@@ -28,6 +28,18 @@ Automated conference abstract submission processing system demonstrating:
 
 ---
 
+### [BigSchemaDemo](./BigSchemaDemo)
+
+**Status**: Active
+**Type**: Schema-scale CodeGen test bed
+**Features**: 24–36 schemas × 100–150 tables, FKs, deterministic seed, drop/recreate
+
+A private, throwaway database that looks like a real brownfield: many schemas, a hundred-plus tables each, foreign keys inside a schema and a few across schemas. Three profiles (`smoke` 36 tables, `standard` 2,880, `large` 5,400). Used to prove per-schema CodeGen emit, write-if-changed, dirty-schema regen, and `schemaOutput` routing. Not in the npm workspace.
+
+[→ View Demo Documentation](./BigSchemaDemo/README.md)
+
+---
+
 ### [Advanced Entities](./AdvancedEntities)
 
 **Status**: Active

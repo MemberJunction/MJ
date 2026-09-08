@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "accountName": {
+      "type": "string",
+      "title": "Storage Account Name",
+      "description": "Azure Storage account name (the storage account itself, NOT the friendly FileStorageAccount name), e.g. mystorageacct",
+      "isSecret": false,
+      "order": 0
+    },
+    "accountKey": {
+      "type": "string",
+      "title": "Account Key",
+      "description": "Azure Storage account access key (key1 or key2). Full-control secret — rotate periodically.",
+      "isSecret": true,
+      "order": 1
+    },
+    "defaultContainer": {
+      "type": "string",
+      "title": "Container",
+      "description": "Blob container name to store objects in, e.g. mj-archives",
+      "isSecret": false,
+      "order": 2
+    }
+  },
+  "required": ["accountName", "accountKey", "defaultContainer"]
+}

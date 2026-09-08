@@ -48,7 +48,7 @@ interface LoopAgentResponse {
     /** Next action. Required when taskComplete=false */
     nextStep?: {
         /** Operation type */
-        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %};
+        type: 'Actions' | 'Sub-Agent' | 'Chat' | 'Retry'{% if clientToolDetails %} | 'ClientTools'{% endif %}{% if skillCount > 0 %} | 'Skill'{% endif %}{% if planModeActive and not planApproved %} | 'Plan'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.forEach != false %} | 'ForEach'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.while != false %} | 'While'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %} | 'Pipeline'{% endif %}{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %} | 'Tasks'{% endif %};
         /** Actions to execute — server-side tools (when type='Actions') */
         actions?: Array<{ name: string; params: Record<string, unknown> }>;
 {% if skillCount > 0 %}
@@ -62,6 +62,30 @@ interface LoopAgentResponse {
 {% if __agentTypePromptParams.includeResponseTypeDefinition.pipeline != false and _PIPELINE_TOOLS %}
         /** Run a server-side dataflow (when type='Pipeline'); only the final stage's value returns to you (see Agent Pipelines below). Processed inline, zero turn cost. */
         pipeline?: { steps: Array<Record<string, unknown>> };
+{% endif %}
+{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %}
+        /** Durable task graph to submit (when type='Tasks') — see Durable Task Graphs below. Ends your turn. */
+        tasks?: {
+            workflowName: string;
+            reasoning?: string;
+            tasks: Array<{
+                tempId: string;
+                name: string;
+                description: string;
+                /** What runs this step. Picks which `configuration` shape applies. */
+                kind: 'Agent' | 'Action' | 'Human' | 'Prompt';
+                configuration:
+                    | { agentName: string; message?: string }      // kind: 'Agent'
+                    | { actionName: string }                        // kind: 'Action'
+                    | { assignToUserID?: string; instructions?: string }  // kind: 'Human'
+                    | { promptName: string };                       // kind: 'Prompt'
+                /** A bare tempId waits unconditionally; the object form gates the edge on a condition. */
+                dependsOn: Array<string | { tempId: string; condition?: string }>;
+                inputPayload?: Record<string, unknown>;
+            }>;
+            continuation?: 'message' | 'reinvoke' | 'none';
+            durable?: boolean;
+        };
 {% endif %}
 {% if clientToolDetails %}
         /** Client tools to execute — browser-side UI tools (when type='ClientTools') */
@@ -439,6 +463,46 @@ Use `responseForm` to collect structured user input. Single question with button
 {% endif %}
 
 {% if __agentTypePromptParams.includeCommandDocs != false %}
+## Record links in Chat messages
+
+When you name a MemberJunction **record** in `message`, do not paste primary-key values as prose. Emit a record-link token. The conversation renderer turns it into a clickable pill; the host opens the record.
+
+Aim for **world-class UX**: clean, readable results. A record link is a citation, not chrome to repeat. The reader should never see the same name as both heading text and a labeled pill, or two pills for the same row in one breath.
+
+Tokens are `@{…}` JSON (same wrapper as mentions). They live **inside** `message` and must be JSON-escaped with the rest of that string.
+
+Required fields:
+
+- `"_mode": "mention"`
+- `"type": "record"` — this is a **row**, not an entity definition (`type: "entity"` is the table)
+- `"entityName"` — exact entity name from metadata (e.g. `"Customers"`, `"MJ: AI Agent Runs"`)
+
+Optional:
+
+- `"name"` — label inside the pill. **Omit it when the surrounding sentence already names the record.** The pill then renders as an icon with an arrow. **Err on omitting.** Include `name` only when the token *is* the mention (no nearby prose name).
+
+Primary key: add each PK field as a **sibling key**, using the field names from entity metadata.
+
+- Single PK named `ID`: include `"ID": "<value>"`.
+- Composite PK: include **every** PK field. The UI looks up `Entity.PrimaryKeys` and reads those keys from the token. Missing a composite part produces a dead link — omit the token rather than emit a partial one.
+- Do not invent PK field names. Use the names on the record you actually have.
+
+Preferred (prose names it; token is icon-only):
+
+Capex Drag @{"_mode":"mention","type":"record","entityName":"MJ_BizApps_FPNA: Planned Items","ID":"DE2D7A95-F5BC-4699-8B43-41D15516C29F"} of **-$25,000** lands on 2027-03-01.
+
+Labeled pill — only when the token *is* the name:
+
+See @{"_mode":"mention","type":"record","entityName":"Customers","name":"Acme Corp","ID":"abc-123"} for the open balance.
+
+Composite example (icon-only after the line name):
+
+Line Widget × 12 @{"_mode":"mention","type":"record","entityName":"Order Details","OrderID":"ord-1","LineNumber":4} drove the variance.
+
+**Cite each record once per section.** Do not put a token in a heading and again in the first sentence. Headings stay text; place one token next to the first prose mention. Never emit two nearby tokens for the same row.
+
+Use `actionableCommands` `open:resource` **in addition** when you want a button after the message ("Open this record"). Inline tokens are for names in the sentence; buttons are for a primary CTA. Prefer both when you created or materially changed a record.
+
 ## Commands
 
 After completing work, use `actionableCommands` for navigation buttons and `automaticCommands` for immediate UI updates (data refresh, notifications).
@@ -453,6 +517,7 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
       "label": "View New Agent",
       "icon": "fa-robot",
       "resourceType": "Record",
+      "entityName": "MJ: AI Agents",
       "resourceId": "agent-789",
       "mode": "view"
     }
@@ -469,6 +534,20 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
       "severity": "success"
     }
   ]
+}
+```
+
+Composite primary key (use `keys` instead of `resourceId`):
+
+```json
+{
+  "type": "open:resource",
+  "label": "Open order line",
+  "icon": "fa-file-lines",
+  "resourceType": "Record",
+  "entityName": "Order Details",
+  "keys": { "OrderID": "ord-1", "LineNumber": 4 },
+  "mode": "view"
 }
 ```
 
@@ -500,7 +579,9 @@ Pair this with `nextStep: 'Chat'` and a short `message` explaining why the snaps
 - Your **entire** response must be only JSON with no leading or trailing characters!
 - Must adhere to [LoopAgentResponse](#response-format)
 {% if __agentTypePromptParams.includeResponseFormDocs != false %}- Use `responseForm` when you need user input (replaces old suggestedResponses pattern){% endif %}
-{% if __agentTypePromptParams.includeCommandDocs != false %}- Use `actionableCommands` to provide navigation buttons after completing work
+{% if __agentTypePromptParams.includeCommandDocs != false %}- Use record-link tokens in `message` instead of raw primary keys
+- `open:resource` buttons need `entityName` plus `resourceId` or `keys`
+- Use `actionableCommands` to provide navigation buttons after completing work
 - Use `automaticCommands` to refresh data or show notifications{% endif %}
 
 {% if __agentTypePromptParams.includeScratchpadDocs != false %}
@@ -710,6 +791,58 @@ Memory Manager.
 
 {% if __agentTypePromptParams.includePipelineDocs != false and _PIPELINE_TOOLS %}
 {{ _PIPELINE_TOOLS | safe }}
+{% endif %}
+
+{% if __agentTypePromptParams.includeResponseTypeDefinition.tasks %}
+## Durable Task Graphs (`nextStep.type = 'Tasks'`)
+
+You can hand off a dependency-ordered set of tasks to run **outside this conversation turn**.
+
+**The distinction from `subAgents[]` is durability, not parallelism.** Both fan out. But
+`subAgents[]` is *ephemeral*: it blocks this run, and if the run ends — the user reloads, the
+server restarts — the work is gone. A task graph is *durable*: it becomes real Task rows that a
+server-side dispatcher owns, visible in the Tasks UI, resumable after a restart, and able to wait
+on a human.
+
+**Reach for `Tasks` when** the work is long-running, has real dependencies between steps, should
+survive the user closing the tab, or needs a person to approve or complete a step.
+
+**Stay with `subAgents[]` when** you need the results *in this turn* to keep reasoning. Submitting a
+graph ends your turn — you cannot read its output before replying.
+
+### How to write one
+
+- Give every task a `tempId` unique within the graph. Express dependencies with `dependsOn`, using
+  those `tempId`s — you cannot know real IDs at authoring time.
+- The graph must be **acyclic**. A cycle can never execute, because nothing would ever become
+  eligible to start, so it is rejected outright.
+- Every task declares a `kind` and a matching `configuration`:
+  - `kind: 'Agent'` → `configuration: { agentName }` — must name a real agent
+  - `kind: 'Action'` → `configuration: { actionName }` — must name a real action
+  - `kind: 'Human'` → `configuration: {}` — a step a person completes
+  - `kind: 'Prompt'` → `configuration: { promptName }`
+  The pairing is the whole assignment; there is no separate flag to set.
+- An edge can be conditional: `dependsOn: [{ tempId: 'analyze', condition: 'severity === "high"' }]`
+  runs the step only when the expression holds. Use it for "only if" work rather than inventing a
+  branching step.
+- Put structured inputs in `inputPayload`. Describe intent in `description` — that is what the
+  assigned agent reads.
+- Maximum 50 tasks per graph.
+
+### What happens after you submit
+
+Your turn ends. You do **not** wait, and you must not claim the work is finished — say it has
+*started*. When the graph completes, `continuation` decides what happens:
+
+- `'message'` (default) — the results are posted into the conversation.
+- `'reinvoke'` — you get a fresh turn with the outcome, so you can synthesize a final answer.
+- `'none'` — nothing further happens.
+
+A one-task graph with no dependencies is automatically run in-line instead, since a graph of one
+needs no dispatcher. Set `durable: true` if you specifically want the Task row anyway.
+
+If your graph is malformed you will get every problem back at once — fix them all and re-emit the
+**complete** graph, not a patch.
 {% endif %}
 
 {# ── Volatile blocks intentionally placed LAST ──────────────────────────────

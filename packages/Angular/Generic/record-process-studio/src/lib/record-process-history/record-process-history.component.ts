@@ -195,7 +195,7 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
 
     async reload(): Promise<void> {
         this.Loading = true; this.cdr.detectChanges();
-        const rv = this.Provider ? RunView.FromMetadataProvider(this.Provider) : new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = this.RecordProcessID ? `RecordProcessID='${this.RecordProcessID}'` : '';
         const [runs, procs] = await rv.RunViews([
             {
@@ -220,7 +220,7 @@ export class RecordProcessHistoryComponent extends BaseAngularComponent implemen
 
     async openRun(run: RunRow): Promise<void> {
         this.OpenRunRow = run; this.Mode = 'detail'; this.DetailLoading = true; this.Details = []; this.cdr.detectChanges();
-        const rv = this.Provider ? RunView.FromMetadataProvider(this.Provider) : new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<RawDetail>({
             EntityName: 'MJ: Process Run Details',
             Fields: ['RecordID', 'Status', 'ResultPayload', 'ErrorMessage'],

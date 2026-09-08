@@ -1,4 +1,4 @@
-import { RunReport, BaseEntity, Metadata, RunView, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
+import { BaseEntity, Metadata, RunView, RunQuery, SetProvider, StartupManager } from "@memberjunction/core";
 import { GraphQLDataProvider, GraphQLProviderConfigData } from "./graphQLDataProvider";
 import { MJGlobal, MJEventType } from "@memberjunction/global";
 

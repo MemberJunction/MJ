@@ -195,9 +195,11 @@ FROM __mj."vwSQLTablesAndEntities" e
 -- ----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS __mj."spUpdateExistingEntityFieldsFromSchema"(TEXT);
 DROP FUNCTION IF EXISTS __mj."spUpdateExistingEntityFieldsFromSchema"(TEXT, TEXT);
+DROP FUNCTION IF EXISTS __mj."spUpdateExistingEntityFieldsFromSchema"(TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION __mj."spUpdateExistingEntityFieldsFromSchema"(
   p_ExcludedSchemaNames TEXT,
-  p_EntityIDs TEXT DEFAULT NULL
+  p_EntityIDs TEXT DEFAULT NULL,
+  p_IncludedSchemaNames TEXT DEFAULT NULL
 )
 RETURNS TABLE(
   "EntityID" UUID,
@@ -225,6 +227,7 @@ RETURNS TABLE(
 LANGUAGE plpgsql AS $func$
 DECLARE
   v_is_scoped BOOLEAN := FALSE;
+  v_has_include BOOLEAN := FALSE;
 BEGIN
   -- [Large Schema Series] Force hash/merge joins for the catalog-introspection
   -- reconciliation below. In the scoped Pass-2 codegen path this SP runs AFTER
@@ -240,6 +243,13 @@ BEGIN
     SELECT TRIM(s) AS schema_name
     FROM unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
+
+  DROP TABLE IF EXISTS _uef_included;
+  CREATE TEMP TABLE _uef_included AS
+    SELECT TRIM(s) AS schema_name
+    FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
+    WHERE TRIM(s) <> '';
+  v_has_include := EXISTS (SELECT 1 FROM _uef_included);
 
   DROP TABLE IF EXISTS _uef_scope;
   CREATE TEMP TABLE _uef_scope AS
@@ -355,6 +365,7 @@ BEGIN
   LEFT JOIN _uef_excluded ex ON e."SchemaName"::text = ex.schema_name
   WHERE e."VirtualEntity" = FALSE
     AND ex.schema_name IS NULL
+    AND (NOT v_has_include OR e."SchemaName"::text IN (SELECT i.schema_name FROM _uef_included i))
     AND (NOT v_is_scoped OR e."ID" IN (SELECT s.entity_id FROM _uef_scope s))
   ) chg
   -- Single source of truth for "this row changed": derived from the two flag columns computed
@@ -414,6 +425,7 @@ BEGIN
   DROP TABLE IF EXISTS _uef_filtered;
   DROP TABLE IF EXISTS _uef_scope;
   DROP TABLE IF EXISTS _uef_excluded;
+  DROP TABLE IF EXISTS _uef_included;
 END;
 $func$;
 
@@ -422,7 +434,11 @@ $func$;
 --    (consumer reads "Name" from result rows)
 -- ----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS __mj."spUpdateExistingEntitiesFromSchema"(TEXT);
-CREATE OR REPLACE FUNCTION __mj."spUpdateExistingEntitiesFromSchema"(p_ExcludedSchemaNames TEXT)
+DROP FUNCTION IF EXISTS __mj."spUpdateExistingEntitiesFromSchema"(TEXT, TEXT);
+CREATE OR REPLACE FUNCTION __mj."spUpdateExistingEntitiesFromSchema"(
+  p_ExcludedSchemaNames TEXT,
+  p_IncludedSchemaNames TEXT DEFAULT NULL
+)
 RETURNS TABLE(
   "ID" UUID,
   "Name" TEXT,
@@ -432,7 +448,16 @@ RETURNS TABLE(
   "SchemaName" TEXT
 )
 LANGUAGE plpgsql AS $func$
+DECLARE
+  v_has_include BOOLEAN := FALSE;
 BEGIN
+  DROP TABLE IF EXISTS _ues_included;
+  CREATE TEMP TABLE _ues_included AS
+    SELECT TRIM(s) AS schema_name
+    FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
+    WHERE TRIM(s) <> '';
+  v_has_include := EXISTS (SELECT 1 FROM _ues_included);
+
   DROP TABLE IF EXISTS _ues_filtered;
   CREATE TEMP TABLE _ues_filtered AS
   SELECT
@@ -448,6 +473,7 @@ BEGIN
     ON sq."SchemaName"::text = TRIM(ex.v)
   WHERE e."VirtualEntity" = FALSE
     AND ex.v IS NULL
+    AND (NOT v_has_include OR sq."SchemaName"::text IN (SELECT i.schema_name FROM _ues_included i))
     AND COALESCE(CASE WHEN e."AutoUpdateDescription" THEN sq."EntityDescription" ELSE e."Description" END, '')
         <> COALESCE(e."Description", '');
 
@@ -463,6 +489,7 @@ BEGIN
   FROM _ues_filtered fr;
 
   DROP TABLE IF EXISTS _ues_filtered;
+  DROP TABLE IF EXISTS _ues_included;
 END;
 $func$;
 
@@ -474,9 +501,11 @@ $func$;
 -- ----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS __mj."spDeleteUnneededEntityFields"(TEXT);
 DROP FUNCTION IF EXISTS __mj."spDeleteUnneededEntityFields"(TEXT, TEXT);
+DROP FUNCTION IF EXISTS __mj."spDeleteUnneededEntityFields"(TEXT, TEXT, TEXT);
 CREATE OR REPLACE FUNCTION __mj."spDeleteUnneededEntityFields"(
   p_ExcludedSchemaNames TEXT,
-  p_EntityIDs TEXT DEFAULT NULL
+  p_EntityIDs TEXT DEFAULT NULL,
+  p_IncludedSchemaNames TEXT DEFAULT NULL
 )
 RETURNS TABLE(
   "ID" UUID,
@@ -487,6 +516,7 @@ RETURNS TABLE(
 LANGUAGE plpgsql AS $func$
 DECLARE
   v_is_scoped BOOLEAN := FALSE;
+  v_has_include BOOLEAN := FALSE;
 BEGIN
   -- [Large Schema Series] Force hash/merge joins for this reconciliation.
   -- This SP runs in codegen Pass 2, immediately AFTER the SQL-generation phase
@@ -509,6 +539,13 @@ BEGIN
     FROM unnest(string_to_array(COALESCE(p_EntityIDs, ''), ',')) AS v
     WHERE TRIM(v) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_is_scoped := EXISTS (SELECT 1 FROM _del_scope);
+
+  DROP TABLE IF EXISTS _del_included;
+  CREATE TEMP TABLE _del_included AS
+    SELECT TRIM(s) AS schema_name
+    FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
+    WHERE TRIM(s) <> '';
+  v_has_include := EXISTS (SELECT 1 FROM _del_included);
 
   -- External-data-source entities must be excluded from the field prune (they are remote; they have no
   -- physical table/view, so the orphan join would match every external EntityField and delete it). But
@@ -541,6 +578,7 @@ BEGIN
   WHERE e."VirtualEntity" = FALSE
     AND ef."EntityID" NOT IN (SELECT entity_id FROM _del_ext_entities) -- exclude external-data-source entities (see note above)
     AND ex.v IS NULL
+    AND (NOT v_has_include OR e."SchemaName"::text IN (SELECT i.schema_name FROM _del_included i))
     AND (NOT v_is_scoped OR ef."EntityID" IN (SELECT s.entity_id FROM _del_scope s));
   -- [Large Schema Series] ANALYZE so the planner has real cardinalities for the
   -- orphan join below. Without stats it estimates rows=1 and nested-loops.
@@ -582,6 +620,7 @@ BEGIN
   DROP TABLE IF EXISTS _del_actual;
   DROP TABLE IF EXISTS _del_ef;
   DROP TABLE IF EXISTS _del_scope;
+  DROP TABLE IF EXISTS _del_included;
 END;
 $func$;
 
@@ -589,7 +628,11 @@ $func$;
 -- 6. spSetDefaultColumnWidthWhereNeeded
 -- ----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS __mj."spSetDefaultColumnWidthWhereNeeded"(TEXT);
-CREATE OR REPLACE FUNCTION __mj."spSetDefaultColumnWidthWhereNeeded"(p_ExcludedSchemaNames TEXT)
+DROP FUNCTION IF EXISTS __mj."spSetDefaultColumnWidthWhereNeeded"(TEXT, TEXT);
+CREATE OR REPLACE FUNCTION __mj."spSetDefaultColumnWidthWhereNeeded"(
+  p_ExcludedSchemaNames TEXT,
+  p_IncludedSchemaNames TEXT DEFAULT NULL
+)
 RETURNS void
 LANGUAGE plpgsql AS $func$
 BEGIN
@@ -608,7 +651,13 @@ BEGIN
     ON e."SchemaName"::text = TRIM(ex.v)
   WHERE ef."EntityID" = e."ID"
     AND ef."DefaultColumnWidth" IS NULL
-    AND ex.v IS NULL;
+    AND ex.v IS NULL
+    AND (
+      COALESCE(p_IncludedSchemaNames, '') = ''
+      OR e."SchemaName"::text IN (
+        SELECT TRIM(s) FROM unnest(string_to_array(p_IncludedSchemaNames, ',')) AS s WHERE TRIM(s) <> ''
+      )
+    );
 END;
 $func$;
 
@@ -617,9 +666,15 @@ $func$;
 --    (consumer caches the returned SchemaInfo rows)
 -- ----------------------------------------------------------------------------
 DROP FUNCTION IF EXISTS __mj."spUpdateSchemaInfoFromDatabase"(TEXT);
-CREATE OR REPLACE FUNCTION __mj."spUpdateSchemaInfoFromDatabase"(p_ExcludedSchemaNames TEXT DEFAULT NULL)
+DROP FUNCTION IF EXISTS __mj."spUpdateSchemaInfoFromDatabase"(TEXT, TEXT);
+CREATE OR REPLACE FUNCTION __mj."spUpdateSchemaInfoFromDatabase"(
+  p_ExcludedSchemaNames TEXT DEFAULT NULL,
+  p_IncludedSchemaNames TEXT DEFAULT NULL
+)
 RETURNS SETOF __mj."SchemaInfo"
 LANGUAGE plpgsql AS $func$
+DECLARE
+  v_has_include BOOLEAN := FALSE;
 BEGIN
   DROP TABLE IF EXISTS _usi_excluded;
   CREATE TEMP TABLE _usi_excluded AS
@@ -627,13 +682,21 @@ BEGIN
     FROM unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS s
     WHERE TRIM(s) <> '';
 
+  DROP TABLE IF EXISTS _usi_included;
+  CREATE TEMP TABLE _usi_included AS
+    SELECT TRIM(s) AS schema_name
+    FROM unnest(string_to_array(COALESCE(p_IncludedSchemaNames, ''), ',')) AS s
+    WHERE TRIM(s) <> '';
+  v_has_include := EXISTS (SELECT 1 FROM _usi_included);
+
   UPDATE __mj."SchemaInfo" si SET
     "Description" = ss."SchemaDescription",
     "__mj_UpdatedAt" = now()
   FROM __mj."vwSQLSchemas" ss
   WHERE si."SchemaName" = ss."SchemaName"
     AND (si."Description" IS NULL OR si."Description" <> COALESCE(ss."SchemaDescription", ''))
-    AND ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x);
+    AND ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x)
+    AND (NOT v_has_include OR ss."SchemaName" IN (SELECT i.schema_name FROM _usi_included i));
 
   INSERT INTO __mj."SchemaInfo" ("SchemaName", "EntityIDMin", "EntityIDMax", "Comments", "Description")
   SELECT
@@ -645,7 +708,8 @@ BEGIN
   FROM __mj."vwSQLSchemas" ss
   LEFT JOIN __mj."SchemaInfo" si ON ss."SchemaName" = si."SchemaName"
   WHERE si."ID" IS NULL
-    AND ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x);
+    AND ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x)
+    AND (NOT v_has_include OR ss."SchemaName" IN (SELECT i.schema_name FROM _usi_included i));
 
   -- Backfill the case-stable canonical schema name from the installed Open App record.
   -- SchemaInfo.SchemaName is the physical (lowercased) name on PG; the app record carries
@@ -657,15 +721,19 @@ BEGIN
   FROM __mj."OpenApp" app
   WHERE LOWER(si."SchemaName") = LOWER(app."SchemaName")
     AND si."CanonicalSchemaName" IS NULL
-    AND app."SchemaName" IS NOT NULL;
+    AND app."SchemaName" IS NOT NULL
+    AND si."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x)
+    AND (NOT v_has_include OR si."SchemaName" IN (SELECT i.schema_name FROM _usi_included i));
 
   RETURN QUERY
   SELECT si.*
   FROM __mj."SchemaInfo" si
   INNER JOIN __mj."vwSQLSchemas" ss ON si."SchemaName" = ss."SchemaName"
-  WHERE ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x);
+  WHERE ss."SchemaName" NOT IN (SELECT x.schema_name FROM _usi_excluded x)
+    AND (NOT v_has_include OR ss."SchemaName" IN (SELECT i.schema_name FROM _usi_included i));
 
   DROP TABLE IF EXISTS _usi_excluded;
+  DROP TABLE IF EXISTS _usi_included;
 END;
 $func$;
 

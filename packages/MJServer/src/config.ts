@@ -2,16 +2,37 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
+import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
 const userHandlingInfoSchema = z.object({
   autoCreateNewUsers: z.boolean().optional().default(false),
+  /** When true, auto-provisioning is restricted to the domains in `newUserAuthorizedDomains`. */
   newUserLimitedToAuthorizedDomains: z.boolean().optional().default(false),
+  /**
+   * Authorized **email domains** for auto-provisioned users — e.g. `['example.com', '*.example.org']`.
+   *
+   * These are matched against the domain of the email address in the verified identity token, NOT
+   * against the browser `Origin` / frontend hostname. If you are upgrading from a build that
+   * compared these to the request origin, replace any frontend hostnames here (`app.example.com`,
+   * `localhost`) with the email domains your users actually sign in with.
+   *
+   * `*` wildcards are supported and match in full: `*.example.com` matches `mail.example.com` but
+   * NOT `example.com` — list both if you need both.
+   */
   newUserAuthorizedDomains: z.array(z.string()).optional().default([]),
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),
   updateCacheWhenNotFoundDelay: z.number().optional().default(30000),
+  /**
+   * The internal user whose context creates new user records. Matched against `User.Name` FIRST,
+   * then `User.Email` — so either spelling of an existing user resolves. On a stock database the
+   * system user is `Name='System'` / `Email='not.set@nowhere.com'`; both reach it.
+   *
+   * When unset, or when the value matches no user, resolution falls back to the system user and
+   * then to the lowest-ID active Owner. See `src/auth/principals.ts`.
+   */
   contextUserForNewUserCreation: z.string().optional().default(''),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
   UserApplications: z.array(z.string()).optional().default([]),
@@ -131,6 +152,23 @@ const scheduledJobsSchema = z.object({
   staleLockCleanupInterval: z.number().optional().default(300000), // 5 minutes in ms
 });
 
+/**
+ * Integration sync worker (PR 1 item 8). When enabled, this process polls
+ * `CompanyIntegrationRun` for `Status='Queued'` rows, atomically claims them, executes
+ * the sync, and releases. The claim sproc is the mutual exclusion, so any number of
+ * processes may run a worker against the same database.
+ */
+const integrationSyncWorkerSchema = z.object({
+  /** Master switch — off by default so existing deployments keep running syncs inline. */
+  enabled: z.boolean().optional().default(false),
+  /** Email of the user the worker executes syncs as. */
+  systemUserEmail: z.string().optional().default('system@memberjunction.org'),
+  /** How often to poll the queue, in ms. */
+  pollingIntervalMs: z.number().optional().default(15000),
+  /** Maximum runs this worker executes concurrently. */
+  maxConcurrentRuns: z.number().optional().default(3),
+});
+
 const queryDialectSchema = z.object({
   /** When true, saving a Query entity auto-generates QuerySQL entries for configured target dialects */
   autoConvertOnSave: zodBooleanWithTransforms().default(false),
@@ -162,9 +200,14 @@ const multiTenancySchema = z.object({
 });
 
 const telemetrySchema = z.object({
-  enabled: zodBooleanWithTransforms().default(
-    process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
-  ),
+  // NOTE: MJ_TELEMETRY_ENABLED is read in DEFAULT_SERVER_CONFIG, not here.
+  //
+  // A Zod `.default()` only fires when the key is ABSENT from the parsed object, and
+  // DEFAULT_SERVER_CONFIG — the base of the config merge — always supplies `telemetry.enabled`.
+  // The key is therefore never absent, so a `.default(process.env...)` here could never take
+  // effect. Owning it in one place keeps the env var working and stops this line from claiming
+  // a behaviour it does not have.
+  enabled: zodBooleanWithTransforms().default(true),
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
@@ -293,7 +336,11 @@ const magicLinkSchema = z.object({
    * from attaching a privileged role (e.g. Owner) to an external magic-link user.
    */
   grantableRoleNames: z.array(z.string()).optional().default([]),
-  /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
+  /**
+   * The internal user whose context provisions magic-link users, matched against `User.Name` then
+   * `User.Email` (falls back to `userHandling.contextUserForNewUserCreation`, then to the system
+   * user, then to the lowest-ID active Owner).
+   */
   contextUserForProvisioning: z.string().optional(),
   /**
    * Guard against bolting an external magic-link role/app onto an EXISTING account
@@ -356,7 +403,10 @@ const widgetSchema = z.object({
   rateLimitWindowMs: z.coerce.number().optional().default(60_000),
   /** Server-wide default hard ceiling (minutes) on a voice session when an instance omits one (W4). */
   voiceDefaultMaxSessionMinutes: z.coerce.number().optional().default(10),
-  /** Email/name of the internal user whose context READS widget config at mint time (falls back to system/Owner). */
+  /**
+   * The internal user whose context READS widget config at mint time, matched against `User.Name`
+   * then `User.Email` (falls back to the system user, then the lowest-ID active Owner).
+   */
   contextUserForLookup: z.string().optional(),
   /**
    * Host-identity public keys (PEM), keyed by widget PublicKey, for the `host-identity` auth
@@ -501,6 +551,7 @@ const configInfoSchema = z.object({
   authProviders: z.array(authProviderSchema).optional(),
   componentRegistries: z.array(componentRegistrySchema).optional(),
   scheduledJobs: scheduledJobsSchema.optional().default({}),
+  integrationSyncWorker: integrationSyncWorkerSchema.optional().default({}),
   telemetry: telemetrySchema.optional().default({}),
   queryDialects: queryDialectSchema.optional().default({}),
   multiTenancy: multiTenancySchema.optional().default({}),
@@ -559,6 +610,7 @@ export type SqlLoggingInfo = z.infer<typeof sqlLoggingSchema>;
 export type AuthProviderConfig = z.infer<typeof authProviderSchema>;
 export type ComponentRegistryConfig = z.infer<typeof componentRegistrySchema>;
 export type ScheduledJobsConfig = z.infer<typeof scheduledJobsSchema>;
+export type IntegrationSyncWorkerConfig = z.infer<typeof integrationSyncWorkerSchema>;
 export type TelemetryConfig = z.infer<typeof telemetrySchema>;
 export type QueryDialectConfig = z.infer<typeof queryDialectSchema>;
 export type MultiTenancyConfig = z.infer<typeof multiTenancySchema>;
@@ -614,7 +666,10 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     newUserRoles: ['UI', 'Developer'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
+    // The seeded system user, named by `Name`. Its Email ('not.set@nowhere.com') resolves too —
+    // resolution tries both columns — but naming it this way keeps the default readable as what it
+    // is, rather than as an address nobody can receive mail at.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
     UserApplications: []
   },
@@ -671,9 +726,23 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     staleLockCleanupInterval: 300000
   },
 
-  // Telemetry defaults
+  // Integration sync worker defaults (off — syncs run inline unless a worker is enabled)
+  integrationSyncWorker: {
+    enabled: false,
+    systemUserEmail: 'not.set@nowhere.com',
+    pollingIntervalMs: 15000,
+    maxConcurrentRuns: 3
+  },
+
+  // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.
+  //
+  // The env read lives HERE rather than in telemetrySchema for the same reason as
+  // loggingSettings.graphql.logVariables below: this object is the merge BASE, so any key it
+  // supplies is always present by the time Zod parses, and a schema-level `.default()` can never
+  // fire. An unset (or empty) variable leaves telemetry enabled; anything parseBooleanEnv reads as
+  // false ('false', '0', 'no', 'off') disables it.
   telemetry: {
-    enabled: true,
+    enabled: TelemetryEnabledDefault(process.env.MJ_TELEMETRY_ENABLED),
     level: 'standard'
   },
 
@@ -696,42 +765,22 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     },
   },
 
-  // Auth providers (environment-driven)
-  authProviders: [
-    // Microsoft Azure AD / Entra ID
-    process.env.TENANT_ID && process.env.WEB_CLIENT_ID ? {
-      name: 'azure',
-      type: 'msal',
-      issuer: `https://login.microsoftonline.com/${process.env.TENANT_ID}/v2.0`,
-      audience: process.env.WEB_CLIENT_ID,
-      jwksUri: `https://login.microsoftonline.com/${process.env.TENANT_ID}/discovery/v2.0/keys`,
-      clientId: process.env.WEB_CLIENT_ID,
-      tenantId: process.env.TENANT_ID
-    } : null,
-
-    // Auth0
-    process.env.AUTH0_DOMAIN && process.env.AUTH0_CLIENT_ID ? {
-      name: 'auth0',
-      type: 'auth0',
-      issuer: `https://${process.env.AUTH0_DOMAIN}/`,
-      audience: process.env.AUTH0_CLIENT_ID,
-      jwksUri: `https://${process.env.AUTH0_DOMAIN}/.well-known/jwks.json`,
-      clientId: process.env.AUTH0_CLIENT_ID,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET,
-      domain: process.env.AUTH0_DOMAIN
-    } : null,
-    // AWS Cognito
-    process.env.COGNITO_USER_POOL_ID && process.env.COGNITO_CLIENT_ID && process.env.AWS_REGION ? {
-      name: 'cognito',
-      type: 'cognito',
-      issuer: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}`,
-      audience: process.env.COGNITO_CLIENT_ID,
-      jwksUri: `https://cognito-idp.${process.env.AWS_REGION}.amazonaws.com/${process.env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
-      clientId: process.env.COGNITO_CLIENT_ID,
-      region: process.env.AWS_REGION,
-      userPoolId: process.env.COGNITO_USER_POOL_ID
-    } : null,
-  ].filter(Boolean),
+  // Auth providers.
+  //
+  // Empty by design. This used to be a hard-coded block that enumerated Entra / Auth0 / Cognito
+  // inline and built each config from its environment variables. That made env-var configuration
+  // a closed domain: a third-party provider could register a driver class and take a metadata row
+  // or an explicit entry here, but it could never offer the "set two variables and you're done"
+  // experience, because the enumeration lived in core.
+  //
+  // Each provider class now owns its own mapping via the optional static
+  // `ConfigFromEnvironment` (see IEnvironmentConfigurableProvider in @memberjunction/auth-providers),
+  // and `initializeAuthProviders()` collects them through the ClassFactory registry.
+  //
+  // Discovery cannot happen here: this literal is evaluated when config.ts is imported, which is
+  // BEFORE @memberjunction/auth-providers loads and the driver classes register. It is deferred to
+  // registration time, where the registry is populated.
+  authProviders: [],
 };
 
 /**

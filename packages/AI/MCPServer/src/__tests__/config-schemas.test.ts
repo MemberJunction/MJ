@@ -20,6 +20,11 @@ import { z } from 'zod';
 // (importing config.ts directly triggers dotenv side-effects)
 // ========================================================================
 
+const mcpServerAgentManagementToolInfoSchema = z.object({
+    enabled: z.boolean().optional().default(true),
+    builderAgents: z.array(z.string()).optional(),
+});
+
 const mcpServerEntityToolInfoSchema = z.object({
     entityName: z.string().optional(),
     schemaName: z.string().optional(),
@@ -227,6 +232,28 @@ describe('Agent Tool Schema', () => {
         });
         expect(result.agentName).toBe('SkipAgent');
         expect(result.status).toBe(true);
+    });
+});
+
+describe('Agent Management Tool Schema', () => {
+    it('should default to enabled with no builder-agent override', () => {
+        const result = mcpServerAgentManagementToolInfoSchema.parse({});
+        expect(result.enabled).toBe(true);
+        expect(result.builderAgents).toBeUndefined();
+    });
+
+    it('should parse a full agent management config', () => {
+        const result = mcpServerAgentManagementToolInfoSchema.parse({
+            enabled: false,
+            builderAgents: ['ActionSmith'],
+        });
+        expect(result.enabled).toBe(false);
+        expect(result.builderAgents).toEqual(['ActionSmith']);
+    });
+
+    it('should accept an empty builderAgents array to expose none', () => {
+        const result = mcpServerAgentManagementToolInfoSchema.parse({ builderAgents: [] });
+        expect(result.builderAgents).toEqual([]);
     });
 });
 

@@ -1,47 +1,108 @@
 <div class="tab-container">
 
-  <!-- Single-Resource Mode: Direct component rendering without Golden Layout -->
-  <!-- This avoids the 20px height issue when GL header is hidden -->
-  @if (useSingleResourceMode) {
-    <div #directContentContainer class="direct-content-container"></div>
-  } @else {
-    <!-- Multi-Tab Mode: Golden Layout Container -->
-    <div #glContainer class="gl-container"></div>
+  <!-- Main region: nav pages (single-resource or main Golden Layout).
+       Hidden (not destroyed) while the RECORDS region is showing, so nav
+       content keeps its state and reappears instantly. -->
+  <div class="main-region" [class.region-hidden]="ShowRecordsRegion">
+    <!-- Single-Resource Mode: Direct component rendering without Golden Layout -->
+    <!-- This avoids the 20px height issue when GL header is hidden -->
+    @if (useSingleResourceMode) {
+      <div #directContentContainer class="direct-content-container"></div>
+    } @else {
+      <!-- Multi-Tab Mode: Golden Layout Container -->
+      <div #glContainer class="gl-container"></div>
+    }
+  </div>
+
+  <!-- RECORDS region: a SEPARATE Golden Layout hosting only record tabs
+       (records-style record opens). Always in the DOM once created so the
+       layout survives visibility flips; shown only while the active tab is
+       a record. Native GL tab bar = record tabs, drag-to-split included. -->
+  @if (RecordsStyleActive) {
+    <!-- Origin crumbs are PANE-LEVEL now (first element inside each record
+         pane — see RecordOriginCrumbComponent); the region needs no bar. -->
+    <div class="records-region" [class.region-hidden]="!ShowRecordsRegion">
+      <!-- MOBILE: the GL tab strip is unusable at phone widths (one tab
+           fits, no overflow UI) — the record bar replaces it and opens the
+           record switcher sheet. The GL itself runs headerless (HideHeaders). -->
+      @if (IsMobileRecords) {
+        <mj-record-bar
+          [Title]="RecordBarTitle"
+          [Icon]="RecordBarIcon"
+          [Color]="RecordBarColor"
+          [Count]="OpenRecordCount"
+          (SwitcherRequested)="OpenRecordSwitcher()">
+        </mj-record-bar>
+      }
+      <div #recordsGlContainer class="records-gl-container"></div>
+    </div>
+
+    <!-- MOBILE record switcher: bottom sheet listing ALL open records
+         (region + docked). Fixed-position — DOM location here is
+         visual-neutral; living in tab-container keeps close routing on the
+         same path as the tab context menu. -->
+    <mj-record-switcher-sheet
+      [Entries]="SwitcherEntries"
+      [Visible]="RecordSwitcherVisible"
+      (VisibleChange)="OnSwitcherVisibleChange($event)"
+      (ActivateRequested)="OnSwitcherActivate($event)"
+      (CloseRequested)="OnSwitcherClose($event)">
+    </mj-record-switcher-sheet>
   }
 
-  <!-- Context Menu (only relevant in multi-tab mode) -->
+  <!-- Context Menu (only relevant in multi-tab mode). Real buttons with
+       menu semantics: arrow keys rove, Escape closes with focus return to
+       the invoking control (see onMenuKeydown / hideContextMenu). -->
   @if (contextMenuVisible) {
     <div
       class="context-menu"
+      role="menu"
+      aria-label="Tab actions"
+      (keydown)="onMenuKeydown($event)"
       [style.left.px]="contextMenuX"
       [style.top.px]="contextMenuY">
-      <div class="context-menu-item" (click)="onContextPin()">
-        <i class="fa-solid fa-thumbtack"></i>
+      <button type="button" role="menuitem" class="context-menu-item" (click)="onContextPin()">
+        <i class="fa-solid fa-thumbtack" aria-hidden="true"></i>
         <span>{{ isContextTabPinned ? 'Unpin Tab' : 'Pin Tab' }}</span>
-      </div>
+      </button>
       <div class="context-menu-divider"></div>
-      <div class="context-menu-item" [class.new-item]="!isContextTabPinnedToHome" [class.disabled]="isContextTabPinnedToHome" (click)="onContextPinToHome()">
-        <i class="fa-solid fa-house-chimney"></i>
+      <button type="button" role="menuitem" class="context-menu-item" [class.new-item]="!isContextTabPinnedToHome" [class.disabled]="isContextTabPinnedToHome" [disabled]="isContextTabPinnedToHome" (click)="onContextPinToHome()">
+        <i class="fa-solid fa-house-chimney" aria-hidden="true"></i>
         @if (isContextTabPinnedToHome) {
           <span>Pinned to Home</span>
-          <span class="check"><i class="fa-solid fa-check"></i></span>
+          <span class="check"><i class="fa-solid fa-check" aria-hidden="true"></i></span>
         } @else {
           <span>Pin to Home</span>
         }
-      </div>
+      </button>
+      @if (canContextMoveToWorkspace || canContextMoveToRecords) {
+        <div class="context-menu-divider"></div>
+        @if (canContextMoveToWorkspace) {
+          <button type="button" role="menuitem" class="context-menu-item" (click)="onContextMoveToWorkspace()">
+            <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i>
+            <span>Move to Workspace</span>
+          </button>
+        }
+        @if (canContextMoveToRecords) {
+          <button type="button" role="menuitem" class="context-menu-item" (click)="onContextMoveToRecords()">
+            <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+            <span>Move to Records</span>
+          </button>
+        }
+      }
       <div class="context-menu-divider"></div>
-      <div class="context-menu-item" (click)="onContextClose()">
-        <i class="fa-solid fa-xmark"></i>
+      <button type="button" role="menuitem" class="context-menu-item" (click)="onContextClose()">
+        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         <span>Close Tab</span>
-      </div>
-      <div class="context-menu-item" (click)="onContextCloseOthers()">
-        <i class="fa-solid fa-layer-group"></i>
+      </button>
+      <button type="button" role="menuitem" class="context-menu-item" (click)="onContextCloseOthers()">
+        <i class="fa-solid fa-layer-group" aria-hidden="true"></i>
         <span>Close Others</span>
-      </div>
-      <div class="context-menu-item" (click)="onContextCloseToRight()">
-        <i class="fa-solid fa-angles-right"></i>
+      </button>
+      <button type="button" role="menuitem" class="context-menu-item" (click)="onContextCloseToRight()">
+        <i class="fa-solid fa-angles-right" aria-hidden="true"></i>
         <span>Close to Right</span>
-      </div>
+      </button>
     </div>
   }
 </div>

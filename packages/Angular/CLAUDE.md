@@ -76,6 +76,13 @@ There is a known multi-provider migration in flight — many existing Angular co
 
 ## 🚨 CRITICAL: Routing Rules 🚨
 
+> These rules are one boundary of MJ's four-layer UX architecture (L0 runtime → L1 widget →
+> L2 composite → L3 Explorer surface). The full model — including the `Before*`/`After*`
+> cancelable event contract that replaces routing below L3, the per-layer data-access rules,
+> the package split, and the `mj standards check` gate that enforces all of it — is in
+> **[/guides/UI_LAYERING_GUIDE.md](../../guides/UI_LAYERING_GUIDE.md)**. Read it before
+> building new UI here or in any MJ app repo.
+
 ### Generic Components MUST NOT Import Router
 
 Components in `packages/Angular/Generic/` are reusable across any Angular application (MJ Explorer, custom apps, embedded widgets). They **MUST NOT** import `Router`, `ActivatedRoute`, or any `@angular/router` types directly.
@@ -153,6 +160,10 @@ When the tab-container reattaches a cached component, an **incoming** navigation
 ---
 
 ## 🚨 NPM Workspace and Peer Dependencies (For Downstream Projects)
+
+### Angular framework peers: ranges, never exact pins
+
+**Rule (2026-08-07, MJ#3580):** every `ng-*` library declares its `@angular/*` peerDependencies as a **caret range at the era platform pin** (`"@angular/core": "^21.1.3"`), never an exact version. A peer declaration is a compatibility claim, not an install instruction — an exact pin falsely rejects every other Angular 21.x build, breaks strict peer resolution in consuming workspaces, and turns each Angular security patch into a republish of all ~290 ng-* packages. Exact `@angular/*` versions belong only where installation is decided: application `dependencies` (MJExplorer), build tooling `devDependencies` (`@angular/compiler-cli`), and the era platform manifest in `release-lines.json`. When creating a new ng-* package, copy the peer block from an existing one and keep the carets.
 
 ### Shared Singleton Services Pattern
 
@@ -594,6 +605,10 @@ MemberJunction has **two** patterns for extending generated entity forms. Both a
 ### Pattern 1: `BaseFormPanel` slots — for adding panels alongside the generated UI
 
 Write a standalone Angular component that extends `BaseFormPanel`, decorate it with `@RegisterClassEx(BaseFormPanel, { metadata: { entity, slot, sortKey } })`, declare it in any module. The next time anyone opens that entity's edit form, the panel renders in your chosen slot via `<mj-form-panel-slot>`. No `*Extended` class. No restating every generated panel. No custom HTML for the existing form.
+
+To **replace** a related-entity grid (or supply one when another OpenApp's relationship was not baked into this form), add `relatedEntity` and optional `relatedJoinField` to the metadata bag. To **replace a field panel** (or drop a hero that is not a collapsible panel), set `slot: 'before-fields'` and `replacesSectionKey: 'details'` (the CodeGen `SectionKey`). The composer hides the baked panel and mounts yours. Highest ClassFactory `Priority` wins when two apps claim the same `contributionKey`. See [PANELS.md](Generic/base-forms/PANELS.md), [Forms Architecture §7c](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7c-form-contributions--add-replace-or-fill-in-no-regen), and [`/plans/form-contributions.md`](../../plans/form-contributions.md).
+
+Related grids on a parent form follow the chrome stack in [Forms Architecture §7d](../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more): L1 `EntityRelationship.Configuration.UI.inclusion` (`Primary` / `More` / `None`; omit = Auto), L2 ranker on Auto leftovers (`RelatedRolePolicy`, default `'smart'`), L3 `MJ: Form Chrome Rules` (admin, not app-synced; optional `Title` survives OpenApp upgrades), L4 user rail order. `None` is not a More item and never reaches the ranker. `BaseFormPolicy.DecorateChrome` is cosmetics only.
 
 **Use when** the generated form's layout is fine, you just want to add governance widgets, typed-config panels, type-conditional sections, or any standalone UI. The generated form keeps regenerating freely; your panels mount alongside.
 

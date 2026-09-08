@@ -20,6 +20,16 @@ const DEFAULT_CATEGORY = 'default';
  * Storage structure: `Map<category, Map<key, unknown>>`
  */
 export class BrowserStorageProviderBase implements ILocalStorageProvider {
+    /**
+     * `true` — the base tier keeps values in a `Map` with no serialization, so callers and
+     * the store share objects. Subclasses that add a real serializing backend override this
+     * with a getter that reports `false` while that backend is reachable.
+     * See {@link ILocalStorageProvider.SharesReferences}.
+     */
+    public get SharesReferences(): boolean {
+        return true;
+    }
+
     private _storage: Map<string, Map<string, unknown>> = new Map();
 
     /**
@@ -91,6 +101,16 @@ export class BrowserStorageProviderBase implements ILocalStorageProvider {
  * Falls back to in-memory storage if localStorage is not available.
  */
 class BrowserLocalStorageProvider extends BrowserStorageProviderBase {
+    /**
+     * `false` while localStorage is reachable — every value round-trips through
+     * `JSON.stringify`/`parse`, which fully isolates stored data from live objects.
+     * When localStorage is absent every method defers to the in-memory base class, so
+     * the reference-sharing semantics (and the cache's freeze) come back.
+     */
+    public override get SharesReferences(): boolean {
+        return typeof localStorage === 'undefined';
+    }
+
     /**
      * Builds a prefixed key for localStorage
      * Format: `[mj]:[category]:[key]`
@@ -311,6 +331,16 @@ export interface MJ_MetadataDB extends DBSchema {
  * unknown categories share `mj:default` with prefixed keys.
  */
 export class BrowserIndexedDBStorageProvider extends BrowserStorageProviderBase {
+    /**
+     * `false` — every value crosses IndexedDB's structured-clone boundary, so stored data
+     * is always a copy, never a live reference. Unlike the localStorage provider this class
+     * never defers to the in-memory base tier (its methods log and return null/no-op when
+     * the DB is unreachable), so there is no fallback path that could reintroduce sharing.
+     */
+    public override get SharesReferences(): boolean {
+        return false;
+    }
+
     private dbPromise: Promise<IDBPDatabase<MJ_MetadataDB>>;
     private _dbReady: boolean = false;
 

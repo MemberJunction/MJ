@@ -5,6 +5,7 @@ import {
   convertCharIndex, convertStuff, convertConvertFunction, convertIIF, convertTopToLimit,
   transformCodeOnly, castBooleanInsertValues, convertJsonFunctions,
   convertBooleanLiteralComparisons,
+  escapeRegExp,
 } from './ExpressionHelpers.js';
 
 /** Strip trailing comments (both line -- and block /* *‌/) from a SQL string.
@@ -69,8 +70,14 @@ export class InsertRule implements IConversionRule {
     // Quote bare schema.Name references (e.g. __mj.vwFoo → __mj."vwFoo")
     const schema = context.Schema;
     if (schema) {
-      const bareSchemaRef = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
-      result = result.replace(bareSchemaRef, `${schema}."$1"`);
+      // Both sides treat `schema` as DATA. Escaped on the search side so a `$`
+      // in it cannot act as an end-anchor (which would make the pattern match
+      // nothing), and carried through a replacement function on the other so a
+      // `$` cannot be expanded. The capture group stays intentional, passed as a
+      // named callback parameter instead of `$1`. The sibling ViewRule was
+      // converted by the #3171 sweep; this twin was missed. See issue #3171.
+      const bareSchemaRef = new RegExp(`\\b${escapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+      result = result.replace(bareSchemaRef, (_match, table: string) => `${schema}."${table}"`);
     }
     // Quote column names in INSERT INTO table (col1, col2, ...) — these are always column
     // names even if they collide with SQL keywords (e.g. Language, Condition, Action)

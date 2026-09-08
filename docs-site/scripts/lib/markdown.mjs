@@ -9,6 +9,7 @@ import remarkGfm from 'remark-gfm';
 import remarkStringify from 'remark-stringify';
 import { toString as mdastToString } from 'mdast-util-to-string';
 import { createLinkRewriter } from './rewrite.mjs';
+import { rewriteThemePictures } from './theme-picture.mjs';
 
 const STRINGIFY_OPTIONS = { bullet: '-', fences: true, rule: '-', emphasis: '*', strong: '*' };
 const DESCRIPTION_MAX = 200;
@@ -24,6 +25,9 @@ export function transformRepoMarkdown(source, ctx) {
   const tree = processor.parse(source);
   const title = extractTitle(tree);
   const description = extractDescription(tree);
+  // Before the link rewriter: the <img> pair this emits still carries repo-
+  // relative src values, so the rewriter resolves them like any other image.
+  rewriteThemePictures(tree);
   createLinkRewriter(ctx)(tree);
   return { title, description, body: processor.stringify(tree) };
 }

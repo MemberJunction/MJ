@@ -13,7 +13,7 @@ function AIInsightsPanel({
   // Optional props with defaults
   title = 'AI Insights',
   icon = 'fa-wand-magic-sparkles',
-  iconColor = '#8B5CF6',
+  iconColor,
   maxHeight = '400px',
   showRefresh = true,
   showExport = true,
@@ -24,6 +24,27 @@ function AIInsightsPanel({
   customButtons = []
 }) {
   const { useState, useEffect, useRef } = React;
+
+  // Theme tokens, with the previous hardcoded values kept as fallbacks for a host
+  // that renders this component without styles.
+  const themeColors = styles?.colors || {};
+  const accentColor = iconColor || themeColors.primary || '#8B5CF6';
+  const bodyColor = themeColors.text || '#374151';
+  const headingColor = themeColors.text || '#111827';
+  const headingAltColor = themeColors.text || '#1F2937';
+  const subtleTextColor = themeColors.textSecondary || '#4B5563';
+  const surfaceColor = themeColors.background || '#ffffff';
+  const surfaceAltColor = themeColors.surface || '#f9fafb';
+  const surfaceHoverColor = themeColors.surfaceHover || '#F9FAFB';
+  const codeSurfaceColor = themeColors.surfaceHover || '#F3F4F6';
+  const borderColor = themeColors.border || '#E5E7EB';
+  const successColor = themeColors.success || '#10B981';
+  const errorColor = themeColors.error || '#EF4444';
+  const errorSurfaceColor = themeColors.errorLight || '#FEE2E2';
+  const errorBorderColor = themeColors.errorBorder || '#FECACA';
+  const shadowColor = themeColors.shadowMedium || 'rgba(0, 0, 0, 0.1)';
+  const inverseSurfaceColor = themeColors.text || '#1F2937';
+  const inverseTextColor = themeColors.background || '#F9FAFB';
   
   // State
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
@@ -45,7 +66,7 @@ function AIInsightsPanel({
             className="markdown-insights"
             dangerouslySetInnerHTML={{ __html: htmlContent }}
             style={{
-              color: '#374151',
+              color: bodyColor,
               lineHeight: '1.6'
             }}
           />
@@ -57,7 +78,7 @@ function AIInsightsPanel({
     
     // Fallback to plain text with basic formatting
     return (
-      <div style={{ whiteSpace: 'pre-wrap', color: '#374151', lineHeight: '1.6' }}>
+      <div style={{ whiteSpace: 'pre-wrap', color: bodyColor, lineHeight: '1.6' }}>
         {text}
       </div>
     );
@@ -112,8 +133,8 @@ ${insights}`;
     backgroundColor: styles?.colors?.surface || 'white',
     borderRadius: styles?.borders?.radius || '8px',
     border: `1px solid ${styles?.colors?.border || '#E5E7EB'}`,
-    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-    background: 'linear-gradient(135deg, #ffffff 0%, #f9fafb 100%)',
+    boxShadow: `0 2px 4px ${shadowColor}`,
+    background: `linear-gradient(135deg, ${surfaceColor} 0%, ${surfaceAltColor} 100%)`,
     transition: 'all 0.3s ease',
     cursor: 'default'
   };
@@ -140,7 +161,7 @@ ${insights}`;
           alignItems: 'center',
           gap: styles?.spacing?.sm || '8px'
         }}>
-          <i className={`fa-solid ${icon}`} style={{ color: iconColor }}></i>
+          <i className={`fa-solid ${icon}`} style={{ color: accentColor }}></i>
           {title}
         </h3>
         
@@ -168,7 +189,7 @@ ${insights}`;
             }}
             title={collapsed ? 'Expand' : 'Collapse'}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#F9FAFB';
+              e.currentTarget.style.backgroundColor = surfaceHoverColor;
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.backgroundColor = 'transparent';
@@ -182,8 +203,8 @@ ${insights}`;
             <button
               onClick={copyToClipboard}
               style={{
-                background: copyFeedback ? '#10B981' : 'none',
-                border: `1px solid ${copyFeedback ? '#10B981' : styles?.colors?.border || '#E5E7EB'}`,
+                background: copyFeedback ? successColor : 'none',
+                border: `1px solid ${copyFeedback ? successColor : borderColor}`,
                 borderRadius: '6px',
                 color: copyFeedback ? 'white' : (styles?.colors?.textSecondary || '#6B7280'),
                 cursor: 'pointer',
@@ -220,7 +241,7 @@ ${insights}`;
               }}
               title="Export as Markdown"
               onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#F9FAFB';
+                e.currentTarget.style.backgroundColor = surfaceHoverColor;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.backgroundColor = 'transparent';
@@ -300,7 +321,7 @@ ${insights}`;
               }}
               title="Close"
               onMouseEnter={(e) => {
-                e.currentTarget.style.color = '#EF4444';
+                e.currentTarget.style.color = errorColor;
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.color = styles?.colors?.textSecondary || '#6B7280';
@@ -321,7 +342,7 @@ ${insights}`;
               padding: '24px',
               textAlign: 'center',
               color: styles?.colors?.textSecondary || '#6B7280',
-              backgroundColor: '#F9FAFB',
+              backgroundColor: surfaceHoverColor,
               borderRadius: '6px'
             }}>
               <i className="fa-solid fa-spinner fa-spin" style={{ fontSize: '24px', marginBottom: '12px' }}></i>
@@ -334,9 +355,9 @@ ${insights}`;
             <div style={{
               color: styles?.colors?.error || '#EF4444',
               padding: '12px',
-              backgroundColor: '#FEE2E2',
+              backgroundColor: errorSurfaceColor,
               borderRadius: '6px',
-              border: '1px solid #FECACA',
+              border: `1px solid ${errorBorderColor}`,
               display: 'flex',
               alignItems: 'start',
               gap: '8px'
@@ -352,7 +373,7 @@ ${insights}`;
               maxHeight: maxHeight,
               overflowY: 'auto',
               padding: '12px',
-              backgroundColor: '#F9FAFB',
+              backgroundColor: surfaceHoverColor,
               borderRadius: '6px'
             }}>
               {formatInsights(insights)}
@@ -363,24 +384,24 @@ ${insights}`;
       
       {/* Add styles for markdown content */}
       <style>{`
-        .markdown-insights h1 { font-size: 20px; font-weight: 600; color: #111827; margin: 16px 0 12px 0; }
-        .markdown-insights h2 { font-size: 18px; font-weight: 600; color: #1F2937; margin: 14px 0 10px 0; }
-        .markdown-insights h3 { font-size: 16px; font-weight: 600; color: #374151; margin: 12px 0 8px 0; }
-        .markdown-insights h4 { font-size: 14px; font-weight: 600; color: #4B5563; margin: 10px 0 6px 0; }
-        .markdown-insights p { margin: 8px 0; color: #374151; line-height: 1.6; }
-        .markdown-insights ul, .markdown-insights ol { margin: 8px 0; padding-left: 24px; color: #374151; }
+        .markdown-insights h1 { font-size: 20px; font-weight: 600; color: ${headingColor}; margin: 16px 0 12px 0; }
+        .markdown-insights h2 { font-size: 18px; font-weight: 600; color: ${headingAltColor}; margin: 14px 0 10px 0; }
+        .markdown-insights h3 { font-size: 16px; font-weight: 600; color: ${bodyColor}; margin: 12px 0 8px 0; }
+        .markdown-insights h4 { font-size: 14px; font-weight: 600; color: ${subtleTextColor}; margin: 10px 0 6px 0; }
+        .markdown-insights p { margin: 8px 0; color: ${bodyColor}; line-height: 1.6; }
+        .markdown-insights ul, .markdown-insights ol { margin: 8px 0; padding-left: 24px; color: ${bodyColor}; }
         .markdown-insights li { margin: 4px 0; line-height: 1.5; }
-        .markdown-insights strong { font-weight: 600; color: #1F2937; }
+        .markdown-insights strong { font-weight: 600; color: ${headingAltColor}; }
         .markdown-insights em { font-style: italic; }
-        .markdown-insights code { background: #F3F4F6; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
-        .markdown-insights blockquote { border-left: 3px solid ${iconColor}; padding-left: 12px; margin: 12px 0; color: #4B5563; }
-        .markdown-insights hr { border: none; border-top: 1px solid #E5E7EB; margin: 16px 0; }
-        .markdown-insights a { color: ${iconColor}; text-decoration: none; }
+        .markdown-insights code { background: ${codeSurfaceColor}; padding: 2px 4px; border-radius: 3px; font-family: monospace; font-size: 0.9em; }
+        .markdown-insights blockquote { border-left: 3px solid ${accentColor}; padding-left: 12px; margin: 12px 0; color: ${subtleTextColor}; }
+        .markdown-insights hr { border: none; border-top: 1px solid ${borderColor}; margin: 16px 0; }
+        .markdown-insights a { color: ${accentColor}; text-decoration: none; }
         .markdown-insights a:hover { text-decoration: underline; }
         .markdown-insights table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-        .markdown-insights th, .markdown-insights td { border: 1px solid #E5E7EB; padding: 8px; text-align: left; }
-        .markdown-insights th { background: #F9FAFB; font-weight: 600; }
-        .markdown-insights pre { background: #1F2937; color: #F9FAFB; padding: 12px; border-radius: 6px; overflow-x: auto; }
+        .markdown-insights th, .markdown-insights td { border: 1px solid ${borderColor}; padding: 8px; text-align: left; }
+        .markdown-insights th { background: ${surfaceHoverColor}; font-weight: 600; }
+        .markdown-insights pre { background: ${inverseSurfaceColor}; color: ${inverseTextColor}; padding: 12px; border-radius: 6px; overflow-x: auto; }
       `}</style>
     </div>
   );

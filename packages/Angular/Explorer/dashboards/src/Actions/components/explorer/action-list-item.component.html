@@ -46,9 +46,9 @@
 
   <!-- Params Count -->
   @if (!IsCompact) {
-    <div class="item-params" [title]="(Action.Params.length || 0) + ' parameters'">
+    <div class="item-params" [title]="(Action.Params.Items.length || 0) + ' parameters'">
       <i class="fa-solid fa-sliders"></i>
-      <span>{{ Action.Params.length || 0 }}</span>
+      <span>{{ Action.Params.Items.length || 0 }}</span>
     </div>
   }
 

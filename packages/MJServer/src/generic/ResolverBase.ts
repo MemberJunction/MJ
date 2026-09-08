@@ -20,7 +20,8 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { MJAuditLogEntity, MJErrorLogEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
-import { SQLServerDataProvider, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
@@ -30,9 +31,11 @@ import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
 import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
-import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { SQLParser } from '@memberjunction/sql-parser';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
-import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
+import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
 import { PubSubManager } from './PubSubManager.js';
 import { FieldMapper } from '@memberjunction/graphql-dataprovider';
@@ -62,16 +65,28 @@ export class ResolverBase {
    * - AllowDecryptInAPI=false + SendEncryptedValue=true: Keep encrypted ciphertext
    * - AllowDecryptInAPI=false + SendEncryptedValue=false: Replace with sentinel
    *
+   * Returns a COPY — `dataObject` is never written to. Callers routinely pass rows straight
+   * from `findBy`/`RunView`, which are the server cache's own objects held by reference, and
+   * `LocalCacheManager` deep-freezes them. Renaming in place therefore threw
+   * `Cannot add property _mj__CreatedAt, object is not extensible` on every `UserByEmail` /
+   * `UserByID` / `UserByEmployeeID` call and on every generated single-record resolver whose
+   * entity has caching enabled. (Before the freeze it did something worse but quieter: it
+   * rewrote the cached row's keys, so later readers were served transport-shaped rows that
+   * `BaseEntity.SetMany` rejects.) Copying here fixes every call site at once and makes the
+   * hazard unreachable for future ones.
+   *
    * @param entityName - The entity name
-   * @param dataObject - The data object with field values
+   * @param dataObject - The data object with field values. Not modified.
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
-   * @returns The processed data object
+   * @returns A new object in transport shape, or null when there is nothing to map
    */
   protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
     }
+    // Shallow copy up front so every write below lands on our object, never the caller's.
+    dataObject = { ...dataObject };
 
     // for the given entity name provided, check to see if there are any fields
     // where the code name is different from the field name, and for just those
@@ -184,14 +199,21 @@ export class ResolverBase {
     return true;
   }
 
-  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo): Promise<any[]> {
-    // iterate through the array and call MapFieldNamesToCodeNames for each element
-    if (dataObjectArray && dataObjectArray.length > 0) {
-      for (const element of dataObjectArray) {
-        await this.MapFieldNamesToCodeNames(entityName, element, contextUser);
-      }
+  /**
+   * Array form of {@link MapFieldNamesToCodeNames}. Returns a NEW array of NEW objects; neither
+   * the input array nor its rows are modified. Both matter: the cache freezes the array as well
+   * as the rows it contains, so collecting the mapped copies (rather than mapping in place and
+   * returning the original) is what makes this safe on cache-served input.
+   */
+  protected async ArrayMapFieldNamesToCodeNames(entityName: string, dataObjectArray: any[], contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any[]> {
+    if (!dataObjectArray || dataObjectArray.length === 0) {
+      return dataObjectArray;
     }
-    return dataObjectArray;
+    const mapped: any[] = [];
+    for (const element of dataObjectArray) {
+      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider));
+    }
+    return mapped;
   }
 
   /**
@@ -321,6 +343,58 @@ export class ResolverBase {
     return dataObjectArray;
   }
 
+  /**
+   * Renders one `findBy` predicate value as the SQL literal text it will become inside the
+   * `ExtraFilter` that method builds.
+   *
+   * The two slots have different exposure, so they are handled differently:
+   *
+   * - **Quoted slot** (`NeedsQuotes` — every type except Number and Boolean). The value sits
+   *   inside a single-quoted literal, so it is escaped with `EscapeSQLString`: quotes are
+   *   doubled and null bytes stripped, leaving the payload inert *inside* the literal.
+   * - **Unquoted slot** (Number and Boolean fields). There is no literal to break out of
+   *   here — the value lands in the clause bare, so a string value simply *is* SQL and no
+   *   amount of quote escaping helps. Only a genuine number or boolean is accepted; anything
+   *   else is refused rather than interpolated. Numeric and boolean strings are accepted too
+   *   (a client may legitimately send `"42"`), since neither can carry SQL.
+   *
+   * A `null`/`undefined` value is refused in either slot. `EscapeSQLString` maps both to `''`
+   * by design, which would silently turn a by-value lookup into `Field = ''` — for this
+   * caller a missing value is a bug, not a query.
+   *
+   * @param value the raw value supplied for the field
+   * @param fieldName field name, for the error message
+   * @param entity entity name, for the error message
+   * @param needsQuotes whether the field's type requires a quoted literal
+   * @returns the literal text (including quotes when the slot is quoted)
+   * @throws when the value cannot be rendered safely for the slot it is destined for
+   */
+  private formatFilterValue(value: unknown, fieldName: string, entity: string, needsQuotes: boolean): string {
+    if (value === null || value === undefined) {
+      throw new Error(
+        `Field ${fieldName} in entity ${entity} was given a ${value === null ? 'null' : 'undefined'} value. findBy builds an equality predicate, which needs a value to compare against.`
+      );
+    }
+
+    if (needsQuotes) {
+      return `'${EscapeSQLString(String(value))}'`;
+    }
+
+    // Unquoted slot — accept only what cannot carry SQL, and render it exactly as before.
+    if (typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value))) {
+      return String(value);
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (/^-?\d+(\.\d+)?$/.test(trimmed)) return trimmed;
+      if (/^(true|false)$/i.test(trimmed)) return trimmed.toLowerCase();
+    }
+
+    throw new Error(
+      `Field ${fieldName} in entity ${entity} is a numeric or boolean field, so its value is not quoted in the filter — only a number or boolean can be used. Received: ${typeof value}.`
+    );
+  }
+
   protected async findBy<T = any>(provider: DatabaseProviderBase, entity: string, params: any, contextUser: UserInfo): Promise<Array<T>> {
     // build the SQL query based on the params passed in
     const rv = provider as any as IRunViewProvider;
@@ -334,8 +408,7 @@ export class ResolverBase {
       // look up the field in the entityInfo to see if it needs quotes
       const field = e.Fields.find((f) => f.Name === k);
       if (!field) throw new Error(`Field ${k} not found in entity ${entity}`);
-      const quotes = field.NeedsQuotes ? "'" : '';
-      extraFilter += `${k} = ${quotes}${params[k]}${quotes}`;
+      extraFilter += `${k} = ${this.formatFilterValue(params[k], k, entity, field.NeedsQuotes)}`;
     });
 
     // ok, now we have a SQL string, run it and return the results
@@ -362,7 +435,8 @@ export class ResolverBase {
       const rv = provider as any as IRunViewProvider;
       const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
-        ExtraFilter: "Name='" + viewInput.ViewName + "'",
+        // SECURITY: the view name is client-supplied and lands inside a SQL literal.
+        ExtraFilter: "Name='" + EscapeSQLString(viewInput.ViewName) + "'",
       }, userPayload.userRecord);
       if (result && result.Success && result.Results.length > 0) {
         const viewInfo = result.Results[0];
@@ -388,7 +462,8 @@ export class ResolverBase {
           viewInput.AfterKey
             ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
             : undefined,
-          viewInput.BypassCache
+          viewInput.BypassCache,
+          viewInput.DataSource
         );
       }
       else {
@@ -431,7 +506,8 @@ export class ResolverBase {
         viewInput.StartRow,
         viewInput.Aggregates,
         undefined,
-        viewInput.BypassCache
+        viewInput.BypassCache,
+        viewInput.DataSource
       );
     } catch (err) {
       console.log(err);
@@ -477,7 +553,8 @@ export class ResolverBase {
         viewInput.StartRow,
         viewInput.Aggregates,
         undefined,
-        viewInput.BypassCache
+        viewInput.BypassCache,
+        viewInput.DataSource
       );
     } catch (err) {
       console.log(err);
@@ -551,6 +628,7 @@ export class ResolverBase {
           userPayload,
           aggregates: viewInput.Aggregates,
           bypassCache: viewInput.BypassCache,
+          dataSource: viewInput.DataSource,
         });
       } catch (err) {
         LogError(err);
@@ -691,7 +769,11 @@ export class ResolverBase {
       return;
     }
 
-    // Check specific scope
+    // Check specific scope. The acting context stamped on the session user (set
+    // server-side in context.ts, never client-supplied) rides along so filtered
+    // rules with {{Acting*}} tokens can validate their required values — without
+    // it, a filtered rule fails closed even for a session carrying valid context.
+    const sessionUser = this.GetUserFromPayload(userPayload);
     const result = await apiKeyEngine.Authorize(
       userPayload.apiKeyHash,
       'MJAPI',
@@ -701,6 +783,9 @@ export class ResolverBase {
       {
         endpoint: '/graphql',
         method: 'POST'
+      },
+      {
+        actingContext: sessionUser?.APIKeyActingContext
       }
     );
 
@@ -713,6 +798,129 @@ export class ResolverBase {
         `Denial reason: ${result.Reason}`
       );
     }
+  }
+
+  /**
+   * SECURITY — GraphQL-boundary screen for one client-supplied SQL clause fragment.
+   *
+   * `ValidateUserProvidedSQLClause` still blocks stacked statements, DML, comments, UNION
+   * and WAITFOR, and still permits SELECT (server-internal engines pass richer filters).
+   * A keyword ban on SELECT/EXISTS at this boundary (#4253) broke first-party clients that
+   * use `IN (SELECT … FROM <entity base view>)` — that is a legitimate ExtraFilter.
+   *
+   * This screen uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`):
+   * wrap the fragment as a single SELECT, fail closed if it does not parse as a read, then
+   * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
+   * and catalogs are rejected. Server-internal RunView callers never hit this.
+   *
+   * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
+   * into the view. Subqueries against another entity's BaseView therefore do not inherit that
+   * entity's RLS; they are still restricted to the view (not the table).
+   */
+  protected assertClientClauseUsesEntityBaseViews(
+    clause: string | undefined | null,
+    label: string,
+    provider?: IMetadataProvider,
+  ): void {
+    if (!clause?.trim()) return;
+
+    const dialect = this.dialectForProvider(provider);
+    if (SQLParser.HasStackedStatements(clause, dialect)) {
+      throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
+    }
+
+    const wrapped =
+      label === 'OrderBy'
+        ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
+        : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
+    const parser = new SQLParser(wrapped, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+      throw new Error(
+        `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
+      );
+    }
+    if (this.astContainsWriteNode(parser.AST)) {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+
+    const allowed = this.entityBaseViewAllowList(provider);
+    const tables = SQLParser.ExtractTableRefs(wrapped, dialect);
+    for (const t of tables) {
+      const table = this.stripSqlIdent(t.TableName);
+      const schema = this.stripSqlIdent(t.SchemaName);
+      if (table.toLowerCase() === '__mj_clause_screen') continue;
+      const qualified = `${schema}.${table}`.toLowerCase();
+      const bare = table.toLowerCase();
+      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
+      throw new Error(
+        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+      );
+    }
+  }
+
+  /**
+   * Applies {@link assertClientClauseUsesEntityBaseViews} to every client-supplied clause
+   * a view request can carry. GraphQL entry points (RunViewByName, RunViewByID,
+   * RunDynamicView, RunViews) funnel through RunViewGenericInternal / RunViewsGenericInternal.
+   */
+  protected screenClientViewClauses(
+    clauses: {
+      extraFilter?: string | null;
+      orderBy?: string | null;
+      userSearchString?: string | null;
+      overrideExcludeFilter?: string | null;
+    },
+    provider?: IMetadataProvider,
+  ): void {
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.userSearchString, 'UserSearchString', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
+  }
+
+  /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
+  private astContainsWriteNode(node: unknown): boolean {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some((n) => this.astContainsWriteNode(n));
+    const obj = node as Record<string, unknown>;
+    const type = obj.type;
+    if (typeof type === 'string' && ResolverBase.WRITE_NODE_TYPES.has(type.toLowerCase())) {
+      return true;
+    }
+    return Object.values(obj).some((v) => this.astContainsWriteNode(v));
+  }
+
+  private static readonly WRITE_NODE_TYPES = new Set<string>([
+    'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
+    'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
+  ]);
+
+  private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
+    const name = provider?.constructor?.name ?? '';
+    if (/postgres/i.test(name)) return new PostgreSQLDialect();
+    return new SQLServerDialect();
+  }
+
+  private stripSqlIdent(name: string | null | undefined): string {
+    if (!name) return '';
+    return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
+  }
+
+  private entityBaseViewAllowList(provider?: IMetadataProvider): {
+    qualified: Set<string>;
+    bare: Set<string>;
+  } {
+    const qualified = new Set<string>();
+    const bare = new Set<string>();
+    const entities = provider?.Entities ?? [];
+    for (const e of entities) {
+      const view = this.stripSqlIdent(e.BaseView);
+      if (!view) continue;
+      const schema = this.stripSqlIdent(e.SchemaName);
+      bare.add(view.toLowerCase());
+      if (schema) qualified.add(`${schema}.${view}`.toLowerCase());
+    }
+    return { qualified, bare };
   }
 
   /**
@@ -740,10 +948,18 @@ export class ResolverBase {
     startRow: number | undefined,
     aggregates?: AggregateExpression[],
     afterKey?: CompositeKey,
-    bypassCache?: boolean
+    bypassCache?: boolean,
+    dataSource?: 'Live' | 'Materialized'
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews.
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        provider as unknown as IMetadataProvider,
+      );
 
       // Check API key scope authorization for view operations
       await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
@@ -810,6 +1026,7 @@ export class ResolverBase {
           ResultType: rt,
           Aggregates: aggregates,
           BypassCache: bypassCache,
+          DataSource: dataSource,
         },
         user
       );
@@ -819,12 +1036,27 @@ export class ResolverBase {
         LogStatus(`[ResolverBase] RunView result aggregate info: entityName=${viewInfo.Entity}, hasAggregateResults=${!!result?.AggregateResults}, aggregateResultCount=${result?.AggregateResults?.length || 0}, aggregateExecutionTime=${result?.AggregateExecutionTime}, aggregateResults=${JSON.stringify(result?.AggregateResults)}`);
       }
 
-      // Process results for GraphQL transport
+      // Process results for GraphQL transport.
+      //
+      // Map onto COPIES, never in place. `FieldMapper.MapFields` renames keys by
+      // mutating (`obj[mapped] = obj[k]; delete obj[k]`), and these rows are the
+      // provider's own result objects — which the server cache holds BY REFERENCE
+      // under a reference-sharing storage provider. Mapping them in place rewrote
+      // `__mj_CreatedAt` to the transport alias `_mj__CreatedAt` inside the live
+      // cache, and because that cache is process-wide, one GraphQL response made
+      // every later read hand back transport-shaped rows that `BaseEntity.SetMany`
+      // rejects. `ArrayFilterEncryptedFieldsForAPI` mutates too, so it must also
+      // see the copies. (FileResolver already maps a spread copy.)
+      //
+      // These copies are LOAD-BEARING, not merely defensive: LocalCacheManager now
+      // deep-freezes cached rows (see ILocalStorageProvider.SharesReferences), so
+      // mapping in place would throw rather than silently corrupt. `{ ...r }` is a
+      // SHALLOW copy, which is sufficient here because the only post-map mutators
+      // rename top-level keys and redact scalar fields — and the cache's freeze is
+      // deep, so a nested value can no longer be reached through the copy either.
       const mapper = new FieldMapper();
       if (result?.Success && result.Results?.length) {
-        for (const r of result.Results) {
-          mapper.MapFields(r);
-        }
+        result.Results = result.Results.map(r => mapper.MapFields({ ...r }));
         // Filter encrypted fields before sending to API client
         await this.ArrayFilterEncryptedFieldsForAPI(
           viewInfo.Entity,
@@ -890,6 +1122,17 @@ export class ResolverBase {
 
       // Transform parameters
       for (const param of params) {
+        // SECURITY: same GraphQL-boundary BaseView screen as RunViewGenericInternal.
+        this.screenClientViewClauses(
+          {
+            extraFilter: param.extraFilter,
+            orderBy: param.orderBy,
+            userSearchString: param.userSearchString,
+            overrideExcludeFilter: param.overrideExcludeFilter,
+          },
+          md,
+        );
+
         if (param.viewInfo) {
           // Validate entity only once per entity type
           const entityName = param.viewInfo.Entity;
@@ -930,6 +1173,7 @@ export class ResolverBase {
           ResultType: rt,
           Aggregates: param.aggregates,
           BypassCache: param.bypassCache,
+          DataSource: param.dataSource,
         });
       }
 
@@ -941,9 +1185,9 @@ export class ResolverBase {
       for (let i = 0; i < runViewResults.length; i++) {
         const runViewResult = runViewResults[i];
         if (runViewResult?.Success && runViewResult.Results?.length) {
-          for (const result of runViewResult.Results) {
-            mapper.MapFields(result);
-          }
+          // Copy-then-map, same reason as the single-view path above: these rows
+          // are cache-held references and MapFields renames keys in place.
+          runViewResult.Results = runViewResult.Results.map(r => mapper.MapFields({ ...r }));
           // Filter encrypted fields before sending to API client
           // Use the corresponding param's entity name
           const entityName = params[i]?.viewInfo?.Entity;
@@ -999,7 +1243,7 @@ export class ResolverBase {
       ?? UserCache.Users.find((u) => u.Email.toLowerCase().trim() === userPayload?.email.toLowerCase().trim());
     if (!user) throw new Error(`User ${userPayload?.email} not found in metadata`);
 
-    return entityInfo.GetUserRowLevelSecurityWhereClause(user, type, returnPrefix);
+    return entityInfo.GetEffectiveRowFilterWhereClause(user, type, returnPrefix);
   }
 
   protected async createAuditLogRecord(
@@ -1101,6 +1345,22 @@ export class ResolverBase {
     });
   }
 
+  /**
+   * Publishes a push-status update to the client on {@link PUSH_STATUS_UPDATES_TOPIC}, stamping the
+   * authenticated owner's user ID from `userPayload` so the subscription filter can bind delivery
+   * to identity (see B49 / `statusUpdatesFilter`). The ergonomic wrapper every resolver should use
+   * instead of calling `pubSub.publish` on the topic directly — it makes omitting identity
+   * impossible. Non-resolver publishers (services, the liveness heartbeat) call the shared
+   * `publishStatusUpdate()` function directly with an explicit `ownerUserId`.
+   */
+  protected PublishStatusUpdate(pubSub: PubSubEngine, sessionId: string, message: string | undefined, userPayload: UserPayload): void {
+    publishStatusUpdate(pubSub, {
+      sessionId,
+      ownerUserId: userPayload?.userRecord?.ID ?? '',
+      message,
+    });
+  }
+
   protected ListenForEntityMessages(entityObject: BaseEntity, pubSub: PubSubEngine, userPayload: UserPayload) {
     // The unique key is set up for each entity object via it's primary key to ensure that we only have one listener at most for each unique
     // entity in the system. This is important because we don't want to have multiple listeners for the same entity as it could
@@ -1130,16 +1390,13 @@ export class ResolverBase {
             const baseEntityEvent = event.args as BaseEntityEvent;
             // message from our entity object, relay it to the client
             LogDebug('ResolverBase.ListenForEntityMessages: About to publish PUSH_STATUS_UPDATES_TOPIC');
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-              message: JSON.stringify({
-                status: 'OK',
-                type: 'EntityObjectStatusMessage',
-                entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
-                primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
-                message: event.args.payload,
-              }),
-              sessionId: userPayload.sessionId,
-            });
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+              status: 'OK',
+              type: 'EntityObjectStatusMessage',
+              entityName: baseEntityEvent.baseEntity.EntityInfo.Name,
+              primaryKey: baseEntityEvent.baseEntity.PrimaryKey,
+              message: event.args.payload,
+            }), userPayload);
           }
         }
       });
@@ -1270,7 +1527,15 @@ export class ResolverBase {
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
-        throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+        // CompleteMessage, not Message. A validation refusal puts its reasons in `Errors` and leaves
+        // `Message` unset, so reading `Message` here fell through to 'Unknown error' and discarded
+        // every field-named explanation the entity had just produced. CreateRecord already read
+        // CompleteMessage; this path did not, which is why the SAME rule on the SAME entity explained
+        // itself on a create and said nothing on an update. CompleteMessage is a strict superset — it
+        // starts from `Message`, then appends `Error` and `Errors` — so nothing previously reported is
+        // lost, and it still yields undefined when there is genuinely nothing to say, leaving the
+        // fallback below to fire rather than showing the user a blank error.
+        throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
           extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
         });
       }
@@ -1476,6 +1741,10 @@ export class ResolverBase {
     // Check API key scope authorization for entity delete operations
     await this.CheckAPIKeyScopeAuthorization('entity:delete', entityName, userPayload);
 
+    // ...which authorizes "may you delete", never "may you delete without an audit row". Strip
+    // the capabilities no client may exercise before they reach the entity.
+    options = DeleteOptionsInput.SanitizeFromWire(options, entityName, userPayload?.email);
+
     if (await this.BeforeDelete(provider, key)) {
       // fire event and proceed if it wasn't cancelled
       const entityObject = await provider.GetEntityObject(entityName, this.GetUserFromPayload(userPayload));
@@ -1496,7 +1765,11 @@ export class ResolverBase {
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
         return returnValue;
       } else {
-        throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+        // CompleteMessage, for the same reason as the update path above. It matters more going
+        // forward: apps already refuse deletes by overriding Delete() and returning false with the
+        // reason on LatestResult, and #3971 proposes a first-class delete-validation seam. Every one
+        // of those reasons was being replaced by 'Unknown error' at the API boundary.
+        throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
           extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
         });
       }

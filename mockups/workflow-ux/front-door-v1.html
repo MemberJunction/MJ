@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow UX — Create Workflow front door v1 (design locked)</title>
+<style>
+  :root{
+    --bg:#eef1f5; --panel:#ffffff; --border:#dfe5ec; --border-strong:#c3ccd8;
+    --ink:#1e2936; --ink-2:#54657a; --ink-3:#8394a8;
+    --blue:#2d6a9f; --blue-soft:#e8f1f8;
+    --action:#0891b2; --agent:#7c5295; --prompt:#2d6a9f; --human:#d97706; --loop:#4f7b48;
+    --ok:#16a34a; --run:#2563eb; --pend:#94a3b8; --warn:#d97706; --err:#dc2626;
+    --r:10px; --shadow:0 1px 3px rgba(16,32,51,.09), 0 4px 14px rgba(16,32,51,.06);
+  }
+  *{box-sizing:border-box; margin:0}
+  body{background:var(--bg); color:var(--ink); font:14px/1.45 -apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; padding:36px 28px 80px}
+  .intro{max-width:1240px; margin:0 auto 34px}
+  .intro h1{font-size:22px; font-weight:700}
+  .intro p{color:var(--ink-2); margin-top:6px; max-width:880px}
+  .mock{max-width:1240px; margin:0 auto 56px}
+  .mock>h2{font-size:15px; font-weight:700; letter-spacing:.02em; text-transform:uppercase; color:var(--blue); margin-bottom:4px}
+  .mock>p.cap{color:var(--ink-2); margin-bottom:14px; max-width:960px}
+  .frame{background:var(--panel); border:1px solid var(--border); border-radius:14px; box-shadow:var(--shadow); overflow:hidden}
+
+  /* ============ app chrome ============ */
+  .topbar{display:flex; align-items:center; gap:14px; padding:12px 18px; border-bottom:1px solid var(--border); background:#fbfcfe}
+  .topbar .back{color:var(--ink-3); font-size:17px}
+  .wf-name{font-size:16px; font-weight:650}
+  .chip{display:inline-flex; align-items:center; gap:6px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:999px; border:1px solid var(--border-strong); color:var(--ink-2); background:#fff}
+  .chip.active{color:#0d7a3f; border-color:#bfe3cd; background:#effaf3}
+  .chip.eph{color:var(--agent); border-color:#e0d3ec; background:#f7f2fb}
+  .spacer{flex:1}
+  .seg{display:flex; border:1px solid var(--border-strong); border-radius:8px; overflow:hidden; font-size:12.5px; font-weight:600}
+  .seg span{padding:6px 12px; color:var(--ink-3); background:#fff}
+  .seg span.on{background:var(--blue); color:#fff}
+  .knob{font-size:12.5px; color:var(--ink-2); display:flex; align-items:center; gap:6px}
+  .knob b{border:1px solid var(--border-strong); border-radius:6px; padding:2px 9px; background:#fff; font-weight:650}
+  .btn{font-size:13px; font-weight:600; border-radius:8px; padding:7px 14px; border:1px solid var(--border-strong); background:#fff; color:var(--ink-2)}
+  .btn.primary{background:var(--blue); border-color:var(--blue); color:#fff}
+  .btn.star{border-color:#e8c98a; background:#fff8ec; color:#9a6a00}
+  .btn.danger{color:var(--err); border-color:#f2c4c4}
+
+  .body3{display:grid; grid-template-columns:190px 1fr 268px; min-height:520px}
+  .body2{display:grid; grid-template-columns:1fr 268px; min-height:520px}
+
+  /* palette */
+  .palette{border-right:1px solid var(--border); padding:14px; background:#fbfcfe}
+  .palette h4, .props h4, .feed h4{font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-3); margin-bottom:10px}
+  .pal-item{display:flex; align-items:center; gap:9px; border:1px solid var(--border); background:#fff; border-radius:8px; padding:8px 10px; margin-bottom:8px; font-size:13px; font-weight:600; color:var(--ink-2); cursor:grab}
+  .dot{width:10px; height:10px; border-radius:3px; flex:none}
+  .pal-note{font-size:11.5px; color:var(--ink-3); margin-top:12px; line-height:1.5}
+
+  /* canvas */
+  .canvas{position:relative; background:
+      linear-gradient(90deg, rgba(45,106,159,.045) 1px, transparent 1px) 0 0/22px 22px,
+      linear-gradient(rgba(45,106,159,.045) 1px, transparent 1px) 0 0/22px 22px, #f7f9fc}
+  .canvas svg.wires{position:absolute; inset:0; width:100%; height:100%}
+  .wire{fill:none; stroke:#9fb2c6; stroke-width:2}
+  .wire.done{stroke:var(--ok)}
+  .wire.live{stroke:var(--run)}
+  .wire.rec{stroke:var(--warn); stroke-dasharray:6 5}
+  .wire-label{font-size:11px; font-weight:600; fill:#54657a}
+  .wire-label.rec{fill:var(--warn)}
+  .port{fill:#fff; stroke:#9fb2c6; stroke-width:2}
+
+  .node{position:absolute; width:200px; background:#fff; border:1px solid var(--border-strong); border-left-width:4px; border-radius:var(--r); box-shadow:var(--shadow); padding:10px 12px 9px}
+  .node .nt{display:flex; align-items:center; gap:8px}
+  .node .ic{width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; font-size:12.5px; color:#fff; flex:none}
+  .node .ttl{font-size:13px; font-weight:650; line-height:1.25}
+  .node .sub{font-size:11.5px; color:var(--ink-3); margin-top:4px}
+  .node.action{border-left-color:var(--action)} .node.action .ic{background:var(--action)}
+  .node.agent{border-left-color:var(--agent)}  .node.agent .ic{background:var(--agent)}
+  .node.human{border-left-color:var(--human)}  .node.human .ic{background:var(--human)}
+  .node.sel{outline:2px solid var(--blue); outline-offset:2px}
+  .node .join{position:absolute; top:-11px; left:10px; font-size:10.5px; font-weight:700; background:#334155; color:#fff; border-radius:999px; padding:2px 9px; letter-spacing:.03em}
+  .start{position:absolute; background:#334155; color:#fff; font-size:12.5px; font-weight:700; border-radius:999px; padding:9px 18px; box-shadow:var(--shadow)}
+
+  /* runtime status */
+  .st{position:absolute; top:-11px; right:10px; font-size:10.5px; font-weight:700; border-radius:999px; padding:2px 9px; color:#fff}
+  .st.ok{background:var(--ok)} .st.run{background:var(--run)} .st.wait{background:var(--warn)} .st.pend{background:var(--pend)}
+  .node.dim{opacity:.55}
+  .node.running{outline:2px solid var(--run); outline-offset:2px}
+  .node.waiting{outline:2px solid var(--warn); outline-offset:2px}
+  .meta{font-size:11px; color:var(--ink-3); margin-top:6px; display:flex; align-items:center; gap:6px}
+  .meta .ava{width:16px; height:16px; border-radius:50%; background:var(--human); color:#fff; font-size:9px; font-weight:700; display:inline-flex; align-items:center; justify-content:center}
+
+  /* props / feed */
+  .props, .feed{border-left:1px solid var(--border); padding:16px; background:#fbfcfe}
+  .fld{margin-bottom:14px}
+  .fld label{display:block; font-size:11.5px; font-weight:650; color:var(--ink-2); margin-bottom:5px}
+  .fld .in{border:1px solid var(--border-strong); border-radius:7px; background:#fff; padding:7px 10px; font-size:13px; color:var(--ink)}
+  .radio{display:flex; gap:8px; font-size:12.5px}
+  .radio span{border:1px solid var(--border-strong); border-radius:7px; padding:6px 10px; background:#fff; color:var(--ink-3); flex:1; text-align:center; font-weight:600}
+  .radio span.on{border-color:var(--blue); color:var(--blue); background:var(--blue-soft)}
+  .hint{font-size:11px; color:var(--ink-3); margin-top:4px}
+  .statusbar{display:flex; gap:18px; align-items:center; border-top:1px solid var(--border); background:#fbfcfe; padding:8px 18px; font-size:12px; color:var(--ink-2)}
+  .statusbar .okc{color:var(--ok); font-weight:650}
+
+  /* run header extras */
+  .progress{height:7px; border-radius:99px; background:#e2e8f0; width:180px; overflow:hidden}
+  .progress i{display:block; height:100%; width:66%; background:linear-gradient(90deg, var(--ok), #43b56c)}
+  .feed .ev{display:flex; gap:9px; margin-bottom:11px; font-size:12.5px}
+  .feed .tks{color:var(--ink-3); font-variant-numeric:tabular-nums; flex:none; width:44px}
+  .feed .ev b{font-weight:650}
+  .feed .pill{display:inline-block; font-size:10.5px; font-weight:700; border-radius:99px; padding:1px 8px; color:#fff}
+  .savebox{margin-top:14px; border:1px dashed #e0c68f; background:#fffaf0; border-radius:10px; padding:12px}
+  .savebox p{font-size:12px; color:#7a5b17; margin-bottom:9px}
+
+  /* chat mock */
+  .chat{max-width:760px; margin:0 auto; padding:26px 22px}
+  .msg{display:flex; gap:12px; margin-bottom:18px}
+  .msg .who{width:32px; height:32px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; color:#fff}
+  .msg.user .who{background:#64748b}
+  .msg.sage .who{background:var(--blue)}
+  .bubble{background:#fff; border:1px solid var(--border); border-radius:12px; padding:12px 15px; box-shadow:var(--shadow); max-width:600px}
+  .bubble p{font-size:13.5px}
+  .plancard{margin-top:10px; border:1px solid var(--border-strong); border-radius:10px; overflow:hidden}
+  .plancard .pc-h{display:flex; align-items:center; gap:10px; padding:9px 13px; background:#f4f7fa; border-bottom:1px solid var(--border); font-size:12.5px; font-weight:700}
+  .plancard ul{list-style:none; padding:9px 13px}
+  .plancard li{display:flex; align-items:center; gap:9px; font-size:12.5px; padding:4px 0; color:var(--ink-2)}
+  .tick{width:16px; height:16px; border-radius:50%; flex:none; display:inline-flex; align-items:center; justify-content:center; font-size:9.5px; color:#fff; font-weight:800}
+  .tick.ok{background:var(--ok)} .tick.run{background:var(--run)} .tick.pend{background:#cbd5e1} .tick.wait{background:var(--warn)}
+  .indent{margin-left:22px}
+  .pc-f{display:flex; gap:8px; align-items:center; padding:9px 13px; border-top:1px solid var(--border); background:#fbfcfe}
+  .pc-f .grow{flex:1; font-size:11.5px; color:var(--ink-3)}
+
+  /* modal mock */
+  .modal-scrim{background:rgba(30,41,54,.45); padding:56px 0; display:flex; justify-content:center}
+  .modal{width:560px; background:#fff; border-radius:14px; box-shadow:0 18px 60px rgba(10,20,35,.35); overflow:hidden}
+  .modal .m-h{padding:16px 20px; border-bottom:1px solid var(--border); font-size:16px; font-weight:700}
+  .modal .m-b{padding:18px 20px}
+  .tiles{display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; margin-top:6px}
+  .tile{border:1.5px solid var(--border-strong); border-radius:10px; padding:12px; text-align:center; cursor:pointer}
+  .tile .t-ic{font-size:20px}
+  .tile b{display:block; font-size:12.5px; margin-top:6px}
+  .tile p{font-size:11px; color:var(--ink-3); margin-top:4px; line-height:1.35}
+  .tile.on{border-color:var(--blue); background:var(--blue-soft)}
+  .m-f{display:flex; justify-content:flex-end; gap:10px; padding:14px 20px; border-top:1px solid var(--border); background:#fbfcfe}
+  .note{font-size:12px; color:var(--ink-3); margin-top:10px}
+</style>
+<style>
+  .lock{max-width:1240px;margin:0 auto 34px;background:#effaf3;border:1px solid #bfe3cd;border-radius:12px;padding:16px 18px}
+  .lock h3{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:#0d7a3f;margin-bottom:8px}
+  .lock ol{margin:0;padding-left:20px;color:var(--ink-2);font-size:13px;line-height:1.65}
+  .lock ol b{color:var(--ink)}
+  .tiles-lg{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:16px 0}
+  .tile-lg{border:1px solid var(--border);border-radius:12px;padding:18px;background:#fff;cursor:pointer}
+  .tile-lg.on{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-soft)}
+  .tile-lg .t-ic{font-size:24px;margin-bottom:10px;color:var(--blue)}
+  .tile-lg b{display:block;font-size:14.5px;margin-bottom:4px}
+  .tile-lg p{font-size:12.5px;color:var(--ink-2);line-height:1.5}
+  .tile-lg .meta{margin-top:10px;font-size:11.5px;color:var(--ink-3)}
+  .field{margin:14px 0}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+  .field input,.field textarea{width:100%;border:1px solid var(--border-strong);border-radius:8px;padding:9px 11px;font:inherit;background:#fff}
+  .runlist{border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:12px}
+  .runrow{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--border);font-size:13px}
+  .runrow:last-child{border-bottom:none}
+  .runrow.on{background:var(--blue-soft)}
+  .runrow .nm{font-weight:600;flex:1}
+  .runrow .sub{color:var(--ink-3);font-size:12px}
+</style>
+</head>
+<body>
+
+<div class="intro">
+  <h1>Create Workflow — the front door</h1>
+  <p>The screen that replaces today's save-the-agent-record-first requirement. Per D18 nothing here says
+  <em>graph</em>, <em>DAG</em>, <em>node</em> or <em>Flow Agent</em> — those survive in metadata and dev docs only.
+  This screen lives in a new <b>Workflows</b> Explorer app, not inside the AI app: a business user automating
+  something does not look under "AI", and D19 exists precisely because the editor is currently buried.</p>
+</div>
+
+<div class="lock">
+  <h3>Open questions from phase5-overview-v1 — now answered</h3>
+  <ol>
+    <li><b>① Concurrency cap placement → toolbar, not per-node.</b> It is a property of the <em>workflow</em>
+    ("run at most N steps at once"), not of any one step. Per-node placement would imply each step carries its
+    own limit, which the engine does not model — <code>maxConcurrentSteps</code> lives in the flow's params bag.</li>
+    <li><b>② Recovery-path style → dashed amber covers recovery only.</b> Validate-rejection routes get no
+    special colour because they are not a route: a rejected graph never runs, so there is nothing to draw.
+    Rejections surface in the validation banner, which is where an author can act on them.</li>
+    <li><b>③ Run view → right-panel activity feed.</b> A bottom timeline strip competes with the canvas for
+    horizontal space, which is the axis a fan-out graph needs most. The feed also reads chronologically
+    top-to-bottom, matching how someone follows a run in progress.</li>
+    <li><b>④ Save as Workflow from chat → name it inline, then offer the editor.</b> One field and a Save
+    button in the card; a "Open in editor" secondary. Dropping straight into the editor makes saving feel like
+    a commitment to more work, which is exactly the friction that stops a good one-off plan becoming reusable.
+    Triggers are <em>not</em> asked for here — a saved workflow defaults to On demand, because the moment of
+    saving is about capture, not scheduling.</li>
+    <li><b>⑤ Minimap &amp; palette → collapsed by default under 1100px.</b> Both are navigational aids for a
+    graph large enough to need them; on a narrow viewport they cost more canvas than they return.</li>
+  </ol>
+</div>
+
+<div class="mock">
+  <h2>A — Create Workflow (Describe it selected)</h2>
+  <p class="cap">Three doors. "Describe it" is pre-selected because it is the one that needs no prior
+  knowledge of the product — the others assume you know what steps you want, or that a good run already happened.</p>
+  <div class="frame">
+    <div class="topbar">
+      <span class="back">←</span><span class="wf-name">Create Workflow</span>
+      <span class="spacer"></span>
+      <button class="btn">Cancel</button><button class="btn primary">Create →</button>
+    </div>
+    <div style="padding:22px 26px">
+      <div class="tiles-lg">
+        <div class="tile-lg"><div class="t-ic">▦</div><b>Blank canvas</b>
+          <p>Add steps and connect them yourself.</p>
+          <div class="meta">Best when you already know the shape.</div></div>
+        <div class="tile-lg on"><div class="t-ic">✦</div><b>Describe it</b>
+          <p>Say what you want done. We draft the steps; you refine them on the canvas.</p>
+          <div class="meta">Nothing is saved until you approve it.</div></div>
+        <div class="tile-lg"><div class="t-ic">⟳</div><b>From a past run</b>
+          <p>Promote something an agent already worked out.</p>
+          <div class="meta">Only runs that finished are listed.</div></div>
+      </div>
+
+      <div class="field">
+        <label>What should this workflow do?</label>
+        <textarea rows="3" placeholder="e.g. Every Monday, pull last week's support tickets, summarise the themes, and email the team lead."></textarea>
+      </div>
+      <div class="field">
+        <label>Name <span style="font-weight:400;color:var(--ink-3)">— you can change this later</span></label>
+        <input value="Weekly support themes" />
+      </div>
+      <p class="note" style="color:var(--ink-3);font-size:12.5px">
+        Workflows are deterministic pathways — they can include AI steps, but always follow the same route.
+        You will review every step before anything runs.</p>
+    </div>
+  </div>
+</div>
+
+<div class="mock">
+  <h2>B — From a past run</h2>
+  <p class="cap">Only settled runs appear. Offering an in-flight run would invite promoting a shape that may
+  still change under a retry or a recovery branch — the saved workflow would not be the one that ran.</p>
+  <div class="frame">
+    <div class="topbar">
+      <span class="back">←</span><span class="wf-name">Create Workflow</span>
+      <span class="spacer"></span>
+      <button class="btn">Cancel</button><button class="btn primary">Create →</button>
+    </div>
+    <div style="padding:22px 26px">
+      <div class="tiles-lg">
+        <div class="tile-lg"><div class="t-ic">▦</div><b>Blank canvas</b><p>Add steps and connect them yourself.</p></div>
+        <div class="tile-lg"><div class="t-ic">✦</div><b>Describe it</b><p>We draft the steps; you refine them.</p></div>
+        <div class="tile-lg on"><div class="t-ic">⟳</div><b>From a past run</b><p>Promote something an agent already worked out.</p></div>
+      </div>
+      <div class="runlist">
+        <div class="runrow on"><span class="nm">Quarterly review</span>
+          <span class="sub">4 steps · finished 2 days ago · Sage</span><span class="chip active">Finished</span></div>
+        <div class="runrow"><span class="nm">Competitor scan</span>
+          <span class="sub">6 steps · finished last week · Research Agent</span><span class="chip active">Finished</span></div>
+        <div class="runrow"><span class="nm">Onboarding checklist</span>
+          <span class="sub">3 steps · 1 waiting on a person · Sage</span><span class="chip">Waiting</span></div>
+      </div>
+      <p class="note" style="color:var(--ink-3);font-size:12.5px;margin-top:12px">
+        Steps that waited on a person are kept as person steps. Anything the run used that cannot be repeated
+        — one-off inputs from that day — is flagged so you can replace it with something reusable.</p>
+    </div>
+  </div>
+</div>
+
+<div class="mock">
+  <h2>C — Save as Workflow, from a chat plan card (answers ④)</h2>
+  <p class="cap">Name it inline and save. "Open in editor" is available but secondary — making the editor
+  mandatory turns a two-second capture into a task, which is what stops good one-off plans becoming reusable.
+  No trigger is requested: saving is capture, not scheduling.</p>
+  <div class="frame" style="max-width:720px">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+      <span style="color:var(--ink-3)">▾</span>
+      <b>Quarterly review</b>
+      <span style="flex:1;color:var(--ink-2);font-size:12.5px">4 steps — 4 complete</span>
+      <span style="color:var(--ok)">✓</span>
+    </div>
+    <div style="padding:16px;background:#f7f9fc;border-bottom:1px solid var(--border);color:var(--ink-3);font-size:12.5px">
+      [ the same read-only canvas the editor uses ]
+    </div>
+    <div style="padding:14px 16px;display:flex;align-items:center;gap:10px">
+      <input style="flex:1;border:1px solid var(--border-strong);border-radius:8px;padding:8px 11px;font:inherit"
+             value="Quarterly review" />
+      <button class="btn primary">Save as Workflow</button>
+      <button class="btn">Open in editor</button>
+    </div>
+    <div style="padding:0 16px 14px;color:var(--ink-3);font-size:12px">
+      Saved workflows run on demand until you give them a schedule.</div>
+  </div>
+</div>
+
+<div class="intro" style="margin-top:-18px">
+  <p style="font-size:12.5px"><b>Placement:</b> a new <b>Workflows</b> Explorer app (left-nav shell), scaffolded
+  with <code>scaffold-mj-dashboard</code> so page chrome, <code>BaseResourceComponent</code> +
+  <code>NotifyLoadComplete</code>, <code>NavigationService</code> routing and query-param round-trip are correct
+  by construction. The canvas embeds unchanged — it is a <code>widgets</code>-layer component, so the app supplies
+  the routing and provider it deliberately refuses to know about. Scheduled after Phase 7 (Track D).</p>
+</div>
+
+</body>
+</html>

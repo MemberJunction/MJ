@@ -15,8 +15,10 @@ import {
     RealtimeVoiceOption,
     IsTranscriptContinuation,
     JSONObject,
+    RealtimeTurnDetectionMode,
+    RealtimeTurnDetectionSettings,
 } from '@memberjunction/ai';
-import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, ResolveResponseDoneUsage } from '@memberjunction/ai';
 import { OpenAI } from 'openai';
 import { OpenAIRealtimeWebSocket } from 'openai/realtime/websocket';
 // NOTE: the bare 'openai/realtime' directory subpath is not exported by the SDK's package
@@ -187,11 +189,21 @@ export interface OpenAIRealtimeProfile {
     /** The fatal-error message surfaced when the socket closes unexpectedly. */
     unexpectedCloseMessage: string;
     /**
-     * Builds the `audio.input.turn_detection` block. `disableAutoResponse` comes from the Config
-     * bag (meeting mode: the bridge, not server VAD, decides when the model speaks). Return
-     * `undefined` to omit the block and accept the provider default.
+     * The MJ-normalized turn-detection modes this provider's endpoint actually supports (the
+     * catalog/cascade `turnDetection.Mode` vocabulary, `'default'` excluded — it means "no
+     * request"). A requested mode NOT in this list is diag-logged and falls back to the profile
+     * default — a shared model catalog must be safe on every provider, never reject a session.
      */
-    buildTurnDetection(disableAutoResponse: boolean): RealtimeAudioInputTurnDetection | undefined;
+    supportedTurnModes: ReadonlyArray<Exclude<RealtimeTurnDetectionMode, 'default'>>;
+    /**
+     * Builds the `audio.input.turn_detection` block. `disableAutoResponse` comes from the Config
+     * bag (meeting mode: the bridge, not server VAD, decides when the model speaks); `requested`
+     * is the normalized turn-detection request from the catalog/config cascade (the `turnDetection`
+     * bag key), already extracted and never sent raw. Return `undefined` to omit the block and
+     * accept the provider default. Meeting mode ALWAYS composes on top: whatever mode is chosen,
+     * `create_response` must reflect `!disableAutoResponse`.
+     */
+    buildTurnDetection(disableAutoResponse: boolean, requested?: RealtimeTurnDetectionSettings): RealtimeAudioInputTurnDetection | undefined;
     /**
      * Maps MJ's NORMALIZED effort level (numeric 1–100 or named — the same vocabulary as
      * `ChatParams.effortLevel`) onto THIS provider's realtime effort literals. Providers whose
@@ -199,6 +211,58 @@ export interface OpenAIRealtimeProfile {
      * unmappable value (it is never sent raw). Only consulted when `supportsReasoningEffort` is on.
      */
     mapEffortLevel(effortLevel: string): string | undefined;
+}
+
+/**
+ * Maps a normalized {@link RealtimeTurnDetectionSettings} request onto the OpenAI-protocol
+ * `turn_detection` wire block, gated by a profile's `supportedTurnModes`. Shared by every profile
+ * in the family so the vocabulary translates identically on all of them:
+ *
+ * - `'serverVad'` → `{ type: 'server_vad' }` with the optional threshold/silence tuning;
+ * - `'semanticVad'` → `{ type: 'semantic_vad' }` with the optional eagerness;
+ * - `'native'` → no family-wide mapping YET (reserved for full-duplex modes providers document);
+ *   profiles that gain one override {@link OpenAIRealtimeProfile.buildTurnDetection} to map it.
+ *
+ * Returns `undefined` when the request is absent, mode `'default'`, or the mode is unsupported by
+ * this profile (diag-logged) — the caller then applies its own default. Meeting-mode composition
+ * (`create_response: !disableAutoResponse`, `interrupt_response: true`) is applied here so every
+ * mapped mode honors the bridge's floor control.
+ */
+export function MapNormalizedTurnDetection(
+    profile: Pick<OpenAIRealtimeProfile, 'providerKey' | 'supportedTurnModes'>,
+    disableAutoResponse: boolean,
+    requested: RealtimeTurnDetectionSettings | undefined,
+): RealtimeAudioInputTurnDetection | undefined {
+    const mode = requested?.Mode;
+    if (!mode || mode === 'default') {
+        return undefined;
+    }
+    if (!profile.supportedTurnModes.includes(mode)) {
+        RealtimeDiagLog(
+            `[${profile.providerKey}Realtime][diag] Requested turn-detection mode '${mode}' is not supported by this provider ` +
+            `(supported: ${profile.supportedTurnModes.join(', ') || '(none)'}) — falling back to the profile default`,
+        );
+        return undefined;
+    }
+    const floor = { create_response: !disableAutoResponse, interrupt_response: true };
+    if (mode === 'semanticVad') {
+        return {
+            type: 'semantic_vad',
+            ...(requested?.Eagerness ? { eagerness: requested.Eagerness } : {}),
+            ...floor,
+        } as RealtimeAudioInputTurnDetection;
+    }
+    if (mode === 'serverVad') {
+        return {
+            type: 'server_vad',
+            ...(typeof requested?.Threshold === 'number' ? { threshold: requested.Threshold } : {}),
+            ...(typeof requested?.SilenceDurationMs === 'number' ? { silence_duration_ms: requested.SilenceDurationMs } : {}),
+            ...floor,
+        } as RealtimeAudioInputTurnDetection;
+    }
+    // 'native' reached only when a profile declares it supported but did not override the mapping.
+    RealtimeDiagLog(`[${profile.providerKey}Realtime][diag] Turn-detection mode 'native' has no wire mapping on this profile — falling back to the profile default`);
+    return undefined;
 }
 
 /** The OpenAI provider profile — the defaults every OpenAI-compatible subclass overrides from. */
@@ -213,10 +277,13 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: true,
     supportsLiveReconfigure: true,
     unexpectedCloseMessage: 'OpenAI realtime connection closed unexpectedly',
-    // OpenAI's default turn detection (server VAD with auto-response) is correct for 1:1 calls, so
-    // the block is only sent when meeting mode needs create_response disabled.
-    buildTurnDetection: (disableAutoResponse) =>
-        disableAutoResponse ? { type: 'server_vad', create_response: false, interrupt_response: true } : undefined,
+    supportedTurnModes: ['serverVad', 'semanticVad'],
+    // A normalized request (catalog/cascade `turnDetection`) maps first; otherwise OpenAI's default
+    // turn detection (server VAD with auto-response) is correct for 1:1 calls, so the block is only
+    // sent when meeting mode needs create_response disabled.
+    buildTurnDetection: (disableAutoResponse, requested) =>
+        MapNormalizedTurnDetection(OPENAI_REALTIME_PROFILE, disableAutoResponse, requested)
+        ?? (disableAutoResponse ? { type: 'server_vad', create_response: false, interrupt_response: true } : undefined),
     mapEffortLevel: MapEffortLevelToOpenAIRealtime,
 };
 
@@ -239,6 +306,13 @@ interface ExtractedRealtimeFeatures {
     voice?: string;
     /** The host-neutral meeting flag (`disableAutoResponse`) — never sent raw to a provider. */
     disableAutoResponse: boolean;
+    /**
+     * The MJ-normalized turn-detection request (`turnDetection` bag key) sourced from the model
+     * catalog (`ModelConfiguration.Realtime.TurnDetection`) and/or the agent/app config cascade
+     * (`realtime.session.turnDetection`). Translated per profile via `buildTurnDetection` —
+     * NEVER sent raw (the normalized shape is not a wire field on any provider).
+     */
+    turnDetection?: RealtimeTurnDetectionSettings;
     /** Per-session input-transcription model override (`inputTranscriptionModel` bag key). */
     inputTranscriptionModel?: string;
     /**
@@ -276,6 +350,7 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
         mcpTools?: unknown;
         voice?: unknown;
         disableAutoResponse?: unknown;
+        firstMessage?: unknown;
     };
 
     // The provider-native key is an explicit override; the normalized key is the standard channel.
@@ -312,6 +387,19 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     const disableAutoResponse = rest.disableAutoResponse === true;
     delete rest.disableAutoResponse;
 
+    // `firstMessage` is the neutral opening-utterance key (issue #3557). This protocol family has
+    // no equivalent — the agent speaks when prompted — so there is nothing to translate, and the
+    // key is scrubbed rather than forwarded. Unconsumed is NOT the same as harmless: everything
+    // left in `rest` is spread into the session payload on BOTH topologies, and per the protected-
+    // wire-fields note below this endpoint rejects a malformed session object wholesale.
+    delete rest.firstMessage;
+
+    // Normalized turn-detection request — validated structurally (only recognized, correctly-typed
+    // knobs survive) and ALWAYS scrubbed: the normalized shape is MJ vocabulary, not a wire field.
+    const turnDetectionBag = rest as JSONObject & { turnDetection?: unknown };
+    const turnDetection = normalizeTurnDetectionRequest(turnDetectionBag.turnDetection);
+    delete turnDetectionBag.turnDetection;
+
     // PROTECTED WIRE FIELDS — never overridable through the open bag. `type` is the GA session
     // discriminator (a clobbered value makes strict endpoints reject the WHOLE session.update,
     // silently dropping the prompt AND tools); `instructions` is the server-authored co-agent
@@ -344,7 +432,35 @@ export function ExtractRealtimeFeatures(config: JSONObject | undefined): Extract
     delete bag.proxyBaseUrl;
     const proxyBaseUrl = typeof rawProxy === 'string' && rawProxy.trim().length > 0 ? rawProxy.trim() : undefined;
 
-    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, rest };
+    return { effortLevel, parallelToolCalls, mcpTools, voice, disableAutoResponse, turnDetection, inputTranscriptionModel, endpoint, sampleRate, proxyBaseUrl, rest };
+}
+
+/**
+ * Structurally validates the `turnDetection` bag value into a {@link RealtimeTurnDetectionSettings}
+ * — only recognized, correctly-typed knobs survive (the bag came through JSON layers of unknown
+ * provenance). Returns `undefined` when nothing valid is present, so an absent/garbage value
+ * contributes nothing (tolerant, like every other cascade input).
+ */
+function normalizeTurnDetectionRequest(raw: unknown): RealtimeTurnDetectionSettings | undefined {
+    if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+        return undefined;
+    }
+    const source = raw as { Mode?: unknown; Eagerness?: unknown; Threshold?: unknown; SilenceDurationMs?: unknown };
+    const result: RealtimeTurnDetectionSettings = {};
+    const modes: ReadonlyArray<RealtimeTurnDetectionMode> = ['default', 'serverVad', 'semanticVad', 'native'];
+    if (typeof source.Mode === 'string' && (modes as readonly string[]).includes(source.Mode)) {
+        result.Mode = source.Mode as RealtimeTurnDetectionMode;
+    }
+    if (source.Eagerness === 'low' || source.Eagerness === 'auto' || source.Eagerness === 'high') {
+        result.Eagerness = source.Eagerness;
+    }
+    if (typeof source.Threshold === 'number' && Number.isFinite(source.Threshold)) {
+        result.Threshold = source.Threshold;
+    }
+    if (typeof source.SilenceDurationMs === 'number' && Number.isFinite(source.SilenceDurationMs)) {
+        result.SilenceDurationMs = source.SilenceDurationMs;
+    }
+    return Object.keys(result).length > 0 ? result : undefined;
 }
 
 /**
@@ -624,7 +740,7 @@ export class OpenAIRealtime extends BaseRealtimeModel {
         // The OUTPUT voice comes from the effective config's per-provider voice (`params.Config.voice`,
         // shaped by GetProviderVoiceSettings) — this is what lets a co-agent's configured voice OR a
         // per-session override actually take effect in the client-direct topology.
-        const turnDetection = profile.buildTurnDetection(features.disableAutoResponse);
+        const turnDetection = profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
         const audio = BuildAudioBlock(profile, features, turnDetection);
         const session: GARealtimeSessionCreateRequest = {
             type: 'realtime',
@@ -675,6 +791,13 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
     private errorListener: (error: OpenAIRealtimeError) => void;
     /** Set by {@link Close} so a consumer-initiated teardown never reports an "unexpected" close. */
     private closedByConsumer = false;
+
+    /**
+     * The normalized turn-detection request from the LAST applied session config, kept so
+     * {@link Reconfigure}'s partial `session.update` rebuilds the session's actual mode rather
+     * than hardcoding server_vad (which would silently downgrade a semantic/native session).
+     */
+    private lastTurnDetectionRequest?: RealtimeTurnDetectionSettings;
 
     /** Backing promise for {@link WaitForConfigApplied}; resolve/reject handles null once settled. */
     private configAppliedPromise: Promise<void>;
@@ -988,11 +1111,13 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             return;
         }
         const disable = params.DisableAutoResponse === true;
-        const turnDetection: RealtimeAudioInputTurnDetection = {
-            type: 'server_vad',
-            create_response: !disable,
-            interrupt_response: true,
-        };
+        // Preserve the session's resolved turn-detection MODE across the live flip: rebuild from
+        // the remembered normalized request (semantic/native sessions stay semantic/native) and
+        // only fall back to explicit server_vad when no request produced a block — the partial
+        // update must ALWAYS carry create_response, since flipping it is the whole point here.
+        const turnDetection: RealtimeAudioInputTurnDetection =
+            this.profile.buildTurnDetection(disable, this.lastTurnDetectionRequest)
+            ?? { type: 'server_vad', create_response: !disable, interrupt_response: true };
         // Re-send the transcription block alongside ONLY when this profile transcribes via an
         // opt-in model — a partial update must not fabricate `transcription: { model: undefined }`
         // for natively-transcribing providers.
@@ -1111,7 +1236,7 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
             case 'response.done':
                 // Emitted for every terminal status (completed, cancelled, failed) — always clears.
                 this.responseActive = false;
-                return this.handleResponseDone(event.response.usage as GARealtimeResponseUsage | undefined);
+                return this.handleResponseDone(ResolveResponseDoneUsage(event));
             default:
                 return this.dispatchMcpEvent(event);
         }
@@ -1275,7 +1400,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         // while KEEPING detection so input transcription and barge-in still work. A 1:1 call (flag absent)
         // keeps the provider's default auto-response.
         const features = ExtractRealtimeFeatures(config);
-        const turnDetection = this.profile.buildTurnDetection(features.disableAutoResponse);
+        // Remember the normalized request so a LIVE Reconfigure (meeting-mode flip) rebuilds the
+        // SAME mode instead of silently downgrading a semantic/native session to server_vad.
+        this.lastTurnDetectionRequest = features.turnDetection;
+        const turnDetection = this.profile.buildTurnDetection(features.disableAutoResponse, features.turnDetection);
 
         // Opt into USER input transcription — the same opt-in CreateClientSession applies for the
         // client-direct topology — so user-role transcripts flow server-bridged too (the contract

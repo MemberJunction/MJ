@@ -1,6 +1,6 @@
 import { PubSubEngine } from 'type-graphql';
 import { LogError } from '@memberjunction/core';
-import { PUSH_STATUS_UPDATES_TOPIC } from './PushStatusResolver.js';
+import { publishStatusUpdate } from './PushStatusResolver.js';
 
 /** Default cadence for fire-and-forget liveness pulses (5 minutes). */
 export const DEFAULT_PULSE_INTERVAL_MS = 5 * 60 * 1000;
@@ -32,6 +32,11 @@ export interface LivenessPulseOptions {
     pubSub: PubSubEngine;
     /** Session the client is subscribed on (used by the subscription filter). */
     sessionId: string;
+    /**
+     * Authenticated user the operation belongs to (B49). Stamped on every pulse so the
+     * subscription filter binds delivery to identity, not just the client-chosen sessionId.
+     */
+    ownerUserId: string;
     /** Resolver label echoed in the message envelope (e.g. 'RunAIAgentResolver'). */
     resolver: string;
     /** Pulse cadence in ms. Defaults to {@link DEFAULT_PULSE_INTERVAL_MS}. */
@@ -56,7 +61,7 @@ export interface LivenessPulseOptions {
  * so the client receives it through the same subscription with no special parsing.
  */
 export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulseHandle {
-    const { pubSub, sessionId, resolver, readStatus } = options;
+    const { pubSub, sessionId, ownerUserId, resolver, readStatus } = options;
     const intervalMs = options.intervalMs ?? DEFAULT_PULSE_INTERVAL_MS;
 
     const timer = setInterval(() => {
@@ -68,14 +73,15 @@ export function startLivenessPulse(options: LivenessPulseOptions): LivenessPulse
             LogError(`[LivenessPulse:${resolver}] readStatus failed: ${(e as Error).message}`);
         }
 
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
+        publishStatusUpdate(pubSub, {
+            sessionId,
+            ownerUserId,
             message: JSON.stringify({
                 resolver,
                 type: HEARTBEAT_MESSAGE_TYPE,
                 status: 'ok',
                 data: data ?? {},
             }),
-            sessionId,
         });
     }, intervalMs);
 

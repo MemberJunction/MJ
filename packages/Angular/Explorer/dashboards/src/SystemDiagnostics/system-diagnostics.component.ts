@@ -1,5 +1,4 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy, ElementRef, ViewChild, AfterViewInit, NgZone } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
 import { Subject, interval } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { RegisterClass } from '@memberjunction/global';
@@ -1464,8 +1463,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
 
     constructor(
         private cdr: ChangeDetectorRef,
-        private ngZone: NgZone,
-        private route: ActivatedRoute
+        private ngZone: NgZone
     ) {
         super();
     }
@@ -1478,15 +1476,10 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         // Apply query params (override preferences if present)
         this.applyQueryParams();
 
-        // Subscribe to query param changes
-        this.route.queryParams
-            .pipe(takeUntil(this.destroy$))
-            .subscribe(() => {
-                // Only apply if we've already loaded settings
-                if (this.settingsLoaded) {
-                    this.applyQueryParams();
-                }
-            });
+        // Back/forward and deep-link changes arrive via OnQueryParamsChanged below — the shell
+        // owns URL sync, so a resource component must never subscribe to Router events itself.
+        // (Explorer CACHES and reuses resource components, so a one-shot read in ngOnInit is not
+        // enough either: a re-focused tab never re-runs it.)
 
         this.refreshData();
         this.NotifyLoadComplete();
@@ -4154,11 +4147,20 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     // === Deep Linking via Query Parameters ===
 
     /**
+     * Back/forward, deep link, or Home-pin restore. The framework calls this whenever the tab's
+     * query params change after initial load — the replacement for a `route.queryParams`
+     * subscription, which desyncs from the shell's cached-component lifecycle.
+     */
+    protected override OnQueryParamsChanged(_params: Record<string, string>, _source: 'popstate' | 'deeplink'): void {
+        if (this.settingsLoaded) this.applyQueryParams();
+    }
+
+    /**
      * Apply query parameters to component state (deep linking support)
      * Query params take precedence over saved preferences
      */
     private applyQueryParams(): void {
-        const params = this.route.snapshot.queryParams;
+        const params = this.GetQueryParams();
 
         // Section: ?section=engines|redundant|performance|cache
         if (params['section']) {

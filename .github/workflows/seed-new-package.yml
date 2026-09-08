@@ -1,0 +1,171 @@
+name: Seed new package
+
+# Publishes a seed version of a new @memberjunction/* package THROUGH the trusted
+# publisher, so that a public, machine-checkable proof of the OIDC configuration exists.
+#
+# WHY THIS WORKFLOW EXISTS: `new-package-gate.yml` needs to know whether a new package has
+# a trusted-publisher configuration attached. It cannot ask npm directly — the config lives
+# behind `GET /-/package/<name>/trust`, which rejects a read-only granular token with HTTP
+# 403, and the only token that can read it is write-scoped across every @memberjunction
+# package: the exact long-lived credential trusted publishing exists to abolish.
+#
+# So instead of asking whether trust is configured, we USE it and check what it leaves
+# behind. This job publishes over OIDC with `--provenance`. That publish can only succeed
+# if `npm trust github` has already been run for the package, and it deposits a public
+# provenance attestation naming this repository and publish.yml. The gate then reads that
+# attestation unauthenticated. No secrets anywhere in the chain.
+#
+# WHEN TO RUN IT: step 5 of the new-package setup, after `npm trust github`. The gate's
+# failure message walks the author through it.
+#
+# The seed is a prerelease published under a non-default dist-tag, so `latest` never points
+# at it and a real release is unaffected.
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package name, e.g. @memberjunction/new-thing'
+        required: true
+        type: string
+      version:
+        description: 'Seed version (prerelease — must not collide with a real release)'
+        required: false
+        default: '0.0.1-seed.1'
+        type: string
+
+concurrency:
+  group: seed-new-package-${{ inputs.package }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # mints the OIDC token npm exchanges for publish rights
+
+jobs:
+  seed:
+    name: Seed ${{ inputs.package }} over OIDC
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm >= 11.5.1; pin well above it so the runner's bundled
+      # npm version can drift without silently changing behaviour here.
+      - name: Pin npm
+        run: |
+          npm install -g npm@^11.15.0
+          npm --version
+
+      - name: Validate inputs
+        env:
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          case "$PACKAGE" in
+            @memberjunction/*) ;;
+            *) echo "::error::'$PACKAGE' is not in the @memberjunction scope."; exit 1 ;;
+          esac
+          # A seed must be a prerelease. A plain x.y.z could win the `latest` tag and point
+          # consumers at an empty placeholder.
+          case "$VERSION" in
+            *-*) ;;
+            *) echo "::error::'$VERSION' is not a prerelease. Use something like 0.0.1-seed.1."; exit 1 ;;
+          esac
+
+      # If the package does not exist, `npm trust github` cannot have been run against it
+      # either — npm refuses to configure trust for a nonexistent package. Say so plainly
+      # rather than letting the publish fail with a less obvious error.
+      - name: Require the package to already exist
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          encoded="${PACKAGE/\//%2f}"
+          code=$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/$encoded")
+          echo "registry returned HTTP $code for $PACKAGE"
+          if [ "$code" = "404" ]; then
+            echo "::error::$PACKAGE does not exist on npm yet. Run 'npx setup-npm-trusted-publish $PACKAGE' first, then 'npm trust github ...', then re-run this workflow."
+            exit 1
+          fi
+          if [ "$code" != "200" ]; then
+            echo "::error::Unexpected HTTP $code from the registry. Check https://status.npmjs.org/ and re-run."
+            exit 1
+          fi
+
+      # Published from a scratch directory, not the repo: the seed is a marker, not code.
+      # `repository` must name this repo or npm refuses to attach provenance.
+      - name: Build the seed package
+        env:
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/seed && cd /tmp/seed
+          cat > package.json <<EOF
+          {
+            "name": "$PACKAGE",
+            "version": "$VERSION",
+            "description": "Trusted-publishing seed. Proves OIDC is configured; contains no code.",
+            "license": "ISC",
+            "repository": {
+              "type": "git",
+              "url": "git+https://github.com/${{ github.repository }}.git"
+            }
+          }
+          EOF
+          cat > README.md <<EOF
+          # $PACKAGE
+
+          Seed release published over OIDC to prove trusted publishing is configured for
+          this package. It contains no code and is tagged \`seed\`, never \`latest\`.
+          Real releases are published by .github/workflows/publish.yml.
+          EOF
+          cat package.json
+
+      # The load-bearing step. Succeeds only if a trusted publisher naming this repository
+      # and publish.yml is already attached to the package. No NPM_TOKEN is set, on purpose.
+      - name: Publish seed over OIDC
+        working-directory: /tmp/seed
+        env:
+          NPM_TOKEN: ''
+        run: |
+          set -euo pipefail
+          npm publish --provenance --access public --tag seed 2>&1 | tee /tmp/seed-publish.log
+
+      # Read back what the publish deposited, so the operator sees the same evidence the
+      # gate will, without waiting for a PR run.
+      - name: Verify the attestation is public
+        env:
+          PACKAGE: ${{ inputs.package }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          encoded="${PACKAGE/\//%2f}"
+          url="https://registry.npmjs.org/-/npm/v1/attestations/$encoded@$VERSION"
+          code=$(curl -s -o /tmp/att.json -w '%{http_code}' "$url")
+          echo "attestation endpoint returned HTTP $code"
+          if [ "$code" != "200" ]; then
+            echo "::error::Published, but no public attestation at $url. The gate will still block. Confirm 'npm trust list $PACKAGE' names publish.yml."
+            exit 1
+          fi
+          node -e '
+            const d = require("/tmp/att.json");
+            for (const a of d.attestations ?? []) {
+              const p = a?.bundle?.dsseEnvelope?.payload;
+              if (!p) continue;
+              const s = JSON.parse(Buffer.from(p, "base64").toString());
+              const w = s?.predicate?.buildDefinition?.externalParameters?.workflow;
+              if (w) { console.log("workflow path :", w.path); console.log("workflow repo :", w.repository); }
+            }
+          '
+          {
+            echo "## Seeded ${PACKAGE}@${VERSION}"
+            echo ''
+            echo 'Published over OIDC with provenance. The new-package gate will now pass for this package.'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -43,6 +43,9 @@ export class RunQueryInput {
 
   @Field(() => GraphQLJSONObject, { nullable: true, description: 'Optional runtime-only directive to post-process result rows through a registered query result enricher ({ EnricherKey, Config })' })
   Enrichment?: RunQueryEnrichment;
+
+  @Field(() => String, { nullable: true, description: "Read source: 'Live' (default) or 'Materialized' (serve from a fresh RowFilterBroad materialization when available; falls back to live otherwise)" })
+  DataSource?: 'Live' | 'Materialized';
 }
 
 @ObjectType()
@@ -195,7 +198,8 @@ export class RunQueryResolver extends ResolverBase {
                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                      @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                      @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
-                     @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
+                     @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment,
+                     @Arg('DataSource', () => String, {nullable: true, description: "Read source: 'Live' (default) or 'Materialized' (serve from a fresh RowFilterBroad materialization when available; falls back to live otherwise)"}) DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResultType> {
     // Check API key scope authorization for query execution
     await this.CheckAPIKeyScopeAuthorization('query:run', QueryID, context.userPayload);
 
@@ -212,7 +216,8 @@ export class RunQueryResolver extends ResolverBase {
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
-        Enrichment: Enrichment
+        Enrichment: Enrichment,
+        DataSource: DataSource
       },
       context.userPayload.userRecord);
 
@@ -256,7 +261,8 @@ export class RunQueryResolver extends ResolverBase {
                            @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                            @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                            @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
-                           @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
+                           @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment,
+                           @Arg('DataSource', () => String, {nullable: true, description: "Read source: 'Live' (default) or 'Materialized' (serve from a fresh RowFilterBroad materialization when available; falls back to live otherwise)"}) DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResultType> {
     // Check API key scope authorization for query execution
     await this.CheckAPIKeyScopeAuthorization('query:run', QueryName, context.userPayload);
 
@@ -272,7 +278,8 @@ export class RunQueryResolver extends ResolverBase {
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
-        Enrichment: Enrichment
+        Enrichment: Enrichment,
+        DataSource: DataSource
       },
       context.userPayload.userRecord);
       
@@ -304,7 +311,8 @@ export class RunQueryResolver extends ResolverBase {
                                @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                                @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                                @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
-                               @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
+                               @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment,
+                               @Arg('DataSource', () => String, {nullable: true, description: "Read source: 'Live' (default) or 'Materialized' (serve from a fresh RowFilterBroad materialization when available; falls back to live otherwise)"}) DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResultType> {
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const md = provider as unknown as IMetadataProvider;
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
@@ -319,10 +327,11 @@ export class RunQueryResolver extends ResolverBase {
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
-        Enrichment: Enrichment
+        Enrichment: Enrichment,
+        DataSource: DataSource
       },
       context.userPayload.userRecord);
-    
+
     // If QueryName is not populated by the provider, use efficient lookup
     let queryName = result.QueryName;
     if (!queryName) {
@@ -364,7 +373,8 @@ export class RunQueryResolver extends ResolverBase {
                                      @Arg('StartRow', () => Int, {nullable: true}) StartRow?: number,
                                      @Arg('ForceAuditLog', () => Boolean, {nullable: true}) ForceAuditLog?: boolean,
                                      @Arg('AuditLogDescription', () => String, {nullable: true}) AuditLogDescription?: string,
-                                     @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment): Promise<RunQueryResultType> {
+                                     @Arg('Enrichment', () => GraphQLJSONObject, {nullable: true}) Enrichment?: RunQueryEnrichment,
+                                     @Arg('DataSource', () => String, {nullable: true, description: "Read source: 'Live' (default) or 'Materialized' (serve from a fresh RowFilterBroad materialization when available; falls back to live otherwise)"}) DataSource?: 'Live' | 'Materialized'): Promise<RunQueryResultType> {
     const provider = GetReadOnlyProvider(context.providers, {allowFallbackToReadWrite: true});
     const rq = new RunQuery(provider as unknown as IRunQueryProvider);
 
@@ -378,7 +388,8 @@ export class RunQueryResolver extends ResolverBase {
         StartRow: StartRow,
         ForceAuditLog: ForceAuditLog,
         AuditLogDescription: AuditLogDescription,
-        Enrichment: Enrichment
+        Enrichment: Enrichment,
+        DataSource: DataSource
       },
       context.userPayload.userRecord);
     
@@ -426,7 +437,8 @@ export class RunQueryResolver extends ResolverBase {
       StartRow: i.StartRow,
       ForceAuditLog: i.ForceAuditLog,
       AuditLogDescription: i.AuditLogDescription,
-      Enrichment: i.Enrichment
+      Enrichment: i.Enrichment,
+      DataSource: i.DataSource
     }));
 
     // Execute all queries in parallel using the batch method
@@ -476,7 +488,8 @@ export class RunQueryResolver extends ResolverBase {
       StartRow: i.StartRow,
       ForceAuditLog: i.ForceAuditLog,
       AuditLogDescription: i.AuditLogDescription,
-      Enrichment: i.Enrichment
+      Enrichment: i.Enrichment,
+      DataSource: i.DataSource
     }));
 
     // Execute all queries in parallel using the batch method
@@ -540,6 +553,7 @@ export class RunQueryResolver extends ResolverBase {
           ForceAuditLog: item.params.ForceAuditLog,
           AuditLogDescription: item.params.AuditLogDescription,
           Enrichment: item.params.Enrichment,
+          DataSource: item.params.DataSource,
         },
         cacheStatus: item.cacheStatus ? {
           maxUpdatedAt: item.cacheStatus.maxUpdatedAt,

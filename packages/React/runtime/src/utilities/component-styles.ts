@@ -3,7 +3,7 @@
  * @module @memberjunction/react-runtime/utilities
  */
 
-import { ComponentStyles } from '@memberjunction/interactive-component-types';
+import { ComponentStyles, StyleOverrides } from '@memberjunction/interactive-component-types';
 
 /**
  * Creates the default component styles for Skip components
@@ -27,17 +27,26 @@ export function SetupStyles(): ComponentStyles {
       // Status colors
       success: '#10B981',
       successLight: '#D1FAE5',
+      successText: '#047857',
+      successBorder: '#b7eb8f',
       warning: '#F59E0B',
       warningLight: '#FEF3C7',
+      warningText: '#8c6c00',
+      warningBorder: '#ffe58f',
       error: '#EF4444',
       errorLight: '#FEE2E2',
+      errorText: '#B91C1C',
+      errorBorder: '#FECACA',
       info: '#3B82F6',
       infoLight: '#DBEAFE',
-      
+      infoText: '#1D4ED8',
+      infoBorder: '#91d5ff',
+
       // Base colors
       background: '#FFFFFF',
       surface: '#F8FAFC',
       surfaceHover: '#F1F5F9',
+      overlay: 'rgba(0, 0, 0, 0.5)', // Modal scrim
       
       // Text colors with better contrast
       text: '#1E293B',
@@ -125,6 +134,18 @@ export function SetupStyles(): ComponentStyles {
       '#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0',
       '#00BCD4', '#F44336', '#8BC34A', '#FF5722', '#3F51B5',
     ],
+    // Default sequential (single-hue) intensity ramp, light-to-dark, for heatmaps
+    // and density shading. Overridden per-theme from `--mj-viz-seq-*`.
+    sequentialScale: [
+      '#E3F2FD', '#BBDEFB', '#90CAF9', '#42A5F5', '#2196F3', '#1976D2', '#0D47A1',
+    ],
+    // Default diverging ramp for measures with a meaningful midpoint.
+    // Overridden per-theme from `--mj-viz-div-*`.
+    divergingScale: {
+      low: '#F44336',
+      mid: '#EEEEEE',
+      high: '#4CAF50',
+    },
   }
 }
 
@@ -143,19 +164,31 @@ const THEME_COLOR_TOKEN_MAP: Record<string, string> = {
   primaryHover: '--mj-brand-primary-hover',
   primaryActive: '--mj-brand-primary-active',
   primaryLight: '--mj-brand-primary-light',
+  // Secondary
+  secondary: '--mj-brand-secondary',
+  secondaryHover: '--mj-brand-secondary-hover',
   // Status
   success: '--mj-status-success',
   successLight: '--mj-status-success-bg',
+  successText: '--mj-status-success-text',
+  successBorder: '--mj-status-success-border',
   warning: '--mj-status-warning',
   warningLight: '--mj-status-warning-bg',
+  warningText: '--mj-status-warning-text',
+  warningBorder: '--mj-status-warning-border',
   error: '--mj-status-error',
   errorLight: '--mj-status-error-bg',
+  errorText: '--mj-status-error-text',
+  errorBorder: '--mj-status-error-border',
   info: '--mj-status-info',
   infoLight: '--mj-status-info-bg',
+  infoText: '--mj-status-info-text',
+  infoBorder: '--mj-status-info-border',
   // Surfaces (MJ: page = tinted, surface = elevated/white in light mode)
   background: '--mj-bg-page',
   surface: '--mj-bg-surface',
   surfaceHover: '--mj-bg-surface-hover',
+  overlay: '--mj-bg-overlay',
   // Text
   text: '--mj-text-primary',
   textSecondary: '--mj-text-secondary',
@@ -172,6 +205,9 @@ const THEME_COLOR_TOKEN_MAP: Record<string, string> = {
 
 /** Number of `--mj-viz-N` categorical tokens the bridge probes for `chartPalette`. */
 const VIZ_TOKEN_COUNT = 10;
+
+/** Number of `--mj-viz-seq-N` tokens the bridge probes for `sequentialScale`. */
+const VIZ_SEQ_TOKEN_COUNT = 7;
 
 /**
  * Reads the live MJ theme (`--mj-*` custom properties on the document root) and
@@ -216,5 +252,97 @@ export function BuildStylesFromTheme(root?: Element): ComponentStyles {
     base.chartPalette = palette;
   }
 
+  const sequential: string[] = [];
+  for (let i = 1; i <= VIZ_SEQ_TOKEN_COUNT; i++) {
+    const value = read(`--mj-viz-seq-${i}`);
+    if (value) {
+      sequential.push(value);
+    }
+  }
+  // A ramp needs at least two stops to interpolate; a single resolved token is
+  // treated as an incomplete theme and left on the default.
+  if (sequential.length > 1) {
+    base.sequentialScale = sequential;
+  }
+
+  // Endpoints are required for a diverging scale to mean anything; `mid` is
+  // optional, so only the low/high pair gates the swap.
+  const divLow = read('--mj-viz-div-low');
+  const divHigh = read('--mj-viz-div-high');
+  if (divLow && divHigh) {
+    const divMid = read('--mj-viz-div-mid');
+    base.divergingScale = divMid ? { low: divLow, mid: divMid, high: divHigh } : { low: divLow, high: divHigh };
+  }
+
   return base;
+}
+
+/** Multipliers applied to the whole `fontSize` ladder per `StyleOverrides.fontScale`. */
+const FONT_SCALE_FACTOR: Record<string, number> = { small: 0.875, large: 1.25 };
+
+/** Smallest px size the scale may produce, so `small` cannot render text illegible. */
+const MIN_FONT_SIZE_PX = 10;
+
+/**
+ * Rescales every px value in a `fontSize` token map, leaving anything not expressed
+ * in whole px (rem, em, clamp(), a keyword) untouched rather than guessing at it.
+ */
+function scaleFontSizes(fontSize: Record<string, string | undefined>, factor: number): Record<string, string | undefined> {
+  const scaled: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(fontSize)) {
+    const px = typeof value === 'string' ? /^\s*(\d+(?:\.\d+)?)px\s*$/.exec(value) : null;
+    scaled[key] = px
+      ? `${Math.max(MIN_FONT_SIZE_PX, Math.round(parseFloat(px[1]) * factor))}px`
+      : value;
+  }
+  return scaled;
+}
+
+/**
+ * Layers explicitly user-requested styling (`ComponentSpec.styleOverrides`) over
+ * theme-resolved styles, producing the `styles` a component actually receives.
+ *
+ * This is what lets "make the charts blue" be honored without a color literal ever
+ * entering generated code: the request is carried as spec data and resolved here,
+ * above the org theme, so the component keeps reading `styles.chartPalette` and
+ * friends. Of the color slots only visualization ones are merged — the override
+ * contract deliberately has no background/text/border slots, since those cannot be
+ * flipped for dark mode without derived per-mode variants.
+ *
+ * `fontScale` is the one non-color slot, and it rescales the `typography.fontSize`
+ * ladder in place. Doing it here rather than in the generator is what makes a type
+ * scale hold: every token moves at once, so text inside registry components and
+ * third-party libraries scales along with the generated markup.
+ *
+ * Returns `base` unchanged when there are no overrides, and never mutates `base`.
+ *
+ * @param base theme-resolved styles (from `BuildStylesFromTheme()` or `SetupStyles()`)
+ * @param overrides the spec's `styleOverrides`, if any
+ */
+export function ApplyStyleOverrides<T extends Partial<ComponentStyles>>(base: T, overrides?: StyleOverrides): T {
+  if (!overrides) {
+    return base;
+  }
+
+  const hasChartPalette = Array.isArray(overrides.chartPalette) && overrides.chartPalette.length > 0;
+  // A ramp needs at least two stops to interpolate between.
+  const hasSequential = Array.isArray(overrides.sequentialScale) && overrides.sequentialScale.length > 1;
+  const hasDiverging = !!overrides.divergingScale?.low && !!overrides.divergingScale?.high;
+  // 'normal' — and any unrecognized value — leaves the ladder alone.
+  const fontFactor = overrides.fontScale ? FONT_SCALE_FACTOR[overrides.fontScale] : undefined;
+  const hasFontScale = !!fontFactor && !!base.typography?.fontSize;
+
+  if (!hasChartPalette && !hasSequential && !hasDiverging && !hasFontScale) {
+    return base;
+  }
+
+  return {
+    ...base,
+    ...(hasChartPalette ? { chartPalette: overrides.chartPalette } : {}),
+    ...(hasSequential ? { sequentialScale: overrides.sequentialScale } : {}),
+    ...(hasDiverging ? { divergingScale: overrides.divergingScale } : {}),
+    ...(hasFontScale
+      ? { typography: { ...base.typography!, fontSize: scaleFontSizes(base.typography!.fontSize, fontFactor!) } }
+      : {}),
+  };
 }

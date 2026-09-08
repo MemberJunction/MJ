@@ -167,6 +167,13 @@ const DEFAULT_CATEGORY = 'default';
  * ```
  */
 export class RedisLocalStorageProvider implements ILocalStorageProvider {
+    /**
+     * `false` — values are JSON-serialized onto the wire and parsed back on read, so a
+     * Redis-backed cache never hands out a live reference to a caller's object.
+     * See {@link ILocalStorageProvider.SharesReferences}.
+     */
+    public readonly SharesReferences = false;
+
     private _client: Redis;
     private _keyPrefix: string;
     private _defaultTTLSeconds: number | undefined;

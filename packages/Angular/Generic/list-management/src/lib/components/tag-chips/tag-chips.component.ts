@@ -304,6 +304,8 @@ export class TagChipsComponent extends BaseAngularComponent implements OnInit {
   }
 
   private metadata(): Metadata {
-    return (this.ProviderToUse as unknown as Metadata) ?? new Metadata();
+    // ProviderToUse always resolves (it falls back to the global default itself), so a
+    // `?? new Metadata()` arm here was dead code that would have defeated an injected provider.
+    return this.ProviderToUse as unknown as Metadata;
   }
 }

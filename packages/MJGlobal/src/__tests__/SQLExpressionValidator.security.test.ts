@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { SQLExpressionValidator } from '../SQLExpressionValidator';
+import { SQLExpressionValidator, StripSQLStringLiterals } from '../SQLExpressionValidator';
 
 /**
  * Adversarial security tests for SQLExpressionValidator.
@@ -26,17 +26,33 @@ describe('SQLExpressionValidator - Security', () => {
       expect(r.trigger).toBe('DROP');
     });
 
-    it('should block UNION-based data exfiltration', () => {
-      // This is valid in full_query because UNION is allowed—
-      // BUT it must still start with SELECT. The attack vector here
-      // is actually fine for full_query (UNION is legitimate).
-      // The real guard is that only SELECT queries can be submitted.
+    it('should block UNION-based data exfiltration from system catalogs', () => {
+      // UNION itself is legitimate in full_query, but reading SQL Server system catalogs
+      // (sys.sql_logins holds login password hashes) sits entirely outside MJ's
+      // entity-permission model. The system-object denylist rejects it regardless of the
+      // read-only connection, so a validated ad-hoc SELECT can't be used to exfiltrate credentials.
       const r = validator.validateFullQuery(
         "SELECT 1 UNION SELECT password FROM sys.sql_logins"
       );
-      // UNION is allowed in full_query, so this is valid from a syntax perspective.
-      // The protection is that ad-hoc queries run on a read-only connection.
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('system-object');
+    });
+
+    it('should still allow a legitimate UNION over application views', () => {
+      // Regression guard: the system-catalog denylist must NOT block ordinary UNION queries
+      // over application entity views — only true system/metadata objects are rejected.
+      const r = validator.validateFullQuery(
+        "SELECT ID FROM vwCustomers UNION SELECT ID FROM vwProspects"
+      );
       expect(r.valid).toBe(true);
+    });
+
+    it('should block INFORMATION_SCHEMA enumeration', () => {
+      const r = validator.validateFullQuery(
+        "SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES"
+      );
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('system-object');
     });
 
     it('should block stacked DELETE after SELECT', () => {
@@ -242,6 +258,78 @@ describe('SQLExpressionValidator - Security', () => {
       expect(r.valid).toBe(false);
       // DROP is detected before semicolon in the keyword scan
       expect(r.trigger).toBe('DROP');
+    });
+  });
+
+  // ---------------------------------------------------------------
+  // Literal-stripper / parser agreement
+  // ---------------------------------------------------------------
+  /**
+   * 🚨 The stripper runs BEFORE every other check (keyword denylist, function allowlist,
+   * system-object denylist), so anything it wrongly treats as "inside a literal" is invisible to
+   * all of them — while the database, which does not agree, still executes it.
+   *
+   * SQL Server and PostgreSQL (standard_conforming_strings=on) do NOT treat `\` as an escape
+   * character. A stripper that honors `\'` swallows an entire stacked statement as one "literal".
+   * These tests pin that behavior; see StripSQLStringLiterals.
+   */
+  describe('literal stripper must match database parsing (backslash is NOT an escape)', () => {
+    it('strips a doubled-quote literal exactly, leaving injected code visible', () => {
+      expect(StripSQLStringLiterals(`Name = 'O''Brien'`)).toBe('Name = ');
+      expect(StripSQLStringLiterals(`x = 'a\\') ; DROP TABLE Users; --'`)).toContain('DROP TABLE Users');
+    });
+
+    it('leaves an UNTERMINATED literal in place rather than swallowing the rest', () => {
+      expect(StripSQLStringLiterals(`Name = 'abc; DROP TABLE t`)).toContain('DROP TABLE t');
+    });
+
+    it('does not over-strip across a double-quoted identifier', () => {
+      // The match must end at the closing quote of "Name", NOT run to the final quote.
+      expect(StripSQLStringLiterals(`"Name") ; DROP TABLE Users; --"`)).toContain('DROP TABLE Users');
+    });
+
+    it('blocks a backslash-hidden DROP in an aggregate expression', () => {
+      const r = validator.validate(`SUM(A)+'\\'; DROP TABLE Users; --'`, {
+        context: 'aggregate',
+        entityFields: ['A'],
+      });
+      expect(r.valid).toBe(false);
+    });
+
+    it('blocks a backslash-hidden DROP with no trailing comment', () => {
+      const r = validator.validate(`SUM(A)+'\\'; DROP TABLE Users; SELECT 1+'`, {
+        context: 'aggregate',
+        entityFields: ['A'],
+      });
+      expect(r.valid).toBe(false);
+      expect(r.trigger).toBe('DROP');
+    });
+
+    it('blocks a backslash-hidden WAITFOR in an aggregate expression', () => {
+      const r = validator.validate(`SUM(A)+'\\'; WAITFOR DELAY '0:0:5'; SELECT 1+'`, {
+        context: 'aggregate',
+        entityFields: ['A'],
+      });
+      expect(r.valid).toBe(false);
+    });
+
+    it('blocks a backslash-hidden stacked statement in a full query', () => {
+      const r = validator.validateFullQuery(`SELECT 'a'+'\\'; DROP TABLE Users; --' FROM T`);
+      expect(r.valid).toBe(false);
+    });
+
+    it('blocks backslash-hidden system-catalog exfiltration in a full query', () => {
+      // Read-only connections still make this a credential-disclosure primitive, which is
+      // exactly what the system-object denylist exists to stop.
+      const r = validator.validateFullQuery(
+        `SELECT 'a'+'\\'; SELECT name, password_hash FROM sys.sql_logins; --' FROM T`
+      );
+      expect(r.valid).toBe(false);
+    });
+
+    it('still allows legitimate literals containing backslashes', () => {
+      const r = validator.validateFullQuery(`SELECT * FROM __mj.vwFiles WHERE Path = 'C:\\temp\\'`);
+      expect(r.valid).toBe(true);
     });
   });
 

@@ -457,6 +457,30 @@ export class ApplicationManager {
   }
 
   /**
+   * The app a fresh session should land on when the URL names no app and there is no
+   * workspace state to restore: the user's active, access-granted application with the
+   * lowest `Application.DefaultSequence` (Home ships at -1; everything else defaults
+   * to 100). Ties keep the earlier app in the user's Sequence-ordered list, so when no
+   * app is flagged below the default the result degrades to the first app the user
+   * ordered — deterministic either way.
+   *
+   * Deliberately independent of `UserApplication.Sequence`: that value is a user-owned
+   * DISPLAY preference for the app switcher, and reordering the switcher must never
+   * change where a session lands.
+   */
+  GetDefaultLandingApp(): BaseApplication | null {
+    const apps = this.applications$.value;
+    if (apps.length === 0) {
+      return null;
+    }
+    // Mirror UserInfoEngine.applicationDefaultSequence's missing-value guard (?? 100):
+    // the constructor's Object.assign can overwrite the class default with undefined,
+    // and a NaN comparison would make this reduce silently order-dependent.
+    const defaultSequence = (app: BaseApplication): number => (Number.isFinite(app.DefaultSequence) ? app.DefaultSequence : 100);
+    return apps.reduce((best, app) => (defaultSequence(app) < defaultSequence(best) ? app : best));
+  }
+
+  /**
    * Canonical `/app/:slug` URL for an application. Uses the app's `Path`
    * (what {@link GetAppByPath} matches on), falling back to `Name`, and
    * url-encodes the segment. This is the single source of truth for app URLs —

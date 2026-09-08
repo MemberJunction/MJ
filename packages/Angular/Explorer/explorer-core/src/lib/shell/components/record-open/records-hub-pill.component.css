@@ -1,0 +1,90 @@
+/* Persistent Records nav pill.
+   The pill mirrors .nav-item in app-nav.component.css EXACTLY (padding, radius,
+   type, hover, focus, and the shared brand active-tint recipe) so it reads as
+   part of the nav row; keep the two in sync. A pipe divider separates it from
+   the app's own nav items. */
+
+:host {
+  display: flex;
+  align-items: center;
+}
+
+/* The pipe: separates app nav items from the global Records pill.
+   Margin is modest — the nav row's own column gap adds the rest. */
+:host::before {
+  content: '';
+  width: 1px;
+  height: 20px;
+  background: var(--mj-border-default);
+  margin: 0 var(--mj-space-1);
+  flex: 0 0 auto;
+}
+
+/* Hide the pipe entirely when no records are open (pill renders nothing) */
+:host:not(:has(.records-pill))::before {
+  display: none;
+}
+
+/* The pipe separates the pill from nav items in the DESKTOP header row.
+   In the mobile drawer (.mobile-nav-records wrapper) the pill sits alone in
+   its own section — the pipe has nothing to divide and renders as a stray
+   left rail. */
+:host-context(.mobile-nav-records)::before {
+  display: none;
+}
+
+.records-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-2);
+  padding: var(--mj-space-2) var(--mj-space-4);
+  border: none;
+  border-radius: var(--mj-radius-md);
+  background: transparent;
+  text-decoration: none;
+  color: var(--mj-text-secondary);
+  font-weight: var(--mj-font-medium);
+  font-size: var(--mj-text-sm);
+  white-space: nowrap;
+  transition: all var(--mj-transition-fast);
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.records-pill:hover {
+  background: var(--mj-bg-surface-hover);
+  color: var(--mj-text-primary);
+}
+
+.records-pill:focus-visible {
+  outline: 2px solid var(--mj-border-focus);
+  outline-offset: 2px;
+}
+
+/* Shared active-tint recipe — keep in sync with .nav-item.active */
+.records-pill.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
+}
+
+.records-pill.active i {
+  color: var(--mj-brand-primary);
+}
+
+.records-pill i {
+  font-size: var(--mj-text-base);
+}
+
+/* Count badge — nav-item .badge metrics, brand-primary (a count, not an alert) */
+.records-pill-count {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+  border-radius: var(--mj-radius-full);
+  padding: var(--mj-space-0-5) var(--mj-space-1-5);
+  font-size: 11px;
+  font-weight: var(--mj-font-semibold);
+  min-width: 18px;
+  text-align: center;
+}

@@ -24,7 +24,8 @@
         "includeWhileDocs": false,
         "includeVariableRefsDocs": false,
         "includeScratchpadDocs": true,
-        "includeMessageExpansionDocs": false
+        "includeMessageExpansionDocs": false,
+        "enableTaskGraphs": true
       },
       "RerankerConfiguration": {
         "enabled": true,
@@ -183,6 +184,20 @@
           "sync": {
             "lastModified": "2026-03-26T22:05:22.838Z",
             "checksum": "384775dde5eb20bf367194f82e8375db20cde188ba2878a731f5d82e0b455d73"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Perplexity Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "84CC71B1-14DA-4341-A301-D7781EDFE6E3"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:09.554Z",
+            "checksum": "4d1d99626f5ea36ed6134f5c0042488057f4649d94b40e10cbb5e7503ef84b72"
           }
         },
         {
@@ -585,7 +600,8 @@
               "includeForEachDocs": false,
               "includeWhileDocs": false,
               "includeScratchpadDocs": true,
-              "includeMessageExpansionDocs": false
+              "includeMessageExpansionDocs": false,
+              "enableTaskGraphs": true
             }
           },
           "relatedEntities": {
@@ -659,8 +675,8 @@
             "ID": "D0F2CF26-32F1-4AE2-B1F8-B27747C962BE"
           },
           "sync": {
-            "lastModified": "2026-04-11T04:11:16.191Z",
-            "checksum": "2cfdd1fc439e891628490c99ffa1107dd2a176973e347c290ca086205665a23e"
+            "lastModified": "2026-08-07T23:58:28.553Z",
+            "checksum": "9487052fab9f761d457388813c990a7e9947a8323e339e369f98ecce12fff07d"
           }
         },
         {
@@ -921,8 +937,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:38.995Z",
-      "checksum": "2e2c4667edb19e46421437e9ddd48f7b56fed297ac2c6b66298bb0c261f69b40"
+      "lastModified": "2026-08-07T23:58:28.494Z",
+      "checksum": "d669fe75a4f42203bbfd1eac02e42e6a82ec4524c09cdfbe9c61f3f7acc274ec"
     }
   }
 ]

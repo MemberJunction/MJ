@@ -8,8 +8,10 @@
 export * from './old/agent-definition.interface';
 
 export * from './agent-spec-sync';
+export * from './flow-step-validation';
 
 // Export agent implementations
 export * from './agents/architect-agent';
 export * from './agents/builder-agent';
 export * from './agents/planning-designer-agent';
+export * from './workflow-agent-writer';

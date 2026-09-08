@@ -1,6 +1,6 @@
-import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
+import { BaseEntity, DatabaseProviderBase, EntityInfo, EntitySaveOptions, IEntityDataProvider, LogError, Metadata, RunView, IMetadataProvider } from "@memberjunction/core";
 import { MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { MJEventType, MJGlobal, RegisterClass } from "@memberjunction/global";
+import { MJEventType, MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
@@ -33,12 +33,14 @@ interface MJGeneratedCodeExtended extends GeneratedCode {
  */
 @RegisterClass(BaseEntity, 'MJ: Actions') // high priority make sure this class is used ahead of other things
 export class MJActionEntityServer extends MJActionEntityExtended {
-    constructor(Entity: EntityInfo) {
-        super(Entity); // call super
+    constructor(Entity: EntityInfo, Provider: IEntityDataProvider | null = null) {
+        super(Entity, Provider);
 
-        // In constructor we must use new Metadata() since entity isn't fully initialized yet
-        // This is an acceptable exception as it only checks provider type at construction time
-        const md = new Metadata(); // global-provider-ok: constructor runs before entity provider is wired
+        // ProviderType is process-wide; new Metadata() here only checks that this
+        // server subclass is not loaded in a client bundle. GetEntityObject also
+        // calls BindProvider(this) after construct so a dropped second arg cannot
+        // silently route Save onto the global host.
+        const md = new Metadata(); // global-provider-ok: constructor-time provider-type check
         if (md.ProviderType !== 'Database')
             throw new Error('This class is only supported for server-side/database providers. Remove this package from your application.');
     }
@@ -281,6 +283,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
         if (this.ParentID) {
             const parentAction = await this.LoadParentAction();
             if (parentAction) {
+                const parentParams = ActionEngineBase.Instance.ActionParams.filter(p => UUIDsEqual(p.ActionID, parentAction.ID));
                 // Create the ChildActionInfo template variable with all parent details
                 data.ChildActionInfo = `
 **Parent Action ID:** ${parentAction.ID.trim().toLowerCase() /*just to make sure casing doesn't mess up the string we pass in*/}
@@ -288,7 +291,7 @@ export class MJActionEntityServer extends MJActionEntityExtended {
 **Parent Description:** ${parentAction.Description || 'No description provided'}
 
 **Parent Parameters:**
-${JSON.stringify(parentAction.Params.map(p => {
+${JSON.stringify(parentParams.map(p => {
     return {
         Name: p.Name,
         Type: p.Type,
@@ -306,7 +309,7 @@ ${JSON.stringify(parentAction.Params.map(p => {
                     Description: parentAction.Description,
                     Category: parentAction.Category
                 };
-                data.actionParams = parentAction.Params.map(p => {
+                data.actionParams = parentParams.map(p => {
                     return {
                         Name: p.Name,
                         Type: p.Type,

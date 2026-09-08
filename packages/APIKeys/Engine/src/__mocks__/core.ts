@@ -90,6 +90,64 @@ export function clearMockEntities() {
     mockEntities.clear();
 }
 
+// ---- Row-filter support: acting context, bindings, entity metadata, RLS filters ----
+
+export interface APIKeyActingContext {
+    ActingOrganizationID?: string;
+    ActingPersonID?: string;
+    ActingScopeID?: string;
+    ActingCompanyIDs?: string[];
+}
+
+export interface APIKeyRowFilterBinding {
+    EntityID: string;
+    PermissionType: 'Read' | 'Create' | 'Update' | 'Delete';
+    FilterID: string;
+}
+
+export class RowLevelSecurityFilterInfo {
+    ID: string;
+    Name: string;
+    FilterText: string;
+
+    constructor(data: { ID: string; Name?: string; FilterText?: string }) {
+        this.ID = data.ID;
+        this.Name = data.Name ?? 'Mock Filter';
+        this.FilterText = data.FilterText ?? '';
+    }
+}
+
+/** Minimal EntityInfo stand-in for EntityByName resolution in tests. */
+export class EntityInfo {
+    ID: string;
+    Name: string;
+
+    constructor(data: { ID: string; Name: string }) {
+        this.ID = data.ID;
+        this.Name = data.Name;
+    }
+}
+
+let mockMetadataEntities: EntityInfo[] = [];
+let mockRLSFilters: RowLevelSecurityFilterInfo[] = [];
+
+export function setMockMetadataEntities(entities: EntityInfo[]): void {
+    mockMetadataEntities = entities;
+}
+
+export function setMockRowLevelSecurityFilters(filters: RowLevelSecurityFilterInfo[]): void {
+    mockRLSFilters = filters;
+}
+
+export function clearMockMetadataState(): void {
+    mockMetadataEntities = [];
+    mockRLSFilters = [];
+}
+
+export function LogError(..._args: unknown[]): void {
+    // no-op in tests
+}
+
 export class Metadata {
     async GetEntityObject<T>(entityName: string, _contextUser?: UserInfo): Promise<T> {
         const entity = mockEntities.get(entityName);
@@ -107,6 +165,18 @@ export class Metadata {
             // Support setting any property
             set(key: string, value: unknown) { mockData[key] = value; }
         } as unknown as T;
+    }
+
+    EntityByName(name: string): EntityInfo | undefined {
+        const needle = name?.trim().toLowerCase();
+        return mockMetadataEntities.find(e => e.Name.trim().toLowerCase() === needle);
+    }
+
+    static get Provider(): { RowLevelSecurityFilters: RowLevelSecurityFilterInfo[]; EntityByName(name: string): EntityInfo | undefined } {
+        return {
+            RowLevelSecurityFilters: mockRLSFilters,
+            EntityByName: (name: string) => new Metadata().EntityByName(name) // global-provider-ok: this IS the mock provider — a self-contained test double with no real multi-provider concern
+        };
     }
 }
 

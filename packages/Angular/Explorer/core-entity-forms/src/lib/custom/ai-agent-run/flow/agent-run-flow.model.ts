@@ -46,8 +46,16 @@ export interface FlowNode {
   heat: 0 | 1 | 2 | 3;
   parent: FlowNode | null;
   children: FlowNode[];
-  /** Underlying step entity (null for the synthetic root). Enables click-through. */
+  /** Underlying step entity (null for the synthetic root, and for task-graph nodes). */
   raw: MJAIAgentRunStepEntity | null;
+  /**
+   * Which record this node came from, whatever entity that is.
+   *
+   * `raw` is typed to a run STEP, so a workflow's steps — which are `MJ: Tasks` rows — could never
+   * be represented by it. This generic reference is what lets one model hold both, and what lets a
+   * click open the right record either way.
+   */
+  source?: { entity: string; id: string } | null;
   /** Font Awesome class (e.g. 'fa-brain'); sub-agents resolve their agent's icon. */
   iconClass: string;
   /** Agent logo image URL when available (sub-agents / root), else null. */
@@ -238,6 +246,18 @@ export async function buildFlowModel(
     await attachStepTree(root, steps, promptRuns, helper);
   }
 
+  return finalizeFlowModel(root);
+}
+
+/**
+ * Durations, playback window, wall-clock and heat — the normalization every FlowModel shares.
+ *
+ * Extracted so a model built from the run TREE goes through the identical pipeline as one built
+ * from raw step rows. Re-deriving any of it in a second builder is how the two sources would drift
+ * into looking like different products — different bar widths, different heat thresholds — for the
+ * same run.
+ */
+export function finalizeFlowModel(root: FlowNode): FlowModel {
   calcDur(root);
   assignT(root, 0, 1);
   assignReal(root, 0);

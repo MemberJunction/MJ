@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock all dependencies
 vi.mock('@memberjunction/core', () => ({
-  RunReport: vi.fn(),
   BaseEntity: vi.fn(),
   Metadata: vi.fn(),
   RunView: vi.fn(),

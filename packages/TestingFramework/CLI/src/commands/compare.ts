@@ -46,6 +46,10 @@ export function classifyChange(
 ): ComparisonChange {
     if (!prev) return 'new';
     if (!curr) return 'removed';
+    // A skip is "not executed", not a pass or fail — a Passed↔Skipped transition is an env
+    // gate opening/closing, not a regression/improvement, and its score is meaningless.
+    // Keep it out of both buckets rather than pollute the regression count.
+    if (prev.Status === 'Skipped' || curr.Status === 'Skipped') return 'unchanged';
     const scoreDelta = (prev.Score != null && curr.Score != null) ? curr.Score - prev.Score : null;
     if (prev.Status === 'Passed' && curr.Status !== 'Passed') return 'regression';
     if (prev.Status !== 'Passed' && curr.Status === 'Passed') return 'improvement';

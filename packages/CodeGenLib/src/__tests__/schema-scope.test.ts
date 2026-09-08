@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { applyIncludeSchemaScope, computeSchemasToExcludeForIncludeList } from '../Database/schema-scope';
+import { resetAuthoredExcludeSnapshot } from '../Database/heal-schema-params';
 
 /**
  * Unit tests for the `includeSchemas` → `excludeSchemas` resolution.
@@ -50,6 +51,10 @@ describe('computeSchemasToExcludeForIncludeList', () => {
 });
 
 describe('applyIncludeSchemaScope', () => {
+  beforeEach(() => {
+    resetAuthoredExcludeSnapshot();
+  });
+
   it('is a NO-OP when includeSchemas is absent — classic exclude-only behavior is unchanged', () => {
     const config = { excludeSchemas: ['sys', 'staging'] };
     const added = applyIncludeSchemaScope(['dbo', 'app_a', 'sys'], config);

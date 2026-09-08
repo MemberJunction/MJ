@@ -70,8 +70,8 @@ flowchart TD
 - **AI-Powered Intelligence**: Uses AI prompts to translate CHECK constraints into Zod schemas, generate semantic form layouts, identify name fields, and create entity descriptions
 - **Extensible Architecture**: Every generator (`SQLCodeGenBase`, `EntitySubClassGeneratorBase`, `AngularClientGeneratorBase`, etc.) can be subclassed and overridden via MJ's class factory
 - **Zod Validation Schemas**: Generates Zod schemas from SQL CHECK constraints with proper union types and refinements
-- **Recursive Hierarchy Support**: Automatically detects self-referential foreign keys and generates CTE-based `Root{FieldName}` columns in views
-- **Cascade Delete Generation**: Produces cursor-based cascade delete procedures that call child entity stored procedures, respecting business logic at every level
+- **Recursive Foreign Key & Hierarchy Traversal Engine**: Automatically detects self-referential foreign keys and generates a 4-routine TVF suite (`GetHierarchyMeta`, `GetDescendants`, `GetAncestors`, `GetRootID`), 5 computed base-view columns (`Root<Field>`, `<Field>Depth`, `<Field>Path`, `<Field>IsLeaf`, `<Field>ChildCount`), and strongly typed TypeScript entity traversal methods (`GetDescendants()`, `GetAncestors()`, `GetChildren()`). See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md).
+- **Cascade Delete Generation**: Produces cursor-based cascade delete procedures that call child entity stored procedures, respecting business logic at every level. Default is **intra-schema only**; `allowCrossSchemaCascadeDeletes` (off) is required to walk FKs in other schemas.
 - **Force Regeneration**: Surgically regenerate specific SQL objects for specific entities without requiring schema changes
 - **Class Registration Manifests**: Prevents tree-shaking of `@RegisterClass`-decorated classes by generating static import manifests
 - **SQL Migration Logging**: Outputs all generated SQL as Flyway-compatible migration files with schema placeholder support
@@ -317,9 +317,39 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `SQLOutput` | Controls Flyway migration file generation from SQL logging |
 | `commands` | Shell commands to run before/after generation (typically package builds) |
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
+| `includeSchemas` | Opt-in positive scope: generate only these schemas (resolved into `excludeSchemas` **for this run**). Heal SQL logged into migrations uses `@IncludedSchemaNames` from this list plus authored `excludeSchemas` — never a snapshot of sibling apps on the publisher DB. |
+| `allowCrossSchemaCascadeDeletes` | Default **false**. Cascade-delete SQL is intra-schema only. `true` restores the old walk of every FK pointing at the entity, including other Open Apps. Dangerous; leave off. |
+| `entityPackageName` | String: npm package this emit writes. Record: install-time host map (those schemas are also skipped for local generation) |
+| `entityImportPackages` | Schema → npm map for peer classes this emit does **not** generate (embeds + related-record collections). See below. |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
 | `additionalSchemaInfo` | Path to JSON file with soft PK/FK definitions and schema prefix rules |
 | `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
+
+### Peer entity imports (`entityImportPackages`)
+
+Embedded records and related-record collections type the generated subclass against the **related** entity class (`DeclareEmbeddedRecord<AddressEntity>`, `DeclareRelatedRecords<PersonEntity>`). When that class is not emitted in the current file, CodeGen must `import` it from the npm package that owns it.
+
+Those are three different knobs. Do not overload `entityPackageName`:
+
+| Knob | Meaning |
+|------|---------|
+| `includeSchemas` | What this run **generates** |
+| string `entityPackageName` | The npm package this run **writes** those classes into |
+| Record `entityPackageName` | Install-time **host** map. Listed schemas are also skipped for local generation (`getExternalEntitySchemas`). Converting a publisher's string `entityPackageName` into this Record silently re-routes every unmapped schema. |
+| `entityImportPackages` | Schema → npm map for peers this run does **not** generate |
+
+Open App **publishers** (the repo that develops the app) use the string form plus `includeSchemas`, and must list sibling apps here:
+
+```javascript
+entityPackageName: '@mj-biz-apps/orders-entities',
+includeSchemas: ['__mj_BizAppsOrders'],
+entityImportPackages: {
+    '__mj_BizAppsCommon': '@mj-biz-apps/common-entities',
+    '__mj_BizAppsAccounting': '@mj-biz-apps/accounting-entities',
+},
+```
+
+Resolution: core schema (`__mj`) → `@memberjunction/core-entities`; same schema as the owning entity → this emit's package; then `entityImportPackages`; then Record `entityPackageName` (host fallback). An unmapped foreign schema **throws** — CodeGen will not self-import this emit's package (that was the Orders `import { mjBizAppsCommonAddressEntity } from '@mj-biz-apps/orders-entities'` bug). Mapping a foreign schema to this emit's own package is also an error. Imports are grouped: one `import { A, B } from 'pkg'` line per package.
 
 ### Database Platform Selection (`dbPlatform`)
 
@@ -436,31 +466,48 @@ export const AIPromptSchema = z.object({
 });
 ```
 
-### SQL Views with Recursive Hierarchy Support
+### SQL Views & Hierarchy Traversal Engine
 
-For tables with self-referential foreign keys, CodeGen automatically generates recursive CTEs:
+For tables with self-referential foreign keys configured as hierarchies (`EntityField.Configuration` setting `{ "Hierarchy": { "IsHierarchy": true } }`) and single-column primary keys, CodeGen automatically generates a 4-routine Table-Valued Function (TVF) suite and projects enriched hierarchy columns into base views via `OUTER APPLY` (T-SQL) or `LEFT JOIN LATERAL` (PostgreSQL):
 
 ```sql
--- Auto-detected: Task.ParentTaskID references Task.ID
-CREATE VIEW [vwTasks] AS
-WITH CTE_RootParentTaskID AS (
-    SELECT [ID], [ID] AS [RootParentTaskID]
-    FROM [__mj].[Task]
-    WHERE [ParentTaskID] IS NULL
-
-    UNION ALL
-
-    SELECT child.[ID], parent.[RootParentTaskID]
-    FROM [__mj].[Task] child
-    INNER JOIN CTE_RootParentTaskID parent
-        ON child.[ParentTaskID] = parent.[ID]
-)
-SELECT t.*, cte.[RootParentTaskID]
-FROM [__mj].[Task] AS t
-LEFT OUTER JOIN CTE_RootParentTaskID cte ON t.[ID] = cte.[ID]
+-- Generated Base View with Hierarchy Columns (T-SQL)
+SELECT 
+    c.*,
+    hier_ParentID.RootID AS [RootParentID],
+    hier_ParentID.Depth AS [ParentIDDepth],
+    hier_ParentID.Path AS [ParentIDPath],
+    hier_ParentID.IsLeaf AS [ParentIDIsLeaf],
+    hier_ParentID.ChildCount AS [ParentIDChildCount]
+FROM [sales].[Category] AS c
+OUTER APPLY [sales].[fnCategoryParentID_GetHierarchyMeta]([c].[ID], [c].[ParentID]) AS hier_ParentID
 ```
 
-The CTE is zero-overhead: the SQL optimizer eliminates it entirely when the root column is not selected.
+```sql
+-- Generated Base View with Hierarchy Columns (PostgreSQL)
+SELECT 
+    c.*,
+    hier_ParentID."RootID" AS "RootParentID",
+    hier_ParentID."Depth" AS "ParentIDDepth",
+    hier_ParentID."Path" AS "ParentIDPath",
+    hier_ParentID."IsLeaf" AS "ParentIDIsLeaf",
+    hier_ParentID."ChildCount" AS "ParentIDChildCount"
+FROM "sales"."Category" AS c
+LEFT JOIN LATERAL "sales"."fn_category_parent_id_get_hierarchy_meta"(c."ID", c."ParentID") AS hier_ParentID ON true
+```
+
+The inline TVF join is **zero-overhead**: relational query optimizers prune it completely when hierarchy columns are not selected.
+
+Additionally, generated entity subclasses in TypeScript automatically receive strongly-typed hierarchy traversal helper methods:
+
+```typescript
+// Auto-generated on entity subclasses with recursive FKs
+const descendants = await category.GetDescendants(maxDepth);
+const ancestors = await category.GetAncestors();
+const children = await category.GetChildren();
+```
+
+See the [Recursive Foreign Keys & Hierarchy Traversal Guide](../../guides/RECURSIVE_FOREIGN_KEYS_AND_HIERARCHIES_GUIDE.md) for complete details.
 
 ### Angular Form Components
 
@@ -564,6 +611,216 @@ The form layout system enforces stability to prevent unnecessary churn:
 - AI can assign fields to existing categories or create categories for genuinely new field groups
 - Existing fields cannot be moved to newly created categories (prevents renaming)
 - Per-field `AutoUpdateCategory` and `AutoUpdateDisplayName` flags provide granular control
+
+## Base Views: Generated, Custom, or Layered
+
+Every entity has a `BaseView` — the object everything reads. Entity field discovery, permissions and
+the generated CRUD routines all target it, so whatever columns it exposes become first-class
+`EntityField` rows.
+
+There are three arrangements, chosen by two columns on `Entity`:
+
+| `BaseViewGenerated` | `GeneratedBaseViewName` | Result |
+|---|---|---|
+| `1` | `NULL` | **Generated.** CodeGen writes `BaseView`. The default, and almost every entity. |
+| `0` | `NULL` | **Fully custom.** CodeGen writes nothing; the application owns `BaseView` entirely. |
+| `0` | `vwFooGenerated` | **Layered.** CodeGen writes the *inner* view; the application owns `BaseView` and wraps it. |
+| `1` | `vwFooGenerated` | **Refused** by a CHECK constraint — contradictory, see below. |
+
+The fourth combination is refused because the two halves of CodeGen read different columns and would
+disagree: view *generation* gates on `BaseViewGenerated || HasLayeredBaseView` and would write the
+inner view, while the outer view's *refresh* and its *GRANTs* gate on `!BaseViewGenerated` and would
+be skipped — leaving an entity whose public surface is never granted and never refreshed, with
+CodeGen reporting success.
+
+**MJ core uses this itself.** `MJ: Version Installations` and `MJ: User View Run Details` are layered
+as of v6.1, and the remaining fully-custom core entities are expected to follow.
+
+**One CodeGen pass.** Apply the hand-authored overlay (it selects `g.*` from the inner generated
+view plus extra columns), `mj sync push` any Entity pins (e.g. `SupportsGeoCoding`), then run
+`mj codegen --skipfiles` **once from the Open App cwd**. Pass 1 discovers overlay columns from
+`BaseView` (`vwSQLColumnsAndEntityFields`) and logs EntityField INSERTs; Pass 2 writes only the
+**inner** view (`GeneratedBaseViewName`) and never DROPs the overlay. A second CodeGen run is not
+required for overlay columns and is how duplicate `__mj_Latitude` / missing SPs happen.
+
+### Open App metadata SQL (`CodeGen_Run_*.sql`)
+
+EntityField INSERTs are **not** in `SQL Scripts/generated/` (that tree is views/SPs). They go to
+`SQLOutput` as `CodeGen_Run_<utc>.sql`.
+
+- Run `mj codegen` from the **Open App cwd** (`mj-app.json`). SQLOutput defaults to
+  `./migrations/codegen`. Do not run it from the MJ repo with `includeSchemas` pointing at an
+  app — that used to dump EntityField SQL into `MJ/migrations/v5`.
+- `--sql-output-dir` overrides the folder. Pointing it at `MJ/migrations/v*` from an app fails.
+- If `SQLOutput.enabled` and no log file is open, CodeGen **refuses to apply** metadata SQL.
+  Fold the `CodeGen_Run` file into the app V migration; never transcribe EntityField rows from
+  the live DB. ExtendedType pins stay in `metadata/entities` (`mj sync push`).
+
+### The two paths, side by side
+
+The thing to hold onto: **`BaseView` is always the public surface**, and the only question is who
+writes it. Layering splits one view into two so that the mechanical half can keep regenerating.
+
+```mermaid
+flowchart TB
+    subgraph GEN["① GENERATED — the default"]
+        direction TB
+        GT[("Foo<br/>base table")]
+        GV["<b>vwFoo</b><br/>owned by CodeGen<br/><i>regenerated every run</i>"]
+        GT --> GV
+    end
+
+    subgraph CUS["② FULLY CUSTOM — BaseViewGenerated = 0"]
+        direction TB
+        CT[("Foo<br/>base table")]
+        CV["<b>vwFoo</b><br/>owned by the application<br/><i>frozen the day it was copied</i>"]
+        CT --> CV
+    end
+
+    subgraph LAY["③ LAYERED — GeneratedBaseViewName = vwFooGenerated"]
+        direction TB
+        LT[("Foo<br/>base table")]
+        LI["<b>vwFooGenerated</b><br/>owned by CodeGen<br/><i>regenerated every run</i>"]
+        LO["<b>vwFoo</b><br/>owned by the application<br/><i>SELECT g.* + your columns</i>"]
+        LT --> LI
+        LI -->|"SELECT g.*"| LO
+    end
+
+    GV --> SURF
+    CV --> SURF
+    LO --> SURF
+
+    SURF["<b>BaseView</b> — the public surface<br/>field discovery · permissions · RunView<br/>spCreate / spUpdate / spDelete"]
+
+    classDef codegen fill:#1f6feb22,stroke:#1f6feb,stroke-width:2px
+    classDef app fill:#d2992222,stroke:#d29922,stroke-width:2px
+    classDef table fill:#8b949e22,stroke:#8b949e,stroke-width:1px
+    classDef surface fill:#23863622,stroke:#238636,stroke-width:2px
+    class GV,LI codegen
+    class CV,LO app
+    class GT,CT,LT table
+    class SURF surface
+```
+
+Read it as: **blue regenerates, amber is hand-written.** In ① the whole view is blue and you cannot
+add a column to it. In ② the whole view is amber — you can add anything, but every display join, geo
+column and root-ID column is now yours to maintain, and a foreign key added later never appears. ③
+puts the boundary in the middle: the ~80 mechanical lines stay blue and keep up with the schema,
+while your computed columns stay amber and stay reviewable.
+
+The green node is why the arrangement is invisible to everything downstream — field discovery,
+permissions, `RunView` and the CRUD routines all target `BaseView` in every case, so a column added
+by the custom layer becomes a first-class virtual `EntityField` and comes back from a save.
+
+### Why layered exists
+
+Fully custom is all-or-nothing. To add one computed column an application inherits the whole
+generated view — every related-entity display join, the geo join, the recursive root-ID `OUTER
+APPLY`, the soft-delete predicate — and must hand-maintain it from then on.
+
+That is not a one-time cost. Add a foreign key later and its display field simply never appears,
+because nothing regenerates the join. The failure is **silent**: the column is absent rather than
+wrong, so nothing errors and no test notices until somebody asks why a name is blank. It also freezes
+the entity at whatever CodeGen produced the day the view was copied — geo columns and root-ID columns
+both arrived after custom views existed in the wild.
+
+Layering keeps CodeGen generating underneath a thin custom layer:
+
+```sql
+-- CodeGen owns this, and keeps it current
+CREATE VIEW [orders].[vwOrderHeadersGenerated] AS
+SELECT o.*, MJCompany_CompanyID.[Name] AS [Company], ... -- 80 lines, regenerated
+
+-- The application owns this, and it stays reviewable
+CREATE VIEW [orders].[vwOrderHeaders] AS
+SELECT g.*,
+       CASE WHEN g.Balance > 0 AND g.DueDate < CAST(GETUTCDATE() AS date) THEN 1 ELSE 0 END AS IsOverdue
+FROM   [orders].[vwOrderHeadersGenerated] g;
+```
+
+`IsOverdue` becomes a virtual `EntityField` like any other — typed on the entity class, filterable in
+`RunView`, visible in Explorer — and is returned by `spCreate`/`spUpdate`/`spDelete`, because those
+select from `BaseView`.
+
+### PostgreSQL — restar the outer view; ship it via pg-migrate
+
+The outer view is still **custom SQL**. A build engineer ships the PostgreSQL equivalent through
+pg-migrate (same `SELECT g.*, extras FROM inner g` shape, with `||` / `LEFT JOIN LATERAL` instead of
+T-SQL). CodeGen never overwrites that outer SQL.
+
+PostgreSQL expands `g.*` at `CREATE VIEW` and freezes the column list, and it has no
+`sp_refreshview`. After CodeGen rewrites the inner view it **restars** the outer definition — rewrites
+the deparsed `SELECT g.col1, g.col2, …, extras` back to `SELECT g.*, extras` — then
+`CREATE OR REPLACE` (or, when a new inner column lands in the middle of `g.*` and PostgreSQL raises
+`42P16`, capture / `DROP CASCADE` / recreate / replay dependent functions). Open App `mj migrate`
+calls `spRebindLayeredOuterViewsInSchema` for the same rebind.
+
+Do not leave the outer as a one-time pg-migrate artifact and hope later inner regenerations show up.
+Without the restar they will not.
+
+### Setting it up
+
+1. Set `GeneratedBaseViewName` on the entity (and `BaseViewGenerated = 0`, since the application owns
+   `BaseView`). For MJ core entities this is declarative metadata, not SQL — see
+   `metadata/entities/.layered-base-views.json`.
+2. Run CodeGen. It writes the inner view.
+3. Create your `BaseView` in a migration that runs **after** CodeGen output, since it selects from the
+   inner view — and may reference generated root-ID functions. On PostgreSQL, ship the same wrapper
+   via pg-migrate (`LEFT JOIN LATERAL` / `||` instead of `OUTER APPLY` / `CONVERT`).
+4. Run CodeGen again so the new columns are discovered as `EntityField` rows. On PostgreSQL this
+   pass restars the outer view so `g.*` includes anything the inner view gained.
+
+> ### ⚠️ Adopting layering on an EXISTING entity needs `forceRegeneration`
+>
+> Setting `GeneratedBaseViewName` is a **metadata** change, not a schema change. The entity therefore
+> never lands in CodeGen's modified/new list, and `logSQLForNewOrModifiedEntity` only writes to the
+> migration log for entities in that list.
+>
+> The failure is quiet and easy to miss: CodeGen **does** create the inner view in whatever database
+> you ran it against, and emits **nothing**. Your dev box looks correct while every other environment
+> never receives the view at all — and the outer view you write in step 3 then selects from an object
+> that does not exist there.
+>
+> Scope a forced regeneration to just the entities you are converting, run CodeGen, then remove it:
+>
+> ```javascript
+> // mj.config.cjs — TEMPORARY, delete after capturing the output
+> forceRegeneration: {
+>   enabled: true,
+>   baseViews: true,
+>   entityWhereClause: "Name IN ('MJ: Version Installations', 'MJ: User View Run Details')",
+> }
+> ```
+>
+> This does not apply to an entity that is layered from the start, or to later schema changes on an
+> already-layered entity — both put the entity in the modified list on their own.
+
+Step 2 necessarily runs while `BaseView` does not yet exist — it selects from the inner view that
+step 2 is creating, so it could not have been created earlier. CodeGen handles this: the
+`sp_refreshview` and `GRANT` it emits against the application-owned view are wrapped in an
+`IF OBJECT_ID(...) IS NOT NULL` guard, so the bootstrap pass skips them and every later pass behaves
+as if the guard were not there. You do not need to order the migrations around it.
+
+### Things worth knowing
+
+- **A view caches its column list.** The custom layer does `SELECT g.*`, so when the schema changes,
+  the inner view must be refreshed **before** the outer one. CodeGen emits `sp_refreshview` in that
+  order automatically. Refreshing the outer against a stale inner re-caches the *old* columns, and
+  the new one stays missing — indistinguishable from never having been added.
+- **The names must differ.** A view cannot select from itself. A CHECK constraint on `Entity` refuses
+  equal names, and `EntityInfo.HasLayeredBaseView` compares case-insensitively so `VWFOO` and `vwFoo`
+  are treated as the same object.
+- **The custom layer must expose a superset.** Whatever `BaseView` exposed before it was layered, it
+  must still expose afterwards — a column that disappears is a breaking change to the generated entity
+  class. Watch for *name collisions* in particular: the inner view generates a display column per
+  foreign key (`Employee` for `EmployeeID`), so an outer view hand-selecting the same alias produces a
+  duplicate column and fails at `CREATE VIEW`. Diff the column list before and after.
+- **Permissions target `BaseView`.** The inner view needs no separate grants: it is in the same schema
+  with the same owner, so ownership chaining covers it.
+- **`EntityInfo.GeneratedViewName`** is the single resolution of "which view does CodeGen write". Use
+  it rather than re-deriving from `BaseView`; several call sites decide where to write the view, what
+  to name the emitted file, and which object to refresh, and any two disagreeing produce a view under
+  a name nothing reads.
 
 ## Force Regeneration
 
@@ -686,7 +943,7 @@ The `CodeGenDatabaseProvider` is the abstract base class that encapsulates **all
 | Triggers | `generateTimestampTrigger` | Timestamp auto-update triggers |
 | Indexes | `generateForeignKeyIndexes` | Foreign key index generation |
 | Full-Text Search | `generateFullTextSearch` | Platform-specific FTS infrastructure |
-| Root ID Functions | `generateRootIDFunction`, `generateRootFieldSelect`, `generateRootFieldJoin` | Recursive hierarchy root ID calculation |
+| Hierarchy TVFs & Views | `generateHierarchyMetaFunction`, `generateDescendantsFunction`, `generateAncestorsFunction`, `generateRootIDFunction`, `generateHierarchyFieldSelect`, `generateHierarchyFieldJoin` | Recursive hierarchy TVF suite & view join generation |
 | Permissions | `generateViewPermissions`, `generateCRUDPermissions`, `generateFullTextSearchPermissions` | GRANT statements per entity role |
 | Cascade Deletes | `generateSingleCascadeOperation` | Cascade delete/update-to-NULL operations |
 | Timestamp Columns | `generateTimestampColumns` | Adding __mj_CreatedAt/__mj_UpdatedAt columns |
@@ -780,6 +1037,9 @@ Generates an import manifest that prevents tree-shaking of `@RegisterClass` deco
 | `outputDir(type, fallback)` | Get the configured output directory for a generator type |
 | `getSettingValue(name, default)` | Get a named setting value from configuration |
 | `mj_core_schema()` | Get the MJ core schema name (typically `__mj`) |
+| `resolveEntityPackageName(schema)` | Package for a schema from `entityPackageName` (string form returns that string for every schema) |
+| `resolveEntityImportPackage(related, owning)` | Package to **import** a peer class from; throws if a foreign schema is unmapped |
+| `thisEmitEntityPackageName(owning)` | The npm package this CodeGen run writes |
 
 ## Dependencies
 

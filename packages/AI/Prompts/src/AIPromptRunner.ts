@@ -2,7 +2,7 @@ import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPI
 import { AIModelRunner } from './AIModelRunner';
 import { ValidationAttempt, AIPromptRunResult, AIModelSelectionInfo } from '@memberjunction/ai-core-plus';
 import { BaseEntitySaveQueue, LogErrorEx, LogStatus, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { CleanJSON, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
+import { CleanJSON, RepairJSONEscaping, MJGlobal, JSONValidator, ValidationResult, ValidationErrorInfo, ValidationErrorType, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptModelEntity, MJAIModelVendorEntity, MJAIConfigurationEntity, MJAIVendorEntity, MJTemplateEntityExtended, MJAICredentialBindingEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { CredentialEngine } from '@memberjunction/credentials';
@@ -2088,8 +2088,13 @@ export class AIPromptRunner {
       if (configurationId) {
         this.addConfigurationFallbackCandidates(candidates, prompt, configurationId, preferredVendorId, verbose);
       }
+    } else if (this.hasAnyPromptModelBindings(prompt)) {
+      // Bindings exist for this prompt but none are Active/Preview (e.g. deliberately deactivated) —
+      // do NOT silently fall back to the global model pool, which would mask an intentional
+      // "no model available for this prompt" state. Leave candidates empty so the caller surfaces
+      // a "no suitable model found" failure instead of succeeding against an unrelated model.
     } else {
-      // No prompt-specific models, use selection strategy
+      // No prompt-specific bindings were ever configured, use the general selection strategy
       this.addStrategyBasedCandidates(candidates, prompt, preferredVendorName);
     }
 
@@ -2263,6 +2268,15 @@ export class AIPromptRunner {
     }
 
     return candidates;
+  }
+
+  /**
+   * Helper: true if this prompt has any AIPromptModel bindings at all, regardless of Status or
+   * ConfigurationID. Distinguishes "no bindings were ever configured" (general selection strategy
+   * should apply) from "bindings exist but are all Inactive" (no model should be selected).
+   */
+  private hasAnyPromptModelBindings(prompt: MJAIPromptEntityExtended): boolean {
+    return AIEngine.Instance.PromptModels.some(pm => UUIDsEqual(pm.PromptID, prompt.ID));
   }
 
   /**
@@ -2797,6 +2811,12 @@ export class AIPromptRunner {
 
       promptRun.PromptID = prompt.ID;
       promptRun.ModelID = model.ID;
+      // Attribute the run to the agent that caused it, when there is one. PromptID alone cannot do
+      // this: agents share agent-type-level prompts, so a parent and its sub-agent produce runs of
+      // the SAME prompt. See AIPromptParams.agentId for why this was previously always null.
+      if (params.agentId) {
+        promptRun.AgentID = params.agentId;
+      }
 
       // Set ChildPromptID if this is a hierarchical execution with child prompts
       if (params.childPrompts && params.childPrompts.length > 0) {
@@ -2932,7 +2952,11 @@ export class AIPromptRunner {
           let systemContent = systemPromptText;
           if (prompt.AssistantPrefill && prompt.PrefillFallbackMode === 'SystemInstruction') {
             const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
-            const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prompt.AssistantPrefill);
+            // Function replacement: prefill text is authored content that routinely
+            // contains `$` (LaTeX `$$`, currency, JSON fragments), and a string
+            // replacement would expand it. See issue #3171.
+            const prefill = prompt.AssistantPrefill;
+            const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, () => prefill);
             systemContent += '\n\n' + fallbackInstruction;
           }
           messages.push({
@@ -4171,7 +4195,9 @@ export class AIPromptRunner {
       // Append to the existing system message rather than adding a new one,
       // since some providers only support a single system message entry.
       const fallbackTemplate = this.resolvePrefillFallbackText(model, vendorId);
-      const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, prefillText);
+      // Function replacement — prefill text routinely contains `$` (LaTeX `$$`,
+      // currency, JSON). See issue #3171.
+      const fallbackInstruction = fallbackTemplate.replace(/\{\{prefill\}\}/g, () => prefillText);
 
       const existingSystemMsg = chatParams.messages.find(m => m.role === ChatMessageRole.system);
       if (existingSystemMsg && typeof existingSystemMsg.content === 'string') {
@@ -5106,8 +5132,36 @@ export class AIPromptRunner {
   }
 
   /**
-   * Attempts to repair malformed JSON using a two-step process.
-   * 
+   * Resolves the parse error that actually describes the model's output.
+   *
+   * The error reaching the repair path comes from `JSON.parse(CleanJSON(rawOutput))`, so it may
+   * describe one of CleanJSON's intermediate transforms rather than the response itself. That
+   * distinction is not cosmetic: a repair pass needs the failure offset in the *original* bytes,
+   * and the AI repair prompt is actively misled by an error describing text it was never shown.
+   *
+   * Observed in production: an unescaped quote at offset 23011 was reported as
+   * `Unexpected token 'm', "mermaid\ns"...` because CleanJSON had extracted a mermaid fence out of
+   * a string value before failing. Every downstream consumer — the repair model, the validation
+   * record, the logs — inherited that misdiagnosis.
+   *
+   * @param rawOutput - The model's unmodified output
+   * @param originalError - The error caught upstream, used as a fallback
+   * @returns The message that best describes what is wrong with `rawOutput`
+   */
+  private resolveTrueParseError(rawOutput: string, originalError: Error): string {
+    try {
+      JSON.parse(rawOutput);
+    } catch (directError: unknown) {
+      return directError instanceof Error ? directError.message : String(directError);
+    }
+    // rawOutput parses cleanly, so the failure came from a later stage; the caller's error stands.
+    return originalError.message;
+  }
+
+  /**
+   * Attempts to repair malformed JSON using a multi-step process: JSON5, then deterministic
+   * lexical repair, then an AI repair prompt.
+   *
    * @param rawOutput - The malformed JSON string
    * @param originalError - The original parsing error
    * @param params - Prompt parameters containing contextUser
@@ -5162,9 +5216,38 @@ export class AIPromptRunner {
       };
       return json5Result;
     } catch (json5Error) {
-      // Step 2: Use AI to repair the JSON
-      this.logStatus('   🤖 JSON5 failed, attempting AI-based JSON repair...', true, params);
-      
+      // The error handed to us may describe a CleanJSON transform rather than the model's actual
+      // output — CleanJSON rewrites the text through several passes before failing, and the error
+      // that escapes describes whatever it was holding at the end. Repairing, and telling a model
+      // what to repair, both require the real syntax error against the real bytes.
+      const trueError = this.resolveTrueParseError(rawOutput, originalError);
+
+      // Step 2: Deterministic lexical repair. The dominant failure by far is an unescaped quote or
+      // raw control character inside a string value — models embed mermaid diagrams, HTML mockups
+      // and code samples in markdown fields and miss an escape. JSON5 cannot help (an unescaped
+      // quote closes a string in JSON5 too), but the defect is mechanical, so fixing it needs no
+      // model call. Runs before the AI stage: it is microseconds against an LLM round-trip on a
+      // payload that may be tens of KB, and it cannot invent content the way a model can.
+      const lexicalRepair = RepairJSONEscaping(rawOutput);
+      if (lexicalRepair.repaired) {
+        this.logStatus(
+          `   ✅ Lexical repair fixed ${lexicalRepair.repairedOffsets.length} unescaped character(s)`,
+          true,
+          params
+        );
+        currentPromptRun._jsonRepairInfo = {
+          repaired: true,
+          method: 'LexicalEscaping',
+          originalError: trueError,
+          rawOutputPrefix: rawOutput.substring(0, 200),
+          repairedOffsets: lexicalRepair.repairedOffsets
+        };
+        return lexicalRepair.value;
+      }
+
+      // Step 3: Use AI to repair the JSON
+      this.logStatus('   🤖 JSON5 and lexical repair failed, attempting AI-based JSON repair...', true, params);
+
       try {
         // Find the "Repair JSON" prompt in the "MJ: System" category
         const repairPrompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === 'repair json' && p.Category.trim().toLowerCase() === 'mj: system');
@@ -5178,7 +5261,7 @@ export class AIPromptRunner {
           contextUser: params.contextUser,
           prompt: repairPrompt,
           data: {
-            ERROR_MESSAGE: originalError.message,
+            ERROR_MESSAGE: trueError,
             MALFORMED_JSON: rawOutput
           },
           skipValidation: true // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
@@ -5199,7 +5282,7 @@ export class AIPromptRunner {
         currentPromptRun._jsonRepairInfo = {
           repaired: true,
           method: 'AIRepair',
-          originalError: originalError.message,
+          originalError: trueError,
           rawOutputPrefix: rawOutput.substring(0, 200),
           repairPromptRunId: repairResult.promptRun?.ID
         };
@@ -5209,15 +5292,16 @@ export class AIPromptRunner {
         this.logError(aiRepairError, {
           category: 'JSONRepairFailed',
           metadata: {
-            originalError: originalError.message,
+            originalError: trueError,
             json5Error: json5Error.message,
+            lexicalRepairReason: lexicalRepair.reason,
             aiError: aiRepairError.message,
             rawOutput: rawOutput.substring(0, 500)
           },
           maxErrorLength: params.maxErrorLength
         });
         
-        throw new Error(`JSON repair failed after both JSON5 and AI attempts: ${originalError.message}`);
+        throw new Error(`JSON repair failed after JSON5, lexical and AI attempts: ${trueError}`);
       }
     }
   }

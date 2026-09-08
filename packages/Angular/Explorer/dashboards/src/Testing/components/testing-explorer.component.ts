@@ -175,6 +175,9 @@ interface TestRunStatRow {
           [Sections]="NavSections"
           [ActiveId]="ActiveNavId"
           [ExpandedIds]="ExpandedNavIds"
+          [Collapsible]="true"
+          [Collapsed]="RailCollapsed"
+          (CollapsedChange)="OnRailCollapsedChange($event)"
           (ItemClicked)="OnNavItemClicked($event)"
           (ItemToggled)="OnNavItemToggled($event)">
         </mj-left-nav>
@@ -1334,6 +1337,14 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
   // Settings keys
   private static readonly PANEL_WIDTH_KEY = 'Testing.ExplorerPanelWidth';
   private static readonly SEARCH_STATE_KEY = 'Testing.ExplorerSearchState';
+  private static readonly RAIL_COLLAPSED_KEY = 'Testing.ExplorerRailCollapsed';
+
+  /**
+   * Whether the browse rail is collapsed to icons. `<mj-left-nav>` owns the presentation; we own
+   * the state, same split as `ExpandedIds` — so it survives a reload and follows the user across
+   * devices via `UserInfoEngine` rather than dying in one browser's localStorage.
+   */
+  RailCollapsed = false;
   private settingsPersistSubject = new Subject<void>();
   private settingsLoaded = false;
 
@@ -2210,6 +2221,7 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
           this._searchTerm$.next(state.searchTerm);
         }
       }
+      this.RailCollapsed = UserInfoEngine.Instance.GetSetting(TestingExplorerComponent.RAIL_COLLAPSED_KEY) === 'true';
     } catch (error) {
       console.warn('[TestingExplorer] Failed to load user settings:', error);
     } finally {
@@ -2224,6 +2236,20 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
     ).subscribe(() => {
       this.persistSearchState();
     });
+  }
+
+  /** The rail toggled — take the new state and persist it (the component only presents). */
+  OnRailCollapsedChange(collapsed: boolean): void {
+    this.RailCollapsed = collapsed;
+    if (!this.settingsLoaded) return;
+    try {
+      UserInfoEngine.Instance.SetSettingDebounced(
+        TestingExplorerComponent.RAIL_COLLAPSED_KEY,
+        String(collapsed)
+      );
+    } catch (error) {
+      console.warn('[TestingExplorer] Failed to persist rail collapsed state:', error);
+    }
   }
 
   private persistSearchState(): void {

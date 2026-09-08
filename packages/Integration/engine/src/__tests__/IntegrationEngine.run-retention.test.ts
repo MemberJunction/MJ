@@ -14,6 +14,13 @@ import type { MJCompanyIntegrationRunEntity } from '@memberjunction/core-entitie
 import { IntegrationEngine } from '../IntegrationEngine.js';
 
 let mockRunViewFn: ReturnType<typeof vi.fn>;
+/**
+ * The provider `ProviderToUse` resolves to. The engine carries NO shared `_provider` field —
+ * each run owns its provider through an AsyncLocalStorage context, and outside a run
+ * `ProviderToUse` falls back to `Metadata.Provider`. The pruner runs at the tail of a run but
+ * needs no run-scoped state, so the fallback is the seam to stub here.
+ */
+let mockProvider: unknown;
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
@@ -21,6 +28,9 @@ vi.mock('@memberjunction/core', async () => {
         ...actual,
         RunView: class MockRunView {
             RunView(...args: unknown[]) { return mockRunViewFn(...args); }
+        },
+        Metadata: class MockMetadata {
+            static get Provider() { return mockProvider; }
         },
     };
 });
@@ -62,7 +72,7 @@ function createRun(): MJCompanyIntegrationRunEntity {
 
 /** Invokes the private pruner with a stubbed provider. */
 function prune(engine: IntegrationEngine, provider: unknown): Promise<void> {
-    (engine as unknown as { _provider: unknown })._provider = provider;
+    mockProvider = provider;
     return (engine as unknown as {
         pruneOldRunHistory: (r: MJCompanyIntegrationRunEntity, u: UserInfo) => Promise<void>;
     }).pruneOldRunHistory(createRun(), contextUser);
@@ -74,6 +84,7 @@ describe('IntegrationEngine.pruneOldRunHistory', () => {
     beforeEach(() => {
         engine = new IntegrationEngine();
         mockRunViewFn = vi.fn();
+        mockProvider = undefined;
         process.env.MJ_INTEGRATION_MAX_RUNS_PER_CI = '100';
     });
 

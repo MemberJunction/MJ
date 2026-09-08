@@ -1,11 +1,15 @@
 import {
   Component, Input, Output, EventEmitter,
   ChangeDetectionStrategy, ChangeDetectorRef, inject,
-  OnChanges, SimpleChanges, ViewEncapsulation
+  OnChanges, OnInit, OnDestroy, SimpleChanges, ViewEncapsulation
 } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormNavigationEvent, EntityHierarchyNavigationEvent } from '../types/navigation-events';
 import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from './isa-hierarchy-utils';
+import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
 
 /**
  * Container panel that discovers and displays IS-A related entity records
@@ -38,8 +42,10 @@ import { DiscoverISADescendants, BuildDescendantTree, IsaRelatedItem } from './i
   templateUrl: './isa-related-panel.component.html',
   styleUrls: ['./isa-related-panel.component.css']
 })
-export class MjIsaRelatedPanelComponent implements OnChanges {
+export class MjIsaRelatedPanelComponent extends BaseAngularComponent implements OnChanges, OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
+  private recordRefresh = inject(FormRecordRefreshCoordinator, { optional: true });
+  private destroy$ = new Subject<void>();
 
   /** The entity record currently displayed in the form */
   @Input() Record: BaseEntity | null = null;
@@ -71,6 +77,17 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
   /** The shared primary key for all IS-A related records */
   get SharedPrimaryKey(): CompositeKey | null {
     return this.Record?.PrimaryKey ?? null;
+  }
+
+  ngOnInit(): void {
+    this.recordRefresh?.Refreshed$.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      void this.DiscoverRelatedItems();
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   ngOnChanges(changes: SimpleChanges): void {
@@ -140,7 +157,7 @@ export class MjIsaRelatedPanelComponent implements OnChanges {
   private async DiscoverDescendants(): Promise<void> {
     if (!this.Record) return;
 
-    const descendants = await DiscoverISADescendants(this.Record);
+    const descendants = await DiscoverISADescendants(this.Record, this.ProviderToUse);
     const tree = BuildDescendantTree(descendants);
     this.RelatedItems.push(...tree);
   }

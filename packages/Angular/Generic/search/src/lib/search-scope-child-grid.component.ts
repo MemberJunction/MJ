@@ -51,6 +51,7 @@ import {
     inject
 } from '@angular/core';
 import { BaseEntity, LogError, Metadata, RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /** Supported inline-edit types for a scope-child grid column. */
@@ -103,7 +104,7 @@ interface GridRow {
     templateUrl: './search-scope-child-grid.component.html',
     styleUrls: ['./search-scope-child-grid.component.css']
 })
-export class SearchScopeChildGridComponent implements OnDestroy {
+export class SearchScopeChildGridComponent extends BaseAngularComponent implements OnDestroy {
     private cdr = inject(ChangeDetectorRef);
 
     // ─── Inputs ───────────────────────────────────────────────────────────────
@@ -184,7 +185,7 @@ export class SearchScopeChildGridComponent implements OnDestroy {
         this.IsLoading = true;
         this.LoadError = null;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<BaseEntity>({
                 EntityName: this.ChildEntityName,
                 ExtraFilter: `${this.ParentFieldName} = '${this._parentID.replace(/'/g, "''")}'`,
@@ -219,7 +220,9 @@ export class SearchScopeChildGridComponent implements OnDestroy {
     public async AddRow(): Promise<void> {
         if (this.Disabled || !this._parentID || !this.ChildEntityName) return;
         try {
-            const md = new Metadata(); // global-provider-ok: child grid does not yet accept a Provider input — multi-provider threading is the team's separate Phase 6 effort
+            // This class extends BaseAngularComponent, so it has accepted a `Provider` input all
+            // along — the note claiming otherwise was stale.
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>(this.ChildEntityName);
             entity.Set(this.ParentFieldName, this._parentID);
             this.applyColumnDefaults(entity);
@@ -328,7 +331,7 @@ export class SearchScopeChildGridComponent implements OnDestroy {
             return;
         }
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const queries = toLoad.map(c => ({
             EntityName: c.LookupEntityName!,
             ExtraFilter: c.LookupFilter || '',

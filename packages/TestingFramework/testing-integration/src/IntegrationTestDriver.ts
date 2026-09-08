@@ -6,7 +6,7 @@
  *
  * Execute():
  *   1) parse Configuration.checks (an ordered list of check BUNDLES) off MJTestEntity;
- *   2) honor an optional env gate (skip-as-Passed with a note);
+ *   2) honor an optional env gate (a REAL 'Skipped' result with a note — never 'Passed');
  *   3) infer the transport (client-cache ⇒ GraphQL client, else SQL server) and obtain
  *      the run-scoped instrumented provider stack (installed first-caller by the CLI,
  *      or self-bootstrapped in a dedicated process);
@@ -32,7 +32,7 @@ import {
 } from '@memberjunction/testing-engine';
 import { Metadata, ProviderType } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type sql from 'mssql';
 import {
     getActiveIntegrationStorage,
@@ -125,7 +125,8 @@ export class IntegrationTestDriver extends BaseTestDriver {
 
         // 2) Whole-test tier gate (gated-tier / local-dev safety net). The tier decides the
         //    env var via TIER_ENV_GATE; an explicit `requiresEnv` overrides it. When the gate
-        //    is unmet, skip-as-Passed with a gate note — the driver result enum has no 'Skipped'.
+        //    is unmet, report a REAL 'Skipped' result (Track A/A1) — a gated run must never
+        //    be indistinguishable from executed coverage.
         const tier: IntegrationTier = config.tier ?? 'deterministic';
         const explicitGate = config.requiresEnv;
         const gated = explicitGate ? process.env[explicitGate] !== '1' : !IsTierEnabled(tier);
@@ -179,10 +180,10 @@ export class IntegrationTestDriver extends BaseTestDriver {
             clearTimeout(timer);
             const msg = (bootErr as Error).message ?? String(bootErr);
             // ENVIRONMENT GAP, not a product defect: client-transport bundles need a live MJAPI.
-            // When the preflight says the server is simply absent (CI runs no MJAPI), skip-as-pass
-            // loudly — the same contract the old per-bundle tsx dispatchers honored with exit 0.
-            // Any OTHER bootstrap failure (bad credentials, cache ownership, config) stays a
-            // hard error.
+            // When the preflight says the server is simply absent (no MJAPI reachable), report a
+            // REAL 'Skipped' result loudly — visible in every summary, never masquerading as
+            // executed coverage. Any OTHER bootstrap failure (bad credentials, cache ownership,
+            // config) stays a hard error.
             if (transport === 'client' && /MJAPI is not reachable/i.test(msg)) {
                 return this.buildSkipResult(context, startTime,
                     `SKIPPED (environment gap): ${msg} Client-transport checks need a live MJAPI; start it and re-run for full coverage.`);
@@ -269,12 +270,35 @@ export class IntegrationTestDriver extends BaseTestDriver {
                     break;
                 }
                 if (check.RequiresMutation && !mutationEnabled) {
+                    this.recordSkippedCheck(context, oracleResults, outcomes, check.Id, check.Name,
+                        `SKIPPED: mutation-gated (set RUN_MUTATION_TESTS=1 or selector runMutationTests to execute)`);
                     continue;
                 }
                 if (check.RequiresLiveModel && !liveModelEnabled) {
+                    this.recordSkippedCheck(context, oracleResults, outcomes, check.Id, check.Name,
+                        `SKIPPED: live-model-gated (RUN_AGENT_TESTS disabled)`);
                     continue;
                 }
                 await this.runCheck(context, checkCtx, check.Id, check.Name, check.Fn, oracleResults, outcomes, deadline);
+            }
+
+            // A bundle whose every check was gated out ran NOTHING, and used to report PASS for it.
+            //
+            // That is not a harmless quirk. `task-graph-execution` is entirely RequiresMutation, so
+            // the deterministic tier showed it green — 0/0, score 0.0000, "PASSED" — while one of
+            // its assertions had contradicted the live engine since R6. The suite was reporting
+            // coverage it did not have, which is the one thing a test suite must never do.
+            //
+            // Each gated check is now recorded as an explicit skip above (recordSkippedCheck marks it
+            // `Skipped: true`, so buildResult keeps it out of the pass tally and surfaces it as a
+            // skip). This bundle-level warning fires only when EVERY recorded outcome is a skip, so an
+            // all-gated bundle is impossible to miss in the log — no extra outcome is pushed, which
+            // would double-count the per-check skips.
+            if (bundle.length > 0 && outcomes.length > 0 && outcomes.every(o => o.Skipped)) {
+                this.logToTestRun(context, 'warn',
+                    `${bundleType}: all ${outcomes.length} check(s) were gated out — nothing ran. ` +
+                    `Set RUN_MUTATION_TESTS=1 (or the live-model gate) to execute them. This bundle ` +
+                    `verified NOTHING on this run.`);
             }
         } catch (fxErr) {
             // The only throw reachable here is from lifecycle.Setup — runCheck swallows per-check
@@ -327,6 +351,25 @@ export class IntegrationTestDriver extends BaseTestDriver {
                 clearTimeout(timer);
             }
         }
+    }
+
+    /**
+     * Record a gated check as SKIPPED instead of silently dropping it. The oracle entry
+     * carries `details.Skipped: true` (the marker buildResult uses to keep skips out of
+     * the executed pass/fail counts) with `passed: true` so legacy consumers that only
+     * read the boolean never mistake a skip for a failure.
+     */
+    private recordSkippedCheck(
+        context: DriverExecutionContext,
+        oracleResults: OracleResult[],
+        outcomes: TestOutcome[],
+        id: string,
+        name: string,
+        reason: string
+    ): void {
+        oracleResults.push({ oracleType: id, passed: true, score: 0, message: reason, details: { DurationMs: 0, Skipped: true } });
+        outcomes.push({ Name: name, Passed: true, DurationMs: 0, Skipped: true });
+        this.logToTestRun(context, 'warn', `− ${id}: ${reason}`);
     }
 
     /** Run one check in try/catch and append one OracleResult + one TestOutcome. */
@@ -427,18 +470,28 @@ export class IntegrationTestDriver extends BaseTestDriver {
         };
     }
 
-    /** Map the OracleResult[] to the framework result (one OracleResult per check). */
+    /**
+     * Map the OracleResult[] to the framework result (one OracleResult per check).
+     * Skipped checks (details.Skipped) are excluded from the executed pass/fail counts
+     * and reported via skippedChecks; a run where NOTHING executed but something was
+     * skipped is a 'Skipped' run, not a 'Passed' one.
+     */
     private buildResult(
         context: DriverExecutionContext,
         startTime: number,
         oracleResults: OracleResult[],
         timedOut: boolean
     ): DriverExecutionResult {
-        const passedChecks = oracleResults.filter(r => r.passed).length;
-        const totalChecks = oracleResults.length;
+        const skipped = oracleResults.filter(r => (r.details as Record<string, unknown> | undefined)?.Skipped === true);
+        const executed = oracleResults.filter(r => !skipped.includes(r));
+        const passedChecks = executed.filter(r => r.passed).length;
+        const totalChecks = executed.length;
         const failedChecks = totalChecks - passedChecks;
         const status: DriverExecutionResult['status'] =
-            timedOut ? 'Timeout' : (failedChecks === 0 ? 'Passed' : 'Failed');
+            timedOut ? 'Timeout'
+                : failedChecks > 0 ? 'Failed'
+                : (totalChecks === 0 && skipped.length > 0) ? 'Skipped'
+                : 'Passed';
 
         const result: DriverExecutionResult = {
             targetType: TARGET_TYPE,
@@ -450,6 +503,7 @@ export class IntegrationTestDriver extends BaseTestDriver {
             passedChecks,
             failedChecks,
             totalChecks,
+            skippedChecks: skipped.length,
             durationMs: Date.now() - startTime
         };
         if (timedOut) {
@@ -458,17 +512,24 @@ export class IntegrationTestDriver extends BaseTestDriver {
         return result;
     }
 
-    /** Gated/skipped run: one passing 'gate' OracleResult, never 'Running', never thrown. */
+    /**
+     * Gated/skipped run: a REAL 'Skipped' status (never 'Running', never thrown, and —
+     * per Track A/A1 — never 'Passed': a run that didn't execute must not be
+     * indistinguishable from one that did). The single gate oracle keeps the note
+     * visible in TestRun.ResultDetails; its passed:true means "the gate itself worked",
+     * while details.Skipped keeps it out of the executed counts.
+     */
     private buildSkipResult(context: DriverExecutionContext, startTime: number, note: string): DriverExecutionResult {
         return {
             targetType: TARGET_TYPE,
             targetLogId: context.testRun.ID,
-            status: 'Passed',
-            score: 1,
-            oracleResults: [{ oracleType: 'gate', passed: true, score: 1, message: note, details: { DurationMs: 0 } }],
-            passedChecks: 1,
+            status: 'Skipped',
+            score: 0,
+            oracleResults: [{ oracleType: 'gate', passed: true, score: 0, message: note, details: { DurationMs: 0, Skipped: true } }],
+            passedChecks: 0,
             failedChecks: 0,
-            totalChecks: 1,
+            totalChecks: 0,
+            skippedChecks: 1,
             durationMs: Date.now() - startTime
         };
     }

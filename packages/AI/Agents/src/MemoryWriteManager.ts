@@ -116,8 +116,20 @@ export interface MemoryWriteManagerConfig {
 export class MemoryWriteManager {
   /** Normalized-note-hash → noteId persisted this run (within-run idempotency + supersede-own lookup) */
   private writtenNotesByHash: Map<string, string> = new Map();
-  /** IDs of notes persisted this run (distinguishes supersede-own from cross-run dedupe) */
-  private writtenNoteIds: Set<string> = new Set();
+  /**
+   * noteId → scope key, for notes persisted this run. Distinguishes supersede-own from cross-run
+   * dedupe, and — because the value is the SCOPE — keeps supersede-own from crossing scopes.
+   *
+   * 🚨 The scope must be part of this bookkeeping, not just the ID. `FindSimilarAgentNotes`
+   * deliberately does not filter out agent-wide (`UserID IS NULL`) notes when a userId is supplied
+   * (see memory-manager-agent.ts, "those notes have UserID=null — FindSimilarAgentNotes won't
+   * filter them out"), so a user-scoped write sees an agent-scoped note written moments earlier in
+   * the same run. Superseding across that boundary loses one memory outright AND leaves the
+   * survivor holding user-specific content at agent-wide scope — `supersedeOwnNote` rewrites
+   * `Note`/`Type` but never `UserID` — where every other user of the agent can read it. Caught by
+   * IT61/MG3 during the 6.1 release.
+   */
+  private writtenNoteScopes: Map<string, string> = new Map();
   private writeCount = 0;
 
   private readonly maxWritesPerRun: number;
@@ -135,7 +147,7 @@ export class MemoryWriteManager {
   /** Reset all per-run state. Called at run start, mirroring ArtifactToolManager.Clear(). */
   Clear(): void {
     this.writtenNotesByHash.clear();
-    this.writtenNoteIds.clear();
+    this.writtenNoteScopes.clear();
     this.writeCount = 0;
   }
 
@@ -162,7 +174,13 @@ export class MemoryWriteManager {
       return finish({ disposition: 'rejected-type', reason: validationError });
     }
 
-    const hash = this.normalizeAndHash(request.note);
+    // Scope FIRST: the idempotency key must include it. Two writes of the same text at different
+    // scopes (agent-wide vs. this user) are two different memories, and a scope-blind hash collapses
+    // them to `skipped-duplicate`, silently dropping the second — the same loss the supersede-own
+    // scope check prevents, arriving through the idempotency door. Same text at the SAME scope still
+    // hashes identically, so within-run idempotency (IT61/MG4) is unchanged.
+    const scope = this.clampScope(request, context);
+    const hash = this.scopedHash(request.note, scope);
     if (this.writtenNotesByHash.has(hash)) {
       return finish({
         disposition: 'skipped-duplicate',
@@ -178,18 +196,17 @@ export class MemoryWriteManager {
       });
     }
 
-    const scope = this.clampScope(request, context);
     const nearDup = await this.findNearDuplicate(request.note, scope, context);
 
     let outcome: Omit<MemoryWriteResult, 'durationMs' | 'request'>;
-    if (nearDup && this.writtenNoteIds.has(nearDup.noteId)) {
+    if (nearDup && this.isOwnNoteInScope(nearDup.noteId, scope)) {
       outcome = await this.supersedeOwnNote(nearDup.noteId, request, scope, context);
     } else if (nearDup) {
       outcome = await this.touchExistingNote(nearDup.noteId, context);
     } else {
       outcome = await this.persistNewNote(request, scope, context);
     }
-    this.recordOutcome(outcome, hash);
+    this.recordOutcome(outcome, hash, scope);
     return finish(outcome);
   }
 
@@ -198,14 +215,39 @@ export class MemoryWriteManager {
    * seams) so subclass/test overrides of the I/O methods can't desync the
    * idempotency hash map, the own-note ID set, or the write cap counter.
    */
-  private recordOutcome(outcome: Omit<MemoryWriteResult, 'durationMs' | 'request'>, hash: string): void {
+  private recordOutcome(
+    outcome: Omit<MemoryWriteResult, 'durationMs' | 'request'>,
+    hash: string,
+    scope: MemoryWriteScope,
+  ): void {
     if (outcome.disposition === 'written' && outcome.noteId) {
       this.writeCount++;
       this.writtenNotesByHash.set(hash, outcome.noteId);
-      this.writtenNoteIds.add(outcome.noteId);
+      this.writtenNoteScopes.set(outcome.noteId, this.scopeKey(outcome.finalScope ?? scope));
     } else if (outcome.disposition === 'superseded-own' && outcome.noteId) {
       this.writtenNotesByHash.set(hash, outcome.noteId);
     }
+  }
+
+  /**
+   * True when `noteId` was written earlier in THIS run **at the same scope** — the only case where
+   * last-write-wins supersede is correct. A same-run note at a DIFFERENT scope is a different
+   * memory that merely reads alike; it must be left alone so the current request persists as its
+   * own note. See {@link writtenNoteScopes} for why the scope check is load-bearing.
+   */
+  private isOwnNoteInScope(noteId: string, scope: MemoryWriteScope): boolean {
+    const written = this.writtenNoteScopes.get(noteId);
+    return written !== undefined && written === this.scopeKey(scope);
+  }
+
+  /** Within-run idempotency key: the normalized note text, qualified by the scope it lands at. */
+  private scopedHash(noteText: string, scope: MemoryWriteScope): string {
+    return `${this.scopeKey(scope)}|${this.normalizeAndHash(noteText)}`;
+  }
+
+  /** Stable identity for a write scope — agent, user (null = agent-wide), and company. */
+  private scopeKey(scope: MemoryWriteScope | undefined): string {
+    return `${scope?.agentId ?? ''}|${scope?.userId ?? ''}|${scope?.companyId ?? ''}`;
   }
 
   // ─── GUARDS ───
@@ -277,12 +319,19 @@ export class MemoryWriteManager {
   ): Promise<{ noteId: string; similarity: number } | null> {
     try {
       const matches = await this.queryVectorService(noteText, scope);
-      const ownHit = matches.find((m) => this.writtenNoteIds.has(m.noteId));
+      const ownHit = matches.find((m) => this.isOwnNoteInScope(m.noteId, scope));
       if (ownHit) {
         return { noteId: ownHit.noteId, similarity: ownHit.similarity };
       }
+      // A note this run wrote at a DIFFERENT scope must not be returned at all. Falling through to
+      // the exact-restatement branch would route it to `touchExistingNote`, which bumps the other
+      // scope's note and drops this write — the same memory loss the scope check exists to prevent,
+      // just via a different door.
+      const crossScopeOwn = new Set(
+        matches.filter((m) => this.writtenNoteScopes.has(m.noteId)).map((m) => m.noteId)
+      );
       const requestHash = this.normalizeAndHash(noteText);
-      const exactHit = matches.find((m) => this.normalizeAndHash(m.noteText) === requestHash);
+      const exactHit = matches.find((m) => !crossScopeOwn.has(m.noteId) && this.normalizeAndHash(m.noteText) === requestHash);
       if (exactHit) {
         return { noteId: exactHit.noteId, similarity: exactHit.similarity };
       }

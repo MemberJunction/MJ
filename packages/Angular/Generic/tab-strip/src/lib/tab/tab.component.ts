@@ -9,7 +9,10 @@ import { MJTabStripComponent } from '../tab-strip/tab-strip.component';
   standalone: false,
   selector: 'mj-tab',
   templateUrl: './tab.component.html',
-  styleUrl: './tab.component.css'
+  styleUrl: './tab.component.css',
+  // The ARIA tablist's children must be the role="tab" elements; this host element is an extra
+  // layer between them, so it opts out of the accessibility tree's structure.
+  host: { role: 'presentation' },
 })
 export class MJTabComponent extends MJTabBase {
   private _tabSelected: boolean = false;

@@ -1,0 +1,177 @@
+// Card Grid & Expandable Card styling using MJ Design Tokens
+
+:host {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+}
+
+.mj-card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+    gap: var(--mj-card-grid-gap, var(--mj-space-4, 16px));
+    width: 100%;
+    position: relative;
+    box-sizing: border-box;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &.mj-card-grid--has-maximized {
+        grid-template-columns: 1fr !important;
+    }
+
+    @media (max-width: 640px) {
+        grid-template-columns: 1fr !important;
+    }
+}
+
+// Host element for mj-card
+mj-card {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.mj-card {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 100%;
+    height: 100%;
+    min-height: 290px;
+    background: var(--mj-bg-surface-card, var(--mj-bg-surface, #141f33));
+    border: 1px solid var(--mj-border-default, #2a3852);
+    border-radius: var(--mj-radius-xl, 16px);
+    box-shadow: var(--mj-shadow-sm, 0 1px 3px rgba(0, 0, 0, 0.08));
+    padding: var(--mj-space-4, 16px) var(--mj-space-5, 20px);
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    position: relative;
+    min-width: 0;
+
+    &:hover {
+        border-color: color-mix(in srgb, var(--mj-brand-primary, #38bdf8) 40%, var(--mj-border-default, #2a3852));
+    }
+
+    &.mj-card--maximized {
+        grid-column: 1 / -1;
+        width: 100%;
+        min-height: 480px;
+        box-shadow: var(--mj-shadow-lg, 0 10px 25px rgba(0, 0, 0, 0.25));
+        border-color: var(--mj-brand-primary, #38bdf8);
+        z-index: 10;
+    }
+
+    &.mj-card--hidden {
+        display: none !important;
+    }
+
+    &__header {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        justify-content: space-between !important;
+        gap: var(--mj-space-3, 12px) !important;
+        margin-bottom: var(--mj-space-3, 12px) !important;
+        min-height: 28px !important;
+        width: 100% !important;
+    }
+
+    &__title-group {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 2px !important;
+        min-width: 0 !important;
+        flex: 1 1 auto !important;
+    }
+
+    &__title-row {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: var(--mj-space-2, 8px) !important;
+        min-width: 0 !important;
+    }
+
+    &__icon {
+        color: var(--mj-brand-primary, #38bdf8);
+        font-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    &__title {
+        font-size: 14px;
+        font-weight: 700;
+        color: var(--mj-text-primary, #ffffff);
+        letter-spacing: -0.01em;
+        margin: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    &__subtitle {
+        font-size: 11.5px;
+        font-weight: 500;
+        color: var(--mj-text-muted, #94a3b8);
+        margin: 0;
+        padding-left: 22px;
+    }
+
+    &__actions {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: var(--mj-space-2, 8px) !important;
+        flex-shrink: 0 !important;
+        margin-left: auto !important;
+    }
+
+    &__toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border-radius: var(--mj-radius-sm, 6px);
+        background: transparent;
+        border: 1px solid transparent;
+        color: var(--mj-text-muted, #94a3b8);
+        cursor: pointer;
+        padding: 0;
+        font-size: 12px;
+        transition: all 0.15s ease;
+
+        &:hover {
+            color: var(--mj-text-primary, #ffffff);
+            background: var(--mj-bg-surface-sunken, rgba(255, 255, 255, 0.06));
+            border-color: var(--mj-border-default, #2a3852);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--mj-brand-primary, #38bdf8);
+            outline-offset: 1px;
+        }
+    }
+
+    &__body {
+        flex: 1 1 auto;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-width: 0;
+    }
+
+    &__footer {
+        margin-top: auto;
+        padding-top: var(--mj-space-3, 12px);
+        border-top: 1px solid var(--mj-border-default, #2a3852);
+    }
+}

@@ -19,7 +19,7 @@ You have access to four specialized sub-agents. Invoke them by calling the appro
 ### Web Research Agent
 **Expertise**: Internet and web-based research
 **Capabilities**:
-- Google Custom Search (web search with advanced filtering)
+- Web search via Perplexity Search (cited synthesis) or Google Custom Search (ranked links with advanced filtering), whichever is configured
 - Web Page Content (fetch and parse web pages)
 - Summarize Content (create summaries with citations)
 

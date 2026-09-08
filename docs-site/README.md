@@ -7,6 +7,7 @@ The MemberJunction documentation site — an [Astro Starlight](https://starlight
 | Developer guides | `guides/*.md` | Auto-discovered by `scripts/ingest.mjs` |
 | Package docs | `packages/**/README.md` (package roots + grouping dirs) | Auto-discovered; index table built from each `package.json` |
 | Overview / Deployment / Upgrade / Contributing / Metadata | Root repo docs | Fixed list in `ingest.mjs` |
+| Release notes | `releases/v*.md` (written by the `/notes` skill) | Auto-discovered; newest-first index generated |
 | Agent skills catalog | `.claude/skills/*/SKILL.md` | Auto-discovered frontmatter |
 | Ecosystem cards | Skyway / Forge / VSCode / bizapps GitHub repos | Fetched at build time (fail-soft) |
 | API reference (`/api/`) | TypeDoc over all packages | Built by `.github/workflows/docs.yml`, copied into `dist/api/` |

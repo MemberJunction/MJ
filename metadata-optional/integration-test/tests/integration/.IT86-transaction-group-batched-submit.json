@@ -1,0 +1,21 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT86 - Transaction Group Batched Submit",
+    "Description": "Live-DB proof of the OPT-IN batched TransactionGroup submit (BatchedSubmit), which the unit tier can only assert against mocks. TGB1 reads SQL Server's own plan cache to confirm the group reached the server as ONE sentinel-fenced statement; TGB2 pins per-item result mapping through a real driver (3 items, 3 distinct server ids, each mapped to its own row); TGB3 pins that the global @p renumbering binds per-item values to their own items (quote / unicode / wildcard payloads); TGB4 pins failure atomicity inside one batched statement; TGB5 is a differential check that batched and sequential submits are observably identical. Server transport (BatchedSubmit is a property of the server-built group). SQL Server only; skips-as-pass elsewhere and where the plan-cache DMVs are unreadable. Self-cleaning prefixed fixtures.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "The batched submit reaches SQL Server as one sentinel-fenced statement, maps every item's result back to its own item, binds every item's parameters to its own row, fails as a unit on a poison item, and is observably identical to the sequential path. 5 checks (TGB1-TGB5)."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "transaction-groups-batched"
+        }
+      ]
+    },
+    "Status": "Active"
+  }
+}

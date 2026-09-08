@@ -399,7 +399,8 @@ export function resolveTargetEntity(
  * Builds column configs from QueryFieldInfo metadata
  */
 export function buildColumnsFromQueryFields(fields: MJQueryFieldEntity[], provider?: IMetadataProvider): QueryGridColumnConfig[] {
-    const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
+    // Metadata.Provider IS the global IMetadataProvider — no cast needed, and it names the fallback.
+    const md = provider ?? Metadata.Provider;
 
     return fields
         .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))

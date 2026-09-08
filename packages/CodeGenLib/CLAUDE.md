@@ -25,6 +25,53 @@ class-registration manifest system.
 
 4. **Server APIs** (`packages/MJServer/src/generated/generated.ts`)
 
+## Base views: generated, custom, or LAYERED
+
+An entity's `BaseView` is its public surface — field discovery, permissions and the generated CRUD
+routines all target it. Two `Entity` columns decide who writes it:
+
+| `BaseViewGenerated` | `GeneratedBaseViewName` | Result |
+|---|---|---|
+| `1` | `NULL` | CodeGen writes `BaseView`. The default. |
+| `0` | `NULL` | The app owns `BaseView` entirely; CodeGen writes nothing. |
+| `0` | `vwFooGenerated` | **Layered** — CodeGen writes the inner view, the app wraps it. |
+
+**Prefer LAYERED over fully custom.** Fully custom means the application inherits ~80 lines of
+generated SQL — every display join, the geo join, the recursive root-ID apply — to add one column,
+and must hand-maintain it forever. A foreign key added later then **silently** never appears: the
+column is absent rather than wrong, so nothing errors and no test notices. Layering keeps all of that
+regenerating underneath:
+
+```sql
+CREATE VIEW [orders].[vwOrderHeaders] AS
+SELECT g.*, CASE WHEN ... END AS IsOverdue
+FROM   [orders].[vwOrderHeadersGenerated] g;
+```
+
+PostgreSQL: CodeGen writes the inner view the same way. The outer view is custom SQL shipped via
+pg-migrate. After inner regeneration, CodeGen restars the outer (`restarLayeredOuterView` /
+`spRebindLayeredOuterView`) so `g.*` re-expands. `CREATE OR REPLACE` of the inner view alone does
+**not** update the outer.
+
+Rules if you touch this:
+
+- **Use `EntityInfo.GeneratedViewName`**, never re-derive from `BaseView`. It is the one answer to
+  "which view does CodeGen write"; several call sites decide where to write, what to name the file,
+  and what to refresh, and any two disagreeing produce a view under a name nothing reads.
+- **`EntityInfo.HasLayeredBaseView`** is the layering test. It compares names case-insensitively —
+  a view cannot select from itself, and a CHECK constraint on `Entity` refuses equal names too.
+  `GeneratedViewName` is derived FROM it, so the two cannot drift; keep it that way rather than
+  re-testing the raw column.
+- **Refresh inner before outer.** The custom layer does `SELECT g.*` and a view caches its column
+  list; refreshing the outer against a stale inner re-caches the old columns and the new one stays
+  missing. CodeGen already emits `sp_refreshview` in that order — keep it that way.
+- **Guard anything aimed at the outer view.** CodeGen refreshes and grants on `BaseView` but never
+  creates it, and on the first pass after layering is enabled it does not exist yet — it selects
+  from the inner view that pass is creating. Emit those through
+  `generateIfViewExistsSQL`, or the run that is supposed to bootstrap the arrangement fails.
+- **CRUD routines stay on `BaseView`.** They return the affected row, so custom columns come back on
+  create/update/delete. Do not point them at the inner view.
+
 ## When CodeGen runs
 
 CodeGen runs when:
@@ -165,9 +212,23 @@ eliminate.
 - This solves the npm distribution gap: published packages only have `dist/` (no `src/`), so the manifest generator can't scan them externally.
 
 **Key scripts:**
-- `npm run mj:manifest` — regenerates all 4 manifests (server-bootstrap, ng-bootstrap, MJAPI, MJExplorer)
-- `npm run mj:manifest:server-bootstrap` / `mj:manifest:ng-bootstrap` — regenerate bootstrap pre-built manifests
-- `npm run mj:manifest:api` / `mj:manifest:explorer` — regenerate app supplemental manifests
+- `pnpm run mj:manifest` — regenerates all **9** manifests, serially (server-bootstrap,
+  server-bootstrap-lite, ng-bootstrap, ng-bootstrap-lite, MJAPI, MJExplorer, A2AServer,
+  MCPServer, MJCodeGenAPI). Runs automatically from the root `postbuild`.
+- `pnpm run mj:manifest:server-bootstrap` / `:server-bootstrap-lite` / `:ng-bootstrap` /
+  `:ng-bootstrap-lite` — regenerate the pre-built bootstrap manifests
+- `pnpm run mj:manifest:api` / `:explorer` / `:a2a-server` / `:mcp-server` / `:codegen-api` —
+  regenerate the app supplemental manifests
+
+> The two `ng-bootstrap*` manifests ship to the **browser**. Regenerating them can pull a
+> server-only package into the bundle — run `pnpm run check:browser-manifest` afterwards
+> (CI runs it too). See [`packages/Angular/Bootstrap/CLAUDE.md`](../Angular/Bootstrap/CLAUDE.md).
+
+> **Ordering caveat.** These 9 steps are not order-independent: each runs with
+> `syncDependencies` on, so it may rewrite `<appDir>/package.json` while another step is
+> walking it. The current serial order does not fully respect that — see
+> [`plans/manifest-generation-parallelization.md`](../../plans/manifest-generation-parallelization.md)
+> before reordering or parallelizing them.
 
 **See**: [CLASS_MANIFEST_GUIDE.md](../../plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for comprehensive
 documentation on the manifest system, including how external consumers and MJ distribution users

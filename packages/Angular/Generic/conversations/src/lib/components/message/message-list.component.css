@@ -1,3 +1,7 @@
+/* Scrolls itself ONLY when no host scroller was supplied — see the `mj-list-host-scrolled`
+   host binding. `overflow-y` here makes this element the nearest scrolling ancestor, which is
+   what `position: sticky` binds to; when the host owns the scrolling this container never
+   moves, so anything sticky inside it silently scrolls away instead of pinning. */
 .message-list-container {
   flex: 1;
   overflow-y: auto;
@@ -97,4 +101,39 @@
 
 .date-nav-option.jump-to:hover {
   background: none;
+}
+
+/* ── Windowed transcript sentinel ─────────────────────────────────────────────
+   Sits above the first loaded message while older pages remain. Needs real height
+   so the IntersectionObserver has something to observe. */
+.transcript-older-sentinel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.5rem;
+  padding: 0.75rem 1rem;
+}
+
+.transcript-older-label {
+  font-size: 0.8125rem;
+  color: var(--mj-text-secondary);
+}
+
+/* Stands in for an unmounted timeline item so the scroll range never changes when the
+   DOM is trimmed. Height comes from the item's last measured size. */
+.transcript-spacer {
+  width: 100%;
+  flex-shrink: 0;
+}
+
+/* Host owns the scrolling: stop creating a scroll context here so `position: sticky`
+   descendants (the date navigator) bind to the host's real scroller and actually pin.
+
+   BOTH axes, not just `overflow-y`. Per CSS Overflow, when one axis is `visible` and the
+   other is not, the `visible` one computes to `auto` — so leaving `overflow-x: hidden` in
+   place silently kept this element a scroll container and the header kept scrolling away.
+   Horizontal clipping is not lost: the host's own scroller (`.chat-messages-container`)
+   already carries `overflow-x: hidden`. */
+:host(.mj-list-host-scrolled) .message-list-container {
+  overflow: visible;
 }

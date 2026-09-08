@@ -57,6 +57,13 @@ const rows = walk(ROOT).map((f) => {
   else if (/@RegisterClass\(\s*BaseFormComponent/.test(ts) || /extends\s+MJ\w*FormComponent\b/.test(ts)) bucket = 'deferred:form';
   // Page-level: extends a BaseResource/Admin/Navigation/Dashboard base, is registered as a resource
   // or navigation component, or wires the mj-page-* chrome set.
+  // Heuristic audit (Phase 4): `mj-page-header` also substring-matches `mj-page-header-interior`
+  // (a sub-page widget, not page chrome). Measured impact: ZERO — every current user of
+  // header-interior also matches real chrome or a page base class, so no component is bucketed
+  // page-level by the substring alone. Re-measure before tightening if that ever changes.
+  // Likewise `\w*Engine\w*.Instance` (below) matches ANY usage, incl. click-handler-only; a spec
+  // sibling always wins (covered is checked first), so writing the spec un-defers such a component
+  // (see EntityLinkPillComponent). The deferred:singleton list is the Phase-3.5 hand-audit target.
   else if (
     /extends\s+Base(Resource|Admin|Navigation|Dashboard)\w*/.test(ts) ||
     /@RegisterClass\(\s*Base(Resource|Navigation)Component/.test(ts) ||
@@ -86,6 +93,27 @@ console.log(`To hit 85%: cover ${Math.max(0, Math.ceil(denom * 0.85) - covered.l
 if (process.argv.includes('--list-inscope')) {
   console.log('IN-SCOPE (uncovered) — the grind list:');
   for (const r of inScope.sort((a, b) => a.rel.localeCompare(b.rel))) console.log(`  ${r.name}  ${r.rel}`);
+}
+
+// CI coverage gate (Phase 4): `--min <pct>` exits non-zero when in-scope coverage falls below
+// the threshold. New components land as in-scope-uncovered by default (deferral requires an
+// explicit heuristic match or a reviewed MANUAL_DEFERRALS entry), so this catches "shipped a
+// testable Explorer component without a DOM spec" at PR time. Start lenient, ratchet up.
+const minIdx = process.argv.indexOf('--min');
+if (minIdx !== -1) {
+  const min = Number(process.argv[minIdx + 1]);
+  if (!Number.isFinite(min) || min < 0 || min > 100) {
+    console.error(`--min requires a percentage 0-100, got: ${process.argv[minIdx + 1]}`);
+    process.exit(2);
+  }
+  const pct = denom ? (covered.length / denom) * 100 : 100;
+  if (pct < min) {
+    console.error(`\n❌ In-scope DOM coverage ${pct.toFixed(1)}% is below the --min ${min}% gate.`);
+    console.error(`   Cover ${Math.ceil((min / 100) * denom) - covered.length} more component(s) — run with --list-inscope for the list,`);
+    console.error(`   or (only if genuinely untestable) add a reviewed deferral. See plans/testing/phase-3-explorer-deferral-register.md.`);
+    process.exit(1);
+  }
+  console.log(`✅ Coverage gate: ${pct.toFixed(1)}% >= ${min}%.`);
 }
 
 if (process.argv.includes('--register')) {

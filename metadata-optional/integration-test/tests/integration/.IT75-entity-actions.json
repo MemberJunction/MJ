@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT75 - Entity Actions",
+    "Description": "The entity-action substrate driven against a live database, bundle 'entity-actions', EA1-EA8. Everything the Track A runbook fixed is invisible to unit tests in the one way that matters: the seams. HandleEntityActions builds a change context from an entity the save is about to reload and reset; a filter is compiled from a row and evaluated fail-closed; a scoped binding is refused by a resolver that walks real foreign keys; a durable binding is handed to a substrate that persists rows. Each half is unit-tested with the other half mocked — exactly the arrangement that lets a contract look correct on both sides and still not meet in the middle. Nothing here runs a model, needs a credential, or starts a dispatcher; graph execution lives in IT74. EA1: an AfterUpdate binding fires when its record is saved, asserted through the execution log rather than the action's own effect, because the dispatch is what is under test. EA2: a transition filter sees the values on BOTH sides of the save — a non-transition save does not fire, the transition does, and a re-save while the record is ALREADY in the target state does not; if the change-context capture ever moves after an await, HandleEntityActions reloads the entity first and this is the only check that would notice. EA3: a Disabled filter binding does not gate, which matters because filters fail closed — a disabled binding that was still consulted would not be inert, it would permanently block the action with no symptom but a trigger that quietly stopped. EA4: a binding pointing at a filter row that no longer exists prevents the run rather than running unfiltered, since running unfiltered ignores the narrowing the row exists to express. EA5: a binding scoped to one record does not fire for a different record of the same entity. EA6: a Durable binding is handed to the registered submitter with a complete, redacted request AND does not also execute in-process — a durable dispatch that double-runs is worse than one that never ran. EA7: a Durable binding whose submission FAILS falls back to running inline, because RunMode='Durable' asks for the work to be harder to lose and dropping it would make the opt-in less reliable than leaving it off. EA8: the change contract reports a create as having no before (so 'when Status becomes Approved' does not fire on insert) and an update as carrying both sides, asserted against real BaseEntity field state rather than a stand-in. Mutation-class throughout: creates Entity Actions, invocations, Action Filters, filter bindings and Lists, and FK-ordered-deletes all of them.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Entity actions dispatch from a real save with a real change context: transition filters fire on the transition and not on the state, a disabled filter binding does not gate while an unresolvable one prevents, scope narrows to the record it names, and a durable binding is submitted exactly once with redacted params — falling back to an inline run when submission fails rather than dropping the work."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "entity-actions"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E9216024-C3D3-4BD1-B50B-BAE2C99F06C2"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T15:50:31.539Z",
+    "checksum": "9f12bfea5872f3cbc9a8a9a1d8ed24a34fa130d1ca47ad93564b39fdf9c7147e"
+  }
+}

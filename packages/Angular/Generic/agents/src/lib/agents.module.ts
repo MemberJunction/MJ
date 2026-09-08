@@ -2,7 +2,8 @@ import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 
-import { MJEmptyStateComponent, MJAlertComponent, MJAccordionModule } from '@memberjunction/ng-ui-components';
+import { MJEmptyStateComponent, MJAlertComponent, MJAccordionModule, MJButtonDirective } from '@memberjunction/ng-ui-components';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 import { AgentPermissionsPanelComponent } from './components/agent-permissions-panel.component';
 import { AgentPermissionsDialogComponent } from './components/agent-permissions-dialog.component';
@@ -12,6 +13,7 @@ import { SkillPermissionsDialogComponent } from './components/skill-permissions-
 import { CreateAgentPanelComponent } from './components/create-agent-panel.component';
 import { CreateAgentDialogComponent } from './components/create-agent-dialog.component';
 import { CreateAgentSlideInComponent } from './components/create-agent-slidein.component';
+import { AgentInvocationsComponent } from './components/agent-invocations.component';
 
 /**
  * Module providing reusable AI Agent UI components.
@@ -25,6 +27,7 @@ import { CreateAgentSlideInComponent } from './components/create-agent-slidein.c
  * - `<mj-create-agent-panel>` — Embeddable agent creation form
  * - `<mj-create-agent-dialog>` — Centered modal dialog for agent creation
  * - `<mj-create-agent-slidein>` — Right-side slide-in for agent creation
+ * - `<mj-agent-invocations>` — Read-only index of every automated pathway that invokes an agent
  *
  * Services:
  * - `CreateAgentService` — Programmatically open create agent dialogs/slide-ins
@@ -46,7 +49,8 @@ import { CreateAgentSlideInComponent } from './components/create-agent-slidein.c
         SkillPermissionsDialogComponent,
         CreateAgentPanelComponent,
         CreateAgentDialogComponent,
-        CreateAgentSlideInComponent
+        CreateAgentSlideInComponent,
+        AgentInvocationsComponent
     ],
     imports: [
         CommonModule,
@@ -54,7 +58,9 @@ import { CreateAgentSlideInComponent } from './components/create-agent-slidein.c
         ReactiveFormsModule,
         MJEmptyStateComponent,
         MJAlertComponent,
-        MJAccordionModule
+        MJAccordionModule,
+        MJButtonDirective,
+        SharedGenericModule
     ],
     exports: [
         AgentPermissionsPanelComponent,
@@ -64,7 +70,8 @@ import { CreateAgentSlideInComponent } from './components/create-agent-slidein.c
         SkillPermissionsDialogComponent,
         CreateAgentPanelComponent,
         CreateAgentDialogComponent,
-        CreateAgentSlideInComponent
+        CreateAgentSlideInComponent,
+        AgentInvocationsComponent
     ]
 })
 export class AgentsModule {}

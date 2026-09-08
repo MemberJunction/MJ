@@ -109,6 +109,21 @@ export type RunQueryParams = {
      * @see RunQueryEnrichment
      */
     Enrichment?: RunQueryEnrichment
+
+    /**
+     * Optional read-source selector, mirroring {@link RunViewParams.DataSource} (plan §7 / Phase 2 §5).
+     *
+     * - `'Live'` (default, and the behavior when omitted): execute the query's SQL against the live source.
+     * - `'Materialized'`: if the query has a fresh, Active materialization of mode `RowFilterBroad`, serve
+     *   it from the materialized table with the row-filter parameters injected as bound read-time predicates
+     *   (never interpolated). This is an **opt-in optimization**: on ANY uncertainty — no materialization,
+     *   not fresh/Active, a parameter absent from the persisted read-filter spec, an unsupported operator —
+     *   the provider transparently falls back to the live query, so a materialized read can never return a
+     *   different row set than the live query would (correct by construction; serving live is always correct).
+     *
+     * Existing callers that omit this are unaffected (they get live results, exactly as before).
+     */
+    DataSource?: 'Live' | 'Materialized'
 }
 
 /**

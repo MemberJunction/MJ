@@ -8,7 +8,7 @@
  * @module @memberjunction/ng-entity-action-ux
  */
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { Metadata, RunView } from '@memberjunction/core';
 import { RegisterClass, SafeJSONParse } from '@memberjunction/global';
 import {
     RecordProcessRunNowOperation,
@@ -310,7 +310,7 @@ export class RecordProcessRunnerUXComponent extends BaseEntityActionRuntimeUX {
 
     /** Reads `MJ: Process Run Details` for the dry-run and builds the per-record diff rows. */
     private async loadDiff(processRunID: string): Promise<void> {
-        const rv = await (this.Context?.Provider ? RunView.FromMetadataProvider(this.Context.Provider) : new RunView()).RunView({
+        const rv = await RunView.FromMetadataProvider(this.Context?.Provider ?? Metadata.Provider).RunView({
             EntityName: 'MJ: Process Run Details',
             ExtraFilter: `ProcessRunID='${processRunID}'`,
             Fields: ['RecordID', 'Status', 'ResultPayload', 'ErrorMessage'],

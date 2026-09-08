@@ -429,6 +429,87 @@ describe('AutotagAndVectorizeContentAction', () => {
     });
 
     // ========================================================================
+    // Flag coercion — the generic RunAction GraphQL mutation delivers every
+    // param value as a STRING, so flags must accept "1"/"true"/"yes" as set
+    // and everything else as unset. A strict `=== 1` check silently skipped
+    // phases for GQL callers.
+    // ========================================================================
+
+    describe('GraphQL string flag coercion', () => {
+        it('should run EmbedPendingChunks when the flag arrives as string "1"', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: '1', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).toHaveBeenCalledTimes(1);
+        });
+
+        it('should run Purge when the flag arrives as string "true" (case-insensitive)', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'Purge', Value: 'True', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockPurge).toHaveBeenCalledTimes(1);
+        });
+
+        it('should run autotag providers when Autotag arrives as string "1"', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '1', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockInitTaxonomyBridge).toHaveBeenCalledTimes(1);
+        });
+
+        it('should treat string "0" and "false" as unset', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: '0', Type: 'Input' },
+                    { Name: 'Purge', Value: 'false', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).not.toHaveBeenCalled();
+            expect(mockPurge).not.toHaveBeenCalled();
+            expect(mockInitTaxonomyBridge).not.toHaveBeenCalled();
+        });
+
+        it('should treat arbitrary strings as unset rather than truthy', async () => {
+            const params = {
+                Params: [
+                    { Name: 'Autotag', Value: '0', Type: 'Input' },
+                    { Name: 'Vectorize', Value: '0', Type: 'Input' },
+                    { Name: 'EmbedPendingChunks', Value: 'enable', Type: 'Input' }
+                ],
+                ContextUser: {}
+            };
+            const result = await callInternal(action, params);
+            expect(result.Success).toBe(true);
+            expect(mockEmbedPendingChunks).not.toHaveBeenCalled();
+        });
+    });
+
+    // ========================================================================
     // Error Handling
     // ========================================================================
 

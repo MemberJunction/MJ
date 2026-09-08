@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture, query, queryAll, text, click, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, click, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { CredentialEditPanelComponent } from './credential-edit-panel.component';
 
 /**
@@ -20,16 +19,13 @@ import { CredentialEditPanelComponent } from './credential-edit-panel.component'
  * (§5). credentialTypes is left empty so no BaseEntity instances are needed to render.
  */
 
-@Component({ standalone: false, selector: 'mj-loading', template: '<span class="stub-loading">loading</span>' })
-class LoadingStubComponent {}
-
 // Returns no category rows — loadCategories() resolves cleanly, nothing to render for categories.
 const provider = createFakeProvider({ runViewResults: [] });
 
 function render(inputs: Record<string, unknown> = {}, setup?: (c: CredentialEditPanelComponent) => void): ComponentFixture<CredentialEditPanelComponent> {
   return renderComponentFixture(CredentialEditPanelComponent, {
-    imports: [CommonModule, FormsModule],
-    declarations: [CredentialEditPanelComponent, LoadingStubComponent],
+    imports: [CommonModule, FormsModule, StubLoadingComponent],
+    declarations: [CredentialEditPanelComponent],
     inputs: { isOpen: true, Provider: provider, ...inputs },
     setup,
   });

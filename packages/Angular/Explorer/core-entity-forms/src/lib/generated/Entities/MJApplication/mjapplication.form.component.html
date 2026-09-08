@@ -224,9 +224,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Application Entities','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Application Entities')"
+                [NewRecordValues]="NewRecordValues('MJ: Application Entities','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJApplicationEntities')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJApplicationEntities', $event.totalRowCount)"
                 >
@@ -249,9 +249,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Application Settings','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Application Settings')"
+                [NewRecordValues]="NewRecordValues('MJ: Application Settings','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJApplicationSettings')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJApplicationSettings', $event.totalRowCount)"
                 >
@@ -274,9 +274,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: User Applications','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: User Applications')"
+                [NewRecordValues]="NewRecordValues('MJ: User Applications','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJUserApplications')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJUserApplications', $event.totalRowCount)"
                 >
@@ -299,9 +299,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboards','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboards')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboards','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJDashboards')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboards', $event.totalRowCount)"
                 >
@@ -324,9 +324,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Application Roles','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Application Roles')"
+                [NewRecordValues]="NewRecordValues('MJ: Application Roles','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJApplicationRoles')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJApplicationRoles', $event.totalRowCount)"
                 >
@@ -349,9 +349,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Dashboard User Preferences','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences')"
+                [NewRecordValues]="NewRecordValues('MJ: Dashboard User Preferences','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJDashboardUserPreferences')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJDashboardUserPreferences', $event.totalRowCount)"
                 >
@@ -374,9 +374,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversations','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversations')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversations','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJConversations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversations', $event.totalRowCount)"
                 >
@@ -399,9 +399,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invite Applications','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invite Applications')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invite Applications','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJMagicLinkInviteApplications')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInviteApplications', $event.totalRowCount)"
                 >
@@ -424,9 +424,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Magic Link Invites','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invites')"
+                [NewRecordValues]="NewRecordValues('MJ: Magic Link Invites','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJMagicLinkInvites')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMagicLinkInvites', $event.totalRowCount)"
                 >
@@ -449,9 +449,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Conversation Widget Instances','ApplicationID')"
-                [NewRecordValues]="NewRecordValues('MJ: Conversation Widget Instances')"
+                [NewRecordValues]="NewRecordValues('MJ: Conversation Widget Instances','ApplicationID')"
                 [AllowLoad]="IsSectionExpanded('mJConversationWidgetInstances')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJConversationWidgetInstances', $event.totalRowCount)"
                 >

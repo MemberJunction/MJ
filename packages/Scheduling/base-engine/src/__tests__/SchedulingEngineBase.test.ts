@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 vi.mock('@memberjunction/core', () => ({
   BaseEngine: class {
@@ -10,6 +10,12 @@ vi.mock('@memberjunction/core', () => ({
     // which lets us assert the subclass's post-super reconcile + notify behavior.
     protected async HandleIndividualBaseEntityEvent(_event: unknown): Promise<boolean> {
       return true;
+    }
+    // Stubbed no-op like HandleIndividualBaseEntityEvent above. The real base applies the
+    // cache-event payload (or reloads) here; these tests assert only the subclass's
+    // post-super re-filter + notify behavior.
+    protected async OnExternalCacheChange(_config: unknown, _event: unknown): Promise<void> {
+      // no-op for tests
     }
     static getInstance<T>(): T {
       return new (this as unknown as new () => T)();
@@ -75,6 +81,92 @@ describe('SchedulingEngineBase', () => {
       // ScheduledJobs starts empty
       engine.UpdatePollingInterval();
       expect(engine.ActivePollingInterval).toBeNull();
+    });
+
+    describe('with string-dated jobs (poisoned cache)', () => {
+      // NextRunAt is declared Date but can hold a raw ISO string once a serialized cache
+      // payload has replaced the engine's rows. Pre-fix, `job.NextRunAt.getTime()` threw
+      // here; the interval math must survive both shapes.
+      type Internals = { _scheduledJobs: Array<{ ID: string; Status: string; NextRunAt: unknown }> };
+      const seed = (jobs: Internals['_scheduledJobs']) => {
+        (engine as unknown as Internals)._scheduledJobs = jobs;
+      };
+
+      beforeEach(() => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date('2026-08-13T12:00:00.000Z'));
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      it('computes the interval from a string NextRunAt instead of throwing', () => {
+        seed([{ ID: 'a', Status: 'Active', NextRunAt: '2026-08-13T12:03:20.000Z' }]); // 200s out
+        expect(() => engine.UpdatePollingInterval()).not.toThrow();
+        expect(engine.ActivePollingInterval).toBe(100000); // half of 200s
+      });
+
+      it('picks the minimum across mixed Date and string NextRunAt values', () => {
+        seed([
+          { ID: 'string-far', Status: 'Active', NextRunAt: '2026-08-13T12:03:20.000Z' },
+          { ID: 'date-near', Status: 'Active', NextRunAt: new Date('2026-08-13T12:01:00.000Z') }, // 60s out
+        ]);
+        engine.UpdatePollingInterval();
+        expect(engine.ActivePollingInterval).toBe(30000); // half of the nearer 60s
+      });
+    });
+  });
+
+  describe('OnExternalCacheChange (cross-server cache event re-filter)', () => {
+    // A cross-server cache event's payload is the UNFILTERED table (the config has no
+    // Filter), and the base handler assigns it wholesale — so the subclass must restore
+    // the Active-only invariant afterwards, exactly as it does for entity events. Pre-fix,
+    // dispatch on this instance would then walk Disabled/Paused/Pending jobs.
+    type EngineInternals = {
+      _scheduledJobs: Array<{ ID: string; Status: string }>;
+      OnExternalCacheChange: (config: unknown, event: unknown) => Promise<void>;
+    };
+    const asInternals = (e: SchedulingEngineBase) => e as unknown as EngineInternals;
+
+    it('re-applies the Active-only filter and emits JobsChanged$ for the Scheduled Jobs config', async () => {
+      const internals = asInternals(engine);
+      internals._scheduledJobs = [
+        { ID: 'a', Status: 'Active' },
+        { ID: 'b', Status: 'Disabled' },
+      ];
+
+      let fired = 0;
+      const sub = engine.JobsChanged$.subscribe(() => fired++);
+
+      await internals.OnExternalCacheChange(
+        { EntityName: 'MJ: Scheduled Jobs', PropertyName: '_scheduledJobs' },
+        { Action: 'set' }
+      );
+
+      expect(fired).toBe(1);
+      expect(engine.ScheduledJobs).toEqual([{ ID: 'a', Status: 'Active' }]);
+      sub.unsubscribe();
+    });
+
+    it('leaves other configs alone (no filter, no notify)', async () => {
+      const internals = asInternals(engine);
+      internals._scheduledJobs = [
+        { ID: 'a', Status: 'Active' },
+        { ID: 'b', Status: 'Disabled' },
+      ];
+
+      let fired = 0;
+      const sub = engine.JobsChanged$.subscribe(() => fired++);
+
+      await internals.OnExternalCacheChange(
+        { EntityName: 'MJ: Scheduled Job Types', PropertyName: '_scheduledJobTypes' },
+        { Action: 'set' }
+      );
+
+      expect(fired).toBe(0);
+      expect(engine.ScheduledJobs).toHaveLength(2);
+      sub.unsubscribe();
     });
   });
 

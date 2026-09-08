@@ -268,4 +268,78 @@ describe('MemoryWriteManager', () => {
       expect(result.durationMs).toBeGreaterThanOrEqual(0);
     });
   });
+
+  describe('supersede-own never crosses a scope boundary', () => {
+    // Regression pin for the 6.1 release (IT61/MG3). `FindSimilarAgentNotes` deliberately does not
+    // filter out agent-wide (UserID=null) notes when a userId is supplied, so a user-scoped write
+    // sees an agent-scoped note written moments earlier in the SAME run. Superseding across that
+    // boundary lost one memory outright and left the survivor holding user-specific content at
+    // agent-wide scope — readable by every other user of the agent.
+    it('keeps an agent-scoped and a user-scoped note as two separate notes', async () => {
+      const agentWrite = await manager.ExecuteWrite(
+        { note: 'marker agent scoped memory', type: 'Preference', scopeHint: 'agent' },
+        baseContext,
+      );
+      expect(agentWrite.disposition).toBe('written');
+      expect(agentWrite.finalScope?.userId).toBeNull();
+
+      // The vector service surfaces the just-written agent-wide note to the user-scoped write.
+      manager.NearDupResult = {
+        noteId: agentWrite.noteId!,
+        similarity: 0.97,
+        noteText: 'marker agent scoped memory',
+      };
+
+      const userWrite = await manager.ExecuteWrite(
+        { note: 'marker user scoped memory', type: 'Preference', scopeHint: 'user' },
+        baseContext,
+      );
+
+      expect(userWrite.disposition).toBe('written');
+      expect(userWrite.noteId).not.toBe(agentWrite.noteId);
+      expect(userWrite.finalScope?.userId).toBe('user-1');
+      expect(manager.SupersededWrites).toHaveLength(0);
+      expect(manager.PersistedWrites).toHaveLength(2);
+    });
+
+    it('does not route a cross-scope own note to the dedupe (touch) path either', async () => {
+      // Same text at two scopes: the exact-restatement branch would otherwise bump the other
+      // scope's note and drop this write — the same loss through a different door.
+      const identical = 'marker identical text at two scopes';
+      const agentWrite = await manager.ExecuteWrite(
+        { note: identical, type: 'Context', scopeHint: 'agent' },
+        baseContext,
+      );
+      manager.NearDupResult = { noteId: agentWrite.noteId!, similarity: 0.99, noteText: identical };
+
+      const userWrite = await manager.ExecuteWrite(
+        { note: identical, type: 'Context', scopeHint: 'user' },
+        baseContext,
+      );
+
+      expect(userWrite.disposition).toBe('written');
+      expect(manager.TouchedNoteIds).toHaveLength(0);
+      expect(manager.SupersededWrites).toHaveLength(0);
+    });
+
+    it('still supersedes within the SAME scope (last-write-wins is preserved)', async () => {
+      const first = await manager.ExecuteWrite(
+        { note: 'marker I love blue charts', type: 'Preference', scopeHint: 'user' },
+        baseContext,
+      );
+      manager.NearDupResult = {
+        noteId: first.noteId!,
+        similarity: 0.95,
+        noteText: 'marker I love blue charts',
+      };
+
+      const second = await manager.ExecuteWrite(
+        { note: 'marker actually I love red charts', type: 'Preference', scopeHint: 'user' },
+        baseContext,
+      );
+
+      expect(second.disposition).toBe('superseded-own');
+      expect(manager.SupersededWrites).toHaveLength(1);
+    });
+  });
 });

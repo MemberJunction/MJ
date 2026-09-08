@@ -28,7 +28,9 @@ export class MJCredentialFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAICredentialBindings', sectionName: 'AI Credential Bindings', isExpanded: false },
             { sectionKey: 'mJCompanyIntegrations', sectionName: 'Company Integrations', isExpanded: false },
             { sectionKey: 'mJSignatureAccounts', sectionName: 'Signature Accounts', isExpanded: false },
-            { sectionKey: 'mJExternalDataSources', sectionName: 'External Data Sources', isExpanded: false }
+            { sectionKey: 'mJExternalDataSources', sectionName: 'External Data Sources', isExpanded: false },
+            { sectionKey: 'mJAIAgentCredentials', sectionName: 'AI Agent Credentials', isExpanded: false },
+            { sectionKey: 'mJAuthenticationProviders', sectionName: 'Authentication Providers', isExpanded: false }
         ]);
     }
 }

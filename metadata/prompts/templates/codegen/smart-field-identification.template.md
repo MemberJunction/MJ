@@ -111,55 +111,65 @@ Do NOT include:
 - Binary/complex data types
 - Fields that duplicate information already in the name fields
 
-### Searchable Field Selection (ONE OR MORE)
+### Searchable Field Selection (ZERO OR MORE)
 
-Searchable fields are included in the user search API — when users type a search term, these fields are searched server-side. Select fields that users would naturally type to find a record.
+Searchable fields are included in the user search API — when users type a search term, these fields are searched server-side, often without indexes. Every searchable field is a cost. **Default to an empty list.** Add a field only when users would realistically type its value into a global search box to find the record.
 
-Good candidates:
-- **Name and title fields** — What users call the record
-- **Email addresses** (ExtendedType: Email) — Commonly searched for people/contacts
-- **Phone numbers** — Users search by phone to find contacts
-- **Unique codes/identifiers** — Order numbers, SKUs, account numbers, member IDs
-- **Company/organization names** — For business entities
-- **Short text fields** (MaxLength < 200) — City, state, job title, etc.
+**Most entities need 0–2 searchable fields. More than 3 is exceptional and must be justified concretely.**
 
-Do NOT include:
+Narrow whitelist of "good candidates":
+- **Name fields** — `Name`, `Title`, `FirstName`, `LastName`, `DisplayName`
+- **Unique business identifiers** — `OrderNumber`, `SKU`, `AccountNumber`, `MemberID`, `InvoiceNumber`, `ISBN`
+- **Email addresses** (ExtendedType: Email)
+- **Phone numbers** — only if phone is the primary lookup key for this entity (contacts, members)
+
+Anything outside that list should default to OFF.
+
+**Never searchable** (anti-pattern — do NOT include even if MaxLength < 200):
+- **Filter targets, not search targets** — `City`, `State`, `Country`, `JobTitle`, `OrganizationName`, `CompanyName`, `Department`, `Status`, `Category`. Users filter on these via dropdowns; they don't type them into the global search box.
+- **Narrative fields** — `Comments`, `Note`, `Notes`, `Description`, `Bio`, `Body`, `Memo`, `Summary`, `Content`, `Remarks`, `Details`, and any `*Comment` / `*Note` / `*Description` variant. These belong in `fullTextSearchFields` (FTS) when they need to be searchable, never in plain `searchableFields` — putting them here forces unindexed `LIKE '%term%'` scans on every query.
 - **Primary keys** (UUIDs, GUIDs, auto-increment IDs)
-- **Foreign key ID fields** — Search the display name instead
-- **Technical fields** (__mj_*, timestamps)
-- **Long text fields** (MaxLength > 500: descriptions, notes, body content)
-- **Numeric fields** (quantities, prices, percentages)
-- **Boolean fields** — Not searchable by text
-- **Date fields** — Users filter by date, not search
+- **Foreign key ID fields** — search the related display name instead
+- **Technical fields** (`__mj_*`, timestamps)
+- **Long text fields** (MaxLength > 500)
+- **Numeric / boolean / date fields**
 
 ### Entity-Level Search Configuration (allowUserSearch)
 
-Decide whether this entity should be searchable by users. This controls `AllowUserSearchAPI` on the entity.
+Decide whether this entity should be searchable by users at all. This controls `AllowUserSearchAPI` on the entity.
 
-**Set to `true` for:**
-- Entities with meaningful, user-facing data (Contacts, Products, Events, Documents, Companies)
-- Entities users would naturally want to find by typing in a search box
-- Entities with good name/title/identifier fields
+**Default to `false`.** Only return `true` when ALL of the following hold:
+- The entity is a **primary user-facing record** that a person would naturally find by typing into a global search box (e.g., Customers, Members, Products, Documents, Companies, Contacts, Orders).
+- You can name a concrete user behavior — *"users type a customer's last name into the search bar to pull up their record."* Generic justifications like "this is a record" are not sufficient.
+- After applying the field rules above, `searchableFields.length >= 1`.
+- Your `confidence` is `high`.
 
-**Set to `false` for:**
-- System/metadata tables (configuration, settings, internal state)
-- Junction/linking tables (only contain foreign key pairs)
-- Audit/log tables (not user-searchable content)
-- Tables with only numeric, boolean, or foreign key columns
-- Tables with very few text fields (e.g., only IDs and dates)
+**If you are not highly confident, return `false`.**
+
+Always `false` for:
+- System / metadata / configuration tables
+- Junction / linking tables (FK pairs only)
+- Audit / log / run-history / snapshot tables
+- Lookup / reference / type tables (users filter by these — they don't search for them)
+- Detail / line-item / step / param / mapping child entities (anything whose name ends in `Detail`, `Line`, `Item`, `Step`, `Param`, `Mapping`, `Run`, `Log`, `Audit`)
+- Tables whose only text columns are narrative (`Comments`, `Notes`, `Description`)
+- Tables with only numeric / boolean / FK / date columns
+
+The `allowUserSearchReason` MUST cite the concrete user behavior when `true`, or the specific category above when `false`. Likewise `searchableFieldsReason` must explain why each chosen field is a *search target* rather than a *filter target*.
 
 ### Search Predicate Selection (searchPredicates)
 
-For each field in `searchableFields`, specify the optimal search predicate. This controls how the search API matches user input against the field value.
+For each field in `searchableFields`, specify the optimal search predicate. This controls how the search API matches user input against the field value, and directly determines whether the query can use an index.
 
-- **`BeginsWith`** (default, fastest — uses index seek): Name, Title, Code, FirstName, LastName, City, State, CompanyName. Best for fields where users type the beginning of the value.
-- **`Contains`** (slower — requires scan): Description, Notes, Bio, Content, Address, Comments. Best for fields where the search term may appear anywhere in the value.
-- **`Exact`** (fastest — direct equality): Email, SKU, OrderNumber, AccountNumber, SSN, PhoneNumber, ZipCode. Best for unique identifiers and codes that users type in full.
-- **`EndsWith`** (rare): Domain names, file extensions. Rarely used.
+- **`Exact`** (fastest — direct equality, index seek): `Email`, `SKU`, `OrderNumber`, `AccountNumber`, `MemberID`, `InvoiceNumber`, `ISBN`, `SSN`, `Phone`, `ZipCode`, and any identifier-shaped field that users type in full. **Default for identifiers.**
+- **`BeginsWith`** (fast — index seek on `LIKE 'term%'`): `Name`, `Title`, `FirstName`, `LastName`, `Code`, `DisplayName`. **Default for name-like fields.**
+- **`Contains`** (slow — forces a scan on `LIKE '%term%'`): **Reserved for fields that are also in `fullTextSearchFields[]` on an FTS-enabled entity.** Do NOT use `Contains` on a non-FTS field — it makes every search a full table scan. If a field genuinely needs substring matching, set `enableFullTextSearch: true` and place the field in `fullTextSearchFields[]` instead of using `Contains`.
+- **`EndsWith`** (rare): only for domain-suffix or extension-suffix lookups (e.g., matching `@example.com`).
 
 Rules:
 - Every field in `searchableFields` MUST have exactly one entry in `searchPredicates`
-- Default to `BeginsWith` when in doubt — it is the most performant
+- When in doubt between `Exact` and `BeginsWith`, prefer `Exact` for anything identifier-shaped and `BeginsWith` for anything name-shaped
+- Never use `Contains` on a field that is not also in `fullTextSearchFields[]`
 
 {% if allowFullTextSearch %}
 ### Full-Text Search Configuration (enableFullTextSearch, fullTextSearchFields)
@@ -248,20 +258,17 @@ For entity "Members" with fields: ID (uniqueidentifier), FirstName (nvarchar, Ma
   "nameFieldsReason": "Members are people — FirstName + LastName together form the natural display name (e.g., 'Elizabeth Rodriguez')",
   "defaultInView": ["Email", "FirstName", "LastName", "Title", "JoinDate", "EngagementScore", "OrganizationName"],
   "defaultInViewReason": "Name fields for recognition, Email for contact, Title for role context, JoinDate and EngagementScore for quick reference, OrganizationName for affiliation",
-  "searchableFields": ["FirstName", "LastName", "Email", "Phone", "Title", "OrganizationName", "City"],
-  "searchableFieldsReason": "Users search members by name, email, phone, title, company, or city. Excludes Bio (too long), EngagementScore (numeric), JoinDate (date), and system fields",
+  "searchableFields": ["FirstName", "LastName", "Email", "Phone"],
+  "searchableFieldsReason": "Users search members by typing a person's name, email, or phone into the global search box. Title / OrganizationName / City / State are filter targets (users pick them from dropdowns), not search targets. Bio is narrative — if it needs to be searchable it belongs in FTS, not plain search.",
   "allowUserSearch": true,
-  "allowUserSearchReason": "Members are core user-facing records that users frequently search for by name, email, or company",
+  "allowUserSearchReason": "Members are primary user-facing records — users routinely type a member's last name or email into the search bar to pull up their record",
   "searchPredicates": [
     { "field": "FirstName", "predicate": "BeginsWith" },
     { "field": "LastName", "predicate": "BeginsWith" },
     { "field": "Email", "predicate": "Exact" },
-    { "field": "Phone", "predicate": "Exact" },
-    { "field": "Title", "predicate": "BeginsWith" },
-    { "field": "OrganizationName", "predicate": "BeginsWith" },
-    { "field": "City", "predicate": "BeginsWith" }
+    { "field": "Phone", "predicate": "Exact" }
   ],
-  "searchPredicatesReason": "Names and titles use BeginsWith for fast prefix matching; Email and Phone use Exact since users type the full value; City uses BeginsWith for prefix lookup",
+  "searchPredicatesReason": "Names use BeginsWith for index-seek prefix matching; Email and Phone use Exact since users type the full value",
 {% if allowFullTextSearch %}
   "enableFullTextSearch": true,
   "fullTextSearchFields": ["Bio"],
@@ -326,7 +333,57 @@ For entity "Orders" with fields: ID (uniqueidentifier), OrderNumber (nvarchar, M
 }
 ```
 
-### Example 4: System/Junction Table (Not Searchable)
+### Example 4: Detail / Line-Item Entity (Not Searchable)
+
+For entity "Order Lines" with fields: ID (uniqueidentifier), OrderID (uniqueidentifier, FK → Orders), ProductID (uniqueidentifier, FK → Products), Quantity (int), UnitPrice (decimal), LineTotal (decimal), Comments (nvarchar, MaxLength: 500), __mj_CreatedAt (datetimeoffset)
+
+```json
+{
+  "nameFields": ["ID"],
+  "nameFieldsReason": "Detail entity with no natural name field — ID is the closest identifier",
+  "defaultInView": ["Quantity", "UnitPrice", "LineTotal"],
+  "defaultInViewReason": "Numeric line-item details for grid display in the parent Order context",
+  "searchableFields": [],
+  "searchableFieldsReason": "Detail entity — users navigate to order lines from the parent Order, they don't type into a search box to find a line. Comments is narrative content that would force unindexed scans if added here; it belongs in FTS if it ever needs to be searchable.",
+  "allowUserSearch": false,
+  "allowUserSearchReason": "Order Lines is a child / line-item entity. Users always reach it through its parent Order — there is no scenario where a user types text into a global search box to find a specific line item.",
+  "searchPredicates": [],
+  "searchPredicatesReason": "No searchable fields, so no predicates needed",
+{% if allowFullTextSearch %}
+  "enableFullTextSearch": false,
+  "fullTextSearchFields": [],
+  "fullTextSearchReason": "Comments is the only narrative field and isn't a typical search target on a line-item entity",
+{% endif %}
+  "confidence": "high"
+}
+```
+
+### Example 5: Reference / Lookup Entity (Not Searchable)
+
+For entity "Countries" with fields: ID (uniqueidentifier), Code (nvarchar, MaxLength: 3, Unique), Name (nvarchar, MaxLength: 100), Region (nvarchar, MaxLength: 50), __mj_CreatedAt (datetimeoffset)
+
+```json
+{
+  "nameFields": ["Name"],
+  "nameFieldsReason": "Single Name field is the human-readable identifier",
+  "defaultInView": ["Code", "Name", "Region"],
+  "defaultInViewReason": "Code, Name, and Region together identify the lookup row in any list",
+  "searchableFields": [],
+  "searchableFieldsReason": "Countries is a reference/lookup table. Users select a country from a dropdown — they don't type 'United States' into a global search box looking for the Country record itself.",
+  "allowUserSearch": false,
+  "allowUserSearchReason": "Lookup / reference table — users filter by country, they don't search for it",
+  "searchPredicates": [],
+  "searchPredicatesReason": "No searchable fields, so no predicates needed",
+{% if allowFullTextSearch %}
+  "enableFullTextSearch": false,
+  "fullTextSearchFields": [],
+  "fullTextSearchReason": "No narrative content; reference data uses dropdowns",
+{% endif %}
+  "confidence": "high"
+}
+```
+
+### Example 6: System/Junction Table (Not Searchable)
 
 For entity "User Roles" with fields: ID (uniqueidentifier), UserID (uniqueidentifier, FK → Users), RoleID (uniqueidentifier, FK → Roles), __mj_CreatedAt (datetimeoffset), __mj_UpdatedAt (datetimeoffset)
 

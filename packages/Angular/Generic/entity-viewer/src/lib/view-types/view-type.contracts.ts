@@ -278,8 +278,9 @@ export interface IViewPropSheet<TConfig = unknown> {
  * }
  * ```
  *
- * The {@link ViewTypeEngine} resolves descriptors by `DriverClass` name using
- * `MJGlobal.Instance.ClassFactory.CreateInstance(BaseViewTypeDescriptor, driverClass)`.
+ * The {@link ViewTypeEngine} resolves descriptors by `DriverClass` name after
+ * probing ClassFactory registrations, then `CreateInstance`. Unregistered keys
+ * (e.g. a seeded TagCloud row) are omitted rather than falling back to this base.
  *
  * NOTE: This class is registered with the ClassFactory itself (via subclasses) and is
  * intentionally NOT decorated — only concrete subclasses carry `@RegisterClass`.

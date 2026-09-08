@@ -15,5 +15,22 @@
       "lastModified": "2026-06-16T01:17:09.178Z",
       "checksum": "9ef137dfc1e15cd100332ec16a73ba16d5fd673d628db0b19047aec8f2db5de6"
     }
+  },
+  {
+    "fields": {
+      "Name": "Speech to Text",
+      "Description": "Models that transcribe recorded audio into text (e.g. Whisper). The inverse of TTS: audio in, text out. Exposed through the BaseAudioGenerator primitive's SpeechToText method and resolved through the ClassFactory by AIModelType + DriverClass, the same as LLM/Embeddings/Image models. Distinct from Realtime, which owns a live bidirectional audio loop rather than transcribing a finished recording. Filing a transcription model under TTS would invert its modalities, so a caller resolving by type would hand audio to a model the catalog claims turns text into audio.",
+      "DefaultInputModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "DefaultOutputModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+      "SupportsPrefill": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "583D65B5-F2EB-458E-8F5B-7F53FEBB12A4"
+    },
+    "sync": {
+      "lastModified": "2026-08-11T22:50:28.511Z",
+      "checksum": "76b164ae07f431fc96486c9aba2d084c9b9cfe72f26d059529e8858e66ee35a7"
+    }
   }
 ]

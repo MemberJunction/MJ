@@ -1,33 +1,18 @@
 /**
- * Unit tests for LLMReranker and createLLMReranker
+ * Unit tests for LLMReranker and createLLMReranker.
+ *
+ * `@memberjunction/ai` is NOT mocked: LLMReranker extends the REAL BaseReranker
+ * (ModelName, sortByRelevance, the Rerank template method), so these tests break
+ * at compile/run time if that contract evolves instead of silently drifting on a
+ * hand-faked copy — the shared-harness doctrine from @memberjunction/unit-testing
+ * (real code under test, only package boundaries mocked). `@memberjunction/global`
+ * is real too, so the @RegisterClass(BaseReranker, 'LLMReranker') decorator runs
+ * against the real ClassFactory. Boundaries that stay mocked: core logging,
+ * AIEngine's prompt catalog, and the AIPromptRunner execution seam.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock dependencies before imports
-vi.mock('@memberjunction/global', async (importOriginal) => {
-    const actual = await importOriginal<typeof import('@memberjunction/global')>();
-    return {
-        ...actual,
-        RegisterClass: () => () => {},
-    };
-});
-
-vi.mock('@memberjunction/ai', () => {
-    class MockBaseReranker {
-        protected _modelName: string;
-        constructor(_apiKey: string, modelName?: string) {
-            this._modelName = modelName || '';
-        }
-        get ModelName(): string {
-            return this._modelName;
-        }
-        protected sortByRelevance<T extends { relevanceScore: number }>(results: T[]): T[] {
-            return [...results].sort((a, b) => b.relevanceScore - a.relevanceScore);
-        }
-    }
-    return { BaseReranker: MockBaseReranker };
-});
-
+// Mock package boundaries before imports
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),

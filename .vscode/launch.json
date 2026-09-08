@@ -31,7 +31,7 @@
       "name": "Scheduled Actions Server",
       "envFile": "${workspaceFolder}/packages/Actions/ScheduledActionsServer/.env",
       "cwd": "${workspaceFolder}/packages/Actions/ScheduledActionsServer",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["start"],
       "skipFiles": ["${workspaceFolder}/node_modules/**/*.js", "<node_internals>/**", "**/zone/**"]
     },
@@ -41,9 +41,9 @@
       "name": "MJAPI",
       "envFile": "${workspaceFolder}/packages/MJAPI/.env",
       "cwd": "${workspaceFolder}/packages/MJAPI",
-      "runtimeExecutable": "npm",
+      "runtimeExecutable": "pnpm",
       "runtimeArgs": ["start"],
-      "preLaunchTask": "Kill Port 4001",
+      "preLaunchTask": "Kill Port 4000",
       "sourceMaps": true,
       "resolveSourceMapLocations": ["${workspaceFolder}/packages/**", "!**/node_modules/**"],
 

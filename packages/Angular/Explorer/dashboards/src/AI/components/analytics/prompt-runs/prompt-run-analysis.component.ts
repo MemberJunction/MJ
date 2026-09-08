@@ -13,6 +13,7 @@ import {
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
 import { cacheHitRate } from '../../../services/cache-metrics';
+import { CompareDateCells, DateCellIso } from '../../../../shared/date-cell';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
@@ -21,8 +22,8 @@ import { GlobalFilterState } from '../../../interfaces/analytics-preferences.int
 
 interface PromptRunRecord {
     ID: string;
-    RunAt: string;
-    CompletedAt: string | null;
+    RunAt: Date | string;
+    CompletedAt: Date | string | null;
     Status: string;
     Success: boolean;
     Cost: number | null;
@@ -929,7 +930,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
     public ExportCSV(): void {
         const headers = ['Timestamp', 'Prompt', 'Model', 'Status', 'Duration(ms)', 'Tokens', 'Cost'];
         const rows = this.FilteredRuns.map(r => [
-            r.RunAt,
+            DateCellIso(r.RunAt),
             r.Prompt ?? '',
             r.Model ?? '',
             r.Status,
@@ -954,7 +955,7 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
         return '$' + value.toFixed(decimals);
     }
 
-    public FormatTimestamp(dateStr: string): string {
+    public FormatTimestamp(dateStr: Date | string): string {
         const d = new Date(dateStr);
         return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) +
             ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
@@ -1192,6 +1193,11 @@ export class AnalyticsPromptRunsComponent extends BaseAngularComponent implement
             if (aVal == null && bVal == null) return 0;
             if (aVal == null) return 1;
             if (bVal == null) return -1;
+            // Date cells (RunAt/CompletedAt arrive as real Dates from simple reads) must sort
+            // chronologically — String(Date).localeCompare orders by weekday name.
+            if (aVal instanceof Date || bVal instanceof Date) {
+                return CompareDateCells(aVal as Date | string, bVal as Date | string) * dir;
+            }
             if (typeof aVal === 'string' && typeof bVal === 'string') {
                 return aVal.localeCompare(bVal) * dir;
             }

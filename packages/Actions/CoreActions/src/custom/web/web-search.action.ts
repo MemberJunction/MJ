@@ -362,18 +362,35 @@ export class WebSearchAction extends BaseAction {
                 /<cite[^>]*>(.*?)<\/cite>/s
             ];
 
-            let match: RegExpExecArray | null;
             let count = 0;
-            
+
             // Try each result pattern until we find matches
             for (const resultPattern of resultPatterns) {
                 if (count >= maxResults) break;
-                
-                const regex = new RegExp(resultPattern.source, resultPattern.flags);
-                
-                while ((match = regex.exec(html)) !== null && count < maxResults) {
-                    const resultHtml = match[1];
-                    
+
+                // ── Slice between result STARTS, rather than trusting `(.*?)</div>` ──────────────
+                // Each pattern's capture group is non-greedy up to the first `</div>`, and a
+                // DuckDuckGo result block contains nested divs. The link sits near the top of the
+                // block and survived; the SNIPPET sits after an inner div and was therefore cut out
+                // of the captured text on every single result. The symptom was ten hits with real
+                // titles and URLs and `snippet: ''` throughout — search results that look fine and
+                // carry no information, which a caller cannot distinguish from a topic with nothing
+                // written about it. A Content Pipeline draft correctly reported "the research data
+                // was empty" and got overruled by a reviewer counting sources.
+                //
+                // Slicing from one block's start to the next captures the whole block, nesting and
+                // all, without trying to balance tags with a regular expression.
+                const starts: number[] = [];
+                const startRegex = new RegExp(resultPattern.source, resultPattern.flags);
+                let startMatch: RegExpExecArray | null;
+                while ((startMatch = startRegex.exec(html)) !== null) {
+                    starts.push(startMatch.index);
+                    if (startMatch.index === startRegex.lastIndex) startRegex.lastIndex++;   // zero-width guard
+                }
+
+                for (let i = 0; i < starts.length && count < maxResults; i++) {
+                    const resultHtml = html.slice(starts[i], starts[i + 1] ?? html.length);
+
                     // Try each link pattern
                     let linkMatch = null;
                     for (const linkPattern of linkPatterns) {
@@ -420,6 +437,19 @@ export class WebSearchAction extends BaseAction {
                 
                 // If we found results with this pattern, don't try others
                 if (results.length > 0) break;
+            }
+
+            // Results with no text are not results. If the markup shifts again and every snippet
+            // comes back empty, that must be LOUD: the failure is otherwise invisible — the caller
+            // receives the expected number of well-formed objects and no indication that the only
+            // field carrying meaning is blank. Reported rather than thrown, because titles and URLs
+            // are still genuinely useful and discarding them would be a worse answer than a noisy one.
+            if (results.length > 0 && results.every((r) => !r.snippet)) {
+                console.warn(
+                    `[Web Search] Parsed ${results.length} result(s) and EVERY snippet is empty. The ` +
+                    `result markup has almost certainly changed — callers are getting titles and URLs ` +
+                    `with no content, which reads as "nothing was written about this topic".`,
+                );
             }
         } catch (error) {
             console.error('Error parsing search results:', error);

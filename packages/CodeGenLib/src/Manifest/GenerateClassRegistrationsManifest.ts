@@ -1,10 +1,10 @@
 /**
  * Build-time tool to generate an import manifest that prevents tree-shaking of
- * @RegisterClass decorated classes.
+ * classes registered with @RegisterClass / @RegisterClassEx.
  *
  * The tool starts from the current app's package.json, walks its full transitive
- * dependency tree, scans each dependency's source for @RegisterClass decorators,
- * and generates a manifest importing only the packages that contain them.
+ * dependency tree, scans each dependency's source for both register-decorator
+ * forms, and generates a manifest importing only the packages that contain them.
  *
  * Usage (via MJCLI):
  *   mj codegen manifest --output ./src/generated/class-registrations-manifest.ts
@@ -35,7 +35,11 @@ export interface RegisteredClassInfo {
     packageName: string;
     /** The base class name from the decorator (first argument) */
     baseClassName?: string;
-    /** The key from the decorator (second argument) */
+    /**
+     * The registration key: the second positional argument of `RegisterClass`,
+     * or the `key` property of the `RegisterClassEx` options bag. Undefined when
+     * the decorator supplies no statically knowable key.
+     */
     key?: string;
 }
 
@@ -187,8 +191,8 @@ export interface LazyChunk {
     subpath: string;
     /** The full import path for dynamic import (e.g., '@memberjunction/ng-dashboards/ai-dashboards.module') */
     importPath: string;
-    /** The generated variable name for the loader function */
-    loaderVarName: string;
+    /** The generated variable name for the chunk descriptor ({ chunkId, load }) */
+    chunkVarName: string;
     /** The @RegisterClass entries (base class + key pairs) that map to this chunk */
     entries: LazyChunkEntry[];
 }
@@ -409,12 +413,58 @@ async function findDistFiles(distDir: string, excludePatterns: string[]): Promis
 }
 
 /**
- * Parses a TypeScript file and extracts @RegisterClass decorator information
+ * Decorator identifiers that register a class with the MJGlobal class factory.
+ *
+ * Both forms must be recognized: `RegisterClass` is the classic positional
+ * signature, `RegisterClassEx` the options-bag variant that MJGlobal's own
+ * docs recommend for new code. Matching only one of them silently omits the
+ * other's classes from the manifest AND from the coverage audit meant to
+ * catch such gaps (issue #3944).
+ */
+const REGISTER_DECORATORS = new Set(['RegisterClass', 'RegisterClassEx']);
+
+/**
+ * Pulls the registration `key` out of a register-decorator argument list,
+ * handling both signatures:
+ *
+ *   RegisterClass(baseClass, 'key', priority?, ...)     -> args[1] is a string literal
+ *   RegisterClassEx(baseClass, { key: 'key', ... })     -> args[1] is an options bag
+ *
+ * `args[0]` (the base class identifier) is identical in both forms, so only the
+ * key extraction differs. Returns undefined when there is no statically
+ * knowable key (absent, null, or a non-literal expression) — the same treatment
+ * the positional form already gave a non-literal second argument.
+ */
+function extractRegistrationKey(args: ts.NodeArray<ts.Expression>): string | undefined {
+    if (args.length < 2) return undefined;
+    const second = args[1];
+
+    // Positional form: RegisterClass(baseClass, 'key')
+    if (ts.isStringLiteral(second)) return second.text;
+
+    // Options-bag form: RegisterClassEx(baseClass, { key: 'key', ... })
+    if (ts.isObjectLiteralExpression(second)) {
+        for (const prop of second.properties) {
+            if (!ts.isPropertyAssignment(prop)) continue;
+            const name = prop.name;
+            const propName = ts.isIdentifier(name) || ts.isStringLiteral(name) ? name.text : undefined;
+            if (propName !== 'key') continue;
+            return ts.isStringLiteral(prop.initializer) ? prop.initializer.text : undefined;
+        }
+    }
+
+    return undefined;
+}
+
+/**
+ * Parses a TypeScript file and extracts @RegisterClass / @RegisterClassEx
+ * decorator information
  */
 function extractRegisterClassDecorators(filePath: string, sourceText: string, packageName: string): RegisteredClassInfo[] {
     const results: RegisteredClassInfo[] = [];
 
-    // Quick check before parsing
+    // Quick check before parsing. 'RegisterClassEx' contains 'RegisterClass',
+    // so this substring test covers both decorator forms.
     if (!sourceText.includes('RegisterClass')) return results;
 
     const sourceFile = ts.createSourceFile(
@@ -445,7 +495,8 @@ function extractRegisterClassDecorators(filePath: string, sourceText: string, pa
 }
 
 /**
- * Parses a single @RegisterClass decorator and extracts its arguments
+ * Parses a single @RegisterClass / @RegisterClassEx decorator and extracts its
+ * arguments
  */
 function parseRegisterClassDecorator(
     decorator: ts.Decorator,
@@ -457,22 +508,19 @@ function parseRegisterClassDecorator(
 
     const callExpr = decorator.expression;
 
-    // Check if the function being called is "RegisterClass"
-    if (!ts.isIdentifier(callExpr.expression) || callExpr.expression.text !== 'RegisterClass') {
+    // Check if the function being called is a register decorator (either form)
+    if (!ts.isIdentifier(callExpr.expression) || !REGISTER_DECORATORS.has(callExpr.expression.text)) {
         return null;
     }
 
     // Extract arguments
     const args = callExpr.arguments;
     let baseClassName: string | undefined;
-    let key: string | undefined;
 
     if (args.length > 0 && ts.isIdentifier(args[0])) {
         baseClassName = args[0].text;
     }
-    if (args.length > 1 && ts.isStringLiteral(args[1])) {
-        key = args[1].text;
-    }
+    const key = extractRegistrationKey(args);
 
     return { className, filePath, packageName, baseClassName, key };
 }
@@ -484,10 +532,11 @@ function parseRegisterClassDecorator(
  * `__decorate()` calls with the pattern:
  *
  *   ClassName = __decorate([ RegisterClass(BaseClass, 'key') ], ClassName);
+ *   ClassName = __decorate([ RegisterClassEx(BaseClass, { key: 'key' }) ], ClassName);
  *
  * This function uses TypeScript's parser with ScriptKind.JS to build a proper
  * AST, then walks it looking for assignment expressions whose right-hand side
- * is a `__decorate([ ... ], ClassName)` call containing `RegisterClass()`.
+ * is a `__decorate([ ... ], ClassName)` call containing a register decorator.
  */
 function extractRegisterClassFromCompiledJS(
     filePath: string,
@@ -496,7 +545,8 @@ function extractRegisterClassFromCompiledJS(
 ): RegisteredClassInfo[] {
     const results: RegisteredClassInfo[] = [];
 
-    // Quick check before parsing
+    // Quick check before parsing. 'RegisterClassEx' contains 'RegisterClass',
+    // so this substring test covers both decorator forms.
     if (!sourceText.includes('RegisterClass')) return results;
 
     const sourceFile = ts.createSourceFile(
@@ -553,7 +603,8 @@ function parseDecorateAssignment(
 
 /**
  * Walks the elements of a __decorate() array literal and extracts
- * RegisterClass(...) calls, returning a RegisteredClassInfo for each.
+ * RegisterClass(...) / RegisterClassEx(...) calls, returning a
+ * RegisteredClassInfo for each.
  */
 function extractRegisterClassFromDecoratorArray(
     arrayLiteral: ts.ArrayLiteralExpression,
@@ -566,18 +617,15 @@ function extractRegisterClassFromDecoratorArray(
     for (const element of arrayLiteral.elements) {
         if (!ts.isCallExpression(element)) continue;
         if (!ts.isIdentifier(element.expression)) continue;
-        if (element.expression.text !== 'RegisterClass') continue;
+        if (!REGISTER_DECORATORS.has(element.expression.text)) continue;
 
         let baseClassName: string | undefined;
-        let key: string | undefined;
 
         const args = element.arguments;
         if (args.length > 0 && ts.isIdentifier(args[0])) {
             baseClassName = args[0].text;
         }
-        if (args.length > 1 && ts.isStringLiteral(args[1])) {
-            key = args[1].text;
-        }
+        const key = extractRegistrationKey(args);
 
         results.push({ className, filePath, packageName, baseClassName, key });
     }
@@ -870,10 +918,12 @@ function topologicallySortPackages(
     return result;
 }
 
+// NOTE: deliberately takes no dep-tree-size argument. The walked count is environment-dependent
+// and must not reach the emitted file — see buildFileHeader for what that cost us. It is still
+// reported on the RESULT object (and hence the console log), which is where it belongs.
 function generateManifestContent(
     classes: RegisteredClassInfo[],
     appName: string,
-    totalDepsWalked: number,
     depTree: Map<string, string>,
     log: (msg: string) => void,
     filterBaseClasses?: string[]
@@ -907,7 +957,7 @@ function generateManifestContent(
     // Build alias map: detect cross-package name collisions and assign unique aliases
     const aliasMap = buildAliasMap(packageMap, sortedPackages);
 
-    const lines: string[] = buildFileHeader(appName, totalDepsWalked, sortedPackages.length);
+    const lines: string[] = buildFileHeader(appName, sortedPackages.length);
 
     // Generate named imports per package
     const allAliases: string[] = [];
@@ -929,15 +979,41 @@ function generateManifestContent(
         lines.push('');
     }
 
-    // Runtime reference array — this is the static code path that prevents tree-shaking
+    // Runtime reference array — this is the static code path that prevents tree-shaking.
+    //
+    // Emitted in bounded CHUNKS rather than as one array literal, which is not cosmetic.
+    // TypeScript computes the best common type of an array literal's elements even when the
+    // declaration is annotated `any[]`, so a single literal listing every registered class
+    // produces a union with one member per distinct constructor. Past roughly a thousand
+    // members that union exceeds what the checker will represent and the file fails to
+    // compile with `TS2590: Expression produces a union type that is too complex to
+    // represent` — pointing at the `[`, with nothing else wrong. It is a cliff, not a slope:
+    // the manifest compiles until the day one more package registers one more class, and
+    // then every consumer of the bootstrap package stops building at once. Chunking keeps
+    // each inferred union bounded by CHUNK_SIZE regardless of how large the tree grows.
+    const CHUNK_SIZE = 200;
+    const chunkCount = Math.max(1, Math.ceil(allAliases.length / CHUNK_SIZE));
     lines.push('/**');
     lines.push(' * Runtime references to every @RegisterClass decorated class.');
     lines.push(' * This array creates a static code path the bundler cannot tree-shake.');
+    lines.push(' *');
+    lines.push(' * Split into fixed-size chunks so no single array literal grows a union large');
+    lines.push(' * enough to trip TS2590; the exported array is their concatenation.');
     lines.push(' */');
+    for (let chunk = 0; chunk < chunkCount; chunk++) {
+        const slice = allAliases.slice(chunk * CHUNK_SIZE, (chunk + 1) * CHUNK_SIZE);
+        lines.push('// eslint-disable-next-line @typescript-eslint/no-explicit-any');
+        lines.push(`const CLASS_REGISTRATIONS_${chunk}: any[] = [`);
+        for (const alias of slice) {
+            lines.push(`    ${alias},`);
+        }
+        lines.push('];');
+        lines.push('');
+    }
     lines.push('// eslint-disable-next-line @typescript-eslint/no-explicit-any');
     lines.push(`export const CLASS_REGISTRATIONS: any[] = [`);
-    for (const alias of allAliases) {
-        lines.push(`    ${alias},`);
+    for (let chunk = 0; chunk < chunkCount; chunk++) {
+        lines.push(`    ...CLASS_REGISTRATIONS_${chunk},`);
     }
     lines.push('];');
     lines.push('');
@@ -961,14 +1037,31 @@ function generateManifestContent(
 
 /**
  * Builds the file header comment block.
+ *
+ * 🚨 Everything emitted here MUST be a pure function of the manifest's inputs. This file is
+ * committed, and several package `build` scripts regenerate it *during* the build — so any
+ * value that varies by machine rewrites a tracked file mid-build, which changes turbo's
+ * global hash (`hashOfInternalDependencies`) and makes EVERY task in the repo cache-miss for
+ * the rest of the job.
+ *
+ * That is not hypothetical: this header used to carry `${totalDepsWalked} packages walked`,
+ * a count that differs between a dev machine and a CI runner (1207 vs 1209 for
+ * server-bootstrap, 632 vs 663 for ng-bootstrap) purely because the installed dependency tree
+ * differs. The manifest body — the imports and CLASS_REGISTRATIONS array — was byte-identical
+ * every time; only this comment moved. It cost the unit-test workflow a second full cold
+ * build (~9 min per merge to next). `packageCount` is kept because it is derived from the
+ * manifest contents themselves and so cannot drift from them.
+ *
+ * Do not add timestamps, hostnames, absolute paths, dep-tree sizes, or versions of anything
+ * that isn't in the manifest.
  */
-function buildFileHeader(appName: string, totalDepsWalked: number, packageCount: number): string[] {
+function buildFileHeader(appName: string, packageCount: number): string[] {
     return [
         '/**',
         ' * AUTO-GENERATED FILE - DO NOT EDIT',
         ' * Generated by mj codegen manifest',
         ` * App: ${appName}`,
-        ` * Dependency tree: ${totalDepsWalked} packages walked, ${packageCount} contain @RegisterClass`,
+        ` * Dependency tree: ${packageCount} packages contain @RegisterClass`,
         ' *',
         ' * This file imports every @RegisterClass decorated class by name and places',
         ' * them in an exported array, creating a static code path that prevents',
@@ -1292,6 +1385,78 @@ export function resolveSubpathExports(packageDir: string): Map<string, Set<strin
 }
 
 /**
+ * Count the subpath exports that resolution is actually *expected* to satisfy: non-`.` entries
+ * carrying a `types` field.
+ *
+ * This is deliberately narrower than {@link hasSubpathExports}, which answers "is there any key
+ * besides `.`" and therefore counts entries that were never code subpaths at all. A built Angular
+ * package publishes `"./package.json": { "default": "./package.json" }`, which has no `types` and
+ * which `resolveSubpathExportsDetailed()` skips by design. Treating that as a declared-but-missing
+ * subpath would flag every ng-packagr output as unbuilt.
+ */
+function countTypedSubpathExports(packageDir: string): number {
+    const pkgPath = path.join(packageDir, 'package.json');
+    if (!fs.existsSync(pkgPath)) return 0;
+
+    let pkg: Record<string, unknown>;
+    try {
+        pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+    } catch {
+        return 0;
+    }
+
+    const exports = pkg.exports as Record<string, Record<string, string> | string> | undefined;
+    if (!exports || typeof exports !== 'object') return 0;
+
+    let count = 0;
+    for (const [subpath, entry] of Object.entries(exports)) {
+        if (subpath === '.') continue;
+        const typesField = typeof entry === 'object' && entry !== null ? entry.types : undefined;
+        if (typesField) count++;
+    }
+    return count;
+}
+
+/**
+ * Resolve a lazy package's subpath exports, refusing to answer "none" when the package
+ * declares typed subpaths it simply hasn't built yet.
+ *
+ * **Call this only for a package that contributes lazy classes.** `resolveSubpathExportsDetailed()`
+ * reads the `.d.ts` each `exports` entry's `types` field names and records the subpath only if
+ * classes are reachable from it, so an empty result is perfectly ordinary in two innocent cases:
+ * a subpath whose `.d.ts` declares no classes, and a package with no code subpaths at all. Neither
+ * is a problem when there are no classes to group.
+ *
+ * With classes present it is a different matter. An empty map sends every one of them down the
+ * whole-package branch of `groupClassesIntoChunks()`, replacing the package's per-subpath lazy
+ * chunks with a SINGLE eager chunk. The emitted config is still valid TypeScript, still compiles,
+ * still passes review — it has just had its code splitting deleted, and nothing downstream can
+ * tell the difference.
+ *
+ * So refuse. A missing build is recoverable in one command; a silently de-optimised bundle
+ * shipped to production is not.
+ *
+ * @throws when `packageDir` declares typed subpath exports but none of them resolve.
+ */
+export function resolveLazySubpathExports(packageName: string, packageDir: string): Map<string, SubpathExportInfo> {
+    const subpaths = resolveSubpathExportsDetailed(packageDir);
+    if (subpaths.size === 0) {
+        const declared = countTypedSubpathExports(packageDir);
+        if (declared > 0) {
+            throw new Error(
+                `Cannot resolve the subpath exports of '${packageName}'. Its package.json declares ${declared} ` +
+                `subpath export(s) with a "types" target, but none of those targets exist under ${packageDir} — ` +
+                `the package has not been built.\n\n` +
+                `Build the workspace before generating the manifest. Emitting a manifest from here would ` +
+                `silently collapse this package's per-subpath lazy chunks into one eager import, removing ` +
+                `its code splitting without failing anything.`
+            );
+        }
+    }
+    return subpaths;
+}
+
+/**
  * Detailed version that also returns the .d.ts file path where each class was found.
  * Used by the lazy config generator to disambiguate classes with the same name
  * that appear in different subpath modules.
@@ -1526,10 +1691,21 @@ function groupClassesIntoChunks(
     lazyPackages: Map<string, string>,
     log: (msg: string) => void
 ): LazyChunk[] {
-    // Build detailed subpath export maps (including .d.ts file paths for disambiguation)
+    // Build detailed subpath export maps (including .d.ts file paths for disambiguation).
+    //
+    // Only packages that actually CONTRIBUTE lazy classes are guarded. An unresolved subpath map
+    // is harmful precisely when there are classes to mis-group: those classes fall through to the
+    // whole-package branch below and the package's per-subpath lazy chunks silently become one
+    // eager chunk. For a package contributing no classes the same fallback groups nothing, so an
+    // empty map is not evidence of anything — and it is a completely ordinary state, since a
+    // subpath whose .d.ts declares no classes (a generated manifest of const arrays, say) is
+    // skipped by resolution exactly like a missing one.
+    const packagesWithLazyClasses = new Set(lazyClasses.map(c => c.packageName));
     const packageSubpaths = new Map<string, Map<string, SubpathExportInfo>>();
     for (const [depName, depDir] of lazyPackages.entries()) {
-        const subpaths = resolveSubpathExportsDetailed(depDir);
+        const subpaths = packagesWithLazyClasses.has(depName)
+            ? resolveLazySubpathExports(depName, depDir)
+            : resolveSubpathExportsDetailed(depDir);
         if (subpaths.size > 0) {
             packageSubpaths.set(depName, subpaths);
         }
@@ -1586,7 +1762,7 @@ function groupClassesIntoChunks(
                 packageName: cls.packageName,
                 subpath,
                 importPath,
-                loaderVarName: buildLoaderVarName(cls.packageName, subpath),
+                chunkVarName: buildChunkVarName(cls.packageName, subpath),
                 entries: []
             });
         }
@@ -1607,35 +1783,35 @@ function groupClassesIntoChunks(
     }
 
     const sorted = Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
-    uniquifyLoaderVarNames(sorted);
+    uniquifyChunkVarNames(sorted);
     return sorted;
 }
 
 /**
- * Ensures every chunk's loader variable name is unique in the generated file. Subpath-derived
+ * Ensures every chunk's descriptor variable name is unique in the generated file. Subpath-derived
  * names collide when two packages expose the same subpath export (e.g. './plugins' in both
  * codegen-lib and metadata-sync produced two `const loadPlugins` → TS2451). Non-colliding
  * names are left untouched so existing generated files don't churn; every member of a colliding
  * group is package-qualified, which is deterministic regardless of chunk discovery order.
  */
-function uniquifyLoaderVarNames(chunks: LazyChunk[]): void {
+function uniquifyChunkVarNames(chunks: LazyChunk[]): void {
     const byName = new Map<string, LazyChunk[]>();
     for (const chunk of chunks) {
-        const group = byName.get(chunk.loaderVarName) ?? [];
+        const group = byName.get(chunk.chunkVarName) ?? [];
         group.push(chunk);
-        byName.set(chunk.loaderVarName, group);
+        byName.set(chunk.chunkVarName, group);
     }
 
     for (const [name, group] of byName.entries()) {
         if (group.length < 2) continue;
         const suffix = name.replace(/^load/, '');
         group.forEach((chunk, index) => {
-            const qualified = `${buildLoaderVarName(chunk.packageName, '.')}${suffix}`;
+            const qualified = `${buildChunkVarName(chunk.packageName, '.')}${suffix}`;
             // Same package + same-named subpaths can't happen (chunkKey is unique per subpath),
             // but guard against pathological sanitized-name ties with an index suffix.
             const stillTaken = group.some((other, i) => i < index &&
-                `${buildLoaderVarName(other.packageName, '.')}${suffix}` === qualified);
-            chunk.loaderVarName = stillTaken ? `${qualified}${index}` : qualified;
+                `${buildChunkVarName(other.packageName, '.')}${suffix}` === qualified);
+            chunk.chunkVarName = stillTaken ? `${qualified}${index}` : qualified;
         });
     }
 }
@@ -1685,7 +1861,7 @@ function findClassSubpathByFile(
 }
 
 /**
- * Builds a deterministic loader variable name from a package name and subpath.
+ * Builds a deterministic chunk-descriptor variable name from a package name and subpath.
  *
  * Both package name and subpath are included to prevent collisions when
  * different packages export the same subpath (e.g. two packages both
@@ -1697,7 +1873,7 @@ function findClassSubpathByFile(
  *   ('@memberjunction/codegen-lib', './plugins')                → 'loadCodegenLibPlugins'
  *   ('@memberjunction/metadata-sync', './plugins')              → 'loadMetadataSyncPlugins'
  */
-function buildLoaderVarName(packageName: string, subpath: string): string {
+function buildChunkVarName(packageName: string, subpath: string): string {
     const pkgParts = sanitizePackageName(packageName).split('_').filter(Boolean);
     const pkgPascal = pkgParts.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join('');
 
@@ -1733,34 +1909,38 @@ function generateLazyConfigContent(chunks: LazyChunk[]): string {
         ' * When ClassFactory.GetRegistrationAsync() or CreateInstanceAsync() cannot find a',
         ' * registration synchronously, the registered lazy loader builds the compound key and',
         ' * looks it up here to dynamically import the chunk containing the class.',
+        ' *',
+        ' * Every entry carries an explicit `chunkId` — the dynamic import specifier — because many',
+        ' * compound keys share one chunk and the registry must be able to tell those chunks apart.',
+        ' * Do NOT collapse these into a shared helper that returns a closure: closures built by the',
+        ' * same helper are indistinguishable by identity-adjacent means (e.g. Function.toString()),',
+        ' * which silently merges all chunks into one.',
         ' */',
-        '',
-        '/** Helper to create a loader that all entries in a feature share. */',
-        'function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {',
-        '  return () => importFn().then(() => {});',
-        '}',
         ''
     ];
 
-    // Emit one loader variable per chunk
+    // Emit one chunk descriptor per chunk
     for (const chunk of chunks) {
         lines.push(`// --- ${chunk.packageName} → ${chunk.subpath} (${chunk.entries.length} entries) ---`);
-        lines.push(`const ${chunk.loaderVarName} = featureLoader(() => import('${chunk.importPath}'));`);
+        lines.push(`const ${chunk.chunkVarName} = {`);
+        lines.push(`  chunkId: '${chunk.importPath}',`);
+        lines.push(`  load: () => import('${chunk.importPath}').then(() => {})`);
+        lines.push('};');
         lines.push('');
     }
 
     // Emit the config record with compound keys
     lines.push('/**');
-    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to lazy-loading functions.');
+    lines.push(' * Complete mapping of compound keys (BaseClassName::Key) to their chunk descriptor.');
     lines.push(' * Covers all @RegisterClass decorated classes in lazy-loaded packages.');
     lines.push(' */');
-    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {');
+    lines.push('export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {');
 
     for (const chunk of chunks) {
         lines.push(`  // ${chunk.packageName} → ${chunk.subpath}`);
         for (const entry of chunk.entries) {
             const compoundKey = `${entry.baseClassName}::${entry.key}`;
-            lines.push(`  '${compoundKey}': ${chunk.loaderVarName},`);
+            lines.push(`  '${compoundKey}': ${chunk.chunkVarName},`);
         }
         lines.push('');
     }
@@ -1900,7 +2080,7 @@ export async function generateClassRegistrationsManifest(
     log(`Verified: ${verifiedClasses.length} exported, ${skipped.length} skipped (not in public API)`);
 
     // Generate manifest using only verified classes
-    const manifestContent = generateManifestContent(verifiedClasses, appPkg.name, depTree.size, depTree, log, filterBaseClasses);
+    const manifestContent = generateManifestContent(verifiedClasses, appPkg.name, depTree, log, filterBaseClasses);
     const absoluteOutputPath = path.resolve(outputPath);
     let manifestChanged = false;
 

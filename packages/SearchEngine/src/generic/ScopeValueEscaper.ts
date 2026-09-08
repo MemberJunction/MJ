@@ -29,6 +29,8 @@
  * @module @memberjunction/search-engine
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
+
 /**
  * The filter dialect a lane consumes, which determines how a value must be escaped.
  *
@@ -46,7 +48,7 @@ export type ScopeLaneKind = 'sql' | 'odata' | 'json' | 'filter_by' | 'esdsl' | '
  * grammar, and leaving them in a predicate invites parser-level surprises.
  */
 export function EscapeSqlLiteral(value: string): string {
-    return value.replace(/'/g, "''").replace(/[\0\b\n\r\t\x1a]/g, '');
+    return EscapeSQLString(value).replace(/[\b\n\r\t\x1a]/g, '');
 }
 
 /**

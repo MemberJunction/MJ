@@ -30,6 +30,13 @@ interface LevelEvaluationResult {
     reason: string;
     matchedRule: ScopeRuleMatch | undefined;
     evaluatedRules: EvaluatedRule[];
+    /**
+     * RowFilterIDs of EVERY matching allow rule at this level (deduped, sorted).
+     * Collected across ALL matching allow rules — not just the highest-priority
+     * one — so a higher-priority unfiltered allow can never shadow a
+     * lower-priority filtered allow (most-restrictive-wins).
+     */
+    rowFilterIds: string[];
 }
 
 /**
@@ -115,7 +122,10 @@ export class ScopeEvaluator {
             Reason: keyResult.reason,
             MatchedAppRule: appResult.matchedRule,
             MatchedKeyRule: keyResult.matchedRule,
-            EvaluatedRules: evaluatedRules
+            EvaluatedRules: evaluatedRules,
+            // Key-level only for v1: application-ceiling filter enforcement is
+            // deferred by design decision (plan §9.3) — the column ships unused.
+            MatchedRowFilterIDs: keyResult.rowFilterIds
         };
     }
 
@@ -160,7 +170,8 @@ export class ScopeEvaluator {
                     allowed: true,
                     reason: 'Key has no scope restrictions (default: allow)',
                     matchedRule: undefined,
-                    evaluatedRules: []
+                    evaluatedRules: [],
+                    rowFilterIds: []
                 };
             }
             // Default deny behavior falls through to evaluateRules which will return denied
@@ -170,8 +181,17 @@ export class ScopeEvaluator {
     }
 
     /**
-     * Evaluate a set of rules against a resource
-     * Rules are sorted by Priority DESC, IsDeny DESC
+     * Evaluate a set of rules against a resource.
+     * Rules are sorted by Priority DESC, IsDeny DESC.
+     *
+     * Semantics (plan §5.4):
+     * - Deny rules keep their trumping behavior: if the HIGHEST-priority matching
+     *   rule is a deny (deny-first at equal priority), access is denied.
+     * - Allow rules do NOT stop evaluation at the first match. ALL matching allow
+     *   rules are collected so that every RowFilterID they carry is returned —
+     *   a higher-priority unfiltered allow must not shadow a lower-priority
+     *   filtered allow (most-restrictive-wins). The returned `matchedRule` stays
+     *   the highest-priority matching allow rule for compatibility.
      */
     private evaluateRules(
         rules: ScopeRule[],
@@ -188,28 +208,51 @@ export class ScopeEvaluator {
             return (b.IsDeny ? 1 : 0) - (a.IsDeny ? 1 : 0);
         });
 
+        let firstMatch: ScopeRule | undefined;
+        let firstMatchingAllow: ScopeRule | undefined;
+        const rowFilterIdSet = new Set<string>();
+
         for (const rule of sortedRules) {
             const evalResult = this.evaluateSingleRule(rule, resource, level);
             evaluatedRules.push(evalResult);
 
             if (evalResult.Matched) {
-                if (rule.IsDeny) {
-                    return {
-                        allowed: false,
-                        reason: `${level === 'application' ? 'Application' : 'Key'} denies access via rule ${rule.ID}`,
-                        matchedRule: this.toRuleMatch(rule),
-                        evaluatedRules
-                    };
+                if (!firstMatch) {
+                    firstMatch = rule;
                 }
-
-                // First matching allow rule wins
-                return {
-                    allowed: true,
-                    reason: `${level === 'application' ? 'Application' : 'Key'} allows access`,
-                    matchedRule: this.toRuleMatch(rule),
-                    evaluatedRules
-                };
+                if (!rule.IsDeny) {
+                    if (!firstMatchingAllow) {
+                        firstMatchingAllow = rule;
+                    }
+                    if (rule.RowFilterID != null) {
+                        rowFilterIdSet.add(rule.RowFilterID);
+                    }
+                }
             }
+        }
+
+        // Deny trumps: the highest-priority matching rule (deny-first at equal
+        // priority) being a deny denies access, exactly as before.
+        if (firstMatch && firstMatch.IsDeny) {
+            return {
+                allowed: false,
+                reason: `${level === 'application' ? 'Application' : 'Key'} denies access via rule ${firstMatch.ID}`,
+                matchedRule: this.toRuleMatch(firstMatch),
+                evaluatedRules,
+                rowFilterIds: []
+            };
+        }
+
+        if (firstMatchingAllow) {
+            return {
+                allowed: true,
+                reason: `${level === 'application' ? 'Application' : 'Key'} allows access`,
+                matchedRule: this.toRuleMatch(firstMatchingAllow),
+                evaluatedRules,
+                // Deduped via the Set; sorted for determinism (the same rule set
+                // must always produce the same filter list, byte for byte).
+                rowFilterIds: [...rowFilterIdSet].sort()
+            };
         }
 
         // No matching rules
@@ -221,7 +264,8 @@ export class ScopeEvaluator {
             allowed: false,
             reason: noMatchReason,
             matchedRule: undefined,
-            evaluatedRules
+            evaluatedRules,
+            rowFilterIds: []
         };
     }
 
@@ -274,7 +318,8 @@ export class ScopeEvaluator {
             Pattern: rule.ResourcePattern,
             PatternType: rule.PatternType,
             IsDeny: rule.IsDeny,
-            Priority: rule.Priority
+            Priority: rule.Priority,
+            RowFilterID: rule.RowFilterID
         };
     }
 
@@ -343,7 +388,8 @@ export class ScopeEvaluator {
             ResourcePattern: e.ResourcePattern,
             PatternType: e.PatternType as 'Include' | 'Exclude',
             IsDeny: e.IsDeny,
-            Priority: e.Priority
+            Priority: e.Priority,
+            RowFilterID: e.RowFilterID
         }));
     }
 
@@ -361,7 +407,8 @@ export class ScopeEvaluator {
             ResourcePattern: e.ResourcePattern,
             PatternType: e.PatternType as 'Include' | 'Exclude',
             IsDeny: e.IsDeny,
-            Priority: e.Priority
+            Priority: e.Priority,
+            RowFilterID: e.RowFilterID
         }));
     }
 }

@@ -345,7 +345,12 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public async SetSetting(settingKey: string, value: string, contextUser?: UserInfo): Promise<boolean> {
     const md = this.ProviderToUse;
-    const userId = contextUser?.ID || md.CurrentUser?.ID;
+    // `ProviderToUse` falls back to the global `Metadata.Provider`, which is undefined when no
+    // provider is configured (a unit-test environment, or after one is torn down). Guard the
+    // provider itself and not just `CurrentUser`: `SetSetting` is reachable from the debounced
+    // flush timer below, which can outlive its provider, and an unguarded read throws there
+    // instead of taking the "no user context" path.
+    const userId = contextUser?.ID || md?.CurrentUser?.ID;
 
     if (!userId) {
       console.error('UserInfoEngine.SetSetting: No user context available');
@@ -480,8 +485,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
       clearTimeout(this._settingsDebounceTimer);
     }
 
+    // Fire-and-forget: nothing awaits this timer, so an unhandled rejection here would surface as
+    // a process-level error rather than anything a caller can catch. Swallow it into a log so a
+    // flush that fails (or fires after the environment it belonged to has gone away) can never
+    // take down the host process or fail an unrelated test run.
     this._settingsDebounceTimer = setTimeout(() => {
-      this.FlushPendingSettings();
+      this.FlushPendingSettings().catch((err) => {
+        console.error('UserInfoEngine: debounced settings flush failed', err);
+      });
     }, this._settingsDebounceMs);
   }
 
@@ -595,19 +606,41 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
-   * Get all applications enabled for the current user, ordered by sequence then application name
+   * Get all applications enabled for the current user, ordered by sequence, then the
+   * application's DefaultSequence, then application name
    */
   public get UserApplications(): MJUserApplicationEntity[] {
     if (!this._loadedForUserId) return [];
     return this.GetConfigData<MJUserApplicationEntity>('_UserApplications')
       .filter((ua) => UUIDsEqual(ua.UserID, this._loadedForUserId))
-      .sort((a, b) => {
-        // Sort by Sequence first, then by Application name
-        if (a.Sequence !== b.Sequence) {
-          return a.Sequence - b.Sequence;
-        }
-        return (a.Application || '').localeCompare(b.Application || '');
-      });
+      .sort((a, b) => this.compareUserApplications(a, b));
+  }
+
+  /**
+   * Canonical ordering for a user's UserApplication rows: user-owned `Sequence` first,
+   * ties broken by the application's `DefaultSequence` (Home ships at -1, so it wins a
+   * tie it didn't ask for), then application name as the final stable tie-break.
+   * Duplicate Sequences are reachable without user action (new rows default to 0 and
+   * `nextUserApplicationSequence` returns 0 for a user with no active rows), so the
+   * tie-break must be deliberate rather than incidental.
+   */
+  private compareUserApplications(a: MJUserApplicationEntity, b: MJUserApplicationEntity): number {
+    if (a.Sequence !== b.Sequence) {
+      return a.Sequence - b.Sequence;
+    }
+    const defaultSequenceDiff = this.applicationDefaultSequence(a.ApplicationID) - this.applicationDefaultSequence(b.ApplicationID);
+    if (defaultSequenceDiff !== 0) {
+      return defaultSequenceDiff;
+    }
+    return (a.Application || '').localeCompare(b.Application || '');
+  }
+
+  /**
+   * The application's DefaultSequence from metadata, or the schema default (100) when
+   * the application is not found.
+   */
+  private applicationDefaultSequence(applicationId: string): number {
+    return this.GetApplicationInfo(applicationId)?.DefaultSequence ?? 100;
   }
 
   /**
@@ -667,12 +700,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   public GetUserApplicationsForUser(userId: string): MJUserApplicationEntity[] {
     return (this._UserApplications || [])
       .filter((ua) => UUIDsEqual(ua.UserID, userId))
-      .sort((a, b) => {
-        if (a.Sequence !== b.Sequence) {
-          return a.Sequence - b.Sequence;
-        }
-        return (a.Application || '').localeCompare(b.Application || '');
-      });
+      .sort((a, b) => this.compareUserApplications(a, b));
   }
 
   // ========================================================================

@@ -1,0 +1,11 @@
+@if (Count > 0) {
+  <button class="records-pill" type="button"
+    [class.active]="ViewingRecord"
+    [attr.aria-current]="ViewingRecord ? 'true' : null"
+    [attr.aria-label]="'Open records (' + Count + ')'"
+    (click)="Activate()">
+    <i class="fa-solid fa-file-lines" aria-hidden="true"></i>
+    <span class="records-pill-label">Records</span>
+    <span class="records-pill-count">{{ Count }}</span>
+  </button>
+}

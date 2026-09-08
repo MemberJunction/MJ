@@ -187,6 +187,37 @@ export function GetFullClassHierarchy(ClassRef: any): ClassInfo[] {
 }
 
 /**
+ * Checks whether two classes are in the same inheritance chain, comparing by class NAME rather
+ * than by object identity.
+ *
+ * Name comparison is deliberate and matches `ClassFactory.GetAllRegistrations`: a module can be
+ * loaded more than once (bundler code-splitting, multiple resolution paths), which yields two
+ * distinct constructor objects for what is logically the same class. Identity comparison reads
+ * that duplicate as an unrelated class, and reads a genuine subclass whose ancestor came from the
+ * other copy of the module as unrelated too.
+ *
+ * @param ClassA First class constructor
+ * @param ClassB Second class constructor
+ * @returns True when the two are the same class, or one inherits from the other at any level
+ */
+export function AreClassesRelated(ClassA: any, ClassB: any): boolean {
+    if (!ClassA || !ClassB || typeof ClassA !== 'function' || typeof ClassB !== 'function') {
+        return false;
+    }
+
+    const nameA = GetClassName(ClassA);
+    const nameB = GetClassName(ClassB);
+    if (nameA === nameB) {
+        return true;
+    }
+
+    const inheritsByName = (descendant: any, ancestorName: string): boolean =>
+        GetClassInheritance(descendant).some((c) => c.name === ancestorName);
+
+    return inheritsByName(ClassA, nameB) || inheritsByName(ClassB, nameA);
+}
+
+/**
  * Checks if a value is a class constructor (not an instance)
  * @param value The value to check
  * @returns True if the value is a class constructor
@@ -235,6 +266,78 @@ export function GetClassName(ClassRef: any): string {
     if (match && match[1]) {
         return match[1];
     }
-    
+
     return 'Anonymous';
+}
+
+/**
+ * Cache for {@link IsMemberOverridden}. Keyed by the subclass constructor, then by the member name
+ * plus the base class, because the answer is a property of that class pair and a hot path should
+ * not walk a prototype chain on every call.
+ */
+const __memberOverrideCache = new WeakMap<Function, Map<string, boolean>>();
+
+/**
+ * Determines whether a subclass has replaced `member` somewhere between `instance` and `BaseClassRef`.
+ *
+ * Distinguishes "the author made no choice" from "the author chose the value that happens to be the
+ * default" — something a getter cannot express on its own. A base class member returning `true`
+ * looks identical whether a subclass deliberately opted in or never knew the member existed, so an
+ * API whose default sits in the *off* position silently disables the subclasses that most wanted it
+ * on. Asking whether the member was overridden recovers the intent.
+ *
+ * Handles methods and accessors alike by comparing property descriptors, and finds an override
+ * declared anywhere in a multi-level chain — a generated class, an application subclass, a
+ * server-side subclass layered on top of it.
+ *
+ * @param instance The object whose class chain is inspected. A non-object returns false.
+ * @param member The property name to look for.
+ * @param BaseClassRef The class declaring the default implementation. A member `BaseClassRef` does
+ *                     not itself declare returns false — there is no baseline to have overridden.
+ * @returns True when some class below `BaseClassRef` declares `member`.
+ */
+export function IsMemberOverridden(instance: any, member: string, BaseClassRef: any): boolean {
+    if (!instance || typeof instance !== 'object' || !member || typeof BaseClassRef !== 'function') {
+        return false;
+    }
+    const ctor = instance.constructor;
+    if (typeof ctor !== 'function') {
+        return false;
+    }
+    // "Overridden relative to a class this object does not descend from" is not a meaningful
+    // question, and answering it by walking anyway is actively wrong: the walk terminates on the
+    // base prototype, so an unrelated chain is traversed to its end and the first same-named member
+    // found anywhere reads as an override.
+    if (!(instance instanceof BaseClassRef)) {
+        return false;
+    }
+
+    // The base class is part of the answer's identity, so two different bases asked about the same
+    // member on the same class cannot collide in the cache.
+    const key = member + ' ' + GetClassName(BaseClassRef);
+    let perClass = __memberOverrideCache.get(ctor);
+    if (perClass && perClass.has(key)) {
+        return perClass.get(key)!;
+    }
+    if (!perClass) {
+        perClass = new Map<string, boolean>();
+        __memberOverrideCache.set(ctor, perClass);
+    }
+
+    const basePrototype = BaseClassRef.prototype;
+    const base = basePrototype ? Object.getOwnPropertyDescriptor(basePrototype, member) : undefined;
+    let answer = false;
+    if (base) {
+        let proto = Object.getPrototypeOf(instance);
+        while (proto && proto !== basePrototype) {
+            const own = Object.getOwnPropertyDescriptor(proto, member);
+            if (own && (own.get !== base.get || own.value !== base.value)) {
+                answer = true;
+                break;
+            }
+            proto = Object.getPrototypeOf(proto);
+        }
+    }
+    perClass.set(key, answer);
+    return answer;
 }

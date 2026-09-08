@@ -6,6 +6,7 @@
  */
 
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, ViewChild, OnInit, OnChanges, SimpleChanges } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJCredentialEntity, MJCredentialTypeEntity } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
 import { CredentialEditPanelComponent } from '../panels/credential-edit-panel/credential-edit-panel.component';
@@ -78,7 +79,7 @@ export interface CredentialDialogResult {
     `],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class CredentialDialogComponent implements OnInit, OnChanges {
+export class CredentialDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
     @ViewChild('editPanel') editPanel!: CredentialEditPanelComponent;
 
     @Input() Visible = false;
@@ -95,7 +96,8 @@ export class CredentialDialogComponent implements OnInit, OnChanges {
 
     private _dialogTitle = 'Credential';
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) {
+        super();}
 
     ngOnInit(): void {
         if (this.Visible) {
@@ -161,7 +163,7 @@ export class CredentialDialogComponent implements OnInit, OnChanges {
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJCredentialTypeEntity>({
                 EntityName: 'MJ: Credential Types',
                 OrderBy: 'Category, Name',

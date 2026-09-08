@@ -127,6 +127,16 @@ describe('MjKanbanBoardComponent (DOM)', () => {
     expect(clicks[0].ID).toBe('c1');
   });
 
+  it('emits CardDoubleClicked with the card when a card is double-clicked', () => {
+    const f = render({ Columns: COLUMNS, Cards: CARDS });
+    const dbl = capture(f.componentInstance.CardDoubleClicked);
+    (queryAll(f, '.mj-kanban-card')[0] as HTMLElement).dispatchEvent(
+      new MouseEvent('dblclick', { bubbles: true }),
+    );
+    expect(dbl.length).toBe(1);
+    expect(dbl[0].ID).toBe('c1');
+  });
+
   // --- drag state: drag-over class ---------------------------------------
 
   it('applies the drag-over class to a column on dragover and removes it on dragleave', () => {

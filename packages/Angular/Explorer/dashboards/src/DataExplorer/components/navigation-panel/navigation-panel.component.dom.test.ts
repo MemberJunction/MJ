@@ -8,6 +8,7 @@ import {
 import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
 import { NavigationPanelComponent } from './navigation-panel.component';
 import type { FavoriteItem, RecentItem } from '../../models/explorer-state.interface';
+import type { EntityInfo } from '@memberjunction/core';
 
 /**
  * DOM coverage for <mj-explorer-navigation-panel> (module-declared). The favorites/recent sections
@@ -75,7 +76,10 @@ describe('NavigationPanelComponent (DOM)', () => {
   });
 
   it('shows the entities count badge reflecting the entities input', () => {
-    const fixture = render({ entities: [{ Name: 'A' }, { Name: 'B' }, { Name: 'C' }] as never });
+    // The badge only counts entities; keep the one field we do supply type-checked against
+    // EntityInfo and seam-cast once at the binding site (`entities` is `EntityInfo[]`).
+    const entities = [{ Name: 'A' }, { Name: 'B' }, { Name: 'C' }] satisfies Array<Pick<EntityInfo, 'Name'>> as unknown as EntityInfo[];
+    const fixture = render({ entities });
     expect(fixture.nativeElement.textContent).toContain('3');
     expect(query(fixture, 'mj-tree')).not.toBeNull();
   });

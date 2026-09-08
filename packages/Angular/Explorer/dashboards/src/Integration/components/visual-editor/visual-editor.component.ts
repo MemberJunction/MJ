@@ -94,7 +94,7 @@ export class VisualFieldEditorComponent implements OnChanges {
 
   InfoPanelLoading = false;
   InfoDestRecordCount: number | null = null;
-  InfoLastSync: { StartedAt: string | null; EndedAt: string | null; Status: string; TotalRecords: number } | null = null;
+  InfoLastSync: { StartedAt: Date | string | null; EndedAt: Date | string | null; Status: string; TotalRecords: number } | null = null;
 
   readonly FIELD_HEIGHT = 40;
   readonly SVG_WIDTH = 200;
@@ -575,7 +575,7 @@ export class VisualFieldEditorComponent implements OnChanges {
     }
   }
 
-  FormatSyncDate(dateStr: string | null): string {
+  FormatSyncDate(dateStr: Date | string | null): string {
     if (!dateStr) return 'Never';
     const d = new Date(dateStr);
     const now = new Date();

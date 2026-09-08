@@ -8,7 +8,8 @@
  */
 
 import sql from 'mssql';
-import { SQLServerProviderConfigData, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { SQLServerProviderConfigData, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -154,7 +155,7 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
   SetProvider(provider);
   globalProvider = provider;
 
-  await refreshUserCacheFromPG(pgPool, coreSchema);
+  await UserCache.Instance.Refresh(provider);
 
   // Run MJ startup with the same 'task' entry-point default as the SQL Server path
   // (where setupSQLServerClient runs this internally). Previously the PG path skipped
@@ -166,31 +167,6 @@ async function initializePostgresProvider(config: MJConfig): Promise<DatabasePro
   await StartupManager.Instance.Startup(false, sysUser || backupSysUser, provider, { mode: startupMode.mode });
 
   return provider;
-}
-
-/**
- * Populates UserCache from PG vwUsers/vwUserRoles. Mirrors MJServer's PG bootstrap path
- * so CLI commands have the same System user lookup semantics as the server.
- */
-async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
-  const uResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUsers"`);
-  const rResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUserRoles"`);
-  const users = uResult.rows;
-  const roles = rResult.rows;
-
-  if (users && globalProvider) {
-    const userInfos = users.map((user: Record<string, unknown>) => {
-      const userWithRoles = {
-        ...user,
-        UserRoles: roles.filter((role: Record<string, unknown>) =>
-          UUIDsEqual(role.UserID as string, user.ID as string)
-        ),
-      };
-      return new UserInfo(Metadata.Provider, userWithRoles);  // global-provider-ok: MetadataSync CLI bootstrap — runs against the global default provider
-    });
-    const cache = UserCache.Instance;
-    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
-  }
 }
 
 /**

@@ -12,7 +12,10 @@
 
 import { RegisterClass, SafeExpressionEvaluator } from '@memberjunction/global';
 import { BaseAgentType } from './base-agent-type';
-import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation } from '@memberjunction/ai-core-plus';
+import { AIPromptRunResult, BaseAgentNextStep, AIPromptParams, ExecuteAgentParams, AgentConfiguration, AgentAction, AgentClientToolInvocation,
+         FormatValidationErrors, ValidateTaskGraphSpec, type TaskGraphSpec,
+    ConfigOf,
+} from '@memberjunction/ai-core-plus';
 import { LogError, LogStatusEx } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { LoopAgentResponse } from './loop-agent-response-type';
@@ -122,6 +125,115 @@ export class LoopAgentType extends BaseAgentType {
             // unproductive-retry limit) and suppresses the "Retrying due to:" message.
         });
     }
+
+    /**
+     * Resolves whether this agent may emit durable task graphs.
+     *
+     * Read from the merged three-level params bag (schema defaults → agent config → runtime
+     * override), so a per-run override behaves like every other Loop parameter. Absent means NO:
+     * this is the one Loop flag whose default is off, because the capability creates durable rows
+     * that outlive the run rather than merely adding prompt text (D3).
+     */
+    private taskGraphsEnabled(params: ExecuteAgentParams<any, any>): boolean {
+        const promptParams = params?.data?.__agentTypePromptParams as Record<string, unknown> | undefined;
+        return promptParams?.enableTaskGraphs === true;
+    }
+
+    /**
+     * Applies a `'Tasks'` emission to the next step: capability gate, validation, then either
+     * single-node constant folding (D9) or a durable submission.
+     *
+     * Mutates `retVal` rather than returning a step so the switch arm stays symmetric with its
+     * siblings, all of which have already populated the shared payload/scratchpad/command fields.
+     */
+    private applyTasksStep<P>(
+        retVal: Partial<BaseAgentNextStep<P>>,
+        spec: TaskGraphSpec | undefined,
+        params: ExecuteAgentParams<any, P>,
+    ): void {
+        // The gate is enforced, not merely documented. Omitting `'Tasks'` from the prompt is the
+        // first line of defense; this is the second, because prompt drift, a cached prompt, or a
+        // model that has seen the type elsewhere can all produce an emission the prompt never
+        // invited. Failing closed with a corrective keeps the agent productive without silently
+        // handing it durable reach it was never configured for.
+        if (!this.taskGraphsEnabled(params)) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'You are not enabled to emit task graphs, so nextStep.type must never be "Tasks". ' +
+                'Use nextStep.type "Sub-Agent" (with subAgents[] for parallel work) or "Actions" instead, ' +
+                'and continue with the task.';
+            retVal.errorMessage = 'Task graphs are not enabled for this agent';
+            return;
+        }
+
+        if (!spec) {
+            retVal.step = 'Retry';
+            retVal.message = 'When nextStep.type == "Tasks", nextStep.tasks must contain the task graph';
+            retVal.errorMessage = 'Task graph not specified for Tasks type';
+            return;
+        }
+
+        // The same validator the server runs at submission (D16), so a graph that passes here
+        // cannot fail a different check later. Every failure is reported at once — a model fixing a
+        // malformed graph should not discover the problems one round-trip at a time.
+        const validation = ValidateTaskGraphSpec(spec);
+        if (!validation.Valid) {
+            retVal.step = 'Retry';
+            retVal.message =
+                'Your task graph is invalid and was not submitted. Fix every problem below and re-emit ' +
+                `the complete graph:\n${FormatValidationErrors(validation.Errors)}`;
+            retVal.errorMessage = `Invalid task graph: ${validation.Errors.map(e => e.Code).join(', ')}`;
+            return;
+        }
+
+        retVal.step = 'Tasks' as BaseAgentNextStep['step'];
+        retVal.taskGraph = { spec, folded: false };
+
+        // Single-node constant folding (D9) — the compiler-flattening analogy: don't spin up loop
+        // machinery for a loop of one. A lone agent task with no edges and default continuation is
+        // observationally identical to a sub-agent call, minus a dispatcher hop and a Task row.
+        const fold = this.describeFold(spec);
+        if (fold.folded) {
+            const node = spec.tasks[0];
+            // describeFold() has already established this is an Agent node — folding is only offered
+            // for one. The `?? ''` is unreachable and exists so this cannot become a silent `undefined`
+            // if that precondition is ever loosened.
+            retVal.step = 'Sub-Agent';
+            retVal.subAgent = {
+                name: ConfigOf(node, 'Agent')?.agentName ?? '',
+                message: node.description,
+                terminateAfter: false,
+                templateParameters: {},
+            };
+            // Recorded, never silent: the TaskGraph run step is written for folded graphs too, so
+            // run forensics show why a graph did not reach the dispatcher, and Save as Workflow
+            // (D17) can attach to the single-node case — the shape a user is most likely to promote.
+            retVal.taskGraph = { spec, folded: true, foldReason: fold.reason };
+        }
+    }
+
+    /**
+     * Decides whether a graph folds to an in-run sub-agent call, and says why when it does not.
+     *
+     * The reason is carried onto the run step rather than discarded: a user who edits a two-node
+     * graph down to one changes its durability and observability, and should be able to read that
+     * off the run record instead of inferring it.
+     */
+    private describeFold(spec: TaskGraphSpec): { folded: boolean; reason: string } {
+        if (spec.tasks.length !== 1) return { folded: false, reason: `graph has ${spec.tasks.length} nodes` };
+
+        const node = spec.tasks[0];
+        if (node.dependsOn?.length) return { folded: false, reason: 'the single node declares dependencies' };
+        // Only an Agent node folds to an in-run sub-agent call. Every other kind — a person's step, an
+        // action, a prompt, a loop — has no in-run equivalent and must reach the dispatcher.
+        if (node.kind !== 'Agent') return { folded: false, reason: `the single node is a ${node.kind} step, which has no in-run equivalent` };
+        if (spec.durable === true) return { folded: false, reason: 'the graph requested durable execution' };
+        if (spec.continuation && spec.continuation !== 'message') {
+            return { folded: false, reason: `continuation is '${spec.continuation}', not the default` };
+        }
+        return { folded: true, reason: 'single agent node, no dependencies, default continuation' };
+    }
+
 
     public async InitializeAgentTypeState<ATS = any, P = any>(params: ExecuteAgentParams<any, P>): Promise<ATS> {
         // Loop agents do not require agent-type specific state initialization
@@ -393,6 +505,9 @@ export class LoopAgentType extends BaseAgentType {
                     retVal.message = 'When nextStep.type == "Pipeline", nextStep.pipeline.steps must contain 1 or more stages';
                     retVal.errorMessage = 'Pipeline steps not specified for Pipeline type';
                     break;
+                case 'Tasks':
+                    this.applyTasksStep(retVal, response.nextStep.tasks, params);
+                    break;
                 default:
                     retVal.step = 'Retry';
                     retVal.errorMessage = `Unknown next step type: ${response.nextStep.type}`;
@@ -479,7 +594,7 @@ export class LoopAgentType extends BaseAgentType {
 
         // Validate nextStep structure if present
         if (response.nextStep) {
-            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline', 'skill', 'plan'];
+            const validStepTypes = ['actions', 'sub-agent', 'chat', 'retry', 'foreach', 'while', 'clienttools', 'pipeline', 'skill', 'plan', 'tasks'];
             let lcaseType = response.nextStep.type?.toLowerCase().trim();
             // allow the AI to mess up the case, but we need to validate it
 
@@ -508,6 +623,9 @@ export class LoopAgentType extends BaseAgentType {
             } else if (!lcaseType && response.nextStep.plan) {
                 response.nextStep.type = 'Plan'; // update the data structure to have the correct type
                 lcaseType = 'plan';
+            } else if (!lcaseType && response.nextStep.tasks) {
+                response.nextStep.type = 'Tasks'; // update the data structure to have the correct type
+                lcaseType = 'tasks';
             }
 
             if (!validStepTypes.includes(lcaseType)) {

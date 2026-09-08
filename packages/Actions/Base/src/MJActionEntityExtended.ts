@@ -1,6 +1,6 @@
 import { BaseEntity, CodeNameFromString } from "@memberjunction/core";
-import { MJActionEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
-import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
+import { MJActionEntity } from "@memberjunction/core-entities";
+import { RegisterClass } from "@memberjunction/global";
 import { ActionEngineBase } from "./ActionEngine-Base";
 
 @RegisterClass(BaseEntity, 'MJ: Actions') // high priority make sure this class is used ahead of other things
@@ -19,35 +19,15 @@ export class MJActionEntityExtended extends MJActionEntity {
         return CodeNameFromString(this.Name);
     }
 
-    private _resultCodes: MJActionResultCodeEntity[] = null;
-    /**
-     * Provides a list of possible result codes for this action.
+    /*
+     * `Params`, `ResultCodes` and `Libraries` used to live here as memoised getters that filtered
+     * ActionEngineBase's preloaded caches. They are now generated related-record collections
+     * declared on the 'MJ: Actions' EntityRelationship rows — `Source: 'cache'`, `Load: 'lazy'`,
+     * read-only — which does exactly the same thing generically: fill on first read, from the same
+     * engine cache, with no query.
+     *
+     * Callers use `action.Params.Items` rather than `action.Params`. The collection is available on
+     * BOTH tiers because CodeGen emits it onto the generated base class, whereas these getters only
+     * existed wherever this server-side package was loaded.
      */
-    public get ResultCodes(): MJActionResultCodeEntity[] {
-        if (!this._resultCodes) {
-            // load the result codes
-            this._resultCodes = ActionEngineBase.Instance.ActionResultCodes.filter(c => UUIDsEqual(c.ActionID, this.ID));
-        }
-        return this._resultCodes;
-    }
-
-    private _params: MJActionParamEntity[] = null;
-    public get Params(): MJActionParamEntity[] {
-        if (!this._params) {
-            // load the inputs
-            this._params = ActionEngineBase.Instance.ActionParams.filter(i => UUIDsEqual(i.ActionID, this.ID));
-        }
-        return this._params;
-    }
-
-    private _libs: MJActionLibraryEntity[] = null;
-    public get Libraries(): MJActionLibraryEntity[] {
-        if (!this._libs) {
-            // load the inputs
-            this._libs = ActionEngineBase.Instance.ActionLibraries.filter(l => UUIDsEqual(l.ActionID, this.ID));
-        }
-        return this._libs;
-    }
-
-
 }

@@ -41,8 +41,7 @@ vi.mock('@memberjunction/core-entities', () => ({
     KnowledgeHubMetadataEngine: { Instance: {} },
     MJContentSourceEntity: class {},
     MJContentSourceTypeEntity_IContentSourceTypeField: class {},
-    MJScheduledActionEntity: class {},
-    MJScheduledActionParamEntity: class {},
+    MJScheduledJobEntity: class {},
     MJContentItemDuplicateEntity: class {},
     UserInfoEngine: { Instance: { Config: vi.fn() } },
 }));

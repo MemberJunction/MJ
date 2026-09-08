@@ -3,6 +3,7 @@ import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import { ResourceData } from '@memberjunction/core-entities';
+import type { MJCompanyIntegrationRunEntity } from '@memberjunction/core-entities';
 import { CompositeKey, IRunViewProvider, RunView } from '@memberjunction/core';
 import {
   IntegrationDataService,
@@ -22,7 +23,12 @@ import {
 } from '../../integration-agent-context';
 import { AgentToolResult, validateEnumParam, validateStringParam } from '../../../shared/agent-tool-validation';
 
-type StatusFilterType = 'All' | 'Success' | 'Failed' | 'In Progress' | 'Pending';
+/**
+ * The activity filter's choices: 'All' plus every real run status, derived from the entity so the
+ * filter can never silently lose a status the database can produce. The hand-written union this
+ * replaces had already fallen behind — 'Queued' rows existed and were unfilterable.
+ */
+type StatusFilterType = 'All' | MJCompanyIntegrationRunEntity['Status'];
 type DateFilterType = 'today' | '7d' | '30d' | 'all';
 
 interface WatermarkRow {
@@ -74,7 +80,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
   ActiveDetailTab: 'entities' | 'watermarks' = 'entities';
   IsLoadingWatermarks = false;
 
-  StatusOptions: StatusFilterType[] = ['All', 'Success', 'Failed', 'In Progress', 'Pending'];
+  StatusOptions: StatusFilterType[] = ['All', 'Success', 'Failed', 'Cancelled', 'In Progress', 'Queued', 'Pending'];
   DateOptions: { Value: DateFilterType; Label: string }[] = [
     { Value: 'all', Label: 'All' },
     { Value: 'today', Label: 'Today' },
@@ -650,17 +656,17 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
 
   // ── Formatting Helpers ────────────────────────────────────
 
-  FormatDuration(startedAt: string | null, endedAt: string | null): string {
+  FormatDuration(startedAt: Date | string | null, endedAt: Date | string | null): string {
     if (!startedAt || !endedAt) return '--';
     const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime();
     return this.dataService.FormatDuration(ms);
   }
 
-  GetRelativeTime(dateStr: string | null): string {
+  GetRelativeTime(dateStr: Date | string | null): string {
     return this.dataService.ComputeRelativeTime(dateStr);
   }
 
-  FormatAbsoluteDate(dateStr: string | null): string {
+  FormatAbsoluteDate(dateStr: Date | string | null): string {
     if (!dateStr) return '';
     return new Date(dateStr).toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
@@ -674,7 +680,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit, 
     return value;
   }
 
-  FormatDate(dateStr: string | null): string {
+  FormatDate(dateStr: Date | string | null): string {
     if (!dateStr) return '--';
     return new Date(dateStr).toLocaleString(undefined, {
       month: 'short', day: 'numeric',

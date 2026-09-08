@@ -82,7 +82,8 @@ vi.mock('@memberjunction/core-entities', () => ({
 // Shared singleton store
 const singletonStore: Record<string, unknown> = {};
 
-vi.mock('@memberjunction/global', () => {
+vi.mock('@memberjunction/global', async (importOriginal) => {
+    const { ToEpochMs } = await importOriginal<typeof import('@memberjunction/global')>();
     class BaseSingleton<T> {
         protected static getInstance<T>(this: new () => T): T {
             const key = this.name;
@@ -95,6 +96,11 @@ vi.mock('@memberjunction/global', () => {
 
     return {
         BaseSingleton,
+        // The real implementation, imported from the module itself — a stub would test
+        // nothing, and a hand-rolled copy would drift from the contract MJGlobal's own
+        // util.toEpochMs.test.ts pins. importOriginal only evaluates the module; the
+        // singletons this mock replaces are created lazily, so none are instantiated.
+        ToEpochMs,
         MJGlobal: {
             Instance: {
                 ClassFactory: {
@@ -366,6 +372,96 @@ describe('SchedulingEngine', () => {
         });
     });
 
+    describe('expireFinishedJobs — retiring a job whose window has closed', () => {
+        // `Expired` has been a declared ScheduledJobStatus that NOTHING ever set. isJobDue already
+        // refuses a job past its EndAt, so such a job stops running on its own — but it stayed
+        // Active forever, permanently inert, and kept driving UpdatePollingInterval. That is why
+        // "run once at T" (cron at T + EndAt just after T) left the whole scheduler polling at that
+        // job's cadence for a job that would never run again.
+        const expire = (evalTime: Date) =>
+            (engine as unknown as { expireFinishedJobs(u: unknown, t: Date): Promise<void> })
+                .expireFinishedJobs({ ID: 'user-1' }, evalTime);
+
+        const job = (over: Record<string, unknown> = {}) => ({
+            ID: 'job-1',
+            Name: 'One-shot',
+            Status: 'Active',
+            EndAt: new Date('2026-08-08T10:00:00Z'),
+            Save: vi.fn().mockResolvedValue(true),
+            LatestResult: null,
+            ...over,
+        });
+
+        it('marks a job past its EndAt as Expired', async () => {
+            const j = job();
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe('Expired');
+            expect(j.Save).toHaveBeenCalled();
+        });
+
+        it('leaves a job whose window is still open alone', async () => {
+            const j = job();
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T09:00:00Z'));
+
+            expect(j.Status).toBe('Active');
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it('ignores a job with no EndAt — an open-ended schedule never expires', async () => {
+            const j = job({ EndAt: null });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2030-01-01T00:00:00Z'));
+
+            expect(j.Status).toBe('Active');
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it.each(['Paused', 'Disabled'])('does NOT overwrite a %s job a person set', async (status) => {
+            // Rewriting a deliberate human decision to Expired would lose it, and the two states
+            // mean different things: Paused is "resume this later".
+            const j = job({ Status: status });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe(status);
+            expect(j.Save).not.toHaveBeenCalled();
+        });
+
+        it('expires a Pending job too — it never ran and never will', async () => {
+            const j = job({ Status: 'Pending' });
+            mockBase.ScheduledJobs = [j];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(j.Status).toBe('Expired');
+        });
+
+        it('keeps going when one job fails to save', async () => {
+            // Retiring a finished job must never stop live ones from being considered.
+            const bad = job({ ID: 'bad', Save: vi.fn().mockResolvedValue(false), LatestResult: { CompleteMessage: 'locked' } });
+            const good = job({ ID: 'good' });
+            mockBase.ScheduledJobs = [bad, good];
+
+            await expire(new Date('2026-08-08T11:00:00Z'));
+
+            expect(good.Save).toHaveBeenCalled();
+        });
+
+        it('does not throw when a save blows up', async () => {
+            const j = job({ Save: vi.fn().mockRejectedValue(new Error('deadlock')) });
+            mockBase.ScheduledJobs = [j];
+
+            await expect(expire(new Date('2026-08-08T11:00:00Z'))).resolves.toBeUndefined();
+        });
+    });
+
     describe('initializeNextRunTimes — RunImmediatelyIfNeverRun', () => {
         // Helper to build a minimal job object matching the MJScheduledJobEntity mock shape
         const buildJob = (overrides: Partial<Record<string, unknown>>): Record<string, unknown> => ({
@@ -385,8 +481,8 @@ describe('SchedulingEngine', () => {
         // reaches it for the sake of one branch test.
         const callInitialize = async (jobs: Array<Record<string, unknown>>): Promise<void> => {
             (mockBase as Record<string, unknown>).ScheduledJobs = jobs;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            await (engine as any).initializeNextRunTimes({ ID: 'user-1' });
+            const seam = engine as unknown as { initializeNextRunTimes(user: { ID: string }): Promise<void> };
+            await seam.initializeNextRunTimes({ ID: 'user-1' });
         };
 
         it('sets NextRunAt to the next cron tick when the flag is off', async () => {
@@ -425,6 +521,129 @@ describe('SchedulingEngine', () => {
             await callInitialize([job]);
             expect(job.NextRunAt).toBe(existing);
             expect(job.Save).not.toHaveBeenCalled();
+        });
+    });
+
+    // ======================================================================
+    // isJobDue with string-dated rows
+    // ======================================================================
+
+    /**
+     * `_scheduledJobs` is a `BaseEngine` config with `CacheLocal: true` and no `ResultType`, so it
+     * inherits `entity_object`. A cross-server cache-change event used to assign the payload's
+     * plain JSON rows straight into that array, leaving `NextRunAt` / `StartAt` / `EndAt` as raw
+     * ISO strings while the property still claimed `MJScheduledJobEntity[]`. `BaseEngine` no
+     * longer does that, so these are defence in depth — but `isJobDue` gates the whole dispatch
+     * loop, and it failed in two very different ways:
+     *
+     *   LOUD   — `job.NextRunAt.getTime()` throws, aborting DispatchScheduledJobs on the FIRST
+     *            job, so nothing runs at all until the cache reloads. This is what was observed
+     *            in production, repeating every poll.
+     *
+     *   SILENT — `evalTime < job.StartAt` does NOT throw on a string. Relational operators coerce
+     *            toward numbers, an ISO string yields NaN, and every comparison is false — so the
+     *            activation window silently stops being enforced and a job can fire outside its
+     *            StartAt/EndAt range with nothing in the logs. No prior test covered this.
+     *
+     * `isJobDue` is private and uses no `this`, so it is invoked off the prototype rather than by
+     * widening production visibility.
+     */
+    describe('isJobDue with string dates (poisoned cache)', () => {
+        const NOW = new Date('2026-08-13T12:00:00.000Z');
+
+        type IsJobDue = (job: Record<string, unknown>, evalTime: Date) => boolean;
+        const isJobDue = (job: Record<string, unknown>, evalTime: Date): boolean =>
+            (SchedulingEngine.prototype as unknown as { isJobDue: IsJobDue }).isJobDue(job, evalTime);
+
+        /** A job as a poisoned cache holds it: plain object, dates as ISO STRINGS. */
+        const stringDatedJob = (overrides: Record<string, unknown> = {}): Record<string, unknown> => ({
+            ID: 'job-1',
+            Name: 'IT probe',
+            Status: 'Active',
+            NextRunAt: '2026-08-13T11:59:00.000Z', // one minute past -> due
+            StartAt: null,
+            EndAt: null,
+            ...overrides,
+        });
+
+        it('does not throw, and reports a past string NextRunAt as due', () => {
+            expect(() => isJobDue(stringDatedJob(), NOW)).not.toThrow();
+            expect(isJobDue(stringDatedJob(), NOW)).toBe(true);
+        });
+
+        // Defense in depth: a cross-server cache event (or an includeAllJobs Config) can leave
+        // non-Active rows in ScheduledJobs, and lock acquisition does not check Status —
+        // isJobDue is the last gate before an inactive job would run.
+        it.each(['Disabled', 'Paused', 'Pending', 'Expired'])(
+            'refuses a due %s job — dispatch cannot rely on the array staying Active-only',
+            (status) => {
+                expect(isJobDue(stringDatedJob({ Status: status }), NOW)).toBe(false);
+            }
+        );
+
+        it('reports a future string NextRunAt as not due', () => {
+            expect(isJobDue(stringDatedJob({ NextRunAt: '2026-08-13T12:05:00.000Z' }), NOW)).toBe(false);
+        });
+
+        it('honours the 1-second tolerance on string dates', () => {
+            expect(isJobDue(stringDatedJob({ NextRunAt: '2026-08-13T12:00:00.500Z' }), NOW)).toBe(true);
+            expect(isJobDue(stringDatedJob({ NextRunAt: '2026-08-13T12:00:02.000Z' }), NOW)).toBe(false);
+        });
+
+        it('treats a null NextRunAt as not due', () => {
+            expect(isJobDue(stringDatedJob({ NextRunAt: null }), NOW)).toBe(false);
+        });
+
+        it('STILL ENFORCES a string StartAt — the silent failure', () => {
+            // Pre-fix this returns true and the job runs a day early, with nothing logged.
+            expect(isJobDue(stringDatedJob({ StartAt: '2026-08-14T00:00:00.000Z' }), NOW)).toBe(false);
+        });
+
+        it('STILL ENFORCES a string EndAt — the silent failure', () => {
+            expect(isJobDue(stringDatedJob({ EndAt: '2026-08-12T00:00:00.000Z' }), NOW)).toBe(false);
+        });
+
+        // The two cases above still have a string NextRunAt, so pre-fix they fail on the THROW
+        // before the window is ever evaluated — which proves the loud bug, not the silent one.
+        // These two isolate it: a real Date NextRunAt means nothing throws, so the only thing
+        // under test is whether a string window is honoured. Pre-fix both return `true`.
+        it('isolates the silent bug: real-Date NextRunAt, string StartAt in the future', () => {
+            const job = stringDatedJob({
+                NextRunAt: new Date('2026-08-13T11:59:00.000Z'), // due, and never throws
+                StartAt: '2026-08-14T00:00:00.000Z',             // window not yet open
+            });
+            expect(isJobDue(job, NOW)).toBe(false);
+        });
+
+        it('isolates the silent bug: real-Date NextRunAt, string EndAt in the past', () => {
+            const job = stringDatedJob({
+                NextRunAt: new Date('2026-08-13T11:59:00.000Z'),
+                EndAt: '2026-08-12T00:00:00.000Z',               // window already closed
+            });
+            expect(isJobDue(job, NOW)).toBe(false);
+        });
+
+        it('runs a job inside a string-dated activation window', () => {
+            expect(isJobDue(stringDatedJob({
+                StartAt: '2026-08-01T00:00:00.000Z',
+                EndAt: '2026-09-01T00:00:00.000Z',
+            }), NOW)).toBe(true);
+        });
+
+        it('handles a mixed row — real Date window, string NextRunAt', () => {
+            expect(isJobDue(stringDatedJob({
+                StartAt: new Date('2026-08-01T00:00:00.000Z'),
+                EndAt: new Date('2026-09-01T00:00:00.000Z'),
+            }), NOW)).toBe(true);
+        });
+
+        it('preserves behaviour for real Dates', () => {
+            const dateJob = (o: Record<string, unknown> = {}) =>
+                stringDatedJob({ NextRunAt: new Date('2026-08-13T11:59:00.000Z'), ...o });
+            expect(isJobDue(dateJob(), NOW)).toBe(true);
+            expect(isJobDue(dateJob({ NextRunAt: new Date('2026-08-13T12:05:00.000Z') }), NOW)).toBe(false);
+            expect(isJobDue(dateJob({ StartAt: new Date('2026-08-14T00:00:00.000Z') }), NOW)).toBe(false);
+            expect(isJobDue(dateJob({ EndAt: new Date('2026-08-12T00:00:00.000Z') }), NOW)).toBe(false);
         });
     });
 });

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { renderComponentFixture, query, queryAll, text } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { RunHistoryPanelComponent } from './run-history-panel.component';
 import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../services/integration-data.service';
 
@@ -13,12 +12,6 @@ import { IntegrationDataService, IntegrationRunRow, RunDetailRow } from '../../s
  * mj-loading / mj-empty-state are stubbed. Covers: empty state, the run table + status chips, and
  * the row-click → detail-load expansion.
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '<span class="stub-loading">{{ text }}</span>' })
-class LoadingStub { @Input() text = ''; @Input() size = ''; }
-
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class EmptyStateStub { @Input() Title = ''; @Input() Icon = ''; @Input() Size = ''; }
 
 function runRow(over: Partial<IntegrationRunRow> = {}): IntegrationRunRow {
   return {
@@ -43,7 +36,7 @@ function fakeService(runs: IntegrationRunRow[], details: RunDetailRow[] = []): I
  */
 async function render(service: IntegrationDataService): Promise<ReturnType<typeof renderComponentFixture<RunHistoryPanelComponent>>> {
   const fixture = renderComponentFixture(RunHistoryPanelComponent, {
-    imports: [CommonModule, LoadingStub, EmptyStateStub],
+    imports: [CommonModule, StubLoadingComponent, StubEmptyStateComponent],
     declarations: [RunHistoryPanelComponent],
     providers: [{ provide: IntegrationDataService, useValue: service }],
     inputs: { CompanyIntegrationID: 'ci1' },

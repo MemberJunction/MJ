@@ -81,6 +81,63 @@ export const FULL_QUERY_ALLOWED_KEYWORDS = [
 ] as const;
 
 /**
+ * System catalog / metadata objects that must never be referenced from a user-supplied
+ * expression or ad-hoc query, in ANY context (including `full_query`). These sit outside
+ * MemberJunction's entity-permission model, so allowing them turns a validated SELECT into
+ * a schema-enumeration and credential-exfiltration primitive
+ * (e.g. `SELECT name, password_hash FROM sys.sql_logins`,
+ *  `SELECT * FROM INFORMATION_SCHEMA.COLUMNS`, `SELECT * FROM pg_catalog.pg_authid`).
+ * String literals are stripped before this check runs, so a literal value like `'sys.x'` is safe.
+ */
+export const BLOCKED_SYSTEM_OBJECT_PATTERNS: RegExp[] = [
+  /\bSYS\s*\.\s*\w/i,                      // SQL Server system catalog schema: sys.sql_logins, sys.objects, sys.fn_*, ...
+  /\bINFORMATION_SCHEMA\b/i,               // ANSI catalog views — schema/table/column enumeration
+  /\bSYSLOGINS\b/i,                        // legacy SQL Server logins view
+  /\bPG_CATALOG\s*\./i,                    // PostgreSQL system catalog schema
+  /\bPG_(AUTHID|SHADOW|USER|ROLES)\b/i,    // PostgreSQL credential / role catalogs
+];
+
+/**
+ * Matches SQL string literals the way SQL Server and PostgreSQL (with the default
+ * `standard_conforming_strings=on`) actually parse them: a literal is closed by the next
+ * single quote, `''` is an embedded quote, and a backslash is an ORDINARY character that
+ * does NOT escape the closing quote. Double-quoted runs are matched with the same doubling
+ * rule so a delimited identifier can't hide a payload either.
+ *
+ * @see StripSQLStringLiterals — use that, not this constant, so every caller gets the
+ * documented semantics and the two validators in MJ can never drift apart again.
+ */
+const SQL_STRING_LITERAL_PATTERN = /'(?:[^']|'')*'|"(?:[^"]|"")*"/g;
+
+/**
+ * Removes SQL string literals from a clause or expression so that a keyword denylist can be
+ * applied to the *code* portion without tripping over keywords that appear inside quoted data
+ * (e.g. `Comments LIKE '%--%'`).
+ *
+ * 🚨 SECURITY — this is the single implementation of literal-stripping for MJ's SQL screens, and
+ * it MUST stay byte-for-byte consistent with how the database parses literals. If the stripper
+ * removes a span the database does NOT treat as a literal, everything hidden inside that span
+ * bypasses the denylist while the database still executes it.
+ *
+ * An earlier version of this logic (duplicated in two places, which is how it survived) honored
+ * **backslash escaping** — `/(['"])(?:(?=(\\?))\2[\s\S])*?\1/g`. SQL Server and PostgreSQL do not
+ * treat `\` as an escape character, so `x = 'a\') ; DROP TABLE Users; --'` was swallowed whole as
+ * one "literal" and stripped to `x = `, which passed every denylist — while the database closed
+ * the literal at the real quote and executed the stacked statement.
+ *
+ * **Do NOT reintroduce backslash-escape handling here, and do NOT inline a second copy of this
+ * regex anywhere else — call this function.**
+ *
+ * @param sql The clause, expression, or query to strip literals from
+ * @returns The input with every complete string literal removed. An UNTERMINATED literal is left
+ *          in place on purpose: the stray quote and everything after it stay visible to the
+ *          denylist rather than being silently swallowed.
+ */
+export function StripSQLStringLiterals(sql: string): string {
+  return sql.replace(SQL_STRING_LITERAL_PATTERN, '');
+}
+
+/**
  * Safe SQL functions allowed in expressions, organized by category
  */
 export const ALLOWED_SQL_FUNCTIONS = {
@@ -240,12 +297,12 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
 
   /**
    * Remove string literals to avoid false positives in keyword detection.
-   * Handles both single and double quoted strings with escaped quotes.
+   *
+   * 🚨 SECURITY: delegates to {@link StripSQLStringLiterals} — read the warning there before
+   * changing anything about how literals are matched. This must never grow its own regex again.
    */
   private removeStringLiterals(expression: string): string {
-    // Match both single and double quoted strings, handling escaped quotes
-    const stringPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
-    return expression.replace(stringPattern, '');
+    return StripSQLStringLiterals(expression);
   }
 
   /**
@@ -297,6 +354,20 @@ export class SQLExpressionValidator extends BaseSingleton<SQLExpressionValidator
           error: `Dangerous SQL keyword detected: ${keyword}`,
           trigger: keyword,
           suggestion: keyword === 'SELECT' ? 'Subqueries are not allowed. Use a direct expression instead.' : undefined
+        };
+      }
+    }
+
+    // Block references to database system catalogs / metadata objects in ALL contexts
+    // (including full_query). These live outside MemberJunction's entity-permission model, so
+    // permitting them turns a validated SELECT into a schema-enumeration / credential-exfiltration
+    // primitive. String literals were already stripped upstream, so legitimate literal values are safe.
+    for (const sysPattern of BLOCKED_SYSTEM_OBJECT_PATTERNS) {
+      if (sysPattern.test(textToCheck)) {
+        return {
+          valid: false,
+          error: 'Access to database system catalogs / metadata objects is not allowed',
+          trigger: 'system-object'
         };
       }
     }

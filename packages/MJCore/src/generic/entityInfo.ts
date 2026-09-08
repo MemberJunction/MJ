@@ -9,17 +9,36 @@ import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
 import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import {
+    ParseEntityConfiguration,
+    ParseEntityRelationshipConfiguration,
+    ParseEntityFieldConfiguration,
+    ReadRelationshipJoinFields,
+    type IEntityConfiguration,
+    type IEntityRelationshipConfiguration,
+    type IEntityFieldConfiguration,
+} from "./entityConfiguration"
 
 /**
- * Valid values for EntityField.ExtendedType.
- * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
+ * truth; {@link EntityFieldExtendedType} is derived from it. CodeGen validates LLM suggestions
+ * against {@link EntityFieldInfo.ExtendedTypes} rather than duplicating the list.
+ *
+ * `Image` — the value is an image URL, a `data:image/...` URI, or raw image base64. UI surfaces
+ * render a thumbnail and (in edit mode) allow replacing it with an upload capped at the field's
+ * MaxLength.
+ * `Color` — the value is a CSS color (hex / rgb / hsl).
+ * `JSON` — the value is a JSON document; validated on save and pretty-printed in forms.
  */
-export type EntityFieldExtendedType =
-    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
-    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
-    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
-    | 'HTML' | 'Icon' | 'Markdown'
-    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+export const EntityFieldExtendedTypes = [
+    'Code', 'Color', 'Email', 'FaceTime', 'Geo',
+    'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+    'GeoCity', 'GeoPostalCode', 'GeoAddress',
+    'HTML', 'Icon', 'Image', 'JSON', 'Markdown',
+    'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg',
+] as const;
+
+export type EntityFieldExtendedType = typeof EntityFieldExtendedTypes[number];
 
 /**
  * The possible status values for a record change
@@ -107,6 +126,78 @@ export class EntityRelationshipInfo extends BaseInfo  {
     */
     AutoUpdateFromSchema: boolean = true
 
+    /**
+     * Comma-delimited list of extra related-entity fields to project in base views.
+     */
+    AdditionalFieldsToInclude: string = null
+
+    /**
+     * Whether CodeGen automatically updates AdditionalFieldsToInclude from schema metadata.
+     */
+    AutoUpdateAdditionalFieldsToInclude: boolean = true
+
+    /**
+    * * Field Name: RelatedRecordCollection
+    * * SQL Data Type: nvarchar(MAX), nullable
+    *
+    * Optional JSON policy object declaring this relationship as a first-class **related-record
+    * collection** — a set of records that load, validate and persist as one unit with the parent.
+    * When non-null, CodeGen emits a typed `DeclareRelatedRecords(...)` declaration onto the
+    * generated entity subclass, so applications no longer hand-write it.
+    *
+    * Shape is `IRelatedRecordCollectionConfig`: `Name` (the generated property name, e.g. `Lines`),
+    * `Load`, `OnRemove`, `OrderBy`, `Sequence` and `ClearAfterSave`. {@link RelatedEntity} and
+    * {@link RelatedEntityJoinField} are deliberately **not** repeated inside the JSON — they are
+    * already columns on this row, and duplicating them would create two sources of truth with the
+    * JSON copy winning silently.
+    *
+    * `null` (the default, and every pre-6.2 row) means the relationship is not a declared
+    * collection: nothing is generated and nothing loads eagerly.
+    *
+    * @see guides/TRANSACTIONS_AND_BATCHING_GUIDE.md
+    */
+    RelatedRecordCollection: string = null
+
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityRelationshipConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityRelationshipConfiguration}).
+     * Nested `UI.inclusion` is Primary, More, or None (omit = Auto ranker).
+     * `UI.FormRole` is an accepted alias (`Detail` = More). Distinct from
+     * RelatedRecordCollection, DisplayComponentConfiguration, and AdditionalFieldsToInclude.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     *
+     * @see packages/MJCore/src/generic/entityConfiguration.ts
+     */
+    get Configuration(): IEntityRelationshipConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityRelationshipConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityRelationshipConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityRelationshipConfiguration | null {
+        return this.Configuration;
+    }
 
     // virtual fields - returned by the database VIEW
     Entity: string = null 
@@ -504,6 +595,18 @@ export class EntityFieldInfo extends BaseInfo {
     DisplayName: string = null 
     Description: string = null 
     /**
+     * Whether CodeGen automatically updates Description from the underlying schema object.
+     */
+    AutoUpdateDescription: boolean = true
+    /**
+     * Whether CodeGen automatically updates UserSearchPredicateAPI from schema heuristics.
+     */
+    AutoUpdateUserSearchPredicate: boolean = true
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from schema indexes.
+     */
+    AutoUpdateFullTextSearch: boolean = true 
+    /**
      * If true, the field is the primary key for the entity. There must be one primary key field per entity.
      */
     IsPrimaryKey: boolean = null
@@ -530,6 +633,10 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
+    /**
+     * Runtime domain for {@link ExtendedType}. Same array as {@link EntityFieldExtendedTypes}.
+     */
+    static readonly ExtendedTypes: readonly EntityFieldExtendedType[] = EntityFieldExtendedTypes
     ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
@@ -575,6 +682,22 @@ export class EntityFieldInfo extends BaseInfo {
      */
     RelatedEntityJoinFields: string = null
     /**
+     * Optional JSON policy object declaring this foreign-key field as a first-class
+     * **embedded record** — a 1:1 peer that loads, validates and persists as one
+     * unit with its owner. Shape is `IEmbeddedRecordConfig` (`OnClear`, `LoadNested`).
+     *
+     * `RelatedEntityID` and this field's `Name` are the join; they are deliberately
+     * not repeated inside the JSON. `AllowsNull` on this same field decides whether
+     * `GetEntityObject` provisions the object (required FK) or the caller uses
+     * `{FieldName}_EnsureObject()` (nullable FK).
+     *
+     * `null` (the default, and every pre-feature row) means the field is an ordinary
+     * FK: nothing is generated and nothing is constructed at `GetEntityObject` time.
+     *
+     * @see packages/MJCore/docs/embedded-records.md
+     */
+    EmbeddedRecord: string = null
+    /**
      * The name of the TypeScript interface/type for this JSON field.
      * When set, CodeGen will emit a strongly-typed getter/setter using this type
      * instead of the default string getter/setter.
@@ -591,6 +714,57 @@ export class EntityFieldInfo extends BaseInfo {
      * Can include imports, multiple types, or any valid TypeScript.
      */
     JSONTypeDefinition: string = null;
+
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityFieldConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityFieldConfiguration}).
+     * Defines field-level configurations such as Hierarchy options (IsHierarchy, MaxDepth).
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     */
+    get Configuration(): IEntityFieldConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityFieldConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityFieldConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityFieldConfiguration | null {
+        return this.Configuration;
+    }
+
+    /**
+     * Returns true if this field is explicitly configured as an intentional recursive tree hierarchy.
+     */
+    get IsHierarchy(): boolean {
+        return this.ConfigurationObject?.Hierarchy?.IsHierarchy === true;
+    }
+
+    /**
+     * Maximum recursion depth configured for this hierarchy field (defaults to 100).
+     */
+    get HierarchyMaxDepth(): number {
+        return this.ConfigurationObject?.Hierarchy?.MaxDepth ?? 100;
+    }
 
     RelatedEntityDisplayType: 'Search' | 'Dropdown' = null
     EntityIDFieldName: string = null
@@ -828,6 +1002,24 @@ export class EntityFieldInfo extends BaseInfo {
     _RelatedEntityNameFieldIsComputed: boolean
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
+    /**
+     * Memoized state for value-list validation. NOTE THE NAMES: none of these may be the getter's
+     * name minus its underscore. `BaseInfo.toJSON` walks own keys, and for a `_`-prefixed one it
+     * looks for a public getter of the matching PascalCase name and serializes THROUGH it. A memo
+     * called `_valueListValuesForDisplay` would therefore add `ValueListValuesForDisplay` to every
+     * serialized field — including the ~5,700 MJ core fields with no value list — bloating the
+     * browser metadata cache and forcing EntityFieldValues hydration purely to serialize a string
+     * that only ever appears in an error message. Hence `_valueListDisplayCache`.
+     */
+    private _normalizedValueListValues: Set<string> | undefined = undefined;
+    /** Memoized message form of the value list, built on first validation failure. */
+    private _valueListDisplayCache: string | undefined = undefined;
+    /** Latches the broken-metadata error so a bulk load cannot emit it once per row. */
+    private _loggedEmptyValueList: boolean = false;
+    /** Latches the unsupported-value-type error for the same reason. */
+    private _loggedUnsupportedValueListType: boolean = false;
+    /** Memoized yyyy-mm-dd keys for a `date` field's value list; null when it cannot be compared. */
+    private _valueListDateKeys: Set<string> | null | undefined = undefined;
     _EntityFieldValues: EntityFieldValueInfo[];
     _RelatedEntityNameFieldMap: string
     /**
@@ -909,6 +1101,258 @@ export class EntityFieldInfo extends BaseInfo {
                 }
             }
         }
+    }
+
+    /**
+     * Upper bound on how many legal values a validation message enumerates before it truncates.
+     * A long list would otherwise produce an error message no user can read.
+     */
+    public static readonly MaxValueListValuesInErrorMessage: number = 25;
+
+    /**
+     * Normalizes a value for comparison against a value list: stringified, trimmed, lower-cased.
+     *
+     * Each part earns its place, and the reasons are NOT equally strong — stated precisely, because
+     * a future maintainer will use this to decide whether to tighten the comparison:
+     *   * **Lower-casing is load-bearing on MJ core itself.** Not merely defensive: the default-value
+     *     path puts a field's SQL default into a new record (`EntityField`'s constructor assigns
+     *     `DefaultValue` when no value is supplied), and two MJ core fields have a default that
+     *     matches their value list by CASE ALONE — `MJ: Entity AI Actions`.TriggerEvent defaults to
+     *     `'After Save'` against a list of `before save | after save`, and its OutputType defaults to
+     *     `'FIeld'` against `entity | field`. Under a case-sensitive comparison, creating either
+     *     record at its database default would fail validation. Separately, SQL Server's default
+     *     collation is case-insensitive, so `Status = 'active'` is accepted by
+     *     `CHECK (Status IN ('Active', ...))` and refusing it here would turn a save that succeeds
+     *     today into a failure. (PostgreSQL IS case-sensitive, so on PG a case variant is still
+     *     refused — by its CHECK, not by this rung.)
+     *   * **Stringifying is required.** `EntityFieldValue.Value` is always a string in metadata while
+     *     the field's runtime value may be a number, so a strict `===` would reject every legal value
+     *     on a numeric list. It is not lossless: `String(1.0)` is `'1'`, so a metadata value written
+     *     as `'1.0'` would fail closed. No numeric value lists exist today (CodeGen cannot produce
+     *     one — see the note in ValueIsPermittedByValueList), so this is recorded rather than solved.
+     *   * **Trimming is cheap insurance, NOT the load-bearing rule it was first documented as.** An
+     *     earlier version of this comment claimed an untrimmed comparison would reject 9,301 existing
+     *     rows in fixed-width `nchar` columns (`MJ: Action Params`.Type, `MJ: Record Changes`.Status
+     *     and others). That measurement was taken over RAW SQL ROWS and does not describe this code
+     *     path: `EntityField`'s value setter already strips trailing padding on fixed-width columns
+     *     (see `FixedWidthColumn`), and hydration assigns through that setter, so the padding is gone
+     *     before `Validate()` ever reads the value. Trimming is kept because it still covers LEADING
+     *     whitespace, stray spaces on the metadata side, and any caller that assigns a padded value
+     *     directly — none of which the setter handles.
+     */
+    public static NormalizeValueListValue(value: unknown): string {
+        return String(value).trim().toLowerCase();
+    }
+
+    /**
+     * Whether `value` is permitted by this field's exhaustive value list (MJ issue #3969).
+     *
+     * A field whose `ValueListType` is `List` carries an exhaustive set of legal values in
+     * `__mj.EntityFieldValue`, and for an `IN (...)` CHECK constraint that list is the ONLY runtime
+     * representation CodeGen produces — `ParseCheckConstraints` emits the value list rather than a
+     * generated `Validate()` method, since the list is also what the UI needs to render a dropdown.
+     * So this is the only place such a constraint can be caught before the database refuses it as a
+     * raw violation attributed to no field.
+     *
+     * The normalized set is built ONCE per field and reused, because it derives from metadata that
+     * is immutable after load and is shared by every `EntityField` instance of this field — at
+     * import scale (thousands to millions of rows) rebuilding it per record is pure waste.
+     *
+     * Four boundaries keep the rule safe to apply everywhere:
+     *   * `ListOrUserEntry` is never checked — that mode exists precisely to permit values outside
+     *     the list, so validating it would break every field that opted into free text.
+     *   * A `List` field with no `EntityFieldValue` rows permits everything. Strictly it describes
+     *     a field where nothing is legal, which should never exist; it means the metadata is
+     *     broken, not that every value is wrong, so this logs loudly (once per EntityFieldInfo
+     *     instance, which means it re-arms after a metadata refresh rather than being once ever)
+     *     and permits rather than failing every save on the field.
+     *   * Null/undefined is the nullability check's job, so one mistake never produces two errors.
+     *     An EMPTY or whitespace-only string is NOT absence: SQL Server pads on comparison, so
+     *     `''` and `'   '` are the same value to a CHECK constraint and it refuses both. Skipping
+     *     them would leave a hole exactly where a blanked-out field lands.
+     *   * Only string and number values are checked, and the gate fails OPEN — an unsupported type
+     *     skips validation rather than manufacturing a failure. Nothing in the schema restricts
+     *     which columns may carry a value list (`CK_EntityField_ValueListType_New` constrains the
+     *     mode, not the column type), but in practice every one is a string column: measured on a
+     *     current 6.x instance, 455 nvarchar + 7 nchar and nothing else, which follows from
+     *     CodeGen's constraint parser only ever extracting quoted literals. `number` is admitted
+     *     because the generated union type anticipates a non-quoted list via `NeedsQuotes`.
+     *     Booleans and Dates are excluded deliberately: a bit column carrying a `'1'`/`'0'` list
+     *     would see `String(true) === 'true'` and reject every legal value, and a Date has no sane
+     *     string form to compare — so guessing there would break saves rather than guard them.
+     *
+     * TWO PRODUCERS, ONE OF WHICH HAS NO DATABASE FLOOR. A CHECK-derived list is safe by
+     * construction: the database refuses anything this rung refuses, so validating can only move a
+     * failure earlier. The other producer is `applyValueListConfig` in CodeGen, which applies
+     * DBAutoDoc's LLM enum detection from `additionalSchemaInfo` — those fields have NO CHECK
+     * constraint, so for them this rung converts a sampled, confidence-scored guess into a hard save
+     * refusal for any value the model did not see. It is opt-in (the config must exist) and arguably
+     * the intended reading of `List` as a closed set, with `ListOrUserEntry` available when unsure —
+     * but it means "MJ never refuses what the database would accept" holds for the first producer
+     * only.
+     *
+     * @param value the field's current runtime value
+     * @returns true when the value is permitted, INCLUDING when the rule does not apply
+     */
+    public ValueIsPermittedByValueList(value: unknown): boolean {
+        if (this.ValueListTypeEnum !== EntityFieldValueListType.List) {
+            return true;
+        }
+        if (this._normalizedValueListValues === undefined) {
+            const values = this.EntityFieldValues ?? [];
+            this._normalizedValueListValues = new Set<string>(
+                values.map(v => EntityFieldInfo.NormalizeValueListValue(v.Value))
+            );
+        }
+
+        // The broken-metadata report comes FIRST, before the null and type gates, so that it is
+        // value-independent: a `List` field with no values whose column happens to hold null (or a
+        // boolean) would otherwise never report at all, making "loud" mean "loud if someone happens
+        // to set a string". The cost is building one memoized set on a field that would build it
+        // anyway.
+        if (this._normalizedValueListValues.size === 0) {
+            if (!this._loggedEmptyValueList) {
+                this._loggedEmptyValueList = true; // latched: one report per field, not per row
+                LogError(
+                    `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but no EntityFieldValue rows. ` +
+                    `That describes a field where no value is legal, which is broken metadata rather than a rule, ` +
+                    `so value-list validation is being SKIPPED for this field. Re-run CodeGen for the entity, or ` +
+                    `set ValueListType='None' if the field is not meant to be constrained.`
+                );
+            }
+            return true;
+        }
+
+        if (value === null || value === undefined) {
+            return true; // an unset nullable field or a new record — the nullability check's business
+        }
+
+        // Dates are compared on the calendar date rather than the string form — see
+        // dateValueIsPermittedByValueList. A `date` column CAN carry a value list: SQL Server stores
+        // `CHECK (D IN ('2026-01-01','2026-07-01'))` as quoted literals, which is exactly the shape
+        // CodeGen's parser captures, so this is a reachable case rather than a hypothetical one.
+        if (value instanceof Date) {
+            return this.dateValueIsPermittedByValueList(value);
+        }
+
+        if (typeof value !== 'string' && typeof value !== 'number') {
+            // The rule cannot be applied to this type at all, and that is a mismatch rather than a
+            // state to absorb: either the field should not declare a value list (one on a bit column
+            // — which CodeGen never produces, since SQL Server renders `IN (0,1)` as unquoted
+            // `([B]=(1) OR [B]=(0))`, the same reason no NUMERIC list exists either; see MJ #3978)
+            // or a caller assigned the wrong type. Skipping it silently would
+            // leave the caller believing a guard is on when it is not, which is the exact failure
+            // mode this rung was added to fix — so it is reported, once per field.
+            this.reportUnsupportedValueListValue(
+                `a ${typeof value} value (SQL type ${this.SQLFullType})`,
+                'value-list validation compares strings, numbers and dates only — comparing anything ' +
+                'else would reject legal values rather than guard them'
+            );
+            return true;
+        }
+
+        return this._normalizedValueListValues.has(EntityFieldInfo.NormalizeValueListValue(value));
+    }
+
+    /**
+     * Value-list membership for a `Date` runtime value, compared on the CALENDAR DATE rather than
+     * the instant.
+     *
+     * Only `date` columns are compared. A column carrying a time component is deliberately skipped:
+     * the metadata value has no timezone, so deciding whether `'2026-01-01T00:00:00'` is the same
+     * instant as the value read back would mean guessing the database's interpretation, and guessing
+     * wrong rejects a legal value.
+     *
+     * For a `date` column the comparison accepts EITHER the value's UTC calendar date or its LOCAL
+     * one. That asymmetry is deliberate: a value read back from SQL Server arrives as UTC midnight,
+     * while application code that builds a date with `new Date(2026, 6, 1)` produces LOCAL midnight —
+     * whose UTC calendar date is the previous day west of Greenwich. Insisting on one representation
+     * would refuse legal values for half the world, so a date is in the list if either reading of it
+     * is. The cost is that an adjacent day can slip through when both days are in the list, which is
+     * a far better trade than a false failure.
+     */
+    private dateValueIsPermittedByValueList(value: Date): boolean {
+        if (this._valueListDateKeys === undefined) {
+            this._valueListDateKeys = this.buildValueListDateKeys();
+        }
+        if (this._valueListDateKeys === null) {
+            this.reportUnsupportedValueListValue(
+                `a Date value (SQL type ${this.SQLFullType})`,
+                'only a `date` column whose value list is entirely yyyy-mm-dd literals can be ' +
+                'compared — anything else would require guessing how the database interprets a ' +
+                'time-zone-less literal'
+            );
+            return true;
+        }
+        if (Number.isNaN(value.getTime())) {
+            return true; // an Invalid Date is not an out-of-list value; leave it to the date check
+        }
+        return this._valueListDateKeys.has(value.toISOString().slice(0, 10)) ||
+               this._valueListDateKeys.has(EntityFieldInfo.LocalCalendarDate(value));
+    }
+
+    /**
+     * Builds the set of yyyy-mm-dd keys for a `date` field's value list, or null when the field is
+     * not a plain `date` column or any of its values is not a yyyy-mm-dd literal. Reads the already
+     * normalized values, so it costs no extra pass over the metadata (lower-casing cannot affect a
+     * numeric date literal).
+     */
+    private buildValueListDateKeys(): Set<string> | null {
+        if ((this.Type ?? '').trim().toLowerCase() !== 'date') {
+            return null;
+        }
+        const keys = new Set<string>();
+        for (const normalized of this._normalizedValueListValues ?? []) {
+            const match = /^(\d{4}-\d{2}-\d{2})$/.exec(normalized);
+            if (!match) {
+                return null; // not a date list — refuse to guess rather than reject legal values
+            }
+            keys.add(match[1]);
+        }
+        return keys.size > 0 ? keys : null;
+    }
+
+    /** The Date's LOCAL calendar date as yyyy-mm-dd (its UTC one is `toISOString().slice(0, 10)`). */
+    private static LocalCalendarDate(value: Date): string {
+        const pad = (n: number): string => String(n).padStart(2, '0');
+        return `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+    }
+
+    /**
+     * Reports, once per field, that a value could not be checked against the field's value list.
+     * Latched because the metadata is shared by every record: a bulk load would otherwise emit the
+     * same line per row, which is the noise the memoization elsewhere in this class exists to avoid.
+     */
+    private reportUnsupportedValueListValue(received: string, reason: string): void {
+        if (this._loggedUnsupportedValueListType) {
+            return;
+        }
+        this._loggedUnsupportedValueListType = true;
+        LogError(
+            `Entity field ${this.Entity}.${this.Name} has ValueListType='List' but was given ${received}: ` +
+            `${reason}, so value-list validation is being SKIPPED for this field. Either the field's ` +
+            `metadata should not declare a value list, or the caller is assigning the wrong type.`
+        );
+    }
+
+    /**
+     * This field's legal values formatted for a validation message, truncated past
+     * {@link MaxValueListValuesInErrorMessage}. Memoized — a bad bulk load fails on the same field
+     * repeatedly, and the string never changes.
+     */
+    get ValueListValuesForDisplay(): string {
+        if (this._valueListDisplayCache !== undefined) {
+            return this._valueListDisplayCache;
+        }
+        // De-duplicated: EntityFieldValue rows are not unique in practice (`MJ: Action Params`.ValueType
+        // carries repeats today), and listing the same value twice — or double-counting it in the
+        // "(N total)" tail — makes the message look like a bug in the message.
+        const values: string[] = [...new Set((this.EntityFieldValues ?? []).map(v => v.Value))];
+        const max = EntityFieldInfo.MaxValueListValuesInErrorMessage;
+        this._valueListDisplayCache = values.length > max ?
+            `${values.slice(0, max).join(', ')}, ... (${values.length} total)` :
+            values.join(', ');
+        return this._valueListDisplayCache;
     }
 
     get GeneratedFormSectionType(): GeneratedFormSectionType {
@@ -1052,6 +1496,42 @@ export class EntityFieldInfo extends BaseInfo {
         return !this.AllowUpdateAPI ||
                this.IsPrimaryKey ||
                this.IsSpecialDateField;
+    }
+
+    /**
+     * True when {@link ExtendedType} is any Geo* tag (`Geo`, `GeoLatitude`, `GeoAddress`, …).
+     * Used by maps, distance, and GeoCodeSyncService. Display-only virtuals still count.
+     */
+    get IsGeoExtendedType(): boolean {
+        const t = this.ExtendedType;
+        return typeof t === 'string' && t.startsWith('Geo');
+    }
+
+    /**
+     * A Geo* field that can be written on Save. GeoCodeSyncService only runs when the
+     * entity has at least one of these. Virtual / AllowUpdateAPI=0 fields (PrimaryAddress*,
+     * `__mj_Latitude`, embedded `__mj_Latitude_{FK}`) are display-only — maps still use them.
+     */
+    get IsWritableGeoField(): boolean {
+        return this.IsGeoExtendedType && !this.IsVirtual && !!this.AllowUpdateAPI;
+    }
+
+    /**
+     * Native (table) latitude column — `ExtendedType=GeoLatitude`, or legacy `Geo` named Latitude.
+     */
+    get IsNativeLatitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLatitude') return true;
+        return this.ExtendedType === 'Geo' && /^lat(itude)?$/i.test(this.Name);
+    }
+
+    /**
+     * Native (table) longitude column — `ExtendedType=GeoLongitude`, or legacy `Geo` named Long*.
+     */
+    get IsNativeLongitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLongitude') return true;
+        return this.ExtendedType === 'Geo' && /^(lng|lon|long|longitude)$/i.test(this.Name);
     }
 
     /**
@@ -1450,6 +1930,65 @@ export class EntityInfo extends BaseInfo {
      */
     public BaseViewGenerated: boolean = null
     /**
+     * When set, CodeGen generates the entity's full base view under THIS name instead of
+     * {@link BaseView}, and the application owns `BaseView` — which is expected to wrap it:
+     *
+     * ```sql
+     * CREATE VIEW vwOrderHeaders AS
+     * SELECT g.*, CASE WHEN ... END AS IsOverdue
+     * FROM   vwOrderHeadersGenerated g
+     * ```
+     *
+     * This is how an entity gets a custom base view WITHOUT inheriting the generated SQL. With
+     * `BaseViewGenerated = 0` alone the application takes over the whole view — every related-entity
+     * display join, the geo join, the recursive root-ID apply — and must hand-maintain it forever;
+     * a foreign key added later then silently never appears, because nothing regenerates the join.
+     * Naming an inner view keeps all of that regenerating underneath a thin, reviewable custom layer.
+     *
+     * NULL (the default, and every pre-existing entity) preserves the original behaviour exactly:
+     * `BaseViewGenerated` alone decides whether CodeGen writes `BaseView`, and there is no second view.
+     *
+     * `BaseView` remains the public surface either way — field discovery, permissions and the
+     * generated CRUD procedures all target it, so a column added by the custom layer becomes a
+     * first-class virtual `EntityField`.
+     */
+    public GeneratedBaseViewName: string = null
+
+    /**
+     * The view CodeGen actually WRITES for this entity.
+     *
+     * Normally {@link BaseView}. When {@link GeneratedBaseViewName} is set, the generated SQL goes
+     * there instead and `BaseView` belongs to the application, which layers over it — see
+     * {@link HasLayeredBaseView}.
+     *
+     * Resolved in ONE place because the two names must never drift: several call sites decide where
+     * to write the view, what to call the emitted file, and which object to refresh, and a
+     * disagreement between any two of them produces a view that exists under a name nothing reads.
+     *
+     * Derived FROM {@link HasLayeredBaseView} rather than re-testing `GeneratedBaseViewName`, so the
+     * two getters cannot disagree by construction. Testing the raw column here would diverge on a
+     * name that differs from `BaseView` only by case: `HasLayeredBaseView` would say "not layered"
+     * (it compares case-insensitively, because SQL Server object names are) while this getter
+     * returned the differently-cased string — leaving CodeGen writing to one object while every
+     * layering-gated code path believed there was no second view at all.
+     */
+    get GeneratedViewName(): string {
+        if (this.HasLayeredBaseView) return this.GeneratedBaseViewName.trim();
+        return this.BaseView ? this.BaseView : `vw${this.CodeName}`;
+    }
+
+    /**
+     * True when this entity has a generated inner view with an application-owned `BaseView` on top.
+     *
+     * In that arrangement CodeGen still generates everything — related-entity display fields, geo
+     * columns, recursive root-ID columns — into {@link GeneratedViewName}, so the custom layer stays
+     * thin and does not go stale when the schema gains a foreign key.
+     */
+    get HasLayeredBaseView(): boolean {
+        const layered = this.GeneratedBaseViewName?.trim();
+        return !!layered && layered.toLowerCase() !== (this.BaseView ?? '').toLowerCase();
+    }
+    /**
      * Database schema that contains this entity's table and view
      */
     SchemaName: string = null
@@ -1534,6 +2073,47 @@ export class EntityInfo extends BaseInfo {
      */
     AllowDeleteAPI: boolean = false
     /**
+     * Whether rows may be INSERTed by SQL that does not go through {@link BaseEntity}.Save() —
+     * bulk loads, ETL/integration sync, or rows created as a side effect of a stored procedure.
+     *
+     * `false` (the default, and every entity that has not opted in) means all inserts are expected
+     * to flow through `BaseEntity`, which is the only path where record-change tracking, entity
+     * actions, validation and cache invalidation actually run.
+     *
+     * **This DECLARES intent; it enforces nothing.** No constraint, trigger or grant prevents
+     * anyone from executing SQL. It exists so the code paths and tooling that *choose* to honour
+     * the platform contract — bulk/ETL and integration sync, record-set processing, and generators
+     * or agents authoring SQL — have one authoritative answer instead of tribal knowledge.
+     *
+     * A database CHECK requires {@link TrackRecordChanges} and {@link TrustServerCacheCompletely}
+     * to both be `false` when this is set, because a direct insert produces neither an audit row
+     * nor a cache-invalidation event — leaving either on yields an audit trail that looks complete
+     * but is not, and a server cache that serves stale rows indefinitely.
+     */
+    AllowDirectSQLInsert: boolean = false
+    /**
+     * Whether rows may be UPDATEd by SQL that does not go through {@link BaseEntity}.Save() —
+     * bulk backfills, integration sync, or maintenance routines.
+     *
+     * `false` (the default) means all updates are expected to flow through `BaseEntity`. See
+     * {@link AllowDirectSQLInsert} for the full rationale, the "declares, does not enforce"
+     * caveat, and the `TrackRecordChanges` / `TrustServerCacheCompletely` requirement.
+     */
+    AllowDirectSQLUpdate: boolean = false
+    /**
+     * Whether rows may be DELETEd by SQL that does not go through {@link BaseEntity}.Delete() —
+     * purge and retention routines, or integration sync reconciling against a remote source.
+     *
+     * `false` (the default) means all deletes are expected to flow through `BaseEntity`. See
+     * {@link AllowDirectSQLInsert} for the full rationale and the `TrackRecordChanges` /
+     * {@link TrustServerCacheCompletely} requirement.
+     *
+     * Additionally requires {@link DeleteType} to be `'Hard'`: a direct `DELETE` removes the row
+     * outright rather than setting `DeletedAt`, so sanctioning it on a soft-delete entity would
+     * quietly defeat soft delete. A database CHECK refuses the combination.
+     */
+    AllowDirectSQLDelete: boolean = false
+    /**
      * If true, uses a custom resolver for GraphQL operations instead of standard CRUD
      */
     CustomResolverAPI: boolean = false
@@ -1542,9 +2122,21 @@ export class EntityInfo extends BaseInfo {
      */
     AllowUserSearchAPI: boolean = false
     /**
-     * Whether full-text search is enabled for this entity
+     * Whether full text search is enabled for this entity
      */
-    FullTextSearchEnabled: boolean = false
+    public FullTextSearchEnabled: boolean = null
+    /**
+     * Whether CodeGen automatically updates FullTextSearchEnabled from database catalog/index availability.
+     */
+    public AutoUpdateFullTextSearch: boolean = true
+    /**
+     * Whether CodeGen automatically updates AllowUserSearchAPI from schema rules.
+     */
+    public AutoUpdateAllowUserSearchAPI: boolean = true
+    /**
+     * Whether external changes to records are detected.
+     */
+    public DetectExternalChanges: boolean = false
     /**
      * Name of the SQL Server full-text catalog used for searching
      */
@@ -1570,11 +2162,19 @@ export class EntityInfo extends BaseInfo {
      */
     FullTextSearchFunctionGenerated: boolean = true
     /**
-     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
-     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
-     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     * When true, this entity participates in geo **read** features: map view, distance
+     * calculations, and similar. That is independent of whether GeoCodeSyncService runs
+     * on Save — the service only fires when {@link HasWritableGeoSourceFields} is true.
+     * Auto-set by CodeGen when LLM detects geo-capable fields.
      */
     SupportsGeoCoding: boolean = false
+    /**
+     * True when at least one field is a writable Geo* source (street and/or native lat/lng).
+     * Person/Org PrimaryAddress* are virtual display fields and do **not** count.
+     */
+    get HasWritableGeoSourceFields(): boolean {
+        return (this.Fields ?? []).some(f => f.IsWritableGeoField);
+    }
     /**
      * When true (default), CodeGen can automatically set SupportsGeoCoding based on
      * LLM analysis of entity fields. Set to false to lock the value.
@@ -1648,6 +2248,46 @@ export class EntityInfo extends BaseInfo {
      * CSS class or icon identifier for displaying this entity in the UI
      */
     Icon: string = null
+
+    /**
+     * Raw string representation of Configuration from metadata.
+     */
+    protected _configuration: string = null;
+    private _configurationObject: IEntityConfiguration | null | undefined = undefined;
+
+    /**
+     * Optional JSON configuration bag (shape = {@link IEntityConfiguration}).
+     * Nested `UI.Form` holds generated-form chrome: layout, auto left-nav
+     * threshold, related-role policy, and the Primary related budget.
+     * Parsed lazily on first access and cached using {@link SafeJSONParse}.
+     *
+     * @see packages/MJCore/src/generic/entityConfiguration.ts
+     */
+    get Configuration(): IEntityConfiguration | null {
+        if (this._configurationObject === undefined) {
+            this._configurationObject = this._configuration ? SafeJSONParse<IEntityConfiguration>(this._configuration, false) : null;
+        }
+        return this._configurationObject;
+    }
+    set Configuration(value: string | IEntityConfiguration | null) {
+        if (typeof value === 'string') {
+            this._configuration = value;
+            this._configurationObject = undefined;
+        } else if (value && typeof value === 'object') {
+            this._configurationObject = value;
+            this._configuration = JSON.stringify(value);
+        } else {
+            this._configuration = null;
+            this._configurationObject = null;
+        }
+    }
+
+    /**
+     * Parsed {@link Configuration}. Null when the column is empty or not valid JSON.
+     */
+    get ConfigurationObject(): IEntityConfiguration | null {
+        return this.Configuration;
+    }
     /**
      * Date and time when this entity was created
      */
@@ -1809,6 +2449,12 @@ export class EntityInfo extends BaseInfo {
     /**
      * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
+     *
+     * This is a single-column convenience for the places MJ is single-column *by design* — foreign-key
+     * targets, keyset `ORDER BY`, IS-A shared keys, and the bare-value shorthand `CompositeKey.LoadFromURLSegment`
+     * accepts. Do not use it to *construct* a load key for an arbitrary entity: that silently drops every
+     * column but the first on a composite key. Build keys with `CompositeKey.FromURLSegment(entityInfo, recordId)`
+     * or `CompositeKey.FromEntityRecord(entityInfo, row)`, which honor all of `PrimaryKeys`.
      */
     get FirstPrimaryKey(): EntityFieldInfo {
         if (this._firstPrimaryKeyCache === undefined) {
@@ -2121,6 +2767,85 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * Returns true when this entity is the ROOT of an IS-A hierarchy: it has subtypes below it and
+     * no parent type above it. The root is where the shared primary key originates and where
+     * `AllowMultipleSubtypes` is decided, so it is the row most IS-A questions resolve back to.
+     */
+    get IsRootType(): boolean {
+        return this.IsParentType && !this.IsChildType;
+    }
+
+    /**
+     * Returns true when this entity is a LEAF of an IS-A hierarchy: it has a parent type and no
+     * subtypes of its own. A leaf is the only kind of IS-A entity that can be created by promotion
+     * without also being something else's parent.
+     */
+    get IsLeafType(): boolean {
+        return this.IsChildType && !this.IsParentType;
+    }
+
+    /**
+     * Returns true when this entity takes part in an IS-A hierarchy at all, in any role.
+     *
+     * The cheap guard for "does IS-A apply here?", which otherwise gets written as
+     * `IsChildType || IsParentType` at every call site — and gets written as just `IsChildType`
+     * about half the time, which silently skips every root and intermediate type.
+     */
+    get ParticipatesInIsA(): boolean {
+        return this.IsChildType || this.IsParentType;
+    }
+
+    /**
+     * This entity's role in the IS-A graph as ONE value, for the common "what is this?" lookup.
+     *
+     * `Intermediate` is the case that makes booleans awkward: an entity can be a child AND a parent
+     * at once (Webinars IS-A Meetings IS-A Products makes Meetings both), so code that branches on
+     * `IsChildType` alone quietly mishandles the middle of every chain deeper than two.
+     */
+    get IsARole(): 'None' | 'Root' | 'Intermediate' | 'Leaf' {
+        if (!this.ParticipatesInIsA) return 'None';
+        if (!this.IsChildType) return 'Root';
+        return this.IsParentType ? 'Intermediate' : 'Leaf';
+    }
+
+    /**
+     * The ROOT entity of this entity's IS-A hierarchy — itself when it is already the root, and
+     * `null` when it takes part in no hierarchy.
+     *
+     * Saves every caller the "walk up until ParentEntityInfo is null" loop, which is where the
+     * cycle guard gets forgotten. Backed by {@link ParentChain}, which is cached and cycle-safe.
+     */
+    get RootEntityInfo(): EntityInfo | null {
+        if (!this.ParticipatesInIsA) return null;
+        const chain = this.ParentChain;
+        return chain.length > 0 ? chain[chain.length - 1] : this;
+    }
+
+    /**
+     * Every entity BELOW this one in the IS-A graph, at any depth — the downward twin of
+     * {@link ParentChain}, which already walks upward.
+     *
+     * {@link ChildEntities} is DIRECT children only, and that distinction is a trap: on
+     * Products → Meetings → Webinars, `Products.ChildEntities` omits Webinars entirely, so a
+     * "find every subtype" written against it misses everything past the first level. Not cached,
+     * because subtypes are discovered by scanning all entities and this is not a hot path; guarded
+     * against cycles the same way `ParentChain` is.
+     */
+    get DescendantEntities(): EntityInfo[] {
+        const descendants: EntityInfo[] = [];
+        const visited = new Set<string>();
+        const queue: EntityInfo[] = [...this.ChildEntities];
+        while (queue.length > 0) {
+            const next = queue.shift()!;
+            if (visited.has(next.ID)) continue;
+            visited.add(next.ID);
+            descendants.push(next);
+            queue.push(...next.ChildEntities);
+        }
+        return descendants;
+    }
+
+    /**
      * Returns all fields from all parent entities in the IS-A chain, excluding primary keys,
      * virtual fields, and timestamp fields (__mj_ prefixed). These represent the inherited
      * fields that should be available on child entities.
@@ -2301,10 +3026,16 @@ export class EntityInfo extends BaseInfo {
 
     /**
      * Generates a where clause for SQL filtering for a given entity for a given user and permission type. If there is no RLS for a given entity or the user is exempt from RLS for the entity, a blank string is returned.
-     * @param user 
-     * @param type 
-     * @param returnPrefix 
-     * @returns 
+     *
+     * @deprecated ROLE RLS ONLY — this method is subject to the role-RLS exemption and
+     * silently omits API-key row filters, so a caller reaching for this familiar name gets
+     * a clause that is fail-open for filtered API-key sessions. Use
+     * {@link GetEffectiveRowFilterWhereClause}, which composes every filter layer. A repo
+     * test asserts no non-test caller exists outside that method.
+     * @param user
+     * @param type
+     * @param returnPrefix
+     * @returns
      */
     public GetUserRowLevelSecurityWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
         // Central exemption check: if the user holds any role that grants this
@@ -2329,6 +3060,70 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
+     * The EFFECTIVE row-filter clause for a user + permission type: role RLS (subject to the
+     * role exemption) AND the API-key row filters carried on the session (NOT subject to the
+     * role exemption — a key ceiling exists precisely to bind principals whose roles are
+     * unrestricted; see UserExemptFromRowLevelSecurity, which exempts off the mere presence
+     * of a filter-less permission row). Composition: OR within the role layer (roles are
+     * additive), AND across layers (no layer can widen another). Returns '' only when no
+     * layer contributes.
+     *
+     * This is THE method every enforcement point must call. Deterministic by construction —
+     * key-filter clauses render in FilterID order and list tokens sort their elements —
+     * because the identical clause participates in the RunView cache fingerprint (INV-2):
+     * any nondeterminism silently splits or merges cache slots.
+     *
+     * The application-ceiling layer (APIApplicationScope.RowFilterID) is deferred to v2 by
+     * design decision; the column ships unused and the term composes here when it lands.
+     */
+    public GetEffectiveRowFilterWhereClause(user: UserInfo, type: EntityPermissionType, returnPrefix: string): string {
+        const layers: string[] = [];
+        const roleClause = this.GetUserRowLevelSecurityWhereClause(user, type, '');
+        if (roleClause && roleClause.length > 0) {
+            layers.push(`(${roleClause})`);
+        }
+        const keyClause = this.getAPIKeyRowFilterClause(user, type);
+        if (keyClause && keyClause.length > 0) {
+            layers.push(`(${keyClause})`);
+        }
+        if (layers.length === 0) {
+            return '';
+        }
+        const sql = layers.join(' AND ');
+        return `${returnPrefix && returnPrefix.length > 0 ? returnPrefix + ' ' : ''}${sql}`;
+    }
+
+    /**
+     * Resolves the API-key row-filter clause for this entity + permission type from the
+     * bindings stamped on the session UserInfo. Multiple matching bindings AND together
+     * (most-restrictive-wins — an unfiltered grant elsewhere cannot cancel a filter).
+     * Fail-closed at every edge: a binding whose filter is missing from metadata (dangling
+     * or unloaded) contributes `(1=0)`, and unresolved tokens inside a filter collapse it
+     * to `(1=0)` via the match-nothing markup mode.
+     */
+    private getAPIKeyRowFilterClause(user: UserInfo, type: EntityPermissionType): string {
+        const bindings = user?.APIKeyRowFilters;
+        if (!bindings || bindings.length === 0) {
+            return '';
+        }
+        const mine = bindings.filter(b => UUIDsEqual(b.EntityID, this.ID) && b.PermissionType === type);
+        if (mine.length === 0) {
+            return '';
+        }
+        const clauses = [...mine]
+            .sort((a, b) => a.FilterID.localeCompare(b.FilterID)) // deterministic order for the cache fingerprint (INV-2)
+            .map(b => {
+                const filter = Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, b.FilterID)); // global-provider-ok: same resolution path as RLSFilter() above — stateless info class proxying to global metadata
+                if (!filter) {
+                    LogError(`API-key row filter ${b.FilterID} for entity ${this.Name} not found in metadata — resolving to (1=0)`);
+                    return '(1=0)';
+                }
+                return `(${filter.MarkupFilterText(user, { unresolvedBehavior: 'match-nothing' })})`;
+            });
+        return clauses.join(' AND ');
+    }
+
+    /**
      * Returns a RunViewParams object that is setup to filter the related entity for the provided record
      * @param record 
      * @param relationship 
@@ -2336,6 +3131,15 @@ export class EntityInfo extends BaseInfo {
      * @returns 
      */
     public static BuildRelationshipViewParams(record: BaseEntity, relationship: EntityRelationshipInfo, filter?: string, maxRecords?: number): RunViewParams {
+        const joinFields = ReadRelationshipJoinFields(relationship.Configuration);
+        if (joinFields && joinFields.length > 1) {
+            const multi = EntityInfo.BuildRelationshipViewParamsForJoinFields(record, relationship.RelatedEntity, joinFields);
+            if (filter && filter.length > 0 && multi.ExtraFilter) {
+                multi.ExtraFilter = `(${multi.ExtraFilter}) AND (${filter})`;
+            }
+            if (maxRecords && maxRecords > 0) multi.MaxRows = maxRecords;
+            return multi;
+        }
         const params: RunViewParams = {}
         let quotes: string = '';
         let keyValue: string = '';
@@ -2376,21 +3180,79 @@ export class EntityInfo extends BaseInfo {
 
         return params;
     }
+
+    /**
+     * One related-entity grid over several join fields (Bill-To OR Ship-To).
+     */
+    public static BuildRelationshipViewParamsForJoinFields(
+        record: BaseEntity,
+        relatedEntityName: string,
+        joinFields: readonly string[],
+    ): RunViewParams {
+        const fields = joinFields.map((f) => f.trim()).filter((f) => f.length > 0);
+        if (fields.length === 0) return { EntityName: relatedEntityName };
+        if (fields.length === 1) {
+            const rel = record.EntityInfo.RelatedEntities.find((r) =>
+                r.RelatedEntity.trim().toLowerCase() === relatedEntityName.trim().toLowerCase()
+                && r.RelatedEntityJoinField.trim().toLowerCase() === fields[0].toLowerCase(),
+            );
+            if (rel) return EntityInfo.BuildRelationshipViewParams(record, rel);
+        }
+
+        const firstKey = record.FirstPrimaryKey;
+        const keyValue = firstKey.Value;
+        const quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
+        const clauses = fields.map((field) => `[${field}] = ${quotes}${keyValue}${quotes}`);
+        return {
+            EntityName: relatedEntityName,
+            ExtraFilter: clauses.join(' OR '),
+        };
+    }
     
     /**
-     * Builds a simple javascript object that will pre-populate a new record in the related entity with values that link back to the specified record. 
-     * This is useful, for example, when creating a new contact from an account, we want to pre-populate the account ID in the new contact record
+     * Default field values for a new related record so it links back to `record`.
+     * When the relationship's Configuration declares `UI.join.fields`, every
+     * listed FK is set (Bill-To AND Ship-To). Otherwise only
+     * `RelatedEntityJoinField` is set.
      */
-    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): any {
-        // we want to build a simple javascript object that will pre-populate a new record in the related entity with values that link
-        // abck to the current record. This is useful for example when creating a new contact from an account, we want to pre-populate the
-        // account ID in the new contact record
-        const obj: any = {};
-        if (record && relationship) {
-            const keyField = relationship.EntityKeyField && relationship.EntityKeyField.trim().length > 0 ? relationship.EntityKeyField : record.FirstPrimaryKey.Name;
-            obj[relationship.RelatedEntityJoinField] = record.Get(keyField);
+    public static BuildRelationshipNewRecordValues(record: BaseEntity, relationship: EntityRelationshipInfo): Record<string, unknown> {
+        if (!record || !relationship) return {};
+        const joinFields = ReadRelationshipJoinFields(relationship.Configuration);
+        if (joinFields && joinFields.length > 0) {
+            return EntityInfo.BuildRelationshipNewRecordValuesForJoinFields(record, joinFields, relationship);
+        }
+        const joinField = (relationship.RelatedEntityJoinField ?? '').trim();
+        if (!joinField) return {};
+        return { [joinField]: EntityInfo.resolveRelationshipKeyValue(record, relationship) };
+    }
+
+    /**
+     * Default field values for a new related record, setting every listed join
+     * field to the parent key. Use this when one grid filters on several FKs
+     * (Bill-To OR Ship-To) so "New" still auto-links the child to this parent.
+     */
+    public static BuildRelationshipNewRecordValuesForJoinFields(
+        record: BaseEntity,
+        joinFields: readonly string[],
+        relationship?: EntityRelationshipInfo,
+    ): Record<string, unknown> {
+        if (!record) return {};
+        const fields = joinFields.map((f) => f.trim()).filter((f) => f.length > 0);
+        if (fields.length === 0) return {};
+        const keyValue = EntityInfo.resolveRelationshipKeyValue(record, relationship);
+        const obj: Record<string, unknown> = {};
+        for (const field of fields) {
+            obj[field] = keyValue;
         }
         return obj;
+    }
+
+    private static resolveRelationshipKeyValue(record: BaseEntity, relationship?: EntityRelationshipInfo): unknown {
+        const explicit = relationship?.EntityKeyField?.trim();
+        if (explicit) return record.Get(explicit);
+        const first = record.FirstPrimaryKey;
+        if (first?.Name) return record.Get(first.Name);
+        return first?.Value;
     }
 
     /**
@@ -2544,8 +3406,11 @@ export class EntityInfo extends BaseInfo {
                     // Fall back to exact match if no custom expression defined
                     return `${fieldExpression} = '${escapedValue}'`;
                 }
-                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
-                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement functions: `escapedValue` is a data value, so `$&`/`` $` ``/
+                // `$'`/`$$` in it would otherwise splice the custom expression's own text
+                // into the SQL literal. See issue #3171.
+                const normalizedField = expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
+                const normalizedValue = expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
                 return `${normalizedField} = ${normalizedValue}`;
             }
             default:
@@ -2583,7 +3448,8 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return fieldExpression;
-                return expr.replace(/\{\{FieldName\}\}/g, fieldExpression);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => fieldExpression);
             }
             default: return fieldExpression;
         }
@@ -2601,7 +3467,8 @@ export class EntityInfo extends BaseInfo {
             case 'Custom': {
                 const expr = organicKey.CustomNormalizationExpression;
                 if (!expr) return `'${escapedValue}'`;
-                return expr.replace(/\{\{FieldName\}\}/g, `'${escapedValue}'`);
+                // Replacement function — see WrapWithNormalization (#3171).
+                return expr.replace(/\{\{FieldName\}\}/g, () => `'${escapedValue}'`);
             }
             default: return `'${escapedValue}'`;
         }

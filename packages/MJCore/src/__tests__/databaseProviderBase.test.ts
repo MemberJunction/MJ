@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DatabaseProviderBase, SaveSQLResult, DeleteSQLResult, ExecuteSQLOptions } from '../generic/databaseProviderBase';
-import { EntityInfo, EntityFieldInfo, EntityPermissionType, UserInfo, CompositeKey, BaseEntity, EntitySaveOptions, EntityDeleteOptions, RunQueryResult, QueryExecutionSpec } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionType, UserInfo, CompositeKey, BaseEntity, EntitySaveOptions, EntityDeleteOptions, RunQueryResult, QueryExecutionSpec } from '../index';
 
 /**
  * Minimal concrete subclass for testing abstract DatabaseProviderBase.
@@ -30,15 +30,25 @@ class TestSQLServerProvider extends DatabaseProviderBase {
         throw new Error('Not supported.');
     }
 
+    /** Test-only passthrough — ValidateUserProvidedSQLClause is protected on the base class. */
+    public TestValidateUserProvidedSQLClause(clause: string): boolean {
+        return this.ValidateUserProvidedSQLClause(clause);
+    }
+
     // RLS test hooks
     public checkRecordRLSResult = true;
     public checkCreateRLSResult = true;
+    public checkUpdateRLSPostImageResult = true;
+    public checkRecordRLSCallCount = 0;
+    public checkCreateRLSCallCount = 0;
+    public checkUpdateRLSPostImageCallCount = 0;
 
     protected override async CheckRecordRLS(
         entity: BaseEntity,
         user: UserInfo,
         type: EntityPermissionType
     ): Promise<boolean> {
+        this.checkRecordRLSCallCount++;
         return this.checkRecordRLSResult;
     }
 
@@ -46,7 +56,16 @@ class TestSQLServerProvider extends DatabaseProviderBase {
         entity: BaseEntity,
         user: UserInfo
     ): Promise<boolean> {
+        this.checkCreateRLSCallCount++;
         return this.checkCreateRLSResult;
+    }
+
+    protected override async CheckUpdateRLSPostImage(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean> {
+        this.checkUpdateRLSPostImageCallCount++;
+        return this.checkUpdateRLSPostImageResult;
     }
 }
 
@@ -244,6 +263,7 @@ describe('DatabaseProviderBase', () => {
         it('does not check RLS when in replay mode', async () => {
             sqlServer.checkCreateRLSResult = false;
             sqlServer.checkRecordRLSResult = false;
+            sqlServer.checkUpdateRLSPostImageResult = false;
             const entity = createMockEntity(false);
             const options = new EntitySaveOptions();
             options.ReplayOnly = true;
@@ -253,6 +273,81 @@ describe('DatabaseProviderBase', () => {
             const result = await sqlServer.Save(entity, mockUser, options);
             // In replay mode, it returns the entity's GetAll() result
             expect(result).toBeTruthy();
+            expect(sqlServer.checkRecordRLSCallCount).toBe(0);
+            expect(sqlServer.checkCreateRLSCallCount).toBe(0);
+            expect(sqlServer.checkUpdateRLSPostImageCallCount).toBe(0);
+        });
+
+        // Step 3b: an additive post-hook RLS gate closes the gap where a before-save hook
+        // (entity actions, AI actions) mutates a filter-referenced field after the pre-hook
+        // check (step 2b) already passed. Applies to BOTH creates and updates — a hook can move
+        // a brand-new record's values outside the Create filter just as easily as it can move
+        // an existing row outside the Update filter.
+        describe('post-hook RLS gate (step 3b)', () => {
+            it('calls CheckCreateRLS twice for a new record — once before and once after OnBeforeSaveExecute', async () => {
+                sqlServer.checkCreateRLSResult = true;
+                const entity = createMockEntity(false);
+
+                // Mocked ExecuteSQL always returns [], so Save() proceeds past both RLS gates
+                // and fails later at SQL execution — not with an RLS error. What's under test
+                // is that CheckCreateRLS ran twice and both calls passed.
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow();
+                expect(sqlServer.checkCreateRLSCallCount).toBe(2);
+            });
+
+            it('rejects a new record when only the SECOND (post-hook) CheckCreateRLS call fails', async () => {
+                let call = 0;
+                sqlServer.CheckCreateRLS = async () => {
+                    call++;
+                    return call === 1; // pre-hook passes, post-hook (a hook mutated a field) fails
+                };
+                const entity = createMockEntity(false);
+
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow('a before-save hook produced field values that no longer pass row-level security');
+                expect(call).toBe(2);
+            });
+
+            it('does not run the post-hook CheckCreateRLS call when the pre-hook call already failed', async () => {
+                sqlServer.checkCreateRLSResult = false;
+                const entity = createMockEntity(false);
+
+                await expect(sqlServer.Save(entity, mockUser, new EntitySaveOptions())).rejects.toThrow();
+                expect(sqlServer.checkCreateRLSCallCount).toBe(1);
+            });
+
+            it('calls both CheckRecordRLS (pre-image) and CheckUpdateRLSPostImage (post-image) exactly once for an update', async () => {
+                sqlServer.checkRecordRLSResult = true;
+                sqlServer.checkUpdateRLSPostImageResult = true;
+                const entity = createMockEntity(true);
+
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow(); // fails later at SQL execution, past both RLS gates
+                expect(sqlServer.checkRecordRLSCallCount).toBe(1);
+                expect(sqlServer.checkUpdateRLSPostImageCallCount).toBe(1);
+            });
+
+            it('throws a distinct message when the update post-image check fails, even though the pre-image passed', async () => {
+                sqlServer.checkRecordRLSResult = true;
+                sqlServer.checkUpdateRLSPostImageResult = false;
+                const entity = createMockEntity(true);
+
+                await expect(
+                    sqlServer.Save(entity, mockUser, new EntitySaveOptions())
+                ).rejects.toThrow('would move this');
+            });
+
+            it('does not run the update post-image check when the pre-image check already failed', async () => {
+                sqlServer.checkRecordRLSResult = false;
+                const entity = createMockEntity(true);
+
+                await expect(sqlServer.Save(entity, mockUser, new EntitySaveOptions())).rejects.toThrow();
+                expect(sqlServer.checkUpdateRLSPostImageCallCount).toBe(0);
+            });
         });
     });
 
@@ -302,6 +397,85 @@ describe('DatabaseProviderBase', () => {
             // Replay returns entity.GetAll() which has data, so ValidateDeleteResult runs
             // (but our mock may not satisfy it fully; the key thing is RLS didn't block it)
             expect(result).toBeDefined();
+        });
+    });
+
+    /**
+     * 🚨 SECURITY REGRESSION SUITE — ValidateUserProvidedSQLClause screens caller-supplied
+     * `ExtraFilter` / `OrderBy` / `UserSearchString` fragments, which are raw SQL. It strips string
+     * literals and then applies a keyword denylist, so the ONLY thing standing between a hostile
+     * filter and the database is that the stripper agrees with the database about where literals
+     * begin and end.
+     *
+     * The bypass these tests pin: the stripper once honored backslash escaping, which SQL Server and
+     * PostgreSQL do not. A payload could hide an entire stacked statement inside a fake "literal".
+     * If someone reintroduces backslash handling — here or in StripSQLStringLiterals — these fail.
+     */
+    describe('ValidateUserProvidedSQLClause — injection screening', () => {
+        let provider: TestSQLServerProvider;
+
+        beforeEach(() => {
+            provider = new TestSQLServerProvider();
+        });
+
+        describe('rejects backslash-hidden payloads (the stripper/parser mismatch)', () => {
+            // The trailing `'` makes the quote count even, so a backslash-aware stripper swallows
+            // the whole payload. The database closes the literal at the FIRST unescaped quote and
+            // executes what follows.
+            it('rejects a stacked DROP hidden behind a backslash', () => {
+                expect(
+                    provider.TestValidateUserProvidedSQLClause(`FirstName = 'a\\') ; DROP TABLE Users; --'`)
+                ).toBe(false);
+            });
+
+            it('rejects a time-based WAITFOR hidden behind a backslash', () => {
+                expect(
+                    provider.TestValidateUserProvidedSQLClause(`ID = 'x\\') ; WAITFOR DELAY '0:0:5'; --'`)
+                ).toBe(false);
+            });
+
+            it('rejects a stacked UPDATE hidden behind a backslash', () => {
+                expect(
+                    provider.TestValidateUserProvidedSQLClause(`Name = 'a\\') ; UPDATE Users SET IsActive=1; --'`)
+                ).toBe(false);
+            });
+        });
+
+        describe('rejects plain injection attempts', () => {
+            it.each([
+                ['stacked statement', `Name = 'x'; DROP TABLE Users`],
+                ['line comment', `Name = 'x' -- rest`],
+                ['block comment', `Name = 'x' /* rest */`],
+                ['UNION', `Name = 'x' UNION SELECT 1`],
+                ['EXEC', `Name = 'x' EXEC sp_who`],
+                ['extended proc', `Name = 'x' AND xp_cmdshell 'dir' = 1`],
+                ['unterminated literal hiding a keyword', `Name = 'abc; DROP TABLE t`],
+                ['double-quoted identifier cannot hide a payload', `"Name") ; DROP TABLE Users; --"`],
+            ])('rejects %s', (_label, clause) => {
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(false);
+            });
+        });
+
+        describe('accepts legitimate clauses (no false positives)', () => {
+            it.each([
+                ['keyword-looking text inside a literal', `Comments LIKE '%DROP TABLE%'`],
+                ['comment marker inside a literal', `Comments LIKE '%--%'`],
+                ['SQL-standard doubled quote', `Name = 'O''Brien'`],
+                ['doubled quote next to a denied keyword', `Note = 'it''s a delete; really'`],
+                ['backslash as ordinary data', `Path = 'C:\\temp\\'`],
+                ['simple comparison', `IsActive = 1`],
+                ['order by', `CreatedAt DESC, Name ASC`],
+                ['IN list', `Status IN ('Active', 'Pending')`],
+            ])('accepts %s', (_label, clause) => {
+                expect(provider.TestValidateUserProvidedSQLClause(clause)).toBe(true);
+            });
+        });
+
+        it('is linear-time on a long unterminated literal (no catastrophic backtracking)', () => {
+            const clause = `Name = '${'a'.repeat(50000)}`;
+            const start = Date.now();
+            provider.TestValidateUserProvidedSQLClause(clause);
+            expect(Date.now() - start).toBeLessThan(1000);
         });
     });
 });

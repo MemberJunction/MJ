@@ -82,9 +82,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Model Costs','PriceTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: AI Model Costs')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Model Costs','PriceTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJAIModelCosts')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIModelCosts', $event.totalRowCount)"
                 >

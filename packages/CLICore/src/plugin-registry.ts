@@ -112,7 +112,63 @@ export class CLIPluginRegistry {
     }
   }
 
-  /** Every registered plugin's usage metadata, de-duplicated by command key. */
+  /**
+   * Usage declared by commands that are NOT {@link BaseCLIPlugin} subclasses —
+   * see {@link CLIPluginRegistry.RegisterUsage}. Keyed by command so repeated
+   * registration (a module imported twice) cannot duplicate an entry.
+   */
+  private static readonly standaloneUsage = new Map<string, PluginUsage>();
+
+  /**
+   * Declares usage for a command that is a plain oclif `Command` rather than a
+   * {@link BaseCLIPlugin}, so it still appears in `mj usage` / `mj <domain> usage`.
+   *
+   * Plugin-backed commands never need this — their `static Usage` is discovered
+   * through the ClassFactory. It exists for commands that ship INSIDE the CLI and
+   * deliberately stay off the plugin base class (e.g. the `dev` domain, which must
+   * remain bootstrap-free), so that "not a plugin" does not mean "undiscoverable".
+   *
+   * Registering the same `command` twice keeps the first declaration, matching the
+   * de-duplication rule {@link CLIPluginRegistry.GetAllUsage} applies to plugins.
+   */
+  /**
+   * Human-authored one-line summaries for the tier-1 domain map, keyed by domain.
+   * See {@link CLIPluginRegistry.RegisterDomainSummary}.
+   */
+  private static readonly domainSummaries = new Map<string, string>();
+
+  /**
+   * Declares the tier-1 summary for a whole domain, overriding the line
+   * {@link CLIPluginRegistry.domainSummary} would otherwise synthesize from its
+   * commands.
+   *
+   * Worth having because the synthesized line degrades badly once a domain has more
+   * than a couple of commands — `mj test`'s 16 commands would render as one command's
+   * summary plus "(+15 more commands)", which tells an agent nothing about what the
+   * domain is FOR. A domain with no registered summary keeps the synthesized line, so
+   * this is an opt-in improvement rather than a new requirement.
+   *
+   * First registration wins, matching {@link CLIPluginRegistry.RegisterUsage}.
+   */
+  static RegisterDomainSummary(domain: string, summary: string): void {
+    const key = domain.trim().toLowerCase();
+    if (!key || !summary) return;
+    if (!this.domainSummaries.has(key)) this.domainSummaries.set(key, summary);
+  }
+
+  static RegisterUsage(usage: PluginUsage): void {
+    if (!usage?.domain || !usage?.command) {
+      throw new Error('RegisterUsage requires a usage object with both domain and command set');
+    }
+    if (this.standaloneUsage.has(usage.command)) return;
+    this.standaloneUsage.set(usage.command, usage);
+  }
+
+  /**
+   * Every command's usage metadata, de-duplicated by command key: the registered
+   * plugins' `static Usage` first, then anything declared via
+   * {@link CLIPluginRegistry.RegisterUsage}.
+   */
   static GetAllUsage(): PluginUsage[] {
     const regs = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseCLIPlugin);
     const byCommand = new Map<string, PluginUsage>();
@@ -121,6 +177,9 @@ export class CLIPluginRegistry {
       if (usage?.domain && usage?.command && !byCommand.has(usage.command)) {
         byCommand.set(usage.command, usage);
       }
+    }
+    for (const [command, usage] of this.standaloneUsage) {
+      if (!byCommand.has(command)) byCommand.set(command, usage);
     }
     return [...byCommand.values()];
   }
@@ -165,6 +224,8 @@ export class CLIPluginRegistry {
    * use it; otherwise join the command summaries compactly.
    */
   private static domainSummary(domain: string, cmds: PluginUsage[]): string {
+    const declared = this.domainSummaries.get(domain.trim().toLowerCase());
+    if (declared) return declared;
     if (cmds.length === 1) return cmds[0].summary;
     // Prefer a command whose key equals the domain (e.g. 'codegen').
     const headline = cmds.find((c) => c.command === domain);

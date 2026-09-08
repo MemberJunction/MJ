@@ -224,7 +224,7 @@ export class ConversationMessageRatingComponent extends BaseAngularComponent imp
   private async grantConversationAccess(conversationID: string): Promise<void> {
     try {
       const md = this.ProviderToUse;
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(md);
       const existing = await rv.RunView({
         EntityName: 'MJ: Resource Permissions',
         ExtraFilter:

@@ -19,6 +19,8 @@ export interface TestOutcome {
     Passed: boolean;
     DurationMs: number;
     Error?: string;
+    /** True when the check was gated off (mutation/live-model tier) rather than executed. */
+    Skipped?: boolean;
 }
 
 /** The serialized per-check shape both execution paths emit for the golden diff. */

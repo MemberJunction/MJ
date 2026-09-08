@@ -1,0 +1,176 @@
+/* ============================================================================
+   Golden Layout — MJ token theme
+   ----------------------------------------------------------------------------
+   REPLACES golden-layout/dist/css/themes/goldenlayout-light-theme.css (no
+   longer imported). GL's structural base css (goldenlayout-base.css) is still
+   imported; this file owns every VISUAL decision GL's stock theme used to
+   make, expressed in --mj-* tokens so both light and dark themes work and the
+   org-theming overlay applies automatically.
+
+   The stock theme's PNG glyphs (close/popout/maximise/popin) are replaced
+   with Font Awesome glyphs drawn in currentColor — colorable, crisp on any
+   DPI, and immune to the background-shorthand-wipes-the-image bug.
+
+   MJ Explorer's tab DESIGN (flex interior, type-icon slot, 38px header) lives
+   with the tab container (explorer-core tab-container.component.css); this
+   file is the base skin underneath it, and the only GL skin non-shell
+   surfaces get.
+   ========================================================================== */
+
+.lm_goldenlayout {
+  background: var(--mj-bg-page);
+}
+
+.lm_content {
+  background: var(--mj-bg-page);
+  border: none;
+}
+
+/* Drag proxy: the floating pane preview while dragging a tab */
+.lm_dragProxy .lm_content {
+  background: var(--mj-bg-surface);
+  border: 1px solid var(--mj-border-strong);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+/* Drop target: brand-tinted so the split destination reads as an action,
+   not a void */
+.lm_dropTargetIndicator {
+  outline: 2px dashed var(--mj-brand-primary);
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.lm_dropTargetIndicator .lm_inner {
+  background: var(--mj-brand-primary);
+  opacity: 0.12;
+}
+
+/* Splitters between panes */
+.lm_splitter {
+  background: var(--mj-border-strong);
+  opacity: 0.001;
+  transition: opacity 200ms ease;
+}
+
+.lm_splitter:hover,
+.lm_splitter.lm_dragging {
+  background: var(--mj-brand-primary);
+  opacity: 0.6;
+}
+
+/* Header/tab base colors — the shell's tab-container overrides carry the
+   full MJ tab design; these are sane token defaults for any GL surface
+   that renders without those overrides. */
+.lm_header {
+  background: var(--mj-bg-surface-sunken);
+}
+
+.lm_header .lm_tab {
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--mj-text-secondary);
+  background: transparent;
+  border-color: var(--mj-border-default);
+}
+
+.lm_tab:hover,
+.lm_tab.lm_active {
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+/* Close glyph: FA xmark in currentColor instead of the stock PNG
+   background-image (which a background override silently wipes, and which
+   can't follow theme colors). */
+.lm_header .lm_tab .lm_close_tab {
+  background-image: none;
+}
+
+.lm_header .lm_tab .lm_close_tab::before {
+  content: '\f00d';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  font-size: inherit;
+  line-height: 1;
+}
+
+/* Stack controls (popout/maximise/close) are hidden by the shell; when any
+   surface shows them, they get FA glyphs, not PNGs. */
+.lm_controls > * {
+  background-image: none !important;
+  color: var(--mj-text-secondary);
+  opacity: 0.6;
+  transition: opacity 200ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.lm_controls > *:hover {
+  opacity: 1;
+}
+
+.lm_controls .lm_popout::before {
+  content: '\f35d'; /* up-right-from-square */
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+.lm_controls .lm_maximise::before {
+  content: '\f31e'; /* maximize */
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+.lm_controls .lm_close::before {
+  content: '\f00d';
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+}
+
+/* Tab overflow is handled by the SCROLLING strip (see tab-container CSS +
+   GoldenLayoutManager settingsConfig) — GL's lm_tabdropdown menu never
+   activates, so it gets no theme treatment. */
+.lm_header .lm_controls .lm_tabdropdown::before {
+  color: var(--mj-text-secondary);
+}
+
+.lm_maximised .lm_header {
+  background-color: var(--mj-bg-surface);
+}
+
+.lm_selected .lm_header {
+  background-color: var(--mj-bg-surface-active);
+}
+
+.lm_transition_indicator {
+  background-color: transparent;
+  border: 1px dashed var(--mj-border-strong);
+}
+
+/* Pop-in affordance (popout windows returning) */
+.lm_popin {
+  cursor: pointer;
+}
+
+.lm_popin .lm_bg {
+  background: var(--mj-bg-overlay);
+  opacity: 0.7;
+}
+
+.lm_popin .lm_icon {
+  background-image: none;
+  opacity: 0.7;
+}
+
+.lm_popin .lm_icon::before {
+  content: '\f2d2'; /* window-restore */
+  font-family: 'Font Awesome 6 Free';
+  font-weight: 900;
+  color: var(--mj-text-inverse);
+}
+
+.lm_popin:hover .lm_icon {
+  opacity: 1;
+}

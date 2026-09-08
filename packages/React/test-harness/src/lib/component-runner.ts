@@ -433,7 +433,8 @@ export class ComponentRunner {
             ComponentRegistry,
             ComponentHierarchyRegistrar,
             ComponentManager,
-            SetupStyles
+            SetupStyles,
+            ApplyStyleOverrides
           } = MJRuntime;
 
           if (debug) {
@@ -530,8 +531,13 @@ export class ComponentRunner {
           // chrome, so there are no `--mj-*` theme tokens on the page to bridge from.
           // Use the base defaults (SetupStyles) for deterministic, theme-independent
           // tests; SetupStyles now includes the full contract (primaryActive, link/
-          // linkHover, chartPalette) so bridged fields still resolve here.
-          const styles = SetupStyles();
+          // linkHover, chartPalette, sequentialScale, divergingScale) so bridged
+          // fields still resolve here.
+          //
+          // Explicitly user-requested colors ARE applied on top, so generation-time
+          // screenshots (and the visual judge reading them) show what the user asked
+          // for rather than the stock palette.
+          const styles = ApplyStyleOverrides(SetupStyles(), spec?.styleOverrides);
 
           if (debug) {
             console.log('📦 Registering component hierarchy...');

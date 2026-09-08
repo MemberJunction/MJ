@@ -1,8 +1,20 @@
-import { BaseModel, BaseParams } from "./baseModel";
+import { BaseModel, BaseParams, ModelUsage } from "./baseModel";
 import { ChatResult } from "./chat.types";
 
 /**
- * Base class for all audio generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all 
+ * One piece of a transcription: the text, plus the audio duration the provider reported for it.
+ *
+ * `durationSeconds` is the billable quantity for per-minute/per-hour transcription pricing. It is
+ * optional because not every provider or response format returns it, and an absent duration must
+ * stay absent rather than becoming a zero that prices as free.
+ */
+export type TranscriptionPiece = {
+    text: string;
+    durationSeconds?: number;
+};
+
+/**
+ * Base class for all audio generation models. Each AI model will have a sub-class implementing the abstract methods in this base class. Not all
  * sub-classes will support all methods. If a method is not supported an exception will be thrown, use the GetSupportedMethods method to determine
  * what methods are supported by a specific sub-class.
  */
@@ -13,6 +25,80 @@ export abstract class BaseAudioGenerator extends BaseModel {
     public abstract GetModels(): Promise<AudioModel[]>
     public abstract GetPronounciationDictionaries(): Promise<PronounciationDictionary[]>
     public abstract GetSupportedMethods(): Promise<string[]>
+
+    /**
+     * Transcribes audio that may exceed the provider's upload ceiling, splitting it first when
+     * it does, and joins the pieces back into one transcript and one duration.
+     *
+     * Pieces are transcribed **sequentially**, not in parallel: transcription providers rate limit
+     * by audio-seconds per minute, so firing an hour of audio at once buys nothing but 429s, and a
+     * partial failure mid-way would leave a transcript with an unmarked hole in it.
+     *
+     * The returned `durationSeconds` is the sum across pieces — which is what the provider bills —
+     * and is left undefined if ANY piece failed to report one, since a partial sum would understate
+     * the bill while looking like a complete answer.
+     *
+     * @param audio The full audio to transcribe
+     * @param maxUploadBytes The provider's hard upload ceiling
+     * @param splitTargetBytes Target piece size, below the ceiling to leave room for multipart framing
+     * @param splitter Splitter to use for oversized audio; may be null, in which case oversized audio fails
+     * @param providerLabel Provider name, used in the size-limit error messages
+     * @param transcribeOne Transcribes a single piece already known to be within the ceiling
+     */
+    protected async TranscribeWithSplitting(
+        audio: Buffer,
+        maxUploadBytes: number,
+        splitTargetBytes: number,
+        splitter: AudioSplitter | null,
+        providerLabel: string,
+        transcribeOne: (piece: Buffer) => Promise<TranscriptionPiece>
+    ): Promise<TranscriptionPiece> {
+        const limitMB = (maxUploadBytes / (1024 * 1024)).toFixed(0);
+
+        if (audio.byteLength <= maxUploadBytes) {
+            return await transcribeOne(audio);
+        }
+
+        if (!splitter) {
+            throw new Error(
+                `Audio is ${(audio.byteLength / (1024 * 1024)).toFixed(1)}MB, above ${providerLabel}'s ${limitMB}MB ` +
+                    `transcription limit. Assign an AudioSplitter to the Splitter property to transcribe ` +
+                    `audio this size.`,
+            );
+        }
+
+        const pieces = await splitter.Split(audio, splitTargetBytes);
+        if (pieces.length === 0) {
+            throw new Error('The configured AudioSplitter returned no pieces');
+        }
+
+        const transcripts: string[] = [];
+        let totalDurationSeconds = 0;
+        let everyPieceReportedDuration = true;
+
+        for (const piece of pieces) {
+            // A piece the splitter left oversized would fail at the API with a size error naming
+            // neither the splitter nor which piece; say so here instead.
+            if (piece.byteLength > maxUploadBytes) {
+                throw new Error(
+                    `The configured AudioSplitter produced a ${(piece.byteLength / (1024 * 1024)).toFixed(1)}MB ` +
+                        `piece, above ${providerLabel}'s ${limitMB}MB limit`,
+                );
+            }
+            const transcribed = await transcribeOne(piece);
+            transcripts.push(transcribed.text);
+            if (transcribed.durationSeconds == null) {
+                everyPieceReportedDuration = false;
+            } else {
+                totalDurationSeconds += transcribed.durationSeconds;
+            }
+        }
+
+        return {
+            text: transcripts.filter((t) => t.length > 0).join(' '),
+            durationSeconds: everyPieceReportedDuration ? totalDurationSeconds : undefined,
+        };
+    }
 }
 
 /**
@@ -33,13 +119,73 @@ export class SpeechResult {
      */
     content: string;
     data?: Buffer;
+
+    /**
+     * Usage for the request, when the provider reported enough to build it.
+     *
+     * Audio models are billed by duration rather than by token, so this is normally a
+     * {@link ModelUsage.ForMedia} instance in `Seconds` — the quantity a per-minute or per-hour
+     * price unit type prices. Left undefined when the provider did not report a duration, so that
+     * cost calculation declines rather than billing the request as free.
+     */
+    usage?: ModelUsage;
 }
 
 export class SpeechToTextParams extends BaseParams {
     /**
-     * Base 64 encoded audio file to convert to text
+     * Base 64 encoded audio file to convert to text.
+     *
+     * Optional only in the sense that `audioData` may be supplied instead; exactly one of
+     * the two is required.
      */
-    audioFile: string;    
+    audioFile: string;
+
+    /**
+     * The raw audio bytes, as an alternative to the base 64 `audioFile`.
+     *
+     * Preferred whenever the caller already holds a Buffer: base 64 encoding an hour of
+     * audio costs a third more memory than the bytes themselves, for a string the
+     * implementation immediately decodes again.
+     */
+    audioData?: Buffer;
+
+    /**
+     * Original file name, e.g. `episode-104.mp3`. Some providers infer the container
+     * format from the extension, so supplying it when known improves reliability.
+     */
+    fileName?: string;
+
+    /**
+     * ISO 639-1 language code of the spoken audio. Supplying it typically improves both
+     * accuracy and latency versus letting the model detect the language.
+     */
+    language?: string;
+
+    /**
+     * Optional text to steer style, spelling or vocabulary — e.g. proper nouns the model
+     * would otherwise mis-transcribe. Should be in the same language as the audio.
+     */
+    prompt?: string;
+}
+
+/**
+ * Splits an audio buffer into pieces small enough for a provider that caps upload size.
+ *
+ * This is a port rather than a bundled implementation on purpose. Splitting audio without
+ * re-encoding it means a media tool — in practice an ffmpeg binary — and a ~70MB
+ * platform-specific binary is not a dependency an AI provider package should force on
+ * every consumer, most of which transcribe short clips and never need it. Applications
+ * that do transcribe long audio already have such a tool and inject it here.
+ */
+export interface AudioSplitter {
+    /**
+     * Split `audio` into consecutive pieces, each no larger than `maxBytes`, ordered so
+     * that concatenating their transcripts reproduces the whole.
+     *
+     * Implementations should split on time, not byte offsets: cutting a compressed stream
+     * mid-frame produces pieces the provider cannot decode.
+     */
+    Split(audio: Buffer, maxBytes: number): Promise<Buffer[]>;
 }
 
 /**

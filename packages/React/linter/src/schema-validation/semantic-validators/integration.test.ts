@@ -192,8 +192,8 @@ function createMockContext(overrides: Partial<ValidationContext> & { entityField
   const entityName = overrides.siblingProps?.get('entityName') as string || 'MJTestEntity';
 
   return {
-    node: {} as any,
-    path: {} as any,
+    node: {} as ValidationContext['node'],
+    path: {} as ValidationContext['path'],
     componentName: 'TestComponent',
     componentSpec: {} as ComponentSpec,
     propertyName: 'fields',
@@ -201,7 +201,7 @@ function createMockContext(overrides: Partial<ValidationContext> & { entityField
     siblingProps: overrides.siblingProps || new Map(),
     entities: new Map(),
     queries: new Map(),
-    typeEngine: null as any,
+    typeEngine: null as unknown as ValidationContext['typeEngine'],
 
     getEntityFields: (name: string) => {
       if (name === entityName) {

@@ -7,7 +7,7 @@ import { Field, InputType, ObjectType } from "type-graphql";
 import { KeyValuePairInput } from "../generic/KeyValuePairInput.js";
 import { AppContext, ProviderInfo } from "../types.js";
 import { CopyScalarsAndArrays, UUIDsEqual } from "@memberjunction/global";
-import { GetReadOnlyProvider } from "../util.js";
+import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
 
 /**
@@ -203,8 +203,10 @@ export class ActionResolver extends ResolverBase {
       // Parse the parameters
       const params = this.parseActionParameters(input.Params);
 
-      // Run the action
-      const result = await this.executeAction(action, user, params, input.SkipActionLog);
+      // Run the action — thread the request-scoped provider so provider-bound
+      // actions (e.g. the semantic find-* / Search Entity actions, which call
+      // params.Provider.SearchEntity) run against the caller's metadata layer.
+      const result = await this.executeAction(action, user, params, ctx.providers, input.SkipActionLog);
 
       // Return the result
       return this.createActionResult(result);
@@ -271,17 +273,23 @@ export class ActionResolver extends ResolverBase {
    * @private
    */
   private async executeAction(
-    action: any, 
-    user: UserInfo, 
-    params: ActionParam[], 
+    action: any,
+    user: UserInfo,
+    params: ActionParam[],
+    providers: Array<ProviderInfo>,
     skipActionLog?: boolean
   ): Promise<ActionResult> {
+    // Resolve the request-scoped provider. Prefer read-write (actions may mutate);
+    // fall back to read-only, then to the engine's global-Metadata default when no
+    // request providers are present (preserves prior behavior).
+    const provider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) ?? undefined;
     return await ActionEngineServer.Instance.RunAction({
       Action: action,
       ContextUser: user,
       Params: params,
       SkipActionLog: skipActionLog,
-      Filters: []
+      Filters: [],
+      Provider: provider
     });
   }
 
@@ -357,6 +365,19 @@ export class ActionResolver extends ResolverBase {
 
       // Run the entity action
       const result = await EntityActionEngineServer.Instance.RunEntityAction(params);
+
+      if (!result) {
+        // The binding is scoped (ScopeEntityID/ScopeRecordID) and this record falls outside it, so
+        // the action never ran. That is a legitimate answer, not a failure — dereferencing the null
+        // here turned "this binding does not apply to that record" into a server error for the
+        // caller. Reported as a successful no-op with an explicit message, so a client can tell it
+        // apart from an action that ran and did nothing.
+        return {
+          Success: true,
+          Message: 'The entity action did not run: its binding is scoped to different records.',
+          ResultData: JSON.stringify({ Ran: false, Reason: 'OutOfScope' })
+        };
+      }
 
       // Return the result
       return {

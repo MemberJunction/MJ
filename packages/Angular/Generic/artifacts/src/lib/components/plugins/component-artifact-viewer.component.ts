@@ -610,7 +610,7 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    */
   private async fetchFullSpecByName(name: string): Promise<ComponentSpec | null> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<{ Specification: string }>({
         EntityName: 'MJ: Components',
         ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,

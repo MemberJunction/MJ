@@ -21,7 +21,7 @@
  */
 import { RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentRunner } from '@memberjunction/ai-agents';
-import { resolveContextUserOrThrow } from './agent-live-shared';
+import { resolveContextUserOrThrow, ResolvePromptRunIdsForAgentRuns, RequireRows } from './agent-live-shared';
 import type { MJAIAgentEntity } from '@memberjunction/core-entities';
 import type { ExecuteAgentParams, ExecuteAgentResult } from '@memberjunction/ai-core-plus';
 
@@ -51,11 +51,15 @@ export interface AgentStepRow {
     FinalPayloadValidationMessages: string | null;
 }
 
-/** Deterministic framework projection of an AI Prompt Run row. */
+/**
+ * Deterministic framework projection of an AI Prompt Run row.
+ *
+ * No AgentRunID member: that column does not exist on AIPromptRun. The owning agent run is
+ * recovered through the step that invoked it — see PromptRunIdsFromSteps in agent-live-shared.
+ */
 export interface PromptRunRow {
     ID: string;
     AgentID: string | null;
-    AgentRunID: string | null;
     Messages: string | null;
     Result: string | null;
 }
@@ -123,7 +127,7 @@ export async function loadAgentByName(
     user: UserInfo,
     name: string
 ): Promise<MJAIAgentEntity | undefined> {
-    const r = await new RunView().RunView<MJAIAgentEntity>({
+    const r = await RunView.FromMetadataProvider(provider).RunView<MJAIAgentEntity>({
         EntityName: 'MJ: AI Agents',
         ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
         ResultType: 'entity_object'
@@ -159,19 +163,21 @@ export function settle(ms = 1500): Promise<void> {
 
 /** Read a single run row fresh. */
 export async function readRun(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentRunRow | undefined> {
-    const r = await new RunView().RunView<AgentRunRow>({
+    const r = await RunView.FromMetadataProvider(provider).RunView<AgentRunRow>({
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ID='${runId}'`,
         Fields: ['ID', 'Status', 'FinalStep', 'FinalPayload', 'ParentRunID', 'ErrorMessage'],
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return r.Success && r.Results.length > 0 ? r.Results[0] : undefined;
+    // undefined means the run genuinely is not there; a broken query throws rather than
+    // impersonating an absent run and failing a later assertion for the wrong reason.
+    return RequireRows(r, `run read for ${runId}`)[0];
 }
 
 /** Read every step of a run fresh, oldest first. */
 export async function readSteps(provider: IMetadataProvider, user: UserInfo, runId: string): Promise<AgentStepRow[]> {
-    const r = await new RunView().RunView<AgentStepRow>({
+    const r = await RunView.FromMetadataProvider(provider).RunView<AgentStepRow>({
         EntityName: 'MJ: AI Agent Run Steps',
         ExtraFilter: `AgentRunID='${runId}'`,
         Fields: ['ID', 'StepType', 'Status', 'TargetLogID', 'PayloadAtStart', 'PayloadAtEnd', 'OutputData', 'ErrorMessage', 'FinalPayloadValidationMessages'],
@@ -179,7 +185,7 @@ export async function readSteps(provider: IMetadataProvider, user: UserInfo, run
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return r.Success ? r.Results : [];
+    return RequireRows(r, `step read for run ${runId}`);
 }
 
 /** Read the prompt runs a given agent produced within a run tree (its raw model responses live here). */
@@ -190,15 +196,39 @@ export async function readPromptRunsForAgent(
     agentId: string
 ): Promise<PromptRunRow[]> {
     if (agentRunIds.length === 0) return [];
-    const inList = agentRunIds.map((id) => `'${id}'`).join(',');
-    const r = await new RunView().RunView<PromptRunRow>({
+    // The runs' prompt-run-bearing steps are the only path to their prompt runs (AIPromptRun has no
+    // AgentRunID). AgentID still narrows to the agent that owns them, which is what makes this
+    // "for agent" — a sub-agent's prompt runs hang off the same run tree.
+    const promptRunIds = await ResolvePromptRunIdsForAgentRuns(agentRunIds, user, provider);
+    if (promptRunIds.length === 0) return [];
+    const r = await RunView.FromMetadataProvider(provider).RunView<PromptRunRow>({
         EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `AgentRunID IN (${inList}) AND AgentID='${agentId}'`,
-        Fields: ['ID', 'AgentID', 'AgentRunID', 'Messages', 'Result'],
+        ExtraFilter: `ID IN (${promptRunIds.map((id) => `'${id}'`).join(',')}) AND AgentID='${agentId}'`,
+        Fields: ['ID', 'AgentID', 'Messages', 'Result'],
         ResultType: 'simple',
         BypassCache: true
     }, user);
-    return r.Success ? r.Results : [];
+    const rows = RequireRows(r, `prompt-run read for agent ${agentId}`);
+    // 🚨 DRIFT GUARD — a dead read surface must never masquerade as model variance.
+    //
+    // The run tree resolved prompt runs, so the agent demonstrably ran inference; if the AgentID
+    // narrowing then removes ALL of them, this function is reading a column nothing populates and
+    // every caller downstream silently sees "the model did nothing". That is precisely what
+    // happened before 6.1: nothing in the product ever set `AIPromptRun.AgentID` (340 rows in the
+    // release database, zero non-null), so six of IT56's checks retried three times each and
+    // reported `model-noncompliance:` — for a defect the model had no part in.
+    //
+    // Throw instead. A thrown error propagates out of runWithCompliance uncaught, so §4.6 triage
+    // sees a real defect rather than acceptable variance.
+    if (rows.length === 0) {
+        throw new Error(
+            `harness-read-surface-dead: resolved ${promptRunIds.length} prompt run(s) from the run ` +
+            `tree, but NONE carry AgentID='${agentId}'. The agent ran inference; the attribution ` +
+            `column is not populated. Either the product stopped stamping AIPromptRun.AgentID ` +
+            `(BaseAgent sets AIPromptParams.agentId) or this narrowing is wrong. Do NOT reclassify ` +
+            `this as model-noncompliance — the model is not involved.`);
+    }
+    return rows;
 }
 
 /** BFS the ParentRunID tree from a root, returning every run ID (root first). Bounded to avoid cycles. */
@@ -208,7 +238,7 @@ export async function collectRunTree(provider: IMetadataProvider, user: UserInfo
     let guard = 0;
     while (frontier.length > 0 && guard++ < 12) {
         const inList = frontier.map((id) => `'${id}'`).join(',');
-        const r = await new RunView().RunView<{ ID: string }>({
+        const r = await RunView.FromMetadataProvider(provider).RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ParentRunID IN (${inList})`,
             Fields: ['ID'],
@@ -261,11 +291,24 @@ export async function deepDeleteRunTrees(provider: IMetadataProvider, user: User
     if (ids.length === 0) return;
     const inList = ids.map((id) => `'${id}'`).join(',');
 
-    // 1. Steps of every run in the trees.
+    // 1. Resolve prompt runs BEFORE deleting steps. AIPromptRun has no AgentRunID, so the
+    //    prompt-run-bearing steps are the only path to these rows — deleting the steps first
+    //    orphans them permanently. Uses the FULL step-type set (the resolver's default), not the
+    //    rollup subset: teardown must reach every prompt run, including Compaction and Tool ones.
+    let promptRunIds: string[] = [];
+    try {
+        promptRunIds = await ResolvePromptRunIdsForAgentRuns(ids, user, provider);
+    } catch (e) {
+        // Best-effort teardown: keep purging what we can reach, but never silently.
+        console.error(`deepDeleteRunTrees: prompt-run resolution failed, prompt runs may leak: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // 2. Steps of every run in the trees.
     await deleteMatching(provider, user, 'MJ: AI Agent Run Steps', `AgentRunID IN (${inList})`);
-    // 2. Prompt runs of every run in the trees.
-    await deleteMatching(provider, user, 'MJ: AI Prompt Runs', `AgentRunID IN (${inList})`);
-    // 3. The runs themselves, child-first (reverse collection order puts descendants before roots).
+    // 3. The prompt runs resolved in step 1, addressed by their own primary key.
+    if (promptRunIds.length > 0) {
+        await deleteMatching(provider, user, 'MJ: AI Prompt Runs', `ID IN (${promptRunIds.map((id) => `'${id}'`).join(',')})`);
+    }
+    // 4. The runs themselves, child-first (reverse collection order puts descendants before roots).
     for (const id of [...ids].reverse()) {
         await deleteMatching(provider, user, 'MJ: AI Agent Runs', `ID='${id}'`);
     }
@@ -279,7 +322,7 @@ export async function deleteMatching(
     filter: string
 ): Promise<void> {
     try {
-        const r = await new RunView().RunView<{ Delete(): Promise<boolean> }>({
+        const r = await RunView.FromMetadataProvider(provider).RunView<{ Delete(): Promise<boolean> }>({
             EntityName: entityName,
             ExtraFilter: filter,
             ResultType: 'entity_object',
@@ -306,8 +349,20 @@ export async function runWithCompliance(
     scenario: () => Promise<string | undefined>,
     isCompliant: (rootRunId: string) => Promise<boolean>,
     label: string,
-    maxAttempts = 3
+    maxAttempts = 3,
+    /**
+     * Optional evidence dump for the FINAL failed attempt, appended to the thrown message.
+     *
+     * A bare `model-noncompliance:` says only "the model didn't do it" — and the fixtures are
+     * purged at teardown, so nothing can be re-queried afterwards to find out WHY. Without this,
+     * "the model declined" is indistinguishable from "the tool was never advertised" or "the
+     * response came back empty", which is precisely how three real product defects hid behind this
+     * prefix during the 6.1 release. Must never throw: a failing diagnostic must not replace the
+     * failure it is describing.
+     */
+    diagnose?: (rootRunId: string) => Promise<string>
 ): Promise<string> {
+    let lastRunId: string | undefined;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         const runId = await scenario();
         // No run landed at all = an EXECUTION failure (harness or product), NOT model variance.
@@ -326,7 +381,18 @@ export async function runWithCompliance(
             if (attempt > 1) console.warn(`  ↻ ${label} — model complied on attempt ${attempt}/${maxAttempts}`);
             return runId;
         }
+        lastRunId = runId;
         console.warn(`  ↻ ${label} — attempt ${attempt}/${maxAttempts} non-compliant (runId=${runId})`);
     }
-    throw new Error(`model-noncompliance: ${label} — the model never took the instructed action after ${maxAttempts} attempts. Fix the prompt, not the check.`);
+    let evidence = '';
+    if (diagnose && lastRunId) {
+        try {
+            evidence = `\n  last attempt (runId=${lastRunId}):\n${await diagnose(lastRunId)}`;
+        } catch (e) {
+            evidence = `\n  (diagnostic for runId=${lastRunId} failed: ${e instanceof Error ? e.message : String(e)})`;
+        }
+    }
+    throw new Error(
+        `model-noncompliance: ${label} — the model never took the instructed action after ${maxAttempts} attempts. ` +
+        `Fix the prompt, not the check.${evidence}`);
 }

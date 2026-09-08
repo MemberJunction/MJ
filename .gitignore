@@ -112,7 +112,9 @@ packages/MJExplorer/src/environments/environment.development.ts
 packages/MJExplorer/src/environments/environment.staging.ts
 packages/MJExplorer/src/environments/environment.ts
 Schema Files/
-/docs/
+# generated TypeDoc output — but hand-written decision records are tracked
+/docs/*
+!/docs/decisions/
 SQL Scripts/generated/
 **/SQL Scripts/generated/
 *.old
@@ -190,6 +192,10 @@ packages/MJExplorer/src/app/generated/class-registrations-manifest.ts
 
 # Test coverage output
 coverage/
+
+# Stryker mutation-testing scratch (per-package, created by `npx stryker run`)
+.stryker-tmp/
+reports/mutation/
 docker/workbench/workspace/.env.database
 docker/workbench/workspace/screenshots/
 test-run-log.txt
@@ -233,3 +239,8 @@ migrations/v*/*__RSU_*.sql
 # explicitly un-ignore this one subtree.
 !/templates/claude-pack/dist/
 !/templates/claude-pack/dist/**
+
+# Per-package LICENSE copies are generated at publish time by
+# .github/scripts/stage-package-licenses.mjs. The root LICENSE is the only
+# source of truth; committing 300 copies would let them drift from it.
+packages/**/LICENSE

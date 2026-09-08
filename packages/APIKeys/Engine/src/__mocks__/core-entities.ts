@@ -130,6 +130,9 @@ export class MJAPIApplicationScopeEntity extends MockBaseEntity {
 
     get Priority(): number { return this['_data'].Priority as number ?? 0; }
     set Priority(value: number) { this['_data'].Priority = value; }
+
+    get RowFilterID(): string | null { return this['_data'].RowFilterID as string | null ?? null; }
+    set RowFilterID(value: string | null) { this['_data'].RowFilterID = value; }
 }
 
 // API Key Scope Entity (key-level scope grants)
@@ -151,6 +154,9 @@ export class MJAPIKeyScopeEntity extends MockBaseEntity {
 
     get Priority(): number { return this['_data'].Priority as number ?? 0; }
     set Priority(value: number) { this['_data'].Priority = value; }
+
+    get RowFilterID(): string | null { return this['_data'].RowFilterID as string | null ?? null; }
+    set RowFilterID(value: string | null) { this['_data'].RowFilterID = value; }
 }
 
 // User Entity

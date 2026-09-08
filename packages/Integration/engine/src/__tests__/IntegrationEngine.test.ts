@@ -21,6 +21,7 @@ import type {
 } from '../BaseIntegrationConnector.js';
 import type { ExternalRecord, SyncProgress } from '../types.js';
 import { IntegrationEngine } from '../IntegrationEngine.js';
+import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 // Note: IntegrationEngine is a singleton but tests instantiate it directly for isolation
 
 // ---- Mocks ----
@@ -76,6 +77,11 @@ function createMockEntity(overrides: Record<string, unknown> = {}) {
 
 vi.mock('@memberjunction/core', async () => {
     const actual = await vi.importActual<typeof import('@memberjunction/core')>('@memberjunction/core');
+    // Durable runs (PR 1): every sync claims/heartbeats/fences its run row through the
+    // provider, so the mock provider must answer those statements.
+    const { createOwnershipProviderSurface } = await vi.importActual<
+        typeof import('./helpers/ownershipProviderSurface.js')
+    >('./helpers/ownershipProviderSurface.js');
     return {
         ...actual,
         RunView: class MockRunView {
@@ -100,7 +106,7 @@ vi.mock('@memberjunction/core', async () => {
                     Entities: { Name: string; FirstPrimaryKey: { Name: string } }[];
                     EntityByName: (name: string) => { Name: string; FirstPrimaryKey: { Name: string } } | undefined;
                     GetEntityObject: (...args: unknown[]) => Promise<unknown>;
-                };
+                } & ReturnType<typeof createOwnershipProviderSurface>;
                 get Entities() {
                     return [{
                         Name: 'Contacts',
@@ -117,6 +123,7 @@ vi.mock('@memberjunction/core', async () => {
                 }
             }
             MockMetadata.Provider = {
+                ...createOwnershipProviderSurface(),
                 BeginTransaction: vi.fn().mockResolvedValue(undefined),
                 CommitTransaction: vi.fn().mockResolvedValue(undefined),
                 RollbackTransaction: vi.fn().mockResolvedValue(undefined),
@@ -1066,7 +1073,7 @@ describe('IntegrationEngine', () => {
     });
 
     describe('Batch size enforcement', () => {
-        it('should truncate records when connector returns more than MaxBatchSize', async () => {
+        it('should write every record but warn UNBOUNDED when connector returns more than MaxBatchSize', async () => {
             // Create 10 records but set MaxBatchSize to 5
             const records = createMockRecords(10);
             const connector = createMockConnector({
@@ -1127,7 +1134,7 @@ describe('IntegrationEngine', () => {
 
             try {
                 orchestrator.MaxBatchSize = 5;
-                const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+                const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
                 const result = await orchestrator.RunSync('ci-1', contextUser);
 
@@ -1135,12 +1142,14 @@ describe('IntegrationEngine', () => {
                 expect(result.RecordsProcessed).toBe(10);
                 expect(result.RecordsCreated).toBe(10);
 
-                // Should have logged a message that the batch size was exceeded
-                expect(logSpy).toHaveBeenCalledWith(
-                    expect.stringContaining('MaxBatchSize')
+                // The over-size batch is surfaced as a pagination-rule violation. HasMore=false on the
+                // first batch ⇒ the connector paginates not at all, so it's the UNBOUNDED variant.
+                expect(warnSpy).toHaveBeenCalledWith(
+                    expect.stringContaining('pagination is not implemented')
                 );
+                expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('ALL 10 records'));
 
-                logSpy.mockRestore();
+                warnSpy.mockRestore();
             } finally {
                 ConnectorFactory.Resolve = resolveOrig;
             }
@@ -1706,6 +1715,83 @@ describe('IntegrationEngine', () => {
                 expect(progressUpdates[1].EntityMapIndex).toBe(1);
             } finally {
                 ConnectorFactory.Resolve = resolveOrig;
+            }
+        });
+    });
+    describe('Catalog freshness', () => {
+        it('re-reads the IntegrationObject catalog before the run reads any of it', async () => {
+            const connector = createMockConnector({ Records: createMockRecords(1), HasMore: false });
+
+            const companyIntegration = createMockCompanyIntegration();
+            const integration = {
+                ID: 'int-1',
+                Get: vi.fn((f: string) => f === 'ID' ? 'int-1' : null),
+                Name: 'Test',
+                ClassName: 'TestConnector',
+            } as unknown as MJIntegrationEntity;
+
+            mockRunViewsFn.mockResolvedValueOnce([
+                { Success: true, Results: [companyIntegration] },
+                {
+                    Success: true,
+                    Results: [{
+                        Get: vi.fn((f: string) => f === 'ID' ? 'em-1' : null),
+                        CompanyIntegrationID: 'ci-1',
+                        EntityID: 'entity-1',
+                        ConflictResolution: 'SourceWins',
+                        DeleteBehavior: 'SoftDelete',
+                        Entity: 'Contacts',
+                        ExternalObjectName: 'contacts',
+                    }],
+                },
+                { Success: true, Results: [integration] },
+                { Success: true, Results: [{ DriverClass: 'TestConnector' }] },
+            ]);
+
+            mockRunViewFn.mockImplementation(async (params: Record<string, unknown>) => {
+                const entityName = params['EntityName'] as string;
+                if (entityName === 'MJ: Company Integration Field Maps') {
+                    return {
+                        Success: true,
+                        Results: [{
+                            SourceFieldName: 'Name',
+                            DestinationFieldName: 'Name',
+                            TransformPipeline: null,
+                            IsKeyField: false,
+                            Status: 'Active',
+                            Priority: 0,
+                        }],
+                    };
+                }
+                return { Success: true, Results: [] };
+            });
+
+            const { ConnectorFactory } = await import('../ConnectorFactory.js');
+            const resolveOrig = ConnectorFactory.Resolve;
+            ConnectorFactory.Resolve = vi.fn().mockReturnValue(connector);
+
+            const order: string[] = [];
+            const refreshSpy = vi
+                .spyOn(IntegrationEngineBase.Instance, 'RefreshCatalog')
+                .mockImplementation(async () => { order.push('refresh'); });
+            const fetchOrig = connector.FetchChanges.bind(connector);
+            connector.FetchChanges = vi.fn(async (...args: Parameters<typeof fetchOrig>) => {
+                order.push('fetch');
+                return fetchOrig(...args);
+            }) as typeof connector.FetchChanges;
+
+            try {
+                const result = await orchestrator.RunSync('ci-1', contextUser);
+
+                expect(result.Success).toBe(true);
+                // Called once per run, and BEFORE anything resolves objects/fields out of the
+                // catalog — a catalog edit made by another process must be visible to this run.
+                expect(refreshSpy).toHaveBeenCalledTimes(1);
+                expect(refreshSpy).toHaveBeenCalledWith(contextUser);
+                expect(order).toEqual(['refresh', 'fetch']);
+            } finally {
+                ConnectorFactory.Resolve = resolveOrig;
+                refreshSpy.mockRestore();
             }
         });
     });

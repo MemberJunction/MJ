@@ -25,6 +25,11 @@ if (stagedCount > 0) {
 console.log('Pushing release commit to origin/main...');
 await git.push('origin', 'HEAD:main');
 
-console.log(`Publishing release tag ${version}...`);
-await git.addTag(version);
-await git.push('origin', `refs/tags/${version}`);
+const existingTags = await git.tags(['--list', version]);
+if (existingTags.all.includes(version)) {
+  console.log(`Tag ${version} already exists — skipping tag creation (re-run of a partially completed publish).`);
+} else {
+  console.log(`Publishing release tag ${version}...`);
+  await git.addTag(version);
+  await git.push('origin', `refs/tags/${version}`);
+}

@@ -23,6 +23,7 @@
 
 import {
     BaseRealtimeModel,
+    REALTIME_SHARED_CONFIG_KEYS,
     type IRealtimeSession,
     type RealtimeSessionParams,
     type RealtimeToolDefinition,
@@ -763,13 +764,24 @@ export class InworldRealtimeSession implements IRealtimeSession {
      * double-write. Lets a per-conversation config replace a whole block (e.g. a fully-specified
      * `audio` object) while shorthands stay convenient.
      *
+     * ALSO skips {@link REALTIME_SHARED_CONFIG_KEYS} — the MJ-side vocabulary shared across the
+     * driver family, which that registry's contract requires non-OpenAI-protocol drivers to scrub
+     * rather than forward. Those keys are never Inworld wire fields, and because a co-agent config
+     * is authored WITHOUT knowing which vendor will run, any of them can arrive here: an agnostic
+     * `firstMessage` (issue #3557) is filed onto whichever driver resolves, consumed or not. This
+     * loop is the forwarding path, so it is where the scrub belongs.
+     *
+     * Deliberately narrow: only the shared vocabulary is dropped. Passing an Inworld-native field
+     * the driver has no shorthand for is the whole point of this channel and still works.
+     *
      * @param session The session object being built (mutated in place).
      * @param config The caller's config bag.
      */
     private applyRawConfigOverrides(session: JSONObject, config: JSONObject): void {
         const consumedShorthands = new Set(['voice', 'stt', 'language', 'eagerness']);
+        const sharedMJKeys = new Set(REALTIME_SHARED_CONFIG_KEYS);
         for (const [key, value] of Object.entries(config)) {
-            if (consumedShorthands.has(key)) {
+            if (consumedShorthands.has(key) || sharedMJKeys.has(key)) {
                 continue;
             }
             session[key] = value;

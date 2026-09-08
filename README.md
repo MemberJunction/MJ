@@ -1,19 +1,19 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./MJ_logo_dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="./MJ_logo.webp">
-    <img alt="MemberJunction" src="./MJ_logo.webp" width="400">
+    <source media="(prefers-color-scheme: dark)" srcset="./MJ_logo_wide_dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="./MJ_logo_wide.png">
+    <img alt="MemberJunction" src="./MJ_logo_wide.png" width="420">
   </picture>
 </p>
 
-<h3 align="center">The open-source, AI-native data platform.</h3>
+<h3 align="center">The AI-native data platform.</h3>
 
 <p align="center">
   Unify your data. Add intelligence. <strong>Build AI-native apps on top of it.</strong>
 </p>
 
 <p align="center">
-  <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE"><img src="https://img.shields.io/github/license/MemberJunction/MJ?style=flat-square" alt="License"></a>
+  <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BUSL--1.1-blue?style=flat-square" alt="License: BUSL 1.1"></a>
   <a href="https://www.npmjs.com/package/@memberjunction/core"><img src="https://img.shields.io/npm/v/@memberjunction/core?style=flat-square&label=npm" alt="npm version"></a>
   <a href="https://www.typescriptlang.org/"><img src="https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"></a>
   <a href="https://github.com/MemberJunction/MJ/stargazers"><img src="https://img.shields.io/github/stars/MemberJunction/MJ?style=flat-square" alt="GitHub Stars"></a>
@@ -104,26 +104,38 @@ const result = await ai.ChatCompletion({
 
 ---
 
-## Quick Start
+## Download & Install
+
+**Installing MemberJunction to use it** — the CLI installer provisions the database, runs
+migrations and CodeGen, writes your config, and starts the services. It resumes from where it
+left off if a step fails.
 
 ```bash
-# Clone and install
-git clone https://github.com/MemberJunction/MJ.git && cd MJ
-npm install
+npm install --global @memberjunction/cli
 
-# Configure your database and auth
-cp install.config.json.example install.config.json
-# Edit install.config.json with your SQL Server connection and auth settings
-
-# Initialize the database
-node InstallMJ.js
-
-# Start the platform
-npm run start:api        # GraphQL API on port 4000
-npm run start:explorer   # Angular UI on port 4200
+mkdir my-mj && cd my-mj
+mj install               # interactive: prompts for database, ports, and auth provider
+mj doctor                # diagnose an existing installation
 ```
 
-> **Prerequisites:** Node.js 20+, npm 9+, SQL Server 2019+ (or Azure SQL), Angular CLI 21+
+Prefer non-interactive? `mj install --yes` accepts defaults, and `--config ./install.config.json`
+supplies the answers from a file.
+
+**Developing MemberJunction itself** — clone the monorepo and build it:
+
+```bash
+git clone https://github.com/MemberJunction/MJ.git && cd MJ
+pnpm install             # always from the repo root — never `npm install`
+pnpm run build
+
+pnpm run start:api       # GraphQL API on port 4000
+pnpm run start:explorer  # Angular UI on port 4201
+```
+
+> **Prerequisites:** Node.js 22+ (24 recommended), pnpm 10.33+, SQL Server 2019+ (or Azure SQL).
+> The Angular CLI is a workspace dependency — no global install needed.
+
+> **Contributing?** See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for standards, tests, and the PR process.
 
 > **Full documentation:** [docs.memberjunction.org](https://docs.memberjunction.org)
 
@@ -228,10 +240,10 @@ Build autonomous AI agents that orchestrate complex, multi-step workflows:
 ```bash
 # Docker
 docker build -f docker/MJAPI/Dockerfile -t memberjunction/api .
-docker-compose up -d
 
-# Database migrations (Flyway)
-# Versioned migrations in /migrations/v2/ run automatically on startup
+# Database migrations (Skyway — Flyway-compatible)
+# Versioned migrations under ./migrations (v2–v6) are applied by `mj migrate`;
+# the API container runs it on startup.
 ```
 
 **Security:** Pluggable authentication — Auth0, Azure AD (MSAL), Okta, AWS Cognito, Google, and WorkOS (AuthKit) — plus row-level security, field permissions, GraphQL query depth limiting, and complete audit logging.
@@ -240,6 +252,7 @@ docker-compose up -d
 
 ## Upgrading
 
+- **[v6.0 Upgrade Guide](./UPGRADE-v6.0.md)** — Breaking changes and step-by-step instructions for upgrading from v5.x
 - **[v5.0 Upgrade Guide](./UPGRADE-v5.0.md)** — Breaking changes, automated migration tools, and step-by-step instructions for upgrading from v4.x
 - **[General Upgrade Procedure](./UPDATES.md)** — Standard process for upgrading across environments (dev/stage/prod)
 
@@ -250,11 +263,16 @@ We welcome contributions!
 - **[GitHub Issues](https://github.com/MemberJunction/MJ/issues)** — Bug reports and feature requests
 - **[Discussions](https://github.com/MemberJunction/MJ/discussions)** — Questions and ideas
 - **[Documentation](https://docs.memberjunction.org)** — Full platform docs
+- **[Contributing Guide](./CONTRIBUTING.md)** — Setup, coding standards, tests, and the PR process
 - **Development Guide** — See [`CLAUDE.md`](./CLAUDE.md) for coding standards, naming conventions, and architecture guidelines
 
 ## License
 
-MemberJunction is open source under the [ISC License](./LICENSE).
+MemberJunction's full source code is public on GitHub — free and unrestricted for nonprofits, forever. Licensed under the [Business Source License 1.1](./LICENSE).
+
+Versions prior to v6.0.0 were released under the ISC License and remain ISC-licensed.
+
+Firms providing professional services to clients on MemberJunction need to be certified — see the [MemberJunction Certified Program](https://docs.memberjunction.org/mjcertified).
 
 ---
 
@@ -264,7 +282,7 @@ MemberJunction is open source under the [ISC License](./LICENSE).
 
 ### [Actions](./packages/Actions/README.md)
 
-Metadata-driven action framework for workflows, agents, and automation (15 packages).
+Metadata-driven action framework for workflows, agents, and automation (13 packages).
 
 #### Core
 
@@ -281,13 +299,6 @@ Metadata-driven action framework for workflows, agents, and automation (15 packa
 |---------|-----|-------------|
 | [ApolloEnrichment](./packages/Actions/ApolloEnrichment/README.md) | `@memberjunction/actions-apollo` | Action classes that wrap the Apollo.io data enrichment API for contacts and accounts. |
 | [ContentAutotag](./packages/Actions/ContentAutotag/README.md) | `@memberjunction/actions-content-autotag` | Action classes that execute the content autotagging and vectorization actions. |
-
-#### Scheduling
-
-| Package | npm | Description |
-|---------|-----|-------------|
-| [ScheduledActions](./packages/Actions/ScheduledActions/README.md) | `@memberjunction/scheduled-actions` | Allows system administrators to schedule any MemberJunction action for recurring or one-time future execution. |
-| [ScheduledActionsServer](./packages/Actions/ScheduledActionsServer/README.md) | `@memberjunction/scheduled-actions-server` | Simple application server that can be called via URL to invoke Scheduled Actions. |
 
 #### [Actions / BizApps](./packages/Actions/BizApps/README.md)
 
@@ -376,7 +387,7 @@ LLM, embedding, cloud-platform, local-inference, and specialty AI provider imple
 | [BlackForestLabs](./packages/AI/Providers/BlackForestLabs/README.md) | `@memberjunction/ai-blackforestlabs` | Wrapper for Black Forest Labs FLUX Image Generation Models |
 | [Cerebras](./packages/AI/Providers/Cerebras/README.md) | `@memberjunction/ai-cerebras` | Wrapper for Cerebras AI inference engine |
 | [Cohere](./packages/AI/Providers/Cohere/README.md) | `@memberjunction/ai-cohere` | Cohere AI Provider - Semantic reranking using Cohere's Rerank API |
-| [ElevenLabs](./packages/AI/Providers/ElevenLabs/README.md) | `@memberjunction/ai-elevenlabs` | Wrapper for ElevenLabs Audio Generation (TTS) |
+| [ElevenLabs](./packages/AI/Providers/ElevenLabs/readme.md) | `@memberjunction/ai-elevenlabs` | Wrapper for ElevenLabs Audio Generation (TTS) |
 | [HeyGen](./packages/AI/Providers/HeyGen/README.md) | `@memberjunction/ai-heygen` | Wrapper for HeyGen Video Generation |
 | [LocalEmbeddings](./packages/AI/Providers/LocalEmbeddings/README.md) | `@memberjunction/ai-local-embeddings` | Local Embeddings Models via Xenova/Transformers |
 
@@ -708,7 +719,6 @@ Packages at the top level of the `packages/` directory, not part of a multi-pack
 | [MJExportEngine](./packages/MJExportEngine/README.md) | `@memberjunction/export-engine` | Export engine for Excel, CSV, and JSON with sampling and formatting |
 | [MJQueue](./packages/MJQueue/README.md) | `@memberjunction/queue` | Server-side queue management |
 | [QueryGen](./packages/QueryGen/README.md) | `@memberjunction/query-gen` | AI-powered SQL query template generation with automatic testing and refinement |
-| [SkipTypes](./packages/SkipTypes/) | `@memberjunction/skip-types` | Shared types for the Skip AI Assistant used across MJAPI, Skip API, and Explorer |
 | [VersionHistory](./packages/VersionHistory/README.md) | `@memberjunction/version-history` | Label-based versioning, dependency-graph snapshots, cross-entity diffs, and point-in-time restore |
 
 ---
@@ -724,5 +734,5 @@ Curious how big the codebase is? Lines-of-code snapshots by language — with tr
 </p>
 
 <p align="center">
-  <sub>Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License</sub>
+  <sub>Built with TypeScript · Angular 21 · SQL Server · Source available under the Business Source License 1.1</sub>
 </p>

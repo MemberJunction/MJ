@@ -1,0 +1,36 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Entity Fields.Configuration so CodeGen emits",
+      "a typed ConfigurationObject accessor returning MJEntityFieldEntity_IEntityFieldConfiguration.",
+      "Source: metadata/entities/JSONType-interfaces/IEntityFieldConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Entity Fields"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IEntityFieldConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IEntityFieldConfiguration.ts"
+          },
+          "_comments": [
+            "EntityField.Configuration — optional Hierarchy / field config bag"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entity Fields&Name=Configuration"
+          },
+          "sync": {
+            "lastModified": "2026-08-20T22:30:53.225Z",
+            "checksum": "d6858dd05508f11bea482563be6afa49beeaac3ba0da3066c8a3c3ab12fe321b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entity Fields"
+    }
+  }
+]

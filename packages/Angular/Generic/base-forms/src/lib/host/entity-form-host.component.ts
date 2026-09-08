@@ -133,6 +133,8 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
   @Output() Saved = new EventEmitter<BaseEntity>();
   /** Re-emitted form `RecordSaved` (richer payload). */
   @Output() RecordSaved = new EventEmitter<RecordSavedEvent>();
+  /** Re-emitted form `RecordRefreshed`. */
+  @Output() RecordRefreshed = new EventEmitter<BaseEntity>();
   /** Re-emitted form `RecordDeleted`. */
   @Output() RecordDeleted = new EventEmitter<RecordDeletedEvent>();
   /** Re-emitted form `RecordSaveFailed`. */
@@ -209,6 +211,16 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       return;
     }
     this.Form?.CancelEdit();
+  }
+
+  /** Refresh the bound record from the database. Full-form mode uses the form's refresh pipeline. */
+  async Refresh(): Promise<boolean> {
+    if (this._isSection) {
+      return this._currentRecord?.IsSaved ? this._currentRecord.Refresh() : false;
+    }
+    const f = this.Form;
+    if (!f) return false;
+    return f.RefreshRecord();
   }
 
   // ── Core: resolve → load → create → bind → wire ──────────────────────────
@@ -402,6 +414,7 @@ export class MjEntityFormHostComponent extends BaseAngularComponent implements A
       form.Navigate.subscribe(e => this.Navigate.emit(e)),
       form.Notification.subscribe(e => this.Notification.emit(e)),
       form.RecordSaved.subscribe(e => this.RecordSaved.emit(e)),
+      form.RecordRefreshed.subscribe(e => this.RecordRefreshed.emit(e.Record)),
       form.RecordDeleted.subscribe(e => this.RecordDeleted.emit(e)),
       form.RecordSaveFailed.subscribe(e => this.RecordSaveFailed.emit(e)),
       form.ValidationFailed.subscribe(e => this.ValidationFailed.emit(e)),

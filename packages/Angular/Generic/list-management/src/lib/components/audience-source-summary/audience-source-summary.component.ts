@@ -56,7 +56,8 @@ export class AudienceSourceSummaryComponent extends BaseAngularComponent {
    */
   private async resolveLabel(source: AudienceSource): Promise<void> {
     try {
-      const md = (this.ProviderToUse as unknown as Metadata) ?? new Metadata();
+      // ProviderToUse always resolves (it falls back to the global default itself).
+      const md = this.ProviderToUse as unknown as Metadata;
       if (source.kind === 'list') {
         const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.ProviderToUse.CurrentUser ?? undefined);
         const loaded = await list.Load(source.listId);

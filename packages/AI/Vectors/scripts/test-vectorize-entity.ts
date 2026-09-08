@@ -36,7 +36,8 @@
  * to "Search" (the type the daily scheduled job uses).
  */
 
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { EntityVectorSyncer } from '@memberjunction/ai-vector-sync';
 import type { MJEntityDocumentEntity } from '@memberjunction/core-entities';
 import sql from 'mssql';
@@ -82,7 +83,7 @@ async function bootstrapProvider() {
     const provider = await setupSQLServerClient(pcfg);
 
     // The vector syncer needs a real ContextUser for its RunView/Save calls.
-    await UserCache.Instance.Refresh(pool);
+    await UserCache.Instance.Refresh(provider);
     const ownerUser = UserCache.Users.find(u => u?.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Users[0];
     if (!ownerUser) throw new Error('No user found in cache to act as ContextUser.');
 

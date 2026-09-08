@@ -5,6 +5,24 @@ panels to a form via the slot system. -->
 
 # BaseFormPanel: dynamic slot-based form extensions
 
+Related grids appear on the parent form through the chrome stack in
+[FORMS_ARCHITECTURE_GUIDE.md §7d](../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more):
+L1 `inclusion` (`Primary` / `More` / `None`), L2 ranker on Auto leftovers,
+L3 `MJ: Form Chrome Rules`, L4 user order. `None` is not a More item.
+In **left-nav** the rail is Primary contributions (lead band, e.g. Overview)
++ Details (leftover field panels) + each Primary related + More; the body
+shows only the selected group, locked open. `inclusion: 'Primary'` on a
+contribution is its own rail item — it does **not** fold into Details.
+A persisted user section order can override that; the generated
+`form.sections` list is not a custom order and does not.
+First-class related items (and non-lead contributions) sort by
+`UI.sortKey` / registration `sortKey` descending, then explicit
+Primary, then ranker score. The left/right rail width is user-resizable
+and persisted per entity (`mj.formChrome.<entity>.railWidth`); collapsed
+is always the 36px spine.
+`BaseFormPolicy.DecorateChrome` is cosmetics only — it cannot change
+membership.
+
 Add panels to entity edit forms WITHOUT replacing the generated form. Panels
 self-register against well-known slots and `<mj-form-panel-slot>` mounts them
 dynamically at runtime. No template edits per consumer, no per-entity custom
@@ -38,6 +56,7 @@ form class.
    ├── Content Items grid (related-entity)
    ├── ... other related-entity grids
    ├── [after-related slot]                 ← CodeGen-emitted; bottom addenda
+   ├── <mj-form-contributions>              ← Container-emitted; fill-in related grids
    └── [after-everything slot]              ← Container-emitted; ALWAYS present (fallback)
 ```
 
@@ -45,7 +64,11 @@ Every `<mj-form-panel-slot>` host:
 - Queries `MJGlobal.Instance.ClassFactory.GetAllRegistrationsByMetadata(BaseFormPanel, ...)` to find panels for its `(entity, slot)` pair.
 - Sorts results by `metadata.sortKey` desc, then `Priority` desc, then registration order.
 - Mounts each registered panel via `ViewContainerRef.createComponent`, wiring `[Record]` / `[FormComponent]` / `[FormContext]`.
+- Sets the slot host (and `BaseFormPanel` itself) to `display: contents` so left-nav leftover height reaches the related grid, not a wrapper.
 - Coordinates with siblings via the per-container `FormSlotCoordinator` to handle fallbacks (see below).
+
+Related grids call `FormComponent.NewRecordValues(relatedEntity, joinField)`
+so **New** prefills every join field that filters the grid.
 
 ## Available slots
 
@@ -216,6 +239,8 @@ This is the composition pattern. The same panel implementation serves both the d
 | Need                                                          | Use                                          |
 |---------------------------------------------------------------|----------------------------------------------|
 | Add a few extra panels to an otherwise-fine generated form    | **BaseFormPanel + slot**                     |
+| Replace a related-entity grid with a custom card              | **BaseFormPanel + `relatedEntity` claim**    |
+| Surface another app's related records on this form            | Same claim, or let the composer fill in the stock grid |
 | Hide or rearrange generated field panels                      | Custom form override (whole-form replace)    |
 | Replace the toolbar / record container                        | Custom form override                         |
 | Add source-type-conditional UI (e.g., Website-only panel)     | **BaseFormPanel + slot**, gate in template   |
@@ -224,12 +249,76 @@ This is the composition pattern. The same panel implementation serves both the d
 
 The slot system handles 90%+ of "I want to extend this form" cases without the maintenance burden of restating the entire generated structure.
 
+## Form contributions
+
+A form is a list of **contributions**. A related-entity grid is the default contribution when nobody claimed that relationship. Installed OpenApps register panels; ClassFactory discovery is “what is installed.” Full write-up: [`/plans/form-contributions.md`](../../../../plans/form-contributions.md).
+
+**CodeGen keeps emitting baked related grids.** Override is runtime:
+
+| On the form | Result |
+|---|---|
+| Baked grid, no claim | Baked grid shows. Composer does not add a second one. |
+| A panel **claims** that relationship | Baked section is hidden (`HiddenSectionKeys`). The panel mounts in its slot. |
+| `DisplayInForm` relationship not baked (other app installed; custom form omitted it) | Composer mounts the stock grid — or the claiming panel. |
+| Extra pane (`relatedEntity` omitted) | Existing slot host mounts it. |
+
+**Replace a related grid** so your panel is the contribution (baked grid hides):
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:People:related:EventOrderLines',
+    metadata: {
+        entity: 'MJ_BizApps_Common: People',
+        slot: 'after-related',
+        sortKey: 80,
+        relatedEntity: 'MJ_BizApps_Orders: Event Order Lines',
+        relatedJoinField: 'PersonID',   // required when two FKs point at the same entity
+    },
+})
+export class PersonEventTicketsPanel extends BaseFormPanel { /* ticket cards */ }
+```
+
+**Replace a field panel with a hero that is not a collapsible panel** (Orders header, Person identity):
+
+```typescript
+@RegisterClassEx(BaseFormPanel, {
+    key: 'form-panel:OrderHeaders:header',
+    metadata: {
+        entity: 'MJ_BizApps_Orders: Order Headers',
+        slot: 'before-fields',          // top of every generated form
+        sortKey: 100,
+        contributionKey: 'header',      // last-wins identity if two apps ship a header
+        replacesSectionKey: 'details',  // CodeGen SectionKey — hides the baked Details panel
+    },
+})
+export class OrderHeaderHeroPanel extends BaseFormPanel {
+    // template is a hero strip — no <mj-collapsible-panel>
+}
+```
+
+`replacesSectionKey` is the `SectionKey` on the generated `<mj-collapsible-panel>` (camelCase of the section name). Must name a concrete `entity`, not `'*'`.
+
+`contributionKey` defaults to `related:${relatedEntity}:${joinField}` for related claims. Two registrations with the same key collapse; highest ClassFactory `Priority` wins. Discover via `GetAllRegistrationsByMetadata` — do not stuff entity/slot/order into `Key`.
+
+Worked examples (Orders hero, Person tickets, Sales fill-in, competing headers): [Forms Architecture Guide §7c](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7c-form-contributions--add-replace-or-fill-in-no-regen).
+
+`<mj-record-form-container>` always hosts `<mj-form-contributions>`, so custom forms that use the container get fill-in grids with no template edit. Put CodeGen slots back on custom templates so claimed panels land in `after-related` instead of falling through to `after-everything`. A form that is not in the container can drop in:
+
+```html
+<mj-form-contributions [Record]="record" [FormComponent]="this"></mj-form-contributions>
+```
+
+Related section keys use the same camelCase as CodeGen (`FormSectionCamelCase` / `RelatedEntitySectionKey`) so hide-baked and skip-baked hit the right panel.
+
 ## Implementation files
 
 | File                                                                                  | Role                                                          |
 |---------------------------------------------------------------------------------------|---------------------------------------------------------------|
 | `base-form-panel.ts`                                                                  | `BaseFormPanel` abstract class + `FormPanelSlot` type union + `FormPanelRegistrationMetadata` shape. |
+| `form-contribution.ts`                                                                | Pure composer: last-wins, related claims, baked-section keys. |
+| `form-contributions.component.ts`                                                     | `<mj-form-contributions>` — mounts stock grids the template did not bake. |
+| `related-entity-grid-panel.component.ts`                                              | Stock related-entity grid (mirrors the CodeGen EntityDataGrid template). |
 | `form-panel-slot.component.ts`                                                        | `<mj-form-panel-slot>` host — discovery, sorting, dynamic mount, fallback resolution. |
 | `form-slot-coordinator.service.ts`                                                    | `FormSlotCoordinator` — per-container registry of which slots are physically present. `FORM_SLOT_CHAIN` constant. |
-| `record-form-container.component.{ts,html}`                                           | Provides `FormSlotCoordinator` (`providers:`) + the always-on `after-everything` slot in its template. |
-| `packages/CodeGenLib/src/Angular/angular-codegen.ts` (`innerCollapsiblePanelsHTML`)   | Emits the four primary slot markers into every generated form template. |
+| `record-form-container.component.{ts,html}`                                           | Provides `FormSlotCoordinator` + fill-in contributions + the always-on `after-everything` slot. |
+| `packages/CodeGenLib/src/Angular/angular-codegen.ts` (`innerCollapsiblePanelsHTML`)   | Emits the four primary slot markers into every generated form template. Related grids stay baked. |

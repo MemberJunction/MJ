@@ -407,7 +407,7 @@ ${actionParams.filter(p => p.required).map(p => `  - ${p.name} (${p.type}): ${p.
   }
 
   private async getContextUser(): Promise<UserInfo> {
-    const { UserCache } = await import('@memberjunction/sqlserver-dataprovider');
+    const { UserCache } = await import('@memberjunction/generic-database-provider');
     
     // Try to get the System user like MetadataSync does
     let user = UserCache.Instance.UserByName("System", false);

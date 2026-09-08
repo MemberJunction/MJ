@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
 import { CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
+import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
 
 /**
  * Helper: build a minimal EntityInfo-like object with the given field names.
@@ -229,6 +230,95 @@ describe('PostgreSQLDataProvider', () => {
             await provider.BeginTransaction();      // should be mj_sp_1 again, not mj_sp_2
             expect(client2.queries.at(-1)).toBe('SAVEPOINT mj_sp_1');
         });
+
+        it('IsInTransaction tracks TransactionDepth through begin/begin/commit/commit (C10)', async () => {
+            installFakeClient(provider);
+            expect(provider.IsInTransaction).toBe(false);
+            expect(provider.TransactionDepth).toBe(0);
+            await provider.BeginTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+            await provider.BeginTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(2);
+            await provider.CommitTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+            await provider.CommitTransaction();
+            expect(provider.IsInTransaction).toBe(false);
+            expect(provider.TransactionDepth).toBe(0);
+        });
+
+        it('failed nested ROLLBACK TO abandons the client and resets depth (B3/C8)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('ROLLBACK TO')) {
+                    throw Object.assign(new Error('savepoint "mj_sp_1" does not exist'), { code: '3B001' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(1);
+            expect(client.released).toBe(true);
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(0);
+        });
+
+        it('failed outer COMMIT still releases the client (C6)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql === 'COMMIT') {
+                    throw new Error('commit failed');
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.CommitTransaction()).rejects.toThrow(/commit failed/);
+            expect(provider.TransactionDepth).toBe(0);
+            expect(client.released).toBe(true);
+            expect(client.queries).toContain('ROLLBACK');
+        });
+
+        it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('SAVEPOINT')) {
+                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            await expect(provider.ExecuteSQL('UPDATE orders SET status = 1')).rejects.toBeInstanceOf(DoomedTransactionError);
+            const poolQuery = vi.fn(async () => ({ rows: [{ ok: 1 }] }));
+            await provider.ExecuteSQL('SELECT 1', undefined, { connectionSource: { query: poolQuery } });
+            expect(poolQuery).toHaveBeenCalled();
+            await provider.RollbackTransaction();
+        });
+
+        it('RELEASE SAVEPOINT failure dooms and pops the frame (P4/C11)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('RELEASE')) {
+                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            expect(provider.TransactionDepth).toBe(1);
+            expect(client.released).toBe(true);
+            expect(client.queries).toContain('ROLLBACK');
+            await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            expect(provider.TransactionDepth).toBe(0);
+        });
     });
 
     describe('GetCurrentUser', () => {
@@ -275,14 +365,6 @@ describe('PostgreSQLDataProvider', () => {
             const mockEntityInfo = { ChildEntities: [] } as never;
             const result = await provider.FindISAChildEntity(mockEntityInfo, 'pk1');
             expect(result).toBeNull();
-        });
-
-        it('RunReport should return Report not found when no report exists', async () => {
-            // Mock ExecuteSQL to return empty results (no report found)
-            vi.spyOn(provider, 'ExecuteSQL').mockResolvedValueOnce([]);
-            const result = await provider.RunReport({ ReportID: '00000000-0000-0000-0000-000000000000' });
-            expect(result.Success).toBe(false);
-            expect(result.ErrorMessage).toBe('Report not found');
         });
     });
 
@@ -458,6 +540,41 @@ describe('PostgreSQLDataProvider', () => {
             const fields = new Set(['ID']);
             // "VALID" contains "ID" but not at a word boundary
             expect(quoter.quoteFieldNamesInToken('VALID', fields)).toBe('VALID');
+        });
+
+        /**
+         * PostgreSQL identifiers may legally contain regex metacharacters. Both
+         * sides of the substitution used to mishandle them: `fieldName` was
+         * interpolated into the `RegExp` raw (so `$` acted as an end-anchor and the
+         * pattern matched nothing), and the quoted identifier was passed as a string
+         * replacement (so `$$` would collapse). See issue #3171.
+         */
+        it('quotes a field name containing $', () => {
+            const fields = new Set(['a$$b']);
+            expect(quoter.quoteFieldNamesInToken('a$$b', fields)).toBe('"a$$b"');
+        });
+
+        it('does not let a metacharacter name match unrelated text', () => {
+            const fields = new Set(['a.b']);
+            // Without escaping, '.' matched any character and 'axb' was wrongly
+            // quoted as this column. It must now match a literal dot only.
+            expect(quoter.quoteFieldNamesInToken('axb', fields)).toBe('axb');
+        });
+
+        it('quotes a metacharacter name where it does match', () => {
+            const fields = new Set(['a.b']);
+            expect(quoter.quoteFieldNamesInToken('a.b', fields)).toBe('"a.b"');
+        });
+
+        /**
+         * Separate, pre-existing limitation of the `\b` anchoring, not of the
+         * escaping: a name ending in a non-word character (`)`) has no word
+         * boundary after it, so the pattern cannot match however it is escaped.
+         * Recorded so the gap is visible rather than assumed handled.
+         */
+        it('does not quote a field name ending in a non-word character', () => {
+            const fields = new Set(['Amount(USD)']);
+            expect(quoter.quoteFieldNamesInToken('Amount(USD)', fields)).toBe('Amount(USD)');
         });
     });
 

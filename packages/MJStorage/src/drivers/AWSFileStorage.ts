@@ -302,7 +302,7 @@ export class AWSFileStorage extends FileStorageBase {
     });
 
     const UploadUrl = await getSignedUrl(this._client, command, { expiresIn: 10 * 60 }); // 10 minutes
-    return Promise.resolve({ UploadUrl });
+    return { UploadUrl, HttpMethod: 'PUT' };
   }
 
   /**
@@ -733,6 +733,14 @@ export class AWSFileStorage extends FileStorageBase {
    * S3 supports ranged streaming via the GetObject API's `Range` parameter.
    */
   public override get SupportsStreaming(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthUpload(): boolean {
+    return true;
+  }
+
+  public override get SupportsPreAuthDownload(): boolean {
     return true;
   }
 

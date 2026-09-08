@@ -708,6 +708,39 @@ export class BaseEngineRegistry extends BaseSingleton<BaseEngineRegistry> {
      * @param options.unfilteredOnly  Require a full-set (no-`Filter`) cache. Default false.
      * @returns The live cached array, or null if not cached (per the options).
      */
+    /**
+     * Names the engines that **declare** a cache for an entity, whether or not they are loaded yet.
+     *
+     * {@link FindCachedEntity} deliberately only returns loaded engines, because only those have
+     * data. That makes two very different situations indistinguishable to a caller: no engine
+     * anywhere caches this entity (a design error), versus the engine that does exists but has not
+     * been configured yet (an ordering problem). This method separates them, so a failure can say
+     * which one it is and what to do about it.
+     *
+     * @param entityName - The entity to look for.
+     * @returns Class names of every registered engine declaring an entity config for it, loaded or
+     *          not. Empty when nothing anywhere caches the entity.
+     */
+    public FindEnginesDeclaringEntity(entityName: string): string[] {
+        const target = (entityName ?? '').trim().toLowerCase();
+        if (!target) return [];
+
+        const names: string[] = [];
+        for (const [className, info] of this._engines) {
+            const engine = info.instance;
+            if (!engine || typeof engine !== 'object') continue;
+            const configs = (engine as Record<string, unknown>)['Configs'];
+            if (!Array.isArray(configs)) continue;
+            const declares = (configs as BaseEnginePropertyConfig[]).some(
+                cfg => (cfg.Type ?? 'entity') === 'entity' && cfg.EntityName?.trim().toLowerCase() === target,
+            );
+            if (declares) {
+                names.push(className);
+            }
+        }
+        return names;
+    }
+
     public TryGetCachedRecords<T extends BaseEntity = BaseEntity>(
         entityName: string,
         options?: { unfilteredOnly?: boolean }

@@ -77,8 +77,8 @@ interface MemWrite {
 }
 /** Build the IT: Memory Writer user message so the model emits EXACTLY these writes (verbatim). */
 function memoryWriteMessage(writes: MemWrite[]): string {
-  const lines = writes.map((w, i) => `${i + 1}. type=${w.type}, content="${w.content}"${w.scope ? `, scope=${w.scope}` : ''}`);
-  return `Emit exactly these memory writes, copying the type, content and scope of each verbatim and in order:\n${lines.join('\n')}`;
+  const lines = writes.map((w, i) => `${i + 1}. type=${w.type}, note="${w.content}"${w.scope ? `, scope=${w.scope}` : ''}`);
+  return `Emit exactly these memory writes, copying the type, note and scope of each verbatim and in order:\n${lines.join('\n')}`;
 }
 
 async function runWriter(ctx: IntegrationCheckContext, agent: MJAIAgentEntityExtended, writes: MemWrite[]): Promise<MJAIAgentRunEntityExtended> {
@@ -176,24 +176,42 @@ export const AgentMemoryGuardsChecks: NamedCheck[] = [
   },
   {
     Id: 'agent-memory-guards.MG2',
-    Name: 'MG2: per-run cap (5) — 6 valid writes → 5 written, the 6th skipped-cap',
+    Name: 'MG2: per-run cap (5) — 9 valid writes → exactly 5 written, the rest skipped-cap',
     RequiresLiveModel: true,
     Fn: async (ctx): Promise<void> => {
       await withBoundedRetry('MG2', async (attempt) => {
         const fx = requireFixture(ctx);
         const tag = `${fx.Marker}-MG2-a${attempt}`;
         const agent = await resolveWriter(ctx);
-        const writes: MemWrite[] = [];
-        for (let i = 1; i <= 6; i++) {
-          writes.push({ type: 'Preference', content: `${tag} distinct preference number ${i}` });
-        }
+        // Topics must be semantically distinct, not just distinguished by a trailing number —
+        // near-identical phrasing ("preference number 1" vs "preference number 2") can exceed the
+        // near-dup guard's cosine-similarity threshold and collapse into supersede-own-note instead
+        // of landing as separate writes, undercounting `written` below the cap this test exercises.
+        const topics = [
+          'prefers dark mode in the UI',
+          'wants weekly digest emails on Mondays',
+          'dislikes verbose agent responses',
+          'prefers metric units for measurements',
+          'wants desktop notifications disabled',
+          'prefers keyboard shortcuts over mouse clicks',
+          // Writes 7-9 exist so the cap is structurally guaranteed to be EXCEEDED, not merely
+          // reached. MemoryWriteManager.recordOutcome increments writeCount only for 'written', so
+          // with exactly 6 attempts a single near-dup collapse (superseded-own / deduped) leaves
+          // writeCount at 5 and the cap never trips — `written`=5 but `capped`=0. The cap hard-limits
+          // `written` to 5 regardless of attempt count, so extra attempts can only add skipped-cap.
+          'wants times displayed in 24-hour format',
+          'prefers tables over charts for numeric data',
+          'wants code examples in TypeScript',
+        ];
+        const writes: MemWrite[] = topics.map((topic) => ({ type: 'Preference', content: `${tag}: ${topic}` }));
         const run = await runWriter(ctx, agent, writes);
         const dispositions = await memoryWriteDispositions(ctx, run.ID);
-        assertP(dispositions.length >= 6, `expected 6 attempted writes, got ${dispositions.length}`);
-        const written = dispositions.filter((d) => d.disposition === 'written').length;
-        const capped = dispositions.filter((d) => d.disposition === 'skipped-cap').length;
-        AssertEqual(written, 5, `per-run cap must land exactly 5 written (got ${written})`);
-        Assert(capped >= 1, `the 6th write must be skipped-cap (got ${capped} capped of ${dispositions.length})`);
+        assertP(dispositions.length >= 7, `expected at least 7 attempted writes, got ${dispositions.length}`);
+        const kinds = dispositions.map((d) => d.disposition ?? '');
+        const written = kinds.filter((k) => k === 'written').length;
+        const capped = kinds.filter((k) => k === 'skipped-cap').length;
+        AssertEqual(written, 5, `per-run cap must land exactly 5 written (got ${written}; dispositions ${JSON.stringify(kinds)})`);
+        Assert(capped >= 1, `writes past the cap must be skipped-cap (got ${capped} capped of ${dispositions.length}; dispositions ${JSON.stringify(kinds)})`);
         console.log(`      → ${written} written, ${capped} skipped-cap (cap=5 enforced)`);
       });
     },

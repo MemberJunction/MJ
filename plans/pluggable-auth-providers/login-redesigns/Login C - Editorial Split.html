@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MJ Explorer — Login · C · Editorial Split</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" />
+<link rel="stylesheet" href="base.css" />
+<style>
+  .splitC { min-height: 100dvh; display: grid; grid-template-columns: 1.05fr 1fr; }
+  /* Story panel navy — stops derive from --mj-color-brand-* (deepest = brand-900→black).
+     Its text/overlays are white by design (always-dark panel), so left theme-fixed. */
+  .asideC {
+    position: relative; overflow: hidden; color: #fff;
+    background: linear-gradient(160deg, var(--mj-color-brand-900) 0%, color-mix(in srgb, var(--mj-color-brand-900) 65%, var(--mj-color-brand-700)) 60%, var(--mj-color-brand-700) 140%);
+    padding: var(--mj-space-14) clamp(var(--mj-space-10), 4vw, var(--mj-space-16)) var(--mj-space-12);
+    display: flex; flex-direction: column; justify-content: center;
+  }
+  [data-theme="dark"] .asideC { background: linear-gradient(160deg, color-mix(in srgb, var(--mj-color-brand-900) 65%, #000) 0%, var(--mj-color-brand-900) 60%, color-mix(in srgb, var(--mj-color-brand-900) 50%, var(--mj-color-brand-700)) 140%); }
+  .gridTex { position: absolute; inset: 0; opacity: .5; pointer-events: none;
+    background-image: linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.05) 1px, transparent 1px);
+    background-size: 46px 46px; mask-image: radial-gradient(120% 90% at 20% 20%, #000 0%, transparent 75%); }
+  .asideC > * { position: relative; z-index: 2; }
+  .asideC-brand { position: relative; z-index: 2; }
+  .wordmarkC { width: min(560px, 80%); height: auto; display: block; filter: brightness(0) invert(1); }
+  .asideC-welcome { color: #fff; font-size: clamp(var(--mj-text-3xl), 3.2vw, var(--mj-text-4xl)); font-weight: var(--mj-font-bold); letter-spacing: -.4px; margin: var(--mj-space-8) 0 var(--mj-space-2); }
+  .asideC-sub { color: rgba(255,255,255,.82); font-size: var(--mj-text-lg); margin: 0; }
+
+  .formC { display: flex; flex-direction: column; justify-content: center; background: var(--mj-bg-surface); padding: var(--mj-space-12) clamp(var(--mj-space-8), 5vw, 68px); }
+  .formC .inner { width: 100%; max-width: 400px; margin: 0 auto; }
+  .formC h2 { font-size: var(--mj-text-2xl); font-weight: var(--mj-font-bold); margin: 0 0 var(--mj-space-2); }
+  .formC .lede { margin: 0 0 var(--mj-space-8); font-size: var(--mj-text-base); color: var(--mj-text-secondary); }
+  .formC .caption { margin-top: var(--mj-space-6); }
+  .single-wrap .caption { margin-top: var(--mj-space-4); }
+
+  @media (max-width: 900px) {
+    .splitC { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+    /* Stacked story panel would push the form off-screen — collapse it to just the
+       logo on mobile, and tighten paddings so the whole login fits without scrolling. */
+    .asideC { padding: var(--mj-space-5) var(--mj-space-6); }
+    .formC { padding: var(--mj-space-6); }
+    .formC .lede { margin-bottom: var(--mj-space-5); }
+  }
+</style>
+</head>
+<body class="mode-multi">
+  <div class="controls">
+    <button class="mj-btn" id="themeBtn" aria-pressed="false" aria-label="Switch to dark mode"
+      onclick="(function(b){const d=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=d?'light':'dark';b.setAttribute('aria-pressed',String(!d));})(this)">
+      <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i> Theme
+    </button>
+    <button class="mj-btn" aria-label="Toggle between one and multiple providers" onclick="document.body.classList.toggle('mode-single')">
+      <i class="fa-solid fa-toggle-on" aria-hidden="true"></i> 1 vs 2+ providers
+    </button>
+  </div>
+
+  <div class="splitC">
+    <aside class="asideC">
+      <div class="gridTex" aria-hidden="true"></div>
+      <div class="asideC-brand">
+        <!-- host app supplies its own logo here (MJ shown as a placeholder) -->
+        <img class="wordmarkC" src="assets/MJ_logo.svg" alt="Company logo" />
+        <h2 class="asideC-welcome">Welcome back</h2>
+        <p class="asideC-sub">Sign in to continue.</p>
+      </div>
+    </aside>
+
+    <section class="formC">
+      <div class="inner">
+        <h2>Log in</h2>
+        <p class="lede">Continue with one of your organization's sign-in options.</p>
+
+        <div class="provider-list" role="group" aria-label="Sign-in options">
+          <button type="button" class="mj-btn mj-btn--secondary provider-btn is-default">
+            <span class="ico microsoft" aria-hidden="true"><i class="fa-brands fa-microsoft"></i></span>
+            <span class="label">Continue with Microsoft<span class="sr-only"> (default)</span><span class="default-pill" aria-hidden="true">Default</span></span>
+            <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+          </button>
+          <button type="button" class="mj-btn mj-btn--secondary provider-btn">
+            <span class="ico workos" aria-hidden="true">W</span>
+            <span class="label">Continue with WorkOS</span>
+            <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+          </button>
+          <button type="button" class="mj-btn mj-btn--secondary provider-btn">
+            <span class="ico okta" aria-hidden="true">O</span>
+            <span class="label">Continue with Okta</span>
+            <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+          </button>
+          <button type="button" class="mj-btn mj-btn--secondary provider-btn">
+            <span class="ico google" aria-hidden="true"><i class="fa-brands fa-google"></i></span>
+            <span class="label">Continue with Google</span>
+            <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+          </button>
+        </div>
+
+        <div class="single-wrap">
+          <button type="button" class="mj-btn mj-btn--primary provider-btn provider-btn--primary">
+            <span class="ico" aria-hidden="true"><i class="fa-brands fa-microsoft"></i></span>
+            <span>Continue with Microsoft</span>
+          </button>
+          <p class="caption">When only one provider is enabled, sign-in goes directly — no picker.</p>
+        </div>
+
+        <p class="powered-by">Powered by <strong>MemberJunction</strong></p>
+      </div>
+    </section>
+  </div>
+</body>
+</html>

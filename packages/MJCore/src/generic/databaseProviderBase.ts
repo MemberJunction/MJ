@@ -6,11 +6,11 @@ import { EntitySaveOptions, EntityDeleteOptions, EntityMergeOptions, PotentialDu
 import { dispatchRemoteOperationInProcess } from "./remoteOperationDispatch";
 import { TransactionItem } from "./transactionGroup";
 import { CompositeKey } from "./compositeKey";
+import { EntityTransactionScope } from "./entityTransactionScope";
 import { LogError } from "./logging";
-import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunReportResult, RunQueryResult } from "./interfaces";
+import { AggregateResult, EntityRecordNameInput, EntityRecordNameResult, RunQueryResult } from "./interfaces";
 import { QueryExecutionSpec } from "./queryExecutionSpec";
-import { RunReportParams } from "./runReport";
-import { SQLExpressionValidator, uuidv4 } from "@memberjunction/global";
+import { SQLExpressionValidator, StripSQLStringLiterals, uuidv4 } from "@memberjunction/global";
 import { GetDialect, SQLDialect } from "@memberjunction/sql-dialect";
 
 // Re-export PlatformSQL types from their canonical location for backward compatibility
@@ -164,6 +164,147 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The provider's current transaction nesting depth, for subclasses that track one.
+     *
+     * Distinct from {@link IsInTransaction}, which some providers deliberately leave `false` so
+     * that `RunMaybeSerial` keeps fanning out — SQL Server most notably. This accessor exists so
+     * the entity-transaction machinery can still see real nesting on those providers: it feeds
+     * {@link EntityTransactionScope.IsNested} and the out-of-order settle detection in
+     * {@link BeginEntityTransaction}. Defaults to 0 for providers that do not track depth.
+     */
+    protected get CurrentTransactionDepth(): number {
+        return 0;
+    }
+
+    /**
+     * Public nesting depth. 0 = no ambient TX. Join-TX callers (accounting
+     * CreateJournalEntries) must read this, not `IsInTransaction` (SQL Server
+     * leaves that false). Deprecated camelCase `transactionDepth` alias ships
+     * for one release.
+     */
+    public get TransactionDepth(): number {
+        return this.CurrentTransactionDepth;
+    }
+
+    /**
+     * Independent instance that **shares the connection pool and metadata cache**
+     * but has its own transaction stack. Same pattern MJAPI uses for per-request
+     * providers. Used by `mj sync push` so `--parallel-batch-size` (default 10)
+     * does not interleave `EntityTransactionScope`s on one provider.
+     *
+     * Not SQL Server-specific: each concrete provider implements this against
+     * its own pool. {@link ReleaseIndependentInstance} must NOT close the pool.
+     */
+    public async CreateIndependentInstance(): Promise<DatabaseProviderBase> {
+        throw new Error(`${this.constructor.name} does not implement CreateIndependentInstance`);
+    }
+
+    /**
+     * Drop this instance's transaction handle. Must not close the shared pool.
+     */
+    public async ReleaseIndependentInstance(): Promise<void> {
+        if (this.TransactionDepth > 0) {
+            try {
+                await this.RollbackTransaction();
+            } catch {
+                await this.ResetTransactionState();
+            }
+        }
+    }
+
+    /** @deprecated Use {@link TransactionDepth}. */
+    public get transactionDepth(): number {
+        return this.TransactionDepth;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth. No-op on providers that
+     * do not track nested transactions. Use after a server-side abort when
+     * {@link RollbackTransaction} itself rejects.
+     */
+    public async ResetTransactionState(): Promise<void> {
+        /* no-op */
+    }
+
+    /**
+     * Database providers execute multi-record units of work atomically, in-process.
+     *
+     * @see ProviderBase.SupportsEntityTransactions for why the base default is `false`.
+     */
+    public override get SupportsEntityTransactions(): boolean {
+        return true;
+    }
+
+    /**
+     * Begins a transaction scope, or joins one already in flight on this provider.
+     *
+     * This is the single transaction primitive for all multi-record entity work — IS-A parent
+     * chains, composite save graphs and hand-written application cascades. It delegates to the
+     * provider's existing depth-counted {@link BeginTransaction} / {@link CommitTransaction} /
+     * {@link RollbackTransaction}, which already implement the join semantics: the outermost call
+     * issues a physical `BEGIN`, nested calls create savepoints, and only the outermost commit
+     * commits for real.
+     *
+     * Routing IS-A through here is what closed the torn-write bug described in
+     * {@link EntityTransactionScope} — the previous `BeginISATransaction()` opened a *second*
+     * physical transaction on the same pool, blind to any transaction the caller had already
+     * started.
+     *
+     * The returned scope is **settle-once**: the first `Commit()` or `Rollback()` wins and later
+     * calls are no-ops, so `try { ...; Commit() } catch { Rollback() }` is safe even when the work
+     * already unwound its own scope.
+     *
+     * @returns A scope bound to this provider's ambient transaction.
+     */
+    public async BeginEntityTransaction(): Promise<EntityTransactionScope> {
+        // Capture nesting BEFORE beginning: once BeginTransaction() returns we are, by definition,
+        // in a transaction, so asking afterwards would always answer "nested". IsInTransaction is
+        // not enough on its own — SQL Server deliberately leaves it false (so RunMaybeSerial keeps
+        // fanning out), which made every scope on the flagship provider report IsNested === false
+        // even when joining. The depth accessor sees the truth on providers that track it.
+        const isNested = this.IsInTransaction || this.CurrentTransactionDepth > 0;
+        await this.BeginTransaction();
+        const depthAtBegin = this.CurrentTransactionDepth;
+
+        let settled = false;
+        const settle = async (commit: boolean): Promise<void> => {
+            if (settled) {
+                return; // settle-once: the first outcome wins
+            }
+            settled = true;
+            // Out-of-order settle detection. Depth pairing is strictly LIFO: a scope must settle
+            // while the provider sits at the depth its own begin produced. A mismatch means two
+            // units of work interleaved their scopes on ONE provider instance — concurrent
+            // transactional saves on a shared provider — so this commit/rollback is about to
+            // settle the WRONG savepoint, silently entangling both units' writes in one physical
+            // transaction. That corruption otherwise has no witness at all, so be loud about it.
+            // (Providers that do not track depth report 0/0 and never trip this.)
+            const depthNow = this.CurrentTransactionDepth;
+            if (depthAtBegin > 0 && depthNow !== depthAtBegin) {
+                LogError(
+                    `EntityTransactionScope settled out of order on ${this.constructor.name}: the scope began at ` +
+                    `transaction depth ${depthAtBegin} but the provider is now at depth ${depthNow}. Two ` +
+                    `transactional units of work are interleaving on one provider instance, so their writes share ` +
+                    `one physical transaction and a rollback by either can silently undo the other's committed ` +
+                    `work. Do not run concurrent transactional saves on a shared provider instance — use ` +
+                    `per-request providers (as MJServer does) or serialize the units of work.`,
+                );
+            }
+            if (commit) {
+                await this.CommitTransaction();
+            } else {
+                await this.RollbackTransaction();
+            }
+        };
+
+        return {
+            IsNested: isNested,
+            Commit: () => settle(true),
+            Rollback: () => settle(false),
+        };
+    }
+
+    /**
      * Internal implementation for spec-based query execution.
      * Subclasses must provide the concrete pipeline (composition → templates → execute).
      */
@@ -261,12 +402,14 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param isNew  True for INSERT / Create, false for UPDATE
      * @param user   The acting user (needed for encryption, audit columns, etc.)
      */
-    protected abstract GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo): Promise<SaveSQLResult>;
+    /** `options` carries per-save behavior the SQL builder must honor (e.g. SkipRecordChanges). Optional for back-compat with provider subclasses compiled against the 3-arg shape. */
+    protected abstract GenerateSaveSQL(entity: BaseEntity, isNew: boolean, user: UserInfo, options?: EntitySaveOptions): Promise<SaveSQLResult>;
 
     /**
      * Generates the SQL (and optional parameters) for a Delete operation.
      */
-    protected abstract GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult;
+    /** `options` carries per-delete behavior the SQL builder must honor (e.g. SkipRecordChanges). */
+    protected abstract GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult;
 
     /**************************************************************************/
     // END ---- SQL Dialect Abstractions
@@ -875,8 +1018,11 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         // ISA overlapping-subtype record-change propagation is DB-agnostic: if the save SQL
         // generation populated `overlappingChangeData` in extraData and the entity tracks
         // record changes across multiple subtypes, fan the change record out to siblings.
-        // The provider-specific transaction handle (if any) is passed through opaquely
-        // via `connectionSource`; each provider treats it as its native type downstream.
+        //
+        // No explicit `connectionSource` is supplied: the sibling writes must land in the same
+        // transaction as the save that triggered them, and that is exactly what happens by default
+        // — every ExecuteSQL call without an explicit source runs on the provider's ambient
+        // transaction, which BeginEntityTransaction() opened (or joined) for this unit of work.
         const overlappingChangeData = saveSQLResult.extraData?.overlappingChangeData as
             | { changesJSON: string; changesDescription: string }
             | undefined;
@@ -885,14 +1031,12 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entity.EntityInfo.AllowMultipleSubtypes &&
             entity.EntityInfo.TrackRecordChanges
         ) {
-            const transaction = entity.ProviderTransaction;
             await this.PropagateRecordChangesToSiblings(
                 entity.EntityInfo,
                 overlappingChangeData,
                 entity.PrimaryKey.Values(),
                 user?.ID ?? '',
                 options.ISAActiveChildEntityName,
-                transaction ? { connectionSource: transaction } : undefined,
             );
         }
         return null;
@@ -981,15 +1125,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @returns true if the clause is safe, false if it contains forbidden patterns
      */
     protected ValidateUserProvidedSQLClause(clause: string): boolean {
-        // Remove string literals to avoid false positives
-        const stringLiteralPattern = /(['"])(?:(?=(\\?))\2[\s\S])*?\1/g;
-        const clauseWithoutStrings = clause.replace(stringLiteralPattern, '');
+        // Remove string literals to avoid false positives.
+        //
+        // 🚨 SECURITY: this uses the SHARED stripper in @memberjunction/global. It must match how
+        // SQL Server / PostgreSQL actually parse literals — see StripSQLStringLiterals for the full
+        // rationale and the backslash-escape bypass it exists to prevent. Do NOT inline a regex here;
+        // an inline copy is exactly how this screen and SQLExpressionValidator drifted apart before.
+        const clauseWithoutStrings = StripSQLStringLiterals(clause);
         const lowerClause = clauseWithoutStrings.toLowerCase();
 
         const forbiddenPatterns: RegExp[] = [
             /\binsert\b/, /\bupdate\b/, /\bdelete\b/,
             /\bexec\b/, /\bexecute\b/, /\bdrop\b/,
             /--/, /\/\*/, /\*\//, /\bunion\b/, /\bxp_/, /;/,
+            // Time-based blind injection vector — no legitimate filter/order-by clause uses WAITFOR.
+            /\bwaitfor\b/,
         ];
 
         for (const pattern of forbiddenPatterns) {
@@ -1349,8 +1499,43 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     await this.OnBeforeSaveExecute(entity, user, options, saveContext);
                 }
 
+                // Step 3b: Post-image RLS check. The pre-image/pre-hook check at step 2b
+                // validates values as they exist BEFORE the before-save hooks run, which cannot
+                // catch a hook that mutates a filter-referenced field afterward (e.g. reassigning
+                // a row's owning organization to one the caller doesn't belong to — privilege
+                // escalation, not just a leak). This runs AFTER the before-save hooks by design:
+                // hooks can mutate field values, including filter-referenced ones, and the
+                // authorization boundary must cover the values that actually get written.
+                // Nothing existing moves — step 2b and step 3 keep their order; this is a new,
+                // additive step. Applies to BOTH creates and updates: a before-save hook can
+                // move a brand-new record's values outside the Create filter just as easily as
+                // it can move an existing row outside the Update filter, so CheckCreateRLS is
+                // called a second time here (idempotent, side-effect-free) rather than only
+                // gating updates. Post-image failure gets a specific message (unlike step 2b's
+                // deliberately generic one on the update path): the caller demonstrably had
+                // access to the pre-hook state, so the diagnostic leaks nothing new.
+                if (!bReplay) {
+                    if (bNewRecord) {
+                        const postHookCreatePass = await this.CheckCreateRLS(entity, user);
+                        if (!postHookCreatePass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Access denied for new ${entity.EntityInfo.Name} record: a before-save hook produced field values that no longer pass row-level security`;
+                            throw new Error(entityResult.Message);
+                        }
+                    } else {
+                        const postImagePass = await this.CheckUpdateRLSPostImage(entity, user);
+                        if (!postImagePass) {
+                            entityResult.Success = false;
+                            entityResult.EndedAt = new Date();
+                            entityResult.Message = `Access denied: the requested changes would move this ${entity.EntityInfo.Name} record outside your permitted row scope`;
+                            throw new Error(entityResult.Message);
+                        }
+                    }
+                }
+
                 // Step 4: Generate provider-specific SQL
-                const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user);
+                const sqlDetails = await this.GenerateSaveSQL(entity, bNewRecord, user, options);
 
                 if (entity.TransactionGroup && !bReplay) {
                     // ---- Transaction Group path ----
@@ -1427,7 +1612,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     }
                 }
             } else {
-                return entity; // nothing to save
+                return entity.GetAll(); // nothing to save
             }
         } catch (e) {
             this.OnResumeRefresh();
@@ -1477,7 +1662,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             entity.RegisterResultHistoryEntry(entityResult);
 
             // Generate provider-specific delete SQL
-            const sqlDetails = this.GenerateDeleteSQL(entity, user);
+            const sqlDetails = this.GenerateDeleteSQL(entity, user, options);
 
             // Before-delete hooks
             await this.OnBeforeDeleteExecute(entity, user, options);
@@ -1595,6 +1780,20 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         user: UserInfo
     ): Promise<boolean>;
 
+    /**
+     * Checks whether an UPDATE's pending (post-image) field values still pass the
+     * Update RLS filter. The pre-image check ({@link CheckRecordRLS}) validates the
+     * row as stored; this validates the row as it WILL be after the update, so a
+     * caller cannot move a row they legitimately own outside their own row scope
+     * (a privilege escalation the pre-image check cannot see). Runs after the
+     * before-save hooks so it validates the final values. Subclasses must
+     * implement; return true when no Update filter applies.
+     */
+    protected abstract CheckUpdateRLSPostImage(
+        entity: BaseEntity,
+        user: UserInfo
+    ): Promise<boolean>;
+
     /**************************************************************************/
     // END ---- Save/Delete Orchestration
     /**************************************************************************/
@@ -1683,13 +1882,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
      * @param baseType The operation type
      * @param before True for before-hooks, false for after-hooks
      * @param user The acting user
+     * @param originatingEntityActionIDs Entity Actions that caused this save/delete, from
+     *        `EntitySaveOptions.OriginatingEntityActionIDs`. After-hooks skip them, so an action
+     *        writing back on the record that triggered it does not re-fire itself.
      * @returns Array of action results (empty by default)
      */
     protected async HandleEntityActions(
         _entity: BaseEntity,
         _baseType: 'save' | 'delete' | 'validate',
         _before: boolean,
-        _user: UserInfo
+        _user: UserInfo,
+        _originatingEntityActionIDs?: string[]
     ): Promise<{ Success: boolean; Message?: string }[]> {
         return [];
     }
@@ -2175,54 +2378,6 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     // END ---- Record Duplicates & Merge
     /**************************************************************************/
 
-    /**************************************************************************/
-    // START ---- RunReport
-    /**************************************************************************/
-
-    /**
-     * Runs a report by looking up its SQL definition from vwReports and executing it.
-     * Both SQL Server and PostgreSQL share this logic — the only dialect difference
-     * is identifier quoting, handled by QuoteIdentifier/QuoteSchemaAndView.
-     *
-     * @param params Report parameters including ReportID
-     * @param contextUser Optional context user for permission/audit purposes
-     * @deprecated Reports are no longer supported and will eventually be removed. Interactive Components and Artifacts are replacements
-     */
-    public async RunReport(params: RunReportParams, contextUser?: UserInfo): Promise<RunReportResult> {
-        const reportID = params.ReportID;
-        const safeReportID = reportID.replace(/'/g, "''");
-        const sqlReport = `SELECT ${this.QuoteIdentifier('ReportSQL')} FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwReports')} WHERE ${this.QuoteIdentifier('ID')} = '${safeReportID}'`;
-        const reportInfo = await this.ExecuteSQL<Record<string, unknown>>(sqlReport, undefined, undefined, contextUser);
-        if (reportInfo && reportInfo.length > 0) {
-            const start = Date.now();
-            const sql = String(reportInfo[0].ReportSQL);
-            const result = await this.ExecuteSQL<Record<string, unknown>>(sql, undefined, undefined, contextUser);
-            const end = Date.now();
-            if (result)
-                return {
-                    Success: true,
-                    ReportID: reportID,
-                    Results: result,
-                    RowCount: result.length,
-                    ExecutionTime: end - start,
-                    ErrorMessage: '',
-                };
-            else
-                return {
-                    Success: false,
-                    ReportID: reportID,
-                    Results: [],
-                    RowCount: 0,
-                    ExecutionTime: end - start,
-                    ErrorMessage: 'Error running report SQL',
-                };
-        }
-        return { Success: false, ReportID: reportID, Results: [], RowCount: 0, ExecutionTime: 0, ErrorMessage: 'Report not found' };
-    }
-
-    /**************************************************************************/
-    // END ---- RunReport
-    /**************************************************************************/
 }
 
 /**
@@ -2237,4 +2392,9 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * Explicit driver handle (pool, client, or transaction). When set, the statement
+   * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
+   */
+  connectionSource?: object;
 }

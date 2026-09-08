@@ -52,7 +52,7 @@ Three pieces make this work:
 
 1. **`ClassFactory.RegisterLazyLoader()`** -- Accepts N callback functions that are called in order when a registration is not found. Each loader receives `(baseClassName, key)` and returns `Promise<boolean>` indicating whether it loaded the missing class.
 
-2. **`LAZY_FEATURE_CONFIG`** -- An auto-generated record mapping compound keys (`BaseClassName::Key`) to `import()` loaders. This is the bridge between "I need `BaseApplication::HomeApplication`" and "load `core-dashboards.module` from `ng-dashboards`."
+2. **`LAZY_FEATURE_CONFIG`** -- An auto-generated record mapping compound keys (`BaseClassName::Key`) to chunk descriptors (`{ chunkId, load }`). This is the bridge between "I need `BaseApplication::HomeApplication`" and "load `core-dashboards.module` from `ng-dashboards`."
 
 3. **Subpath exports in `package.json`** -- The bundler uses these to create separate chunks. Each subpath (e.g., `./ai-dashboards.module`) becomes an independently loadable unit.
 
@@ -95,27 +95,36 @@ In `app.module.ts`, the `APP_INITIALIZER` registers the lazy config and wires it
 
 The file at `packages/Angular/Explorer/explorer-core/src/generated/lazy-feature-config.ts` is **auto-generated** by `mj codegen manifest --lazy-config`. Never edit it manually.
 
-It maps compound `@RegisterClass` keys to dynamic `import()` loaders:
+It maps compound `@RegisterClass` keys to **chunk descriptors** -- a stable `chunkId` plus the dynamic `import()` that loads the chunk:
 
 ```typescript
 // AUTO-GENERATED -- DO NOT EDIT
 
-const loadCoreDashboardsModule = featureLoader(
-  () => import('@memberjunction/ng-dashboards/core-dashboards.module')
-);
+const loadNgDashboardsCoreDashboardsModule = {
+  chunkId: '@memberjunction/ng-dashboards/core-dashboards.module',
+  load: () => import('@memberjunction/ng-dashboards/core-dashboards.module').then(() => {})
+};
 
-export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
-  'BaseApplication::HomeApplication': loadCoreDashboardsModule,
-  'BaseResourceComponent::HomeDashboard': loadCoreDashboardsModule,
-  'BaseResourceComponent::APIKeysResource': loadCoreDashboardsModule,
-  'BaseDashboard::EntityAdmin': loadCoreDashboardsModule,
+export const LAZY_FEATURE_CONFIG: Record<string, { chunkId: string; load: () => Promise<void> }> = {
+  'BaseApplication::HomeApplication': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::HomeDashboard': loadNgDashboardsCoreDashboardsModule,
+  'BaseResourceComponent::APIKeysResource': loadNgDashboardsCoreDashboardsModule,
+  'BaseDashboard::EntityAdmin': loadNgDashboardsCoreDashboardsModule,
   // ...
 };
 ```
 
+### Why the explicit `chunkId`
+
+Many compound keys share one chunk, so the registry needs a way to tell chunks apart in order to import each one exactly once. **That identity must be the declared `chunkId` -- never anything derived from the `load` function.**
+
+`LazyModuleRegistry` used to dedupe on `loader.toString()`, and the generator used to build every loader through one shared `featureLoader(importFn)` helper. Every closure that helper returned had **identical source text** (the import path lived in the captured variable, not the function body), so all 18 chunks collapsed into a single dedup key: the first chunk to load made every other chunk look already-loaded, and their classes never registered. If you hand-port this pattern to another app, emit a distinct `chunkId` per chunk and do not reintroduce a shared closure factory.
+
 ### Compound Key Format
 
 Keys use the format `BaseClassName::Key`, matching the two arguments to `@RegisterClass(BaseClass, Key)`. This allows the lazy loader to handle any base class, not just `BaseResourceComponent`.
+
+**The base-class half is not stable at runtime.** `ClassFactory` builds the lookup key from `baseClass.name`, but the emitted identifier depends on the build mode -- Angular's named class expression makes `BaseResourceComponent` report `_BaseResourceComponent` unminified, and esbuild's collision rename makes it `BaseResourceComponent2` minified, while the generated config uses the TypeScript source name. So the registry keeps a secondary index on the **subclass key alone** (the `@RegisterClass` string literal, which no build mode renames) and falls back to it when the exact compound key misses. If several chunks ever claim one subclass key, all of them load and `ClassFactory` still picks the winner by base class.
 
 ---
 
@@ -189,7 +198,7 @@ export class AIDashboardsModule { }
 
 After rebuilding `explorer-core`, the lazy config automatically includes:
 ```
-'BaseResourceComponent::MyNewResource': loadAiDashboardsModule,
+'BaseResourceComponent::MyNewResource': loadNgDashboardsAiDashboardsModule,
 ```
 
 ---
@@ -208,7 +217,7 @@ To make a non-Angular class lazy-loadable:
 export { HomeApplication } from './Home/home-application';
 ```
 
-3. The generator picks up the `@RegisterClass` decorator and maps it with its base class: `'BaseApplication::HomeApplication': loadCoreDashboardsModule`
+3. The generator picks up the `@RegisterClass` decorator and maps it with its base class: `'BaseApplication::HomeApplication': loadNgDashboardsCoreDashboardsModule`
 4. Any consumer using `CreateInstanceAsync` or `GetRegistrationAsync` will trigger the lazy load automatically
 
 ---

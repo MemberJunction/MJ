@@ -159,4 +159,4 @@ startup manager warms exactly one `BaseEngine` cache — the same composition-ov
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../../../LICENSE) for details.

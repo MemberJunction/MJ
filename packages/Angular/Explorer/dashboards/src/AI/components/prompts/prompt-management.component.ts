@@ -557,6 +557,9 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
     if (this.selectedPrompt) {
       this.openPrompt(this.selectedPrompt.ID);
     }
+    // Intent moved to the full record — a lingering panel paints over the
+    // records view and greets the user with stale chrome on return.
+    this.closeDetailPanel();
   }
 
   public testPrompt(promptId: string, event?: Event): void {

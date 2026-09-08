@@ -90,11 +90,36 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Action Invocations','InvocationTypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Action Invocations')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Action Invocations','InvocationTypeID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityActionInvocations')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityActionInvocations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Action Execution Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJActionExecutionLogs"
+        SectionName="Action Execution Logs"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJActionExecutionLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Action Execution Logs','EntityActionInvocationTypeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Action Execution Logs','EntityActionInvocationTypeID')"
+                [AllowLoad]="IsSectionExpanded('mJActionExecutionLogs')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJActionExecutionLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

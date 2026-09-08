@@ -1,4 +1,4 @@
-import { BaseSingleton, MJEvent, MJEventType, MJGlobal } from "@memberjunction/global";
+import { BaseSingleton, MJEvent, MJEventType, MJGlobal, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { BehaviorSubject, Observable, Subject } from "rxjs";
 import { buffer, debounceTime, filter } from "rxjs/operators";
@@ -15,6 +15,7 @@ import { BaseEngineRegistry } from "./baseEngineRegistry";
 import { IStartupSink } from "./RegisterForStartup";
 import { CacheChangedEvent, LocalCacheManager } from "./localCacheManager";
 import { ProviderBase } from "./providerBase";
+import { TransformSimpleObjectToEntityObject } from "./util";
 /**
  * Property configuration for the BaseEngine class to automatically load/set properties on the class.
  */
@@ -1520,16 +1521,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             connectionString = (provider as ProviderBase).InstanceConnectionString;
         }
 
-        // Generate the same fingerprint that would be used when loading this data
-        const params: RunViewParams = {
-            EntityName: config.EntityName,
-            ExtraFilter: config.Filter || '',
-            OrderBy: config.OrderBy || '',
-            ResultType: 'entity_object',
-            MaxRows: -1,
-            StartRow: 0
-        };
-        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, connectionString);
+        // Use the shared builder so the fingerprint matches what LoadSingleEntityConfig
+        // and RegisterCacheChangeCallbacks produce — prevents silent cache-slot mismatches
+        const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
+            this.BuildRunViewParamsForConfig(config),
+            connectionString
+        );
 
         // Build CompositeKey from the entity's primary key fields
         const key = entity.PrimaryKey;
@@ -1589,7 +1586,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Compare all primary key values
             return primaryKeys.every((pk, idx) => {
                 const entityValue = (e as unknown as Record<string, unknown>)[pk.Name];
-                return entityValue === targetKeyValues[idx];
+                const targetValue = targetKeyValues[idx];
+                // UUID columns must compare case-insensitively: the SAME id can arrive with
+                // different casing depending on its source (a client-minted lowercase UUID from
+                // BaseEntity.NewRecord vs. an uppercase value loaded from SQL Server). A raw `===`
+                // then misses the match, and the caller's "not found → add it" branch appends a
+                // DUPLICATE copy of the row into the engine cache. Drive this off metadata
+                // (EntityFieldInfo.IsUniqueIdentifier, which is PG-aware) — never a string-shape
+                // heuristic. See guides/UUID_COMPARISON_GUIDE.md.
+                if (pk.IsUniqueIdentifier) {
+                    return UUIDsEqual(entityValue as string | null | undefined, targetValue as string | null | undefined);
+                }
+                return entityValue === targetValue;
             });
         });
     }
@@ -1731,6 +1739,27 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Builds the RunViewParams for an engine config. Used by LoadSingleEntityConfig,
+     * LoadMultipleEntityConfigs, RegisterCacheChangeCallbacks, and syncLocalCacheForConfig
+     * to ensure the fingerprint-affecting params (EntityName, ExtraFilter, OrderBy,
+     * IgnoreMaxRows) are always consistent — preventing cache key mismatches that break
+     * cross-server invalidation via Redis pub/sub and local cache upsert/remove operations.
+     */
+    protected BuildRunViewParamsForConfig(config: BaseEnginePropertyConfig, bypassCache: boolean = false): RunViewParams {
+        return {
+            EntityName: config.EntityName,
+            ResultType: config.ResultType || this.EngineDefaultResultType,
+            ExtraFilter: config.Filter,
+            OrderBy: config.OrderBy,
+            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
+            _fromEngine: true,   // Mark as engine-initiated to avoid false positive telemetry warnings
+            CacheLocal: config.CacheLocal,
+            CacheLocalTTL: config.CacheLocalTTL,
+            BypassCache: bypassCache
+        } as RunViewParams;
+    }
+
+    /**
      * Handles the process of loading a single config of type 'entity'.
      * @param config
      * @param contextUser
@@ -1745,17 +1774,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const generation = this.beginConfigRefresh(config.PropertyName);
         const p = this.RunViewProviderToUse;
         const rv = new RunView(p);
-        const result = await rv.RunView({
-            EntityName: config.EntityName,
-            ResultType: config.ResultType || this.EngineDefaultResultType,
-            ExtraFilter: config.Filter,
-            OrderBy: config.OrderBy,
-            IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-            _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
-            CacheLocal: config.CacheLocal,
-            CacheLocalTTL: config.CacheLocalTTL,
-            BypassCache: bypassCache
-        }, contextUser);
+        const result = await rv.RunView(this.BuildRunViewParamsForConfig(config, bypassCache), contextUser);
 
         // A newer full refresh superseded us while we awaited — drop this (staler) snapshot
         // rather than clobber the newer one. The newer refresh owns the assignment, the
@@ -1871,19 +1890,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
-            const viewConfigs = configs.map(c => {
-                return <RunViewParams>{
-                    EntityName: c.EntityName,
-                    ResultType: c.ResultType || this.EngineDefaultResultType,
-                    ExtraFilter: c.Filter,
-                    OrderBy: c.OrderBy,
-                    IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
-                    _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
-                    CacheLocal: c.CacheLocal,
-                    CacheLocalTTL: c.CacheLocalTTL,
-                    BypassCache: bypassCache
-                };
-            });
+            const viewConfigs = configs.map(c => this.BuildRunViewParamsForConfig(c, bypassCache));
             const results = await rv.RunViews(viewConfigs, contextUser);
 
             // Process results and record entity loads for redundancy detection
@@ -1957,7 +1964,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {
                             const entity: BaseEntity = await p.GetEntityObject(item.EntityName, contextUser);
-                            entity.SetMany(entityData);
+                            await entity.LoadFromData(entityData);
                             entities.push(entity);
                         }
 
@@ -2008,12 +2015,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
         for (const config of entityConfigs) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(
-                {
-                    EntityName: config.EntityName,
-                    ExtraFilter: config.Filter,
-                    OrderBy: config.OrderBy,
-                    ResultType: 'entity_object',
-                } as RunViewParams,
+                this.BuildRunViewParamsForConfig(config),
                 connectionPrefix
             );
 
@@ -2044,23 +2046,68 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             try {
                 const parsed = JSON.parse(event.Data);
                 if (parsed?.results && Array.isArray(parsed.results)) {
-                    this.HandleSingleViewResult(config, {
-                        Success: true,
-                        Results: parsed.results,
-                        RowCount: parsed.results.length,
-                        TotalRowCount: parsed.totalRowCount ?? parsed.results.length,
-                        ExecutionTime: 0,
-                        ErrorMessage: '',
-                        UserViewRunID: '',
-                    });
-                    return;
+                    // Claim a refresh generation BEFORE the awaited materialization — the same
+                    // protocol LoadSingleConfig uses around its awaited RunView. Without it, two
+                    // overlapping cache events (or an event racing a full reload) can resolve out
+                    // of order and the stale result would be the one that assigns last.
+                    const generation = this.beginConfigRefresh(config.PropertyName);
+                    const rows = await this.materializeCacheEventRows(config, parsed.results);
+                    if (!this.isLatestConfigRefresh(config.PropertyName, generation)) {
+                        return; // superseded while materializing — the newer refresh owns the property
+                    }
+                    if (rows) {
+                        this.HandleSingleViewResult(config, {
+                            Success: true,
+                            Results: rows,
+                            RowCount: rows.length,
+                            TotalRowCount: parsed.totalRowCount ?? rows.length,
+                            ExecutionTime: 0,
+                            ErrorMessage: '',
+                            UserViewRunID: '',
+                        });
+                        return;
+                    }
+                    // rows === null → cannot safely materialize; fall through to a full reload
                 }
-            } catch {
-                // Fall through to full reload
+            } catch (e) {
+                // Designed degradation, but not a silent one: this catch also masks
+                // materialization failures (e.g. an entity class that cannot construct in
+                // this process), and without a trace the only symptom is every cache event
+                // turning into a database reload.
+                LogStatus(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`);
             }
         }
         // Fallback: reload this config from the database
         await this.LoadSingleConfig(config, this._contextUser);
+    }
+
+    /**
+     * Converts rows from a cache-change payload into the shape this config's property expects.
+     *
+     * Cache payloads are JSON, so their rows are plain objects with string dates. A config loaded
+     * as `entity_object` must not receive them directly — the property's declared element type
+     * would be violated and BaseEntity's coercing accessors bypassed, which is what turns a typed
+     * `__mj_CreatedAt` into a raw string at runtime. Mirrors the conversion the RunView cache-hit
+     * path performs, and enforces in this direction the same type-homogeneity invariant
+     * {@link canUseImmediateMutation} enforces for the sibling mutation path.
+     *
+     * @returns the rows to assign, or null when they cannot be safely materialized (caller should
+     *          fall back to a full reload).
+     */
+    private async materializeCacheEventRows(
+        config: BaseEnginePropertyConfig,
+        rows: Array<Record<string, unknown>>
+    ): Promise<Array<BaseEntity> | Array<Record<string, unknown>> | null> {
+        const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
+        if (effectiveResultType === 'simple') {
+            return rows; // property holds plain objects by design
+        }
+        if (!config.EntityName) {
+            return null; // entity_object needs an entity to build against — reload instead
+        }
+        return TransformSimpleObjectToEntityObject(
+            this.ProviderToUse, config.EntityName, rows, this._contextUser
+        );
     }
 
     /**

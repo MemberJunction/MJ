@@ -1,0 +1,38 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration — V202608302030__v6.1.x__Drop_Orphaned_ReportCategory_RootID_Function.sql
+-- Hand-authored: a single guarded DROP. The split converter classified this file
+-- as "no DDL to translate" and emitted a one-line marker, which is wrong — the
+-- function it drops exists on PostgreSQL too (see below), so the marker would
+-- have left the two platforms structurally divergent.
+-- ============================================================================
+--
+-- Drop fnReportCategoryParentID_GetRootID — an orphan of the removed ReportCategory
+-- table. It is present in every PG baseline (B202602151200, B202605132116,
+-- B202605241137, B202605291452, B202607091514) and in the PG CodeGen cutover.
+--
+-- Why the orphan survived on PostgreSQL. The PG counterpart of
+-- V202608061704__v6.1.x__Phase0_Legacy_Workflow_Report_ScheduledAction_Retirement
+-- dropped the parent table with `DROP TABLE IF EXISTS __mj."ReportCategory" CASCADE`,
+-- and CASCADE is exactly why one might assume the function went with it. It did
+-- not: PostgreSQL records pg_depend edges for a function's signature — argument
+-- and return types — but not for the tables its BODY references, so a SQL-language
+-- function that selects from a dropped table is not a dependent object and CASCADE
+-- does not reach it. The result is the same dangling function the SQL Server side
+-- is removing, reached by a different route.
+--
+-- The SQL Server migration's stated motive (Azure SQL bacpac export validates every
+-- module and fails on the dangling reference) is platform-specific and does not
+-- apply here — PostgreSQL will happily keep a broken SQL function until something
+-- calls it, at which point it errors. That does not make this a no-op counterpart:
+-- the object is dead on both platforms, nothing calls it on either, and leaving it
+-- on one would mean the two schemas disagree about what exists. Dropping it keeps
+-- the ledgers in parity, which is the counterpart's job.
+--
+-- Guarded, like the original, so installations where it was already removed by hand
+-- (or never existed) are unaffected — applying this to a clean database is a no-op.
+-- The argument list is required: PostgreSQL identifies a function by its signature,
+-- and this one is __mj."fnReportCategoryParentID_GetRootID"(p_recordid uuid,
+-- p_parentid uuid) RETURNS TABLE("RootID" uuid) — see the v5.46 baseline.
+-- ============================================================================
+
+DROP FUNCTION IF EXISTS __mj."fnReportCategoryParentID_GetRootID"(uuid, uuid);

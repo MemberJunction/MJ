@@ -7,10 +7,12 @@ dist/
 # (The list mirrors GENERATED_PATHS in scripts/ingest.mjs.)
 src/content/docs/guides/
 src/content/docs/packages/
+src/content/docs/releases/
 src/content/docs/community/
 src/content/docs/overview.md
 src/content/docs/deployment.md
 src/content/docs/upgrade-v5.md
+src/content/docs/upgrade-v6.md
 src/content/docs/metadata.md
 src/content/docs/ecosystem.md
 src/content/docs/ai-and-agents/skills.md

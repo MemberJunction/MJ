@@ -1,6 +1,6 @@
 # @memberjunction/ai-agents
 
-Complete framework for building and executing AI agents in MemberJunction. Provides the `BaseAgent` execution engine, pluggable agent type system (Loop and Flow agents), hierarchical sub-agent orchestration, action execution, memory management with notes and examples, payload management, conversation context with message lifecycle management, and reranker integration.
+Complete framework for building and executing AI agents in MemberJunction. Provides the `BaseAgent` execution engine, pluggable agent type system (Loop, Flow, Realtime and Harness agents), hierarchical sub-agent orchestration, action execution, memory management with notes and examples, payload management, conversation context with message lifecycle management, and reranker integration.
 
 It also provides two capability layers any agent can opt into:
 
@@ -140,7 +140,29 @@ Conversational agent that runs in a loop: prompt -> decide -> act -> repeat. Bes
 
 #### FlowAgentType
 
-Step-based agent that follows a predefined flow graph. Each step has explicit paths to the next step based on conditions. Best for deterministic workflows where the execution path is known in advance.
+Step-based agent that follows a predefined flow graph — steps with explicit conditional paths between them. Best for deterministic workflows where the execution path is known in advance.
+
+**A Flow agent no longer walks its own graph.** `DetermineInitialStep` compiles the agent's `AIAgentStep` + `AIAgentStepPath` rows into a `TaskGraphSpec` and returns a `Tasks` step; `BaseAgent.executeTasksStep` submits it and detaches. From that point the workflow is `Task` rows owned by the durable dispatcher in [`@memberjunction/task-graph`](../../TaskGraph/README.md), with the same claiming, conditions, skip cascade, retry and failure semantics as any other graph — one traversal engine, one set of rules, one place a bug can be fixed.
+
+Three consequences worth knowing before you debug one:
+
+- **The run ends at submission.** It returns a handle ("Started — 4 tasks running"), not a result. Per-step detail lives in `Task` rows, not in `AIAgentRunStep`, and cost arrives afterwards via `TotalCostRollup` (see the guide).
+- **The in-run walker is retained but refused.** It stays compiled as the reference implementation the compiler is checked against, and throws at its single choke point if anything reaches it — so a workflow that runs at all provably ran on the dispatcher.
+- **A `Sub-Agent` node starts a new root `AIAgentRun`**, linked from `Task.AgentRunID` rather than nested under the submitting run.
+
+See the **[Workflows and Task Graphs Guide](../../../guides/WORKFLOW_AND_TASK_GRAPH_GUIDE.md)** for the full model: node kinds, exclusive groups, payload mappings, loops, failure semantics, observability, and a worked configuration example.
+
+#### HarnessAgentType
+
+Runs an **external agent harness** — Claude Code, Codex CLI, OpenCode, Gemini CLI, Pi — as the reasoning substrate for an MJ agent, while MJ keeps identity, permissions, governed data access, payload contracts, HITL, cost control and run-level audit. Lives in [`@memberjunction/ai-agent-harness`](../AgentHarness/README.md).
+
+It is the **opposite** design choice from `RealtimeAgentType`: where Realtime is session-driven and bypasses the loop entirely (`IsSessionDriven`), Harness stays *inside* the loop. `HarnessAgentType extends LoopAgentType` and inherits `DetermineNextStep` wholesale, because **a harness turn is protocol-identical to a Loop prompt iteration** — the harness ends each turn by emitting the same next-step JSON envelope a Loop model emits. `HarnessAgentBase extends BaseAgent` overrides exactly one method, `executePrompt`, substituting a harness turn for the prompt call.
+
+That is why every existing guarantee still applies with no new enforcement code: next-step validation, per-action `MaxExecutionsPerRun`, skill gates, plan-mode blocking, `PayloadManager` ACLs, `checkExecutionGuardrails`, run-step recording. One authority channel, not two — which is also why the MCP loopback is read-only.
+
+The `'HarnessAgentType'` string is registered under **both** ClassFactory roots (`BaseAgentType` for the protocol, `BaseAgent` for the driver), so a single `AIAgentType.DriverClass` value selects both halves.
+
+See the [External Agent Harness Guide](../../../guides/AGENT_HARNESS_GUIDE.md).
 
 #### RealtimeAgentType
 

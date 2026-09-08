@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component, EventEmitter, forwardRef, Input, Output } from '@angular/core';
-import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR, ReactiveFormsModule } from '@angular/forms';
-import { renderComponentFixture, query, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { By } from '@angular/platform-browser';
+import { renderComponentFixture, query, click, capture, createFakeProvider, StubDropdownComponent, StubNumericInputComponent } from '@memberjunction/ng-test-utils';
 import type { MCPConnectionData, MCPServerData } from '../mcp-dashboard.component';
 import { MCPConnectionDialogComponent, ConnectionDialogResult } from './mcp-connection-dialog.component';
 
@@ -14,11 +15,6 @@ import { MCPConnectionDialogComponent, ConnectionDialogResult } from './mcp-conn
  * filter, save/cancel outputs, and the "New credential" toggle. Single sync render per test.
  */
 
-class NoopCva implements ControlValueAccessor {
-  writeValue(): void {}
-  registerOnChange(): void {}
-  registerOnTouched(): void {}
-}
 @Component({ selector: 'mj-dialog', standalone: true, template: '<ng-content></ng-content>' })
 class StubDialog {
   @Input() Visible = false;
@@ -31,31 +27,6 @@ class StubDialogActions {}
 @Component({ selector: 'mj-alert', standalone: true, template: '<ng-content></ng-content>' })
 class StubAlert {
   @Input() Variant = '';
-}
-@Component({
-  selector: 'mj-dropdown',
-  standalone: true,
-  template: '<ng-content></ng-content>',
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubDropdown), multi: true }],
-})
-class StubDropdown extends NoopCva {
-  @Input() Data: unknown;
-  @Input() TextField = '';
-  @Input() ValueField = '';
-  @Input() ValuePrimitive = false;
-  @Input() DefaultItem: unknown;
-  @Output() ValueChange = new EventEmitter<unknown>();
-}
-@Component({
-  selector: 'mj-numeric-input',
-  standalone: true,
-  template: '',
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubNumeric), multi: true }],
-})
-class StubNumeric extends NoopCva {
-  @Input() Min = 0;
-  @Input() Max = 0;
-  @Input() Step = 0;
 }
 // Rendered only when ShowCredentialDialog is true (the "New credential" toggle).
 @Component({ selector: 'mj-credential-dialog', standalone: true, template: '' })
@@ -83,7 +54,7 @@ const CONNECTION: MCPConnectionData = {
 const render = (inputs: { connection?: MCPConnectionData | null; visible?: boolean } = {}) =>
   renderComponentFixture(MCPConnectionDialogComponent, {
     declarations: [MCPConnectionDialogComponent],
-    imports: [ReactiveFormsModule, FormsModule, StubDialog, StubDialogActions, StubAlert, StubDropdown, StubNumeric, StubCredentialDialog],
+    imports: [ReactiveFormsModule, FormsModule, StubDialog, StubDialogActions, StubAlert, StubDropdownComponent, StubNumericInputComponent, StubCredentialDialog],
     inputs: {
       Provider: createFakeProvider({ runViewResults: [] }),
       servers: SERVERS,
@@ -122,18 +93,33 @@ describe('MCPConnectionDialogComponent (DOM)', () => {
     expect(query(fixture, 'textarea[formControlName="Description"]')).not.toBeNull();
   });
 
-  it('emits close({saved:false}) when Cancel is invoked', () => {
+  it('emits close({saved:false}) when the Cancel button is clicked', () => {
     const fixture = render({ connection: CONNECTION });
     const closed = capture<ConnectionDialogResult>(fixture.componentInstance.close);
-    fixture.componentInstance.cancel();
+    // The Cancel button is the variant-less mjButton in the dialog actions (Save is variant="primary").
+    click(fixture, 'mj-dialog-actions button:not([variant])');
     expect(closed).toEqual([{ saved: false }]);
   });
 
-  it('toggles the credential creation dialog flag via openCredentialDialog()', () => {
+  it('emits close({saved:false}) when the dialog itself is closed (mj-dialog Close output)', () => {
     const fixture = render({ connection: CONNECTION });
+    const closed = capture<ConnectionDialogResult>(fixture.componentInstance.close);
+    const dialog = fixture.debugElement.query(By.directive(StubDialog));
+    (dialog.componentInstance as StubDialog).Close.emit();
+    expect(closed).toEqual([{ saved: false }]);
+  });
+
+  it('opens the credential creation dialog when the "New" credential button is clicked', async () => {
+    const fixture = render({ connection: CONNECTION });
+    // loadDropdownData is async; the credential row (which holds the "New" button) only renders
+    // once IsLoadingDropdowns flips back to false — flush the fake-provider promise first.
+    await new Promise((resolve) => setTimeout(resolve));
+    fixture.detectChanges(false);
     expect(fixture.componentInstance.ShowCredentialDialog).toBe(false);
-    fixture.componentInstance.openCredentialDialog();
+    expect(query(fixture, 'mj-credential-dialog')).toBeNull();
+    click(fixture, '.credential-row button');
     fixture.detectChanges(false);
     expect(fixture.componentInstance.ShowCredentialDialog).toBe(true);
+    expect(query(fixture, 'mj-credential-dialog')).not.toBeNull();
   });
 });

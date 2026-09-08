@@ -28,7 +28,17 @@ vi.mock('@memberjunction/ai', () => {
             throw new Error(`${this.constructor.name} does not support client-direct realtime sessions`);
         }
     }
-    return { BaseModel, BaseRealtimeModel };
+    // A REPRESENTATIVE shared-key list, not the real one. Reaching for the real export here means
+    // `importOriginal`, which loads the whole @memberjunction/ai barrel — realtimeProxyRegistry then
+    // wants BaseSingleton off the mocked @memberjunction/global, and the mocks cascade. Which is why
+    // this mock exists in the first place.
+    //
+    // The split that keeps this honest: these tests pin the driver's MECHANISM (it consults the
+    // registry and skips every key in it), while membership of the registry — that `firstMessage` is
+    // in the shared vocabulary at all — is pinned in @memberjunction/ai's own suite. Neither test
+    // can drift without the other failing.
+    const REALTIME_SHARED_CONFIG_KEYS = ['voice', 'firstMessage', 'reasoningEffort', 'mcpTools'];
+    return { BaseModel, BaseRealtimeModel, REALTIME_SHARED_CONFIG_KEYS };
 });
 
 import {
@@ -231,6 +241,33 @@ describe('InworldRealtime', () => {
             await startReadySession(driver, { Config: { turn_detection: { type: 'server_vad', threshold: 0.6 } } });
             const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
             expect(update.session?.['turn_detection']).toEqual({ type: 'server_vad', threshold: 0.6 });
+        });
+
+        /**
+         * The raw-override loop forwards every unrecognized Config key straight onto the session,
+         * which makes it the leak path for any NEUTRAL MJ key this driver does not consume — the
+         * shared vocabulary declared in `REALTIME_SHARED_CONFIG_KEYS`, which the registry's own
+         * contract says non-OpenAI-protocol drivers MUST scrub before forwarding.
+         *
+         * `firstMessage` (issue #3557) is the case that exposed this: a persona authors an opening
+         * utterance without naming a vendor, so it is filed onto whichever driver resolves.
+         */
+        it('scrubs shared neutral MJ keys instead of forwarding them raw', async () => {
+            await startReadySession(driver, {
+                Config: { firstMessage: 'Good morning.', reasoningEffort: 'high', mcpTools: [{ type: 'mcp' }] },
+            });
+            const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+            expect(update.session?.['firstMessage']).toBeUndefined();
+            expect(update.session?.['reasoningEffort']).toBeUndefined();
+            expect(update.session?.['mcpTools']).toBeUndefined();
+        });
+
+        it('still forwards genuinely provider-native passthrough keys', async () => {
+            // The scrub must be limited to the shared MJ vocabulary — the raw-override channel is
+            // how a caller reaches an Inworld-native field the driver has no shorthand for.
+            await startReadySession(driver, { Config: { some_inworld_native_field: 'keep me' } });
+            const update = driver.Fake.Find('session.update') as { session?: Record<string, JSONLike> };
+            expect(update.session?.['some_inworld_native_field']).toBe('keep me');
         });
 
         it('maps voice/stt/language shorthands into the audio block', async () => {

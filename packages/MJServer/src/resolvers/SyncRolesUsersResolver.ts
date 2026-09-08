@@ -4,7 +4,7 @@ import { DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, IMetadata
 import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { MJRoleEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
@@ -112,7 +112,7 @@ export class SyncRolesAndUsersResolver {
                 await provider.CommitTransaction();
 
                 // refresh the user cache — one-time, since the normal auto-refresh is already scheduled
-                await UserCache.Instance.Refresh(context.dataSource);
+                await UserCache.Instance.Refresh(provider);
                 return usersResult;
             } catch (txErr) {
                 await provider.RollbackTransaction();

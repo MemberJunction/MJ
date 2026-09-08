@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ComponentFixture } from '@angular/core/testing';
-import { renderComponentFixture, query, queryAll, text, click, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, click, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { CredentialTypeEditPanelComponent } from './credential-type-edit-panel.component';
 
 /**
@@ -14,16 +13,13 @@ import { CredentialTypeEditPanelComponent } from './credential-type-edit-panel.c
  * to stay NG0100-safe per ANGULAR_TESTING_GUIDE.md §5.
  */
 
-@Component({ standalone: false, selector: 'mj-loading', template: '<span class="stub-loading">loading</span>' })
-class LoadingStubComponent {}
-
 function render(
   inputs: Record<string, unknown> = {},
   setup?: (c: CredentialTypeEditPanelComponent) => void,
 ): ComponentFixture<CredentialTypeEditPanelComponent> {
   return renderComponentFixture(CredentialTypeEditPanelComponent, {
-    imports: [CommonModule, FormsModule],
-    declarations: [CredentialTypeEditPanelComponent, LoadingStubComponent],
+    imports: [CommonModule, FormsModule, StubLoadingComponent],
+    declarations: [CredentialTypeEditPanelComponent],
     inputs: { isOpen: true, ...inputs },
     setup,
   });

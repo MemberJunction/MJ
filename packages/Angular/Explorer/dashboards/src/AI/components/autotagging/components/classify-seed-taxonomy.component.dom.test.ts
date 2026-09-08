@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
-import { renderComponentFixture, query, queryAll } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ClassifySeedTaxonomyComponent, SeedTaxonomyNode } from './classify-seed-taxonomy.component';
 
 /**
@@ -11,18 +10,6 @@ import { ClassifySeedTaxonomyComponent, SeedTaxonomyNode } from './classify-seed
  * SourceID gating, and node selection/toggle. mj-loading / mj-empty-state are stubbed elements; mjButton
  * is an attribute directive (no stub needed).
  */
-
-@Component({ selector: 'mj-loading', standalone: true, template: '' })
-class StubLoading {
-  @Input() text = '';
-}
-@Component({ selector: 'mj-empty-state', standalone: true, template: '' })
-class StubEmptyState {
-  @Input() Icon = '';
-  @Input() Title = '';
-  @Input() Message = '';
-  @Input() Variant = '';
-}
 
 const node = (key: string, name: string, over: Partial<SeedTaxonomyNode> = {}): SeedTaxonomyNode => ({
   Key: key,
@@ -37,7 +24,7 @@ const node = (key: string, name: string, over: Partial<SeedTaxonomyNode> = {}): 
 const render = (opts: { sourceId?: string | null; nodes?: SeedTaxonomyNode[]; generated?: boolean } = {}) =>
   renderComponentFixture(ClassifySeedTaxonomyComponent, {
     declarations: [ClassifySeedTaxonomyComponent],
-    imports: [StubLoading, StubEmptyState],
+    imports: [StubLoadingComponent, StubEmptyStateComponent],
     inputs: { SourceID: opts.sourceId ?? null },
     setup: (instance) => {
       if (opts.nodes) instance.ProposedNodes = opts.nodes;

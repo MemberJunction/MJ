@@ -80,11 +80,22 @@ vi.mock('@memberjunction/core', async () => {
         ...actual,
         Metadata: { Provider: null },
         LogError: vi.fn(),
-        RunView: class {
-            async RunView() {
-                return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
-            }
-        },
+        // The service now resolves action IDs through the caller's provider rather than a
+        // globally-constructed RunView, so the mock answers the static factory too.
+        RunView: Object.assign(
+            class {
+                async RunView() {
+                    return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
+                }
+            },
+            {
+                FromMetadataProvider: () => ({
+                    async RunView() {
+                        return hoisted.runViewResponses.shift() ?? { Success: true, Results: [] };
+                    },
+                }),
+            },
+        ),
     };
 });
 

@@ -319,4 +319,4 @@ Authentication providers are automatically configured when their environment var
 
 ## License
 
-ISC License - See LICENSE file for details
+Business Source License 1.1 - See LICENSE file for details

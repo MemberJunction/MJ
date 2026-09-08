@@ -8,7 +8,7 @@ import {
   PotentialDuplicateResult,
 } from '@memberjunction/core';
 import { AppContext } from '../types.js';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 import { CompositeKeyInputType, CompositeKeyOutputType, KeyValuePairOutputType } from '../generic/KeyInputOutputTypes.js';
 import { GetReadOnlyProvider } from '../util.js';

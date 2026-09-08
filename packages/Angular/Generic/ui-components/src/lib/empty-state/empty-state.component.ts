@@ -14,7 +14,7 @@ import { MJButtonDirective } from '../button/button.directive';
 export type MJEmptyStateVariant = 'empty' | 'no-results' | 'success' | 'warning' | 'error';
 
 /** Density of an `<mj-empty-state>` — controls padding and icon size. */
-export type MJEmptyStateSize = 'compact' | 'default' | 'large';
+export type MJEmptyStateSize = 'inline' | 'compact' | 'default' | 'large';
 
 /**
  * mj-empty-state — Canonical centered empty/no-results/error placeholder.
@@ -138,6 +138,19 @@ export type MJEmptyStateSize = 'compact' | 'default' | 'large';
     }
 
     /* ── Sizes ────────────────────────────────────────────────── */
+    :host(.mj-empty-state--inline) {
+      padding: 8px 12px;
+      justify-content: flex-start;
+    }
+    :host(.mj-empty-state--inline) .mj-empty-state__icon {
+      font-size: 1.25rem;
+      margin-bottom: 4px;
+    }
+    :host(.mj-empty-state--inline) .mj-empty-state__title {
+      font-size: var(--mj-text-sm);
+      font-weight: 500;
+    }
+
     :host(.mj-empty-state--compact) {
       padding: var(--mj-space-8);
     }
@@ -210,6 +223,9 @@ export class MJEmptyStateComponent {
 
   /** Emitted when the built-in CTA button is clicked. */
   @Output() Action = new EventEmitter<MouseEvent>();
+
+  @HostBinding('class.mj-empty-state--inline')
+  get IsInline(): boolean { return this.Size === 'inline'; }
 
   @HostBinding('class.mj-empty-state--compact')
   get IsCompact(): boolean { return this.Size === 'compact'; }

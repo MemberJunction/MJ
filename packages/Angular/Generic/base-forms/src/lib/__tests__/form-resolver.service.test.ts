@@ -63,11 +63,13 @@ vi.mock('../base-form-component', () => ({
 // ----- Test setup ---------------------------------------------------------
 
 import type { FormResolverService } from '../resolver/form-resolver.service';
+import type { EntityInfo, UserInfo, IMetadataProvider } from '@memberjunction/core';
 
-const entity = { ID: 'entity-1', Name: 'Customer' } as any;
+// Partial doubles seam-cast to the resolver's parameter types.
+const entity = { ID: 'entity-1', Name: 'Customer' } as unknown as EntityInfo;
 const user = (overrides: Partial<{ ID: string; UserRoles: Array<{ RoleID: string }> }>) =>
-    ({ ID: 'user-1', UserRoles: [], ...overrides } as any);
-const provider = {} as any;
+    ({ ID: 'user-1', UserRoles: [], ...overrides } as unknown as UserInfo);
+const provider = {} as IMetadataProvider;
 
 let createdSeq = 0;
 const overrideRow = (overrides: Partial<{

@@ -37,6 +37,14 @@ export interface UploadFileOptions {
      */
     provider?: IMetadataProvider;
     /**
+     * Optional category ID to associate with the MJ: Files record.
+     */
+    categoryID?: string;
+    /**
+     * Optional description for the file.
+     */
+    description?: string;
+    /**
      * Optional path prefix within the storage bucket.
      * Defaults to `'artifacts/<date>/<uuid>'`.
      */
@@ -314,7 +322,12 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         }
 
         // On-demand fallback: account wasn't in cache (failed init, added late, etc.)
-        const resolved = this.Base.GetAccountWithProvider(accountId);
+        let resolved = this.Base.GetAccountWithProvider(accountId);
+        if (!resolved) {
+            await this.Config(true, contextUser);
+            resolved = this.Base.GetAccountWithProvider(accountId);
+        }
+
         if (!resolved) {
             throw new Error(`FileStorageEngine.GetDriver: account '${accountId}' not found in cached metadata. Did you call Config() first?`);
         }
@@ -359,8 +372,17 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         const { content, fileName, mimeType, contextUser, storageAccountId, provider } = options;
         const md = provider ?? Metadata.Provider;
 
+        // Ensure engine is configured
+        await this.Config(false, contextUser, md);
+
         // 1. Resolve storage account
-        const resolved = this.ResolveStorageAccount(storageAccountId);
+        let resolved = this.ResolveStorageAccount(storageAccountId);
+        if (!resolved) {
+            // Attempt a forced refresh from database in case account was recently added or cache was stale
+            await this.Config(true, contextUser, md);
+            resolved = this.ResolveStorageAccount(storageAccountId);
+        }
+
         if (!resolved) {
             throw new Error('FileStorageEngine.UploadFile: no file storage accounts configured. Cannot upload.');
         }
@@ -368,9 +390,11 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
         // 2. Initialize driver
         const driver = await this.GetDriver(resolved.account.ID, contextUser);
 
-        // 3. Upload
-        const pathPrefix = options.pathPrefix ?? `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}`;
-        const storagePath = `${pathPrefix}/${fileName}`;
+        // 3. Upload with sanitized path prefix and file name (prevents directory traversal and control characters)
+        const cleanFileName = fileName.replace(/[/\\]+/g, '_').replace(/^\.+/, '').replace(/[\x00-\x1f\x7f]/g, '').trim() || 'file';
+        const rawPrefix = options.pathPrefix ?? `artifacts/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}`;
+        const cleanPrefix = rawPrefix.replace(/\.\./g, '').replace(/^[/\\]+/, '').replace(/[\x00-\x1f\x7f]/g, '').replace(/[/\\]+/g, '/').replace(/\/+$/, '') || 'artifacts';
+        const storagePath = `${cleanPrefix}/${cleanFileName}`;
         const uploaded = await driver.PutObject(storagePath, content, mimeType);
         if (!uploaded) {
             throw new Error(`FileStorageEngine.UploadFile: PutObject returned false for path '${storagePath}'`);
@@ -378,11 +402,17 @@ export class FileStorageEngine extends BaseSingleton<FileStorageEngine> {
 
         // 4. Create MJ: Files record
         const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
-        fileEntity.Name = fileName;
+        fileEntity.Name = cleanFileName;
         fileEntity.ContentType = mimeType;
         fileEntity.ProviderID = resolved.provider.ID;
         fileEntity.ProviderKey = storagePath;
         fileEntity.Status = 'Uploaded';
+        if (options.categoryID) {
+            fileEntity.CategoryID = options.categoryID;
+        }
+        if (options.description) {
+            fileEntity.Description = options.description;
+        }
 
         if (!(await fileEntity.Save())) {
             throw new Error(`FileStorageEngine.UploadFile: failed to save MJ: Files record for '${fileName}'`);

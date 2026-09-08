@@ -1,5 +1,541 @@
 # Change Log - @memberjunction/cli
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- cffd286: Fix five gaps in the agent-first CLI work, found in review.
+
+  **`-f` works again on `mj test *`.** Widening `--format` to the canonical vocabulary had
+  swapped in a flag with no short form, so `mj test run -f json` — and the same on `list`,
+  `history`, `compare`, `validate`, `suite`, and `regression compare` — started failing with
+  "Nonexistent flag". Widening the accepted _values_ must not narrow the accepted
+  _spellings_; `-f` is restored on all seven. The `mj ai` family deliberately keeps no `-f`:
+  `--format` is new there, and `mj ai audit agent-run` already spends `-f` on `--file`.
+
+  **`mj ai agents run --chat` no longer hangs when spawned.** It went straight into an stdin
+  REPL without passing through the interactivity guard. It now refuses up front — before
+  loading the AI services — and points at `--prompt`, which does work headlessly.
+
+  **`mj install` fails before it writes anything.** The guard lived in the prompt handler, so
+  a non-interactive install got as far as scaffolding files and only then hit the version
+  picker it could not answer. A preflight check now refuses at the start, leaving the target
+  directory untouched. Relatedly, the CLI no longer registers its interactive prompt bridge
+  under `--yes`: it was racing the engine's own auto-resolver safety net and could turn a
+  working headless install into an exit(1).
+
+  **Machine output stays machine-readable.** `mj ai actions run --dry-run` printed coloured
+  prose regardless of `--format`, and an empty `mj ai agents list` / `actions list` returned
+  the sentence "No agents found." even under `--format=json`, which no JSON parser accepts.
+  The dry run now renders through the resolved formatter, and an empty list is `[]` in json
+  mode while keeping the readable sentence for humans.
+
+  **`mj sync file-reset` validates before it connects.** It opened a database connection and
+  loaded the sync engine before checking whether `--sections` or `--all` was supplied, so a
+  run missing them paid for a full connection just to be told which flag to pass. All input
+  resolution now happens first.
+
+- 574008d: Make the `mj` CLI agent-first, following the model the ElevenLabs CLI adopted.
+
+  **Prompting now follows the terminal.** A command prompts when stdin and stdout are both
+  TTYs — so nothing changes for a human — and does not when either is piped, when a CI
+  environment variable is set, or when `TERM=dumb`. In those cases a command that needs a
+  value it wasn't given fails immediately naming the flag that supplies it, instead of
+  blocking on stdin forever. Previously `mj sync init` had four prompts and no escape flags
+  at all, and `mj install --legacy` had two dozen; both hung an agent indefinitely. Override
+  the detection with the global `--interactive` / `--no-interactive`, or pin it for a session
+  with `MJ_CLI_INTERACTIVE`.
+
+  **Output follows the pipe.** With no explicit `--format`, a non-TTY stdout resolves to
+  `json` and all decorative chrome (banner, spinners, color) is suppressed — no flag
+  required. `MJ_CLI_FORMAT` pins the format for a shell session.
+
+  **One `--format` spelling CLI-wide.** `mj test *` (`console|json|markdown`) and `mj ai *`
+  (`compact|json|table`) now also accept the canonical `--format text|json|md`. Every
+  existing value keeps working, and an explicit legacy value still wins over inference.
+
+  **`mj usage` covers the whole CLI.** The tier-1 domain map went from 3 domains to 23, and
+  every domain now has a `mj <domain> usage` page. Entries for commands that aren't
+  `BaseCLIPlugin` plugins are derived from oclif's own manifest at runtime, so they cannot
+  drift; only the per-domain runtime budget is hand-maintained.
+
+  **Richer result envelope.** `MJCLIResult` now carries a `version` field (stamped on every
+  serialized result) and `MJCLIResultError` gains machine-readable `code` and actionable
+  `suggestion` fields. JSON output is compact when piped and pretty on a terminal.
+
+  Behavioral change: a command that used to prompt when spawned or piped now fails with an
+  actionable error instead of hanging. Interactive use at a terminal is unchanged.
+  `mj sync init` gains `--setup-entity`, `--entity`, `--dir`, and `--overwrite` to make it
+  fully scriptable.
+
+- 23c2521: Close silent-failure gaps in Open App config writes, class registration, and update checks — and
+  fix the first real collision the new class-registration diagnostic found.
+
+  `dynamicPackages` idempotency matched the whole config file rather than the target array, so a
+  `shared` package — which must be written to both `server` and `client` — had its client insert
+  skipped by the server entry written moments earlier. The package never reached
+  `dynamicPackages.client`, so its `@RegisterClass` components were tree-shaken out of the browser
+  bundle with no error raised anywhere. The check is now scoped to the target array's body.
+
+  Upgrades were add-only, so `mj.config.cjs` converged on the union of every version ever installed
+  and a package dropped in v2 kept being bootstrapped. `PruneDynamicPackagesNotInManifest` now runs
+  on the upgrade path, after the adds; surviving entries are left byte-identical so an operator's
+  `Enabled: false` is not silently reset, keep-sets are per-array, and an entry shape that cannot be
+  parsed is a no-op rather than a guess. A renamed `startupExport` is retargeted in place — keying
+  only on package name left the old export name in the config forever, and ServerBootstrap then reads
+  `mod[StartupExport]`, gets `undefined`, skips it because it is not a function, and still logs
+  `(ran <old name>)`. The add-then-prune order is chosen for the failure case: these are two writes
+  to the same files with no rollback between them, and adding first leaves that window holding
+  (old ∪ new), so a server that restarts mid-upgrade still finds every entry it needs. Pruning first
+  would leave a subset of both versions and the app's registrations would vanish.
+
+  `@RegisterClass` passes `priority = 0`, which routes to the auto-increment branch, so a later
+  registration always wins — correct for an inheritance chain, silently wrong for two unrelated
+  classes colliding on a key. Only `priority > 0` ever warned, so in practice nothing warned.
+  `ClassFactory.Register` now warns naming every prior unrelated registration for that
+  `(base class, key)` pair, using a new `AreClassesRelated` that compares by name as well as identity
+  so a module loaded through two paths does not read as a collision. Registration behavior is
+  unchanged; the warning is diagnostic only. Measured over a realistic MJAPI load — 1,318 real
+  registrations across 697 `(base, key)` groups — it fires on exactly one pair, with no false
+  positives.
+
+  That one pair was a real bug, fixed here. `MJConversationDetailEntityServer` and
+  `MJConversationDetailEntityExtended` both registered for `BaseEntity` under
+  `'MJ: Conversation Details'` as siblings, each extending the generated entity directly. The server
+  package loads last, so it won outright and the Extended class's `Save`/`Delete` permission gate —
+  the check that only a conversation's owner may set `UserRating`/`UserFeedback`, and that a
+  non-owner without a resource grant cannot write at all — never ran. The gate is explicitly written
+  to run server-side (`ProviderType === 'Database'`), which is exactly where it was being shadowed
+  out. `MJConversationDetailEntityServer` now extends `MJConversationDetailEntityExtended`, so the
+  edit-flag logic and the permission gate compose instead of one replacing the other. The resolved
+  class is unchanged; only its base is.
+
+  `mj app check-updates` dropped the per-repo `TokenMap` that `install` and `upgrade` both use, so
+  private repos reported "up to date" forever; dropped each app's `Subpath`, so a multi-app repo
+  reported a **sibling app's** version as this app's latest; and let one throwing app kill the sweep
+  or vanish from a report that still concluded "All apps are up to date". The loop moved into a
+  testable `CheckAppsForUpdates` helper with the version lookup injected, and failures are collected
+  per app and reported.
+
+  A lookup that returns no version at all is now reported as `Unresolved` — a third outcome, distinct
+  from both an update and a failure — and the green "All apps are up to date" line is printed only
+  when every app actually produced an answer. Every app in the list is installed, so it resolved from
+  a real ref once; finding no version now means the resolver and the repository disagree. This matters
+  because `ListGitHubTags` reads a single page of the GitHub tags API: against
+  `MemberJunction/Integrations` (374 tags), the scoped `<subpath>@<semver>` tag line for every
+  installed connector sits past page 1, so all nine apps resolve to nothing. Without this, scoping the
+  lookup by `Subpath` would have traded a wrong-but-obvious answer for a confident false green.
+  Pagination itself is fixed separately in #3353, which should land with or before this.
+
+- ac0275b: Seed the BIT/BOOLEAN registry from the live catalog when baking PostgreSQL migrations. The registry was collected only from the migration set's own baseline, which declares the app's tables and never MJ core's — so an Open App migration seeding `__mj.EntityField` had no type information for `AllowsNull` / `IsVirtual` / `IsPrimaryKey`, emitted bare `0`/`1`, and failed with `column "AllowsNull" is of type boolean but expression is of type integer`, halting the whole bake chain. `--bake-codegen` already requires a live connection, so `information_schema` is now read for the core and app schemas and merged in via the new `MJPostgresTranspiler.addExtraBitColumns()`. Also corrects the registry's type: entries are `[table, column]` pairs (`BitColumnRef`), not the `string[]` the signature claimed — a `"Table.Column"` string would have serialized fine and matched nothing.
+- 517d18b: Resolve `${mjSchema}` when converting migrations. `${flyway:defaultSchema}` (the app's own schema) was substituted but `${mjSchema}` (MJ core) was not, so the macro survived into the emitted `.pg.sql` and into the SQL `--bake-codegen` executes against the working database — failing with `relation "${mjSchema}.Entity" does not exist` and halting the entire bake chain at the first migration that referenced core. Adds a `coreSchema` option to `convertMigration` and `IncrementalBaker`, plus a `--core-schema` CLI flag (default `__mj`). The two are deliberately separate values: an Open App names itself with `${flyway:defaultSchema}` and core with `${mjSchema}`, and for every app those differ.
+- Updated dependencies [6dbe524]
+- Updated dependencies [cffd286]
+- Updated dependencies [574008d]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [d735407]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [9fe3019]
+- Updated dependencies [047a80f]
+- Updated dependencies [887ba9c]
+- Updated dependencies
+- Updated dependencies [d66a26a]
+- Updated dependencies [b42c125]
+- Updated dependencies [23c2521]
+- Updated dependencies [ac0275b]
+- Updated dependencies [517d18b]
+- Updated dependencies [1d3ab82]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [8b78695]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/sql-converter@6.1.0-edge.5
+  - @memberjunction/ai-cli@6.1.0-edge.5
+  - @memberjunction/cli-core@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/codegen-lib@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/open-app-engine@6.1.0-edge.5
+  - @memberjunction/sqlglot-ts@6.1.0-edge.5
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/metadata-sync@6.1.0-edge.5
+  - @memberjunction/db-auto-doc@6.1.0-edge.5
+  - @memberjunction/query-gen@6.1.0-edge.5
+  - @memberjunction/testing-cli@6.1.0-edge.5
+  - @memberjunction/config@6.1.0-edge.5
+  - @memberjunction/installer@6.1.0-edge.5
+  - @memberjunction/standards@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 698aeaf: A statement the converter could not parse now fails the run.
+
+  Two rules write a marker comment into their own output at the point where they knowingly could not produce SQL — `DeclareDmlBlockRule` emits `-- Could not parse: …` and `BatchConverter` emits `-- ERROR converting batch …` — and then return normally. On the legacy `migrate convert` path the batch was therefore counted as `Converted`, so a file that PostgreSQL rejects was reported as `Files: 1 (1 OK, 0 errors)` and the command exited 0. The unusable `.pg.sql` was then committed like any other.
+
+  The markers now live in one place (`CONVERSION_GAP_MARKERS`), the assembled output is scanned for exactly those strings, and matches are counted as `Gaps`. Adding a marker to that list is all a new rule needs to have its gaps reported — an emitter and the scan cannot drift apart, which is the failure mode that made this invisible in the first place.
+
+  `Gaps` is deliberately distinct from `Errors`: an error is a throw the converter CAUGHT and already counted as a failure, while a gap is output it knowingly could not produce, where the rule returned normally and nothing downstream ever learned the file was unusable. An errored batch leaves a marker too, so it is counted in both channels — the scan reports what is actually in the file.
+
+  `decideLegacyConvertExit` fails the run on gaps unless `--allow-gaps` is passed, which finally gives that flag meaning on the legacy path. It never suppresses a caught error, and when both are present the message names both.
+
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- Updated dependencies [e533ce5]
+- Updated dependencies [f5e91a7]
+- Updated dependencies [4586215]
+- Updated dependencies [698aeaf]
+- Updated dependencies [8643a3d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [50860ad]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [f4fedab]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [6b971ab]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [bae672c]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/codegen-lib@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/sql-converter@6.1.0-edge.4
+  - @memberjunction/open-app-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/metadata-sync@6.1.0-edge.4
+  - @memberjunction/ai-cli@6.1.0-edge.4
+  - @memberjunction/db-auto-doc@6.1.0-edge.4
+  - @memberjunction/query-gen@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/testing-cli@6.1.0-edge.4
+  - @memberjunction/cli-core@6.1.0-edge.4
+  - @memberjunction/config@6.1.0-edge.4
+  - @memberjunction/installer@6.1.0-edge.4
+  - @memberjunction/sqlglot-ts@6.1.0-edge.4
+  - @memberjunction/standards@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- 64bc5dc: New `mj dev workspace` command set: generates the four parent files of the multi-repo Open App dev workspace (`pnpm-workspace.yaml`, `.npmrc`, `package.json`, `turbo.json`) reproducing the manual setup it replaces, with sibling-repo member detection (+ include/exclude), an opt-out `pnpm install` step, a `status` subcommand, and never-overwrite-silently protection (`--force` writes `.bak` backups). App registration into a running host is deliberately out of scope for this MVP.
+
+  Generation also writes a `.mj-dev-workspace.json` sentinel manifest at the parent — the `generatedBy` marker, the files written, and the member repo names, with no timestamp so regenerating an unchanged workspace is byte-identical. `mj dev workspace clean` uses it as proof of ownership: it removes exactly the workspace residue (the four files, the sentinel, `pnpm-lock.yaml`, `node_modules`) and refuses to touch a parent whose sentinel is missing or not ours unless given `--force`, so a hand-made workspace can't be torn down by accident. `--dry-run` lists what would go without deleting, `.bak` backups are always kept, absent paths are reported as already gone rather than failing, and `status` now reports whether a sentinel is present.
+
+  All three commands bind `--dir` to the `MJ_DEV_WORKSPACE_DIR` environment variable, so a shell that exports it once can drive generate/status/clean without repeating the path; an explicit `--dir` still wins, and `status` reports which of flag, environment, or default supplied the directory it used.
+
+  `mj dev usage` joins the progressive-disclosure surface: `dev` now appears in `mj usage`, and the tier-2 command documents each dev command's flags, examples, and runtime expectations — including the rules an agent would otherwise have to guess (the parent must be a plain directory rather than a git repo root, how members are detected, what the sentinel gates, and that a shell declares its own auth-SDK peers). Because the dev commands are plain oclif commands that must stay bootstrap-free rather than `BaseCLIPlugin` plugins, `@memberjunction/cli-core` gains `CLIPluginRegistry.RegisterUsage()` so a command shipping inside the CLI can declare usage without being plugin-backed; plugin-declared usage still wins on a key collision.
+
+  The generated `.npmrc` carries no `public-hoist-pattern[]` block. The 78-entry hoist set the manual setup carried was written for the npm-hoisted era; an attribution audit of all 78 entries against the monorepo found none that still needs hoisting — every package an MJ library imports is declared by that library, and every third-party peer relationship in the set is satisfied by a real declaration, because pnpm's strict layout forced those fixes during the pnpm conversion. The only residue is the auth SDK family, which MJ correctly exposes as `peerDependencies` of `@memberjunction/ng-auth-services` because the choice of provider belongs to the shell; the command now prints that as guidance instead of hoisting the whole family.
+
+- dec0349: New `mj dev workspace doctor`: a read-only health check for a generated cross-repo workspace that prints PASS/WARN/FAIL/SKIP per check and exits non-zero on any failure — including a one-copy census of the parent package store that fails when more than one version of `@angular/core`, `@angular/common`, `@angular/compiler`, `rxjs`, `zone.js`, `@memberjunction/core` or `@memberjunction/global` is installed.
+- e5063c5: `mj dev workspace`: generate member globs from each member's own `pnpm-workspace.yaml` instead of a hardcoded `packages/*`. Fixes the silent split-registry failure where MJ's 42 nested globs (248 packages) fell out of the generated workspace and resolved from npm (#3795). Positive globs must be packages-rooted; negation guards are always kept and re-prefixed; a member whose workspace file yields no packages-rooted globs now triggers a loud warning instead of a silent `packages/*` fallback.
+- beae186: Follow-up to the Open App client bootstrap fix: number the generated namespace-import aliases off their position in `OPEN_APP_CLIENT_MODULES` rather than off the entry index, so the declared aliases and the array contents share one counter by construction. They agreed before, but nothing pinned that — and any skew between the two emits an array element naming a variable that was never declared, which surfaces as a TS2304 in the host app's build rather than a CLI test failure. Adds regression tests for mixed enabled/disabled entry sets and the all-disabled case, and records in the emitter's docs that the `globalThis` anchor is a deliberate variant of (not the same mechanism as) the `CLASS_REGISTRATIONS` array-spread anchor, and that a package declaring `"sideEffects": false` while self-registering classes is the underlying false declaration this block defends against.
+- Updated dependencies [834f8d7]
+- Updated dependencies [5ef97ff]
+- Updated dependencies [407f2f7]
+- Updated dependencies [64bc5dc]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [49f3592]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [a788e27]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [2e2879e]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [2741d46]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/codegen-lib@6.1.0-edge.3
+  - @memberjunction/cli-core@6.1.0-edge.3
+  - @memberjunction/installer@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/metadata-sync@6.1.0-edge.3
+  - @memberjunction/ai-cli@6.1.0-edge.3
+  - @memberjunction/sql-converter@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/testing-cli@6.1.0-edge.3
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.3
+  - @memberjunction/open-app-engine@6.1.0-edge.3
+  - @memberjunction/db-auto-doc@6.1.0-edge.3
+  - @memberjunction/query-gen@6.1.0-edge.3
+  - @memberjunction/config@6.1.0-edge.3
+  - @memberjunction/sqlglot-ts@6.1.0-edge.3
+  - @memberjunction/standards@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- Updated dependencies [d430fa5]
+- Updated dependencies [c49a34a]
+- Updated dependencies [255d506]
+- Updated dependencies [59def38]
+- Updated dependencies [6bb2e1f]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [aa4fbe9]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/codegen-lib@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/open-app-engine@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/ai-cli@6.1.0-edge.2
+  - @memberjunction/metadata-sync@6.1.0-edge.2
+  - @memberjunction/query-gen@6.1.0-edge.2
+  - @memberjunction/testing-cli@6.1.0-edge.2
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.2
+  - @memberjunction/db-auto-doc@6.1.0-edge.2
+  - @memberjunction/cli-core@6.1.0-edge.2
+  - @memberjunction/config@6.1.0-edge.2
+  - @memberjunction/installer@6.1.0-edge.2
+  - @memberjunction/sql-converter@6.1.0-edge.2
+  - @memberjunction/sqlglot-ts@6.1.0-edge.2
+  - @memberjunction/standards@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/open-app-engine@6.1.0-edge.1
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.1
+  - @memberjunction/standards@6.1.0-edge.1
+  - @memberjunction/ai-cli@6.1.0-edge.1
+  - @memberjunction/codegen-lib@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/db-auto-doc@6.1.0-edge.1
+  - @memberjunction/metadata-sync@6.1.0-edge.1
+  - @memberjunction/query-gen@6.1.0-edge.1
+  - @memberjunction/testing-cli@6.1.0-edge.1
+  - @memberjunction/cli-core@6.1.0-edge.1
+  - @memberjunction/config@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/installer@6.1.0-edge.1
+  - @memberjunction/sql-converter@6.1.0-edge.1
+  - @memberjunction/sqlglot-ts@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- 8d0d45a: build: declare dependencies that npm's hoisting was silently supplying, as part of the monorepo's cutover to pnpm.
+
+  Under npm, a package could import a module it never declared and still resolve it, because npm flattens everything into the workspace-root `node_modules`. pnpm's strict, isolated linking gives a package only what it declares — so each of these was a latent bug that happened to work. They are fixed here independently of the package manager; nothing about the published API changes.
+
+  Added declarations: `@types/mssql` (codegen-lib, sqlserver-dataprovider, testing-cli, testing-integration, react-test-harness), `@types/pg` (codegen-lib), `@types/express` (messaging-adapters, server-extensions-core), `@types/fs-extra` (codegen-lib), `@types/babel__traverse` (react-linter), `ora` (ai-cli), `glob` (react-test-harness), `tslib` (ng-bootstrap, which compiles with `importHelpers`), `@auth0/auth0-spa-js` (ng-auth-services), `@memberjunction/core-entities` + `@memberjunction/global` + `@memberjunction/aiengine` (cli), and `@memberjunction/ng-react` (ng-explorer-core, reached from a generated file).
+
+  Two changes are more than a declaration:
+  - **`@memberjunction/server`**: `@types/express` moves `^4.17.25` → `^5.0.6`. The package declares `express@^5.2.1` at runtime, so it was only compiling because hoisting supplied the v5 types that six sibling packages declare. The types now match the express it actually runs.
+  - **`@memberjunction/ng-auth-services`**: `angularProviderFactory` gains an explicit `Provider[]` return type. Declaring `@auth0/auth0-spa-js` alone does not resolve TS2742 — the emitted declaration file still needed a nameable type rather than one inferred through a transitive package path.
+  - **`@memberjunction/scheduled-actions-server`**: drops `@types/axios`, a deprecated stub package that carries no type definitions; its presence made TypeScript auto-include it and then fail to find any types. axios ships its own.
+
+- Updated dependencies
+- Updated dependencies [cd520e2]
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [e76b195]
+- Updated dependencies [190db45]
+  - @memberjunction/standards@6.1.0-edge.0
+  - @memberjunction/codegen-lib@6.1.0-edge.0
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/generic-database-provider@6.1.0-edge.0
+  - @memberjunction/ai-cli@6.1.0-edge.0
+  - @memberjunction/testing-cli@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.0
+  - @memberjunction/metadata-sync@6.1.0-edge.0
+  - @memberjunction/open-app-engine@6.1.0-edge.0
+  - @memberjunction/query-gen@6.1.0-edge.0
+  - @memberjunction/db-auto-doc@6.1.0-edge.0
+  - @memberjunction/cli-core@6.1.0-edge.0
+  - @memberjunction/config@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/installer@6.1.0-edge.0
+  - @memberjunction/sql-converter@6.1.0-edge.0
+  - @memberjunction/sqlglot-ts@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-cli@6.0.0
+  - @memberjunction/codegen-lib@6.0.0
+  - @memberjunction/db-auto-doc@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/metadata-sync@6.0.0
+  - @memberjunction/open-app-engine@6.0.0
+  - @memberjunction/query-gen@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/server-bootstrap-lite@6.0.0
+  - @memberjunction/testing-cli@6.0.0
+  - @memberjunction/cli-core@6.0.0
+  - @memberjunction/config@6.0.0
+  - @memberjunction/installer@6.0.0
+  - @memberjunction/sql-converter@6.0.0
+  - @memberjunction/sqlglot-ts@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [1e048ef]
+- Updated dependencies [a8fc549]
+  - @memberjunction/codegen-lib@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-cli@5.51.0
+  - @memberjunction/server-bootstrap-lite@5.51.0
+  - @memberjunction/db-auto-doc@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/metadata-sync@5.51.0
+  - @memberjunction/open-app-engine@5.51.0
+  - @memberjunction/query-gen@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/testing-cli@5.51.0
+  - @memberjunction/cli-core@5.51.0
+  - @memberjunction/config@5.51.0
+  - @memberjunction/installer@5.51.0
+  - @memberjunction/sql-converter@5.51.0
+  - @memberjunction/sqlglot-ts@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

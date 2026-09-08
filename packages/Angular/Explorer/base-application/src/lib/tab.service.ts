@@ -105,21 +105,6 @@ export class TabService {
   }
 
   /**
-   * Helper method to open a report in a tab
-   */
-  OpenReport(reportId: string, reportName: string, applicationId: string): void {
-    this.OpenTab({
-      ApplicationId: applicationId,
-      Title: reportName,
-      Route: `/report/${reportId}`,
-      Configuration: {
-        resourceType: 'report',
-        reportId
-      }
-    });
-  }
-
-  /**
    * Helper method to open a query in a tab
    */
   OpenQuery(queryId: string, queryName: string, applicationId: string): void {

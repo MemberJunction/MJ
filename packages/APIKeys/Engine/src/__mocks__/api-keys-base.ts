@@ -40,12 +40,19 @@ export function setMockBaseKeyScopes(keyScopes: MJAPIKeyScopeEntity[]): void {
     _keyScopes = keyScopes;
 }
 
+let _loaded = true;
+
+export function setMockBaseLoaded(loaded: boolean): void {
+    _loaded = loaded;
+}
+
 export function clearMockBaseState(): void {
     _scopes = [];
     _applications = [];
     _applicationScopes = [];
     _keyApplications = [];
     _keyScopes = [];
+    _loaded = true;
 }
 
 // ---- Mock APIKeysEngineBase ----
@@ -66,6 +73,18 @@ export class APIKeysEngineBase {
 
     get Applications(): MJAPIApplicationEntity[] {
         return _applications;
+    }
+
+    get ApplicationScopes(): MJAPIApplicationScopeEntity[] {
+        return _applicationScopes;
+    }
+
+    get KeyScopes(): MJAPIKeyScopeEntity[] {
+        return _keyScopes;
+    }
+
+    get Loaded(): boolean {
+        return _loaded;
     }
 
     GetScopeByPath(fullPath: string): MJAPIScopeEntity | undefined {
@@ -98,5 +117,9 @@ export class APIKeysEngineBase {
         return _keyScopes.filter(
             ks => UUIDsEqual(ks.APIKeyID, apiKeyId) && UUIDsEqual(ks.ScopeID, scopeId)
         );
+    }
+
+    GetKeyScopesByKeyId(apiKeyId: string): MJAPIKeyScopeEntity[] {
+        return _keyScopes.filter(ks => UUIDsEqual(ks.APIKeyID, apiKeyId));
     }
 }

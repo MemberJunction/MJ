@@ -42,14 +42,17 @@ WORKDIR /app
 # Install pm2 globally
 RUN npm install -g pm2
 
-# Copy package.json and package-lock.json from the root directory
-COPY package.json turbo.json tsconfig.server.json ./
+# corepack activates the pnpm version pinned by package.json's packageManager field
+RUN corepack enable
+
+# Copy the workspace manifests from the root directory
+COPY package.json pnpm-workspace.yaml turbo.json tsconfig.server.json ./
 COPY packages/GeneratedActions/package.json ./packages/GeneratedActions/package.json
 COPY packages/GeneratedEntities/package.json ./packages/GeneratedEntities/package.json
 COPY packages/MJAPI/package.json ./packages/MJAPI/package.json
 
-# Install dependencies using npm workspaces
-RUN npm install
+# Install dependencies using pnpm workspaces
+RUN pnpm install
 
 # Remove build tools to reduce image size
 RUN apt-get purge -y build-essential && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*
@@ -75,6 +78,17 @@ COPY docker/MJAPI/entrypoint.sh /entrypoint.sh
 
 # Make the entrypoint script executable
 RUN chmod +x /entrypoint.sh
+
+# MJAPI serves GraphQL + /healthcheck on this port (docker.config.cjs `graphqlPort`,
+# overridable via PORT/GRAPHQL_PORT).
+EXPOSE 4000
+
+# Container-level liveness: MJServer registers an unauthenticated /healthcheck before
+# the auth middleware. curl is removed from this image earlier in the build, so probe
+# with node's global fetch. start-period is generous because the entrypoint runs
+# `mj migrate` + `mj codegen` against the target DB before the API starts listening.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15m --retries=3 \
+  CMD node -e "fetch('http://localhost:'+(process.env.PORT||process.env.GRAPHQL_PORT||4000)+'/healthcheck').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 # Set the entrypoint for the container
 ENTRYPOINT ["/entrypoint.sh"]

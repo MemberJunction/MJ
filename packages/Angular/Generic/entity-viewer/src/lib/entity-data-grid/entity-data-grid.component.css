@@ -1218,3 +1218,59 @@
 ::ng-deep .ag-row[style*="auto-height"] {
   min-height: 40px;
 }
+
+/* ========================================
+   Width filler column ([FillWidth])
+   ========================================
+   The trailing filler exists so row banding and horizontal rules reach the container's right edge
+   instead of stopping wherever the last real column ends. For that to read as "the table extends"
+   rather than "there is an empty column here", it must lose every affordance that makes a column
+   look like a column: its own vertical rule, the header hover/menu, and the resize handle. What is
+   left is bare row background — which is exactly the point. */
+::ng-deep .ag-header-cell.mj-grid-filler-header,
+::ng-deep .ag-cell.mj-grid-filler-cell {
+  border-left: none !important;
+  border-right: none !important;
+  cursor: default;
+}
+
+/* The hover tint is OURS (see ".ag-theme-alpine .ag-header-cell:hover" above), not AG Grid's, so it
+   has to be switched off here or the filler lights up as though it were interactive. Everything else
+   the filler needs suppressed — resize grip, header menu, moving, tool-panel entry — is handled by
+   native colDef flags on the column itself, not by CSS. */
+::ng-deep .ag-header-cell.mj-grid-filler-header:hover {
+  background-color: transparent !important;
+}
+
+/* AG Grid injects cellRenderer HTML without Angular attributes, so these
+   must pierce encapsulation or the image renders at intrinsic SVG size. */
+::ng-deep .ag-cell.mj-grid-image-cell {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 4px !important;
+}
+::ng-deep .ag-header-cell.mj-grid-image-header .ag-header-cell-label {
+  justify-content: center;
+}
+::ng-deep .cell-image-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--mj-bg-surface-sunken);
+  flex-shrink: 0;
+}
+::ng-deep .cell-image {
+  width: 100%;
+  height: 100%;
+  max-width: 28px;
+  max-height: 28px;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+}

@@ -245,9 +245,15 @@ export class FolderTreeComponent {
     this.cdr.detectChanges();
 
     try {
+      // Blob keys (Azure/S3) have NO leading slash and use a trailing slash to denote a
+      // directory prefix. currentPath is stored with a leading slash (e.g. "/test"), which
+      // never matches real keys — so nested-folder listings came back empty (empty folder
+      // names). Normalize to a slash-free, trailing-slash prefix before listing.
+      const rawPath = this.currentPath && this.currentPath !== '/' ? this.currentPath : '';
+      const listPrefix = rawPath ? rawPath.replace(/^\/+/, '').replace(/\/+$/, '') + '/' : '';
       const listResult = await this.storageClient.ListObjects(
         this.account.account.ID,
-        this.currentPath === '/' ? '' : this.currentPath,
+        listPrefix,
         '/'
       );
 

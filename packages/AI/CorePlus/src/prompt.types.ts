@@ -750,6 +750,19 @@ export class AIPromptParams {
   provider?: IMetadataProvider;
 
   /**
+   * ID of the agent this prompt is being executed on behalf of, persisted to
+   * `AIPromptRun.AgentID`. Set by BaseAgent for every prompt it invokes.
+   *
+   * `AIPromptRun.AgentID` is documented as "If this prompt was run as part of an agent,
+   * references the agent", but nothing ever populated it — found during the 6.1 release with
+   * 340 prompt-run rows in the release database and zero non-null AgentIDs. Without it there is
+   * no way to attribute a prompt run to the agent that caused it: agents share agent-type-level
+   * prompts (e.g. "Loop Agent Type: System Prompt"), so PromptID cannot distinguish a parent's
+   * inference from its sub-agent's.
+   */
+  agentId?: string;
+
+  /**
    * Optional file artifacts that may be attached as native content blocks
    * when the resolved LLM driver supports the file's MIME type natively.
    *

@@ -18,13 +18,22 @@ import { ConversationChatAreaComponent } from '../lib/components/conversation/co
 
 interface EngineStub {
   EnsureConversationLoaded: ReturnType<typeof vi.fn>;
-  RefreshConversationDetails: ReturnType<typeof vi.fn>;
-  GetCachedDetails: ReturnType<typeof vi.fn>;
+}
+
+/**
+ * The transcript is WINDOWED: the chat area refreshes the newest page through the window
+ * store rather than re-running the engine's full-history `RefreshConversationDetails`, which
+ * would re-query the whole conversation and replace the loaded window with every row.
+ */
+interface WindowStoreStub {
+  RefreshLatest: ReturnType<typeof vi.fn>;
+  GetSnapshot: ReturnType<typeof vi.fn>;
 }
 
 interface Harness {
   component: ConversationChatAreaComponent;
   engine: EngineStub;
+  windowStore: WindowStoreStub;
   realtimeConversationReadyEmit: ReturnType<typeof vi.fn>;
   loadPeripheralData: ReturnType<typeof vi.fn>;
   sessionCreatedConversationId: { value: string | null };
@@ -35,15 +44,31 @@ function createHarness(): Harness {
   const open = component as unknown as Record<string, unknown>;
 
   const engine: EngineStub = {
-    EnsureConversationLoaded: vi.fn().mockResolvedValue(null),
-    RefreshConversationDetails: vi.fn().mockResolvedValue(undefined),
-    GetCachedDetails: vi.fn().mockReturnValue([])
+    EnsureConversationLoaded: vi.fn().mockResolvedValue(null)
+  };
+  const snapshot = {
+    ConversationID: 'CONV-ACTIVE',
+    Details: [],
+    Timeline: [],
+    Cursor: { OldestSequence: null, NewestSequence: null, HasMoreAbove: false },
+    PinnedDetails: [],
+    AgentRunsByDetailId: new Map(),
+    UserAvatars: new Map(),
+    RatingsByDetailId: new Map(),
+    ArtifactsByDetailId: new Map(),
+    IsLoadingLatest: false,
+    IsLoadingOlder: false
+  };
+  const windowStore: WindowStoreStub = {
+    RefreshLatest: vi.fn().mockResolvedValue(undefined),
+    GetSnapshot: vi.fn().mockReturnValue(snapshot)
   };
   const realtimeConversationReadyEmit = vi.fn();
   const loadPeripheralData = vi.fn().mockResolvedValue(undefined);
   const sessionCreatedConversationId = { value: null as string | null };
 
   open['engine'] = engine;
+  open['windowStore'] = windowStore;
   open['currentUser'] = { ID: 'USER-1' };
   open['cdr'] = { detectChanges: vi.fn() };
   open['realtimeConversationReady'] = { emit: realtimeConversationReadyEmit };
@@ -57,7 +82,10 @@ function createHarness(): Harness {
     }
   };
 
-  return { component, engine, realtimeConversationReadyEmit, loadPeripheralData, sessionCreatedConversationId };
+  return {
+    component, engine, windowStore, realtimeConversationReadyEmit,
+    loadPeripheralData, sessionCreatedConversationId
+  };
 }
 
 /** Reaches a private method on the prototype-built component. */
@@ -109,9 +137,9 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
 
     await invokePrivate(h.component, 'reloadActiveConversationTimeline');
 
-    expect(h.engine.RefreshConversationDetails).toHaveBeenCalledWith('CONV-ACTIVE', { ID: 'USER-1' });
-    expect(h.engine.GetCachedDetails).toHaveBeenCalledWith('CONV-ACTIVE');
-    expect(h.loadPeripheralData).toHaveBeenCalledWith('CONV-ACTIVE');
+    expect(h.windowStore.RefreshLatest).toHaveBeenCalledWith({ ID: 'USER-1' });
+    expect(h.windowStore.GetSnapshot).toHaveBeenCalled();
+    expect(h.loadPeripheralData).toHaveBeenCalledWith('CONV-ACTIVE', expect.anything());
     // lastLoadedConversationId is reset so peripheral data (incl. session meta) reprocesses
     expect((h.component as unknown as Record<string, unknown>)['lastLoadedConversationId']).toBeNull();
   });
@@ -126,7 +154,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
 
     await invokePrivate(h.component, 'reloadActiveConversationTimeline');
 
-    expect(h.engine.RefreshConversationDetails).not.toHaveBeenCalled();
+    expect(h.windowStore.RefreshLatest).not.toHaveBeenCalled();
     expect(h.loadPeripheralData).not.toHaveBeenCalled();
   });
 
@@ -142,7 +170,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
     invokePrivate(h.component, 'onRealtimeSessionEnded');
 
     // Timeline refresh fired (BUG 2) ...
-    expect(h.engine.RefreshConversationDetails).toHaveBeenCalledWith('CONV-ACTIVE', { ID: 'USER-1' });
+    expect(h.windowStore.RefreshLatest).toHaveBeenCalledWith({ ID: 'USER-1' });
     // ... and the host was told to fold + select the created conversation.
     expect(h.realtimeConversationReadyEmit).toHaveBeenCalledWith({ conversationId: 'CONV-ACTIVE', select: true });
   });
@@ -158,7 +186,7 @@ describe('BUG 2 — session end reloads the active conversation timeline', () =>
 
     invokePrivate(h.component, 'onRealtimeSessionEnded');
 
-    expect(h.engine.RefreshConversationDetails).toHaveBeenCalledWith('CONV-ACTIVE', { ID: 'USER-1' });
+    expect(h.windowStore.RefreshLatest).toHaveBeenCalledWith({ ID: 'USER-1' });
     expect(h.realtimeConversationReadyEmit).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { Component, Input } from '@angular/core';
 import { MJEmptyStateComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { renderComponentFixture, query, queryAll, text, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import type { DrilldownRecord } from './record-drilldown.component';
 import { RecordDrilldownComponent } from './record-drilldown.component';
 
@@ -12,11 +11,6 @@ import { RecordDrilldownComponent } from './record-drilldown.component';
  * stubbed. Single synchronous render.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class LoadingStub {
-  @Input() text = '';
-}
-
 const RECORDS = [
   { Title: 'Alpha doc', Subtitle: 'a', Weight: 0.9, EntityName: 'Documents', RecordID: 'd1' },
   { Title: 'Beta doc', Subtitle: 'b', Weight: 0.5, EntityName: 'Documents', RecordID: 'd2' },
@@ -24,7 +18,7 @@ const RECORDS = [
 
 const render = (inputs: Record<string, unknown>) =>
   renderComponentFixture(RecordDrilldownComponent, {
-    imports: [MJEmptyStateComponent, MJButtonDirective, LoadingStub],
+    imports: [MJEmptyStateComponent, MJButtonDirective, StubLoadingComponent],
     declarations: [RecordDrilldownComponent],
     inputs: { Title: 'Related Records', Visible: true, IsLoading: false, Records: [], ...inputs },
   });

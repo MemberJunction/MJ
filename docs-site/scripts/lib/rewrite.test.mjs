@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { transformRepoMarkdown, buildFrontmatter, extractDescription } from './markdown.mjs';
 import { rewriteHtmlValue, rewriteLinkTarget, rewriteImageTarget } from './rewrite.mjs';
-import { guideSlug, labelFromSlug, packageSlug, relativeSiteLink, resolveRepoPath } from './site-map.mjs';
+import { compareReleasesDesc, guideSlug, labelFromSlug, packageSlug, relativeSiteLink, releaseSlug, releaseVersion, resolveRepoPath } from './site-map.mjs';
 
 const SHA = 'abc1234';
 
@@ -42,6 +42,17 @@ test('slug derivation strips _GUIDE and kebab-cases', () => {
 
 test('package slug lowercases each segment', () => {
   assert.equal(packageSlug('packages/AI/Providers/OpenAI'), 'packages/ai/providers/openai');
+});
+
+test('release slug and version parsing', () => {
+  assert.equal(releaseSlug('v5.51.0.md'), 'v5-51-0');
+  assert.deepEqual(releaseVersion('v5.51.0.md'), [5, 51, 0]);
+  assert.equal(releaseVersion('notes.md'), null);
+});
+
+test('releases sort newest-first with numeric (not lexical) comparison', () => {
+  const files = ['v5.9.0.md', 'v5.51.0.md', 'v6.0.0.md', 'v5.51.1.md', 'weird.md'];
+  assert.deepEqual(files.sort(compareReleasesDesc), ['v6.0.0.md', 'v5.51.1.md', 'v5.51.0.md', 'v5.9.0.md', 'weird.md']);
 });
 
 test('label from slug title-cases the last segment', () => {

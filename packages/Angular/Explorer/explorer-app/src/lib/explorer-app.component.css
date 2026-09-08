@@ -28,7 +28,8 @@
   position: relative;
   display: flex;
   align-items: center;
-  height: 100vh;
+  /* dvh, not vh — see .main-banner. */
+  height: 100dvh;
 }
 
 /* ---- Theme Toggle ---- */
@@ -67,95 +68,54 @@
 
 /* ---- Left Banner Column ---- */
 
+/* Slightly wider than the form column, per Login C's 1.05fr / 1fr split. */
 .login-wrapper .main-banner {
-  flex: 1;
+  flex: 1.05;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
   position: relative;
   overflow: hidden;
-  height: 100vh;
-  padding: var(--mj-space-12);
+  /* dvh, not vh — mobile browsers include the collapsing URL bar in vh, which pushes the
+     picker below the fold on first paint. */
+  height: 100dvh;
+  padding: var(--mj-space-14) clamp(var(--mj-space-10), 4vw, var(--mj-space-16)) var(--mj-space-12);
   box-sizing: border-box;
+  /* The panel is dark in BOTH themes, so its stops come from the login gradient tokens
+     (which already swap light/dark) rather than from surface tokens. No waves — Login C
+     replaced them with a quiet gradient so the surface can carry any brand. */
+  background: linear-gradient(
+    160deg,
+    var(--mj-login-grad-start) 0%,
+    color-mix(in srgb, var(--mj-login-grad-start) 65%, var(--mj-login-grad-mid)) 60%,
+    var(--mj-login-grad-mid) 140%
+  );
 }
 
-/* SVG background — fills the banner, sits behind content */
-.login-bg-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-}
+/* Brand block: logo, welcome, sub — centered as one group by the column's justify-content. */
 
-/* Content stacks above the SVG */
-.login-wrapper .main-banner .logo-icon,
-.login-wrapper .main-banner .title,
-.login-wrapper .main-banner h1 {
-  position: relative;
-  z-index: 1;
-}
-
-.login-wrapper .main-banner .logo-icon {
-  flex: 1;
-}
-
-.login-wrapper .main-banner h1 {
-  font-size: var(--mj-text-display);
+.login-wrapper .main-banner .banner-welcome {
+  font-size: clamp(var(--mj-text-3xl), 3.2vw, var(--mj-text-4xl));
   font-weight: var(--mj-font-bold);
   line-height: var(--mj-leading-tight);
+  letter-spacing: -0.4px;
   text-align: left;
-  flex: 2;
-  /* Always white — sits on the SVG gradient in both themes */
+  margin: var(--mj-space-8) 0 var(--mj-space-2);
+  /* Always white — the panel is dark in both themes, so the semantic inverse token
+     (which flips to near-black in dark mode) would be unreadable here. */
   color: var(--mj-color-neutral-0);
 }
 
-/* ---- Wave Animations ---- */
-
-@keyframes login-wave-sway-1 {
-  0%, 100% { transform: translate(0, 0); }
-  25%      { transform: translate(15px, -8px); }
-  50%      { transform: translate(-10px, 4px); }
-  75%      { transform: translate(12px, -6px); }
-}
-
-@keyframes login-wave-sway-2 {
-  0%, 100% { transform: translate(0, 0); }
-  25%      { transform: translate(-12px, 6px); }
-  50%      { transform: translate(18px, -5px); }
-  75%      { transform: translate(-8px, 8px); }
-}
-
-@keyframes login-wave-sway-3 {
-  0%, 100% { transform: translate(0, 0); }
-  25%      { transform: translate(10px, 5px); }
-  50%      { transform: translate(-14px, -7px); }
-  75%      { transform: translate(6px, 10px); }
-}
-
-.login-wave {
-  will-change: transform;
-}
-
-.login-wave-1 {
-  animation: login-wave-sway-1 16s ease-in-out infinite;
-}
-
-.login-wave-2 {
-  animation: login-wave-sway-2 20s ease-in-out infinite;
-  animation-delay: -4s;
-}
-
-.login-wave-3 {
-  animation: login-wave-sway-3 14s ease-in-out infinite;
-  animation-delay: -8s;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .login-wave {
-    animation: none !important;
-  }
+.login-wrapper .main-banner .banner-sub {
+  margin: 0;
+  font-size: var(--mj-text-lg);
+  font-weight: var(--mj-font-normal);
+  line-height: var(--mj-leading-normal);
+  text-align: left;
+  /* Always white — see .banner-welcome. */
+  color: var(--mj-color-neutral-0);
+  opacity: 0.82;
 }
 
 /* ---- Right Login Column ---- */
@@ -167,57 +127,18 @@
   align-items: center;
   justify-content: center;
   background: var(--mj-bg-surface);
-  height: 100vh;
+  /* dvh, not vh — see .main-banner. */
+  height: 100dvh;
   box-sizing: border-box;
-  padding: var(--mj-space-6);
+  padding: var(--mj-space-12) clamp(var(--mj-space-8), 5vw, var(--mj-space-16));
 }
 
-.login-wrapper .login-btn h3 {
-  font-size: var(--mj-text-4xl);
-  font-weight: var(--mj-font-semibold);
-  line-height: var(--mj-leading-tight);
-  text-align: center;
-  color: var(--mj-text-primary);
-}
-
-.login-wrapper .login-btn p {
-  font-size: var(--mj-text-base);
-  font-weight: var(--mj-font-medium);
-  line-height: var(--mj-leading-normal);
-  text-align: center;
-  color: var(--mj-text-secondary);
-}
-
-.login-wrapper .login-btn button {
-  max-width: 450px;
-  width: 100%;
-  background: var(--mj-brand-primary);
-  color: var(--mj-brand-on-primary);
-  border-radius: var(--mj-radius-lg);
-  padding: 0 var(--mj-space-6);
-  border: none;
-  font-size: var(--mj-text-base);
-  font-weight: var(--mj-font-bold);
-  line-height: var(--mj-space-12);
-  cursor: pointer;
-  text-align: center;
-  transition: background-color var(--mj-transition-base);
-}
-
-.login-wrapper .login-btn button:hover {
-  background: var(--mj-brand-primary-hover);
-}
-
-.login-wrapper .login-btn button:focus-visible {
-  outline: none;
-  box-shadow: var(--mj-focus-ring);
-}
+/* Nothing here styles the sign-in controls: <mj-login-picker> owns the heading, lede, rows and
+   the empty-catalog CTA in all three states. The bespoke `.login-btn button` block that used to
+   live here was overriding the mjButton directive, which is why that CTA never picked up the
+   standard focus ring or 44px hit target. */
 
 /* ---- Misc ---- */
-
-.title {
-  font-size: x-large;
-}
 
 .mj-logo-mark-login {
   width: 62px;
@@ -241,28 +162,32 @@
    Responsive Breakpoints
    ======================================== */
 
-/* Tablet: stacked layout */
-@media (max-width: 768px) {
+/* Tablet: stacked layout. 900px is Login C's stack point — the two columns get cramped
+   before 768px, so the panes stack earlier than the app's other breakpoints. */
+@media (max-width: 900px) {
   .login-wrapper {
     flex-direction: column;
   }
 
   .login-wrapper .main-banner {
-    height: 35vh;
+    height: 35dvh;
     width: 100%;
     padding: var(--mj-space-6);
     align-items: center;
     justify-content: flex-end;
   }
 
-  .login-wrapper .main-banner h1 {
-    font-size: var(--mj-text-5xl);
-    text-align: center;
-    flex: unset;
+  /* Login C collapses the story panel to just the logo once the panes stack — a stacked
+     welcome + sub would push the picker below the fold. */
+  .login-wrapper .main-banner .banner-brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
-  .login-wrapper .main-banner .logo-icon {
-    flex: unset;
+  .login-wrapper .main-banner .banner-welcome,
+  .login-wrapper .main-banner .banner-sub {
+    display: none;
   }
 
   .login-wrapper .login-btn {
@@ -276,24 +201,12 @@
 /* Mobile: compact layout */
 @media (max-width: 480px) {
   .login-wrapper .main-banner {
-    height: 30vh;
+    height: 30dvh;
     padding: var(--mj-space-4);
-  }
-
-  .login-wrapper .main-banner h1 {
-    font-size: var(--mj-text-4xl);
   }
 
   .login-wrapper .login-btn {
     padding: var(--mj-space-6) var(--mj-space-4);
-  }
-
-  .login-wrapper .login-btn h3 {
-    font-size: var(--mj-text-2xl);
-  }
-
-  .login-wrapper .login-btn button {
-    max-width: 100%;
   }
 
   .mj-logo-wordmark-login {

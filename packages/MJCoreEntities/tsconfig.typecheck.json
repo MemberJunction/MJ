@@ -1,0 +1,9 @@
+{
+  "//": "Type-level tests only. The build tsconfig EXCLUDES src/__tests__, so pointing vitest's typecheck at it silently produced an empty program — the *.test-d.ts assertions all 'passed' while a deliberately widened generic went undetected. This config puts them back in the program.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

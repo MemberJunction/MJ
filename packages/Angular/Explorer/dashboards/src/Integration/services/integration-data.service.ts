@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { DateCellDayKey } from '../../shared/date-cell';
 import {
   MJCompanyIntegrationEntityMapEntity,
   MJCompanyIntegrationFieldMapEntity,
@@ -9,6 +10,16 @@ import {
   MJIntegrationSourceTypeEntity,
   MJCompanyIntegrationSyncWatermarkEntity,
 } from '@memberjunction/core-entities';
+import type { MJCompanyIntegrationRunEntity } from '@memberjunction/core-entities';
+
+/**
+ * A sync run's status, taken from the entity rather than restated here. The literal union that used
+ * to be written out in both interfaces below had already gone stale — it predated 'Queued', so a
+ * queued run was a value the compiler said could not exist. Indexed access tracks the CHECK
+ * constraint through CodeGen, so a new status shows up as a compile error in the switch-like
+ * helpers below instead of silently falling through to a default colour.
+ */
+type IntegrationRunStatus = MJCompanyIntegrationRunEntity['Status'];
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
   GraphQLDataProvider,
@@ -34,8 +45,8 @@ export interface IntegrationRow {
   Name: string;
   IsActive: boolean | null;
   LastRunID: string | null;
-  LastRunStartedAt: string | null;
-  LastRunEndedAt: string | null;
+  LastRunStartedAt: Date | string | null;
+  LastRunEndedAt: Date | string | null;
   Company: string;
   Integration: string;
   DriverClassName: string | null;
@@ -44,10 +55,10 @@ export interface IntegrationRow {
 export interface IntegrationRunRow {
   ID: string;
   CompanyIntegrationID: string;
-  StartedAt: string | null;
-  EndedAt: string | null;
+  StartedAt: Date | string | null;
+  EndedAt: Date | string | null;
   TotalRecords: number;
-  Status: 'Failed' | 'In Progress' | 'Pending' | 'Success';
+  Status: IntegrationRunStatus;
   ErrorLog: string | null;
   Integration: string;
   Company: string;
@@ -160,9 +171,9 @@ export interface IntegrationKPIs {
 export interface ActivityFeedItem {
   RunID: string;
   IntegrationName: string;
-  Status: 'Failed' | 'In Progress' | 'Pending' | 'Success';
-  StatusColor: 'amber' | 'green' | 'red';
-  StartedAt: string | null;
+  Status: IntegrationRunStatus;
+  StatusColor: 'amber' | 'green' | 'red' | 'gray';
+  StartedAt: Date | string | null;
   RelativeTime: string;
   TotalRecords: number;
   RunByUser: string;
@@ -412,8 +423,11 @@ export class IntegrationDataService {
 
   ComputeKPIs(summaries: IntegrationSummary[]): IntegrationKPIs {
     const totalIntegrations = summaries.length;
+    // 'Queued' counts as an active sync: worker-mode enqueues a run that has been asked for and
+    // not yet finished, which is what this KPI means. Omitting it made every worker-mode
+    // deployment under-report in-flight work.
     const activeSyncs = summaries.filter(
-      s => s.LatestRun?.Status === 'In Progress' || s.LatestRun?.Status === 'Pending'
+      s => s.LatestRun?.Status === 'In Progress' || s.LatestRun?.Status === 'Pending' || s.LatestRun?.Status === 'Queued'
     ).length;
     const recordsSyncedToday = summaries.reduce((acc, s) => acc + s.TotalRecordsSyncedToday, 0);
 
@@ -449,7 +463,7 @@ export class IntegrationDataService {
     return `${hours}h ${remainingMinutes}m`;
   }
 
-  ComputeRelativeTime(dateStr: string | null): string {
+  ComputeRelativeTime(dateStr: Date | string | null): string {
     return this.computeRelativeTime(dateStr);
   }
 
@@ -784,7 +798,7 @@ export class IntegrationDataService {
     companyIntegrationID: string,
     entityID: string,
     provider?: IRunViewProvider | null
-  ): Promise<{ StartedAt: string | null; EndedAt: string | null; Status: string; TotalRecords: number } | null> {
+  ): Promise<{ StartedAt: Date | string | null; EndedAt: Date | string | null; Status: string; TotalRecords: number } | null> {
     const rv = this.createRunView(provider);
     // Get runs for this integration, most recent first
     const runsResult = await rv.RunView<IntegrationRunRow>({
@@ -1056,9 +1070,13 @@ export class IntegrationDataService {
     };
   }
 
-  private runStatusColor(run: IntegrationRunRow): 'amber' | 'green' | 'red' {
+  private runStatusColor(run: IntegrationRunRow): 'amber' | 'green' | 'red' | 'gray' {
     if (run.Status === 'Failed') return 'red';
     if (run.Status === 'Success') return 'green';
+    // A cancelled run is neither healthy nor broken — someone stopped it on purpose. Red would
+    // read as a defect to fix; amber would read as work still in flight. Neutral is the truth.
+    if (run.Status === 'Cancelled') return 'gray';
+    // 'Queued' / 'In Progress' / 'Pending' — work outstanding.
     return 'amber';
   }
 
@@ -1086,7 +1104,7 @@ export class IntegrationDataService {
       const label = date.toLocaleDateString(undefined, { weekday: 'short' });
 
       const dayRecords = runs
-        .filter(r => r.StartedAt && r.StartedAt.startsWith(dateStr))
+        .filter(r => DateCellDayKey(r.StartedAt) === dateStr)
         .reduce((acc, r) => acc + r.TotalRecords, 0);
 
       result.push({ Date: dateStr, Label: label, Records: dayRecords });
@@ -1101,21 +1119,24 @@ export class IntegrationDataService {
     if (!isActive) return 'gray';
     if (!latestRun) return 'gray';
     if (latestRun.Status === 'Failed') return 'red';
-    if (latestRun.Status === 'In Progress' || latestRun.Status === 'Pending') return 'amber';
+    // 'Queued' belongs with the other work-outstanding states: a run waiting for a worker is
+    // pending, not unknown. It was missing here only because the hand-copied union predated it.
+    if (latestRun.Status === 'In Progress' || latestRun.Status === 'Pending' || latestRun.Status === 'Queued') return 'amber';
     if (latestRun.Status === 'Success') {
       return this.isStale(latestRun.StartedAt) ? 'amber' : 'green';
     }
+    // 'Cancelled' lands here — deliberately neutral, same reasoning as runStatusColor.
     return 'gray';
   }
 
-  private isStale(startedAt: string | null): boolean {
+  private isStale(startedAt: Date | string | null): boolean {
     if (!startedAt) return true;
     const runDate = new Date(startedAt);
     const hoursAgo = (Date.now() - runDate.getTime()) / (1000 * 60 * 60);
     return hoursAgo > 24;
   }
 
-  private computeRelativeTime(dateStr: string | null): string {
+  private computeRelativeTime(dateStr: Date | string | null): string {
     if (!dateStr) return 'Never run';
     const date = new Date(dateStr);
     const diffMs = Date.now() - date.getTime();

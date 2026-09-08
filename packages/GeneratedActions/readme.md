@@ -68,4 +68,4 @@ When this package is imported, each action class's `@RegisterClass(BaseAction, '
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

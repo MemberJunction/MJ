@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "title": "Access Token",
+      "description": "Databricks Personal Access Token (PAT). The driver authenticates with authType 'access-token'. The warehouse hostname and HTTP path are non-secret and belong in the data source's ConnectionConfig, not here.",
+      "isSecret": true,
+      "order": 0
+    }
+  },
+  "required": ["token"]
+}

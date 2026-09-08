@@ -305,6 +305,8 @@ export class QueryCompositionEngine {
             // Check if we already have this exact CTE
             const existingCTE = cteEntries.find(e => e.DeduplicationKey === dedupeKey);
             if (existingCTE) {
+                // safe-replace: CTEName is only ever generateCTEName(), which strips every
+                // char outside [a-zA-Z0-9_ ] and appends a base36 hash — it cannot hold a `$`
                 resolvedSQL = resolvedSQL.replace(token.FullToken, existingCTE.CTEName);
                 continue;
             }
@@ -371,6 +373,8 @@ export class QueryCompositionEngine {
             };
 
             cteEntries.push(cteEntry);
+            // safe-replace: cteName is generateCTEName() output — sanitised to
+            // [a-zA-Z0-9_ ] plus a base36 hash, so it cannot hold a `$`
             resolvedSQL = resolvedSQL.replace(token.FullToken, cteName);
         }
 
@@ -818,7 +822,15 @@ export class QueryCompositionEngine {
             `\\[${escaped}\\]|"${escaped}"|\\b${escaped}\\b`,
             'gi'
         );
-        return sql.replace(pattern, newName);
+        // Function replacement, not a string. `newName` comes from
+        // `SymbolTable.Register`, which returns the identifier verbatim (or
+        // `name__N`) with no sanitisation — and both SQL Server bracketed and
+        // PostgreSQL quoted identifiers may legally contain `$`. As a string
+        // replacement, `$$`/`$&`/`` $` ``/`$'` in it were expanded rather than
+        // inserted, splicing surrounding SQL into an identifier in executed SQL.
+        // Escaping the search side above and stopping there is exactly the
+        // half-applied defence issue #3171 was about.
+        return sql.replace(pattern, () => newName);
     }
 
     /**

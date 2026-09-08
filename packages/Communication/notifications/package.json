@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/notifications",
   "type": "module",
-  "version": "5.50.0",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Unified Notification System with Multi-Channel Delivery",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -14,19 +14,20 @@
     "test": "vitest run"
   },
   "author": "MemberJunction.com",
-  "license": "ISC",
+  "license": "BUSL-1.1",
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@memberjunction/global": "5.50.0",
-    "@memberjunction/core": "5.50.0",
-    "@memberjunction/core-entities": "5.50.0",
-    "@memberjunction/templates": "5.50.0",
-    "@memberjunction/communication-engine": "5.50.0",
-    "@memberjunction/communication-types": "5.50.0",
-    "@memberjunction/sqlserver-dataprovider": "5.50.0"
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/templates": "6.1.0-edge.5",
+    "@memberjunction/communication-engine": "6.1.0-edge.5",
+    "@memberjunction/communication-types": "6.1.0-edge.5",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.5",
+    "@memberjunction/sqlserver-dataprovider": "6.1.0-edge.5"
   },
   "repository": {
     "type": "git",

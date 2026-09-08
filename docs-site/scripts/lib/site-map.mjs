@@ -37,6 +37,34 @@ export function packageSlug(dirRelPath) {
   return dirRelPath.split('/').map((seg) => seg.toLowerCase()).join('/');
 }
 
+/** 'v5.51.0.md' -> 'v5-51-0' */
+export function releaseSlug(filename) {
+  return filename.replace(/\.md$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+}
+
+/**
+ * Sort key for release filenames: higher versions sort FIRST (newest-first).
+ * 'v5.51.0.md' -> [5, 51, 0]; unparseable names sort last (and should be
+ * warned about by the caller).
+ */
+export function releaseVersion(filename) {
+  const match = filename.match(/(\d+)\.(\d+)\.(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+}
+
+export function compareReleasesDesc(a, b) {
+  const va = releaseVersion(a);
+  const vb = releaseVersion(b);
+  if (va === null && vb === null) return a.localeCompare(b);
+  if (va === null) return 1;
+  if (vb === null) return -1;
+  for (let i = 0; i < 3; i++) {
+    if (va[i] !== vb[i]) return vb[i] - va[i];
+  }
+  return 0;
+}
+
 /**
  * Relative URL from one site slug to another (both without leading/trailing
  * slashes). Returns a path ending in '/', or '#anchor'-only for self-links.

@@ -36,4 +36,26 @@ describe('config-loader', () => {
       expect(config.database!.schema).toBe('__mj');
     });
   });
+
+  /**
+   * Regression guard. This module used to call `dotenv.config({ override: true })`,
+   * which overwrote variables already present in the environment. The effect was
+   * that `DB_DATABASE=MJ_scratch mj test ...` was silently discarded and the suite
+   * ran — including mutation tests — against whatever `.env` pointed at, making the
+   * "one database per agent" rule unenforceable and diverging from every other `mj`
+   * command. An explicitly-set variable must win.
+   */
+  describe('dotenv precedence', () => {
+    it('does not pass override:true, so an explicit env var wins over .env', async () => {
+      vi.resetModules();
+      const configSpy = vi.fn();
+      vi.doMock('dotenv', () => ({ default: { config: configSpy } }));
+
+      await import('../utils/config-loader');
+
+      expect(configSpy).toHaveBeenCalled();
+      const options = configSpy.mock.calls[0]?.[0] as { override?: boolean } | undefined;
+      expect(options?.override).not.toBe(true);
+    });
+  });
 });

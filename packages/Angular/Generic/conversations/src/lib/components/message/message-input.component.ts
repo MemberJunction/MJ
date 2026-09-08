@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
 import { ConnectedPosition } from '@angular/cdk/overlay';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, Metadata } from '@memberjunction/core';
-import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine } from '@memberjunction/core-entities';
+import { UserInfo, Metadata, LogStatusEx } from '@memberjunction/core';
+import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine, UserInfoEngine, TaskGraphSubmitOperation, type TaskGraphSubmitInput } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, AppContextSnapshot } from "@memberjunction/ai-core-plus";
 import { DialogService } from '../../services/dialog.service';
 import { ToastService } from '../../services/toast.service';
@@ -14,7 +14,7 @@ import { ConversationStreamingService, MessageProgressUpdate, MessageProgressMet
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { GenerateAndApplyConversationName } from '../../services/conversation-naming';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, AgentResponseForm, ActionableCommand, AutomaticCommand, ConversationUtility, agentFailureDisposition, agentFailureMessage } from '@memberjunction/ai-core-plus';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { AiComposerComponent } from '../composer/ai-composer.component';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
@@ -268,7 +268,28 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   @ViewChild('inputBox') inputBox!: AiComposerComponent;
 
-  public messageText: string = '';
+  private _messageText: string = '';
+  /**
+   * The composer's text. An accessor pair rather than a plain field because every write reaches the
+   * editor through `[value]` -> `ngModel.writeValue`, which rebuilds or empties the chip DOM WITHOUT
+   * emitting `valueChange` — so a write is exactly the event {@link mentionedAgentId} has to hear
+   * about, and the setter is the one place that cannot be bypassed.
+   *
+   * Bypassing it is not hypothetical: `handleSuccessfulSend` and the empty-state submit clear the
+   * text without touching the editor, and `conversation-chat-area` assigns `messageText` on this
+   * component from the outside (three call sites). Invalidating at the individual call sites instead
+   * would leave every future one to remember.
+   *
+   * Read is a plain field read; there is no two-way `ngModel` on this property (the template binds
+   * `[value]="messageText"` one-way), so the pair is transparent to callers.
+   */
+  public get messageText(): string {
+    return this._messageText;
+  }
+  public set messageText(value: string) {
+    this._messageText = value;
+    this.mentionedAgentId = undefined;
+  }
 
   /**
    * Prefills the composer with draft text WITHOUT sending (unlike pendingMessage,
@@ -407,6 +428,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   private completionTimestamps = new Map<string, number>();
   // Track registered streaming callbacks for cleanup
   private registeredCallbacks = new Map<string, (progress: MessageProgressUpdate) => Promise<void>>();
+  // After a post-ACK disconnect, keep observing ConversationDetail.Status until
+  // the *server* writes Complete/Error (MaxTimePerRun terminates the run).
+  // Back off 5s → 15s → 60s so we bound polling cost, not invent a client
+  // verdict. Do not paint Error here — that would unregister the streaming
+  // callback and make a later server Complete sticky-wrong until reload.
+  private static readonly IN_FLIGHT_WATCH_BACKOFF_MS = [5_000, 15_000, 60_000] as const;
+  private inFlightWatches = new Map<string, ReturnType<typeof setTimeout>>();
 
   // Track pending attachments from the input box
   private pendingAttachments: PendingAttachment[] = [];
@@ -527,6 +555,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   ngOnDestroy() {
     // Unregister all streaming callbacks
     this.unregisterAllCallbacks();
+    this.clearInFlightWatches();
     this.realtimeActiveSub?.unsubscribe();
     // If the user navigates away mid-call, tear the session down.
     if (this.realtimeSession.IsActive) {
@@ -550,6 +579,49 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       ?? this.converationManagerAgent?.ID
       ?? null;
   }
+
+  /**
+   * The agent the '/' skill picker should narrow to. Mirrors routing's priority: an explicit
+   * `@agent` chip already in the draft wins (routeMessage's Priority 1), else the agent the message
+   * would otherwise go to ({@link resolveCurrentAgentId}). Bound to `mj-ai-composer`'s
+   * `TargetAgentId`; null = unknown, no narrowing.
+   */
+  public get pickerTargetAgentId(): string | null {
+    if (this.mentionedAgentId === undefined) {
+      const chips = this.inputBox?.getMentionChipsData() || [];
+      this.mentionedAgentId = chips.find(chip => chip.type === 'agent')?.id ?? null;
+    }
+    return this.mentionedAgentId ?? this.resolveCurrentAgentId();
+  }
+
+  /**
+   * Memo for the first `@agent` chip in the draft, so the template-bound
+   * {@link pickerTargetAgentId} does not walk the editor DOM on every change-detection cycle.
+   *
+   * `undefined` = dirty, recompute on next read; `null` = computed, no `@agent` chip present.
+   * The two are NOT interchangeable — collapsing them to `null` is what makes a cleared or restored
+   * draft read as "no chip" forever.
+   *
+   * Invalidated from {@link messageText}'s setter, which is the only choke point every chip change
+   * passes through. Chips reach the editor by two kinds of path and only one announces itself:
+   *
+   *   - user editing (autocomplete insert, backspace-delete, `InsertMention`) and `clear()` all end
+   *     in the editor's `onInput()`, which emits `valueChange` -> {@link OnComposerValueChanged},
+   *     which assigns `messageText`;
+   *   - a programmatic write — a restored draft (`[initialDraft]` -> {@link SetDraft}), a post-send
+   *     reset, or a host assigning `messageText` directly — goes `[value]` ->
+   *     `ngModel.writeValue` -> `setEditorContent`, which rebuilds the chips with `appendChild` (or
+   *     empties the editor) and never calls `onInput()`. No `valueChange`, so no hook fires.
+   *
+   * Invalidate-and-lazy rather than eager refresh, because an eager read in the setter would be too
+   * early: `ngModel` writes the editor on a later change-detection pass, so the read would predate
+   * the chips it wants. Marking dirty is timing-independent — the recompute happens on the next
+   * read, by which point the editor holds the new content.
+   *
+   * The picker can be opened by the Skills button as well as by typing `/`, so "the next keystroke
+   * would repair it" is not a defence: the button path takes whatever the memo holds.
+   */
+  private mentionedAgentId: string | null | undefined = undefined;
 
   /** True when the mic button should be enabled (have an agent + not disabled). */
   public get canStartRealtime(): boolean {
@@ -1321,10 +1393,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     // Priority 5: Check if Sage was explicitly @mentioned with a config preset
     // If so, treat it like agent continuity so the config preset is preserved
     if (this.converationManagerAgent?.ID) {
-      const sageConfigPreset = this.agentService.findConfigurationPresetFromHistory(
-        this.converationManagerAgent.ID,
-        this.conversationHistory
-      );
+      const sageConfigPreset = this.conversationId
+        ? await this.agentService.FindConfigurationPresetForAgent(
+            this.conversationId,
+            this.converationManagerAgent.ID
+          )
+        : undefined;
       if (sageConfigPreset) {
         // User explicitly @mentioned Sage with a config - use the shared execution helper directly
         // Pass the already-found config preset to avoid redundant history search
@@ -1493,20 +1567,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     this.intentCheckStarted.emit({ conversationId: this.conversationId });
 
     try {
-      // Build context from pre-loaded maps (if available)
-      if (!this.artifactsByDetailId || !this.agentRunsByDetailId) {
-        console.warn('⚠️ Artifact/agent run context not available for intent check');
-        return { decision: 'UNSURE' as const, reasoning: 'Context not available' };
+      // The pre-loaded artifact/agent-run maps are no longer passed: they are scoped to the
+      // loaded transcript window, and the service now queries for this agent's artifacts so
+      // the classifier reasons over the whole conversation. A conversation id is what it
+      // needs instead, and without one there is nothing to query.
+      if (!this.conversationId) {
+        console.warn('⚠️ No conversation id available for intent check');
+        return { decision: 'UNSURE' as const, reasoning: 'Conversation not available' };
       }
 
       const intent = await this.agentService.checkAgentContinuityIntent(
+        this.conversationId,
         agentId,
         message,
-        this.conversationHistory,
-        {
-          artifactsByDetailId: this.artifactsByDetailId,
-          agentRunsByDetailId: this.agentRunsByDetailId
-        }
+        this.conversationHistory
       );
       return intent;
     } catch (error) {
@@ -1749,15 +1823,14 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       taskId = null; // Clear reference but don't remove from service
 
       if (!result || !result.success) {
-        // Evaluation failed - use updateConversationDetail to ensure task cleanup
-        const errorMsg = result?.agentRun?.ErrorMessage || 'Agent evaluation failed';
-        conversationManagerMessage.Error = errorMsg;
-        await this.updateConversationDetail(conversationManagerMessage, `❌ Evaluation failed`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-        console.warn('⚠️ Sage failed:', result?.agentRun?.ErrorMessage);
-
-        // Clean up completion timestamp
+        await this.applyAgentFailureToDetail(
+          conversationManagerMessage,
+          userMessage,
+          this.converationManagerAgent?.Name || 'Sage',
+          result,
+          'failed',
+        );
+        console.warn('⚠️ Sage failed:', agentFailureMessage(result, 'Agent evaluation failed'));
         this.cleanupCompletionTimestamp(conversationManagerMessage.ID);
         return;
       }
@@ -1866,9 +1939,31 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
   }
 
+  /** Detaches the progress callback for one message — used when submission never starts. */
+  private releaseProgressCallback(messageId: string): void {
+    const callback = this.registeredCallbacks.get(messageId);
+    if (callback) {
+      this.streamingService.unregisterMessageCallback(messageId, callback);
+      this.registeredCallbacks.delete(messageId);
+    }
+  }
+
   /**
-   * Handle task graph execution based on Sage's payload
-   * Creates tasks and orchestrates their execution
+   * Submits a task graph to the server and returns — the client no longer drives execution.
+   *
+   * This used to call the `ExecuteTaskGraph` mutation and await the ENTIRE workflow inside one
+   * long-lived GraphQL request. That had three unfixable problems: a page reload lost the awaited
+   * promise (leaving a workflow running with nobody watching), a server restart orphaned every
+   * in-flight task, and no other channel could reach the substrate at all.
+   *
+   * Now submission returns as soon as the graph is durable and the server-side dispatcher executes
+   * it. The client is purely an observer: progress arrives over the existing PubSub frames, and
+   * because the work lives in Task rows rather than in a promise, a reload can re-attach to a
+   * workflow already in flight.
+   *
+   * Single-task graphs are no longer special-cased here. The old client-side fork ran them through
+   * a different code path entirely; they now submit like any other graph, and the decision about
+   * whether a one-node graph is worth durable machinery moves server-side where it can be recorded.
    */
   private async handleTaskGraphExecution(
     userMessage: MJConversationDetailEntity,
@@ -1876,162 +1971,66 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     conversationId: string,
     conversationManagerMessage: MJConversationDetailEntity
   ): Promise<void> {
-    const taskGraph = managerResult.payload.taskGraph;
+    // `payload` is untyped by construction (an agent's payload shape is agent-specific), so pin the
+    // graph to the operation's own input contract at the boundary rather than letting it stay loose.
+    const taskGraph: TaskGraphSubmitInput['spec'] | undefined = managerResult.payload?.taskGraph;
+    if (!taskGraph) return;
+
     const workflowName = taskGraph.workflowName || 'Workflow';
     const reasoning = taskGraph.reasoning || 'Executing multi-step workflow';
-    const taskCount = taskGraph.tasks?.length || 0;
+    const taskCount = Array.isArray(taskGraph.tasks) ? taskGraph.tasks.length : 0;
 
-    // Deduplicate tasks by tempId (LLM sometimes returns duplicates)
-    const seenTempIds = new Set<string>();
-    const uniqueTasks = taskGraph.tasks.filter((task: any) => {
-      if (seenTempIds.has(task.tempId)) {
-        console.warn(`⚠️ Duplicate tempId detected on client, filtering: ${task.tempId} (${task.name})`);
-        return false;
-      }
-      seenTempIds.add(task.tempId);
-      return true;
-    });
-
-    const uniqueTaskCount = uniqueTasks.length;
-
-    const isSingleTask = uniqueTaskCount === 1;
-
-    // If single task, use direct agent execution (existing pattern with great PubSub support)
-    if (isSingleTask) {
-      const task = uniqueTasks[0];
-      const agentName = task.agentName;
-
-      // Update CM message
-      const delegationMessage = `👉 Delegating to **${agentName}**`;
-      await this.updateConversationDetail(conversationManagerMessage, delegationMessage, 'Complete');
-
-      // Execute single agent directly using existing pattern
-      await this.handleSingleTaskExecution(
-        userMessage,
-        task,
-        agentName,
-        conversationId,
-        conversationManagerMessage
-      );
-
-      return;
-    }
-
-    // Multi-step workflow - use server-side task orchestration
-    console.log(`📋 Multi-step workflow detected (${uniqueTaskCount} tasks), using task orchestration`);
-
-    // Update CM message with task summary (use unique tasks only)
-    const taskSummary = uniqueTasks.map((t: any) => `• ${t.name}`).join('\n');
-
-    await this.updateConversationDetail(conversationManagerMessage, `📋 Setting up multi-step workflow...\n\n**${workflowName}**\n${taskSummary}`, 'Complete');
-
-    // Step 2: Create new ConversationDetail for task execution updates
+    // A message the user can watch. Progress frames from the dispatcher land against this ID.
     const taskExecutionMessage = await this.dataCache.createConversationDetail(this.currentUser);
     taskExecutionMessage.ConversationID = conversationId;
     taskExecutionMessage.Role = 'AI';
-    taskExecutionMessage.Message = '⏳ Starting workflow execution...';
-    taskExecutionMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation message
+    taskExecutionMessage.Message = `⏳ **${workflowName}**\n\n${reasoning}\n\nSubmitting ${taskCount} task(s)…`;
+    taskExecutionMessage.ParentID = conversationManagerMessage.ID;
     taskExecutionMessage.Status = 'In-Progress';
     taskExecutionMessage.HiddenToUser = false;
-    // No AgentID for now - this represents the task orchestration system
     await taskExecutionMessage.Save();
     this.messageSent.emit(taskExecutionMessage);
 
-    // Register for streaming updates via global streaming service
     const callback = this.createMessageProgressCallback(taskExecutionMessage.ID);
     this.registeredCallbacks.set(taskExecutionMessage.ID, callback);
     this.streamingService.registerMessageCallback(taskExecutionMessage.ID, callback);
 
     try {
-      // Get default environment ID (MJ standard environment used across all installations)
-      const environmentId = MJEnvironmentEntityExtended.DefaultEnvironmentID;
+      // `TaskGraph.Submit` is a Remote Operation, not a bespoke mutation: the same call site is
+      // reachable from MCP, an Action wrapper, and this UI. `Execute` marshals over the generic
+      // `ExecuteRemoteOperation` transport, so there is no hand-written GraphQL document here.
+      const result = await new TaskGraphSubmitOperation().Execute({
+        spec: taskGraph,
+        environmentID: MJEnvironmentEntityExtended.DefaultEnvironmentID,
+        conversationDetailID: taskExecutionMessage.ID,
+      });
 
-      // Get session ID for PubSub subscriptions
-      const sessionId = GraphQLDataProvider.Instance.sessionId || '';
-      
-      // Step 3: Call ExecuteTaskGraph mutation (links to taskExecutionMessage)
-      const mutation = `
-        mutation ExecuteTaskGraph($taskGraphJson: String!, $conversationDetailId: String!, $environmentId: String!, $sessionId: String!, $createNotifications: Boolean) {
-          ExecuteTaskGraph(
-            taskGraphJson: $taskGraphJson
-            conversationDetailId: $conversationDetailId
-            environmentId: $environmentId
-            sessionId: $sessionId
-            createNotifications: $createNotifications
-          ) {
-            success
-            errorMessage
-            results {
-              taskId
-              success
-              output
-              error
-            }
-          }
-        }
-      `;
-
-      const variables = {
-        taskGraphJson: JSON.stringify(taskGraph),
-        conversationDetailId: taskExecutionMessage.ID, // Link tasks to execution message, not CM message
-        environmentId: environmentId,
-        sessionId: sessionId,
-        createNotifications: true
-      };
-
-      const result = await GraphQLDataProvider.Instance.ExecuteGQL(mutation, variables);
-
-      // Step 4: Update task execution message with results
-      // ExecuteGQL returns data directly (not wrapped in {data, errors})
-      if (result?.ExecuteTaskGraph?.success) {
-        await this.updateConversationDetail(taskExecutionMessage, `✅ **${workflowName}** completed successfully`, 'Complete');
+      if (result.Success && result.Output?.success) {
+        // Deliberately NOT "completed" — submission means the work is durable and running, and
+        // claiming completion here is exactly the lie the old await-everything path told when it
+        // returned early. The dispatcher's progress frames update this message as tasks finish.
+        await this.updateConversationDetail(
+          taskExecutionMessage,
+          `▶️ **${workflowName}** started — ${taskCount} task(s) running.`,
+          'In-Progress'
+        );
       } else {
-        const errorMsg = result?.ExecuteTaskGraph?.errorMessage || 'Unknown error';
-        console.error('❌ Task graph execution failed:', errorMsg);
+        const errorMsg = result.Output?.errorMessage || result.ErrorMessage || 'Unknown error';
+        console.error('Task graph submission rejected:', errorMsg);
         taskExecutionMessage.Error = errorMsg;
-        await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** failed: ${errorMsg}`, 'Error');
+        await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** rejected: ${errorMsg}`, 'Error');
+        this.releaseProgressCallback(taskExecutionMessage.ID);
       }
-
-      // Trigger artifact reload for this message
-      // Artifacts were created on server during task execution and linked to this message
-      // This event triggers the parent component to reload artifacts from the database
-      this.emitArtifactReload(taskExecutionMessage);
-
-      // Unregister streaming callback (task complete)
-      const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
-      if (callback) {
-        this.streamingService.unregisterMessageCallback(taskExecutionMessage.ID, callback);
-        this.registeredCallbacks.delete(taskExecutionMessage.ID);
-      }
-
-      // Mark agent response message as complete (removes task from active tasks)
-      await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Complete');
-
-      // Mark user message as complete
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-
     } catch (error) {
-      console.error('❌ Error executing task graph:', error);
-      taskExecutionMessage.Error = String(error);
-      await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** - Error: ${String(error)}`, 'Error');
-
-      // Trigger artifact reload even on error - partial artifacts may have been created
-      this.emitArtifactReload(taskExecutionMessage);
-
-      // Unregister streaming callback (task failed)
-      const callback = this.registeredCallbacks.get(taskExecutionMessage.ID);
-      if (callback) {
-        this.streamingService.unregisterMessageCallback(taskExecutionMessage.ID, callback);
-        this.registeredCallbacks.delete(taskExecutionMessage.ID);
-      }
-
-      // Mark agent response message as complete (removes task from active tasks)
-      conversationManagerMessage.Error = String(error);
-      await this.updateConversationDetail(conversationManagerMessage, conversationManagerMessage.Message, 'Error');
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error('Task graph submission failed:', error);
+      taskExecutionMessage.Error = msg;
+      await this.updateConversationDetail(taskExecutionMessage, `❌ **${workflowName}** failed to submit: ${msg}`, 'Error');
+      this.releaseProgressCallback(taskExecutionMessage.ID);
     }
   }
+
+
 
   protected async updateConversationDetail(convoDetail: MJConversationDetailEntity, message: string, status: 'In-Progress' | 'Complete' | 'Error', result?: ExecuteAgentResult): Promise<void> {
     // Mark as completing FIRST if status is Complete or Error
@@ -2040,15 +2039,15 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
       this.markMessageComplete(convoDetail);
     }
 
-    // Race condition guard: Before writing Error, reload from DB to check if the server
-    // already completed this record. The server and client write to the same conversation
-    // detail record — if the server completed successfully but a client-side timeout or
-    // WebSocket disconnect triggered this error path, we must not overwrite the server's
-    // successful completion with an error status.
-    if (status === 'Error' && convoDetail.ID) {
+    // Race condition guard: Before writing Error *or* In-Progress, reload from DB.
+    // The In-Progress disconnect branch is the path that most needs this: a dropped
+    // socket leaves the in-memory Status stale (still In-Progress from creation), and
+    // without a reload we can overwrite a server Complete with the "still running"
+    // placeholder. If the server already finished, emit that record and stop the timer.
+    if ((status === 'Error' || status === 'In-Progress') && convoDetail.ID) {
       await convoDetail.Load(convoDetail.ID);
-      if (convoDetail.Status === 'Complete') {
-        // Server already completed — emit updated message, don't overwrite with error
+      if (convoDetail.Status === 'Complete' || convoDetail.Status === 'Error') {
+        this.markMessageComplete(convoDetail);
         this.messageSent.emit(convoDetail);
         return;
       }
@@ -2097,156 +2096,37 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
   /**
    * Load previous payload for an agent from its most recent OUTPUT artifact.
-   * Searches backwards through all messages from this agent until an artifact is found.
-   * This ensures payload continuity even after clarifying exchanges without artifacts.
-   * Checks both user-visible and system artifacts to support agents like Agent Manager.
+   *
+   * Resolved by QUERY rather than by scanning `conversationHistory`. That array is now the
+   * loaded transcript WINDOW, not the full conversation, so a scan silently misses any
+   * artifact below the window's oldest row — and a null payload is a legal agent input, so
+   * the miss surfaces as the agent regenerating from scratch instead of modifying. Covers
+   * system-visibility artifacts (Agent Manager and friends) for free: the query filters on
+   * Direction, not on Visibility.
    */
   private async loadPreviousPayloadForAgent(agentId: string): Promise<{
-    payload: any;
+    payload: Record<string, unknown> | null;
     artifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null;
   }> {
-    // Get all messages from this agent in reverse order (most recent first)
-    const agentMessages = this.conversationHistory
-      .slice()
-      .reverse()
-      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
-
-    if (agentMessages.length === 0) {
+    if (!this.conversationId) {
       return { payload: null, artifactInfo: null };
     }
 
-    // Search through all agent messages until we find one with an artifact
-    for (const message of agentMessages) {
-      // Check user-visible artifacts first
-      let artifacts = this.artifactsByDetailId?.get(message.ID);
-
-      // If not found, check system artifacts (Agent Manager, etc.)
-      if (!artifacts || artifacts.length === 0) {
-        artifacts = this.systemArtifactsByDetailId?.get(message.ID);
-      }
-
-      // Try to load artifact content as payload
-      if (artifacts && artifacts.length > 0) {
-        const artifact = artifacts[0];
-        try {
-          const version = await artifact.getVersion();
-          if (version.Content) {
-            console.log(`📦 Loaded previous payload for agent ${agentId} from artifact (message: ${message.ID})`);
-            return {
-              payload: JSON.parse(version.Content),
-              artifactInfo: {
-                artifactId: artifact.artifactId,
-                versionId: artifact.artifactVersionId,
-                versionNumber: artifact.versionNumber
-              }
-            };
-          }
-        } catch (error) {
-          console.error('Error loading payload from artifact:', error);
-          // Continue to next message
-        }
-      }
+    const source = await this.agentService.FindLatestAgentOutputVersion(this.conversationId, agentId);
+    if (!source || source.payload == null) {
+      console.log(`📦 No previous payload found for agent ${agentId}`);
+      return { payload: null, artifactInfo: null };
     }
 
-    console.log(`📦 No previous payload found for agent ${agentId} after searching ${agentMessages.length} messages`);
-    return { payload: null, artifactInfo: null };
-  }
-
-  /**
-   * Handle single task execution from task graph using direct agent execution
-   * Uses the existing agent execution pattern with PubSub support
-   */
-  private async handleSingleTaskExecution(
-    userMessage: MJConversationDetailEntity,
-    task: any, // Task definition from taskGraph
-    agentName: string,
-    conversationId: string,
-    conversationManagerMessage: MJConversationDetailEntity
-  ): Promise<void> {
-    try {
-      // Look up the agent
-      const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
-      if (!agent) {
-        throw new Error(`Agent not found: ${agentName}`);
+    console.log(`📦 Loaded previous payload for agent ${agentId} from artifact version ${source.versionId}`);
+    return {
+      payload: source.payload,
+      artifactInfo: {
+        artifactId: source.artifactId,
+        versionId: source.versionId,
+        versionNumber: source.versionNumber
       }
-
-      // Create AI response message for the agent execution
-      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
-
-      agentResponseMessage.ConversationID = conversationId;
-      agentResponseMessage.Role = 'AI';
-      agentResponseMessage.Message = '⏳ Starting...';
-      agentResponseMessage.ParentID = conversationManagerMessage.ID; // Thread under delegation
-      agentResponseMessage.Status = 'In-Progress';
-      agentResponseMessage.HiddenToUser = false;
-      agentResponseMessage.AgentID = agent.ID;
-
-      await agentResponseMessage.Save();
-      this.messageSent.emit(agentResponseMessage);
-
-      // Add to active tasks
-      const newTaskId = this.activeTasks.add({
-        agentName: agentName,
-        status: 'Starting...',
-        relatedMessageId: userMessage.ID,
-        conversationDetailId: agentResponseMessage.ID,
-        conversationId,
-        conversationName: this.conversationName
-      });
-
-      // Load previous payload if agent has been invoked before
-      const { payload: previousPayload, artifactInfo } = await this.loadPreviousPayloadForAgent(agent.ID);
-
-      // Merge Sage's task payload with previous agent payload (Sage's takes precedence)
-      const mergedPayload = previousPayload
-        ? { ...previousPayload, ...task.inputPayload }
-        : task.inputPayload;
-
-      // Invoke agent with merged payload
-      const agentResult = await this.agentService.invokeSubAgent(
-        agentName,
-        conversationId,
-        userMessage,
-        this.conversationHistory,
-        task.description || task.name,
-        agentResponseMessage.ID,
-        mergedPayload, // Pass merged payload for continuity
-        this.createProgressCallback(agentResponseMessage, agentName),
-        artifactInfo?.artifactId,
-        artifactInfo?.versionId,
-        undefined, // configurationPresetId not used in this path
-        this.appContext, // Embedder-supplied app/form context
-        this.PlanModeEnabled, // per-request Plan Mode toggle
-        this._pendingRequestedSkillIDs, // user-requested skills (/skill mentions)
-      );
-
-      // Task will be removed automatically in markMessageComplete() when status changes to Complete/Error
-      // DO NOT remove here - allows UI to show task during entire execution
-
-      if (agentResult && agentResult.success) {
-        // Update message with result
-        await this.updateConversationDetail(agentResponseMessage, agentResult.agentRun?.Message || `✅ **${agentName}** completed`, 'Complete', agentResult);
-
-        // Server created artifacts - emit event to trigger UI reload
-        if (agentResult.payload && Object.keys(agentResult.payload).length > 0) {
-          this.emitArtifactReload(agentResponseMessage);
-          console.log('🎨 Server created artifact from single task execution');
-          this.messageSent.emit(agentResponseMessage);
-        }
-      } else {
-        // Handle failure
-        const errorMsg = agentResult?.agentRun?.ErrorMessage || 'Agent execution failed';
-        agentResponseMessage.Error = errorMsg;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** failed: ${errorMsg}`, 'Error');
-      }
-
-      // Mark user message as complete
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-
-    } catch (error) {
-      console.error('❌ Error in single task execution:', error);
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
-    }
+    };
   }
 
   /**
@@ -2264,12 +2144,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     const reasoning = payload.reasoning || 'Delegating to specialist agent';
 
     // Now create a NEW message for the sub-agent execution
+    let agentResponseMessage: MJConversationDetailEntity | null = null;
     try {
       // Look up the agent to get its ID
       const agent = AIEngineBase.Instance.Agents.find(a => a.Name === agentName);
 
       // Create AI response message BEFORE invoking agent (for duration tracking)
-      const agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
+      agentResponseMessage = await this.dataCache.createConversationDetail(this.currentUser);
 
       agentResponseMessage.ConversationID = conversationId;
       agentResponseMessage.Role = 'AI';
@@ -2303,7 +2184,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
       // Find configuration preset from previous @mention in conversation history
       const configurationPresetId = agent?.ID
-        ? this.agentService.findConfigurationPresetFromHistory(agent.ID, this.conversationHistory)
+        ? await this.agentService.FindConfigurationPresetForAgent(conversationId, agent.ID)
         : undefined;
 
       // Invoke the sub-agent with progress callback
@@ -2345,6 +2226,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
+        // A post-ACK disconnect means the first run may still be executing on this
+        // detail — do not start a second run on the same conversationDetailId.
+        if (agentFailureDisposition(subResult).status === 'In-Progress') {
+          await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, subResult);
+          return;
+        }
+
         // Sub-agent failed - attempt auto-retry once
         console.log(`⚠️ ${agentName} failed, attempting auto-retry...`);
 
@@ -2385,20 +2273,47 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         } else {
-          // Retry also failed - show error with manual retry option
-          conversationManagerMessage.Error = retryResult?.agentRun?.ErrorMessage || null;
-          await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** failed after retry\n\n${retryResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-          await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+          // Retry also failed — terminate the agent bubble (the red-pill timer lives here),
+          // not only the Sage delegation message.
+          await this.applyAgentFailureToDetail(
+            agentResponseMessage,
+            userMessage,
+            agentName,
+            retryResult,
+            'failed after retry',
+          );
+          const retryDisposition = agentFailureDisposition(retryResult);
+          if (retryDisposition.status === 'Error') {
+            conversationManagerMessage.Error = retryDisposition.message;
+            await this.updateConversationDetail(
+              conversationManagerMessage,
+              `❌ **${agentName}** failed after retry\n\n${retryDisposition.message}`,
+              'Error',
+            );
+          }
         }
       }
     } catch (error) {
       console.error(`❌ Error invoking sub-agent ${agentName}:`, error);
 
-      conversationManagerMessage.Error = String(error);
-      await this.updateConversationDetail(conversationManagerMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      const catchResult = {
+        success: false,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      } as ExecuteAgentResult;
+      if (agentResponseMessage) {
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, catchResult);
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      }
+      const catchDisposition = agentFailureDisposition(catchResult);
+      if (catchDisposition.status === 'Error') {
+        conversationManagerMessage.Error = catchDisposition.message;
+        await this.updateConversationDetail(
+          conversationManagerMessage,
+          `❌ **${agentName}** encountered an error\n\n${catchDisposition.message}`,
+          'Error',
+        );
+      }
     }
   }
 
@@ -2437,33 +2352,23 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     const agentName = previousAgent.Name || 'Agent';
 
-    let previousPayload: any = null;
+    let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
 
-    // Use pre-loaded artifact data (no DB queries!)
-    // Check both user-visible and system artifacts
-    let artifacts = this.artifactsByDetailId?.get(lastAIMessage.ID);
-    if (!artifacts || artifacts.length === 0) {
-      artifacts = this.systemArtifactsByDetailId?.get(lastAIMessage.ID);
-    }
-
-    if (artifacts && artifacts.length > 0) {
-      try {
-        // Use the first artifact (should only be one OUTPUT per message)
-        const artifact = artifacts[0];
-        const version = await artifact.getVersion();
-        if (version.Content) {
-          previousPayload = JSON.parse(version.Content);
-          previousArtifactInfo = {
-            artifactId: artifact.artifactId,
-            versionId: artifact.artifactVersionId,
-            versionNumber: artifact.versionNumber
-          };
-          console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
-        }
-      } catch (error) {
-        console.warn('⚠️ Could not parse previous artifact content:', error);
-      }
+    // Resolved by QUERY, not from the window's artifact maps: `lastAIMessage` can sit inside
+    // the loaded window while its artifact does not, and this path silently degrades to a
+    // null payload when the lookup misses.
+    const source = await this.agentService.FindLatestAgentOutputVersion(
+      conversationId, lastAIMessage.AgentID
+    );
+    if (source && source.payload != null) {
+      previousPayload = source.payload;
+      previousArtifactInfo = {
+        artifactId: source.artifactId,
+        versionId: source.versionId,
+        versionNumber: source.versionNumber
+      };
+      console.log('📦 Loaded previous OUTPUT artifact as payload for continuity', previousArtifactInfo);
     }
 
     // Create status message showing agent continuity
@@ -2537,21 +2442,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
-        // Agent failed
-        statusMessage.Error = continuityResult?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(statusMessage, `❌ **${agentName}** failed during refinement\n\n${continuityResult?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(statusMessage, userMessage, agentName, continuityResult, 'failed during refinement');
       }
     } catch (error) {
       console.error(`❌ Error in agent continuity with ${agentName}:`, error);
 
       // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
 
-      statusMessage.Error = String(error);
-      await this.updateConversationDetail(statusMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      await this.applyAgentFailureToDetail(
+        statusMessage,
+        userMessage,
+        agentName,
+        { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        'encountered an error',
+      );
     }
   }
  
@@ -2664,24 +2568,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
         }
       } else {
-        // Agent failed - update the existing message instead of creating a new one
-        agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, result);
       }
     } catch (error) {
       console.error(`❌ Error invoking mentioned agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-
-      // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        agentResponseMessage.Error = String(error);
-        await this.updateConversationDetail(agentResponseMessage, `❌ **@${agentName}** encountered an error\n\n${String(error)}`, 'Error');
+        await this.applyAgentFailureToDetail(
+          agentResponseMessage,
+          userMessage,
+          agentName,
+          { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        );
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -2707,69 +2608,32 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     const agentName = agent.Name || 'Agent';
 
-    let previousPayload: any = null;
+    let previousPayload: Record<string, unknown> | null = null;
     let previousArtifactInfo: {artifactId: string; versionId: string; versionNumber: number} | null = null;
     let previousConfigurationId: string | undefined = undefined;
 
-    // Use targetArtifactVersionId if specified (from intent check)
+    // Use targetArtifactVersionId if specified (from intent check).
+    // Resolved by ID against the database, not against artifactsByDetailId: the intent check
+    // may well have named a version attached to a message BELOW the loaded window, which is
+    // precisely when continuity matters and precisely what the window's maps cannot see.
     if (targetArtifactVersionId) {
-      // Find the artifact in pre-loaded data (check both user-visible and system artifacts)
-      for (const [detailId, artifacts] of (this.artifactsByDetailId?.entries() || [])) {
-        const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
-        if (targetArtifact) {
-          try {
-            // Lazy load the full version entity to get Content
-            const version = await targetArtifact.getVersion();
-            if (version.Content) {
-              previousPayload = JSON.parse(version.Content);
-              previousArtifactInfo = {
-                artifactId: targetArtifact.artifactId,
-                versionId: targetArtifact.artifactVersionId,
-                versionNumber: targetArtifact.versionNumber
-              };
-              console.log('📦 Loaded target artifact version as payload', previousArtifactInfo);
-            }
-          } catch (error) {
-            console.warn('⚠️ Could not load target artifact version:', error);
-          }
-          break;
-        }
-      }
-
-      // If not found in user-visible artifacts, check system artifacts
-      if (!previousPayload && this.systemArtifactsByDetailId) {
-        for (const [detailId, artifacts] of this.systemArtifactsByDetailId.entries()) {
-          const targetArtifact = artifacts.find(a => a.artifactVersionId === targetArtifactVersionId);
-          if (targetArtifact) {
-            try {
-              const version = await targetArtifact.getVersion();
-              if (version.Content) {
-                previousPayload = JSON.parse(version.Content);
-                previousArtifactInfo = {
-                  artifactId: targetArtifact.artifactId,
-                  versionId: targetArtifact.artifactVersionId,
-                  versionNumber: targetArtifact.versionNumber
-                };
-                console.log('📦 Loaded target artifact version as payload (from system artifacts)', previousArtifactInfo);
-              }
-            } catch (error) {
-              console.warn('⚠️ Could not load target artifact version:', error);
-            }
-            break;
-          }
-        }
+      const target = await this.agentService.FindArtifactVersionById(targetArtifactVersionId);
+      if (target && target.payload != null) {
+        previousPayload = target.payload;
+        previousArtifactInfo = {
+          artifactId: target.artifactId,
+          versionId: target.versionId,
+          versionNumber: target.versionNumber
+        };
+        console.log('📦 Loaded target artifact version as payload', previousArtifactInfo);
+      } else {
+        console.warn('⚠️ Could not load target artifact version:', targetArtifactVersionId);
       }
     }
 
-    // Get all messages from this agent in reverse order (most recent first)
-    const agentMessages = this.conversationHistory
-      .slice()
-      .reverse()
-      .filter(msg => msg.Role === 'AI' && UUIDsEqual(msg.AgentID, agentId));
-
     // Extract configuration preset from the User message that @mentioned this agent
     // Uses the shared helper method in the agent service
-    previousConfigurationId = this.agentService.findConfigurationPresetFromHistory(agentId, this.conversationHistory);
+    previousConfigurationId = await this.agentService.FindConfigurationPresetForAgent(conversationId, agentId);
 
     // Fall back to the chat header's mode-picker selection when nothing
     // in the message history pinned a preset. The picker reflects the
@@ -2783,40 +2647,22 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
 
     // Fall back to searching through all agent messages for an artifact
     // This ensures payload continuity even after clarifying exchanges without artifacts
-    if (!previousPayload && agentMessages.length > 0) {
-      console.log('📦 Searching through agent messages for most recent artifact...');
-
-      for (const message of agentMessages) {
-        // Get artifacts from pre-loaded data (check both user-visible and system artifacts)
-        let artifacts = this.artifactsByDetailId?.get(message.ID);
-        if (!artifacts || artifacts.length === 0) {
-          artifacts = this.systemArtifactsByDetailId?.get(message.ID);
-        }
-
-        if (artifacts && artifacts.length > 0) {
-          try {
-            // Use the first artifact (should only be one OUTPUT per message)
-            const artifact = artifacts[0];
-            const version = await artifact.getVersion();
-            if (version.Content) {
-              previousPayload = JSON.parse(version.Content);
-              previousArtifactInfo = {
-                artifactId: artifact.artifactId,
-                versionId: artifact.artifactVersionId,
-                versionNumber: artifact.versionNumber
-              };
-              console.log(`📦 Loaded artifact as payload from message ${message.ID}`, previousArtifactInfo);
-              break; // Found an artifact, stop searching
-            }
-          } catch (error) {
-            console.warn('⚠️ Could not parse artifact content:', error);
-            // Continue to next message
-          }
-        }
-      }
-
-      if (!previousPayload) {
-        console.log(`📦 No artifact found after searching ${agentMessages.length} messages from agent`);
+    // Fall back to this agent's newest OUTPUT artifact when the intent check named no
+    // version (or named one that no longer resolves). Queried, not scanned: the array this
+    // used to walk is the loaded window, so the artifact it is looking for is exactly the
+    // one most likely to be missing from it.
+    if (!previousPayload) {
+      const source = await this.agentService.FindLatestAgentOutputVersion(conversationId, agentId);
+      if (source && source.payload != null) {
+        previousPayload = source.payload;
+        previousArtifactInfo = {
+          artifactId: source.artifactId,
+          versionId: source.versionId,
+          versionNumber: source.versionNumber
+        };
+        console.log('📦 Loaded artifact as payload for continuation', previousArtifactInfo);
+      } else {
+        console.log(`📦 No artifact found for agent ${agentId} in this conversation`);
       }
     }
 
@@ -2926,24 +2772,21 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
-        // Agent failed - update the existing message instead of creating a new one
-        agentResponseMessage.Error = result?.agentRun?.ErrorMessage || null;
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** failed\n\n${result?.agentRun?.ErrorMessage || 'Unknown error'}`, 'Error');
-
-        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+        await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, result);
       }
     } catch (error) {
       console.error(`❌ Error continuing with agent ${agentName}:`, error);
 
-      // Task removed in markMessageComplete() - this.activeTasks.remove(taskId);
-
-      // Update the existing agent response message if it was created
       if (agentResponseMessage) {
-        agentResponseMessage.Error = String(error);
-        await this.updateConversationDetail(agentResponseMessage, `❌ **${agentName}** encountered an error\n\n${String(error)}`, 'Error');
+        await this.applyAgentFailureToDetail(
+          agentResponseMessage,
+          userMessage,
+          agentName,
+          { success: false, errorMessage: error instanceof Error ? error.message : String(error) } as ExecuteAgentResult,
+        );
+      } else {
+        await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       }
-
-      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
     }
   }
 
@@ -2982,29 +2825,134 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
   }
 
   /**
+   * Persist an agent failure onto the response bubble.
+   *
+   * A dropped HTTP/WebSocket path used to return `null` from invokeSubAgent, so
+   * the bubble said "Unknown error" while the AIAgentRun stayed Running and the
+   * timer kept ticking. If the transport ACKed the mutation and then died, keep
+   * In-Progress so a later completion event (or {@link startInFlightDetailWatch})
+   * can land. ConversationDetail.Status is the server's claim; the client only
+   * renders it. The GraphQLAIClient stall reconciler covers the wait inside
+   * invokeSubAgent; once that returns, the watch observes the detail until the
+   * server writes a terminal status (MaxTimePerRun).
+   *
+   * Always completes the user message — the user turn finished regardless of
+   * what the agent is doing.
+   */
+  private async applyAgentFailureToDetail(
+    agentResponseMessage: MJConversationDetailEntity,
+    userMessage: MJConversationDetailEntity,
+    agentName: string,
+    result: ExecuteAgentResult | null | undefined,
+    failedVerb = 'failed',
+  ): Promise<void> {
+    const disposition = agentFailureDisposition(result);
+    if (disposition.status === 'In-Progress') {
+      await this.updateConversationDetail(
+        agentResponseMessage,
+        `⏳ **${agentName}** is still running on the server.\n\n${disposition.message}`,
+        'In-Progress',
+      );
+      // Skip the watch if the reload-before-write guard already found a
+      // terminal server status (Complete/Error) — starting it would race the
+      // just-completed bubble.
+      if (agentResponseMessage.Status === 'In-Progress') {
+        this.startInFlightDetailWatch(agentResponseMessage);
+      }
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      return;
+    }
+    agentResponseMessage.Error = disposition.message;
+    await this.updateConversationDetail(
+      agentResponseMessage,
+      `❌ **${agentName}** ${failedVerb}\n\n${disposition.message}`,
+      'Error',
+    );
+    await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+  }
+
+  private startInFlightDetailWatch(detail: MJConversationDetailEntity): void {
+    if (!detail.ID) {
+      return;
+    }
+    this.stopInFlightDetailWatch(detail.ID);
+    this.scheduleInFlightDetailPoll(detail, 0);
+  }
+
+  private scheduleInFlightDetailPoll(detail: MJConversationDetailEntity, step: number): void {
+    const delays = MessageInputComponent.IN_FLIGHT_WATCH_BACKOFF_MS;
+    const delay = delays[Math.min(step, delays.length - 1)];
+    const handle = setTimeout(() => {
+      void this.pollInFlightDetail(detail, step);
+    }, delay);
+    this.inFlightWatches.set(detail.ID, handle);
+  }
+
+  private async pollInFlightDetail(detail: MJConversationDetailEntity, step: number): Promise<void> {
+    if (!this.inFlightWatches.has(detail.ID)) {
+      return;
+    }
+    try {
+      await detail.Load(detail.ID);
+      if (detail.Status === 'Complete' || detail.Status === 'Error') {
+        this.stopInFlightDetailWatch(detail.ID);
+        this.markMessageComplete(detail);
+        this.messageSent.emit(detail);
+        return;
+      }
+    } catch (e) {
+      console.warn(`[InFlightWatch] Failed to reload conversation detail ${detail.ID}:`, e);
+    }
+    if (!this.inFlightWatches.has(detail.ID)) {
+      return;
+    }
+    this.scheduleInFlightDetailPoll(detail, step + 1);
+  }
+
+  private stopInFlightDetailWatch(detailId: string): void {
+    const handle = this.inFlightWatches.get(detailId);
+    if (handle) {
+      clearTimeout(handle);
+      this.inFlightWatches.delete(detailId);
+    }
+  }
+
+  private clearInFlightWatches(): void {
+    for (const handle of this.inFlightWatches.values()) {
+      clearTimeout(handle);
+    }
+    this.inFlightWatches.clear();
+  }
+
+  /**
    * Marks a conversation detail as complete and records timestamp to prevent race conditions
    * Emits event to parent to refresh agent run data from database
    */
   private markMessageComplete(conversationDetail: MJConversationDetailEntity): void {
     const now = Date.now();
     this.completionTimestamps.set(conversationDetail.ID, now);
+    this.stopInFlightDetailWatch(conversationDetail.ID);
 
     // Unregister streaming callback for this message (no more updates needed)
     const callback = this.registeredCallbacks.get(conversationDetail.ID);
     if (callback) {
       this.streamingService.unregisterMessageCallback(conversationDetail.ID, callback);
       this.registeredCallbacks.delete(conversationDetail.ID);
-      console.log(`[MarkComplete] Unregistered streaming callback for completed message ${conversationDetail.ID}`);
+      LogStatusEx({ message: `[MarkComplete] Unregistered streaming callback for completed message ${conversationDetail.ID}`, verboseOnly: true });
     }
 
     // Remove task from active tasks if it exists
     const task = this.activeTasks.getByConversationDetailId(conversationDetail.ID);
     if (task) {
-      console.log(`✅ Task found for message ${conversationDetail.ID} - removing from active tasks:`, {
-        taskId: task.id,
-        agentName: task.agentName,
-        conversationId: task.conversationId,
-        conversationName: task.conversationName
+      LogStatusEx({
+        message: `✅ Task found for message ${conversationDetail.ID} - removing from active tasks:`,
+        additionalArgs: [{
+          taskId: task.id,
+          agentName: task.agentName,
+          conversationId: task.conversationId,
+          conversationName: task.conversationName
+        }],
+        verboseOnly: true,
       });
 
       this.activeTasks.remove(task.id);
@@ -3021,7 +2969,13 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         );
       }
     } else {
-      console.warn(`⚠️ No task found for completed message ${conversationDetail.ID} - task may have been removed prematurely or not added`);
+      // verboseOnly, and no longer a warning. A turn registers ONE task, against whichever message
+      // its flow chose — activeTasks.add() is called with the user message, a Sage delegation
+      // message, a status message or the agent response depending on the path — while this method
+      // runs for EVERY message in the turn reaching Complete or Error. Most calls therefore land
+      // here, so it is the normal case rather than the lifecycle race the old text described
+      // ("task may have been removed prematurely or not added"). Kept for tracing, off by default.
+      LogStatusEx({ message: `[MarkComplete] No task registered against completed message ${conversationDetail.ID} — expected for any message that did not start the turn`, verboseOnly: true });
     }
 
     // Emit completion event to parent so it can refresh agent run data

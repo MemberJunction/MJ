@@ -199,7 +199,7 @@ describe('PrepareClientSession — Voice & manner in the companion system prompt
 
 describe('PrepareClientSession — provider voice settings in the session Config bag', () => {
     const VOICE_CONFIG = JSON.stringify({
-        realtime: { voice: { providers: { openai: { voice: 'alloy' }, elevenlabs: { voiceId: 'el-1' } } } }
+        realtime: { voice: { providers: { openai: { voice: 'alloy' }, elevenlabs: { voice: 'el-1' } } } }
     });
 
     it('merges the DriverClass-matched provider settings into the Config bag', async () => {

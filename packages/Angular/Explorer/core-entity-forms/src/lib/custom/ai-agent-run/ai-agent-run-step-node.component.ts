@@ -20,14 +20,18 @@ export class AIAgentRunStepNodeComponent {
   }
 
   get isSubAgent(): boolean {
-    return this.item.type === 'subrun' || (this.item.type === 'step' && this.item.data?.StepType === 'Sub-Agent');
+    // A TaskGraph step expands too: it stands in for a whole graph of Task rows, and without the
+    // affordance the run stops at "Task Graph: X" with no way to see what actually ran.
+    return this.item.type === 'subrun' ||
+      (this.item.type === 'step' && (this.item.data?.StepType === 'Sub-Agent' || this.item.data?.StepType === 'TaskGraph'));
   }
 
   get isParentStep(): boolean {
-    // Check if this step has children via ParentID relationships (non-Sub-Agent hierarchy)
-    return this.item.type === 'step' &&
-           this.item.data?.StepType !== 'Sub-Agent' &&
-           this.hasChildren;
+    // STRUCTURAL, not type-gated. Anything holding children can be opened — a loop's iterations, a
+    // workflow's steps, a nested run. The old test required `type === 'step'`, so a ForEach that
+    // came from a task graph rendered its children into the model and then offered no way to reach
+    // them: the work existed, was loaded, and was unreachable.
+    return !this.isSubAgent && this.hasChildren;
   }
 
   get canExpand(): boolean {
@@ -56,6 +60,8 @@ export class AIAgentRunStepNodeComponent {
           return 'View Prompt Run';
         case 'sub-agent':
           return 'View Agent Run';
+        case 'taskgraph':
+          return 'View Workflow Run';
         default:
           return 'View Details';
       }
@@ -64,13 +70,29 @@ export class AIAgentRunStepNodeComponent {
     return "";
   }
 
+  /**
+   * The glyph beside a row's status word.
+   *
+   * Covers BOTH status vocabularies' worth of meaning, because this list used to know only what an
+   * `AIAgentRunStep` can be — `Running / Completed / Failed / Cancelled / Paused`. A workflow step is
+   * `Pending`, `Skipped` or `Blocked` (and says `Complete`, not `Completed`), so every row belonging
+   * to a task graph fell through to the unknown glyph and rendered a question mark. The projection
+   * now normalizes the two vocabularies into one; these are the values it can produce.
+   */
   getStatusIcon(status: string): string {
     const iconMap: Record<string, string> = {
       'Running': 'fa-circle-notch fa-spin',
       'Completed': 'fa-check-circle',
       'Failed': 'fa-times-circle',
       'Cancelled': 'fa-ban',
-      'Paused': 'fa-pause-circle'
+      'Paused': 'fa-pause-circle',
+      // A branch the workflow did not take. Not a failure and not a pause — deliberately its own
+      // glyph, because reading it as either sends someone hunting for a problem that never happened.
+      'Skipped': 'fa-diamond-turn-right',
+      'Pending': 'fa-hourglass-half',
+      // Failure-driven unsatisfiability: something upstream broke and this can no longer run.
+      'Blocked': 'fa-circle-exclamation',
+      'Waiting': 'fa-user-clock'
     };
     return iconMap[status] || 'fa-question-circle';
   }

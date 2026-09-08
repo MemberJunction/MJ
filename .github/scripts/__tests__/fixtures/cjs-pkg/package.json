@@ -1,5 +1,6 @@
 {
     "name": "fixture-cjs-pkg",
+    "license": "BUSL-1.1",
     "private": true,
     "main": "built/index.js"
 }

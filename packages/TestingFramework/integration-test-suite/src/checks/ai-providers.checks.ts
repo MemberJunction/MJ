@@ -54,20 +54,13 @@ export const AiProvidersChecks: NamedCheck[] = [
                 console.warn(`  ⚠ AIP1 SKIPPED — none of ${activeLLMs.length} Active LLM drivers are registered in this process (provider packages not loaded).`);
                 return;
             }
-            // Providers ARE loaded here — now an unresolvable Active driver is a real break.
-            // RATCHET: B65 (CohereLLM has no implementation — 'Cohere Command A'/'A+' are dead
-            // at runtime) is logged and awaiting a product decision; pin it as a loud warning.
-            // Any driver NOT on the known-dead list fails the gate.
-            const KNOWN_DEAD_DRIVERS = new Set(['cohorellm', 'coherellm']);
-            const unresolved = activeLLMs.filter(m => !resolves(m.DriverClass!));
-            const known = unresolved.filter(m => KNOWN_DEAD_DRIVERS.has(m.DriverClass!.trim().toLowerCase()));
-            const fresh = unresolved.filter(m => !KNOWN_DEAD_DRIVERS.has(m.DriverClass!.trim().toLowerCase()))
+            // Providers ARE loaded here — every ACTIVE LLM model's driver must resolve, or it is
+            // dead at runtime. (B65 — the two Cohere Command models declaring the non-existent
+            // CohereLLM driver — was closed by deactivating those models; no allowlist needed.)
+            const unresolved = activeLLMs.filter(m => !resolves(m.DriverClass!))
                 .map(m => `${m.Name} → ${m.DriverClass}`);
-            if (known.length > 0) {
-                console.warn(`  ⚠ AIP1 (B65): ${known.length} Active model(s) on the known-dead driver list (no implementation ships): ${known.map(m => `${m.Name} → ${m.DriverClass}`).join('; ')}`);
-            }
-            AssertEqual(fresh.length, 0,
-                `AIP1: ${fresh.length} Active LLM model(s) have NEW unresolvable DriverClass strings while ${resolved.length} sibling(s) resolve (dead models at runtime): ${fresh.slice(0, 6).join('; ')}`);
+            AssertEqual(unresolved.length, 0,
+                `AIP1: ${unresolved.length} Active LLM model(s) have unresolvable DriverClass strings while ${resolved.length} sibling(s) resolve (dead models at runtime): ${unresolved.slice(0, 6).join('; ')}`);
             console.log(`      → ${resolved.length}/${activeLLMs.length} Active LLM drivers resolve`);
         }
     },

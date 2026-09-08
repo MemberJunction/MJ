@@ -52,6 +52,12 @@ export * from './Database/dbSchema'
 export * from './Database/manage-metadata'
 export * from './Database/sql_codegen'
 export * from './Database/sql'
+export * from './Database/schema-scope'
+export * from './Database/exclude-tables'
+export * from './Config/schema-output'
+export * from './Misc/file-write'
+export * from './Misc/emit-stats'
+export * from './Misc/schema-emit'
 
 // Code generation exports
 export * from './Misc/entity_subclasses_codegen'

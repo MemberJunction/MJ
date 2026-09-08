@@ -54,6 +54,19 @@ function primaryDisplayField(entity: EntityInfo): EntityFieldInfo | undefined {
     );
 }
 
+/**
+ * A cell value rendered for card subtitles. Simple-read rows carry real `Date` objects for
+ * date columns (normalized by @memberjunction/core), which must not fall through to
+ * `String(v)` — `Date.toString()` is unreadable in a card. Handles the pre-normalization
+ * ISO-string shape identically via the `Date` branch never matching.
+ */
+function displayCellValue(v: unknown): string {
+    if (v instanceof Date) {
+        return v.toLocaleDateString();
+    }
+    return String(v);
+}
+
 /** One entity record projected to a card: id, title, subtitle, and the raw field bag. */
 export type EntityRecordRow = {
     /** Composite PK serialized (entity record id). */
@@ -119,7 +132,7 @@ export async function loadEntityRecords(
         const subtitle = secondary
             .map((f) => r[f.Name])
             .filter((v) => v !== null && v !== undefined && v !== '')
-            .map((v) => String(v))
+            .map((v) => displayCellValue(v))
             .join(' · ');
         return { id: idVal, title, subtitle, raw: r };
     });
@@ -165,7 +178,7 @@ export async function loadRecordDetail(
             return {
                 key: f.Name,
                 label: f.DisplayName || f.Name,
-                value: v === null || v === undefined ? '—' : String(v),
+                value: v === null || v === undefined ? '—' : displayCellValue(v),
             };
         });
 

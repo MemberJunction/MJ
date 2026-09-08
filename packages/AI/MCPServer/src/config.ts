@@ -125,6 +125,25 @@ const mcpServerAgentToolInfoSchema = z.object({
 });
 
 /**
+ * Zod schema for the agent-management (AgentSpec) tool group.
+ * These tools expose the high-level AgentSpec object model so MCP clients
+ * (Claude Code, Codex, etc.) can browse, introspect, create, and edit complete
+ * agent definitions without knowing the underlying entity schema. The group is
+ * enabled by default when the MCP server is enabled; individual tools remain
+ * subject to the include/exclude filter patterns and scope authorization.
+ */
+const mcpServerAgentManagementToolInfoSchema = z.object({
+  /** Master switch for the agent-management tool group */
+  enabled: z.boolean().optional().default(true),
+  /**
+   * Builder agents to always expose as Execute_<Name>_Agent tools, independent
+   * of agentTools entries. Defaults to the ActionSmith and Codesmith agents
+   * shipped with MJ; pass an empty array to expose none.
+   */
+  builderAgents: z.array(z.string()).optional(),
+});
+
+/**
  * Zod schema for OAuth Proxy settings.
  * The OAuth proxy enables dynamic client registration (RFC 7591) for MCP clients.
  */
@@ -212,6 +231,7 @@ const mcpServerInfoSchema = z.object({
   entityTools: z.array(mcpServerEntityToolInfoSchema).optional(),
   actionTools: z.array(mcpServerActionToolInfoSchema).optional(),
   agentTools: z.array(mcpServerAgentToolInfoSchema).optional(),
+  agentManagementTools: mcpServerAgentManagementToolInfoSchema.optional(),
   queryTools: mcpServerQueryToolInfoSchema.optional(),
   promptTools: z.array(mcpServerPromptToolInfoSchema).optional(),
   communicationTools: mcpServerCommunicationToolInfoSchema.optional(),
@@ -253,6 +273,7 @@ export type ConfigInfo = z.infer<typeof configInfoSchema>;
 export type MCPServerEntityToolInfo = z.infer<typeof mcpServerEntityToolInfoSchema>;
 export type MCPServerActionToolInfo = z.infer<typeof mcpServerActionToolInfoSchema>;
 export type MCPServerAgentToolInfo = z.infer<typeof mcpServerAgentToolInfoSchema>;
+export type MCPServerAgentManagementToolInfo = z.infer<typeof mcpServerAgentManagementToolInfoSchema>;
 export type MCPServerQueryToolInfo = z.infer<typeof mcpServerQueryToolInfoSchema>;
 export type MCPServerPromptToolInfo = z.infer<typeof mcpServerPromptToolInfoSchema>;
 export type MCPServerCommunicationToolInfo = z.infer<typeof mcpServerCommunicationToolInfoSchema>;

@@ -363,6 +363,9 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
     if (this.selectedConfig) {
       this.onOpenConfiguration(this.selectedConfig);
     }
+    // Intent moved to the full record — a lingering panel paints over the
+    // records view and greets the user with stale chrome on return.
+    this.closeDetailPanel();
   }
 
   public getStatusClass(status: string): string {

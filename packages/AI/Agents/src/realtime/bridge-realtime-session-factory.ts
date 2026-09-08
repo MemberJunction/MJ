@@ -24,6 +24,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
 import { RealtimeClientSessionService } from './realtime-client-session-service';
+import { SelectRealtimeVendorForModel } from './realtime-vendor-resolution';
 
 /**
  * The context a bridge passes to {@link CreateBridgeRealtimeSession}. Structurally compatible with the
@@ -79,7 +80,7 @@ export interface BridgeRealtimeSessionContext {
  *
  * @param ctx The bridge session context (agent id/name + user + provider).
  * @returns The live realtime session to hand to `AIBridgeEngine.StartBridgeSession`.
- * @throws When the agent can't be resolved, has no DriverClass, the driver can't be instantiated, or no
+ * @throws When the agent can't be resolved, names a DriverClass no BaseAgent subclass is registered for, or no
  *   usable Realtime model is configured (surfaced from {@link BaseAgent.StartBridgeRealtimeSession}).
  */
 export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionContext): Promise<IRealtimeSession> {
@@ -94,16 +95,59 @@ export async function CreateBridgeRealtimeSession(ctx: BridgeRealtimeSessionCont
         );
     }
 
-    // Instantiate the right BaseAgent subclass exactly as AgentRunner does (agent DriverClass, else its type's).
-    const agentType = AIEngine.Instance.AgentTypes.find((t) => UUIDsEqual(t.ID, agent.TypeID));
-    const driverClass = agent.DriverClass || agentType?.DriverClass;
-    if (!driverClass) {
-        throw new Error(`CreateBridgeRealtimeSession: agent '${agent.Name}' has no DriverClass (and its type none either).`);
-    }
-
-    const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseAgent>(BaseAgent, driverClass);
-    if (!instance) {
-        throw new Error(`CreateBridgeRealtimeSession: ClassFactory could not create a BaseAgent for DriverClass '${driverClass}'.`);
+    // Instantiate the agent's own BaseAgent subclass — or the plain BaseAgent when it declares none.
+    //
+    // ── WHY NOT `agentType.DriverClass` AS A FALLBACK (#4111) ──
+    //
+    // `AIAgentType.DriverClass` names a **BaseAgentType** subclass — the three shipped values are
+    // `LoopAgentType`, `FlowAgentType`, `RealtimeAgentType`. The key needed here is a **BaseAgent**
+    // one. Different ClassFactory registries, matched by exact key against the base class NAME, so
+    // the type's key resolved nothing here — ever. Dead code that looked alive.
+    //
+    // What that produced is worth stating precisely, because the wrong story invites the wrong fix:
+    // with no registration and no `@RequiresSubclass` marker, `resolveAndInstantiate` returns
+    // `new BaseClassConstructor(...)` — a plain `BaseAgent`. So every such seat silently ran the
+    // BASE implementation, dropping whatever subclass behaviour it was configured for. It did not
+    // run some other agent's class. The only signal was one `console.warn` from
+    // `reportResolutionFailure`, deduped per base+key and capped at 3 per base: effectively
+    // invisible in a busy log, which is the whole problem.
+    //
+    // A NULL key is the path that really does hand back somebody else's agent —
+    // `GetAllRegistrations` skips the key filter entirely for null, so the highest-priority
+    // registered `BaseAgent` subclass wins. That is why the else-branch below constructs
+    // `new BaseAgent()` directly instead of calling `CreateInstance(BaseAgent, null)`.
+    //
+    // Most agents declare no `DriverClass` at all and are meant to run on the base implementation
+    // (that is what makes them data rather than code), so an absent one is NOT an error — it is the
+    // common case, and the old throw was unreachable only because the wrong-registry lookup always
+    // produced a truthy key.
+    //
+    // Dropping the type fallback loses nothing: agent-type behaviour is resolved separately inside
+    // `BaseAgent` via `BaseAgentType.GetAgentTypeInstance`, so a seat on the plain `BaseAgent` still
+    // gets Loop/Realtime type semantics.
+    // Trimmed like every other externally-sourced string in this file (`RealtimeVoice`,
+    // `RealtimeModelID`, `AgentSessionID`): a whitespace-only value is a truthy key that would
+    // otherwise reach the ClassFactory and fail with a confusing quoted-blank message.
+    const driverClass = agent.DriverClass?.trim() || undefined;
+    let instance: BaseAgent | null;
+    if (driverClass) {
+        // `TryCreateInstance`, not `CreateInstance`: an unresolvable key must be an error here rather
+        // than a hollow anchor-base object that answers plausibly and wrongly.
+        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BaseAgent>(BaseAgent, driverClass);
+        instance = resolution.Resolved ? resolution.Instance : null;
+        if (!instance) {
+            throw new Error(
+                `CreateBridgeRealtimeSession: no BaseAgent subclass is registered as '${driverClass}' ` +
+                    `(agent '${agent.Name}'). Refusing the base-class fallback: it would run a different ` +
+                    `agent than the one configured, in this agent's voice.`,
+            );
+        }
+    } else {
+        // `new BaseAgent()` and NOT `CreateInstance(BaseAgent, null)`: a null key makes
+        // `GetAllRegistrations` skip the key filter, so the factory would return the
+        // highest-priority registered subclass — an arbitrary agent. Direct construction is the only
+        // form that reliably yields the base implementation.
+        instance = new BaseAgent();
     }
 
     return instance.StartBridgeRealtimeSession({
@@ -204,7 +248,7 @@ export async function GetRealtimeModelVoices(
 
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const driverClass = resolveRealtimeDriverClass(model.ID);
+        const driverClass = SelectRealtimeVendorForModel(model.ID)?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
@@ -214,19 +258,6 @@ export async function GetRealtimeModelVoices(
         out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
     }
     return out;
-}
-
-/** The DriverClass of the highest-priority Active vendor (with a resolvable API key) for a model, or null. */
-function resolveRealtimeDriverClass(modelID: string): string | null {
-    const vendors = AIEngine.Instance.ModelVendors
-        .filter((mv) => UUIDsEqual(mv.ModelID, modelID) && mv.Status === 'Active' && mv.DriverClass != null)
-        .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
-    for (const v of vendors) {
-        if (GetAIAPIKey(v.DriverClass!)) {
-            return v.DriverClass!;
-        }
-    }
-    return null;
 }
 
 /** Resolves the agent entity from the engine cache by id (preferred), then by case-insensitive name. */

@@ -6,7 +6,11 @@
  * definition is the single source of truth — editing it keeps its schedule in sync, no separate
  * Scheduled Job management.
  *
- * (On-change reconciliation — owning an Entity Action — is a separate follow-up; see the plan §18.)
+ * It also owns the **on-change** trigger the same way: `OnChangeEnabled` reconciles an Entity Action
+ * binding on the process's target entity, and `OnChangeFilter` compiles into that binding's Action
+ * Filter — which is what those two columns have always claimed to do. The substrate work lives in
+ * `RecordProcessOnChangeReconciler` so this class stays a dispatcher rather than growing a second
+ * hundred-line reconciler inside `Save()`.
  * @module @memberjunction/core-entities-server
  */
 
@@ -20,12 +24,22 @@ import {
     UserInfo,
 } from '@memberjunction/core';
 import { MJRecordProcessEntity, MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
+import { ReconcileRecordProcessOnChange } from './RecordProcessOnChangeReconciler';
 
 /** The `MJ: Scheduled Job Types.Name` seeded for record-process recurrence (metadata-driven). */
 const RUN_RECORD_PROCESS_JOB_TYPE = 'Run Record Process';
 
 /** Fields whose change can affect the owned Scheduled Job — reconcile only when one is dirty. */
 const SCHEDULE_RELEVANT_FIELDS = ['ScheduleEnabled', 'CronExpression', 'Timezone', 'Status', 'Name'] as const;
+
+/**
+ * Fields whose change can affect the owned Entity Action binding.
+ *
+ * `EntityID` is in the list because the binding is anchored to it: repointing a process at a
+ * different entity while its old binding still fires would leave the process running against
+ * records it no longer describes.
+ */
+const ON_CHANGE_RELEVANT_FIELDS = ['OnChangeEnabled', 'OnChangeInvocationType', 'OnChangeFilter', 'Status', 'EntityID'] as const;
 
 /** Whether the owned Scheduled Job should be active or disabled, given the process's schedule state. */
 export type ScheduleAction = 'upsert' | 'disable';
@@ -65,21 +79,54 @@ export class MJRecordProcessEntityServer extends MJRecordProcessEntity {
      * save — the record itself is valid; a reconciliation error is logged for the operator.
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const shouldReconcile = !this.IsSaved || this.scheduleFieldsDirty();
+        // Both reads happen BEFORE the save, because saving resets every dirty flag — asking
+        // afterwards would report that nothing changed and reconcile nothing, forever.
+        const isNew = !this.IsSaved;
+        const reconcileSchedule = isNew || this.anyFieldDirty(SCHEDULE_RELEVANT_FIELDS);
+        const reconcileOnChange = isNew || this.anyFieldDirty(ON_CHANGE_RELEVANT_FIELDS);
+
         const saved = await super.Save(options);
-        if (saved && shouldReconcile) {
-            try {
-                await this.reconcileScheduledJob();
-            } catch (e) {
-                LogError(`MJRecordProcessEntityServer: schedule reconciliation failed for '${this.Name}' (${this.ID}): ${e instanceof Error ? e.message : String(e)}`);
-            }
+        if (!saved) return saved;
+
+        if (reconcileSchedule) {
+            await this.reconcileSafely('schedule', () => this.reconcileScheduledJob());
+        }
+        if (reconcileOnChange) {
+            await this.reconcileSafely('on-change', () => this.reconcileOnChangeBinding());
         }
         return saved;
     }
 
-    /** True when any field affecting the owned Scheduled Job is dirty (fast-path before save). */
-    private scheduleFieldsDirty(): boolean {
-        return SCHEDULE_RELEVANT_FIELDS.some((f) => this.GetFieldByName(f)?.Dirty ?? false);
+    /**
+     * Runs one reconciliation without letting it fail the save.
+     *
+     * The record itself is valid and already persisted; a substrate error is an operator problem,
+     * not a reason to reject the user's edit. Each trigger is wrapped separately so a failure in one
+     * cannot skip the other — a process whose schedule reconciliation broke should still get its
+     * on-change binding.
+     */
+    private async reconcileSafely(label: string, work: () => Promise<void>): Promise<void> {
+        try {
+            await work();
+        } catch (e) {
+            LogError(
+                `MJRecordProcessEntityServer: ${label} reconciliation failed for '${this.Name}' (${this.ID}): ` +
+                `${e instanceof Error ? e.message : String(e)}`,
+            );
+        }
+    }
+
+    /** True when any of the named fields is dirty (fast-path, read before the save clears them). */
+    private anyFieldDirty(fields: readonly string[]): boolean {
+        return fields.some((f) => this.GetFieldByName(f)?.Dirty ?? false);
+    }
+
+    /** Ensures the owned Entity Action binding matches the process's on-change settings. */
+    private async reconcileOnChangeBinding(): Promise<void> {
+        await ReconcileRecordProcessOnChange(this, {
+            Provider: this.ProviderToUse as unknown as IMetadataProvider,
+            ContextUser: this.ContextCurrentUser,
+        });
     }
 
     /** Ensures the owned Scheduled Job matches the process's current schedule state. */

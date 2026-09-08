@@ -305,9 +305,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','ComponentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
+                [NewRecordValues]="NewRecordValues('MJ: Component Dependencies','ComponentID')"
                 [AllowLoad]="IsSectionExpanded('mJComponentDependenciesComponentID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentDependenciesComponentID', $event.totalRowCount)"
                 >
@@ -330,9 +330,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Library Links','ComponentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Component Library Links')"
+                [NewRecordValues]="NewRecordValues('MJ: Component Library Links','ComponentID')"
                 [AllowLoad]="IsSectionExpanded('mJComponentLibraryLinks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentLibraryLinks', $event.totalRowCount)"
                 >
@@ -355,9 +355,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Component Dependencies','DependencyComponentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Component Dependencies')"
+                [NewRecordValues]="NewRecordValues('MJ: Component Dependencies','DependencyComponentID')"
                 [AllowLoad]="IsSectionExpanded('mJComponentDependenciesDependencyComponentID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJComponentDependenciesDependencyComponentID', $event.totalRowCount)"
                 >
@@ -380,9 +380,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Form Overrides','ComponentID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Form Overrides')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Form Overrides','ComponentID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityFormOverrides')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityFormOverrides', $event.totalRowCount)"
                 >

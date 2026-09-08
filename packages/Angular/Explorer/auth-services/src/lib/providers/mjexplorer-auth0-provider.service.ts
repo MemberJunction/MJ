@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Provider } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAuthBase } from '../mjexplorer-auth-base.service';
 import { AuthService, IdToken, User, AuthGuard, AuthConfigService, Auth0ClientService, Auth0ClientFactory, AuthClientConfig } from '@auth0/auth0-angular';
@@ -32,7 +32,7 @@ export class MJAuth0Provider extends MJAuthBase {
    * Factory function to provide Angular dependencies required by Auth0
    * Stored as a static property for the factory to access without instantiation
    */
-  static angularProviderFactory = (environment: Record<string, unknown>) => {
+  static angularProviderFactory = (environment: Record<string, unknown>): Provider[] => {
     // Check if we're on the MCP OAuth callback path
     const isMCPOAuthCallback = window.location.pathname.startsWith('/oauth/callback');
 

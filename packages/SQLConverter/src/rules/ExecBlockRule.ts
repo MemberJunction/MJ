@@ -633,19 +633,54 @@ export class ExecBlockRule implements IConversionRule {
     // overload ("function ... does not exist"), so coerce those to TRUE/FALSE.
     const boolCols = this.boolColumnsForProc(exec.procRef, context.TableColumns);
 
+    const paramList = exec.params
+      .map(p => `${p.paramName} := ${this.coerceBooleanArg(p.paramName, p.valueExpr, boolCols)}`)
+      .join(', ');
+
     if (exec.params.length > POSTGRESQL_PROCEDURE_PARAM_LIMIT) {
-      // Wide entity: the baseline defines this CRUD sproc in single-JSONB-arg shape
-      // (spXxx(p_data JSONB)) because the individual-param form exceeds PG's
-      // FUNC_MAX_ARGS / param limit. Emit the matching call: build a JSON object
-      // keyed by column name. The `_Clear` flags are dropped — in JSON-arg shape a
-      // present key (even with a null value) means "set this column", which is
-      // exactly the full-record semantics the metadata-sync UPDATE/INSERT expresses.
+      // Definitely wide: this CALL alone exceeds the limit, so a typed-arg function with
+      // at least this many parameters cannot exist on PostgreSQL. Only the JSON-arg shape
+      // is possible, so emit it unconditionally.
       out.push(`  PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
     } else {
-      const paramList = exec.params
-        .map(p => `${p.paramName} := ${this.coerceBooleanArg(p.paramName, p.valueExpr, boolCols)}`)
-        .join(', ');
-      out.push(`  PERFORM ${exec.procRef}(${paramList});`);
+      // The call count does NOT settle the shape, so resolve it at APPLY time.
+      //
+      // The shape is a property of the FUNCTION, not of the call. A T-SQL EXEC may omit
+      // parameters that have defaults, so a call can be narrower than the procedure it
+      // targets — and CodeGen decides JSON-arg from the entity's projected parameter count,
+      // which includes `_Clear` companions no call has to pass.
+      //
+      // That gap is not hypothetical. On v6.1.0-edge.3, `Entity.Configuration` pushed
+      // `MJ: Entities` over the threshold: CodeGen projects 90 and emits
+      // spUpdateEntity(p_data JSONB) — dropping every typed-arg overload as it does so —
+      // while __mj.spUpdateEntity on SQL Server has 93 parameters and the single EXEC in
+      // that release's metadata sync passes 89. Deciding from 89 emitted a typed-arg call
+      // against a function that now only accepts JSONB, and `mj migrate` died on
+      // `function __mj.spUpdateEntity(...) does not exist` — with nothing in the converted
+      // output looking wrong.
+      //
+      // The converter cannot close that gap by counting: it has no procedure definition in
+      // a metadata-sync file (only EXECs), and ConversionContext carries neither procedure
+      // arities nor column nullability, so CodeGen's projection is not reproducible here.
+      // Any threshold we pick is a guess that drifts the next time an entity gains a column.
+      //
+      // So don't guess — ask the catalogue. Emitting both branches under a pg_proc lookup
+      // is correct against either shape and stays correct as entities widen. Only the taken
+      // branch is ever planned: PL/pgSQL plans a statement on first execution, not when the
+      // DO block is compiled, so the untaken branch's call need not resolve.
+      const procName = exec.procRef.replace(/^.*\./, '').replace(/"/g, '');
+      const schemaRef = exec.procRef.includes('.')
+        ? exec.procRef.replace(/\.[^.]*$/, '').replace(/"/g, '')
+        : context.Schema;
+      out.push(`  IF EXISTS (`);
+      out.push(`    SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace`);
+      out.push(`     WHERE n.nspname = '${schemaRef}' AND p.proname = '${procName}'`);
+      out.push(`       AND p.pronargs = 1 AND p.proargtypes[0] = 'jsonb'::regtype`);
+      out.push(`  ) THEN`);
+      out.push(`    PERFORM ${exec.procRef}(p_data := ${this.buildJsonArg(exec.params, boolCols)});`);
+      out.push(`  ELSE`);
+      out.push(`    PERFORM ${exec.procRef}(${paramList});`);
+      out.push(`  END IF;`);
     }
 
     out.push('END $mj$;');

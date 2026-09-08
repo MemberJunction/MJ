@@ -1,8 +1,7 @@
-import { Component } from '@angular/core';
 import { describe, it, expect } from 'vitest';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RunViewParams } from '@memberjunction/core';
-import { createFakeProvider, useFakeGlobalProvider, query, queryAll } from '@memberjunction/ng-test-utils';
+import { createFakeProvider, useFakeGlobalProvider, query, queryAll, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { AnalyticsModelPerformanceComponent } from './model-performance.component';
 
 /**
@@ -14,9 +13,6 @@ import { AnalyticsModelPerformanceComponent } from './model-performance.componen
  * `mj-loading` stubbed. Explicit `detectChanges(false)` because `LoadData()` toggles `IsLoading`.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {}
-
 const RUNS = [
   { ModelID: 'm1', Model: 'GPT-4o', Vendor: 'OpenAI', Success: true, ExecutionTimeMS: 1200, TokensUsed: 1000, Cost: 0.02 },
   { ModelID: 'm1', Model: 'GPT-4o', Vendor: 'OpenAI', Success: true, ExecutionTimeMS: 900, TokensUsed: 800, Cost: 0.015 },
@@ -24,7 +20,7 @@ const RUNS = [
 ];
 
 async function render(rows: unknown[]): Promise<ComponentFixture<AnalyticsModelPerformanceComponent>> {
-  TestBed.configureTestingModule({ declarations: [AnalyticsModelPerformanceComponent], imports: [StubLoading] });
+  TestBed.configureTestingModule({ declarations: [AnalyticsModelPerformanceComponent], imports: [StubLoadingComponent] });
   const fixture = TestBed.createComponent(AnalyticsModelPerformanceComponent);
   fixture.componentRef.setInput('Provider', createFakeProvider({ runViewResults: (_p: RunViewParams) => rows }));
   fixture.detectChanges(false);

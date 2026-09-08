@@ -125,6 +125,59 @@ async function compactionStepCount(ctx: IntegrationCheckContext, runId: string):
   return r.Success ? r.Results.filter((s) => s.StepType === 'Compaction').length : 0;
 }
 
+/**
+ * The Compaction steps for a run, with the fields that distinguish "the pass fired" from "the pass
+ * ran and failed" — a failed summary prompt or a failed audit-row save records a step with
+ * Success=0, whereas a skipped pass records nothing at all (base-agent.ts runCrossTurnCompaction).
+ */
+async function compactionStepDetails(ctx: IntegrationCheckContext, runId: string): Promise<Array<{ Success: boolean | null; ErrorMessage: string | null }>> {
+  const r = await new RunView().RunView<{ StepType: string; Success: boolean | null; ErrorMessage: string | null }>(
+    {
+      EntityName: 'MJ: AI Agent Run Steps',
+      ExtraFilter: `AgentRunID='${runId}'`,
+      Fields: ['StepType', 'Success', 'ErrorMessage'],
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    ctx.User,
+  );
+  return r.Success ? r.Results.filter((s) => s.StepType === 'Compaction').map((s) => ({ Success: s.Success, ErrorMessage: s.ErrorMessage })) : [];
+}
+
+/**
+ * Boundary-summary state, reported as its TWO independent saves: the summary written onto the
+ * boundary ConversationDetail, and the ConversationCompactionRun audit row. Collapsing them into
+ * one boolean makes a failed audit insert masquerade as "compaction never fired".
+ */
+async function boundarySummaryState(ctx: IntegrationCheckContext, conversationId: string): Promise<{ summary: boolean; audit: boolean }> {
+  const rv = new RunView();
+  const detailsResult = await rv.RunView<{ ID: string; SummaryOfEarlierConversation: string | null }>(
+    {
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ConversationID='${conversationId}'`,
+      Fields: ['ID', 'SummaryOfEarlierConversation'],
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    ctx.User,
+  );
+  if (!detailsResult.Success) return { summary: false, audit: false };
+  const boundaryRows = detailsResult.Results.filter((d) => !!d.SummaryOfEarlierConversation && d.SummaryOfEarlierConversation.trim().length > 0);
+  if (boundaryRows.length === 0) return { summary: false, audit: false };
+  const boundaryIds = boundaryRows.map((d) => `'${d.ID}'`).join(',');
+  const auditResult = await rv.RunView<{ ID: string }>(
+    {
+      EntityName: 'MJ: Conversation Compaction Runs',
+      ExtraFilter: `ConversationDetailID IN (${boundaryIds})`,
+      Fields: ['ID'],
+      ResultType: 'simple',
+      BypassCache: true,
+    },
+    ctx.User,
+  );
+  return { summary: true, audit: auditResult.Success && auditResult.Results.length > 0 };
+}
+
 async function boundarySummaryPresent(ctx: IntegrationCheckContext, conversationId: string): Promise<boolean> {
   const rv = new RunView();
   const detailsResult = await rv.RunView<{ ID: string; SummaryOfEarlierConversation: string | null }>(
@@ -197,28 +250,56 @@ export const AgentCompactionE2EChecks: NamedCheck[] = [
     RequiresLiveModel: true,
     Fn: async (ctx): Promise<void> => {
       const agent = await resolveAgent(ctx, 'IT: Compaction Agent');
-      // Fabricate a stored history whose estimated tokens exceed the 4000 trigger (~5 chars/token):
-      // 12 rows × ~1400 chars ≈ 16.8k chars ≈ well over trigger, and > MIN_MESSAGES_TO_COMPACT (4).
+      // Fabricate a stored history whose estimated tokens exceed the 4000 trigger. The real
+      // estimator (heuristicTokenCount) is ~4 chars/token WITH a 50% whitespace discount, so a
+      // 1400-char filler row is ~323 tokens, not ~280 — 12 rows landed at ~3.9k, just UNDER the
+      // trigger, making compaction a quiet no-op. 16 rows ≈ 5.2k tokens clears it with margin
+      // (and is > MIN_MESSAGES_TO_COMPACT (4)).
       const rows: Array<{ role: 'User' | 'AI'; text: string }> = [];
-      for (let i = 1; i <= 12; i++) {
+      for (let i = 1; i <= 16; i++) {
         rows.push({ role: i % 2 === 1 ? 'User' : 'AI', text: filler(`CE2-msg${i}`, 1400) });
       }
       const conv = await fabricateConversation(ctx, rows);
       const run = await runCompactionAgent(ctx, agent, conv.ID, 'Acknowledge and finish.');
 
+      // PRECONDITION, asserted separately: startPostTurnCompaction returns SILENTLY (no Compaction
+      // step, no boundary summary) unless the root run settled as Completed/AwaitingFeedback. Without
+      // this assertion a failed live turn is indistinguishable from "compaction didn't fire", and the
+      // real cause — the model, not the compaction wiring — is invisible in the failure message.
+      Assert(
+        run.Status === 'Completed' || run.Status === 'AwaitingFeedback',
+        `CE2 precondition: the turn must settle before post-turn compaction is eligible, but the run ended ` +
+          `Status='${run.Status}' (ErrorMessage: ${run.ErrorMessage ?? 'none'}) — compaction was never attempted`,
+      );
+
       // Post-turn compaction is fire-and-forget (+ a real summary LLM call) — poll for it to land.
-      let fired = false;
+      let state = { summary: false, audit: false };
+      let steps: Array<{ Success: boolean | null; ErrorMessage: string | null }> = [];
       for (let i = 0; i < COMPACTION_POLL_ATTEMPTS; i++) {
-        if ((await boundarySummaryPresent(ctx, conv.ID)) && (await compactionStepCount(ctx, run.ID)) > 0) {
-          fired = true;
+        state = await boundarySummaryState(ctx, conv.ID);
+        steps = await compactionStepDetails(ctx, run.ID);
+        if (state.summary && state.audit && steps.length > 0) {
           break;
         }
         await settle(2500);
       }
+      // Report the three independent outcomes separately — a recorded-but-failed step (summary prompt
+      // or audit save) is a different defect from no step at all (the pass never ran).
+      const stepDiag = steps.length === 0
+        ? 'no Compaction step recorded (the pass never ran or quietly no-op\'d)'
+        : `Compaction steps: ${JSON.stringify(steps)}`;
       Assert(
-        fired,
-        'post-turn compaction never persisted a boundary summary + Compaction step for an over-trigger history ' +
-          '(check the seeded "Conversation Summary" prompt has an active model binding)',
+        steps.length > 0,
+        `post-turn compaction recorded no Compaction step for an over-trigger history (~5.2k tokens vs a 4k trigger) — ${stepDiag}`,
+      );
+      Assert(
+        state.summary,
+        `a Compaction step was recorded but no boundary summary was persisted — ${stepDiag} ` +
+          '(check the seeded "Conversation Summary" prompt has an active model binding with a reachable vendor)',
+      );
+      Assert(
+        state.audit,
+        `the boundary summary persisted but its ConversationCompactionRun audit row did not — ${stepDiag}`,
       );
 
       // The next assembled window must fold to [summary, tail] — the summary is now the first message.
@@ -241,6 +322,14 @@ export const AgentCompactionE2EChecks: NamedCheck[] = [
         { role: 'AI', text: 'CE9 short two' },
       ]);
       const run = await runCompactionAgent(ctx, agent, conv.ID, 'Acknowledge and finish.');
+      // Same precondition as CE2, and here it also guards against VACUOUS GREEN: a run that failed to
+      // settle skips post-turn compaction entirely, so "no Compaction step" would prove nothing about
+      // the under-trigger negative control this check exists to assert.
+      Assert(
+        run.Status === 'Completed' || run.Status === 'AwaitingFeedback',
+        `CE9 precondition: the turn must settle for the negative control to be meaningful, but the run ended ` +
+          `Status='${run.Status}' (ErrorMessage: ${run.ErrorMessage ?? 'none'})`,
+      );
       // Give any (erroneous) post-turn pass ample time to appear before asserting absence.
       await settle(SETTLE_MS);
       const steps = await compactionStepCount(ctx, run.ID);

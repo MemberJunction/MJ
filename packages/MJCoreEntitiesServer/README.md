@@ -449,4 +449,4 @@ When contributing new server-side entities:
 
 ## License
 
-This package is part of the MemberJunction open-source project.
+This package is part of the MemberJunction project.

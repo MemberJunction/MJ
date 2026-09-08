@@ -15,6 +15,7 @@ import {
 import {
     AgentSpec,
     AgentActionSpec,
+    AgentStep,
     SubAgentSpec
 } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -553,7 +554,7 @@ export class AgentSpecSync {
             Name: agent.Name || '',
             Description: agent.Description || undefined,
             TypeID: agent.TypeID || undefined,
-            Status: (agent.Status as 'Active' | 'Inactive' | 'Pending') || undefined,
+            Status: agent.Status || undefined,
             IconClass: agent.IconClass || undefined,
             LogoURL: agent.LogoURL || undefined,
             ParentID: agent.ParentID || undefined,
@@ -718,7 +719,7 @@ export class AgentSpecSync {
      * @param step - The agent step entity
      * @returns Mapped step spec
      */
-    private mapStepEntityToSpec(step: MJAIAgentStepEntity): any {
+    private mapStepEntityToSpec(step: MJAIAgentStepEntity): AgentStep {
         return {
             ID: step.ID,
             Name: step.Name,
@@ -728,8 +729,13 @@ export class AgentSpecSync {
             ActionID: step.ActionID || undefined,
             SubAgentID: step.SubAgentID || undefined,
             PromptID: step.PromptID || undefined,
-            ActionInputMapping: this.parseJsonField<any>(step.ActionInputMapping),
-            ActionOutputMapping: this.parseJsonField<any>(step.ActionOutputMapping)
+            // Loop steps round-trip their body type and bounds; without these, reading a flow agent
+            // that contains a loop and writing it back would silently turn the loop into an
+            // unconfigured step that iterates over nothing.
+            LoopBodyType: step.LoopBodyType || undefined,
+            Configuration: step.Configuration || undefined,
+            ActionInputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionInputMapping),
+            ActionOutputMapping: this.parseJsonField<Record<string, unknown>>(step.ActionOutputMapping)
         };
     }
 
@@ -882,12 +888,9 @@ export class AgentSpecSync {
             agentEntity.TypeID = (this.spec as any).TypeID;
         }
 
-        // Handle Status - defaults to Active if not specified
-        if ((this.spec as any).Status) {
-            agentEntity.Status = (this.spec as any).Status;
-        } else {
-            agentEntity.Status = 'Active';
-        }
+        // Handle Status - defaults to Active if not specified. Typed rather than cast: the cast is
+        // what let `'Inactive'` — a value the CHECK constraint rejects — reach the entity unchallenged.
+        agentEntity.Status = this.spec.Status ?? 'Active';
 
         // Serialize JSON fields
         agentEntity.PayloadDownstreamPaths = JSON.stringify(
@@ -1362,6 +1365,11 @@ export class AgentSpecSync {
             stepEntity.ActionID = stepSpec.ActionID || null;
             stepEntity.SubAgentID = stepSpec.SubAgentID || null;
             stepEntity.Status = 'Active'; // Default to Active
+            // Loop steps: the body type says which of Action/Prompt/Sub-Agent runs each pass, and
+            // Configuration carries the bounds. Written for every step because a step that STOPS
+            // being a loop must have these cleared, not left behind from its previous shape.
+            stepEntity.LoopBodyType = stepSpec.LoopBodyType || null;
+            stepEntity.Configuration = stepSpec.Configuration || null;
 
             // Handle inline prompt creation for Prompt-type steps
             // If StepType is Prompt and PromptID is empty, create a new AIPrompt record

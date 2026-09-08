@@ -199,9 +199,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Runs','TestID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Runs','TestID')"
                 [AllowLoad]="IsSectionExpanded('mJTestRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestRuns', $event.totalRowCount)"
                 >
@@ -224,9 +224,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Test Suite Tests','TestID')"
-                [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests')"
+                [NewRecordValues]="NewRecordValues('MJ: Test Suite Tests','TestID')"
                 [AllowLoad]="IsSectionExpanded('mJTestSuiteTests')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTestSuiteTests', $event.totalRowCount)"
                 >

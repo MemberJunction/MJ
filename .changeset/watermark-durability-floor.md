@@ -1,0 +1,5 @@
+---
+"@memberjunction/integration-engine": patch
+---
+
+Mid-run watermark durability floor — the watermark twin of the keyset checkpoint. A watermark-based connector had no durable position at all until its run ended: a SIGKILL / OOM / container recycle mid-object threw away hours of applied batches, and the next run re-fetched the entire window from the last completed run's watermark. The 25-batch checkpoint now also persists the max watermark seen (`currentWatermark` only advances at the end of a fully-applied batch, so the floor can never point past an unwritten record). The floor is gated on no page-skip gap having occurred — a skipped page can hold records behind the max watermark seen, i.e. a hole behind the floor — and a floor already written is retracted to the pre-run value the moment the first gap appears, restoring the exact hold semantics the post-loop save has always had. Keyset connectors (their position is the seek key) and partition-reconcile maps (their watermark row stores the rollup snapshot) are excluded. `WatermarkService.RestoreValue` is new, accepting null because the prior state may be "no watermark yet".

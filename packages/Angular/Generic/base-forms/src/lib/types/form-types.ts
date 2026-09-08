@@ -1,3 +1,4 @@
+import type { BaseEntity } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 
 /**
@@ -131,6 +132,14 @@ export interface RecordSavedEvent {
   /** The display name of the saved record (for tab title updates, etc.) */
   RecordDisplayName?: string;
   Result: FormSaveResult;
+}
+
+/**
+ * Event emitted after a saved record is reloaded from the database in place.
+ */
+export interface RecordRefreshedEvent {
+  EntityName: string;
+  Record: BaseEntity;
 }
 
 /**

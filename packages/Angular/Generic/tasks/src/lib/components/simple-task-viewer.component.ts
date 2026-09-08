@@ -22,7 +22,10 @@ import { UUIDsEqual } from '@memberjunction/global';
               [class.selected]="IsTaskSelected(task)"
               (click)="onTaskClick(task)">
               <!-- Status Icon -->
-              <div class="status-icon" [class.complete]="task.Status === 'Complete'">
+              <div class="status-icon"
+                   [class.complete]="task.Status === 'Complete'"
+                   [class.failed]="task.Status === 'Failed'"
+                   [class.blocked]="task.Status === 'Blocked'">
                 <i class="fas" [ngClass]="getStatusIcon(task.Status)"></i>
               </div>
               <!-- Task Content -->
@@ -182,6 +185,19 @@ import { UUIDsEqual } from '@memberjunction/global';
     .status-icon.complete {
       background: color-mix(in srgb, var(--mj-status-success) 15%, var(--mj-bg-surface));
       color: var(--mj-status-success);
+    }
+
+    /* Failed and Blocked are distinct outcomes: Failed is this task's own error, Blocked
+       means an upstream dependency can never be satisfied. Both previously rendered with
+       the default (pending) treatment, so a dead graph looked like a waiting one. */
+    .status-icon.failed {
+      background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+      color: var(--mj-status-error);
+    }
+
+    .status-icon.blocked {
+      background: color-mix(in srgb, var(--mj-text-muted) 15%, var(--mj-bg-surface));
+      color: var(--mj-text-muted);
     }
 
     .task-content {

@@ -600,7 +600,9 @@ ${versionSection}${newUserSection}  output: [],
     // Try to replace existing newUserSetup block
     const existingPattern = /newUserSetup:\s*\{[^}]*\}/;
     if (existingPattern.test(content)) {
-      return content.replace(existingPattern, newUserBlock);
+      // Function replacement: the block embeds the user's name and email, which
+      // may contain `$`. See issue #3171.
+      return content.replace(existingPattern, () => newUserBlock);
     }
 
     // Insert before the closing of module.exports
@@ -665,7 +667,8 @@ ${versionSection}${newUserSection}  output: [],
     const line = `mjRepoVersion: '${version}'`;
     const existing = /mjRepoVersion\s*:\s*'[^']*'/;
     if (existing.test(content)) {
-      return content.replace(existing, line);
+      // Function replacement — see the note in patchNewUserSetup (#3171).
+      return content.replace(existing, () => line);
     }
 
     const marker = 'module.exports = {';
@@ -838,7 +841,11 @@ ${versionSection}${newUserSection}  output: [],
     const pattern = new RegExp(`^\\s*${name}\\s*=.*$`, 'm');
     const newLine = `${name}='${value}'`;
     if (pattern.test(content)) {
-      return content.replace(pattern, newLine);
+      // Function replacement, NOT a string: `value` is a secret we were handed,
+      // and a string replacement would expand `$$`/`$&`/`` $` ``/`$'` inside it —
+      // writing a corrupted password, or splicing a neighbouring .env line into
+      // the middle of one. See issue #3171.
+      return content.replace(pattern, () => newLine);
     }
     const suffix = content.endsWith('\n') ? '' : '\n';
     return `${content}${suffix}${newLine}\n`;
@@ -1138,7 +1145,10 @@ ${versionSection}${newUserSection}  output: [],
         `(["']?${field}["']?\\s*[:=]\\s*)(?:["']{2}|["']\\s*["'])`,
       );
       if (emptyPattern.test(content)) {
-        content = content.replace(emptyPattern, `$1'${value}'`);
+        // Function replacement: the `$1` back-reference is ours and intentional,
+        // but `value` is data — as a string replacement its own `$&`/`` $` ``/`$'`
+        // would expand too. See issue #3171.
+        content = content.replace(emptyPattern, (_match, prefix: string) => `${prefix}'${value}'`);
         continue;
       }
 
@@ -1152,7 +1162,11 @@ ${versionSection}${newUserSection}  output: [],
         );
         const match = content.match(valuedPattern);
         if (match && scaffoldDefault.test(match[2])) {
-          content = content.replace(valuedPattern, `$1${value}$3`);
+          // Function replacement — see the note on the empty-value patch above.
+          content = content.replace(
+            valuedPattern,
+            (_match, prefix: string, _oldValue: string, suffix: string) => `${prefix}${value}${suffix}`,
+          );
         }
       }
     }

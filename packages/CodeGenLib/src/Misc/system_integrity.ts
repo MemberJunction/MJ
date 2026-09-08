@@ -130,7 +130,15 @@ export class SystemIntegrityBase {
 
                 // loop through all the fields. Each time the entity changes, check to see if there are any duplicate fields
                 // that has the same sequence number and flag that as an error.
+                const excludedSchemas = new Set(
+                    (configInfo.excludeSchemas ?? []).map((s) => s.toLowerCase())
+                );
+
                 for (const row of result) {
+                    if (excludedSchemas.has(String(row.SchemaName ?? '').toLowerCase())) {
+                        lastEntity = row.Entity;
+                        continue;
+                    }
                     if (lastEntity !== row.Entity) {
                         // we have a new entity, check all the fields in this entity
                         // eslint-disable-next-line @typescript-eslint/no-explicit-any

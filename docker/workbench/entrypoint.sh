@@ -56,10 +56,10 @@ echo ""
 
 # ─── Install dependencies on fresh clone ─────────────────────────────────────
 if [ "$FRESH_CLONE" = true ] && [ -f "$MJ_DIR/package.json" ]; then
-    echo "Running npm install (this may take a few minutes on first run)..."
+    echo "Running pnpm install (this may take a few minutes on first run)..."
     cd "$MJ_DIR"
-    npm install 2>&1 | tail -5
-    echo "  npm install complete"
+    pnpm install 2>&1 | tail -5
+    echo "  pnpm install complete"
     cd /workspace
     echo ""
 fi

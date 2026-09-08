@@ -51,6 +51,20 @@ export function redactArg(ctx: RedactionContext): unknown {
     const entity = ctx.provider.Entities.find((e) => e.ClassName === match.groups!.name);
     if (entity) {
       encryptedFieldNames = new Set(entity.EncryptedFields.map((f) => f.Name));
+    } else {
+      // The name matched the CRUD convention but resolves to no entity — so the
+      // metadata half of the redactor contributes nothing and, absent any @NoLog
+      // field, this arg falls through to shortenForLog with its values intact.
+      //
+      // This is the silent case: the boot audit tests only the NAME pattern, so an
+      // input like `CreateConnectionInput` is classified as metadata-bound and never
+      // warned about, while the lookup here quietly fails. Every hand-written
+      // `Create*Input` in the resolvers hits this — codegen inputs embed the entity
+      // ClassName (`CreateMJCredentialInput`), hand-written ones do not.
+      //
+      // Report it once per input type so the operator who enabled variables logging
+      // learns which args are unprotected, rather than discovering it in a log file.
+      WarnUnboundCrudInput(ctx.inputTypeName);
     }
   }
 
@@ -80,3 +94,32 @@ export function redactArg(ctx: RedactionContext): unknown {
 }
 
 const EMPTY_SET: ReadonlySet<string> = new Set<string>();
+
+/**
+ * Input type names already reported by {@link WarnUnboundCrudInput}. Warning once
+ * per type keeps a hot mutation from flooding the log with the same diagnostic.
+ */
+const warnedUnboundInputTypes = new Set<string>();
+
+/**
+ * Reports, once per input type, that an arg named like a CRUD input resolves to no
+ * entity and is therefore logged unredacted unless its fields carry `@NoLog`.
+ *
+ * Exported for tests; not part of the redaction path's contract.
+ */
+export function WarnUnboundCrudInput(inputTypeName: string): void {
+  if (warnedUnboundInputTypes.has(inputTypeName)) {
+    return;
+  }
+  warnedUnboundInputTypes.add(inputTypeName);
+  console.warn(
+    `[MJServer] Variables logging: '${inputTypeName}' matches the Create/Update/Delete input ` +
+      `naming convention but maps to no entity, so encrypted-field redaction cannot apply to it. ` +
+      `Its values are being logged. Mark any sensitive @Field() on this input with @NoLog.`,
+  );
+}
+
+/** Test seam — clears the once-per-type warning state. */
+export function ResetUnboundCrudInputWarnings(): void {
+  warnedUnboundInputTypes.clear();
+}

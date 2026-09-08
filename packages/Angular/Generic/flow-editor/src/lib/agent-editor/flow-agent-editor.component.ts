@@ -35,6 +35,29 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
   @Input() EditMode = true;
   @Input() FullScreen = false;
 
+  /**
+   * Whether this editor shows its own Save / Edit / Cancel controls.
+   *
+   * **Off by default, and that default is the safe one.** When a host form owns the record's save —
+   * which is the normal case, since the flow is one part of an agent — a Save button here is a
+   * second save button for the same record. The user then has two, they disagree about what "saved"
+   * means, and the unsaved indicator on one says nothing about the other.
+   *
+   * A host that turns this ON is declaring that this editor owns its own persistence (the standalone
+   * or fullscreen self-contained case). A host that leaves it off MUST call
+   * {@link FlowAgentEditorComponent.QueueSaveInto} from its own save, or flow edits will have no way
+   * to reach the database at all.
+   */
+  @Input() ShowSaveControls = false;
+
+  /**
+   * The title shown in the centre of the toolbar. `null` hides it.
+   *
+   * Hidden by hosts whose own page chrome already names the record — repeating it inside the canvas
+   * is a second, smaller title competing with the real one.
+   */
+  @Input() CanvasTitle: string | null = 'Flow Configuration';
+
   // ── Outputs ─────────────────────────────────────────────────
   @Output() FlowSaved = new EventEmitter<void>();
   @Output() FlowChanged = new EventEmitter<boolean>();
@@ -259,47 +282,33 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   // ── Save ────────────────────────────────────────────────────
 
+  /**
+   * Saves the flow on its own — creates a transaction, queues everything into it, submits.
+   *
+   * Used when this editor owns the save (the standalone / fullscreen self-contained mode). A host
+   * that owns the record's save should call {@link QueueSaveInto} instead so the flow lands in the
+   * same transaction as the rest of the record.
+   */
   async Save(): Promise<void> {
     if (this.isSaving || !this.AgentID) return;
     this.isSaving = true;
     this.cdr.detectChanges();
 
     try {
-      // Update positions from canvas to entities
-      this.syncPositionsFromCanvas();
-
-      // Bundle deletes and saves for steps + paths into one transaction so a partial save
-      // can never leave the flow in an inconsistent state.
       const p = this.ProviderToUse;
       const tg = await p.CreateTransactionGroup();
-
-      await this.queueRemovedEntitiesForDelete(tg);
-
-      for (const step of this.steps) {
-        step.TransactionGroup = tg;
-        await step.Save();
-      }
-
-      for (const path of this.paths) {
-        path.TransactionGroup = tg;
-        await path.Save();
-      }
+      await this.QueueSaveInto(tg);
 
       if (!await tg.Submit()) {
         console.error('Failed to save flow — all changes have been rolled back');
         return;
       }
 
-      this.deletedPathIDs = [];
-      this.deletedStepIDs = [];
-      this.hasUnsavedChanges = false;
-      this.lastSaved = new Date();
-
+      this.MarkSaved();
       // Exit self-contained fullscreen edit mode after successful save
       if (this.fullscreenEditMode) {
         this.fullscreenEditMode = false;
       }
-
       this.FlowSaved.emit();
     } catch (err) {
       console.error('Error saving flow:', err);
@@ -307,6 +316,49 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       this.isSaving = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Queues every step and path change onto a transaction the CALLER owns and will submit.
+   *
+   * Split out of {@link Save} so a host form can make the flow part of the record's own atomic save
+   * rather than a second, separate one. Two independent saves is how a record ends up looking saved
+   * while the user's step edits are gone — the form succeeds, the flow fails, and nothing says so.
+   *
+   * Deliberately does NOT submit and does NOT clear dirty state: the caller decides whether the
+   * transaction commits, and only the caller knows whether it did. Call {@link MarkSaved} after a
+   * successful submit.
+   */
+  public async QueueSaveInto(tg: TransactionGroupBase): Promise<void> {
+    // Positions live on the canvas until asked for, so pull them onto the entities first — otherwise
+    // a drag made just before saving is the one change that does not persist.
+    this.syncPositionsFromCanvas();
+
+    await this.queueRemovedEntitiesForDelete(tg);
+
+    for (const step of this.steps) {
+      step.TransactionGroup = tg;
+      await step.Save();
+    }
+
+    for (const path of this.paths) {
+      path.TransactionGroup = tg;
+      await path.Save();
+    }
+  }
+
+  /** Clears dirty state after the owning transaction actually committed. */
+  public MarkSaved(): void {
+    this.deletedPathIDs = [];
+    this.deletedStepIDs = [];
+    this.hasUnsavedChanges = false;
+    this.lastSaved = new Date();
+    this.cdr.detectChanges();
+  }
+
+  /** Whether the flow holds edits that have not been written yet. Read by a host that owns the save. */
+  public get HasUnsavedChanges(): boolean {
+    return this.hasUnsavedChanges;
   }
 
   private syncPositionsFromCanvas(): void {

@@ -2,8 +2,8 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import * as Config from './config';
 import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo, CompositeKey } from "@memberjunction/core";
-import axios, { AxiosResponse } from "axios";
-import { ApolloBulkPeopleRequest, ApolloBulkPeopleResponse, ProcessPersonRecordGroupParams, SearchPeopleResponsePerson } from "./generic/apollo.types";
+import { HttpError, HttpGet, HttpPost, HttpRequestConfig, HttpResponse, IsHttpError } from '@memberjunction/network-utils';
+import { ApolloBulkPeopleRequest, ApolloBulkPeopleResponse, ProcessPersonRecordGroupParams, SearchPeopleResponse, SearchPeopleResponsePerson } from "./generic/apollo.types";
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
 /**
@@ -511,12 +511,12 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                 'Content-Type': 'application/json'
             };
     
-            const response = await this.WrapApolloCall('post', 'people/bulk_match', ApolloParams,  { headers: headers });
+            const response = await this.WrapApolloCall<ApolloBulkPeopleResponse>('post', 'people/bulk_match', ApolloParams,  { Headers: headers });
     
-            if (response.status === 200) {
+            if (response.Status === 200) {
                 // here we want to iterate through all the results and update the contacts with the enriched data if
                 // the API returned a match
-                const result: ApolloBulkPeopleResponse = response.data;
+                const result: ApolloBulkPeopleResponse = response.Data;
                 let bSuccess: boolean = true;
                 if (result && result.missing_records <= ApolloParams.details.length) {
                     if (result.status.trim().toLowerCase() === 'success' ) {
@@ -633,31 +633,31 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                 'Content-Type': 'application/json' 
             };
     
-            const response = await this.WrapApolloCall('post', 'mixed_people/search', api_params, { headers: headers });
+            const response = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', api_params, { Headers: headers });
 
-            if(response.status !== 200){
-                console.error(`Error fetching mixed_people data from Apollo.io: ${response.statusText}`);
+            if(response.Status !== 200){
+                console.error(`Error fetching mixed_people data from Apollo.io: ${response.StatusText}`);
                 return;
             }
 
             // here we want to iterate through all the results and update the contacts with the enriched data if
             // the API returned a match
-            const result = response.data
+            const result = response.Data
             const allPeople = result.people;
 
             for (let i = 1; i < result.pagination.total_pages && i < (Config.MaxPeopleToEnrichPerOrg / 10); i++) {
                 // get additional pages
                 api_params.page = i + 1;
                 LogStatus(`Fetching page ${i + 1} of ${result.pagination.total_pages} people for domain: ${domain}`);
-                const nextResponse = await this.WrapApolloCall('post', 'mixed_people/search', api_params, { headers: headers });
-                if (nextResponse.status !== 200) {
-                    console.error(`Error fetching mixed_people data from Apollo.io: ${nextResponse.statusText}`);
+                const nextResponse = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', api_params, { Headers: headers });
+                if (nextResponse.Status !== 200) {
+                    console.error(`Error fetching mixed_people data from Apollo.io: ${nextResponse.StatusText}`);
                     return;
                 }
                 else {
                     // here we want to iterate through all the results and update the contacts with the enriched data if
                     // the API returned a match
-                    const nextResult = nextResponse.data
+                    const nextResult = nextResponse.Data
                     allPeople.push(...nextResult.people);
                 }
             }
@@ -875,21 +875,23 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
      * @param method - HTTP method ('get' or 'post')
      * @param endpoint - Apollo API endpoint path
      * @param data - Request payload for POST requests
-     * @param config - Axios configuration object
+     * @param config - request configuration (headers / query params)
      * @param retryAttempts - Number of retry attempts remaining (default: 1)
-     * @returns Promise<AxiosResponse> - Apollo API response
+     * @returns Promise<HttpResponse> - Apollo API response
      * @throws Error if rate limit exceeded or other API errors
      */
-    protected async WrapApolloCall(method: 'get' | 'post', endpoint: string, data: any, config: any, retryAttempts: number = 1): Promise<AxiosResponse> {
+    protected async WrapApolloCall<T = unknown>(method: 'get' | 'post', endpoint: string, data: unknown, config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'>, retryAttempts: number = 1): Promise<HttpResponse<T>> {
         try {
             const url = `${Config.ApolloAPIEndpoint}/${endpoint}`;  
             
-            let response: AxiosResponse = method === 'get' ? await axios.get(url, config) : await axios.post(url, data, config);
-            if (response.status === 429) {
+            // ThrowOnError stays on by default, so a 429 surfaces in the catch below;
+            // the explicit status check here mirrors the original belt-and-braces handling.
+            const response: HttpResponse<T> = method === 'get' ? await HttpGet<T>(url, config) : await HttpPost<T>(url, data, config);
+            if (response.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
                     await this.Timeout(60000); // wait 1 minute
-                    return await this.WrapApolloCall(method, endpoint, data, config, retryAttempts - 1);
+                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else{
                     throw {message: 'Too many requests to Apollo.io API', code: 429};
@@ -898,15 +900,15 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
 
             return response;    
         }
-        catch (apolloError: any) {
-            // axios could throw an exception for a 429 instead of a response, so we need to handle that here
-            if (apolloError && apolloError.response && apolloError.response.status === 429) {
+        catch (apolloError: unknown) {
+            // A 429 arrives as a thrown HttpError rather than a returned response, so handle it here too
+            if (IsHttpError(apolloError) && apolloError.Status === 429) {
                 let waitTime: number = 60000; // default to 1 minute
                 //this is a rough guesstimate, check the response headers for more accurate info
-                if(apolloError.response.data){
-                    const errorMessage: string = typeof apolloError.response.data === 'string' 
-                        ? apolloError.response.data 
-                        : JSON.stringify(apolloError.response.data);
+                if(apolloError.Data){
+                    const errorMessage: string = typeof apolloError.Data === 'string' 
+                        ? apolloError.Data 
+                        : JSON.stringify(apolloError.Data);
                     if(errorMessage.includes('times per hour')){
                         LogStatus("   >>> Hourly rate limit reached")
                         //we reached out hourly rate limit, so wait an hour 
@@ -916,7 +918,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
                 if (retryAttempts > 0) {
                     LogStatus(`   >>> Too many requests to Apollo.io API, waiting ${waitTime / 60000} minute(s) and trying again...`)
                     await this.Timeout(waitTime); // wait 1 minute
-                    return await this.WrapApolloCall(method, endpoint, data, config, retryAttempts - 1);
+                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else {
                     throw {message: 'Too many requests to Apollo.io API', code: 429};

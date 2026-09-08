@@ -155,6 +155,7 @@ export interface SecondaryDimension {
 // Exported directly from index.ts, not re-exported here
 import type { ForEachOperation } from './foreach-operation';
 import type { WhileOperation } from './while-operation';
+import type { TaskGraphSpec } from './task-graph/task-graph-spec';
 
 /**
  * Represents a media output that an agent has explicitly promoted to its outputs.
@@ -233,7 +234,19 @@ export interface FileOutputRef {
     fileId?: string;
     /** File size in bytes */
     sizeBytes?: number;
+    /**
+     * How the artifact MJ creates for this file is shown. `Always` (default): a normal artifact, with a
+     * card on the message and the viewer. `System Only`: the artifact, its version and its download URL
+     * exist, but the chat keeps it out of the message cards (a host opts in with `showSystemArtifacts`).
+     * An action whose file is a DOWNLOAD — an export the user asked for and will open elsewhere — says
+     * so here, instead of the host having to hide a card that opens an empty viewer.
+     * @since 6.1.0
+     */
+    visibility?: FileOutputVisibility;
 }
+
+/** The visibility an action can ask for on the artifact made from its file output. */
+export type FileOutputVisibility = 'Always' | 'System Only';
 
 /**
  * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
@@ -262,12 +275,17 @@ export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
     const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
     if (!fileData && !fileId) return null;
 
+    const rawVisibility = fo['visibility'];
+    const visibility: FileOutputVisibility | undefined =
+        rawVisibility === 'Always' || rawVisibility === 'System Only' ? rawVisibility : undefined;
+
     return {
         fileName,
         mimeType,
         fileData,
         fileId,
-        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined,
+        visibility
     };
 }
 
@@ -417,6 +435,14 @@ export type AgentSubAgentRequest<TContext = any> = {
      */
     context?: TContext;
 }
+
+/**
+ * Why BaseAgent's `filterAvailableSkills` hook is being asked. `catalog` is the set the model is
+ * OFFERED (the auto-activatable skills rendered into the prompt); `auto-activation` is a
+ * model-initiated Skill step being validated or executed; `requested` is a user's explicit
+ * `/skill` request arriving through `ExecuteAgentParams.requestedSkillIDs`.
+ */
+export type SkillAvailabilityPurpose = 'catalog' | 'auto-activation' | 'requested';
 
 /**
  * A skill the agent's response requested be activated (by catalog name — the agent only
@@ -642,6 +668,23 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     planDetails?: { plan: string };
     /**
+     * The emitted task graph, set whenever a Loop agent produced one — whether it was dispatched
+     * (`step === 'Tasks'`) or constant-folded into an in-run `'Sub-Agent'` call (D9).
+     *
+     * **The fold is recorded, not silent.** The `TaskGraph` run step is written for every emitted
+     * graph, so run forensics show why a graph did or did not reach the dispatcher; a user who
+     * edits a two-node graph down to one can read the durability change off the run record instead
+     * of inferring it; and Save as Workflow (D17) attaches to the recorded spec, which makes the
+     * single-node case — the shape most likely to be worth promoting — promotable like any other.
+     */
+    taskGraph?: {
+        spec: TaskGraphSpec;
+        /** True when the graph was flattened to an in-run sub-agent call rather than dispatched. */
+        folded: boolean;
+        /** Why it folded. Absent when it did not. */
+        foldReason?: string;
+    };
+    /**
      * When true, the agent should terminate after executing the current step.
      * Used by ClientTools: the main loop needs `terminate: false` so it continues
      * to dispatch the tool execution, but `executeClientToolsStep` checks this
@@ -662,6 +705,17 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
 export type ExecuteAgentResult<P = any> = {
     /** Whether the agent execution was successful */
     success: boolean;
+    /**
+     * Transport-level failure text when {@link agentRun} is missing (lost WebSocket,
+     * fire-and-forget timeout). Prefer `agentRun.ErrorMessage` when the run exists.
+     */
+    errorMessage?: string;
+    /**
+     * True when the fire-and-forget mutation returned an ACK before the transport
+     * died (server has the run). False when the request never left the browser.
+     * Undefined when the caller does not know.
+     */
+    requestAcknowledged?: boolean;
     /** Optional payload returned by the agent */
     payload?: P;
     /**
@@ -967,6 +1021,20 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentAgentHierarchy?: string[];
     /** Optional parent depth for sub-agent execution */
     parentDepth?: number;
+
+    /**
+     * How many task-graph continuations led to this run, persisted to
+     * `AIAgentRun.ContinuationDepth`.
+     *
+     * Set only by the continuation deliverer when a finished graph restarts its submitting agent.
+     * Any graph this run subsequently submits inherits the value, which is what allows
+     * `MAX_REINVOKE_DEPTH` to bound a graph-reinvokes-agent-emits-graph chain — before this existed
+     * the depth restarted at zero on every hop and the cap could never fire.
+     *
+     * Distinct from `parentDepth`, which measures sub-agent nesting inside a single turn. A
+     * continuation is a NEW top-level turn caused by work that already completed.
+     */
+    continuationDepth?: number;
     /**
      * Optional parent step counts from root to immediate parent agent.
      * Used to build hierarchical step display (e.g., "2.1.3" for nested agents).
@@ -975,6 +1043,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: MJAIAgentRunEntityExtended;
+    /**
+     * The skills active in the PARENT run when this sub-agent was invoked. Skills activate on the root
+     * agent only, so a sub-agent's own activated set is always empty; this is how the root's active
+     * skills reach the actions a sub-agent runs (`Context.ActiveSkillIDs`), e.g. a retrieval sub-agent's
+     * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
+     */
+    parentActivatedSkillIDs?: readonly string[];
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /**
@@ -1115,6 +1190,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * @since 5.44.0
      */
     planMode?: boolean;
+
+    /**
+     * When this run submits a task graph, seed `$.debug` on the parent at insert.
+     * `paused: true` is start-paused — nothing is claimed until Resume/Step.
+     * Must travel with the submit; Pause-after-submit races the first dispatcher poll.
+     */
+    taskGraphDebug?: { paused?: boolean };
 
     /**
      * Skills the caller (typically an end user via a `/skill-name` mention in the composer)

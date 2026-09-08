@@ -11,6 +11,7 @@ import {
   convertStringConcat, convertTopToLimit, convertCastTypes, convertIIF,
   convertConvertFunction, removeNPrefix, removeCollate, convertCommonFunctions,
   convertBooleanLiteralComparisons,
+  escapeRegExp,
 } from './ExpressionHelpers.js';
 
 /** SQL keywords that should NOT be quoted as column references */
@@ -63,14 +64,24 @@ export class ViewRule implements IConversionRule {
     result = convertIdentifiers(result);
 
     // Schema normalization: "schema".Name → schema."Name"
-    const quotedSchemaPattern = new RegExp(`"${schema}"\\.(?!")`, 'g');
-    result = result.replace(quotedSchemaPattern, `${schema}.`);
+    // Function replacements throughout: `schema` is a configured identifier that
+    // may legally contain `$`, and a string replacement would expand it (and any
+    // `$&`/`` $` ``/`$'`) while emitting SQL. Capture groups are carried through
+    // as named callback parameters instead of `$1`/`$2`. See issue #3171.
+    const quotedSchemaPattern = new RegExp(`"${escapeRegExp(schema)}"\\.(?!")`, 'g');
+    result = result.replace(quotedSchemaPattern, () => `${schema}.`);
     // Quote unquoted table references after schema.
-    const bareSchemaPattern = new RegExp(`\\b${schema}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
-    result = result.replace(bareSchemaPattern, `${schema}."$1"`);
+    const bareSchemaPattern = new RegExp(`\\b${escapeRegExp(schema)}\\.(?!")((?:vw)?[A-Za-z]\\w+)\\b`, 'g');
+    result = result.replace(bareSchemaPattern, (_match, table: string) => `${schema}."${table}"`);
     // Add schema to bare view references: FROM vwXxx → FROM schema."vwXxx"
-    result = result.replace(/(\bFROM\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
-    result = result.replace(/(\bJOIN\s+)(vw\w+)\b/gi, `$1${schema}."$2"`);
+    result = result.replace(
+        /(\bFROM\s+)(vw\w+)\b/gi,
+        (_match, keyword: string, view: string) => `${keyword}${schema}."${view}"`,
+    );
+    result = result.replace(
+        /(\bJOIN\s+)(vw\w+)\b/gi,
+        (_match, keyword: string, view: string) => `${keyword}${schema}."${view}"`,
+    );
 
     // PascalCase column and alias quoting
     result = this.quoteColumnRefs(result);
@@ -172,15 +183,35 @@ export class ViewRule implements IConversionRule {
     return result + '\n';
   }
 
+  /**
+   * Alias names whose DEFINITION is case-preserved, so their references must be quoted to match.
+   *
+   * Only an `AS <alias>` definition gets quoted — by quoteAsAliases, or by convertIdentifiers when
+   * the source bracketed it. An alias introduced WITHOUT `AS` (`FROM __mj."vwEntities" relatedEntity`,
+   * the form MJ's baseline views use) stays unquoted and folds to lowercase. Deciding on the alias's
+   * spelling alone cannot tell the two apart, and getting it wrong in either direction breaks the
+   * view: quote only the reference and it resolves to nothing, quote only the definition and every
+   * reference misses it. Gating on the definitions actually present keeps both sides on the same
+   * side of folding by construction.
+   */
+  private quotedAliasNames(sql: string): Set<string> {
+    const names = new Set<string>();
+    for (const m of sql.matchAll(/\bAS\s+(?:"(\w+)"|([A-Za-z][a-zA-Z]\w*))\b/gi)) {
+      const name = m[1] ?? m[2];
+      if (name && /[A-Z]/.test(name) && !SQL_KEYWORDS.has(name.toUpperCase())) names.add(name);
+    }
+    return names;
+  }
+
   /** Quote PascalCase column references: alias.PascalCol → alias."PascalCol" */
   private quoteColumnRefs(sql: string): string {
+    // Aliases this pass is allowed to quote — those with a case-preserved definition.
+    const quotedAliases = this.quotedAliasNames(sql);
+
     // alias.PascalColumn (unquoted alias)
-    // If alias starts with uppercase and isn't a keyword, quote it too
-    // so it matches the AS "Alias" definition from quoteAsAliases.
     sql = sql.replace(/\b(\w+)\.(?!")([A-Z]\w*)\b/g, (match, alias: string, col: string) => {
       if (SQL_KEYWORDS.has(col.toUpperCase()) || SQL_KEYWORDS.has(alias.toUpperCase())) return match;
-      const needsQuote = /^[A-Z]/.test(alias) && !SQL_KEYWORDS.has(alias.toUpperCase());
-      const quotedAlias = needsQuote ? `"${alias}"` : alias;
+      const quotedAlias = quotedAliases.has(alias) ? `"${alias}"` : alias;
       return `${quotedAlias}."${col}"`;
     });
     // "alias".PascalColumn (quoted alias, unquoted column)
@@ -188,11 +219,16 @@ export class ViewRule implements IConversionRule {
       if (SQL_KEYWORDS.has(col.toUpperCase())) return `"${alias}".${col}`;
       return `"${alias}"."${col}"`;
     });
-    // UnquotedPascalAlias."QuotedColumn" (unquoted alias, already-quoted column)
-    // Handles cases where convertIdentifiers already quoted [Col] → "Col"
-    sql = sql.replace(/\b([A-Z]\w*)\."(\w+)"/g, (match, alias: string, col: string) => {
-      if (SQL_KEYWORDS.has(alias.toUpperCase())) return match;
-      return `"${alias}"."${col}"`;
+    // UnquotedAlias."QuotedColumn" (unquoted alias, already-quoted column)
+    // Handles cases where convertIdentifiers already quoted [Col] → "Col". Same gate as above:
+    // quote the reference only when the alias's own definition is case-preserved.
+    sql = sql.replace(/\b([A-Za-z]\w*)\."(\w+)"/g, (match, alias: string) => {
+      // `alias` is captured by `([A-Za-z]\w*)` above, so it is word characters
+      // only and can never contain `$` — the replacement has no `$` for
+      // expansion to act on. Marked because the #3171 gate cannot see that
+      // constraint, and would otherwise fail the next PR to touch this line.
+      // safe-replace: alias is \w-only by construction, so the replacement is $-free
+      return quotedAliases.has(alias) ? match.replace(`${alias}.`, `"${alias}".`) : match;
     });
     return sql;
   }

@@ -806,19 +806,6 @@ as-split {
    ============================================ */
 
 /* Detail Panel Overlay */
-.detail-panel-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(4px);
-  z-index: 1000;
-  opacity: 0;
-  animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-}
-
 @keyframes fadeIn {
   to {
     opacity: 1;
@@ -826,24 +813,15 @@ as-split {
 }
 
 /* Detail Panel */
-.detail-panel {
-  position: fixed;
-  top: 0;
-  right: -480px;
-  width: 480px;
-  max-width: 90vw;
-  height: 100vh;
-  background: var(--mj-bg-surface);
-  box-shadow: -8px 0 32px rgba(0, 0, 0, 0.15);
-  z-index: 1001;
+/* Panel layout inside the shared mj-slide-panel shell: fixed header,
+   scrolling content, fixed action row. The shell owns positioning,
+   backdrop, animation, and resize. */
+.detail-panel-flow {
+  height: 100%;
   display: flex;
   flex-direction: column;
-  transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 0;
   overflow: hidden;
-}
-
-.detail-panel.visible {
-  right: 0;
 }
 
 /* Detail Panel Header */
@@ -1103,22 +1081,6 @@ as-split {
   background: var(--mj-bg-surface-card);
   border-color: var(--mj-brand-primary);
   color: var(--mj-brand-primary);
-}
-
-/* Responsive adjustments for detail panel */
-@media (max-width: 520px) {
-  .detail-panel {
-    width: 100%;
-    right: -100%;
-  }
-
-  .detail-panel.visible {
-    right: 0;
-  }
-
-  .detail-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Search Highlight */

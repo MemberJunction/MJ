@@ -12,6 +12,8 @@ export * from './generic/baseEmbeddings';
 export * from './generic/baseAudio';
 export * from './generic/baseVideo';
 export * from './generic/baseRealtime';
+export * from './generic/realtimeUsage';
+export * from './generic/modelConfiguration';
 export * from './generic/transcriptContinuation';
 export * from './generic/realtimeProxyRegistry';
 export * from './generic/baseRealtimeChannelServer';

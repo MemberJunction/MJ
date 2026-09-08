@@ -55,12 +55,12 @@ describe('Cross-Dialect Comparison Tests', () => {
     describe('Schema-Qualified Identifiers', () => {
         it('should produce schema.object in platform-specific quoting', () => {
             expect(ss.QuoteSchema('dbo', 'Users')).toBe('[dbo].[Users]');
-            expect(pg.QuoteSchema('public', 'Users')).toBe('public."Users"');
+            expect(pg.QuoteSchema('public', 'Users')).toBe('"public"."Users"');
         });
 
         it('should handle MJ-style schema names (__mj)', () => {
             expect(ss.QuoteSchema('__mj', 'Entity')).toBe('[__mj].[Entity]');
-            expect(pg.QuoteSchema('__mj', 'Entity')).toBe('__mj."Entity"');
+            expect(pg.QuoteSchema('__mj', 'Entity')).toBe('"__mj"."Entity"');
         });
     });
 
@@ -91,6 +91,34 @@ describe('Cross-Dialect Comparison Tests', () => {
         it('should produce platform-specific UUID PK default expressions', () => {
             expect(ss.UUIDPKDefault()).toBe('NEWSEQUENTIALID()');
             expect(pg.UUIDPKDefault()).toBe('gen_random_uuid()');
+        });
+    });
+
+    // ─── Affected-Row Count ─────────────────────────────────────────
+
+    describe('AffectedRowCountSQL', () => {
+        const dml = `UPDATE __mj."Task" SET "Status" = 'In Progress' WHERE "ID" = '1'`;
+
+        it('should use @@ROWCOUNT on SQL Server', () => {
+            const sql = ss.AffectedRowCountSQL(dml, 'AffectedRows');
+            expect(sql).toContain('@@ROWCOUNT');
+            expect(sql).toContain(dml);
+        });
+
+        it('should use a data-modifying CTE on PostgreSQL, never @@ROWCOUNT', () => {
+            // PostgreSQL has no @@ROWCOUNT. Emitting it left a bare ROWCOUNT identifier that folds
+            // to lowercase, so every guarded write failed with `column "rowcount" does not exist`.
+            const sql = pg.AffectedRowCountSQL(dml, 'AffectedRows');
+            expect(sql).not.toMatch(/ROWCOUNT/i);
+            expect(sql).toMatch(/^WITH\s/);
+            expect(sql).toContain('RETURNING 1');
+            expect(sql).toContain('COUNT(*)');
+            expect(sql).toContain(dml);
+        });
+
+        it('should quote the alias so its casing survives on both platforms', () => {
+            expect(ss.AffectedRowCountSQL(dml, 'AffectedRows')).toContain(ss.QuoteColumnAlias('AffectedRows'));
+            expect(pg.AffectedRowCountSQL(dml, 'AffectedRows')).toContain(pg.QuoteColumnAlias('AffectedRows'));
         });
     });
 

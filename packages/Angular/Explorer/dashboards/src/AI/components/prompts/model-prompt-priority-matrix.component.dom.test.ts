@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { RunViewParams } from '@memberjunction/core';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ModelPromptPriorityMatrixComponent } from './model-prompt-priority-matrix.component';
 
 /**
@@ -19,11 +19,6 @@ import { ModelPromptPriorityMatrixComponent } from './model-prompt-priority-matr
  * in save/discard handlers we do not exercise). FormsModule is imported for the [(ngModel)] toggles.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size = '';
-}
 @Component({ standalone: true, selector: 'mj-alert', template: '<div class="stub-alert"><ng-content></ng-content></div>' })
 class StubAlert {
   @Input() Variant = '';
@@ -59,7 +54,7 @@ const rowsFn = (p: RunViewParams): unknown[] => {
 
 async function render(rows: (p: RunViewParams) => unknown[] = rowsFn) {
   const fixture = renderComponentFixture(ModelPromptPriorityMatrixComponent, {
-    imports: [CommonModule, FormsModule, StubLoading, StubAlert],
+    imports: [CommonModule, FormsModule, StubLoadingComponent, StubAlert],
     declarations: [ModelPromptPriorityMatrixComponent],
     providers: [
       { provide: MJNotificationService, useValue: { CreateSimpleNotification: () => {} } },

@@ -46,12 +46,24 @@ Summary of changes based on commit messages
 
 ## Versioning Rules
 
-- **Minor bump**: ONLY when NEW migration files were ADDED IN THIS BRANCH in any `migrations/v*/` folder (applied to `@memberjunction/core` only)
-  - Check: `git diff next...HEAD --name-only | grep "^migrations/v[0-9]\\+/.*\\.sql$"`
-  - If this returns any files → include `"@memberjunction/core": minor`
-  - If this returns nothing → do NOT include core in changeset
-- **Patch bump**: All TypeScript code changes, bug fixes, documentation updates
+The full rule, with its rationale, lives in [`.claude/rules/changesets.md`](../rules/changesets.md)
+and can be self-checked with `npm run check:changeset` (local only — nothing gates it in CI). In short:
+
+- **Minor bump**: the branch changes the DATABASE — it adds a migration under a `migrations/vN`
+  folder, **or** it changes anything under `metadata/`. Metadata counts because it BECOMES a
+  migration: the build engineer's release-time `mj sync push` turns accumulated metadata edits
+  into one consolidated metadata-sync migration.
+  - Check: `git diff origin/next...HEAD --name-only | grep -E "^(migrations/v[0-9]+/.*\\.sql|metadata/)"`
+  - Any hit → `minor` is correct for the packages this branch changed.
+- **Patch bump**: everything else — TypeScript, tests, docs, guides, CI, refactors. Size and
+  user-visibility are irrelevant; a 2,000-line feature with no migration and no metadata is a patch.
 - **Major bump**: NEVER use without explicit user approval (breaking changes)
+
+Verify before committing:
+
+```bash
+npm run check:changeset
+```
 
 ## Important Notes
 
@@ -59,7 +71,10 @@ Summary of changes based on commit messages
 - Always create changeset files manually
 - Package names must match exactly what's in each package's `package.json` (e.g., `DBAutoDoc` → `@memberjunction/db-auto-doc`)
 - If no migrations AND no package changes, ask the user what changed
-- **ALWAYS use `next` branch as baseline** for BOTH migration and package comparisons
+- **Use `next` as the baseline** for BOTH migration and package comparisons — *unless the branch is
+  a backport to a certified line*, in which case the baseline is that line (`origin/lts/5`, …) and
+  the rule inverts to patch-only. `npm run check:changeset` works this out from ancestry; see
+  [`.claude/rules/changesets.md`](../rules/changesets.md)
 - This ensures you only count changes added in the current branch, not changes from other branches
 
 ## Example Output

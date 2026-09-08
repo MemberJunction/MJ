@@ -18,7 +18,6 @@ export class AddItemComponent extends BaseAngularComponent implements OnInit {
   public resourceType: any = null;
   public selectedEntity: any = null;
   public selectedView: any = null;
-  public selectedReport: any = null;
   public selectedViewMode: string = 'grid';
   public viewModeOptions = [
     { label: 'Grid', value: 'grid', icon: 'fa-solid fa-list' },
@@ -28,7 +27,6 @@ export class AddItemComponent extends BaseAngularComponent implements OnInit {
   ];
   public Entities: any[] = [];
   public Views: any[] = [];
-  public Reports: any[] = [];
   public get ResourceTypes(): any[] {
     return SharedService.Instance.ResourceTypes.filter((rt: any) => rt.Name !== 'Dashboards' && rt.Name !== 'Records');
   }
@@ -48,9 +46,6 @@ export class AddItemComponent extends BaseAngularComponent implements OnInit {
   async onResourceTypeChange(event: any) {
     this.resourceType = event;
     this.selectedEntity = null;
-    if (this.resourceType.Name === 'Reports') {
-      this.getReports();
-    }
   }
 
   async getViews() {
@@ -68,38 +63,14 @@ export class AddItemComponent extends BaseAngularComponent implements OnInit {
     this.showloader = false;
   }
 
-  async getReports() {
-    if (!this.resourceType) return;
-    
-    this.showloader = true;
-    this.selectedReport = null;
-    this.Reports = [];
-    
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const reports = await rv.RunView({ EntityName: this.resourceType.Entity, ExtraFilter: `UserID='${this.md.CurrentUser.ID}'` });
-    
-    if (reports.Success && reports.Results) {
-      // Sort reports alphabetically
-      this.Reports = reports.Results.sort((a, b) => a.Name.localeCompare(b.Name));
-    }
-    
-    // Always set showloader to false when done, even if no reports found
-    this.showloader = false;
-  }
-
   onEntityChange(event: any) {
     this.selectedEntity = event;
     this.selectedView = null;
-    this.selectedReport = null;
     this.getViews();
   }
 
   onViewChange(event: any) {
-    if (this.resourceType.Name === 'Reports') {
-      this.selectedReport = event;
-    } else {
-      this.selectedView = event;
-    }
+    this.selectedView = event;
   }
 
   public addItem() {
@@ -107,13 +78,13 @@ export class AddItemComponent extends BaseAngularComponent implements OnInit {
     const isViewResource = this.resourceType?.Name === 'UserViews' || this.resourceType?.Entity === 'MJ: User Views';
     const isDefaultView = isViewResource && this.selectedEntity && !this.selectedView;
 
-    if (!this.selectedReport && !this.selectedView && !isDefaultView) {
+    if (!this.selectedView && !isDefaultView) {
       this.sharedService.CreateSimpleNotification('Please select an item to add', 'warning', 2000);
       return;
     }
 
-    const name = this.selectedReport?.Name || this.selectedView?.Name || (isDefaultView ? `${this.selectedEntity.Name} (Default View)` : null);
-    const id = this.selectedReport?.ID || this.selectedView?.ID || null;
+    const name = this.selectedView?.Name || (isDefaultView ? `${this.selectedEntity.Name} (Default View)` : null);
+    const id = this.selectedView?.ID || null;
 
     // Build configuration — include viewMode for view resources
     const configuration: Record<string, unknown> = {};

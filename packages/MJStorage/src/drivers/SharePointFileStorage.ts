@@ -1,6 +1,7 @@
 import { Client } from '@microsoft/microsoft-graph-client';
 import { AuthenticationProvider } from '@microsoft/microsoft-graph-client';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, DescribeTokenEndpointFailure } from '@memberjunction/global';
+import { DrainResponseBody } from '@memberjunction/network-utils';
 import env from 'env-var';
 import mime from 'mime-types';
 import { Readable } from 'stream';
@@ -150,6 +151,7 @@ class ClientCredentialsAuthProvider implements AuthenticationProvider {
     });
 
     if (!response.ok) {
+      await DrainResponseBody(response);
       throw new Error(`Failed to get access token: ${response.statusText}`);
     }
 
@@ -264,9 +266,13 @@ class RefreshTokenAuthProvider implements AuthenticationProvider {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('[SharePoint RefreshTokenAuth] Token refresh failed:', errorText);
-      throw new Error(`Failed to refresh access token: ${response.statusText}`);
+      // SECURITY: the thrown message was already careful to use statusText rather than
+      // the body — but the body was logged one line above, which leaks just as durably.
+      // A failed Microsoft token refresh echoes the request, including client_secret
+      // and the refresh token itself.
+      const detail = DescribeTokenEndpointFailure(await response.text());
+      console.error('[SharePoint RefreshTokenAuth] Token refresh failed:', `${response.status}${detail}`);
+      throw new Error(`Failed to refresh access token: ${response.statusText}${detail}`);
     }
 
     const json = (await response.json()) as MicrosoftTokenResponse;
@@ -1127,6 +1133,7 @@ export class SharePointFileStorage extends FileStorageBase {
       const response = await fetch(item['@microsoft.graph.downloadUrl']);
 
       if (!response.ok) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to download item: ${response.statusText}`);
       }
 
@@ -1189,6 +1196,7 @@ export class SharePointFileStorage extends FileStorageBase {
       const response = await fetch(downloadUrl, headers ? { headers } : undefined);
 
       if (!response.ok && response.status !== 206) {
+        await DrainResponseBody(response);
         throw new Error(`Failed to stream item: ${response.statusText}`);
       }
       if (!response.body) {
@@ -1324,7 +1332,7 @@ export class SharePointFileStorage extends FileStorageBase {
           const chunk = data.slice(i, Math.min(i + maxChunkSize, data.length));
           const contentRange = `bytes ${i}-${i + chunk.length - 1}/${data.length}`;
 
-          await fetch(uploadSession.uploadUrl, {
+          const chunkResponse = await fetch(uploadSession.uploadUrl, {
             method: 'PUT',
             headers: {
               'Content-Length': chunk.length.toString(),
@@ -1332,6 +1340,7 @@ export class SharePointFileStorage extends FileStorageBase {
             },
             body: chunk as BodyInit,
           });
+          await DrainResponseBody(chunkResponse);
         }
       }
 

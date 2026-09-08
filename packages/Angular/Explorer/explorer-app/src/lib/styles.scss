@@ -26,16 +26,13 @@
 // Import dhtmlx-gantt CSS for Gantt chart components
 @import 'dhtmlx-gantt/codebase/dhtmlxgantt.css';
 
-// Import Golden Layout CSS for tab management (required for mj-shell)
+// Import Golden Layout CSS for tab management (required for mj-shell).
+// ONLY the structural base — the stock light theme (hardcoded grays, PNG
+// glyphs, Arial) is replaced by our token theme so GL follows light/dark
+// and org theming natively (the old [data-theme="dark"] .lm_goldenlayout
+// band-aid is gone with it).
 @import 'golden-layout/dist/css/goldenlayout-base.css';
-@import 'golden-layout/dist/css/themes/goldenlayout-light-theme.css';
-
-// Dark mode override for Golden Layout root background
-[data-theme="dark"] {
-  .lm_goldenlayout {
-    background: var(--mj-bg-page);
-  }
-}
+@import './styles/golden-layout-theme';
 
 // Import remaining custom styles
 @import './styles/common';
@@ -54,6 +51,8 @@
 @import '@memberjunction/ng-ui-components/dist/lib/accordion/accordion';
 @import '@memberjunction/ng-ui-components/dist/lib/window/window';
 @import '@memberjunction/ng-ui-components/dist/lib/input/chip';
+// Tab chrome shared by mj-tabstrip and the draft/workspace tab strip — one look, two packages.
+@import '@memberjunction/ng-ui-components/dist/lib/tabs/tabs';
 
 .link-text {
     cursor: pointer;

@@ -1,16 +1,22 @@
 import { AuthProviderConfig, LogStatusEx } from '@memberjunction/core';
 import { IAuthProvider } from './IAuthProvider.js';
 import { BaseAuthProvider } from './BaseAuthProvider.js';
+import { isEnvironmentConfigurable } from './IEnvironmentConfigurableProvider.js';
 import { MJGlobal, BaseSingleton, MJLruCache } from '@memberjunction/global';
 
-// Import providers to ensure they're registered
-import './providers/Auth0Provider.js';
-import './providers/MSALProvider.js';
-import './providers/OktaProvider.js';
-import './providers/CognitoProvider.js';
-import './providers/GoogleProvider.js';
-import './providers/WorkOSProvider.js';
-import './providers/MagicLinkProvider.js';
+// NOTE: this file deliberately contains NO list of concrete providers.
+//
+// It used to carry a literal `import './providers/Auth0Provider.js'` roster, which made the
+// built-ins look like a closed set that had to be edited to add a provider. They never were:
+// providers are @RegisterClass plugins resolved by key, and `index.ts` already exports all of
+// them by name, so importing anything from '@memberjunction/auth-providers' loads and registers
+// every built-in. HostIdentityProvider — added later — was never in that roster and has always
+// registered fine through the package entry point and the server-bootstrap manifest, which is
+// the proof the roster was redundant rather than load-bearing.
+//
+// Adding a provider is therefore: ship a @RegisterClass(BaseAuthProvider, 'x') subclass (in this
+// package, or in any package covered by a class-registration manifest) and add an
+// `MJ: Authentication Providers` row naming 'x' as its DriverClass. No edit here.
 
 /**
  * Factory and registry for managing authentication providers
@@ -180,6 +186,48 @@ export class AuthProviderFactory extends BaseSingleton<AuthProviderFactory> {
       .filter((key): key is string => key !== null && key !== undefined);
     // Return unique provider types
     return Array.from(new Set(providerTypes));
+  }
+
+  /**
+   * Collects provider configurations from environment variables by asking every registered
+   * provider class to configure itself.
+   *
+   * This replaces the hard-coded env block that used to live in MJServer's config and
+   * enumerated Entra / Auth0 / Cognito inline. Discovery is now driven by the same
+   * `@RegisterClass` registry that resolves drivers, so a third-party provider gets the
+   * env-var experience without a core edit — see {@link IEnvironmentConfigurableProvider}.
+   *
+   * A provider whose variables are absent returns null and is skipped. A provider whose
+   * mapping throws is skipped with an error rather than taking down startup, because one
+   * malformed mapping must not cost a deployment its other providers.
+   *
+   * @param env Environment to read from; defaults to `process.env`.
+   * @returns One config per provider that found its variables, deduplicated by name.
+   */
+  static DiscoverFromEnvironment(env: NodeJS.ProcessEnv = process.env): AuthProviderConfig[] {
+    const registrations = MJGlobal.Instance.ClassFactory.GetAllRegistrations(BaseAuthProvider);
+    const configs = new Map<string, AuthProviderConfig>();
+
+    for (const registration of registrations) {
+      const providerClass: unknown = registration.SubClass;
+      if (!isEnvironmentConfigurable(providerClass)) {
+        continue;
+      }
+      try {
+        const config = providerClass.ConfigFromEnvironment(env);
+        if (config && !configs.has(config.name)) {
+          configs.set(config.name, config);
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        LogStatusEx({
+          message: `Auth provider '${registration.Key}' failed to build a configuration from environment variables: ${message}`,
+          verboseOnly: true
+        });
+      }
+    }
+
+    return Array.from(configs.values());
   }
 
   /**

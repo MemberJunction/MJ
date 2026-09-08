@@ -25,6 +25,14 @@ export type UserPayload = {
   apiKeyId?: string;
   /** SHA-256 hash of the MJ API key (used for scope authorization) */
   apiKeyHash?: string;
+  /**
+   * The IdP's OIDC `email_verified` assertion from the verified JWT, when present.
+   * Three-state: `true` (IdP vouched for the email), `false` (IdP explicitly says the email is
+   * unverified — security-sensitive flows must not trust an email match), `undefined` (the IdP
+   * omits the claim, or auth was via API key / magic link). Consumed by identity-claim
+   * redemption; do not treat `undefined` as `false`.
+   */
+  emailVerified?: boolean;
 };
 
 /**
@@ -107,6 +115,12 @@ export type RunViewGenericParams = {
    * happens. Propagated to `RunViewParams.BypassCache`.
    */
   bypassCache?: boolean;
+  /**
+   * Optional source-of-truth selector for entities that have a base-view materialization.
+   * 'Materialized' routes the read to the entity's materialized wrapper view; defaults to 'Live'.
+   * Propagated to `RunViewParams.DataSource`.
+   */
+  dataSource?: 'Live' | 'Materialized';
 };
 
 

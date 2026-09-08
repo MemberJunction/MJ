@@ -110,6 +110,8 @@ const KEY_FILES: ReadonlyArray<{ Path: string; Description: string }> = [
   { Path: 'mj.config.cjs', Description: 'MJ configuration' },
   { Path: 'package.json', Description: 'Root package.json' },
   { Path: 'package-lock.json', Description: 'npm lock file' },
+  { Path: 'pnpm-lock.yaml', Description: 'pnpm lock file' },
+  { Path: 'pnpm-workspace.yaml', Description: 'pnpm workspace definition' },
   { Path: 'node_modules', Description: 'Dependencies installed' },
   { Path: 'mj-db-setup.sql', Description: 'Database setup script' },
   { Path: 'mj-db-validate.sql', Description: 'Database validation script' },
@@ -446,6 +448,9 @@ export class ReportGenerator {
       `| OS | ${env.OS} |`,
       `| Node.js | ${env.NodeVersion} |`,
       `| npm | ${env.NpmVersion} |`,
+      ...(env.PackageManager
+        ? [`| Package manager | ${[env.PackageManager, env.PackageManagerVersion].filter(Boolean).join(' ')} |`]
+        : []),
       `| Architecture | ${env.Architecture} |`,
     ].join('\n');
   }

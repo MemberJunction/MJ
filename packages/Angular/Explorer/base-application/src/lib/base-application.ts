@@ -120,7 +120,9 @@ export class BaseApplication {
 
   /**
    * Creates the default tab request when user switches to this app.
-   * If app has navigation items, uses the first nav item.
+   * If app has navigation items, uses the nav item flagged `isDefault` (falling back to
+   * the first item) — the same resolution the shell applies on explicit app switches
+   * and deep links, so landing on an app opens the same tab as clicking it would.
    * If app has no nav items, loads the first available dashboard preference for this app.
    * Override in subclass for custom default tab logic.
    */
@@ -128,7 +130,7 @@ export class BaseApplication {
     const navItems = await this.GetNavItems();
 
     if (navItems.length > 0) {
-      const firstItem = navItems[0];
+      const firstItem = navItems.find(item => item.isDefault) || navItems[0];
       const tabRequest: TabRequest = {
         ApplicationId: this.ID,
         Title: firstItem.Label

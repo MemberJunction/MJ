@@ -1,10 +1,14 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { Metadata, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, IMetadataProvider, RunView } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
-import { ExecuteAgentResult, AgentExecutionProgressCallback } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, AgentExecutionProgressCallback, coerceFailedExecuteAgentResult } from '@memberjunction/ai-core-plus';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
-import { MJConversationDetailEntity } from '@memberjunction/core-entities';
+import {
+  MJConversationDetailEntity,
+  MJArtifactVersionEntity,
+  MJArtifactEntity
+} from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
@@ -15,14 +19,53 @@ import { MentionParserService } from './mention-parser.service';
 import { UUIDsEqual } from '@memberjunction/global';
 
 import { ConversationsRuntimeBootstrap } from './conversations-runtime-bootstrap.service';
+import {
+  GroupVersionsByArtifact,
+  type AgentArtifactSummary
+} from '../utils/agent-artifact-summary';
 
 /**
- * Context for artifact lookups - provides pre-loaded data from conversation
- * to avoid redundant database queries
+ * Rows the configuration-preset lookup parses before giving up. The SQL prefilter is a LIKE,
+ * so a few candidates may not be real mention blobs; this bounds how many we inspect.
+ */
+const CONFIG_PRESET_CANDIDATE_ROWS = 5;
+
+/**
+ * Cap on artifact versions listed for the intent classifier.
+ *
+ * The block is a hint, not a record: the prompt prints a name, a type, a version count and
+ * the latest version per artifact. Newest-first ordering means the cap only ever trims the
+ * oldest versions of the busiest artifacts, which are the least useful lines in it.
+ */
+const MAX_AGENT_ARTIFACT_VERSIONS = 40;
+
+/**
+ * Context for artifact lookups — pre-loaded conversation data.
+ *
+ * NO LONGER CONSUMED by this service. Both readers were converted to queries when transcript
+ * windowing made these maps a partial view: they are keyed to the loaded window, so any
+ * lookup for an older row silently missed. Retained as an exported type for API
+ * compatibility; new code should not build one.
  */
 export interface ArtifactLookupContext {
   agentRunsByDetailId: Map<string, MJAIAgentRunEntityExtended>;
   artifactsByDetailId: Map<string, LazyArtifactInfo[]>;
+}
+
+/**
+ * An agent's prior OUTPUT artifact, resolved for payload continuity.
+ *
+ * `payload` is the parsed `ArtifactVersion.Content`, typed to match what actually consumes it
+ * — `executeAgentContinuation` and `invokeSubAgent` both take `Record<string, unknown> | null`.
+ * It is null when the version carried no content, the content did not parse, or the content
+ * parsed to something that is not a JSON object; callers treat all three the same as "no prior
+ * artifact", which is already a legal agent input.
+ */
+export interface AgentPayloadSource {
+  artifactId: string;
+  versionId: string;
+  versionNumber: number;
+  payload: Record<string, unknown> | null;
 }
 
 /**
@@ -48,7 +91,7 @@ export interface IntentCheckResult {
  *   `message-input.component`.
  * - `checkAgentContinuityIntent(...)` — fast intent classification when the
  *   user replies to a previous-agent thread.
- * - `findConfigurationPresetFromHistory(...)` — locates an agent's preset
+ * - `FindConfigurationPresetForAgent(...)` — locates an agent's preset
  *   from prior @mentions in the conversation.
  * - `clearSession(...)` — per-conversation session-id bookkeeping.
  *
@@ -204,46 +247,64 @@ export class ConversationAgentService {
   }
 
   /**
-   * Find the configuration preset ID from a previous @mention of an agent in conversation history.
-   * Searches backwards through User messages to find the most recent @mention of the specified agent
-   * that includes a configId.
+   * Configuration preset an agent was pinned to by a previous `@mention` in this conversation.
    *
-   * @param agentId The agent ID to search for
-   * @param conversationHistory The conversation history to search through
-   * @returns The configuration preset ID if found, undefined otherwise
+   * Resolved by QUERY, not by scanning the display array. The pinning `@mention` is normally
+   * the FIRST message of an exchange and everything after it is follow-up, so it is the
+   * message most likely to fall below the loaded transcript window — and `undefined` is a
+   * legal value for `configurationPresetId`, so the miss is silent. The visible consequence
+   * is a run executed under the default configuration (a different model tier) instead of the
+   * one the user explicitly chose, with a plausible-looking result and no error.
+   *
+   * There is no column to filter on: the preset lives inside the message body as a JSON
+   * mention blob (`@{"type":"agent","id":"…","configId":"…"}`). So SQL narrows and the parser
+   * decides — both `configId` and the agent id appear verbatim in that blob, which makes the
+   * two LIKEs a tight prefilter, and `parseMentions` is what actually confirms a match.
    */
-  public findConfigurationPresetFromHistory(
-    agentId: string,
-    conversationHistory: MJConversationDetailEntity[]
-  ): string | undefined {
-    // Search backwards through history for User messages that @mention this agent with a configId
-    const userMentionWithConfig = conversationHistory
-      .slice()
-      .reverse()
-      .find(msg => {
-        if (msg.Role !== 'User' || !msg.Message) return false;
-        const mentionResult = this.mentionParser.parseMentions(
-          msg.Message,
-          AIEngineBase.Instance.Agents,
-          []
-        );
-        return mentionResult.agentMention?.id === agentId && mentionResult.agentMention?.configurationId;
-      });
+  public async FindConfigurationPresetForAgent(
+    conversationId: string,
+    agentId: string
+  ): Promise<string | undefined> {
+    type MentionRow = Pick<MJConversationDetailEntity, 'ID' | 'Message'>;
 
-    if (userMentionWithConfig) {
-      const mentionResult = this.mentionParser.parseMentions(
-        userMentionWithConfig.Message,
-        AIEngineBase.Instance.Agents,
-        []
-      );
-      if (mentionResult.agentMention?.configurationId) {
-        console.log(`🎯 Found configuration preset from @mention: ${mentionResult.agentMention.configurationId}`);
-        return mentionResult.agentMention.configurationId;
-      }
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<MentionRow>({
+      EntityName: 'MJ: Conversation Details',
+      ExtraFilter: `ConversationID='${conversationId}' AND Role='User'`
+        + ` AND Message LIKE '%"configId"%' AND Message LIKE '%${agentId}%'`,
+      OrderBy: 'Sequence DESC',
+      // >1 because LIKE cannot tell a mention blob from the same id appearing elsewhere in
+      // the prose; the parse below is authoritative and picks the newest genuine match.
+      MaxRows: CONFIG_PRESET_CANDIDATE_ROWS,
+      Fields: ['ID', 'Message'],
+      ResultType: 'simple'
+    }, this.Provider.CurrentUser ?? undefined);
+
+    if (!result.Success) {
+      console.error('Failed to resolve configuration preset:', result.ErrorMessage);
+      return undefined;
     }
 
+    for (const row of result.Results || []) {
+      const configurationId = this.readAgentConfigFromMention(row.Message, agentId);
+      if (configurationId) {
+        console.log(`\u{1F3AF} Found configuration preset from @mention: ${configurationId}`);
+        return configurationId;
+      }
+    }
     return undefined;
   }
+
+  /** Returns the configId this message pins for `agentId`, or null when it pins none. */
+  private readAgentConfigFromMention(message: string | null, agentId: string): string | null {
+    if (!message) {
+      return null;
+    }
+    const parsed = this.mentionParser.parseMentions(message, AIEngineBase.Instance.Agents, []);
+    const mention = parsed.agentMention;
+    return mention?.id === agentId && mention.configurationId ? mention.configurationId : null;
+  }
+
 
   /**
    * Clear the session for a conversation (useful when starting a new topic)
@@ -289,7 +350,7 @@ export class ConversationAgentService {
     conversationHistory: MJConversationDetailEntity[],
     reasoning: string,
     conversationDetailId: string,
-    payload?: unknown,
+    payload?: Record<string, unknown> | null,
     onProgress?: AgentExecutionProgressCallback,
     sourceArtifactId?: string,
     sourceArtifactVersionId?: string,
@@ -342,7 +403,7 @@ export class ConversationAgentService {
           invocationReason: reasoning,
           ...(appContext ? { appContext } : {}),
         },
-        ...(payload ? { Payload: payload as Record<string, unknown> } : {}),
+        ...(payload ? { Payload: payload } : {}),
         ...(aiConfigurationId ? { ConfigurationId: aiConfigurationId } : {}),
         ...(planMode ? { PlanMode: true } : {}),
         ...(requestedSkillIDs?.length ? { RequestedSkillIDs: requestedSkillIDs } : {}),
@@ -364,19 +425,21 @@ export class ConversationAgentService {
 
       if (runResult.Success && runResult.Result) {
         return runResult.Result as ExecuteAgentResult;
-      } else if (!runResult.Success) {
-        const errorMsg = `Sub-agent "${agentName}" failed: ${runResult.ErrorMessage || 'unknown error'}`;
-        console.error(errorMsg);
-        MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-        return null;
       }
 
-      return null;
+      const failed = coerceFailedExecuteAgentResult(
+        runResult.Result as ExecuteAgentResult | null | undefined,
+        runResult.ErrorMessage || `Sub-agent "${agentName}" failed`,
+      );
+      const errorMsg = `Sub-agent "${agentName}" failed: ${failed.errorMessage}`;
+      console.error(errorMsg);
+      MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
+      return failed;
     } catch (error) {
       const errorMsg = `Error invoking sub-agent "${agentName}": ` + (error instanceof Error ? error.message : String(error));
       console.error(`Error invoking sub-agent "${agentName}":`, error);
       MJNotificationService.Instance?.CreateSimpleNotification(errorMsg, 'error', 5000);
-      return null;
+      return coerceFailedExecuteAgentResult<ExecuteAgentResult>(undefined, errorMsg);
     }
   }
 
@@ -388,10 +451,10 @@ export class ConversationAgentService {
    * Could move to the runtime in a follow-up.
    */
   async checkAgentContinuityIntent(
+    conversationId: string,
     agentId: string,
     latestMessage: string,
-    conversationHistory: MJConversationDetailEntity[],
-    context: ArtifactLookupContext
+    conversationHistory: MJConversationDetailEntity[]
   ): Promise<IntentCheckResult> {
     if (!this._aiClient) {
       console.warn('AI Client not initialized, defaulting to UNSURE for intent check');
@@ -412,11 +475,10 @@ export class ConversationAgentService {
         return { decision: 'UNSURE', reasoning: 'Previous agent not found' };
       }
 
-      const agentArtifacts = this.findAllAgentArtifacts(
-        agentId,
-        conversationHistory,
-        context
-      );
+      // Queried, not read off the caller's window-scoped maps — see findAllAgentArtifacts.
+      // `conversationHistory` below is still the window on purpose: the `.slice(-10)` wants
+      // the most recent exchange, which the loaded tail always contains.
+      const agentArtifacts = await this.findAllAgentArtifacts(conversationId, agentId);
 
       const recentHistory = conversationHistory.slice(-10);
       const compactHistory = recentHistory.map((msg, idx) => {
@@ -500,87 +562,194 @@ ${compactHistory}${artifactContext}
   }
 
   /**
-   * Find all artifacts created by the specified agent in this conversation.
-   * Returns artifacts grouped by artifact with versions, ordered most recent first.
-   * Enables LLM to reason about which artifact/version user is referencing.
+   * Every artifact this agent produced in this conversation, newest version first — resolved
+   * by QUERY, not by scanning the display array.
    *
-   * Uses pre-loaded data from ArtifactLookupContext for performance (no database queries).
+   * The scan this replaces walked `conversationDetails` and looked each row up in the
+   * caller's `artifactsByDetailId` / `agentRunsByDetailId` maps. Both are scoped to the
+   * LOADED WINDOW, so under transcript windowing it saw only the artifacts attached to the
+   * page currently on screen.
+   *
+   * That matters because this list is the "Prior Artifacts Created by This Agent" block fed
+   * to the Check Sage Intent prompt, which is what produces `targetArtifactVersionId`. A
+   * truncated list does not make the classifier fail — it makes it reason over a partial
+   * history and confidently name the wrong version, or miss continuity altogether. Silent,
+   * plausible, and wrong: the same failure class as {@link FindLatestAgentOutputVersion},
+   * closed the same way.
+   *
+   * Two reads, not the four the old shape would have needed — see
+   * {@link AgentArtifactSummary} for why dropping `runId` removes the join back to agent runs.
    */
-  private findAllAgentArtifacts(
-    agentId: string,
-    conversationDetails: MJConversationDetailEntity[],
-    context: ArtifactLookupContext
-  ): Array<{
-    artifactId: string;
-    artifactName: string;
-    artifactType: string;
-    artifactDescription: string | null;
-    versions: Array<{
-      runId: string;
-      versionId: string;
-      versionNumber: number;
-      versionName: string | null;
-      versionDescription: string | null;
-      createdAt: Date;
-    }>;
-  }> {
-    const artifactMap = new Map<string, {
-      artifactId: string;
-      artifactName: string;
-      artifactType: string;
-      artifactDescription: string | null;
-      versions: Array<{
-        runId: string;
-        versionId: string;
-        versionNumber: number;
-        versionName: string | null;
-        versionDescription: string | null;
-        createdAt: Date;
-      }>;
-    }>();
+  private async findAllAgentArtifacts(
+    conversationId: string,
+    agentId: string
+  ): Promise<AgentArtifactSummary[]> {
+    type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Name'>;
 
-    for (let i = conversationDetails.length - 1; i >= 0; i--) {
-      const detail = conversationDetails[i];
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const versionResult = await rv.RunView<VersionRow>({
+      EntityName: 'MJ: Artifact Versions',
+      ExtraFilter: this.agentOutputVersionFilter(conversationId, agentId),
+      OrderBy: '__mj_CreatedAt DESC',
+      MaxRows: MAX_AGENT_ARTIFACT_VERSIONS,
+      Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Name'],
+      ResultType: 'simple'
+    }, this.Provider.CurrentUser ?? undefined);
 
-      if (detail.Role !== 'AI' || detail.Status === 'Error') continue;
-
-      const agentRun = context.agentRunsByDetailId.get(detail.ID);
-      if (!agentRun || !UUIDsEqual(agentRun.AgentID, agentId) || agentRun.Status !== 'Completed') {
-        continue;
-      }
-
-      const artifacts = context.artifactsByDetailId.get(detail.ID);
-      if (!artifacts || artifacts.length === 0) continue;
-
-      for (const lazyArtifact of artifacts) {
-        const mainArtifactId = lazyArtifact.artifactId;
-
-        if (!artifactMap.has(mainArtifactId)) {
-          artifactMap.set(mainArtifactId, {
-            artifactId: mainArtifactId,
-            artifactName: lazyArtifact.artifactName,
-            artifactType: lazyArtifact.artifactType,
-            artifactDescription: lazyArtifact.artifactDescription || null,
-            versions: []
-          });
-        }
-
-        const artifactEntry = artifactMap.get(mainArtifactId)!;
-        artifactEntry.versions.push({
-          runId: agentRun.ID,
-          versionId: lazyArtifact.artifactVersionId,
-          versionNumber: lazyArtifact.versionNumber,
-          versionName: lazyArtifact.versionName,
-          versionDescription: lazyArtifact.versionDescription,
-          createdAt: lazyArtifact.versionCreatedAt
-        });
-      }
+    if (!versionResult.Success) {
+      console.error('Failed to load agent artifact versions:', versionResult.ErrorMessage);
+      return [];                    // the classifier degrades to no artifact context
+    }
+    const versions = versionResult.Results || [];
+    if (versions.length === 0) {
+      return [];
     }
 
-    return Array.from(artifactMap.values()).sort((a, b) => {
-      const aLatest = a.versions[0]?.createdAt || new Date(0);
-      const bLatest = b.versions[0]?.createdAt || new Date(0);
-      return bLatest.getTime() - aLatest.getTime();
-    });
+    const artifactsById = await this.loadArtifactNames(
+      [...new Set(versions.map(v => v.ArtifactID))]
+    );
+    return GroupVersionsByArtifact(versions, artifactsById);
   }
+
+  /** Names and types for the artifacts behind a set of versions. */
+  private async loadArtifactNames(
+    artifactIds: string[]
+  ): Promise<Map<string, Pick<MJArtifactEntity, 'ID' | 'Name' | 'Type'>>> {
+    type ArtifactRow = Pick<MJArtifactEntity, 'ID' | 'Name' | 'Type'>;
+
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<ArtifactRow>({
+      EntityName: 'MJ: Artifacts',
+      ExtraFilter: `ID IN (${artifactIds.map(id => `'${id}'`).join(',')})`,
+      Fields: ['ID', 'Name', 'Type'],
+      ResultType: 'simple'
+    }, this.Provider.CurrentUser ?? undefined);
+
+    if (!result.Success) {
+      console.error('Failed to load agent artifacts:', result.ErrorMessage);
+      return new Map<string, ArtifactRow>();
+    }
+    return new Map((result.Results || []).map(a => [a.ID, a]));
+  }
+
+  /**
+   * Newest OUTPUT artifact version an agent produced in this conversation — resolved by
+   * QUERY, not by scanning the display array.
+   *
+   * The array scan this replaces was correct only while `conversationHistory` held the whole
+   * conversation. Under transcript windowing it holds one page, so the scan silently returns
+   * null for any artifact below the window's oldest row — exactly the long "modify this
+   * again" exchanges where payload continuity matters most. A null payload is a LEGAL agent
+   * input, so the failure is silent: the agent regenerates from scratch instead of modifying.
+   *
+   * One round trip. The subquery walks details -> Output junctions, and versions carry
+   * `__mj_CreatedAt`, so "newest" is expressible without joining back for `Sequence`.
+   */
+  public async FindLatestAgentOutputVersion(
+    conversationId: string,
+    agentId: string
+  ): Promise<AgentPayloadSource | null> {
+    return this.runPayloadSourceQuery(
+      this.agentOutputVersionFilter(conversationId, agentId), '__mj_CreatedAt DESC'
+    );
+  }
+
+  /**
+   * `ArtifactVersion.ID IN (...)` for every OUTPUT artifact an agent produced in one
+   * conversation. Shared by {@link FindLatestAgentOutputVersion} and
+   * {@link findAllAgentArtifacts} so the two can never disagree about what "this agent's
+   * artifacts" means.
+   *
+   * Filters on the DETAIL's `Status <> 'Error'` rather than the agent run's
+   * `Status = 'Completed'` (which is what the array scan this replaced used). Doing it on the
+   * run would mean joining back to `MJ: AI Agent Runs` purely to restate a condition the
+   * detail already carries.
+   */
+  private agentOutputVersionFilter(conversationId: string, agentId: string): string {
+    return `ID IN (
+        SELECT ArtifactVersionID FROM [__mj].[vwConversationDetailArtifacts]
+        WHERE Direction='Output' AND ConversationDetailID IN (
+          SELECT ID FROM [__mj].[vwConversationDetails]
+          WHERE ConversationID='${conversationId}' AND AgentID='${agentId}'
+            AND Role='AI' AND Status <> 'Error'
+        )
+      )`;
+  }
+
+  /**
+   * One artifact version by ID, as a payload source.
+   *
+   * Used by the continuity path after the intent check names a specific version: that ID may
+   * belong to a message below the loaded window, so it cannot be resolved from the window's
+   * artifact maps.
+   */
+  public async FindArtifactVersionById(versionId: string): Promise<AgentPayloadSource | null> {
+    return this.runPayloadSourceQuery(`ID='${versionId}'`, undefined);
+  }
+
+  /**
+   * Shared read behind {@link FindLatestAgentOutputVersion} and {@link FindArtifactVersionById}.
+   *
+   * `ResultType: 'simple'` with an explicit `Fields` list: nothing here is mutated, and under
+   * `entity_object` the `Fields` narrowing would be silently discarded by `PreRunView`.
+   */
+  private async runPayloadSourceQuery(
+    extraFilter: string,
+    orderBy: string | undefined
+  ): Promise<AgentPayloadSource | null> {
+    type VersionRow = Pick<MJArtifactVersionEntity, 'ID' | 'ArtifactID' | 'VersionNumber' | 'Content'>;
+
+    const rv = RunView.FromMetadataProvider(this.Provider);
+    const result = await rv.RunView<VersionRow>({
+      EntityName: 'MJ: Artifact Versions',
+      ExtraFilter: extraFilter,
+      OrderBy: orderBy,
+      MaxRows: 1,
+      Fields: ['ID', 'ArtifactID', 'VersionNumber', 'Content'],
+      ResultType: 'simple'
+    }, this.Provider.CurrentUser ?? undefined);
+
+    if (!result.Success) {
+      console.error('Failed to resolve agent payload source:', result.ErrorMessage);
+      return null;
+    }
+    const row = result.Results?.[0];
+    if (!row) {
+      return null;
+    }
+    return {
+      artifactId: row.ArtifactID,
+      versionId: row.ID,
+      versionNumber: row.VersionNumber,
+      payload: parseArtifactContent(row.Content)
+    };
+  }
+
+}
+
+/**
+ * Parses an artifact version's `Content` into an agent payload. Returns null rather than
+ * throwing — a malformed artifact must not take down the send path, and "no payload" is
+ * already a legal agent input.
+ *
+ * A payload must be a JSON OBJECT. Valid JSON that parses to an array, string, or number is
+ * rejected for the same reason a parse failure is: every consumer spreads it or reads named
+ * keys off it, so a non-object would satisfy the type at the boundary and misbehave deeper in.
+ */
+function parseArtifactContent(content: string | null | undefined): Record<string, unknown> | null {
+  if (!content) {
+    return null;
+  }
+  try {
+    const parsed: unknown = JSON.parse(content);
+    return isPayloadObject(parsed) ? parsed : null;
+  } catch (error) {
+    console.warn('Artifact version content did not parse as JSON:', error);
+    return null;
+  }
+}
+
+/** Narrows a parsed JSON value to a plain object — the only shape a payload may take. */
+function isPayloadObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

@@ -10,7 +10,7 @@ import { StartupManager, StartupOptions, UserInfo } from '@memberjunction/core';
 import { setupSQLServerClient } from '../config';
 import { SQLServerDataProvider } from '../SQLServerDataProvider';
 import { SQLServerProviderConfigData } from '../types';
-import { UserCache } from '../UserCache';
+import { UserCache } from '@memberjunction/generic-database-provider';
 
 function makeConfig(): SQLServerProviderConfigData {
     const fakePool = { connected: true } as unknown as sql.ConnectionPool;

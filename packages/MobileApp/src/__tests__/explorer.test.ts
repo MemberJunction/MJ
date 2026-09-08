@@ -40,7 +40,7 @@ vi.mock('@memberjunction/core', () => {
     return { Metadata, RunView, RunQuery, CompositeKey };
 });
 
-import { loadEntities, entityCount, loadQueries, queryCount, loadDashboard } from '@/data/services/explorer';
+import { loadEntities, entityCount, loadQueries, queryCount, loadDashboard, loadEntityRecords } from '@/data/services/explorer';
 
 beforeEach(() => {
     state.entities = [];
@@ -156,5 +156,60 @@ describe('loadDashboard', () => {
     it('returns null when the dashboard fails to load', async () => {
         state.dashboard = { ID: 'd1', Name: 'x', Description: null, UIConfigDetails: '', Load: async () => false };
         expect(await loadDashboard('d1')).toBeNull();
+    });
+});
+
+describe('loadEntityRecords — card subtitle rendering of normalized date cells', () => {
+    // Simple-read date columns arrive as real Date objects (normalized by
+    // @memberjunction/core). Subtitles must render them readably instead of
+    // falling through to String(v), which prints the verbose Date.toString().
+    const orderEntity = {
+        Name: 'Test Orders',
+        Fields: [
+            { Name: 'ID', IsPrimaryKey: true, DefaultInView: false, Type: 'uniqueidentifier' },
+            { Name: 'Name', IsPrimaryKey: false, DefaultInView: true, Type: 'nvarchar' },
+            { Name: 'OrderDate', IsPrimaryKey: false, DefaultInView: true, Type: 'datetime' },
+        ],
+        FirstPrimaryKey: { Name: 'ID' },
+        NameField: { Name: 'Name' },
+    };
+
+    beforeEach(() => {
+        state.entities = [orderEntity as unknown as Record<string, unknown>];
+    });
+
+    it('renders a Date cell as a locale date, not Date.toString()', async () => {
+        const orderDate = new Date('2026-08-01T00:00:00.000Z');
+        state.runView = () => ({
+            Success: true,
+            Results: [{ ID: 'r1', Name: 'Order One', OrderDate: orderDate }],
+        });
+
+        const load = await loadEntityRecords('Test Orders');
+
+        expect(load?.rows[0].subtitle).toBe(orderDate.toLocaleDateString());
+        expect(load?.rows[0].subtitle).not.toContain('GMT');
+    });
+
+    it('renders a string cell unchanged (pre-normalization rows keep working)', async () => {
+        state.runView = () => ({
+            Success: true,
+            Results: [{ ID: 'r1', Name: 'Order One', OrderDate: '2026-08-01T00:00:00.000Z' }],
+        });
+
+        const load = await loadEntityRecords('Test Orders');
+
+        expect(load?.rows[0].subtitle).toBe('2026-08-01T00:00:00.000Z');
+    });
+
+    it('omits null and empty cells from the subtitle', async () => {
+        state.runView = () => ({
+            Success: true,
+            Results: [{ ID: 'r1', Name: 'Order One', OrderDate: null }],
+        });
+
+        const load = await loadEntityRecords('Test Orders');
+
+        expect(load?.rows[0].subtitle).toBe('');
     });
 });

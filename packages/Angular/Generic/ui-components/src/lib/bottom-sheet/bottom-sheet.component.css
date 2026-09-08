@@ -1,0 +1,77 @@
+/* z-index 9998/9999: the mobile-chrome overlay band (left-nav drawer,
+   filter sheet). Below mj-window (10000); MJConfirmService (20000) and
+   toasts (100000) still land above a sheet. */
+
+.mj-bottom-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: var(--mj-bg-overlay);
+  opacity: 0;
+  transition: opacity 0.24s ease;
+}
+
+.mj-bottom-sheet-scrim--open {
+  opacity: 1;
+}
+
+.mj-bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+  background: var(--mj-bg-surface);
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  box-shadow: var(--mj-shadow-lg);
+  transform: translateY(100%);
+  transition: transform 0.24s ease;
+  outline: none;
+}
+
+.mj-bottom-sheet--open {
+  transform: translateY(0);
+}
+
+/* Settled open state: transform must be NONE, not translateY(0) — a non-none
+   transform creates a containing block that displaces position:fixed
+   descendants (dropdowns/popovers projected into the sheet). */
+.mj-bottom-sheet--settled {
+  transform: none;
+}
+
+.mj-bottom-sheet-grab {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--mj-border-strong);
+  margin: 10px auto 2px;
+  flex-shrink: 0;
+}
+
+.mj-bottom-sheet-header {
+  flex-shrink: 0;
+  padding: 8px 16px 10px;
+  font-size: var(--mj-text-base, 15px);
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.mj-bottom-sheet-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: var(--mj-space-6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mj-bottom-sheet-scrim,
+  .mj-bottom-sheet {
+    transition: none;
+  }
+}

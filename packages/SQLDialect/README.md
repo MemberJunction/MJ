@@ -42,6 +42,26 @@ SQLDialect (abstract base)
 | `QuoteIdentifier(name)` | Wraps a single identifier | `[name]` | `"name"` |
 | `QuoteSchema(schema, object)` | Schema-qualified reference | `[schema].[object]` | `schema."object"` |
 
+#### PostgreSQL auto-quoting (whole-statement)
+
+The two methods above quote one identifier you have already identified. `postgresqlAutoQuote.ts`
+solves the harder problem: taking arbitrary SQL and deciding which of its bare words are
+identifiers that must be quoted to survive PostgreSQL's lowercase folding.
+
+| Export | Description |
+|---|---|
+| `AutoQuotePostgreSQLIdentifiers(sql)` | Tokenizes a statement and quotes the words that are identifiers. Skips string literals, dollar-quoted bodies and comments. Idempotent. |
+| `PostgreSQLQuotingKeywords` | Keywords recognized **case-sensitively, ALL-CAPS only**. A word here is safe even when it is also an MJ column name — only the ALL-CAPS spelling is exempted, so the mixed-case column form still quotes. |
+| `PostgreSQLStructuralKeywords` | A small tier matched case-INsensitively, so stored `UserView.OrderBy` / `ExtraFilter` fragments written in Title Case keep working. Guarded by a test that fails if a real column ever collides. |
+
+The ALL-CAPS rule is the load-bearing part: the set of SQL keywords and the set of MJ column names
+intersect (`Name`, `Text`, `Length`, `Values`, `Rank`, …), so a case-insensitive denylist emits
+those columns bare and PostgreSQL then rejects them. `TEXT` is the type; `Text` is the column.
+
+This is **not** the only quoter — `PostgreSQLDataProvider` has a metadata-driven one that knows an
+entity's field list and is used where that context exists. See the module docblock; they are not
+duplicates.
+
 ### Pagination
 
 | Method | Description | SQL Server | PostgreSQL |
@@ -402,4 +422,4 @@ Or, in a MemberJunction workspace, add the dependency to your package's `package
 
 ## License
 
-ISC
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component, EventEmitter, forwardRef, Input, Output } from '@angular/core';
-import { ControlValueAccessor, FormsModule, NG_VALUE_ACCESSOR, ReactiveFormsModule } from '@angular/forms';
-import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
+import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { By } from '@angular/platform-browser';
+import { renderComponentFixture, query, click, capture, StubDropdownComponent, StubNumericInputComponent } from '@memberjunction/ng-test-utils';
 import type { MCPServerData } from '../mcp-dashboard.component';
 import { MCPServerDialogComponent, ServerDialogResult } from './mcp-server-dialog.component';
 
@@ -27,39 +28,6 @@ class StubDialogActions {}
 class StubAlert {
   @Input() Variant = '';
 }
-// A no-op ControlValueAccessor so the template's [ngModel] on these stubs binds cleanly under
-// FormsModule (the real components are CVAs too). Without it, ngModel triggers NgControlStatus →
-// "No provider for NgControl".
-class NoopCva implements ControlValueAccessor {
-  writeValue(): void {}
-  registerOnChange(): void {}
-  registerOnTouched(): void {}
-}
-@Component({
-  selector: 'mj-dropdown',
-  standalone: true,
-  template: '<ng-content></ng-content>',
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubDropdown), multi: true }],
-})
-class StubDropdown extends NoopCva {
-  @Input() Data: unknown;
-  @Input() TextField = '';
-  @Input() ValueField = '';
-  @Input() ValuePrimitive = false;
-  @Output() ValueChange = new EventEmitter<unknown>();
-}
-@Component({
-  selector: 'mj-numeric-input',
-  standalone: true,
-  template: '',
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubNumeric), multi: true }],
-})
-class StubNumeric extends NoopCva {
-  @Input() Min = 0;
-  @Input() Max = 0;
-  @Input() Step = 0;
-  @Input() Placeholder = '';
-}
 
 const SERVER: MCPServerData = {
   ID: 'srv-1',
@@ -77,7 +45,7 @@ const SERVER: MCPServerData = {
 const render = (inputs: { server?: MCPServerData | null; visible?: boolean } = {}) =>
   renderComponentFixture(MCPServerDialogComponent, {
     declarations: [MCPServerDialogComponent],
-    imports: [ReactiveFormsModule, FormsModule, StubDialog, StubDialogActions, StubAlert, StubDropdown, StubNumeric],
+    imports: [ReactiveFormsModule, FormsModule, StubDialog, StubDialogActions, StubAlert, StubDropdownComponent, StubNumericInputComponent],
     inputs: { server: inputs.server ?? null, visible: inputs.visible ?? true },
   });
 
@@ -117,10 +85,19 @@ describe('MCPServerDialogComponent (DOM)', () => {
     expect(query(fixture, 'mj-alert')).toBeNull();
   });
 
-  it('emits close({saved:false}) when Cancel is clicked', () => {
+  it('emits close({saved:false}) when the Cancel button is clicked', () => {
     const fixture = render({ server: SERVER });
     const closed = capture<ServerDialogResult>(fixture.componentInstance.close);
-    fixture.componentInstance.cancel();
+    // The Cancel button is the variant-less mjButton in the dialog actions (Save is variant="primary").
+    click(fixture, 'mj-dialog-actions button:not([variant])');
+    expect(closed).toEqual([{ saved: false }]);
+  });
+
+  it('emits close({saved:false}) when the dialog itself is closed (mj-dialog Close output)', () => {
+    const fixture = render({ server: SERVER });
+    const closed = capture<ServerDialogResult>(fixture.componentInstance.close);
+    const dialog = fixture.debugElement.query(By.directive(StubDialog));
+    (dialog.componentInstance as StubDialog).Close.emit();
     expect(closed).toEqual([{ saved: false }]);
   });
 });

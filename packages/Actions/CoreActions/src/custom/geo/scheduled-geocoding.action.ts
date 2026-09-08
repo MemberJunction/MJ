@@ -768,10 +768,14 @@ export class ScheduledGeocodingAction extends BaseAction {
             LocationType: string;
             SourceFieldHash: string | null;
             Status: string;
+            RetryCount: number | null;
         }>({
             EntityName: 'MJ: Record Geo Codes',
             ExtraFilter: `EntityID = '${entityId}'`,
-            Fields: ['ID', 'RecordID', 'LocationType', 'SourceFieldHash', 'Status'],
+            // RetryCount comes along because it is what separates a transient failure from a
+            // settled one (IsSettledGeoCode) — without it every not-geocodable address is
+            // re-attempted on every pass.
+            Fields: ['ID', 'RecordID', 'LocationType', 'SourceFieldHash', 'Status', 'RetryCount'],
             ResultType: 'simple',
             IgnoreMaxRows: true,
             BypassCache: true
@@ -786,7 +790,8 @@ export class ScheduledGeocodingAction extends BaseAction {
                     RecordID: row.RecordID,
                     LocationType: row.LocationType,
                     SourceFieldHash: row.SourceFieldHash,
-                    Status: row.Status
+                    Status: row.Status,
+                    RetryCount: row.RetryCount ?? 0
                 });
             }
         }

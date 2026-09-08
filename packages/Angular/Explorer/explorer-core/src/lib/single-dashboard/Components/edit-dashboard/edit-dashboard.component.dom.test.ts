@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { MJWindowComponent, MJButtonDirective } from '@memberjunction/ng-ui-components';
-import { renderComponentFixture, query, queryAll, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture, click } from '@memberjunction/ng-test-utils';
+import { ResourceData } from '@memberjunction/core-entities';
+import { DashboardItem } from '../../single-dashboard.component';
 import { EditDashboardComponent } from './edit-dashboard.component';
 
 /**
@@ -11,13 +13,23 @@ import { EditDashboardComponent } from './edit-dashboard.component';
  * panel visibility, not its contents. mj-window / mjButton are imported directly from ng-ui-components.
  */
 
-// Plain stand-ins for DashboardItem — CreateDashboardItem copies these fields onto a real DashboardItem.
-const ITEMS = [
-  { title: 'Members Chart', order: 0, col: 1, row: 1, rowSpan: 1, colSpan: 1, ResourceData: {} },
-  { title: 'Revenue Table', order: 1, col: 2, row: 1, rowSpan: 1, colSpan: 1, ResourceData: {} },
-] as never;
+// Real DashboardItem fixtures — ngOnInit copies these onto fresh DashboardItems via
+// CreateDashboardItem, so sharing the array across tests can't leak mutations.
+function makeItem(title: string, order: number, col: number): DashboardItem {
+  const item = new DashboardItem();
+  item.title = title;
+  item.order = order;
+  item.col = col;
+  item.row = 1;
+  item.rowSpan = 1;
+  item.colSpan = 1;
+  item.ResourceData = new ResourceData();
+  return item;
+}
 
-const render = (items: unknown = ITEMS) =>
+const ITEMS: DashboardItem[] = [makeItem('Members Chart', 0, 1), makeItem('Revenue Table', 1, 2)];
+
+const render = (items: DashboardItem[] = ITEMS) =>
   renderComponentFixture(EditDashboardComponent, {
     imports: [MJWindowComponent, MJButtonDirective],
     declarations: [EditDashboardComponent],
@@ -26,6 +38,9 @@ const render = (items: unknown = ITEMS) =>
 
 const addButton = (fixture: ReturnType<typeof render>) =>
   queryAll(fixture, 'button').find((b) => b.textContent?.includes('Add item')) as HTMLElement;
+
+const footerButton = (fixture: ReturnType<typeof render>, label: string) =>
+  queryAll(fixture, '.dialog-footer-actions button').find((b) => b.textContent?.includes(label)) as HTMLElement;
 
 describe('EditDashboardComponent (DOM)', () => {
   it('renders the Customize Dashboard window with an Add item button', () => {
@@ -57,10 +72,32 @@ describe('EditDashboardComponent (DOM)', () => {
     expect(query(render(), '.add-dropdown-panel')).toBeNull();
   });
 
-  it('emits onClose when the window is closed', () => {
+  // Real mj-window title-bar X — exercises the (Close)="closeDialog()" template binding.
+  it('emits onClose when the window close button is clicked', () => {
     const fixture = render();
     const closed = capture(fixture.componentInstance.onClose);
-    fixture.componentInstance.closeDialog();
+    click(fixture, '.mj-window-close');
     expect(closed.length).toBe(1);
+  });
+
+  // Footer Cancel — exercises the (click)="closeDialog()" template binding.
+  it('emits onClose when the footer Cancel button is clicked', () => {
+    const fixture = render();
+    const closed = capture(fixture.componentInstance.onClose);
+    footerButton(fixture, 'Cancel').click();
+    expect(closed.length).toBe(1);
+  });
+
+  // Footer Save — exercises the (click)="saveChanges()" template binding end-to-end,
+  // including that a prior DOM removal is reflected in the emitted payload.
+  it('emits onSave with the current items when the footer Save button is clicked', () => {
+    const fixture = render();
+    const saved = capture(fixture.componentInstance.onSave);
+    (query(fixture, '.mj-tile-item .remove-item-btn') as HTMLElement).click();
+    fixture.detectChanges();
+    footerButton(fixture, 'Save').click();
+    expect(saved.length).toBe(1);
+    expect(saved[0].itemsChanged).toBe(true);
+    expect(saved[0].items.map((i) => i.title)).toEqual(['Revenue Table']);
   });
 });

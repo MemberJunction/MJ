@@ -1,0 +1,76 @@
+# pnpm workspace definition. The npm `workspaces` array in package.json is left in
+# place because other tooling still reads it (the OpenApp install engine's
+# findWorkspacePackageJsonFiles, syncpack, knip) — pnpm itself ignores it and uses
+# this file. Keep the two glob lists in sync until that tooling is migrated.
+
+# LOAD-BEARING. pnpm 10 defaults this to false, which makes internal deps pinned at
+# an exact version resolve from the REGISTRY instead of linking to the local package.
+# For an unpublished package that fails loudly; for a published one it silently
+# installs a stale copy. Do not remove.
+linkWorkspacePackages: true
+
+# pnpm 10 does not run dependency build scripts unless they are allowlisted here.
+# Anything omitted installs without its native/postinstall step and fails later at
+# runtime rather than at install. Add a name only after confirming the script is
+# actually needed. (Playwright needs nothing.)
+onlyBuiltDependencies:
+  - '@apollo/protobufjs'
+  - '@google/genai'
+  - '@parcel/watcher'
+  - '@zoom/rtms'
+  - browser-tabs-lock
+  - core-js
+  - core-js-pure
+  - esbuild
+  - isolated-vm
+  - lmdb
+  - msgpackr-extract
+  - oracledb
+  - protobufjs
+  - rete
+  - sharp
+  - tesseract.js
+
+packages:
+  - 'packages/*'
+  - 'packages/Actions/*'
+  - 'packages/Actions/BizApps/*'
+  - 'packages/AI/*'
+  - 'packages/AI/Providers/*'
+  - 'packages/AI/RealtimeBridge/*'
+  - 'packages/AI/RealtimeBridge/Providers/*'
+  - 'packages/AI/RemoteBrowser/*'
+  - 'packages/AI/RemoteBrowser/Providers/*'
+  - 'packages/AI/Recommendations/*'
+  - 'packages/AI/Vectors/*'
+  - 'packages/AI/Vectors/Providers/*'
+  - 'packages/AI/Vectors/Memory/*'
+  - 'packages/AI/Knowledge/*'
+  - 'packages/AI/AgentManager/*'
+  - 'packages/AI/DatabaseDesigner/*'
+  - 'packages/AI/FormBuilder/*'
+  - 'packages/AI/PredictiveStudio/*'
+  - 'packages/AI/AICLI'
+  - 'packages/Communication/*'
+  - 'packages/Communication/providers/*'
+  - 'packages/Templates/*'
+  - 'packages/Angular/*'
+  - 'packages/Angular/Explorer/*'
+  - 'packages/Angular/Generic/*'
+  - 'packages/AngularElements/*'
+  - 'packages/Web/*'
+  - 'packages/React/*'
+  - 'packages/Scheduling/*'
+  - 'packages/TestingFramework/*'
+  - 'packages/Credentials/*'
+  - 'packages/ExternalDataSources/*'
+  - 'packages/ExternalDataSources/Providers/*'
+  - 'packages/APIKeys/*'
+  - 'packages/OpenApp/*'
+  - 'packages/Integration/*'
+  - 'packages/Archiving/*'
+  - 'packages/geo/*'
+  - 'packages/Lists/*'
+  - 'packages/RecordSetProcessor/*'
+  - 'packages/eSignature/*'
+  - 'packages/eSignature/Providers/*'

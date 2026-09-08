@@ -17,6 +17,7 @@ export * from './lib/types/form-types';
 export * from './lib/types/navigation-events';
 export * from './lib/types/toolbar-config';
 export * from './lib/types/form-events';
+export * from './lib/types/form-toolbar-item';
 export * from './lib/types/entity-form-config';
 
 // Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
@@ -42,6 +43,7 @@ export * from './lib/base-form-section-info';
 // State management
 export * from './lib/form-state.interface';
 export * from './lib/form-state.service';
+export * from './lib/form-record-refresh.coordinator';
 
 // Components
 export * from './lib/toolbar/form-toolbar.component';
@@ -63,4 +65,17 @@ export * from './lib/isa-related-panel/isa-related-panel.component';
 export * from './lib/panel-slot/base-form-panel';
 export * from './lib/panel-slot/form-panel-slot.component';
 export * from './lib/panel-slot/form-slot-coordinator.service';
+export * from './lib/panel-slot/form-contribution';
+export * from './lib/panel-slot/collect-form-panel-registrations';
+export * from './lib/panel-slot/form-contributions.component';
+export * from './lib/panel-slot/related-entity-grid-panel.component';
 export * from './lib/interactive-form/interactive-form.component';
+
+// Form chrome (accordion / left-nav / More grouping)
+export * from './lib/chrome/form-chrome';
+export * from './lib/chrome/base-form-policy';
+export * from './lib/chrome/resolve-form-chrome';
+export * from './lib/chrome/load-form-chrome-rules';
+export * from './lib/chrome/form-chrome-coordinator.service';
+export * from './lib/chrome/form-chrome-rail-pref';
+export * from './lib/related-grid-height';

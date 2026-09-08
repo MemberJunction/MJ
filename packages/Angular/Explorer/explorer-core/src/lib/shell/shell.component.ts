@@ -13,9 +13,9 @@ import {
   AppAccessResult,
   NavItem
 } from '@memberjunction/ng-base-application';
-import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey } from '@memberjunction/core';
+import { Metadata, EntityInfo, LogStatus, LogError, StartupManager, CompositeKey, EncodeNewRecordValuesForURL, IsNewEntityRecordUrlId, NEW_ENTITY_RECORD_URL_ID, NEW_RECORD_VALUES_QUERY_PARAM, RecordUrlMatchesTab, ResourceUrlsEquivalent } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService, ActivityService, ActivityItem, SetRecordOpenStyle, RecordOpenStyle, IsRecordsRegionTab, IsRecordsTabConfiguration } from '@memberjunction/ng-shared';
 import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
@@ -60,6 +60,7 @@ interface ShellChromeFlags {
   appSwitcher: boolean;
   appSwitcherStyle: AppSwitcherStyle;
   appNav: boolean;
+  recordOpenStyle: RecordOpenStyle;
 }
 
 @Component({
@@ -71,6 +72,8 @@ interface ShellChromeFlags {
 export class ShellComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
+  /** Newest workspace configuration emission — see the staleness guard in the Configuration subscription */
+  private latestSyncedConfig: WorkspaceConfiguration | null = null;
   private initialNavigationComplete = false; // Track if initial navigation has completed
 
   activeApp: BaseApplication | null = null;
@@ -99,6 +102,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   initialized = false;
   private waitingForFirstResource = false;
   tabBarVisible = true; // Controlled by workspace manager
+
+  /**
+   * True when the deployment uses the records-as-tabs record-open style
+   * (`Shell.RecordOpen.Style` != 'classic'): records open as native Golden
+   * Layout tabs in the app the user is standing in, and the Records pill in
+   * the nav is the global entry point (count + resume-last-viewed). The GL
+   * tab header is the tab UI — native close/drag/pin apply to records too.
+   */
+  public get RecordTabsStyle(): boolean {
+    return this.chromeFlags.recordOpenStyle === 'records';
+  }
   userMenuVisible = false; // User avatar context menu
   mobileNavOpen = false; // Mobile navigation drawer
   unreadNotificationCount = 0; // Notification badge count
@@ -159,6 +173,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   searchableEntities: EntityInfo[] = [];
   selectedEntity: EntityInfo | null = null;
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
+  /** Mobile drawer + its toggle — used to return focus to the toggle when the drawer closes. */
+  @ViewChild('mobileNavDrawer') mobileNavDrawer?: ElementRef<HTMLElement>;
+  @ViewChild('mobileNavToggle') mobileNavToggle?: ElementRef<HTMLButtonElement>;
 
   // Legacy universal search overlay (omnibar-off MOBILE path) — opened by the
   // mobile search icon or Ctrl/Cmd+K when the inline composite isn't visible.
@@ -191,11 +208,48 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // to 'auto' (compact under a handful of apps, launcher otherwise)
           appSwitcherStyle: rawStyle === 'launcher' || rawStyle === 'compact' ? rawStyle : 'auto',
           appNav: engine.GetBoolean('Shell.AppNav.Enabled', true),
+          // Resolved (and pushed to collaborators) in resolveRecordOpenStyle()
+          // during initializeShell — NEVER as a getter side effect; getters
+          // run at change detection's whim and startup correctness must not
+          // depend on when a template happens to be evaluated.
+          recordOpenStyle: this.resolvedRecordOpenStyle,
       };
       if (engine.Loaded) {
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /** The record-open style resolved at startup ('records' until resolved) */
+  private resolvedRecordOpenStyle: RecordOpenStyle = 'records';
+
+  /**
+   * Resolve `Shell.RecordOpen.Style` from instance config and push it to the
+   * two collaborators that partition tabs by it: the ng-shared style module
+   * (NavigationService forks record opens on it) and the workspace manager's
+   * main-layout filter (record tabs must never count toward — or be consumed
+   * by — main-layout semantics). Called ONCE from initializeShell, after the
+   * InstanceConfigEngine load attempt and BEFORE workspace initialization.
+   */
+  private resolveRecordOpenStyle(): void {
+      const raw = InstanceConfigEngine.Instance.Get('Shell.RecordOpen.Style');
+      // Case/whitespace-insensitive: this compare is the ONLY opt-out for a
+      // default-behavior flip — an admin typing 'Classic' or 'classic ' must
+      // not silently get records anyway (GetBoolean parses insensitively;
+      // this value deserves the same tolerance).
+      this.resolvedRecordOpenStyle = raw?.trim().toLowerCase() === 'classic' ? 'classic' : 'records';
+      SetRecordOpenStyle(this.resolvedRecordOpenStyle);
+      // Region membership, not record identity: a record DOCKED to the
+      // workspace ("Move to Workspace") is a main-layout tab.
+      this.workspaceManager.MainLayoutTabFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => !IsRecordsRegionTab(tab.configuration)
+        : null;
+      // But NO record tab — docked included — may be consumed as the
+      // replaceable nav temp tab: the next nav click must never silently
+      // destroy an open record.
+      this.workspaceManager.TempTabConsumptionFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => !IsRecordsTabConfiguration(tab.configuration)
+        : null;
   }
 
   get ShowSearchBar(): boolean {
@@ -449,6 +503,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         LogStatus('InstanceConfigEngine initialization skipped (not critical)');
     });
 
+    // Resolve the record-open style EAGERLY, before workspace initialization.
+    // The first workspace configuration emission fires synchronously inside
+    // Initialize() below, and everything that partitions tabs between the
+    // main layout and the records region reads this style. Resolving it
+    // lazily (e.g. in a getter evaluated by change detection) leaves a
+    // startup window where a 'classic' deployment runs records-style —
+    // wiping saved main layouts on every boot and potentially hiding the
+    // main region permanently. This MUST happen here, awaited, first.
+    this.resolveRecordOpenStyle();
+
     // Get current user
     const md = this.ProviderToUse;
     const user = md.CurrentUser;
@@ -592,10 +656,13 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           }
         }
 
-        // Set default app if URL doesn't specify one AND no app is active yet
+        // Bare-root landing: URL names no app and nothing is active yet. Land on the
+        // declared-default app (lowest Application.DefaultSequence — Home ships at -1),
+        // NOT apps[0]: the user-owned Sequence order is a display preference for the
+        // app switcher, and reordering it must never change where a session lands.
         const currentActiveApp = this.appManager.GetActiveApp();
         if (!appMatch && !currentActiveApp) {
-          await this.appManager.SetActiveApp(apps[0].ID);
+          await this.openLandingApp(apps);
         }
       })
     );
@@ -629,8 +696,20 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.subscriptions.push(
       this.workspaceManager.Configuration.subscribe(async config => {
         if (config && this.initialized) {
+          this.latestSyncedConfig = config;
           // Sync active app with active tab's application
           await this.syncActiveAppWithTab(config);
+          // STALENESS GUARD: rapid multi-step flows (e.g. the origin crumb's
+          // apply-params-then-activate) emit several configurations in one
+          // tick, and each handler suspends at the await above. A handler
+          // resuming with an OLD snapshot must NOT sync the URL: it would
+          // navigate the browser to the previous active tab's URL, and
+          // syncWorkspaceWithUrl would then make that stale URL real by
+          // re-activating its tab (the "crumb click bounces back to the
+          // record" bug). Only the newest emission drives URL and title.
+          if (this.latestSyncedConfig !== config) {
+            return;
+          }
           this.syncUrlWithWorkspace(config);
           // Update browser tab title
           this.updateBrowserTitle(config);
@@ -815,6 +894,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.isViewingSystemTab = false;
     this.cdr.detectChanges();
 
+    // Records style: records-REGION tabs are a GLOBAL
+    // surface — viewing one must never flip the user's app context. Without
+    // this guard, resuming a record opened from another app yanked the whole
+    // header to that app (the "clicked Records in AI, landed in Data
+    // Explorer" bug). The Records pill carries the active state; the nav
+    // stays wherever the user is. Records DOCKED to the workspace fall
+    // through: they are ordinary main-layout tabs and DO flip app context.
+    if (this.RecordTabsStyle && IsRecordsRegionTab(activeTab.configuration)) {
+      this.titleService.setContext(this.activeApp?.Name || null, activeTab.title || null);
+      return;
+    }
+
     // Check if active app needs to be updated
     const currentActiveApp = this.appManager.GetActiveApp();
     if (!UUIDsEqual(currentActiveApp?.ID, tabAppId)) {
@@ -857,8 +948,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const currentUrl = this.router.url;
       const newUrl = resourceUrl;
 
-      // Only update if URL is different (path or query params changed)
-      if (currentUrl !== newUrl) {
+      // Decode before compare. encodeURIComponent writes `%3A` for the
+      // colon in `MJ_BizApps_Orders: Order Headers`; Angular's serializer
+      // leaves `:`. A raw !== is permanently true and reloads the route
+      // until the tab dies (Person → Orders → New).
+      if (!ResourceUrlsEquivalent(currentUrl, newUrl)) {
         // Suppress ResourceResolver for this navigation - we're just syncing the URL
         // to reflect the current active tab, not requesting a new tab to be opened
         this.tabService.SuppressNextResolve();
@@ -950,9 +1044,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appRecordMatch) {
         const entityName = decodeURIComponent(appRecordMatch[2]);
         const recordId = decodeURIComponent(appRecordMatch[3]);
-        const compositeKey = new CompositeKey();
-        compositeKey.SimpleLoadFromURLSegment(recordId);
-        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        this.openRecordFromUrl(entityName, recordId, queryParams);
         return;
       }
 
@@ -994,14 +1086,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (appQueryMatch) {
         const queryId = appQueryMatch[2];
         this.navigationService.OpenQuery(queryId, 'Query');
-        return;
-      }
-
-      // Check for app-scoped report URL: /app/:appName/report/:reportId
-      const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
-      if (appReportMatch) {
-        const reportId = appReportMatch[2];
-        this.navigationService.OpenReport(reportId, 'Report');
         return;
       }
 
@@ -1078,9 +1162,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (legacyRecordMatch) {
         const entityName = decodeURIComponent(legacyRecordMatch[1]);
         const recordId = decodeURIComponent(legacyRecordMatch[2]);
-        const compositeKey = new CompositeKey();
-        compositeKey.SimpleLoadFromURLSegment(recordId);
-        this.navigationService.OpenEntityRecord(entityName, compositeKey);
+        this.openRecordFromUrl(entityName, recordId, queryParams);
         return;
       }
 
@@ -1102,6 +1184,32 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     } finally {
       this.urlBasedNavigation = false;
     }
+  }
+
+  /**
+   * Recreate a record tab from a URL. `/new` is OpenNewEntityRecord — feeding
+   * the sentinel through OpenEntityRecord produced an empty CompositeKey and
+   * another forced tab, which is the loop that killed the browser.
+   */
+  private openRecordFromUrl(entityName: string, recordId: string, queryParams: URLSearchParams): void {
+    if (IsNewEntityRecordUrlId(recordId)) {
+      const nrv = queryParams.get(NEW_RECORD_VALUES_QUERY_PARAM) ?? undefined;
+      this.navigationService.OpenNewEntityRecord(entityName, {
+        newRecordValues: nrv,
+        recordSource: 'none',
+      });
+      return;
+    }
+    const compositeKey = new CompositeKey();
+    compositeKey.SimpleLoadFromURLSegment(recordId);
+    this.navigationService.OpenEntityRecord(entityName, compositeKey, { recordSource: 'none' });
+  }
+
+  private recordTabMatchesUrl(tab: WorkspaceTab, entityName: string, recordId: string): boolean {
+    const tabConfig = tab.configuration || {};
+    const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
+    const tabRecordId = (tabConfig['recordId'] ?? tab.resourceRecordId) as string | undefined;
+    return RecordUrlMatchesTab(entityName, recordId, tabEntity, tabRecordId);
   }
 
   /**
@@ -1185,15 +1293,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (appRecordMatch) {
       const entityName = decodeURIComponent(appRecordMatch[2]);
       const recordId = decodeURIComponent(appRecordMatch[3]);
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
-               tabRecordId === recordId;
-      }) || null;
+      return tabs.find(tab => this.recordTabMatchesUrl(tab, entityName, recordId)) || null;
     }
 
     // Dynamic view: /app/:appName/view/dynamic/:entityName
@@ -1239,20 +1339,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }) || null;
     }
 
-    // Report: /app/:appName/report/:reportId
-    const appReportMatch = urlPath.match(/^\/app\/([^\/]+)\/report\/(.+)$/);
-    if (appReportMatch) {
-      const reportId = appReportMatch[2];
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const resourceType = (tabConfig['resourceType'] as string | undefined)?.toLowerCase();
-        const tabReportId = (tabConfig['reportId'] || tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return resourceType === 'reports' && tabReportId === reportId;
-      }) || null;
-    }
-
     // Artifact: /app/:appName/artifact/:artifactId
     const appArtifactMatch = urlPath.match(/^\/app\/([^\/]+)\/artifact\/(.+)$/);
     if (appArtifactMatch) {
@@ -1287,15 +1373,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (recordMatch) {
       const entityName = decodeURIComponent(recordMatch[1]);
       const recordId = decodeURIComponent(recordMatch[2]);
-
-      return tabs.find(tab => {
-        const tabConfig = tab.configuration || {};
-        const tabEntity = (tabConfig['Entity'] || tabConfig['entity']) as string | undefined;
-        const tabRecordId = (tabConfig['recordId'] || tab.resourceRecordId) as string | undefined;
-
-        return tabEntity?.toLowerCase() === entityName.toLowerCase() &&
-               tabRecordId === recordId;
-      }) || null;
+      return tabs.find(tab => this.recordTabMatchesUrl(tab, entityName, recordId)) || null;
     }
 
     // Check for view URL: /resource/view/:viewId
@@ -1378,10 +1456,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const tabAppId = tab.applicationId;
 
     // Helper to append query params to a URL, preserving any existing params
-    const appendQP = (url: string): string => {
-      if (!queryParams || Object.keys(queryParams).length === 0) return url;
+    const appendQP = (url: string, extra?: Record<string, string>): string => {
+      const all = { ...(queryParams ?? {}), ...(extra ?? {}) };
+      if (Object.keys(all).length === 0) return url;
       const separator = url.includes('?') ? '&' : '?';
-      const params = new URLSearchParams(queryParams);
+      const params = new URLSearchParams(all);
       return `${url}${separator}${params.toString()}`;
     };
 
@@ -1500,13 +1579,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       switch (resourceType) {
         case 'records':
           // /app/:appName/record/:entityName/:recordId
-          if (entityName && recordId) {
-            // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
-            // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
-            // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
-            // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
-            // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
-            return appendQP(`/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
+          // Unsaved records use the `new` sentinel so they can deeplink with NewRecordValues.
+          if (entityName) {
+            const isNewRecord = config['isNew'] === true || IsNewEntityRecordUrlId(recordId);
+            const idSeg = isNewRecord ? NEW_ENTITY_RECORD_URL_ID : recordId;
+            if (idSeg) {
+              // recordId is a CompositeKey URL segment ("ID|<value>") — the '|' MUST be encoded.
+              // Angular's UrlSerializer percent-encodes '|' to %7C in router.url, so if we embed it raw
+              // here, `syncUrlWithWorkspace`'s `currentUrl !== newUrl` check is permanently true and can
+              // drive a re-navigation loop (with onSameUrlNavigation:'reload'). The read side already
+              // decodeURIComponent()s this segment, so encoding here keeps both sides consistent.
+              const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+              return appendQP(
+                `/app/${encodeURIComponent(appPath)}/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
+                nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+              );
+            }
           }
           break;
 
@@ -1548,13 +1636,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           }
           break;
 
-        case 'reports':
-          // /app/:appName/report/:reportId
-          if (recordId) {
-            return appendQP(`/app/${encodeURIComponent(appPath)}/report/${recordId}`);
-          }
-          break;
-
         case 'search results': {
           // /app/:appName/search/:searchInput?minRelevance=...&Entity=...
           const searchInput = config['SearchInput'] as string | undefined;
@@ -1582,10 +1663,18 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     // Fallback to legacy routes (for backward compatibility during transition)
     switch (resourceType) {
       case 'records':
-        if (entityName && recordId) {
-          // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
-          // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
-          return appendQP(`/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(recordId)}`);
+        if (entityName) {
+          const isNewRecord = config['isNew'] === true || IsNewEntityRecordUrlId(recordId);
+          const idSeg = isNewRecord ? NEW_ENTITY_RECORD_URL_ID : recordId;
+          if (idSeg) {
+            // Encode the CompositeKey segment ('|' → %7C) to match Angular's serialized router.url and
+            // the decodeURIComponent() on the read side — see the app-scoped 'records' case above.
+            const nrv = isNewRecord ? EncodeNewRecordValuesForURL(config['NewRecordValues']) : undefined;
+            return appendQP(
+              `/resource/record/${encodeURIComponent(entityName)}/${encodeURIComponent(idSeg)}`,
+              nrv ? { [NEW_RECORD_VALUES_QUERY_PARAM]: nrv } : undefined,
+            );
+          }
         }
         break;
 
@@ -2140,8 +2229,10 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     const { item, shiftKey } = event;
 
-    // Close mobile nav if open
-    this.mobileNavOpen = false;
+    // Close mobile nav if open. Routed through closeMobileNav() rather than setting the flag
+    // directly so focus does not get dropped to <body> when the drawer goes inert — tapping a
+    // nav item is the most common way the drawer closes on a phone.
+    this.closeMobileNav();
 
     // Use NavigationService with forceNewTab option if shift was pressed
     this.navigationService.OpenNavItem(
@@ -2174,13 +2265,59 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    */
   toggleMobileNav(): void {
     this.mobileNavOpen = !this.mobileNavOpen;
+    if (!this.mobileNavOpen) {
+      this.returnFocusFromMobileNav();
+    }
   }
 
   /**
    * Close mobile navigation drawer
    */
   closeMobileNav(): void {
-    this.mobileNavOpen = false;
+    if (this.mobileNavOpen) {
+      this.mobileNavOpen = false;
+      this.returnFocusFromMobileNav();
+    }
+  }
+
+  /**
+   * When the drawer closes it becomes `inert`, which drops focus to <body> if focus was
+   * inside it — the user's place in the page is gone and the next Tab restarts at the top.
+   * Hand focus back to the control that opened it instead. No-op when focus was elsewhere
+   * (e.g. the drawer was closed from a keyboard shortcut while the user was in the content).
+   */
+  private returnFocusFromMobileNav(): void {
+    const drawer = this.mobileNavDrawer?.nativeElement;
+    const active = document.activeElement;
+    if (!drawer || !active || !drawer.contains(active)) {
+      return;
+    }
+    this.mobileNavToggle?.nativeElement.focus();
+  }
+
+  /**
+   * Accessible name for the avatar button. The name must never depend on the avatar image
+   * rendering — a Gravatar CORS failure drops to the icon fallback, and an icon carries no
+   * name of its own — so it is set on the BUTTON and falls back to a generic label before
+   * the user record has loaded.
+   */
+  get avatarAriaLabel(): string {
+    return this.userName ? `Account: ${this.userName}` : 'Account';
+  }
+
+  /**
+   * Skip link target handoff (WCAG 2.4.1). Focus is moved programmatically rather than left
+   * to the browser's fragment navigation: the shell's main region is a Golden Layout host,
+   * and letting the URL hash change here would collide with the deep-link/tab restore path.
+   */
+  skipToMainContent(event: Event): void {
+    event.preventDefault();
+    const main = document.getElementById('mj-main-content');
+    if (!main) {
+      return;
+    }
+    main.focus();
+    main.scrollIntoView({ block: 'start' });
   }
 
   /**
@@ -2191,13 +2328,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.userMenuVisible = !this.userMenuVisible;
 
     if (this.userMenuVisible) {
-      // Close menu when clicking outside
+      // Close menu when clicking outside. CAPTURE phase so clicks whose
+      // bubbling something stopped (e.g. the origin crumb's GL-focus
+      // stoppers) still dismiss the menu.
       const closeHandler = () => {
         this.userMenuVisible = false;
-        document.removeEventListener('click', closeHandler);
+        document.removeEventListener('click', closeHandler, true);
       };
       setTimeout(() => {
-        document.addEventListener('click', closeHandler);
+        document.addEventListener('click', closeHandler, true);
       }, 0);
     }
   }
@@ -2547,7 +2686,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (rt === 'Dashboards' || config['dashboardId']) return 'Dashboards';
     if (rt === 'User Views' || rt === 'MJ: User Views' || config['viewId']) return 'User Views';
     if (rt === 'Queries' || config['queryId']) return 'Queries';
-    if (rt === 'Reports' || config['reportId']) return 'Reports';
     if (rt === 'Records' || (config['Entity'] && config['recordId'])) return 'Records';
     if (rt === 'Custom' || config['navItemName']) return 'Custom';
     return rt || 'Custom';
@@ -2882,8 +3020,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
       if (!result.EntityName || !result.RecordID) return;
 
-      // Entity records — open via NavigationService
-      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      // Entity records — open via NavigationService. Search is a TRANSIENT
+      // launcher: it dismisses on selection, so the page behind it is the
+      // truthful origin (default capture) — "back" returns the user there.
+      // Contrast the chat overlay, a persistent surface whose true origin is
+      // the conversation (it passes an explicit recordSource).
+      //
+      // `RecordID` is a compact CompositeKey segment — the bare value for a single-column primary
+      // key, "F1|v1||F2|v2" for a composite one — and the key column can have ANY name (the search
+      // lanes read it off entity metadata). Resolve it against that metadata; hardcoding
+      // `{ FieldName: 'ID' }` made Load() fail with "Primary key ID not found" for every entity
+      // whose key isn't called ID, and could never open a composite-key record at all.
+      const entityInfo = this.ProviderToUse.EntityByName(result.EntityName);
+      const pkey = CompositeKey.FromURLSegment(entityInfo, result.RecordID);
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 
@@ -3053,9 +3202,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       if (this.appAccessDialog) {
         this.appAccessDialog.show(dialogConfig);
       } else {
-        // Fallback if dialog not available - redirect to first app
-        console.warn('App access dialog not available, redirecting to first app');
-        this.redirectToFirstApp(availableApps);
+        // Fallback if dialog not available - redirect to a working app
+        console.warn('App access dialog not available, redirecting to fallback app');
+        this.redirectToFallbackApp(availableApps);
       }
     }, 0);
   }
@@ -3139,7 +3288,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           this.appAccessDialog.show({ type: 'layout_error' });
         } else {
           // Direct redirect if dialog not available
-          this.redirectToFirstApp(availableApps);
+          this.redirectToFallbackApp(availableApps);
         }
       }, 0);
     }
@@ -3167,7 +3316,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       case 'redirect':
       case 'dismissed':
       default:
-        this.redirectToFirstApp(availableApps);
+        this.redirectToFallbackApp(availableApps);
         break;
     }
   }
@@ -3193,12 +3342,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         
           console.error('[ShellComponent] Failed to add application');
           this.appAccessDialog?.completeProcessing();
-          this.redirectToFirstApp(this.appManager.GetAllApps());
+          this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error adding app:', error);
       this.appAccessDialog?.completeProcessing();
-      this.redirectToFirstApp(this.appManager.GetAllApps());
+      this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
 
@@ -3214,12 +3363,12 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
         await this.waitForAppAndNavigate(appId);
       } else {
         this.appAccessDialog?.completeProcessing();
-        this.redirectToFirstApp(this.appManager.GetAllApps());
+        this.redirectToFallbackApp(this.appManager.GetAllApps());
       }
     } catch (error) {
       console.error('Error enabling app:', error);
       this.appAccessDialog?.completeProcessing();
-      this.redirectToFirstApp(this.appManager.GetAllApps());
+      this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
 
@@ -3249,9 +3398,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       await this.navigateToApp(systemApp);
       this.appAccessDialog?.completeProcessing();
     } else {
-      console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to first app`);
+      console.warn(`[ShellComponent] App ${appId} not found after waiting, redirecting to fallback app`);
       this.appAccessDialog?.completeProcessing();
-      this.redirectToFirstApp(this.appManager.GetAllApps());
+      this.redirectToFallbackApp(this.appManager.GetAllApps());
     }
   }
 
@@ -3273,22 +3422,75 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     this.router.navigateByUrl(this.appManager.GetAppUrl(app));
   }
 
-  /**
-   * Redirect to the first available app (fallback)
-   */
   /** Case-insensitive UUID check whether an app is the currently active app. */
   public IsActiveApp(app: BaseApplication): boolean {
     return UUIDsEqual(app.ID, this.activeApp?.ID);
   }
 
-  private async redirectToFirstApp(apps: BaseApplication[]): Promise<void> {
-    if (apps.length > 0) {
-      const firstApp = apps[0];
-      await this.navigateToApp(firstApp);
-    } else {
-      // No apps available - this shouldn't happen, but handle gracefully
-      this.loading = false;
-      this.cdr.detectChanges();
+  /**
+   * Candidate order for landing and fallback navigation: the declared-default app
+   * first (lowest Application.DefaultSequence — Home ships at -1), then the rest of
+   * the user's apps in their Sequence order.
+   */
+  private landingCandidates(apps: BaseApplication[]): BaseApplication[] {
+    const landingApp = this.appManager.GetDefaultLandingApp();
+    if (!landingApp) {
+      return [...apps];
     }
+    return [landingApp, ...apps.filter(a => !UUIDsEqual(a.ID, landingApp.ID))];
+  }
+
+  /**
+   * Open the app a bare-root session should land on, falling through to the next
+   * candidate when one cannot open. Each candidate must produce a default tab BEFORE
+   * it is activated — activation hands the session to that app, and an app whose
+   * default tab cannot be built would otherwise become a dead entry point with no way
+   * back (the loading screen never clears and the user cannot navigate away). The
+   * actual tab opening still happens in the ActiveApp subscription.
+   */
+  private async openLandingApp(apps: BaseApplication[]): Promise<void> {
+    for (const candidate of this.landingCandidates(apps)) {
+      try {
+        // CreateDefaultTab() runs TWICE on this path by design: once here as a pure
+        // validation probe (the result is discarded), and again in the ActiveApp
+        // subscription, which opens the tab. That's safe while CreateDefaultTab stays
+        // a side-effect-free builder over cached nav items — if it ever gains side
+        // effects, this validate-then-rebuild pattern must change with it.
+        const tabRequest = await candidate.CreateDefaultTab();
+        if (!tabRequest) {
+          LogError(`Landing app "${candidate.Name}" could not create a default tab, trying next candidate`);
+          continue;
+        }
+        await this.appManager.SetActiveApp(candidate.ID);
+        return;
+      } catch (error) {
+        LogError(`Landing app "${candidate.Name}" failed to activate, trying next candidate:`, undefined,
+          error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    // Every candidate failed — surface a terminal dialog instead of hanging the loading screen
+    LogError('No application could be opened as the landing app');
+    await this.handleNoAppsAvailable();
+  }
+
+  /**
+   * Redirect to a working app (fallback used by the app-access dialogs): declared-default
+   * app first, then the rest of the user's apps in order.
+   */
+  private async redirectToFallbackApp(apps: BaseApplication[]): Promise<void> {
+    for (const app of this.landingCandidates(apps)) {
+      try {
+        await this.navigateToApp(app);
+        return;
+      } catch (error) {
+        LogError(`Fallback navigation to "${app.Name}" failed, trying next candidate:`, undefined,
+          error instanceof Error ? error.message : String(error));
+      }
+    }
+
+    // No apps available - this shouldn't happen, but handle gracefully
+    this.loading = false;
+    this.cdr.detectChanges();
   }
 }

@@ -45,6 +45,7 @@ import {
     RealtimeChannelServerHost,
     RealtimeCoAgentConfig,
     EvaluateRuntimeOverrideAuthorization,
+    FindIgnoredRealtimeConfigKeys,
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     RealtimeAllowedAgent,
@@ -60,7 +61,7 @@ import { ResolverBase } from '../generic/ResolverBase.js';
 import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { GetReadWriteProvider } from '../util.js';
 import { SessionManager } from '../agentSessions/index.js';
-import { resolveWidgetGuestRunContext } from '../realtimeWidget/widgetGuestElevation.js';
+import { resolveWidgetGuestRunContext, ResolveScopedAnonymousRunUser } from '../realtimeWidget/widgetGuestElevation.js';
 
 /**
  * Progress steps worth narrating to the realtime model — mirrors the normal agent-run path's filter
@@ -228,6 +229,18 @@ export class StartRealtimeClientSessionResult {
     ModelName?: string;
 
     /**
+     * `DriverClass` of the vendor that actually runs the session (e.g. `OpenAIRealtime`,
+     * `ElevenLabsRealtime`). Null when unknown.
+     *
+     * Surfaced to the BROWSER because on the default-model path the framework picks the vendor itself:
+     * without this the caller cannot tell which vendor spoke, and so cannot diagnose a voice that did
+     * not land (issue #3530). `ModelName` alone is not enough — one model can resolve to different
+     * vendors depending on which API keys a deployment configures.
+     */
+    @Field(() => String, { nullable: true })
+    DriverClass?: string;
+
+    /**
      * DB-driven progress-narration instruction template (contains a `{{ progressMessage }}`
      * placeholder). Null when the narration prompt is not present in this deployment's metadata —
      * the browser falls back to its built-in narration text.
@@ -349,8 +362,13 @@ export class UploadRealtimeRecordingResult {
  */
 @Resolver()
 export class RealtimeClientSessionResolver extends ResolverBase {
-    private readonly sessionManager = new SessionManager();
+    // Declaration order matters: `clientSessionService` must be initialized before `sessionManager`
+    // reads it, so `SessionManager.CloseSession` finalizes co-agent observability runs (see
+    // `finalizeObservabilityRuns`) through the SAME `RealtimeClientSessionService` instance that
+    // `AppendPromptRunMessage`/`AccumulatePromptRunUsage` (below) accumulated per-run write-chain
+    // state on — otherwise that cleanup silently no-ops on a freshly-constructed instance.
     private readonly clientSessionService = new RealtimeClientSessionService();
+    private readonly sessionManager = new SessionManager(this.clientSessionService);
 
     /**
      * Start a client-direct realtime voice session targeting `targetAgentId`.
@@ -495,13 +513,28 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
         const config = this.readSessionConfig(session);
 
+        // SCOPED-ANONYMOUS ELEVATION (issue #3371): once ownership is proven above, the delegated
+        // run + its AI-run-entity writes execute as the system user for a scoped anonymous caller
+        // (the caller's role deliberately holds no grants on the run entities). The lead
+        // targetAgentID comes from the session config and was CanRun-gated at start; the colleague
+        // union is gated just below, against the CALLER, so elevation never widens agent authority.
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
+        if (runUser !== contextUser) {
+            LogStatus(
+                `ExecuteRealtimeSessionTool: dispatching relayed tool '${toolName}' for session ${agentSessionId} ` +
+                    'under the system user (scoped-anonymous caller).',
+            );
+        }
         const { ResultJson, PausedRunID, Artifacts } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
                 TargetAgentID: config.targetAgentID,
                 // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
                 // colleague in the call is validated against this; absent ⇒ single-target behavior.
-                AllowedAgents: config.allowedAgents,
+                AllowedAgents: await this.filterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
+                // Attribution follows the VISITOR even when `runUser` is elevated: the delegated run
+                // row and its context-memory scope must stay the person's, not the system user's.
+                AttributionUserID: contextUser.ID,
                 // Nest the delegated target-agent run under the co-agent observability run (when present).
                 ParentRunID: config.coAgentRunID,
                 Call: { CallID: callId, ToolName: toolName, Arguments: argsJson },
@@ -509,7 +542,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Resume a previously-paused delegated run (if any) with the user's answer.
                 ResumeRunID: config.pendingFeedbackRunID,
             },
-            contextUser,
+            runUser,
             provider,
         );
 
@@ -519,7 +552,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
         // Junction-link any artifacts the delegated run produced into the session's conversation
         // history (best-effort) — so chat, session review, and resume carryover can all see them.
-        await this.linkDelegatedArtifactsToConversation(session, Artifacts, contextUser, provider);
+        // Runs as `runUser`: the junction entity is not among an anonymous caller's relay grants.
+        await this.linkDelegatedArtifactsToConversation(session, Artifacts, runUser, provider);
 
         await this.sessionManager.Heartbeat(agentSessionId, contextUser, provider);
         return ResultJson;
@@ -542,18 +576,15 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             if (!SIGNIFICANT_PROGRESS_STEPS.includes(progress.step)) {
                 return;
             }
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                message: JSON.stringify({
-                    resolver: 'RealtimeClientSessionResolver',
-                    type: 'RealtimeDelegationProgress',
-                    agentSessionID,
-                    callID,
-                    step: progress.step,
-                    message: progress.message,
-                    percentage: progress.percentage,
-                }),
-                sessionId: userPayload.sessionId,
-            });
+            this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                resolver: 'RealtimeClientSessionResolver',
+                type: 'RealtimeDelegationProgress',
+                agentSessionID,
+                callID,
+                step: progress.step,
+                message: progress.message,
+                percentage: progress.percentage,
+            }), userPayload);
         };
     }
 
@@ -625,6 +656,8 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         // Mirror the turn onto the co-agent's long-lived prompt run so its Messages capture the full
         // conversation (run-viewer observability parity). Best-effort — never fails the transcript relay.
+        // The prompt-run write runs as the scoped-anonymous elevated user (issue #3371) — the visible
+        // Conversation Detail above deliberately stays on the caller.
         const promptRunID = this.readPromptRunID(session);
         if (promptRunID) {
             await this.clientSessionService.AppendPromptRunMessage(
@@ -632,7 +665,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 this.mapTranscriptRoleToChatRole(role),
                 text,
                 replacesPrevious ?? false,
-                contextUser,
+                ResolveScopedAnonymousRunUser(contextUser),
                 provider,
             );
         }
@@ -691,13 +724,18 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             return { Success: false, ErrorMessage: 'Recording consent was not granted.' };
         }
 
+        // SCOPED-ANONYMOUS ELEVATION (issue #3371): past the ownership + consent gates, the store is
+        // server-side plumbing over entities (MJ: AI Agents read, MJ: Files, the file-session link)
+        // the caller's narrow relay role deliberately does not hold. Attribution flows through the
+        // session link, so nothing here depends on the caller's identity.
+        const runUser = ResolveScopedAnonymousRunUser(contextUser);
         try {
-            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
                 return { Success: false, ErrorMessage: `Co-agent ${session.AgentID} for the session could not be loaded.` };
             }
 
-            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
+            const accountID = await resolveRecordingStorageAccountID(agent, runUser, provider);
             if (!accountID) {
                 return { Success: false, ErrorMessage: 'No recording storage account is configured for this agent.' };
             }
@@ -707,28 +745,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return { Success: false, ErrorMessage: 'The uploaded recording was empty.' };
             }
 
-            const fileID = await storeRealtimeRecording({
+            const stored = await storeRealtimeRecording({
                 Audio: buffer,
                 MimeType: mimeType,
                 Media: 'Audio',
                 StartedAt: session.RecordingStartedAt ?? new Date(),
                 StorageAccountID: accountID,
                 SessionID: agentSessionId,
-                ContextUser: contextUser,
+                ContextUser: runUser,
                 Provider: provider,
                 // Sanitized capture-time waveform peaks → persisted as a peaks.json sidecar.
                 Peaks: this.sanitizePeaks(peaks),
             });
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
-            if (fileID) {
-                await deleteRealtimeRecordingSegments(agentSessionId, accountID, contextUser);
+            if (stored.FileID) {
+                await deleteRealtimeRecordingSegments(agentSessionId, accountID, runUser);
             }
 
             return {
-                Success: !!fileID,
-                FileID: fileID ?? undefined,
-                ErrorMessage: fileID ? undefined : 'Storage upload failed.',
+                Success: !!stored.FileID,
+                FileID: stored.FileID ?? undefined,
+                // Report the reason the storage layer knew (e.g. Drive's "Service Accounts do not have
+                // storage quota"); the generic sentence is only for when no layer supplied one.
+                ErrorMessage: stored.FileID ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -762,11 +802,13 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         try {
             const { contextUser, provider } = this.requireUserAndProvider(ctx.userPayload, ctx.providers);
             const session = await this.loadOwnedSession(agentSessionId, contextUser, provider);
-            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
+            // Scoped-anonymous elevation (issue #3371) — same rationale as UploadRealtimeRecording.
+            const runUser = ResolveScopedAnonymousRunUser(contextUser);
+            const agent = await provider.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', runUser);
             if (!(await agent.Load(session.AgentID))) {
                 return false;
             }
-            const accountID = await resolveRecordingStorageAccountID(agent, contextUser, provider);
+            const accountID = await resolveRecordingStorageAccountID(agent, runUser, provider);
             if (!accountID) {
                 return false;
             }
@@ -780,7 +822,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 Audio: buffer,
                 MimeType: mimeType,
                 StorageAccountID: accountID,
-                ContextUser: contextUser,
+                ContextUser: runUser,
             });
         } catch (error) {
             LogError(`RealtimeClientSessionResolver.UploadRealtimeRecordingSegment failed for session ${agentSessionId}: ${error instanceof Error ? error.message : String(error)}`);
@@ -815,7 +857,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             'assistant',
             this.formatToolTurn(toolName, argsJson, resultJson),
             false,
-            contextUser,
+            ResolveScopedAnonymousRunUser(contextUser),
             provider,
         );
     }
@@ -913,7 +955,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         // Delegate to the service so usage writes share the per-run serialization with transcript-message
         // appends — otherwise the frequent usage save clobbers freshly-appended Messages (and vice-versa).
-        return this.clientSessionService.AccumulatePromptRunUsage(promptRunID, inputDelta, outputDelta, contextUser, provider);
+        // Runs as the scoped-anonymous elevated user (issue #3371) — the caller's role holds no prompt-run grants.
+        return this.clientSessionService.AccumulatePromptRunUsage(
+            promptRunID, inputDelta, outputDelta, ResolveScopedAnonymousRunUser(contextUser), provider,
+        );
     }
 
     /** Clamps a relayed token delta: negative / non-finite values become 0. */
@@ -1124,6 +1169,39 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     }
 
     /**
+     * Narrows a session's colleague union (`allowedAgents`) to the agents the CALLER may run.
+     *
+     * {@link assertCanRunTarget} gates the LEAD target at session start, but the union it travels
+     * with was never gated at all — a model-named colleague resolves straight to a delegated run.
+     * That was survivable while the run carried the caller's own identity, because base-agent
+     * re-checks `CanRun` against `contextUser`. Once the run user is elevated for a scoped anonymous
+     * caller (issue #3371) that check sees the SYSTEM user, so this is the only remaining place the
+     * caller's own authority is applied to a colleague. It therefore runs for EVERY caller, elevated
+     * or not — the authorization identity must never depend on the elevation decision.
+     *
+     * `HasPermission` reads AIEngineBase's in-memory caches (no DB round trip) and already fails
+     * closed on error, so an unresolvable agent drops OUT of the union rather than becoming runnable.
+     * A filtered-out colleague is not an error: the delegation layer reports it as "not available in
+     * this session" and lists what remains, which is the same answer the model gets for a typo.
+     *
+     * @param allowedAgents The session's persisted colleague union (absent/empty ⇒ single-target).
+     * @param contextUser The ORIGINAL caller — never the elevated run user.
+     * @returns The subset the caller may run, preserving order.
+     */
+    private async filterAllowedAgentsByCanRun(
+        allowedAgents: RealtimeAllowedAgent[] | undefined,
+        contextUser: UserInfo,
+    ): Promise<RealtimeAllowedAgent[] | undefined> {
+        if (!allowedAgents || allowedAgents.length === 0) {
+            return allowedAgents;
+        }
+        const verdicts = await Promise.all(
+            allowedAgents.map((a) => AIAgentPermissionHelper.HasPermission(a.agentId, contextUser, 'run')),
+        );
+        return allowedAgents.filter((_, i) => verdicts[i]);
+    }
+
+    /**
      * Resolves the AUTHORITATIVE target agent id under the co-agent's PAIRING CONSTRAINTS
      * (`MJ: AI Agent Co Agents`, ordered by `Sequence`):
      *
@@ -1242,6 +1320,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Judgment calls baked in (per the approved product rules): co-agent selection (`coAgentId`)
      * and target selection within a pairing list / for a universal co-agent are NORMAL user flow
      * — they stay behind the existing `CanRun` gate only and are not touched here.
+     *
+     * Also the one place that reports what an ACCEPTED override payload still loses to
+     * normalization (see {@link FindIgnoredRealtimeConfigKeys}) — a gated field implies the payload
+     * matters, so an ignored key is worth a log line rather than silence.
      */
     private async assertRuntimeOverridesAuthorized(
         coAgentID: string,
@@ -1267,6 +1349,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         });
         if (!decision.Allowed) {
             throw new Error(`Not authorized: ${decision.DenialReason}`);
+        }
+
+        // The overrides are ACCEPTED — so say what the cascade will nevertheless throw away. The
+        // effective-config layer keeps only known, correctly-typed keys under `realtime`; every
+        // other key vanishes, and neither side of the wire can observe that (MJ #3854: a downstream
+        // app shipped a whole ignored section for months). Rejecting unknown keys was considered
+        // and deliberately NOT chosen: MJ is a framework with unknown callers, and turning a
+        // previously-accepted payload into a hard error in a patch release would break them — so a
+        // named, greppable warning is what ships.
+        const ignored = FindIgnoredRealtimeConfigKeys(configOverridesJson);
+        if (ignored.length > 0) {
+            LogStatus(
+                `StartRealtimeClientSession: configOverridesJson keys IGNORED by the realtime effective-config layer ` +
+                    `(co-agent ${coAgentID}, user ${contextUser.Email ?? contextUser.ID}): ` +
+                    ignored.map((k) => `${k.path} [${k.reason}]`).join(', ') +
+                    '. Only known, correctly-typed keys under the top-level "realtime" section are applied.',
+            );
         }
     }
 
@@ -1584,7 +1683,12 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 ApplicationID: applicationId,
                 AppContext: appContext,
             },
-            contextUser,
+            // SCOPED-ANONYMOUS ELEVATION (issue #3371): the prepare creates the co-agent
+            // observability AIAgentRun/AIPromptRun/run-step, which a scoped anonymous caller's role
+            // deliberately cannot write. `UserID` above stays the CALLER's id, so run attribution
+            // and memory scope remain the visitor's. Authorization (CanRun, runtime overrides)
+            // already ran on the caller in StartRealtimeClientSession.
+            ResolveScopedAnonymousRunUser(contextUser),
             provider,
         );
 
@@ -1609,6 +1713,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             ExpiresAt: cfg.ExpiresAt,
             SessionConfigJson: JSON.stringify(cfg.SessionConfig),
             ModelName: prep.ModelName,
+            DriverClass: prep.DriverClass,
             NarrationInstructionsTemplate: prep.NarrationInstructionsTemplate,
             NarrationPaceMs: prep.NarrationPaceMs,
             EffectiveConfigJson: prep.EffectiveConfig ? JSON.stringify(prep.EffectiveConfig) : undefined,
@@ -2190,7 +2295,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         detail.HiddenToUser = true;
         detail.Message = 'Artifacts produced during a realtime session (system anchor).';
         detail.AgentSessionID = session.ID;
-        detail.UserID = contextUser.ID;
+        // Attribute the anchor to the SESSION owner, not the (possibly elevated) writer — identical
+        // for every non-elevated caller, whose ownership of the session is already proven.
+        detail.UserID = session.UserID;
         if (await detail.Save()) {
             return detail.ID;
         }
@@ -2492,6 +2599,27 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         utteranceEndMs?: number,
     ): Promise<boolean> {
         const mappedRole = this.mapTranscriptRole(role);
+        // ── WHY THE CORRECTION IS A SEPARATE CONCERN FROM THE INSERT ──
+        //
+        // Streaming-transcription providers (Grok) deliver ONE spoken utterance as a growing series
+        // of CORRECTIONS, each replacing the last. A refused update therefore truncates a
+        // candidate's answer to its opening words: measured live, a 28-second answer persisted as
+        // `I` and a 114-second answer as `So I think`. The MODEL had the full audio and replied
+        // coherently, so nothing looked wrong during the interview — but the evaluator scores the
+        // TRANSCRIPT, and correctly refused to credit words it could not see. A real candidate was
+        // scored 0.0 and Rejected for a permissions gap.
+        //
+        // The correction runs as the CALLER. They own the row, and the anonymous widget role now
+        // carries UPDATE on `MJ: Conversation Details`; `loadOwnedActiveSession` has already proved
+        // the caller owns THIS session and the filter below is pinned to its id, so the only row
+        // reachable is a turn they just spoke.
+        //
+        // ⚠️ ELEVATING INSTEAD WAS TRIED AND IS A TRAP. `ResolveScopedAnonymousRunUser` returns
+        // `UserCache.GetSystemUser()`, which on this deployment resolves to the unconfigured
+        // placeholder `not.set@nowhere.com` ("Configured provisioning user not found; falling back
+        // to an Owner"). Saving as a user that does not exist returns false with a NULL
+        // `LatestResult` — indistinguishable from a permission denial, and just as silent.
+        const writeUser = contextUser;
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJConversationDetailEntity>(
             {
@@ -2501,11 +2629,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 MaxRows: 1,
                 ResultType: 'entity_object',
             },
-            contextUser,
+            writeUser,
         );
-        const previous = result.Success ? (result.Results?.[0] ?? null) : null;
-        if (!previous) {
+        const found = result.Success ? (result.Results?.[0] ?? null) : null;
+        if (!found) {
             return this.persistTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs);
+        }
+        // RE-LOAD through the provider rather than saving the RunView's object.
+        //
+        // `ResultType: 'entity_object'` hands back hydrated entities, but they do not carry the
+        // context user the way `GetEntityObject(entity, user)` does — so `Save()` ran with no
+        // principal and failed with an EMPTY message ("unknown error"), which is what the elevation
+        // fix above looked like when it was still broken. The insert path beside this one has
+        // always used `GetEntityObject`; this now matches it, which is also why they now succeed
+        // and fail for the same reasons.
+        const previous = await provider.GetEntityObject<MJConversationDetailEntity>(
+            CONVERSATION_DETAIL_ENTITY,
+            writeUser,
+        );
+        if (!(await previous.Load(found.ID))) {
+            LogError(
+                `RealtimeClientSessionResolver.replacePreviousTranscriptTurn could not re-load turn `
+                + `${found.ID} for session ${session.ID}; the transcript keeps its shorter text.`,
+            );
+            return false;
         }
         previous.Message = text;
         // The correction extends the existing turn: always refresh the end boundary when provided,
@@ -2518,8 +2665,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         const saved = await previous.Save();
         if (!saved) {
+            // Name the CONSEQUENCE, not just the failure: a refused correction silently truncates a
+            // candidate's answer to its opening words, and whoever reads this log is the only person
+            // who can connect a 0.0 score to it.
             LogError(
-                `RealtimeClientSessionResolver.replacePreviousTranscriptTurn save failed: ${previous.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.replacePreviousTranscriptTurn save failed for session `
+                + `${session.ID} — the ${mappedRole} turn keeps its PREVIOUS, shorter text and the `
+                + `transcript now understates what was said: `
+                + `${previous.LatestResult?.CompleteMessage || JSON.stringify(previous.LatestResult ?? null)}`,
             );
         }
         return saved;

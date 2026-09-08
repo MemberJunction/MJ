@@ -22,45 +22,38 @@ vi.mock('crypto', async () => {
     };
 });
 
-// Mock external dependencies
-vi.mock('@memberjunction/core', () => ({
-    RunView: class {
-        async RunView() { return { Success: false, Results: [] }; }
-    },
-    Metadata: class {
-        async GetEntityObject() { return { Save: async () => false }; }
-    },
-    UserInfo: class { ID = 'mock-user'; },
-}));
-
-vi.mock('@memberjunction/core-entities', () => ({
-    MJAPIKeyEntity: class {},
-    MJAPIApplicationEntity: class {},
-    MJAPIKeyApplicationEntity: class {},
-    MJAPIScopeEntity: class {},
-    MJUserEntity: class {},
-    MJAPIKeyUsageLogEntity: class {},
-    MJAPIApplicationScopeEntity: class {},
-    MJAPIKeyScopeEntity: class {},
-}));
-
-vi.mock('@memberjunction/api-keys-base', () => ({
-    APIKeysEngineBase: {
-        Instance: {
-            Config: vi.fn().mockResolvedValue(undefined),
-            Scopes: [],
-            Applications: [],
-            GetApplicationByName: vi.fn().mockReturnValue(null),
-            GetApplicationById: vi.fn().mockReturnValue(null),
-            GetKeyApplicationsByKeyId: vi.fn().mockReturnValue([]),
-            GetScopeByPath: vi.fn().mockReturnValue(null),
-            GetApplicationScopeRules: vi.fn().mockReturnValue([]),
-            GetKeyScopeRules: vi.fn().mockReturnValue([]),
-        }
-    },
-}));
+// NOTE: @memberjunction/core, @memberjunction/core-entities, and
+// @memberjunction/api-keys-base resolve to the rich alias mocks in
+// src/__mocks__/ (see vitest.config.ts) — configured per test via the
+// setMock* helpers below.
 
 import { cosmiconfigSync } from 'cosmiconfig';
+import {
+    UserInfo,
+    setMockRunViewResult,
+    clearMockRunViewResults,
+    clearMockEntities,
+    setMockMetadataEntities,
+    setMockRowLevelSecurityFilters,
+    clearMockMetadataState,
+    EntityInfo,
+    RowLevelSecurityFilterInfo,
+} from '../__mocks__/core';
+import {
+    MJAPIKeyEntity,
+    MJAPIApplicationEntity,
+    MJAPIScopeEntity,
+    MJAPIApplicationScopeEntity,
+    MJAPIKeyScopeEntity,
+} from '../__mocks__/core-entities';
+import {
+    setMockBaseScopes,
+    setMockBaseApplications,
+    setMockBaseApplicationScopes,
+    setMockBaseKeyScopes,
+    setMockBaseLoaded,
+    clearMockBaseState,
+} from '../__mocks__/api-keys-base';
 import {
     APIKeyEngine,
     GetAPIKeyEngine,
@@ -76,6 +69,10 @@ describe('APIKeyEngine', () => {
 
     beforeEach(() => {
         ResetAPIKeyEngine();
+        clearMockBaseState();
+        clearMockRunViewResults();
+        clearMockEntities();
+        clearMockMetadataState();
         engine = new APIKeyEngine();
     });
 
@@ -554,5 +551,421 @@ describe('config file loading', () => {
         const body = Raw.slice('skip-'.length);
         expect(body).toHaveLength(64);
         expect(Hash).toMatch(/^[a-f0-9]{64}$/); // SHA-256 hash is always 64 hex chars
+    });
+});
+
+// =========================================================================
+// ROW-FILTER ENGINE LAYER (plan §5.4, §5.6 rows 3/4, §5.6.1, §5.10)
+// =========================================================================
+
+describe('row filters', () => {
+    const systemUser = new UserInfo({ ID: 'sys-user' });
+    const HASH = 'a'.repeat(64);
+    const ORG_GUID = '11111111-2222-3333-4444-555555555555';
+    const COMPANY_GUID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+    beforeEach(() => {
+        ResetAPIKeyEngine();
+        clearMockBaseState();
+        clearMockRunViewResults();
+        clearMockEntities();
+        clearMockMetadataState();
+    });
+
+    /** Configures a valid key + application so Authorize reaches scope evaluation. */
+    function setupKeyAndApp(): void {
+        setMockRunViewResult('MJ: API Keys', {
+            Success: true,
+            Results: [new MJAPIKeyEntity({ ID: 'key-1', UserID: 'user-1', Status: 'Active' })],
+        });
+        setMockBaseApplications([
+            new MJAPIApplicationEntity({ ID: 'app-1', Name: 'MJAPI', IsActive: true }),
+        ]);
+    }
+
+    /** Standard scope set used across the tests below. */
+    function setupScopes(): void {
+        setMockBaseScopes([
+            new MJAPIScopeEntity({ ID: 'scope-read', FullPath: 'entity:read', IsActive: true }),
+            new MJAPIScopeEntity({ ID: 'scope-update', FullPath: 'entity:update', IsActive: true }),
+            new MJAPIScopeEntity({ ID: 'scope-fa', FullPath: 'full_access', IsActive: true }),
+            new MJAPIScopeEntity({ ID: 'scope-qr', FullPath: 'query:run', IsActive: true }),
+            new MJAPIScopeEntity({ ID: 'scope-agent', FullPath: 'agent:execute', IsActive: true }),
+        ]);
+    }
+
+    /** Allows everything at the application ceiling for the given scope IDs. */
+    function allowCeiling(...scopeIds: string[]): void {
+        setMockBaseApplicationScopes(scopeIds.map((scopeId, i) =>
+            new MJAPIApplicationScopeEntity({
+                ID: `as-${i}`, ApplicationID: 'app-1', ScopeID: scopeId,
+                ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+            })
+        ));
+    }
+
+    describe('startup invariant (§5.6 rows 3/4)', () => {
+        it('Config() throws when a filtered KEY scope rule exists and enforcement is disabled', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+            const e = new APIKeyEngine({ enforcementEnabled: false });
+            await expect(e.Config()).rejects.toThrow(/enforcementEnabled/);
+            expect(e.IsConfigured).toBe(false);
+        });
+
+        it('Config() throws when a filtered APPLICATION scope rule exists and defaultBehaviorNoScopes is allow', async () => {
+            setMockBaseApplicationScopes([
+                new MJAPIApplicationScopeEntity({
+                    ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+            const e = new APIKeyEngine({ defaultBehaviorNoScopes: 'allow' });
+            await expect(e.Config()).rejects.toThrow(/defaultBehaviorNoScopes/);
+        });
+
+        it('Config() succeeds with filtered rules under an enforcing, default-deny engine', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+            const e = new APIKeyEngine(); // enforcement on, default deny
+            await expect(e.Config()).resolves.toBeUndefined();
+            expect(e.IsConfigured).toBe(true);
+        });
+
+        it('Config() succeeds with no filtered rules even when enforcement is disabled (regression)', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+            const e = new APIKeyEngine({ enforcementEnabled: false });
+            await expect(e.Config()).resolves.toBeUndefined();
+        });
+    });
+
+    describe('full_access backstop (§5.6.1)', () => {
+        it('denies full_access for a key carrying any row-filtered rule, naming cause and remedy', async () => {
+            setupKeyAndApp();
+            setupScopes();
+            allowCeiling('scope-fa');
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-fa', APIKeyID: 'key-1', ScopeID: 'scope-fa',
+                    ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-filtered', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'full_access', '*', systemUser as never, undefined, { skipLogging: true });
+
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toContain('row filter');
+            expect(result.Reason).toContain('Users');
+            expect(result.Reason).toContain('full_access is');
+            expect(result.Reason).toMatch(/remove the full_access grant or the row filter/i);
+            expect(result.Reason).toMatch(/split the key/i);
+        });
+
+        it('unfiltered key with a full_access grant is still allowed (regression)', async () => {
+            setupKeyAndApp();
+            setupScopes();
+            allowCeiling('scope-fa');
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-fa', APIKeyID: 'key-1', ScopeID: 'scope-fa',
+                    ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'full_access', '*', systemUser as never, undefined, { skipLogging: true });
+            expect(result.Allowed).toBe(true);
+        });
+    });
+
+    describe('RLS-bypassing scope denial (§5.10)', () => {
+        for (const scopePath of ['query:run', 'query:test', 'dataset:read', 'report:run']) {
+            it(`denies '${scopePath}' for a filtered key, naming the row filter and the split-the-key remedy`, async () => {
+                setupKeyAndApp();
+                setupScopes();
+                setMockBaseKeyScopes([
+                    new MJAPIKeyScopeEntity({
+                        ID: 'ks-filtered', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                        ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                        RowFilterID: 'filter-1',
+                    }),
+                ]);
+
+                const engine = new APIKeyEngine();
+                const result = await engine.Authorize(HASH, 'MJAPI', scopePath, 'SomeQuery', systemUser as never, undefined, { skipLogging: true });
+
+                expect(result.Allowed).toBe(false);
+                expect(result.Reason).toContain('row filter');
+                expect(result.Reason).toContain(scopePath);
+                expect(result.Reason).toMatch(/bypass/i);
+                expect(result.Reason).toMatch(/split the key/i);
+            });
+        }
+
+        it('unfiltered key requesting query:run is unchanged (regression)', async () => {
+            setupKeyAndApp();
+            setupScopes();
+            allowCeiling('scope-qr');
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-qr', APIKeyID: 'key-1', ScopeID: 'scope-qr',
+                    ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'query:run', 'SomeQuery', systemUser as never, undefined, { skipLogging: true });
+            expect(result.Allowed).toBe(true);
+        });
+    });
+
+    describe('binding resolution + acting-token validation (§5.4/§5.2)', () => {
+        function setupFilteredReadRule(filterText: string): void {
+            setupKeyAndApp();
+            setupScopes();
+            allowCeiling('scope-read');
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-filtered', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+            setMockMetadataEntities([new EntityInfo({ ID: 'entity-users', Name: 'Users' })]);
+            setMockRowLevelSecurityFilters([
+                new RowLevelSecurityFilterInfo({ ID: 'filter-1', Name: 'OrgFilter', FilterText: filterText }),
+            ]);
+        }
+
+        it('missing required acting token → denied, reason NAMES the token', async () => {
+            setupFilteredReadRule("OrganizationID = '{{ActingOrganizationID}}'");
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, { skipLogging: true });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toContain('ActingOrganizationID');
+        });
+
+        it('non-GUID ActingOrganizationID → denied, not coerced', async () => {
+            setupFilteredReadRule("OrganizationID = '{{ActingOrganizationID}}'");
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
+                skipLogging: true,
+                actingContext: { ActingOrganizationID: "x' OR '1'='1" },
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toContain('ActingOrganizationID');
+            expect(result.Reason).toMatch(/not a valid GUID/i);
+        });
+
+        it('invalid ActingScopeID → denied naming the token', async () => {
+            setupFilteredReadRule("ScopeKey = '{{ActingScopeID}}'");
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
+                skipLogging: true,
+                actingContext: { ActingScopeID: "bad'value" },
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toContain('ActingScopeID');
+        });
+
+        it('empty ActingCompanyIDs array → denied naming the token', async () => {
+            setupFilteredReadRule('CompanyID IN ({{ActingCompanyIDs}})');
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
+                skipLogging: true,
+                actingContext: { ActingCompanyIDs: [] },
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toContain('ActingCompanyIDs');
+        });
+
+        it('valid acting context → allowed with RowFilterBindings and EffectiveFilter populated', async () => {
+            const filterText = "OrganizationID = '{{ActingOrganizationID}}' AND CompanyID IN ({{ActingCompanyIDs}})";
+            setupFilteredReadRule(filterText);
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
+                skipLogging: true,
+                actingContext: { ActingOrganizationID: ORG_GUID, ActingCompanyIDs: [COMPANY_GUID] },
+            });
+
+            expect(result.Allowed).toBe(true);
+            expect(result.RowFilterBindings).toEqual([
+                { EntityID: 'entity-users', PermissionType: 'Read', FilterID: 'filter-1' },
+            ]);
+            expect(result.EffectiveFilter).toEqual([
+                { EntityName: 'Users', FilterID: 'filter-1', FilterText: filterText },
+            ]);
+        });
+
+        it('{{User*}} / {{Scope*}} tokens do not require acting context', async () => {
+            setupFilteredReadRule("OrganizationID = '{{UserOrganizationID}}' AND ResID = '{{ScopeResourceID}}'");
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, { skipLogging: true });
+            expect(result.Allowed).toBe(true);
+            expect(result.RowFilterBindings).toHaveLength(1);
+        });
+
+        it('unresolvable entity name on a filtered matching rule → denied (fail closed)', async () => {
+            setupFilteredReadRule("OrganizationID = '{{ActingOrganizationID}}'");
+            setMockMetadataEntities([]); // entity no longer resolvable
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
+                skipLogging: true,
+                actingContext: { ActingOrganizationID: ORG_GUID },
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toMatch(/does not resolve to an entity/i);
+        });
+
+        it('dangling RowFilterID → denied (fail closed)', async () => {
+            setupFilteredReadRule("Col = '{{ActingOrganizationID}}'");
+            setMockRowLevelSecurityFilters([]); // filter missing from metadata
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, {
+                skipLogging: true,
+                actingContext: { ActingOrganizationID: ORG_GUID },
+            });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toMatch(/not found/i);
+        });
+
+        it('filtered matching rule on a scope with no coherent permission type → denied', async () => {
+            setupKeyAndApp();
+            setupScopes();
+            allowCeiling('scope-agent');
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-agent', APIKeyID: 'key-1', ScopeID: 'scope-agent',
+                    ResourcePattern: 'SomeAgent', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'agent:execute', 'SomeAgent', systemUser as never, undefined, { skipLogging: true });
+            expect(result.Allowed).toBe(false);
+            expect(result.Reason).toMatch(/no coherent permission type/i);
+        });
+
+        it('unfiltered matching rule → no bindings, allowed as before (regression)', async () => {
+            setupKeyAndApp();
+            setupScopes();
+            allowCeiling('scope-read');
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+            const engine = new APIKeyEngine();
+            const result = await engine.Authorize(HASH, 'MJAPI', 'entity:read', 'Users', systemUser as never, undefined, { skipLogging: true });
+            expect(result.Allowed).toBe(true);
+            expect(result.RowFilterBindings).toBeUndefined();
+            expect(result.EffectiveFilter).toBeUndefined();
+        });
+    });
+
+    describe('GetRowFilterBindingsForKey()', () => {
+        beforeEach(() => {
+            setupScopes();
+            setMockMetadataEntities([
+                new EntityInfo({ ID: 'entity-users', Name: 'Users' }),
+                new EntityInfo({ ID: 'entity-orders', Name: 'Orders' }),
+            ]);
+        });
+
+        it('maps rule → entity → permission type, skipping unfiltered rules', () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-read', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-update', APIKeyID: 'key-1', ScopeID: 'scope-update',
+                    ResourcePattern: 'Orders', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-2',
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-unfiltered', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+
+            const engine = new APIKeyEngine();
+            const bindings = engine.GetRowFilterBindingsForKey('key-1');
+            expect(bindings).toEqual([
+                { EntityID: 'entity-orders', PermissionType: 'Update', FilterID: 'filter-2' },
+                { EntityID: 'entity-users', PermissionType: 'Read', FilterID: 'filter-1' },
+            ]);
+        });
+
+        it('skips rules whose entity does not resolve (fail closed per rule, no binding)', () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-bad', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'NoSuchEntity', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+            const engine = new APIKeyEngine();
+            expect(engine.GetRowFilterBindingsForKey('key-1')).toEqual([]);
+        });
+
+        it('skips deny and Exclude rules carrying a filter (invalid config)', () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-deny', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: true, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-exclude', APIKeyID: 'key-1', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Exclude', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-2',
+                }),
+            ]);
+            const engine = new APIKeyEngine();
+            expect(engine.GetRowFilterBindingsForKey('key-1')).toEqual([]);
+        });
+
+        it('only returns bindings for the requested key', () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-other', APIKeyID: 'other-key', ScopeID: 'scope-read',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+            const engine = new APIKeyEngine();
+            expect(engine.GetRowFilterBindingsForKey('key-1')).toEqual([]);
+        });
+
+        it('throws when the base engine has not loaded (fail closed, §5.6 row 7)', () => {
+            setMockBaseLoaded(false);
+            const engine = new APIKeyEngine();
+            expect(() => engine.GetRowFilterBindingsForKey('key-1')).toThrow(/before APIKeysEngineBase loaded/);
+        });
     });
 });

@@ -27,13 +27,34 @@ export abstract class BaseArtifactPreviewComponent extends BaseAngularComponent 
     protected readonly fileService = inject(ArtifactFileService);
 
     /**
+     * True until {@link resolveContentUrl} has settled, one way or the other.
+     *
+     * Owned here, not per subclass, so that every media preview has a loading state by
+     * construction. Each preview used to carry its own copy of this flag — or, before that, no
+     * loading branch at all, which rendered nothing while the URL resolved and made a generated
+     * image read as "never arrived". `resolveContentUrl` is async even for inline content, and
+     * for `ContentMode === 'File'` it is a network round trip before the media fetch even starts.
+     */
+    public isLoading = true;
+
+    /**
      * Resolve a URL to bind to a media element (`<img>`, `<video>`, `<audio>`):
      *   - `ContentMode === 'File'` → fetch a pre-authenticated download URL from MJStorage.
      *   - otherwise (`'Text'`)     → `Content` is already a `data:<mime>;base64,…` URI; bind directly.
      *
      * Returns `null` when there is no usable content (caller should show its own empty/error state).
+     * Clears {@link isLoading} on every exit, including a throw, so a subclass cannot leave the
+     * indicator spinning beside an error.
      */
     protected async resolveContentUrl(): Promise<string | null> {
+        try {
+            return await this.resolveContentUrlCore();
+        } finally {
+            this.isLoading = false;
+        }
+    }
+
+    private async resolveContentUrlCore(): Promise<string | null> {
         const version = this.artifactVersion;
         if (!version?.ID) {
             return null;

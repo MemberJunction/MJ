@@ -17,6 +17,8 @@ import {
 } from './agent-run-flow.model';
 import { FlameCascadeComponent } from './flame-cascade.component';
 import { SubwayLinesComponent } from './subway-lines.component';
+import { buildFlowModelFromTree } from './run-tree-flow-projection';
+import type { AgentRunTreeNode } from '@memberjunction/ai-core-plus';
 import { ConstellationComponent } from './constellation.component';
 import { FlowchartComponent } from './flowchart.component';
 
@@ -44,6 +46,19 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
   @Input() runStatus = '';
   @Input() agentIconClass: string | null = null;
   @Input() agentLogoUrl: string | null = null;
+
+  /**
+   * The run's execution tree, loaded once by the form and shared with every tab.
+   *
+   * Setter-based so a refresh upstream rebuilds all three renderers immediately — they share one
+   * model, so one rebuild updates whichever is on screen and every one behind it.
+   */
+  @Input()
+  set RunTree(value: AgentRunTreeNode | null) {
+    this.runTree = value;
+    void this.rebuildModel();
+  }
+  private runTree: AgentRunTreeNode | null = null;
 
   public modes: FlowMode[] = [
     { key: 'subway', label: 'Subway Lines', icon: 'fa-train-subway', enabled: true },
@@ -129,7 +144,14 @@ export class AIAgentRunFlowComponent implements AfterViewInit, OnDestroy {
     const wasEmpty = !this.model;
     await AIEngineBase.Instance.EnsureLoaded(); // agent icons/logos read synchronously during build
     const rootIcon = { iconClass: this.agentIconClass || 'fa-robot', logoUrl: this.agentLogoUrl };
-    const model = await buildFlowModel(this.agentName ?? '', this.runStatus, rootIcon, this.dataHelper);
+    // The TREE is the source. It carries the run's steps AND any task-graph work those steps
+    // submitted — which the step-row builder cannot see at all, because a workflow's steps live in
+    // MJ: Tasks rather than in the run's step list. Falling back to the step builder when the tree
+    // has not arrived keeps the view populated on first paint rather than flashing empty.
+    const model = this.runTree
+      ? buildFlowModelFromTree(this.runTree, this.agentName ?? '', this.runStatus, rootIcon)
+      : await buildFlowModel(this.agentName ?? '', this.runStatus, rootIcon, this.dataHelper);
+    if (!model) return;
     this.model = model;
     this.hasData = model.leaves.length > 0;
     if (wasEmpty) this.p = 0;

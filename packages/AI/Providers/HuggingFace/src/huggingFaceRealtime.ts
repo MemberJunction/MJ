@@ -81,6 +81,9 @@ export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     // The compat layer has no create_response gating — no live turn-mode reconfiguration.
     supportsLiveReconfigure: false,
     unexpectedCloseMessage: 'HuggingFace realtime session closed unexpectedly',
+    // The cascade's own VAD stage governs turn taking — no wire-level turn modes to request, so
+    // a normalized `turnDetection` request from the catalog/config cascade is diag-logged + dropped.
+    supportedTurnModes: [],
     // No turn-detection override — the cascade's own VAD stage governs turn taking; meeting-mode
     // create_response gating is not supported by the compat layer, so the flag only suppresses it
     // being sent raw (the bridge still gates spoken updates itself).

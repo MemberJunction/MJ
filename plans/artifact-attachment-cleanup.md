@@ -87,7 +87,7 @@ These are the genuinely open questions. Each blocks a specific batch of the impl
 
 Options:
 
-- **D1a. Keep the read path.** Cost: one deprecation warning per agent run that touches a legacy conversation. Benefit: zero data migration. Suits an open-source platform where every install has different vintage data.
+- **D1a. Keep the read path.** Cost: one deprecation warning per agent run that touches a legacy conversation. Benefit: zero data migration. Suits a source-available platform where every install has different vintage data.
 - **D1b. One-shot backfill.** Write an idempotent migration / `mj-cli` task that walks every `ConversationDetailAttachment` with `ArtifactVersionID IS NULL` and creates the paired artifact (same logic the server hook uses today). Then delete the back-compat branch. Suits a controlled deployment where you can run a maintenance task. PR #2569 already shipped `mj-cli artifacts reclassify` — extending or pairing it with `artifacts backfill-from-attachments` is small.
 - **D1c. Drop legacy rows from agent context.** Decide that conversations with un-migrated attachments simply don't carry those attachments into the agent any longer. Cheapest for code; lossy for users.
 

@@ -137,12 +137,11 @@ export class FieldValueCollection {
             }
             else {
                 if (typeof value === 'string' || value instanceof Date) {
-                    if (quoteStyle === 'single') {
-                        value = `'${value}'`;
-                    }
-                    else {
-                        value = `"${value}"`;
-                    }
+                    // Double any embedded quote of the chosen style so a value like O'Brien — or a
+                    // record id lifted from an external index — cannot break out of the literal.
+                    const quote = quoteStyle === 'single' ? "'" : '"';
+                    const text = typeof value === 'string' ? value.split(quote).join(quote + quote) : `${value}`;
+                    value = `${quote}${text}${quote}`;
                 }
                 return `${keyValue.FieldName}=${value}`;
             }
@@ -231,8 +230,10 @@ export class FieldValueCollection {
             const parts = concatenatedString.split(fieldDelimiter);
             const pkVals: KeyValuePair[] = [];
             for (let p of parts) {
+              // Everything after the first delimiter is the value, so a value that itself contains the
+              // delimiter ("Code|a|b") round-trips instead of being silently truncated to "a".
               const kv = p.split(valueDelimiter);
-              pkVals.push({ FieldName: kv[0], Value: kv[1] });
+              pkVals.push({ FieldName: kv[0], Value: kv.slice(1).join(valueDelimiter) });
             }
   
             this.KeyValuePairs = pkVals;  
@@ -250,6 +251,33 @@ export class FieldValueCollection {
      */
     ToURLSegment(segment?: string): string {
         return this.ToConcatenatedString(segment || CompositeKey.DefaultFieldDelimiter, CompositeKey.DefaultValueDelimiter);
+    }
+
+    /**
+     * The exact inverse of {@link CompositeKey.LoadFromURLSegment}. A single-field key serializes to
+     * just its value — the shorthand `LoadFromURLSegment` maps back onto the entity's first primary
+     * key — while a multi-field key serializes to the full `Field1|Value1||Field2|Value2` segment.
+     * A single value that itself contains the value delimiter also gets the full segment; the parsers
+     * (`SimpleLoadFromURLSegment`, `LoadFromConcatenatedString`) treat everything after the first
+     * delimiter as the value, so it round-trips rather than being truncated. A value containing the
+     * field delimiter (`||`) remains unrepresentable — a pre-existing limit of the format.
+     *
+     * This is the "compact" record-id form carried by search results, `MJ: List Details`,
+     * `MJ: User Record Logs` and Explorer record URLs: for the overwhelmingly common single-column
+     * primary key it is indistinguishable from the raw value, so `IN (...)` filters, dedup keys and
+     * persisted data all keep working, while composite keys still round-trip losslessly.
+     * @example "11055"                       // single-column key, any column name
+     * @example "OrderID|11055||LineNo|3"     // composite key
+     */
+    ToCompactURLSegment(): string {
+        if (this.KeyValuePairs.length === 1) {
+            const value = this.KeyValuePairs[0].Value;
+            const text = value === null || value === undefined ? '' : String(value);
+            if (!text.includes(CompositeKey.DefaultValueDelimiter)) {
+                return text;
+            }
+        }
+        return this.ToURLSegment();
     }
 
     private static readonly _field_delimiter = '||'
@@ -291,8 +319,10 @@ export class FieldValueCollection {
             const parts = urlSegment.split(CompositeKey.DefaultFieldDelimiter);
             const pkVals: KeyValuePair[] = [];
             for (let p of parts) {
+              // Everything after the first '|' is the value, so a value that itself contains '|'
+              // ("Code|a|b") round-trips instead of being silently truncated to "a".
               const kv = p.split('|');
-              pkVals.push({ FieldName: kv[0], Value: kv[1] });
+              pkVals.push({ FieldName: kv[0], Value: kv.slice(1).join('|') });
             }
   
             this.KeyValuePairs = pkVals;  
@@ -330,6 +360,113 @@ export class FieldValueCollection {
         fvc.LoadFromSimpleObject(obj);
         return fvc;
     }
+}
+
+/**
+ * Path segment used for an unsaved entity record so the URL can be deeplinked
+ * (`/app/:app/record/:entity/new?NewRecordValues=...`).
+ */
+export const NEW_ENTITY_RECORD_URL_ID = 'new';
+
+/** Query-string key that carries FieldValueCollection.ToURLSegment() defaults. */
+export const NEW_RECORD_VALUES_QUERY_PARAM = 'NewRecordValues';
+
+/** True when the record-id path segment means "create", not a stored key. */
+export function IsNewEntityRecordUrlId(recordId: string | null | undefined): boolean {
+    if (recordId == null) return true;
+    const trimmed = recordId.trim();
+    return trimmed.length === 0 || trimmed.toLowerCase() === NEW_ENTITY_RECORD_URL_ID;
+}
+
+/**
+ * True when a workspace tab is the record named by a `/record/:entity/:id` URL.
+ *
+ * New-record tabs store `recordId: ''` while the URL uses the `new` sentinel.
+ * Those must match. Comparing the raw strings (`'' === 'new'`) is false, so
+ * URL sync thinks the tab is missing and opens another one — an infinite
+ * tab storm that kills the browser tab.
+ */
+export function RecordUrlMatchesTab(
+    urlEntityName: string,
+    urlRecordId: string,
+    tabEntityName: string | null | undefined,
+    tabRecordId: string | null | undefined,
+): boolean {
+    if ((tabEntityName ?? '').trim().toLowerCase() !== urlEntityName.trim().toLowerCase()) {
+        return false;
+    }
+    if (IsNewEntityRecordUrlId(urlRecordId) && IsNewEntityRecordUrlId(tabRecordId)) {
+        return true;
+    }
+    return (tabRecordId ?? '') === urlRecordId;
+}
+
+/**
+ * Encode new-record defaults for a deeplink. Objects become
+ * `Field|value||Field2|value2`. Empty / null returns undefined.
+ */
+export function EncodeNewRecordValuesForURL(values: unknown): string | undefined {
+    if (values == null) return undefined;
+    if (typeof values === 'string') {
+        const trimmed = values.trim();
+        return trimmed.length > 0 ? trimmed : undefined;
+    }
+    if (typeof values !== 'object' || Array.isArray(values)) return undefined;
+    const record = values as Record<string, unknown>;
+    const keys = Object.keys(record).filter((key) => record[key] != null);
+    if (keys.length === 0) return undefined;
+    const obj: Record<string, unknown> = {};
+    for (const key of keys) {
+        obj[key] = record[key];
+    }
+    return FieldValueCollection.FromObject(obj).ToURLSegment();
+}
+
+/**
+ * Compare two Explorer resource URLs after decoding. Angular's serializer
+ * leaves `:` in `MJ_BizApps_Orders: Order Headers` while `encodeURIComponent`
+ * writes `%3A`. A raw `!==` on those strings is permanently true and, with
+ * `onSameUrlNavigation: 'reload'`, navigates until Chrome dies.
+ */
+export function ResourceUrlsEquivalent(left: string, right: string): boolean {
+    const a = splitResourceUrl(left);
+    const b = splitResourceUrl(right);
+    if (safeDecodePath(a.path) !== safeDecodePath(b.path)) {
+        return false;
+    }
+    return resourceQueryEqual(a.query, b.query);
+}
+
+function splitResourceUrl(raw: string): { path: string; query: Record<string, string> } {
+    const trimmed = (raw ?? '').trim();
+    const q = trimmed.indexOf('?');
+    const path = q === -1 ? trimmed : trimmed.slice(0, q);
+    const search = q === -1 ? '' : trimmed.slice(q + 1);
+    const query: Record<string, string> = {};
+    if (search.length > 0) {
+        new URLSearchParams(search).forEach((value, key) => {
+            query[key] = value;
+        });
+    }
+    return { path, query };
+}
+
+function safeDecodePath(path: string): string {
+    try {
+        return decodeURIComponent(path);
+    } catch {
+        return path;
+    }
+}
+
+function resourceQueryEqual(a: Record<string, string>, b: Record<string, string>): boolean {
+    const keysA = Object.keys(a);
+    const keysB = Object.keys(b);
+    if (keysA.length !== keysB.length) return false;
+    return keysA.every((key) =>
+        decodeURIComponent((a[key] ?? '').replace(/\+/g, ' ')) ===
+        decodeURIComponent((b[key] ?? '').replace(/\+/g, ' ')),
+    );
 }
 
 
@@ -371,6 +508,46 @@ export class CompositeKey extends FieldValueCollection {
     public static FromID(id: any): CompositeKey {
         let compositeKey = new CompositeKey();
         compositeKey.LoadFromSingleKeyValuePair('ID', id);
+        return compositeKey;
+    }
+
+    /**
+     * Static form of {@link LoadFromURLSegment}: builds a key from a record-id string that is either a
+     * bare value (a single-column primary key, mapped onto `entity.FirstPrimaryKey` whatever that
+     * column is called) or a full `Field1|Value1||Field2|Value2` segment (a composite primary key).
+     * It reads both the compact form produced by {@link ToCompactURLSegment} and the always-prefixed
+     * form produced by {@link ToURLSegment}.
+     *
+     * Use this — not {@link FromID} — whenever the entity is a *variable* rather than a literal MJ
+     * core entity name. MJ supports primary keys with any column name(s) and type(s); hardcoding
+     * `ID` fails `Load()` with "Primary key ID not found in entity ..." for every entity whose key
+     * is called something else, and can never represent a multi-column key at all.
+     *
+     * When `entity` is null/undefined (metadata not resolvable) a delimited segment is parsed as-is
+     * since it already carries its field names, and a bare value falls back to an `ID` key so callers
+     * on an unknown entity keep the pre-existing behavior instead of throwing.
+     */
+    public static FromURLSegment(entity: EntityInfo | null | undefined, segment: string): CompositeKey {
+        const compositeKey = new CompositeKey();
+        if (entity?.FirstPrimaryKey) {
+            compositeKey.LoadFromURLSegment(entity, segment);
+        } else if (segment.includes(CompositeKey.DefaultValueDelimiter)) {
+            compositeKey.SimpleLoadFromURLSegment(segment);
+        } else {
+            compositeKey.LoadFromSingleKeyValuePair('ID', segment);
+        }
+        return compositeKey;
+    }
+
+    /**
+     * Static form of {@link LoadFromEntityInfoAndRecord}: builds the key from a data row (a
+     * `ResultType: 'simple'` RunView row, or any object keyed by field name) using the entity's
+     * actual primary key column(s). Pair with {@link ToCompactURLSegment} to produce a record-id
+     * string that {@link FromURLSegment} reads back for any entity, single- or multi-column key.
+     */
+    public static FromEntityRecord(entity: EntityInfo, record: Record<string, unknown>): CompositeKey {
+        const compositeKey = new CompositeKey();
+        compositeKey.LoadFromEntityInfoAndRecord(entity, record);
         return compositeKey;
     }
 

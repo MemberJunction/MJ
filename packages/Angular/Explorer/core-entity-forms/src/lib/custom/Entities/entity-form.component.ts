@@ -16,7 +16,10 @@ import {
     EntityPermissionInfo,
     Metadata,
     CompositeKey,
-    RunView
+    RunView,
+    type IEntityConfiguration,
+    type IEntityFormConfiguration,
+    type RelatedFormRoleCandidate,
 } from '@memberjunction/core';
 import { MJEntityEntity } from '@memberjunction/core-entities';
 import { ERDCompositeState } from '@memberjunction/ng-entity-relationship-diagram';
@@ -716,6 +719,39 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     public setActiveSection(section: ExplorerSection): void {
         this.activeSection = section;
         this.closeDetailPanel();
+        this.cdr.markForCheck();
+    }
+
+    public get FormChromeConfig(): IEntityFormConfiguration | null {
+        return this.record?.ConfigurationObject?.UI?.Form ?? null;
+    }
+
+    public get FormChromeCandidates(): RelatedFormRoleCandidate[] {
+        if (!this.entity) return [];
+        return this.entity.RelatedEntities.map((rel) => ({
+            ID: rel.ID,
+            RelatedEntity: rel.RelatedEntity,
+            RelatedEntityID: rel.RelatedEntityID,
+            RelatedEntityJoinField: rel.RelatedEntityJoinField,
+            RelatedEntitySchemaName: this.allEntities.find((e) => UUIDsEqual(e.ID, rel.RelatedEntityID))?.SchemaName ?? '',
+            DisplayInForm: rel.DisplayInForm,
+            DisplayLocation: rel.DisplayLocation,
+            DisplayComponentID: rel.DisplayComponentID,
+            RelatedRecordCollection: rel.RelatedRecordCollection,
+            JoinView: rel.JoinView,
+            Type: rel.Type,
+            Sequence: rel.Sequence,
+            Configuration: rel.Configuration,
+        }));
+    }
+
+    public OnFormChromeConfigChange(form: IEntityFormConfiguration): void {
+        if (!this.record) return;
+        const current: IEntityConfiguration = this.record.ConfigurationObject ?? {};
+        this.record.ConfigurationObject = {
+            ...current,
+            UI: { ...(current.UI ?? {}), Form: form },
+        };
         this.cdr.markForCheck();
     }
 

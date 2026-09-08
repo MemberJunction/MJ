@@ -1,0 +1,60 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration — V202608050105__v6.1.x__Layered_Base_Views_Pilot.sql
+-- ============================================================================
+--
+-- PG-EMPTY-BY-DESIGN: layered base views are explicitly NOT SUPPORTED on PostgreSQL.
+-- PostgreSQLCodeGenProvider.assertLayeredBaseViewSupported() throws for any entity with
+-- GeneratedBaseViewName set, so the inner "…Generated" views this migration wraps can never
+-- exist on PostgreSQL and there is nothing here to translate.
+--
+-- Read this before "fixing" it. An empty counterpart is indistinguishable at a glance from the
+-- silent-emptying defect that shipped v5.45 broken (issue #3253), so this header records the
+-- reasoning and lets a reviewer check it.
+--
+-- WHAT THE SQL SERVER MIGRATION DOES
+-- It pilots layered base views on two core entities. CodeGen generates the full base view under
+-- a new name (GeneratedBaseViewName), and the application owns BaseView, which wraps it as
+-- `SELECT g.*, <extras> FROM <inner> g`:
+--
+--   MJ: Version Installations  ->  vwVersionInstallations wraps vwVersionInstallationsGenerated
+--   MJ: User View Run Details  ->  vwUserViewRunDetails  wraps vwUserViewRunDetailsGenerated
+--
+-- WHY POSTGRESQL GETS NOTHING — three independent reasons
+--
+--   1. The feature is refused on PostgreSQL BY DESIGN. From
+--      packages/CodeGenLib/src/Database/providers/postgresql/PostgreSQLCodeGenProvider.ts,
+--      assertLayeredBaseViewSupported():
+--        "layered base views are not supported on PostgreSQL. PostgreSQL freezes a view's
+--         column list at creation and has no sp_refreshview equivalent, so the
+--         application-owned view would silently stop gaining columns that the generated view
+--         underneath it picks up."
+--      That is the exact silent-staleness failure layering exists to eliminate, so the provider
+--      throws rather than shipping a footgun.
+--
+--   2. Consequently the inner views are never generated on PostgreSQL. A conversion of this
+--      migration would produce outer views selecting FROM relations that do not exist. Verified
+--      empirically: after applying the converted V202608050100, __mj.vwVersionInstallationsGenerated
+--      is absent, and `CREATE OR REPLACE VIEW vwVersionInstallations … FROM …Generated` fails with
+--      `relation "__mj.vwVersionInstallationsGenerated" does not exist`.
+--
+--   3. Even the drop-and-recreate half does not translate. PostgreSQL tracks a dependency SQL
+--      Server does not: spCreateVersionInstallation / spUpdateVersionInstallation are declared to
+--      return the view's row type, so `DROP VIEW __mj."vwVersionInstallations"` fails with
+--      "cannot drop view … because other objects depend on it". DROP … CASCADE would remove those
+--      two functions, and this migration does not recreate them (it recreates only the
+--      UserViewRunDetail procedures), leaving the database short two CRUD routines.
+--
+-- WHAT CARRIES THE CHANGE ON POSTGRESQL
+-- Nothing. PostgreSQL keeps the generated base views it already had. The additive
+-- Entity.GeneratedBaseViewName COLUMN still arrives via V202608050100, which is portable and
+-- converts normally — only the pilot's use of that column is SQL-Server-only.
+--
+-- 🚨 OPEN CROSS-PLATFORM HAZARD — see issue #3477
+-- The metadata that ENABLES this feature (metadata/entities/.layered-base-views.json) lives in
+-- the normal, platform-neutral metadata tree, so `mj sync push` and the next Metadata_Sync
+-- migration will carry GeneratedBaseViewName to PostgreSQL installs — where the CodeGen guard
+-- above then throws on the next `mj codegen` run. This file being empty does NOT mitigate that;
+-- the metadata reaches PG by a different route. #3477 tracks the decision.
+--
+-- Tracked in issue #3471.
+-- ============================================================================

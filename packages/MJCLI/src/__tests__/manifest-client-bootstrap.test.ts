@@ -102,6 +102,55 @@ describe('applyOpenAppClientBootstrapBlock', () => {
         expect(out).toContain("// '@acme/a-ng' disabled by");
     });
 
+    it('numbers aliases off the array position, so a disabled entry cannot orphan a reference', () => {
+        // The regression this guards: the alias index and OPEN_APP_CLIENT_MODULES must share
+        // one counter. If the alias were numbered off the ENTRY index while the array only
+        // collected enabled entries, a leading disabled package would emit
+        // `[__openAppClient1]` with only `__openAppClient1` declared — or, under any future
+        // skew between the two, an array element naming a variable that does not exist.
+        // That is a TS2304 in the host app's build, not a test failure, so it is worth pinning.
+        const out = applyOpenAppClientBootstrapBlock(BASE, [
+            { PackageName: '@acme/disabled-ng', Enabled: false },
+            { PackageName: '@acme/enabled-ng', Enabled: true },
+        ]);
+
+        expect(out).toContain("// '@acme/disabled-ng' disabled by");
+        expect(out).not.toContain("from '@acme/disabled-ng'");
+        expect(out).toContain("import * as __openAppClient0 from '@acme/enabled-ng';");
+        expect(out).toContain('export const OPEN_APP_CLIENT_MODULES: unknown[] = [__openAppClient0];');
+
+        // Every alias the array references must actually be declared by an import above it.
+        const declared = new Set(Array.from(out.matchAll(/import \* as (__openAppClient\d+) from/g), m => m[1]));
+        const referenced = (out.match(/OPEN_APP_CLIENT_MODULES: unknown\[\] = \[(.*)\];/)?.[1] ?? '')
+            .split(',').map(s => s.trim()).filter(Boolean);
+        expect(referenced.length).toBeGreaterThan(0);
+        for (const ref of referenced) expect(declared.has(ref)).toBe(true);
+        expect(declared.size).toBe(referenced.length);
+    });
+
+    it('keeps alias numbering contiguous across several interleaved disabled entries', () => {
+        const out = applyOpenAppClientBootstrapBlock(BASE, [
+            { PackageName: '@acme/a-ng', Enabled: false },
+            { PackageName: '@acme/b-ng', Enabled: true },
+            { PackageName: '@acme/c-ng', Enabled: false },
+            { PackageName: '@acme/d-ng', Enabled: true },
+        ]);
+        expect(out).toContain("import * as __openAppClient0 from '@acme/b-ng';");
+        expect(out).toContain("import * as __openAppClient1 from '@acme/d-ng';");
+        expect(out).toContain('export const OPEN_APP_CLIENT_MODULES: unknown[] = [__openAppClient0, __openAppClient1];');
+        expect(out).not.toContain('__openAppClient2');
+    });
+
+    it('emits an empty anchor when every entry is disabled (no dangling reference)', () => {
+        const out = applyOpenAppClientBootstrapBlock(BASE, [
+            { PackageName: '@acme/a-ng', Enabled: false },
+            { PackageName: '@acme/b-ng', Enabled: false },
+        ]);
+        expect(out).toContain('export const OPEN_APP_CLIENT_MODULES: unknown[] = [];');
+        expect(out).not.toContain('__openAppClient');
+        expect(out).toContain('BEGIN Open App client bootstrap');
+    });
+
     it('is idempotent — applying the same entries twice yields identical content', () => {
         const entries = [{ PackageName: '@acme/a-ng', Enabled: true }];
         const once = applyOpenAppClientBootstrapBlock(BASE, entries);

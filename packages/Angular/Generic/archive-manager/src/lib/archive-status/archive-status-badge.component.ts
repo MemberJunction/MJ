@@ -9,6 +9,7 @@ import {
   inject,
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Summary information about an archived version of a record.
@@ -35,7 +36,7 @@ export interface ArchiveVersionInfo {
   styleUrls: ['./archive-status-badge.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ArchiveStatusBadgeComponent implements OnDestroy {
+export class ArchiveStatusBadgeComponent extends BaseAngularComponent implements OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   /** Whether the badge is visible (record has archived fields) */
@@ -130,7 +131,7 @@ export class ArchiveStatusBadgeComponent implements OnDestroy {
 
   /** Fetch archive run detail records from the server */
   private async fetchArchiveDetails(): Promise<{ Success: boolean; Results: ArchiveDetailRecord[] }> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const escapedEntity = this._entityName.replace(/'/g, "''");
     const escapedRecord = this._recordID.replace(/'/g, "''");
 

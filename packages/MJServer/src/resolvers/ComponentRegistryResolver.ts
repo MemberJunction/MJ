@@ -1,7 +1,7 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
 import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual, MJLruCache } from '@memberjunction/global';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';

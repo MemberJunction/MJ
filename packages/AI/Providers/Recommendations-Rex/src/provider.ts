@@ -2,7 +2,7 @@ import { RecommendationProviderBase, RecommendationRequest, RecommendationResult
 import { EntityInfo, LogError, LogStatus, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { MJEntityRecordDocumentEntityType, MJListDetailEntity, MJListEntity, MJRecommendationEntity, MJRecommendationItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
-import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, isAxiosError } from "axios";
+import { HttpPost, HttpRequestConfig, HttpResponse, IsHttpError } from "@memberjunction/network-utils";
 import { GetRecommendationParams, RasaResponse, RasaTokenResponse, RecommendationResponse, RecommendContextData } from "./generic/models";
 import * as Config from "./config";
 
@@ -133,12 +133,12 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
         try{
             LogStatus("Getting Rex access token");
 
-            const config: AxiosRequestConfig = {
-                auth: {
-                    username: Config.REX_USERNAME,
-                    password: Config.REX_PASSWORD
+            const config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'> = {
+                BasicAuth: {
+                    Username: Config.REX_USERNAME,
+                    Password: Config.REX_PASSWORD
                 },
-                headers: {
+                Headers: {
                     'Cache-Control': 'no-cache',
                     'Content-Type': 'application/json'
                 }
@@ -148,8 +148,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 key: Config.REX_API_KEY
             }
     
-            const response: AxiosResponse<RasaResponse<RasaTokenResponse>> = await axios.post<RasaResponse<RasaTokenResponse>>(`${Config.REX_API_HOST}/tokens`, body, config);
-            let data: RasaResponse<RasaTokenResponse> = response.data;
+            const response: HttpResponse<RasaResponse<RasaTokenResponse>> = await HttpPost<RasaResponse<RasaTokenResponse>>(`${Config.REX_API_HOST}/tokens`, body, config);
+            const data: RasaResponse<RasaTokenResponse> = response.Data;
             if(!response || data.results.length == 0){
                 LogError("No token returned from Rex API");
                 return null;
@@ -158,9 +158,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             return data.results[0]["rasa-token"];
         }
         catch(ex){
-            if(isAxiosError(ex)){
-                const axiosError: AxiosError = ex;
-                LogError("Error getting Rex access token:", undefined, axiosError);
+            if(IsHttpError(ex)){
+                LogError("Error getting Rex access token:", undefined, ex);
                 return null;
             }
             else{
@@ -172,8 +171,8 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
 
     protected async GetRecommendations(params: GetRecommendationParams): Promise<RecommendationResponse[] | null> {
         try{
-            const config: AxiosRequestConfig = {
-                headers: {
+            const config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'> = {
+                Headers: {
                     'Cache-Control': 'no-cache',
                     'Content-Type': 'application/json',
                     'rasa-token': params.AccessToken
@@ -187,18 +186,17 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
                 filters: params.Options.filters
             };
     
-            const response: AxiosResponse<RasaResponse<RecommendationResponse>> = await axios.post<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);
+            const response: HttpResponse<RasaResponse<RecommendationResponse>> = await HttpPost<RasaResponse<RecommendationResponse>>(`${Config.REX_RECOMMEND_HOST}/suggest?entity=0&id_response=0`, body, config);
             if(!response){
                 return null;
             }
 
-            const data: RasaResponse<RecommendationResponse> = response.data;
+            const data: RasaResponse<RecommendationResponse> = response.Data;
             return data.results;
         }
         catch(ex){
-            if(isAxiosError(ex)){
-                const axiosError: AxiosError<RasaResponse> = ex;
-                const rasaError = axiosError.response.data;
+            if(IsHttpError(ex)){
+                const rasaError = ex.Data as RasaResponse | undefined;
                 LogError("Error getting Rex recommendation, rasaError:", undefined, rasaError);
                 if(params.ErrorListID){
                     const errorMessage: string = JSON.stringify(rasaError);

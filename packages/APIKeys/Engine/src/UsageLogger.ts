@@ -6,7 +6,7 @@
 
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
-import { UsageLogEntry, EvaluatedRule } from './interfaces';
+import { UsageLogEntry, EvaluatedRule, EffectiveFilterEntry } from './interfaces';
 
 /**
  * Logs API key usage with detailed authorization evaluation information
@@ -37,7 +37,7 @@ export class UsageLogger {
             logEntity.IPAddress = entry.IPAddress;
             logEntity.UserAgent = entry.UserAgent;
             logEntity.RequestedResource = entry.RequestedResource;
-            logEntity.ScopesEvaluated = this.serializeEvaluatedRules(entry.ScopesEvaluated);
+            logEntity.ScopesEvaluated = this.serializeEvaluatedRules(entry.ScopesEvaluated, entry.EffectiveFilter);
             logEntity.AuthorizationResult = entry.AuthorizationResult;
             logEntity.DeniedReason = entry.DeniedReason;
 
@@ -64,7 +64,8 @@ export class UsageLogger {
         evaluatedRules: EvaluatedRule[],
         ipAddress: string | null,
         userAgent: string | null,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        effectiveFilter?: EffectiveFilterEntry[]
     ): Promise<string | null> {
         return this.Log({
             APIKeyId: apiKeyId,
@@ -79,7 +80,8 @@ export class UsageLogger {
             RequestedResource: requestedResource,
             ScopesEvaluated: evaluatedRules,
             AuthorizationResult: 'Allowed',
-            DeniedReason: null
+            DeniedReason: null,
+            EffectiveFilter: effectiveFilter
         }, contextUser);
     }
 
@@ -99,7 +101,8 @@ export class UsageLogger {
         deniedReason: string,
         ipAddress: string | null,
         userAgent: string | null,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        effectiveFilter?: EffectiveFilterEntry[]
     ): Promise<string | null> {
         return this.Log({
             APIKeyId: apiKeyId,
@@ -114,7 +117,8 @@ export class UsageLogger {
             RequestedResource: requestedResource,
             ScopesEvaluated: evaluatedRules,
             AuthorizationResult: 'Denied',
-            DeniedReason: deniedReason
+            DeniedReason: deniedReason,
+            EffectiveFilter: effectiveFilter
         }, contextUser);
     }
 
@@ -151,10 +155,14 @@ export class UsageLogger {
     }
 
     /**
-     * Serialize evaluated rules to JSON for storage
+     * Serialize evaluated rules to JSON for storage. When an effective row
+     * filter accompanies the decision (a row-filtered key), it is appended as a
+     * final `{ effectiveFilter: [...] }` element of the same array so the audit
+     * trail answers "what could this request actually see" without a schema
+     * change — ParseEvaluatedRules skips that element.
      */
-    private serializeEvaluatedRules(rules: EvaluatedRule[]): string {
-        return JSON.stringify(rules.map(r => ({
+    private serializeEvaluatedRules(rules: EvaluatedRule[], effectiveFilter?: EffectiveFilterEntry[]): string {
+        const serialized: Record<string, unknown>[] = rules.map(r => ({
             level: r.Level,
             ruleId: r.Rule.Id,
             scopePath: r.Rule.ScopePath,
@@ -162,10 +170,42 @@ export class UsageLogger {
             patternType: r.Rule.PatternType,
             isDeny: r.Rule.IsDeny,
             priority: r.Rule.Priority,
+            rowFilterId: r.Rule.RowFilterID,
             matched: r.Matched,
             patternMatched: r.PatternMatched,
             result: r.Result
-        })));
+        }));
+        if (effectiveFilter && effectiveFilter.length > 0) {
+            serialized.push({
+                effectiveFilter: effectiveFilter.map(f => ({
+                    entityName: f.EntityName,
+                    filterId: f.FilterID,
+                    filterText: f.FilterText
+                }))
+            });
+        }
+        return JSON.stringify(serialized);
+    }
+
+    /**
+     * Parse the effective row filter recorded alongside the evaluated rules,
+     * or an empty array when the log entry carries none.
+     */
+    public static ParseEffectiveFilter(json: string | null): EffectiveFilterEntry[] {
+        if (!json) return [];
+        try {
+            const parsed = JSON.parse(json) as Record<string, unknown>[];
+            const carrier = parsed.find(e => e && typeof e === 'object' && 'effectiveFilter' in e);
+            if (!carrier) return [];
+            const entries = carrier.effectiveFilter as Record<string, unknown>[];
+            return entries.map(e => ({
+                EntityName: e.entityName as string,
+                FilterID: e.filterId as string,
+                FilterText: e.filterText as string
+            }));
+        } catch {
+            return [];
+        }
     }
 
     /**
@@ -175,8 +215,8 @@ export class UsageLogger {
         if (!json) return [];
 
         try {
-            const parsed = JSON.parse(json);
-            return parsed.map((r: Record<string, unknown>) => ({
+            const parsed = JSON.parse(json) as Record<string, unknown>[];
+            return parsed.filter(r => r && typeof r === 'object' && !('effectiveFilter' in r)).map((r: Record<string, unknown>) => ({
                 Level: r.level as 'application' | 'key',
                 Rule: {
                     Id: r.ruleId as string,
@@ -185,7 +225,8 @@ export class UsageLogger {
                     Pattern: r.pattern as string | null,
                     PatternType: r.patternType as 'Include' | 'Exclude',
                     IsDeny: r.isDeny as boolean,
-                    Priority: r.priority as number
+                    Priority: r.priority as number,
+                    RowFilterID: (r.rowFilterId as string | undefined) ?? null
                 },
                 Matched: r.matched as boolean,
                 PatternMatched: r.patternMatched as string | null,

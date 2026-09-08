@@ -5,7 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJConfirmService } from '@memberjunction/ng-ui-components';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
-import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { PromptVersionControlComponent } from './prompt-version-control.component';
 
 /**
@@ -20,17 +20,6 @@ import { PromptVersionControlComponent } from './prompt-version-control.componen
  * / mj-alert are stubbed; the two injected services are stubbed (only touched in restore, not exercised).
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading {
-  @Input() text = '';
-  @Input() size = '';
-}
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<div class="stub-empty">{{ Title }}</div>' })
-class StubEmptyState {
-  @Input() Size = '';
-  @Input() Icon = '';
-  @Input() Title = '';
-}
 @Component({ standalone: true, selector: 'mj-alert', template: '<div class="stub-alert"><ng-content></ng-content></div>' })
 class StubAlert {
   @Input() Variant = '';
@@ -105,7 +94,7 @@ function baseProviders() {
 // Render with a prompt + seeded versions and a chosen filter, then a single detect pass.
 function renderTimeline(over?: { filterBy?: string; showSystemChanges?: boolean }) {
   const fixture = renderComponentFixture(PromptVersionControlComponent, {
-    imports: [CommonModule, FormsModule, StubLoading, StubEmptyState, StubAlert],
+    imports: [CommonModule, FormsModule, StubLoadingComponent, StubEmptyStateComponent, StubAlert],
     declarations: [PromptVersionControlComponent],
     providers: baseProviders(),
     inputs: { Provider: createFakeProvider({ runViewResults: [] }), autoLoad: false, prompt: PROMPT },
@@ -126,7 +115,7 @@ function renderTimeline(over?: { filterBy?: string; showSystemChanges?: boolean 
 describe('PromptVersionControlComponent (DOM)', () => {
   it('shows the prompt-selector empty state when no prompt is provided', () => {
     const fixture = renderComponentFixture(PromptVersionControlComponent, {
-      imports: [CommonModule, FormsModule, StubLoading, StubEmptyState, StubAlert],
+      imports: [CommonModule, FormsModule, StubLoadingComponent, StubEmptyStateComponent, StubAlert],
       declarations: [PromptVersionControlComponent],
       providers: baseProviders(),
       inputs: { Provider: createFakeProvider({ runViewResults: [] }), autoLoad: false, prompt: null },

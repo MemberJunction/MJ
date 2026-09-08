@@ -3,7 +3,7 @@ import { Component, Directive, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MJButtonDirective, MJEmptyStateComponent } from '@memberjunction/ng-ui-components';
-import { renderComponentFixture, query, queryAll, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, capture, createFakeProvider, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { ArtifactLoadDialogComponent } from './artifact-load-dialog.component';
 
 /**
@@ -18,8 +18,6 @@ import { ArtifactLoadDialogComponent } from './artifact-load-dialog.component';
 class DialogStub {}
 @Component({ standalone: true, selector: 'mj-dialog-actions', template: '<ng-content></ng-content>' })
 class DialogActionsStub {}
-@Component({ standalone: true, selector: 'mj-loading', template: '<div class="stub-loading"></div>', inputs: ['text', 'size'] })
-class LoadingStub {}
 @Component({ standalone: true, selector: 'mj-accordion-panel', template: '<ng-content></ng-content>', inputs: ['Size', 'FlushBody', 'Expanded'] })
 class AccordionStub {}
 @Directive({ standalone: true, selector: '[mjAccordionTitle]' })
@@ -37,7 +35,7 @@ async function render() {
   const fixture = renderComponentFixture(ArtifactLoadDialogComponent, {
     imports: [
       CommonModule, FormsModule, MJButtonDirective, MJEmptyStateComponent,
-      DialogStub, DialogActionsStub, LoadingStub, AccordionStub, AccordionTitleStub, AccordionBodyStub, CodeEditorStub,
+      DialogStub, DialogActionsStub, StubLoadingComponent, AccordionStub, AccordionTitleStub, AccordionBodyStub, CodeEditorStub,
     ],
     declarations: [ArtifactLoadDialogComponent],
     setup: (instance) => { instance.Provider = createFakeProvider({ runViewResults: [] }); },

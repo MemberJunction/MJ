@@ -68,9 +68,19 @@ Additional connectors exist for **Wicket**, **Relational DB**, and **File Feed**
 
 ## How to Add a New Connector
 
+> **⚠️ 6.x: new connectors are built in [MemberJunction/Integrations](https://github.com/MemberJunction/Integrations), not here.**
+> Each connector is its own Open App (`@memberjunction/connector-<vendor>`) with its own package,
+> versioning, metadata and seed migrations. The connector *contract* below is unchanged — what differs
+> is the location and the registration key (the npm package name, not the bare class symbol). The
+> `generate-integration-actions.ts` CLI referenced in Step 2/3 was removed along with the connectors it
+> instantiated; in the Integrations repo, action metadata is authored under each Open App's `metadata/`
+> and turned into seed migrations by that repo's `scripts/build-seed-migrations.mjs`.
+> See [docs/connector-development.md](docs/connector-development.md) for the mapping table.
+
 ### Step 1: Implement the Connector
 
-Create a new class extending `BaseIntegrationConnector` in `packages/Integration/connectors/src/`:
+Create a new class extending `BaseIntegrationConnector` (in the Integrations repo, at
+`<Category>/<Vendor>/src/`):
 
 ```typescript
 import { BaseIntegrationConnector } from '@memberjunction/integration-engine';
@@ -183,7 +193,7 @@ The `CompanyIntegrationRecordMap` entity tracks the mapping between MJ record ID
 
 ## Roadmap
 
-The long-term vision is a broad ecosystem of open-source integration connectors covering every major AMS (Association Management System), CRM, marketing automation tool, accounting system, LMS, and SaaS product. Each new connector plugs into the same generation and execution infrastructure, instantly producing a full suite of discoverable actions.
+The long-term vision is a broad ecosystem of community-driven integration connectors covering every major AMS (Association Management System), CRM, marketing automation tool, accounting system, LMS, and SaaS product. Each new connector plugs into the same generation and execution infrastructure, instantly producing a full suite of discoverable actions.
 
 Combined with MJ's AI agent framework, this creates a platform where agents can read from and write to an arbitrarily large number of external systems through a uniform, metadata-driven interface -- without custom code for each integration point.
 

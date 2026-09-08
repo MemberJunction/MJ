@@ -1,9 +1,10 @@
 import { Component, Input, OnChanges, OnInit, SimpleChanges } from '@angular/core';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { RunView } from '@memberjunction/core';
 import { MJFileEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
-import { SharedService } from '@memberjunction/ng-shared';
 import { MJ_AG_GRID_THEME_PARAMS } from '@memberjunction/ng-shared-generic';
 import {
   ColDef,
@@ -73,7 +74,7 @@ const FileDownloadQuerySchema = z.object({
   templateUrl: './files-grid.html',
   styleUrls: ['./files-grid.css'],
 })
-export class FilesGridComponent implements OnInit, OnChanges {
+export class FilesGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
   public files: MJFileEntity[] = [];
   public isLoading: boolean = false;
   public editFile: MJFileEntity | undefined;
@@ -90,7 +91,8 @@ export class FilesGridComponent implements OnInit, OnChanges {
   };
   private gridApi: GridApi | null = null;
 
-  constructor(private sharedService: SharedService) {
+  constructor(private notifications: MJNotificationService) {
+        super();
     this.ColumnDefs = this.buildColumnDefs();
   }
 
@@ -125,7 +127,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
   /**
    * Saves the edited file.
    *
-   * This method saves the changes made to the edited file. It first checks if there is an edited file available. If so, it sets the isLoading property to true to indicate that the save operation is in progress. Then, it calls the Save method of the edited file to save the changes. If the save operation is successful, it creates a success notification using the sharedService.CreateSimpleNotification method. The notification message includes the ID and name of the saved file. Finally, it sets the edited file to undefined and sets the isLoading property to false to indicate that the save operation is complete.
+   * This method saves the changes made to the edited file. It first checks if there is an edited file available. If so, it sets the isLoading property to true to indicate that the save operation is in progress. Then, it calls the Save method of the edited file to save the changes. If the save operation is successful, it creates a success notification using the MJNotificationService.CreateSimpleNotification method. The notification message includes the ID and name of the saved file. Finally, it sets the edited file to undefined and sets the isLoading property to false to indicate that the save operation is complete.
    *
    * @returns Promise<void> - A promise that resolves when the save operation is complete.
    * @throws Error - If there is an error during the save operation.
@@ -136,14 +138,14 @@ export class FilesGridComponent implements OnInit, OnChanges {
       //
       const success = await this.editFile.Save();
       if (success) {
-        this.sharedService.CreateSimpleNotification(`Successfully saved file ${this.editFile.ID} ${this.editFile.Name}`, 'success');
+        this.notifications.CreateSimpleNotification(`Successfully saved file ${this.editFile.ID} ${this.editFile.Name}`, 'success');
         this.editFile = undefined;
         // Refresh the grid to show the updated data
         if (this.gridApi) {
           this.gridApi.setGridOption('rowData', this.files);
         }
       } else {
-        this.sharedService.CreateSimpleNotification(`Unable to save file ${this.editFile.ID} ${this.editFile.Name}`, 'error');
+        this.notifications.CreateSimpleNotification(`Unable to save file ${this.editFile.ID} ${this.editFile.Name}`, 'error');
       }
       this.isLoading = false;
     }
@@ -167,11 +169,11 @@ export class FilesGridComponent implements OnInit, OnChanges {
       const downloadUrl = parsedResult.data.MJFile.DownloadUrl;
       const success = downloadFromUrl(downloadUrl, file.Name, file.ContentType);
       if (!success) {
-        this.sharedService.CreateSimpleNotification(`Unable to download file ${file.ID} ${file.Name}`, 'error');
+        this.notifications.CreateSimpleNotification(`Unable to download file ${file.ID} ${file.Name}`, 'error');
       }
     } else {
       console.error(parsedResult.error);
-      this.sharedService.CreateSimpleNotification(`Unable to download file ${file.ID} ${file.Name}`, 'error');
+      this.notifications.CreateSimpleNotification(`Unable to download file ${file.ID} ${file.Name}`, 'error');
     }
     this.isLoading = false;
   };
@@ -201,10 +203,10 @@ export class FilesGridComponent implements OnInit, OnChanges {
     const Name = file.Name;
     const deleteResult = await file.Delete();
     if (deleteResult) {
-      this.sharedService.CreateSimpleNotification(`Successfully deleted file ${ID} ${Name}`, 'info');
+      this.notifications.CreateSimpleNotification(`Successfully deleted file ${ID} ${Name}`, 'info');
       this.files = this.files.filter((f) => typeof f.ID === 'string' && f.ID !== ID);
     } else {
-      this.sharedService.CreateSimpleNotification(`Unable to delete file ${ID} ${Name}`, 'error');
+      this.notifications.CreateSimpleNotification(`Unable to delete file ${ID} ${Name}`, 'error');
     }
     this.isLoading = false;
   };
@@ -217,7 +219,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
    */
   public handleFileUpload(e: FileUploadEvent) {
     if (!e.success) {
-      this.sharedService.CreateSimpleNotification(`Unable to upload file '${e.file.name}'`, 'error');
+      this.notifications.CreateSimpleNotification(`Unable to upload file '${e.file.name}'`, 'error');
       return;
     }
 
@@ -233,7 +235,7 @@ export class FilesGridComponent implements OnInit, OnChanges {
   async Refresh() {
     this.isLoading = true;
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: 'MJ: Files',
       ResultType: 'entity_object',

@@ -7,8 +7,9 @@ You are a techncal analyst working as a release coordinator for MemberJunction. 
 2. Figure out the next version (whether patch or minor) using `npx changeset status --since main` 
 3.Use both the diff contents and git commit messages to build up the context.  
 - The .changeset/ dir also has more focused human-entered notes you can use. 
-4. Write the release notes to tmp/release-<version>.md following the template given below.
+4. Write the release notes to releases/v<version>.md (the `releases/` directory at the repo root) following the template given below.
 - You can add/remove bullets as needed and omit sections if there are no bullets.
+- This directory is rendered on the docs site automatically (docs.memberjunction.org/releases/), so the file IS the publication — commit it with the release. See releases/README.md.
 5. Verify that the file was written correctly and include its content in your final response.
 
 <template>

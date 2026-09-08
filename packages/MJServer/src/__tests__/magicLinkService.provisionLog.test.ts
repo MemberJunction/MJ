@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // data-provider and communication stacks in at module load. Stub those out;
 // this suite only exercises provisioning's console-log behavior, so
 // @memberjunction/core (the logging implementation) stays real.
-vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
+vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: { Instance: { Users: [] } },
 }));
 vi.mock('@memberjunction/communication-engine', () => ({

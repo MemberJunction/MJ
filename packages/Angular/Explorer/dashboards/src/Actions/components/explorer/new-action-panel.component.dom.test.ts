@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { Component, EventEmitter, Input, Output, forwardRef } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, NG_VALUE_ACCESSOR, type ControlValueAccessor } from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { renderComponentFixture, query, queryAll, text, hasClass, capture } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, hasClass, capture, StubDropdownComponent } from '@memberjunction/ng-test-utils';
 import { NavigationService } from '@memberjunction/ng-shared';
 import type { MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { NewActionPanelComponent } from './new-action-panel.component';
@@ -25,17 +25,6 @@ import { ActionExplorerStateService } from '../../services/action-explorer-state
 class StubAlert { @Input() Variant = ''; }
 @Component({ standalone: true, selector: 'button[mjButton]', template: '<ng-content></ng-content>' })
 class StubButton { @Input() variant = ''; }
-@Component({
-  standalone: true,
-  selector: 'mj-dropdown',
-  template: '',
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubDropdown), multi: true }],
-})
-class StubDropdown implements ControlValueAccessor {
-  @Input() Data: unknown; @Input() TextField = ''; @Input() ValueField = ''; @Input() ValuePrimitive = false;
-  @Output() ValueChange = new EventEmitter<unknown>();
-  writeValue(): void {} registerOnChange(): void {} registerOnTouched(): void {}
-}
 
 const cat = (over: Partial<Record<string, unknown>>) =>
   ({ ID: '', Name: '', ParentID: null, ...over }) as unknown as MJActionCategoryEntity;
@@ -43,7 +32,7 @@ const cat = (over: Partial<Record<string, unknown>>) =>
 const render = (Categories: MJActionCategoryEntity[] = []) => {
   const state = new ActionExplorerStateService();
   return renderComponentFixture(NewActionPanelComponent, {
-    imports: [CommonModule, FormsModule, StubAlert, StubButton, StubDropdown],
+    imports: [CommonModule, FormsModule, StubAlert, StubButton, StubDropdownComponent],
     declarations: [NewActionPanelComponent],
     providers: [
       { provide: ActionExplorerStateService, useValue: state },

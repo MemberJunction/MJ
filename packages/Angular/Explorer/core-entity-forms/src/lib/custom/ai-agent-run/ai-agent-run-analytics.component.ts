@@ -4,6 +4,8 @@ import { takeUntil } from 'rxjs/operators';
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
+import { WalkAgentRunTree, type AgentRunTreeNode } from '@memberjunction/ai-core-plus';
+import { TOKEN_PRICE_UNIT_TYPE_DIVISORS } from '@memberjunction/ai-engine-base';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
@@ -81,6 +83,46 @@ interface SimpleActionLog {
 })
 export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentRunId!: string;
+
+  /**
+   * The run's execution tree, loaded once by the form and shared with every tab.
+   *
+   * **This is what makes the totals honest.** Analytics derives cost from prompt runs reached
+   * through the run's own STEPS, which cannot see work the run dispatched: a task-graph's spend
+   * lives on Task rows and on prompt runs those tasks produced, so a workflow's cost was simply
+   * missing from every figure on this tab. Each tree node reports its OWN cost — never a rollup —
+   * so a total is an honest sum rather than a double-count.
+   */
+  @Input()
+  set RunTree(value: AgentRunTreeNode | null) {
+    this.runTree = value;
+    this.cdr.markForCheck();
+  }
+  public runTree: AgentRunTreeNode | null = null;
+
+  /**
+   * What the dispatched work cost, from the tree — the part the step-based figures cannot see.
+   *
+   * Zero when there is no graph, so a run that dispatched nothing reads exactly as it did before.
+   */
+  public get DispatchedCost(): { Cost: number; Tokens: number; NodeCount: number } {
+    if (!this.runTree) return { Cost: 0, Tokens: 0, NodeCount: 0 };
+    let cost = 0, tokens = 0, nodeCount = 0;
+    for (const node of WalkAgentRunTree(this.runTree)) {
+      // Only nodes the RUN's own step list cannot reach. Counting the run's steps here as well
+      // would double every figure this tab already shows correctly.
+      if (node.NodeType !== 'Task' && node.NodeType !== 'TaskGraph') continue;
+      nodeCount++;
+      cost += node.Cost ?? 0;
+      tokens += node.Tokens ?? 0;
+    }
+    return { Cost: cost, Tokens: tokens, NodeCount: nodeCount };
+  }
+
+  /** True when this run dispatched a workflow, so the tab can show the extra figures at all. */
+  public get HasDispatchedWork(): boolean {
+    return this.DispatchedCost.NodeCount > 0;
+  }
   
   private destroy$ = new Subject<void>();
   
@@ -133,9 +175,6 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
 
   // Per model+vendor cache pricing (currency-per-token), loaded from AIModelCost for the cost split.
   private cacheRates = new Map<string, { inputRate: number; outputRate: number; cacheReadRate: number; cacheWriteRate: number }>();
-  private static readonly UNIT_DIVISORS: Record<string, number> = {
-    'Per Million Tokens': 1_000_000, 'Per Hundred Thousand Tokens': 100_000, 'Per Thousand Tokens': 1_000
-  };
   allActionLogs: SimpleActionLog[] = [];
   allSteps: SimpleAgentRunStep[] = [];
   subAgentRuns: SimpleAgentRun[] = [];
@@ -425,19 +464,50 @@ export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implement
     return `${NormalizeUUID(modelID ?? '')}|${NormalizeUUID(vendorID ?? '')}`;
   }
 
-  /** Load active realtime AIModelCost rates and normalize each to currency-per-token. */
+  /**
+   * Load active realtime AIModelCost rates and normalize each to currency-per-token.
+   *
+   * The scale comes from the unit type's DriverClass, not its display name — the name is editable
+   * metadata (`Per 1M Tokens`) while the driver class is the contract the pricing drivers register
+   * under, so this cannot drift the way a hardcoded name table does.
+   */
   private async loadCacheRates() {
     this.cacheRates.clear();
     const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const res = await rv.RunView({
-      EntityName: 'MJ: AI Model Costs',
-      ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
-      Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitType'],
-      ResultType: 'simple'
-    });
+    const [res, unitTypeRes] = await rv.RunViews([
+      {
+        EntityName: 'MJ: AI Model Costs',
+        ExtraFilter: `Status='Active' AND ProcessingType='Realtime'`,
+        Fields: ['ModelID', 'VendorID', 'InputPricePerUnit', 'OutputPricePerUnit', 'CacheReadPricePerUnit', 'CacheWritePricePerUnit', 'UnitTypeID'],
+        ResultType: 'simple'
+      },
+      {
+        EntityName: 'MJ: AI Model Price Unit Types',
+        Fields: ['ID', 'DriverClass'],
+        ResultType: 'simple'
+      }
+    ]);
     if (!res.Success) return;
+    // The sibling view gets the same treatment for the same reason. Without the driver classes
+    // every rate row hits the `continue` below and the panel shows a confident zero rather than an
+    // error — the failure mode most likely to be believed.
+    if (unitTypeRes && !unitTypeRes.Success) {
+      console.error('AI Agent Run analytics: price unit types failed to load; token rates will be empty. ' +
+        unitTypeRes.ErrorMessage);
+      return;
+    }
+    const driverClassByUnitType = new Map<string, string>(
+      (unitTypeRes?.Results || []).filter(u => u.DriverClass).map(u => [NormalizeUUID(u.ID), u.DriverClass as string])
+    );
     for (const row of res.Results || []) {
-      const divisor = AIAgentRunAnalyticsComponent.UNIT_DIVISORS[row.UnitType ?? ''] ?? 1_000_000;
+      const driverClass = driverClassByUnitType.get(NormalizeUUID(row.UnitTypeID ?? ''));
+      const divisor = TOKEN_PRICE_UNIT_TYPE_DIVISORS[driverClass ?? ''];
+      if (divisor === undefined) {
+        // A non-token unit type (per minute/hour/image), or one this build has no driver for.
+        // Defaulting to the per-1M-token divisor would divide an hourly audio rate by a million
+        // and report token rates that are noise.
+        continue;
+      }
       const input = (row.InputPricePerUnit ?? 0) / divisor;
       this.cacheRates.set(this.rateKey(row.ModelID, row.VendorID), {
         inputRate: input,

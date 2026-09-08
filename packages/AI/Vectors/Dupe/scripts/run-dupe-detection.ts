@@ -13,7 +13,8 @@
  * USAGE (must be run from the repo root so cwd-relative .env / mj.config.cjs resolve):
  *   npx tsx packages/AI/Vectors/Dupe/scripts/run-dupe-detection.ts
  */
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { LogStatus, UserInfo } from '@memberjunction/core';
 import type { IMetadataProvider } from '@memberjunction/core';
 import type { MJDuplicateRunEntity } from '@memberjunction/core-entities';
@@ -51,7 +52,7 @@ async function bootstrap() {
 
     const schema = config.mjCoreSchema || dbSettings.mjCoreSchema || '__mj';
     const provider = await setupSQLServerClient(new SQLServerProviderConfigData(pool, schema));
-    await UserCache.Instance.Refresh(pool);
+    await UserCache.Instance.Refresh(provider);
     const user = UserCache.Users.find(u => u.Email?.toLowerCase() === 'amith@bluecypress.io')
         ?? UserCache.Users.find(u => u?.Type?.trim().toLowerCase() === 'owner')
         ?? UserCache.Users[0];

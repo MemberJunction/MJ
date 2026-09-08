@@ -11,7 +11,7 @@ Before running anything, confirm the environment is ready — the suite runs aga
 3. **Packages built** — `npm run build` (the suite imports built `dist/`). The private `@memberjunction/integration-test-suite` package must be built.
 4. **Metadata seeded** — the suite is dispatched from `MJ: Tests` / `MJ: Test Suites` rows. Seed once per fresh DB:
    ```bash
-   npx mj sync push --dir=metadata-optional/integration-test
+   pnpm mj sync push --dir=metadata-optional/integration-test
    ```
    (Note: `&` in a metadata Name breaks the lookup parser — the seeded records use "and".)
 5. **MJAPI running** on the configured port — REQUIRED for the **client-transport** bundles (they exercise the real GraphQL wire). Server-transport bundles run in-process and don't need it. If MJAPI has run a very long time, restart it fresh (a resource-degraded server produces spurious timeouts).
@@ -31,7 +31,7 @@ The single entry path is `mj test` (there are no per-bundle dispatcher scripts �
   ```
 - **A single bundle** while iterating (by its `MJ: Tests` record Name):
   ```bash
-  MJ_INTEGRATION_TEST=1 npx mj test run "IT30 - Conversation Compaction (assembly layer)"
+  MJ_INTEGRATION_TEST=1 pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"
   # add RUN_MUTATION_TESTS=1 for mutation-gated checks in that bundle
   ```
 - **Live-model tier** (real agent/prompt runs against real models — spends tokens, well under \$1/run; opt-IN):
@@ -47,6 +47,10 @@ The single entry path is `mj test` (there are no per-bundle dispatcher scripts �
 | `RUN_MUTATION_TESTS=1` | Enables the create/update/delete mutation axis. |
 | `RUN_AGENT_TESTS=1` | Enables the live-model tier (real LLM calls, token cost). |
 | `PS_INTEGRATION=1` | Enables the Predictive Studio rig. |
+
+### Platform matrix (PostgreSQL)
+
+The suite is authored platform-portable and is **intended to run against BOTH SQL Server and PostgreSQL**. To run the PG cell, point `mj.config.cjs` / the `PG_*` env vars at a migrated PostgreSQL DB (root CLAUDE.md → "CodeGen Database Connections" + "Switching Database Platforms" — and clear browser cache if reusing an endpoint) and run the same command. On the first PG run, triage any failure as a portability gap in a check (SQL-Server-ism to rewrite) vs a PG-divergence behavior that belongs in a dedicated Domain-8 check — never silently edit a check to pass on one platform and break the other. See `docs/build-engineering-runbook.md` → "PostgreSQL".
 
 ## Reporting
 

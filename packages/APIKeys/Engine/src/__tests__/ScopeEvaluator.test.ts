@@ -448,4 +448,135 @@ describe('ScopeEvaluator', () => {
             expect(() => evaluator.ClearCache()).not.toThrow();
         });
     });
+
+    // =========================================================================
+    // ROW FILTER COLLECTION (plan §5.4 — most-restrictive-wins)
+    // =========================================================================
+
+    describe('EvaluateAccess() - row filter collection', () => {
+        beforeEach(() => {
+            setMockBaseKeyApplications([]);
+            setMockBaseApplicationScopes([
+                new MJAPIApplicationScopeEntity({
+                    ID: 'as-1', ApplicationID: 'app-1', ScopeID: 'scope-1',
+                    ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+        });
+
+        it('should carry the RowFilterID of a matching filtered allow rule', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+
+            const result = await evaluator.EvaluateAccess(baseRequest, contextUser as never);
+            expect(result.Allowed).toBe(true);
+            expect(result.MatchedRowFilterIDs).toEqual(['filter-1']);
+            expect(result.MatchedKeyRule?.RowFilterID).toBe('filter-1');
+        });
+
+        it('shadowing: a higher-priority unfiltered allow must NOT shadow a lower-priority filtered allow', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-broad', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'User*', PatternType: 'Include', IsDeny: false, Priority: 10,
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-filtered', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+
+            const result = await evaluator.EvaluateAccess(baseRequest, contextUser as never);
+            // Both allowed AND the filter collected — the filter cannot be silently
+            // defeated by a priority number.
+            expect(result.Allowed).toBe(true);
+            expect(result.MatchedRowFilterIDs).toEqual(['filter-1']);
+            // MatchedKeyRule stays the highest-priority matching allow rule for compatibility.
+            expect(result.MatchedKeyRule?.Id).toBe('ks-broad');
+            expect(result.MatchedKeyRule?.RowFilterID).toBeNull();
+            // The shadowed rule now appears in EvaluatedRules (it used to be absent).
+            const filteredEval = result.EvaluatedRules.find(er => er.Rule.Id === 'ks-filtered');
+            expect(filteredEval?.Matched).toBe(true);
+            expect(filteredEval?.Result).toBe('Allowed');
+        });
+
+        it('two filtered matching rules → both filters collected, deduped and sorted', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 5,
+                    RowFilterID: 'filter-b',
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-2', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'User*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-a',
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-3', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: '*', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-b', // duplicate — must dedupe
+                }),
+            ]);
+
+            const result = await evaluator.EvaluateAccess(baseRequest, contextUser as never);
+            expect(result.Allowed).toBe(true);
+            expect(result.MatchedRowFilterIDs).toEqual(['filter-a', 'filter-b']);
+        });
+
+        it('unfiltered matching rules → empty MatchedRowFilterIDs', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+            ]);
+
+            const result = await evaluator.EvaluateAccess(baseRequest, contextUser as never);
+            expect(result.Allowed).toBe(true);
+            expect(result.MatchedRowFilterIDs).toEqual([]);
+        });
+
+        it('a filter on a NON-matching rule is not collected', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-1', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-2', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Orders', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+
+            const result = await evaluator.EvaluateAccess(baseRequest, contextUser as never);
+            expect(result.Allowed).toBe(true);
+            expect(result.MatchedRowFilterIDs).toEqual([]);
+        });
+
+        it('deny at highest priority still trumps and collects no filters', async () => {
+            setMockBaseKeyScopes([
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-deny', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: true, Priority: 10,
+                }),
+                new MJAPIKeyScopeEntity({
+                    ID: 'ks-filtered', APIKeyID: 'key-1', ScopeID: 'scope-1',
+                    ResourcePattern: 'Users', PatternType: 'Include', IsDeny: false, Priority: 0,
+                    RowFilterID: 'filter-1',
+                }),
+            ]);
+
+            const result = await evaluator.EvaluateAccess(baseRequest, contextUser as never);
+            expect(result.Allowed).toBe(false);
+            expect(result.MatchedRowFilterIDs).toEqual([]);
+        });
+    });
 });

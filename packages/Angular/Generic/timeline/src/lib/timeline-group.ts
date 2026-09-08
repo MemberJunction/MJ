@@ -8,6 +8,7 @@
  * @module @memberjunction/ng-timeline/timeline-group
  */
 
+import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
 import {
   TimelineCardConfig,
   TimelineEventConfig,
@@ -513,17 +514,20 @@ export class TimelineGroup<T = any> {
     ExtraFilter?: string;
     OrderBy?: string;
     MaxRows?: number;
+    /** The provider to read through. Omit to use the global default. */
+    Provider?: IMetadataProvider;
     [key: string]: unknown;
   }): Promise<TimelineGroup<T>> {
     const group = new TimelineGroup<T>();
 
     try {
-      // Dynamically import MJ core to avoid hard dependency
-      const { RunView } = await import('@memberjunction/core');
-
-      const rv = new RunView();
+      // Provider-scoped, and a STATIC import: the dynamic form here hid the dependency from the
+      // bundler and from readers while the package depends on @memberjunction/core regardless.
+      const rv = RunView.FromMetadataProvider(params.Provider ?? Metadata.Provider);
+      // `Provider` scopes the read; it is not a RunView parameter, so it must not be forwarded.
+      const { Provider: _provider, ...viewFields } = params;
       const viewParams = {
-        ...params,
+        ...viewFields,
         ResultType: 'entity_object' as const
       };
 

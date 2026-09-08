@@ -6,6 +6,7 @@ import {
     OpenAIRealtimeProfile,
     IOpenAIRealtimeConnection,
     MapEffortLevelToOpenAIRealtime,
+    MapNormalizedTurnDetection,
 } from '@memberjunction/ai-openai';
 import type { OpenAIRealtimeError } from 'openai/realtime/index';
 import type { RealtimeClientEvent, RealtimeServerEvent } from 'openai/resources/realtime/realtime';
@@ -52,15 +53,24 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: false,
     supportsLiveReconfigure: true,
     unexpectedCloseMessage: 'xAI Grok Voice realtime connection closed unexpectedly',
+    // server_vad is the only turn mode xAI documents on Grok Voice today. When xAI ships a
+    // native full-duplex / smarter turn mode (the Grok Voice Think Fast family reasons while
+    // speaking — a documented session knob is plausible), add 'native' here and extend the
+    // mapping below — the model CATALOG then opts models in via ModelConfiguration metadata,
+    // with no further driver changes.
+    supportedTurnModes: ['serverVad'],
     // Explicit server-VAD with create_response is REQUIRED on Grok: without it the model hears +
     // transcribes the user (speech_started + input_audio_transcription.* arrive) but never
     // auto-generates a reply — no response.created/audio. Meeting mode (disableAutoResponse) keeps
-    // detection but hands the speak decision to the bridge.
-    buildTurnDetection: (disableAutoResponse) => ({
-        type: 'server_vad',
-        create_response: !disableAutoResponse,
-        interrupt_response: true,
-    }),
+    // detection but hands the speak decision to the bridge. A normalized request maps first
+    // (serverVad tuning knobs apply); the required explicit block is the unconditional fallback.
+    buildTurnDetection: (disableAutoResponse, requested) =>
+        MapNormalizedTurnDetection(XAI_REALTIME_PROFILE, disableAutoResponse, requested)
+        ?? {
+            type: 'server_vad',
+            create_response: !disableAutoResponse,
+            interrupt_response: true,
+        },
     // Not consulted while supportsReasoningEffort is false. When xAI documents reasoning effort on
     // Grok Voice, REVISIT: if Grok's level vocabulary differs from OpenAI's five levels, replace
     // this with a Grok-specific mapping instead of just flipping the gate.

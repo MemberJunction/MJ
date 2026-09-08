@@ -1,5 +1,11 @@
 name: Claude Command
 
+# On-demand only. @gemini-cli (gemini-command.yml) is the everyday bot; this one is
+# kept for when someone wants Claude specifically, or wants both on the same thread
+# to compare. It fires solely on a deliberate @claude mention, so it is idle — and
+# free — unless explicitly asked for. Do NOT make this the default trigger again
+# without also deciding which of the two bots answers an unqualified request.
+
 on:
   issue_comment:
     types: [created]

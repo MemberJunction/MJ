@@ -288,6 +288,55 @@ export abstract class BaseAgentType {
      * 
      * @protected
      */
+    /**
+     * Removes a markdown code fence WRAPPING an entire response, if one is present.
+     *
+     * Models fenced their JSON long before this existed — the retry feedback in LoopAgentType
+     * already tells them not to — but a retry costs a whole turn to recover something we already
+     * received intact. Observed with an external harness: the response was perfectly valid
+     * `{"taskComplete": true, ...}` inside a ```json fence, rejected by JSON.parse, and the identical
+     * answer came back on the retry. Half the latency and half the cost of that run bought nothing.
+     *
+     * ## Why this is narrow on purpose
+     *
+     * It strips ONLY the first line and the trailing fence, never anything interior. A response's
+     * own payload frequently contains fenced code — the case that prompted this had ```haskell blocks
+     * inside its `message` string — so a global strip would corrupt exactly the responses it was
+     * meant to rescue.
+     *
+     * ## Why it cannot make things worse
+     *
+     * The stripped text is only used if it PARSES. On failure the original is returned untouched, so
+     * the outcome is either "an unparseable response became parseable" or "no change" — never a
+     * previously-good response turned bad. Deterministic, no model call, microseconds.
+     */
+    protected stripWrappingCodeFence(raw: string): string {
+        const trimmed = raw.trim();
+        if (!trimmed.startsWith('```') || !trimmed.endsWith('```') || trimmed.length < 7) {
+            return raw;
+        }
+
+        const firstNewline = trimmed.indexOf('\n');
+        if (firstNewline === -1) {
+            return raw;
+        }
+
+        // Everything between the opening fence's line break and the final fence.
+        const inner = trimmed.slice(firstNewline + 1, trimmed.length - 3).trim();
+        if (!inner) {
+            return raw;
+        }
+
+        try {
+            JSON.parse(inner);
+            return inner;
+        } catch {
+            // Not valid JSON once unwrapped — leave the original alone so the caller's existing
+            // error path reports on what the model actually sent.
+            return raw;
+        }
+    }
+
     protected parseJSONResponse<T>(promptResult: AIPromptRunResult): T | null {
         if (!promptResult.success || !promptResult.result) {
             return null;
@@ -296,7 +345,7 @@ export abstract class BaseAgentType {
         try {
             let response: T;
             if (typeof promptResult.result === 'string') {
-                response = JSON.parse(promptResult.result);
+                response = JSON.parse(this.stripWrappingCodeFence(promptResult.result));
             } else {
                 response = promptResult.result as T;
             }

@@ -11,6 +11,27 @@ export type CommandExecutionResult = {
   elapsedTime: number;
 }
 
+const FAILURE_OUTPUT_TAIL_LINES = 40;
+
+/**
+ * Combine the exit-code message with a tail of captured stdout/stderr so AFTER
+ * failures show the actual tsc/pnpm diagnostic instead of just "exited with code N".
+ */
+export function formatCommandFailureDetail(result: CommandExecutionResult, tailLines: number = FAILURE_OUTPUT_TAIL_LINES): string {
+  const parts: string[] = [];
+  const errorText = (result.error || '').trim();
+  if (errorText) {
+    parts.push(errorText);
+  }
+  const output = (result.output || '').trim();
+  if (output) {
+    const lines = output.split(/\r?\n/);
+    const kept = lines.length > tailLines ? ['…', ...lines.slice(-tailLines)] : lines;
+    parts.push(kept.join('\n'));
+  }
+  return parts.join('\n');
+}
+
 /**
  * Base class that handles the process of running commands which can be done executed from any other area of the system, typically done by the main runMemberJunctionCodeGen process
  */
@@ -73,13 +94,9 @@ export class RunCommandsBase {
         });
 
         cp.stderr?.on('data', (data) => {
-          // Capture stderr into the combined output for diagnostics, but do NOT infer
-          // failure from its content. Well-behaved tools routinely print the word "error"
-          // to stderr in benign contexts (deprecation notices, diagnostic text, stack-trace
-          // headers) while still exiting 0 — e.g. MemberJunction's own ClassFactory
-          // "no registration … so this becomes a hard error." fallback diagnostic that
-          // `mj codegen manifest` emits during an MJAPI `npm run build`. Success is decided
-          // solely by the process exit code below (non-zero rejects; zero resolves success).
+          // tsc / npm / pnpm write the word "error" to stderr on successful
+          // builds (TS diagnostics that were not emitted, deprecation banners,
+          // progress). Exit code is the only honest success signal.
           output += data.toString();
         });
 
@@ -92,17 +109,29 @@ export class RunCommandsBase {
         });
 
         cp.on('close', (code) => {
+          const elapsedTime = new Date().getTime() - startTime.getTime();
           if (code === 0) {
-            const elapsedTime = new Date().getTime() - startTime.getTime();
             logStatus(`COMMAND: "${command.command}" COMPLETED SUCCESSFULLY: ${elapsedTime/1000} seconds`);
-            resolve({ output: output,
-                      error: null!,
-                      success: true,
-                      elapsedTime: elapsedTime
-                    });
-          } else {
-            reject(new Error(`Process exited with code ${code}`));
+            resolve({
+              output,
+              error: null!,
+              success: true,
+              elapsedTime,
+            });
+            return;
           }
+
+          // Resolve (do not reject) so callers keep stdout/stderr. The previous
+          // reject-on-nonzero path dropped the captured output and left AFTER
+          // failures looking like a bare "Process exited with code N".
+          const message = `Process exited with code ${code}`;
+          console.error(`COMMAND: "${command.command}" FAILED: ${elapsedTime/1000} seconds (${message})`);
+          resolve({
+            output,
+            error: message,
+            success: false,
+            elapsedTime,
+          });
         });
       });
 

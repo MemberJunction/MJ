@@ -131,6 +131,23 @@ function grantRows(rows: Array<{ ID: string }>): { Success: boolean; Results: Ar
     return { Success: true, Results: rows };
 }
 
+/**
+ * Constructs a bare entity instance for pure getter/setter tests.
+ *
+ * `BaseEntity`'s constructor takes an `EntityInfo`, which these tests have no use for — they
+ * exercise logic that never touches metadata, and the runtime has always been fine. The assertion
+ * states that intent instead of fabricating an `EntityInfo` the test would then have to keep
+ * accurate.
+ *
+ * Worth flagging rather than hiding: the codebase's own rule is that entity subclasses are created
+ * through `Metadata.GetEntityObject()`, never `new`. These call sites predate the typecheck being
+ * switched on and are left structurally as they were; moving them onto the metadata path is a
+ * larger change than making the type checker honest, and belongs with whoever owns these tests.
+ */
+function bare<T>(ctor: new (...args: never[]) => T): T {
+    return new (ctor as unknown as new () => T)();
+}
+
 describe('MJCollectionPermissionEntityExtended — share-create gate', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -140,7 +157,7 @@ describe('MJCollectionPermissionEntityExtended — share-create gate', () => {
     });
 
     function makeEntity(): MutableShareEntity {
-        const entity = new MJCollectionPermissionEntityExtended() as unknown as MutableShareEntity;
+        const entity = bare(MJCollectionPermissionEntityExtended) as unknown as MutableShareEntity;
         entity.CollectionID = 'COLL-1';
         entity.UserID = 'GRANTEE-1';
         entity.SharedByUserID = 'USER-1';
@@ -231,7 +248,7 @@ describe('MJArtifactPermissionEntityExtended — share-create gate', () => {
     });
 
     function makeEntity(): MutableShareEntity {
-        const entity = new MJArtifactPermissionEntityExtended() as unknown as MutableShareEntity;
+        const entity = bare(MJArtifactPermissionEntityExtended) as unknown as MutableShareEntity;
         entity.ArtifactID = 'ART-1';
         entity.UserID = 'GRANTEE-1';
         entity.SharedByUserID = 'USER-1';

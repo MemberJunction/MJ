@@ -100,9 +100,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','DeleteRLSFilterID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions','DeleteRLSFilterID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityPermissionsDeleteRLSFilterID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsDeleteRLSFilterID', $event.totalRowCount)"
                 >
@@ -125,9 +125,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','ReadRLSFilterID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions','ReadRLSFilterID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityPermissionsReadRLSFilterID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsReadRLSFilterID', $event.totalRowCount)"
                 >
@@ -150,9 +150,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','CreateRLSFilterID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions','CreateRLSFilterID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityPermissionsCreateRLSFilterID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsCreateRLSFilterID', $event.totalRowCount)"
                 >
@@ -175,11 +175,61 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Entity Permissions','UpdateRLSFilterID')"
-                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions')"
+                [NewRecordValues]="NewRecordValues('MJ: Entity Permissions','UpdateRLSFilterID')"
                 [AllowLoad]="IsSectionExpanded('mJEntityPermissionsUpdateRLSFilterID')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJEntityPermissionsUpdateRLSFilterID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- API Key Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAPIKeyScopes"
+        SectionName="API Key Scopes"
+        Icon="fa fa-key"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAPIKeyScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Key Scopes','RowFilterID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Key Scopes','RowFilterID')"
+                [AllowLoad]="IsSectionExpanded('mJAPIKeyScopes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIKeyScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- API Application Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAPIApplicationScopes"
+        SectionName="API Application Scopes"
+        Icon="fa fa-lock"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAPIApplicationScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: API Application Scopes','RowFilterID')"
+                [NewRecordValues]="NewRecordValues('MJ: API Application Scopes','RowFilterID')"
+                [AllowLoad]="IsSectionExpanded('mJAPIApplicationScopes')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAPIApplicationScopes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

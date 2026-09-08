@@ -19,7 +19,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { FlowAgentType, FlowExecutionState } from '../agent-types/flow-agent-type';
 import { ExecuteAgentParams } from '@memberjunction/ai-core-plus';
 
-vi.mock('@memberjunction/core', () => ({
+// Partial mock: FlowAgentType now imports the shared traversal engine and its adapters, which pull
+// @memberjunction/core-entities — and therefore BaseEntity — into the module graph. A total mock
+// would have to restate every export core-entities touches, so spread the real module and override
+// only the logging functions these tests care about.
+vi.mock('@memberjunction/core', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@memberjunction/core')>()),
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     LogStatusEx: vi.fn(),

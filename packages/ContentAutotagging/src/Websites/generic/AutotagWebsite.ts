@@ -7,7 +7,7 @@ import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus } from '@memb
 import { MJContentSourceEntity, MJContentItemEntity, MJContentSourceEntity_IContentSourceConfiguration } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
 import type { AnyNode } from 'domhandler';
-import axios from 'axios';
+import { HttpGet, HttpHead } from '@memberjunction/network-utils';
 import { URL } from 'url';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
@@ -382,7 +382,7 @@ export class AutotagWebsite extends AutotagBase {
      * MJContentItem if the page is new or changed (caller should hand it off
      * to the LLM stage), or `null` if the page is unchanged.
      *
-     * One axios.get per URL: the same response body provides both the
+     * One HTTP GET per URL: the same response body provides both the
      * change-detection hash and the page text. Compare with `byChecksum`
      * scoped to the current ContentSource so identical boilerplate (404 pages,
      * shared error templates) from a *different* source can't silently mask
@@ -445,7 +445,7 @@ export class AutotagWebsite extends AutotagBase {
     }
 
     public async fetchPageContent(url: string): Promise<string> {
-        const { data } = await axios.get(url);
+        const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
         return data;
     }
 
@@ -468,7 +468,7 @@ export class AutotagWebsite extends AutotagBase {
     /**
      * Pure helper: extract clean body text from raw HTML. No IO. Exposed as
      * a protected method so subclasses and unit tests can exercise it without
-     * monkey-patching axios.
+     * monkey-patching the HTTP layer.
      */
     protected extractTextFromHTML(html: string): string {
         const $ = cheerio.load(html);
@@ -490,7 +490,7 @@ export class AutotagWebsite extends AutotagBase {
      * change?"
      */
     public async fetchAndExtract(url: string): Promise<{ text: string; checksum: string }> {
-        const { data } = await axios.get(url);
+        const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
         const text = this.extractTextFromHTML(String(data));
         const checksum = await this.engine.getChecksumFromText(text);
         return { text, checksum };
@@ -571,7 +571,7 @@ export class AutotagWebsite extends AutotagBase {
 
         const discovered: string[] = [];
         try {
-            const { data } = await axios.get(url);
+            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
             const $ = cheerio.load(data);
             $('a').each((_, element) => {
                 const link = $(element).attr('href');
@@ -674,8 +674,8 @@ export class AutotagWebsite extends AutotagBase {
 
     protected async urlIsValid(url: string): Promise<boolean> {
         try { 
-            const response = await axios.head(url);
-            return response.status === 200;
+            const response = await HttpHead(url, { ThrowOnError: false });
+            return response.Status === 200;
         }
         catch (e) {
             console.error(`Invalid URL: ${url}`);
@@ -705,7 +705,7 @@ export class AutotagWebsite extends AutotagBase {
 
             const extractedLinks: string[] = [];
 
-            const { data } = await axios.get(url);
+            const { Data: data } = await HttpGet<string>(url, { ResponseType: 'text' });
             const $ = cheerio.load(data);
 
             $('a').each((_, element) => {

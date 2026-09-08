@@ -86,6 +86,73 @@ export interface ComponentTestResult {
 }
 
 /**
+ * Styling a user explicitly asked for, carried on the spec as data rather than
+ * baked into generated code as color literals.
+ *
+ * The color slots each target a visualization surface whose colors are data-driven
+ * and therefore tolerant of light/dark mode — chart series and intensity ramps.
+ * Slots for mode-hostile surfaces (backgrounds, text, borders) are deliberately
+ * absent: honoring those safely requires derived per-mode variants.
+ *
+ * Hosts apply these over the theme-resolved tokens; components never read them.
+ * Invalid values are ignored rather than applied: an empty `chartPalette`, a
+ * `sequentialScale` with fewer than two stops, or a `divergingScale` missing
+ * either endpoint leaves the theme value in place.
+ */
+export interface StyleOverrides {
+    /**
+     * Categorical series colors, replacing `ComponentStyles.chartPalette`.
+     * e.g. a request for "blue and gold charts".
+     */
+    chartPalette?: string[];
+
+    /**
+     * Sequential intensity ramp (ordered light-to-dark), replacing
+     * `ComponentStyles.sequentialScale`. e.g. "shade the map in blues".
+     */
+    sequentialScale?: string[];
+
+    /**
+     * Diverging ramp, replacing `ComponentStyles.divergingScale`.
+     * e.g. "a red-to-green heatmap".
+     */
+    divergingScale?: {
+        low: string;
+        mid?: string;
+        high: string;
+    };
+
+    /**
+     * Uniform scale factor for the whole `ComponentStyles.typography.fontSize` ladder
+     * — `'small'` tightens it to fit more on screen, `'large'` opens it up for
+     * readability. `'normal'` (and omitting the field) leaves the theme ladder alone.
+     *
+     * Scaling the tokens rather than asking a generator to pick different ones is what
+     * makes this reliable: every piece of text moves together, including text inside
+     * registry components and libraries the generator never touched.
+     */
+    fontScale?: 'small' | 'normal' | 'large';
+
+    /**
+     * Provenance of these values. Never a generator's own aesthetic choice — either
+     * the user asked for these colors explicitly, or they are the organization's
+     * standing visualization defaults applied by the generation pipeline.
+     *
+     * Advisory only: the host applies the color slots identically either way. It
+     * exists so tooling and generation gates can tell a specific request apart from
+     * a standing default, which are enforced differently.
+     */
+    source: 'user-request' | 'organization-default';
+
+    /**
+     * The wording that produced these values — the user's own words, or the
+     * organization setting they came from — for audit and so the intent survives
+     * regeneration.
+     */
+    requestText?: string;
+}
+
+/**
  * Specification for an interactive component
  */
 export class ComponentSpec {
@@ -242,6 +309,18 @@ export class ComponentSpec {
      * Relevant examples of components intended to inspire this component's creation
      */
     relevantExamples?: ComponentExample[];
+
+    /**
+     * Explicitly user-requested styling, captured by the generation pipeline as data.
+     *
+     * Component code MUST NOT read this directly — it exists so that a user asking for
+     * "blue charts" or "a red-to-green heatmap" never results in a hardcoded color
+     * literal in generated code. Hosts merge these values onto the theme-resolved
+     * `ComponentStyles` tokens (see `ApplyStyleOverrides` in `@memberjunction/react-runtime`),
+     * so components keep reading `styles.chartPalette` / `styles.sequentialScale` /
+     * `styles.divergingScale` as usual and the override is resolved above them.
+     */
+    styleOverrides?: StyleOverrides;
 
     /**
      * Self-declared maturity level of the component. When a component is "in progress" and is not

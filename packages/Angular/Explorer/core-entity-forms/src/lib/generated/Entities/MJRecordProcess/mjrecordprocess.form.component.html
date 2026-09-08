@@ -329,9 +329,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Record Process Watermarks','RecordProcessID')"
-                [NewRecordValues]="NewRecordValues('MJ: Record Process Watermarks')"
+                [NewRecordValues]="NewRecordValues('MJ: Record Process Watermarks','RecordProcessID')"
                 [AllowLoad]="IsSectionExpanded('mJRecordProcessWatermarks')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJRecordProcessWatermarks', $event.totalRowCount)"
                 >
@@ -354,9 +354,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Process Runs','RecordProcessID')"
-                [NewRecordValues]="NewRecordValues('MJ: Process Runs')"
+                [NewRecordValues]="NewRecordValues('MJ: Process Runs','RecordProcessID')"
                 [AllowLoad]="IsSectionExpanded('mJProcessRuns')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJProcessRuns', $event.totalRowCount)"
                 >
@@ -379,9 +379,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: ML Model Scoring Bindings','RecordProcessID')"
-                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings')"
+                [NewRecordValues]="NewRecordValues('MJ: ML Model Scoring Bindings','RecordProcessID')"
                 [AllowLoad]="IsSectionExpanded('mJMLModelScoringBindings')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJMLModelScoringBindings', $event.totalRowCount)"
                 >

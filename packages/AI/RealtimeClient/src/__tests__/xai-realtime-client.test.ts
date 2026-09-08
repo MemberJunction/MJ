@@ -353,6 +353,52 @@ describe('xAIRealtimeClient', () => {
             client.Emit({ type: 'response.done', response: { usage: { input_tokens: 30, output_tokens: 12 } } });
             expect(usage).toEqual([{ InputTokens: 30, OutputTokens: 12, Raw: { input_tokens: 30, output_tokens: 12 } }]);
         });
+
+        /**
+         * REGRESSION — xAI does NOT use the nested slot.
+         *
+         * The frame below is copied from a live capture off `wss://api.x.ai/v1/realtime`
+         * (grok-voice-think-fast-2.0): usage sits at the TOP LEVEL, and `response.usage` is present
+         * but EMPTY. The test above passes against a hand-written OpenAI-shaped frame, which is
+         * exactly why this went unnoticed — real Grok sessions recorded NULL tokens on AIPromptRun
+         * because `{}` is truthy, so the old `if (!usage) return` guard never fired and the emitted
+         * delta was `{undefined, undefined}` → clamped to 0 → dropped by the host.
+         */
+        it('should read usage from the TOP-LEVEL key when response.usage is an empty object (real xAI shape)', () => {
+            const { usage } = collectUsage(client);
+            client.Emit({ type: 'response.created' });
+            client.Emit({
+                type: 'response.done',
+                response: { id: 'resp_1', status: 'completed', usage: {} },
+                usage: {
+                    input_tokens: 6,
+                    input_token_details: { text_tokens: 6, audio_tokens: 0, grok_tokens: 0 },
+                    output_tokens: 87,
+                    output_token_details: { text_tokens: 7, audio_tokens: 80, grok_tokens: 0 },
+                    total_tokens: 93,
+                    output_audio_seconds: 1.5895,
+                    billable_audio_seconds: 1,
+                },
+            } as unknown as Parameters<typeof client.Emit>[0]);
+
+            expect(usage).toHaveLength(1);
+            expect(usage[0].InputTokens).toBe(6);
+            expect(usage[0].OutputTokens).toBe(87);
+            // The per-modality detail must survive on Raw — audio vs text bill at very different rates.
+            expect(usage[0].Raw).toMatchObject({
+                output_token_details: { text_tokens: 7, audio_tokens: 80 },
+                billable_audio_seconds: 1,
+            });
+        });
+
+        it('should emit NOTHING when neither slot carries token counts', () => {
+            const { usage } = collectUsage(client);
+            client.Emit({ type: 'response.created' });
+            // Both empty — a cancelled/failed turn. Previously emitted a bogus all-undefined delta.
+            client.Emit({ type: 'response.done', response: { usage: {} } } as unknown as Parameters<typeof client.Emit>[0]);
+            client.Emit({ type: 'response.done' });
+            expect(usage).toEqual([]);
+        });
     });
 
     describe('tool calls and tool-result delivery', () => {

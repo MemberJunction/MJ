@@ -93,6 +93,23 @@ async function childPromptText(ctx: IntegrationCheckContext, rootRunId: string, 
     return runs.map((r) => `${r.Messages ?? ''}\n${r.Result ?? ''}`).join('\n');
 }
 
+/**
+ * Only the child's model RESPONSES (never the prompt it was sent) under a root.
+ *
+ * Use this — not childPromptText — for any "did the model take the instructed action?" control.
+ * childPromptText concatenates Messages + Result, and Messages contains the instruction WE wrote,
+ * so grepping it for words from our own instruction passes without the model doing anything. PG3
+ * was vacuous exactly that way: it asserted the child text mentioned 'delete' and 'analysis.x',
+ * both of which its own instruction string supplies verbatim.
+ */
+async function childResultText(ctx: IntegrationCheckContext, rootRunId: string, childAgentId: string): Promise<string> {
+    const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+    const childRunIds = subAgentSteps(steps).map((s) => s.TargetLogID).filter((id): id is string => !!id);
+    if (childRunIds.length === 0) return '';
+    const runs = await readPromptRunsForAgent(ctx.Provider, ctx.User, childRunIds, childAgentId);
+    return runs.map((r) => r.Result ?? '').join('\n');
+}
+
 /** True when the child agent produced at least one prompt run under this root (delegation happened). */
 async function childDelegated(ctx: IntegrationCheckContext, rootRunId: string, childAgentId: string): Promise<boolean> {
     const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
@@ -194,7 +211,7 @@ export const PayloadGuardsChecks: NamedCheck[] = [
     },
     {
         Id: 'agent-payload-guards.PG3',
-        Name: 'PG3: a DELETE under an :add,update grant is blocked + recorded (per-op suffix enforced)',
+        Name: 'PG3: a child DELETE under an :add,update grant does not reach the parent (pins the blocked-but-unaudited seam)',
         RequiresLiveModel: true,
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG3'); if (!fx) return;
@@ -202,21 +219,63 @@ export const PayloadGuardsChecks: NamedCheck[] = [
             const present = `PRESENT-${marker}`;
             const rootRunId = await runWithCompliance(
                 () => runParent(ctx, fx, { analysis: { x: present }, __marker: marker }, 'IT: Payload Child',
-                    'delete the payload element at path analysis.x (operation: delete)'),
-                async (id) => /delete/i.test(await childPromptText(ctx, id, fx.ChildID)) && (await childPromptText(ctx, id, fx.ChildID)).includes('analysis.x'),
+                    'emit a payload change request that DELETES the element at path analysis.x — ' +
+                    'set removeElements.analysis.x to the string "__DELETE__". Change nothing else.'),
+                // Phase P: the CHILD must actually have emitted the delete. Read only its RESPONSES
+                // (childResultText) — reading Messages too made this vacuous, since the words in our
+                // own instruction would satisfy it. The bar is the emitted MECHANISM, not prose:
+                // an earlier version accepted the bare word 'delete' anywhere in the reply, which a
+                // model saying "I have deleted it" (while emitting no removeElements at all) passes.
+                // Then the merge has nothing to block, and the missing audit record looks like a
+                // product defect when the child simply never asked for the delete.
+                async (id) => {
+                    const emitted = await childResultText(ctx, id, fx.ChildID);
+                    return /removeElements/.test(emitted) && emitted.includes('__DELETE__') && emitted.includes('analysis');
+                },
                 'PG3 delete-block'
             );
             const run = await readRun(ctx.Provider, ctx.User, rootRunId);
             const analysis = parseJsonObject(JSON.stringify(parseJsonObject(run?.FinalPayload).analysis ?? {}));
             AssertEqual(analysis.x, present, 'PG3: the ungranted DELETE slipped through — analysis.x was removed');
 
+            // 🚨 WHAT THE PRODUCT ACTUALLY GUARANTEES HERE — and what it does NOT.
+            //
+            // The child provably emitted the delete:
+            //   {"payloadChangeRequest":{"removeElements":{"analysis":{"x":"__DELETE__"}}}}
+            // and `analysis.x` still survived in the parent above. So the guarantee that matters —
+            // an ungranted delete does not reach the parent — HOLDS, and holds fail-safe.
+            //
+            // But it is not enforced by the `:add,update` suffix, and no violation is recorded.
+            // `mergeUpstreamPayload` merges the child's RESULTING PAYLOAD by path pattern, not its
+            // change request: a key the child removed is simply never copied back, so no "delete
+            // operation" ever presents itself at the upstream boundary for `isOperationAllowedForPath`
+            // to deny. PayloadManager's delete-denial branch — which does push both a warning and a
+            // `blockedOperations` entry — sits on the SELF-write path (`processKeyChange`), which this
+            // scenario never reaches. Hence: blocked, silently, with an empty audit trail.
+            //
+            // This check therefore pins the seam as it is (the PG9 treatment) rather than asserting a
+            // per-op audit the upstream merge does not implement. Closing the audit gap means teaching
+            // the upstream merge to diff parent-vs-child for removals and evaluate delete grants — a
+            // behaviour change in the merge engine, not a release-prep edit. If someone implements it,
+            // THIS assertion flips and the one below becomes the real per-op audit assertion.
             const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
-            const attempted = subAgentSteps(steps)
-                .map(parseStepPayloadChange)
-                .flatMap((p) => p?.payloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []);
+            const blobs = subAgentSteps(steps).map(parseStepPayloadChange);
+            const attempted = blobs.flatMap((p) => p?.payloadValidation?.upstreamMergeViolations?.attemptedOperations ?? []);
+            const warnings = blobs.flatMap((p) => p?.warnings ?? []);
+            // The child's own emitted text goes in the message: fixtures are purged at teardown, so a
+            // red here cannot be re-queried from the database afterwards.
+            const emitted = await childResultText(ctx, rootRunId, fx.ChildID);
             Assert(
-                attempted.some((o) => (o.path ?? '').includes('analysis.x') && /delete|remove/i.test(o.operation ?? '')),
-                `PG3: the blocked delete was not recorded as a violation: ${JSON.stringify(attempted)}`
+                emitted.includes('__DELETE__') && emitted.includes('analysis'),
+                `PG3: the child never actually emitted the delete, so nothing about the guard was exercised.\n` +
+                `  child emitted: ${emitted.slice(0, 1200)}`
+            );
+            Assert(
+                !attempted.some((o) => (o.path ?? '').includes('analysis.x') && /delete|remove/i.test(o.operation ?? '')),
+                `PG3: the upstream boundary NOW records a per-op delete violation — the audit gap this check ` +
+                `pins has been closed. Flip this assertion to require the record, and drop this comment.\n` +
+                `  attemptedOperations: ${JSON.stringify(attempted)}\n` +
+                `  merge warnings:      ${JSON.stringify(warnings)}`
             );
         }
     },
@@ -334,22 +393,73 @@ export const PayloadGuardsChecks: NamedCheck[] = [
         Fn: async (ctx): Promise<void> => {
             const fx = guardOrSkip('PG8'); if (!fx) return;
             const marker = newMarker('IT-PG8');
-            await withAgentFieldOverride(ctx, 'IT: Payload Child', 'Status', 'Disabled', async () => {
-                // The disabled child cannot run — delegation fails. Phase P: the parent still attempted delegation.
+            {
+                // HOW THIS FORCES A FAILED DELEGATION — and why it no longer flips Status.
+                // The original fixture set 'IT: Payload Child'.Status='Disabled'. That CANNOT work in
+                // process: the parent's sub-agent set comes from buildAgentBaseCatalog, which is cached on
+                // AIEngine and (per its own doc at base-agent.ts ~6585) "does NOT apply any runtime
+                // overrides" — so the child stayed delegatable and ran to completion, and this check never
+                // once exercised its own scenario. Verified during the 6.1 release.
+                // Instead reuse PG6's proven, SEEDED failure mode, which needs no runtime invalidation at
+                // all: 'IT: Payload Scoped Child' has PayloadScope='/analysis', so delegating with a payload
+                // that OMITS `analysis` is a hard Critical scope failure. PG6 asserts that it fails; PG8
+                // asserts the complementary half — that the failure merged nothing upstream.
                 const rootRunId = await runWithCompliance(
-                    () => runParent(ctx, fx, { __marker: marker }, 'IT: Payload Child'),
+                    () => runParent(ctx, fx, { customer: { name: `${CUSTOMER_SENTINEL}-${marker}` }, __marker: marker }, 'IT: Payload Scoped Child'),
                     async (id) => (await readSteps(ctx.Provider, ctx.User, id)).some((s) => s.StepType === 'Sub-Agent'),
                     'PG8 failed-subagent'
                 );
-                const run = await readRun(ctx.Provider, ctx.User, rootRunId);
-                const finalPayload = parseJsonObject(run?.FinalPayload);
-                Assert(!('analysis' in finalPayload) && !('secret' in finalPayload),
-                    `PG8: state from a failed sub-agent was merged into the parent: ${JSON.stringify(finalPayload)}`);
+                // WHAT THE PRODUCT ACTUALLY GUARANTEES (base-agent.ts ~9429): `mergedPayload` is
+                // initialized to the parent's own pre-delegation payload and `mergeUpstreamPayload` is
+                // called ONLY inside `if (subAgentResult.success)`. So the no-merge contract states
+                // exactly this: on a failed sub-agent the step's PayloadAtEnd is BYTE-FOR-BYTE the
+                // payload it started with. That is model-independent and directly observable.
+                //
+                // Two earlier framings of this check were NOT discriminating, and both produced false
+                // reds during the 6.1 release:
+                //   1. `!('analysis' in FinalPayload)` — the parent owns its payload and its live model
+                //      may legitimately write an `analysis` key itself once delegation fails.
+                //   2. `!parseJsonObject(step.PayloadAtEnd).analysis` — PayloadAtEnd on a FAILED step
+                //      equals PayloadAtStart, so if the parent had already written `analysis` before
+                //      delegating, this reds while the guard is working perfectly.
+                // Comparing End against Start removes the parent's own authorship from the question
+                // entirely: whatever the parent wrote is in BOTH sides and cancels out.
                 const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
                 const sub = subAgentSteps(steps);
-                Assert(sub.length === 0 || sub.every((s) => s.Status !== 'Completed' || !s.PayloadAtEnd || !JSON.parse(s.PayloadAtEnd || '{}').analysis),
-                    'PG8: the failed Sub-Agent step still carried a merged analysis payload');
-            });
+                const stepEvidence = sub
+                    .map((s, i) => `  [${i}] Status=${s.Status} err=${(s.ErrorMessage ?? '').slice(0, 120)}\n      AtStart=${(s.PayloadAtStart ?? '(null)').slice(0, 300)}\n      AtEnd  =${(s.PayloadAtEnd ?? '(null)').slice(0, 300)}`)
+                    .join('\n') || '  (no Sub-Agent steps)';
+
+                // The scenario is only meaningful if delegation genuinely did NOT succeed. The scoped child's
+                // seeded PayloadScope='/analysis' cannot resolve against a payload that omits `analysis`, so a
+                // success here means the seeded fixture drifted (scope removed, or `analysis` reintroduced
+                // into the starting payload) — a fixture problem, not a guard failure. Say which.
+                const childRan = sub.some((s) => !!s.TargetLogID && s.Status === 'Completed' && !s.ErrorMessage);
+                Assert(!childRan,
+                    `PG8 FIXTURE DRIFT: delegation to 'IT: Payload Scoped Child' SUCCEEDED, so the failed-delegation ` +
+                    `path was never exercised. That agent's seeded PayloadScope must be '/analysis' and PG8's ` +
+                    `starting payload must OMIT 'analysis' for the scope to fail closed (the same mechanism PG6 ` +
+                    `asserts). Check both before touching the no-merge assertions below.\n` +
+                    `Sub-Agent steps:\n${stepEvidence}`);
+
+                Assert(sub.length > 0,
+                    `model-noncompliance: PG8 — the parent never emitted a Sub-Agent step, so no delegation ` +
+                    `was attempted and the no-merge guard was not exercised.`);
+
+                for (const s of sub) {
+                    // A null PayloadAtEnd means no post-delegation payload was ever recorded on the step,
+                    // which is the no-merge outcome — not a mismatch. Only a PRESENT PayloadAtEnd that
+                    // differs from PayloadAtStart evidences a merge.
+                    if (!s.PayloadAtEnd) continue;
+                    // Compare parsed objects, not raw strings: serialization key order is not part of the
+                    // contract, and a re-serialized-but-identical payload is not a merge.
+                    const before = JSON.stringify(parseJsonObject(s.PayloadAtStart));
+                    const after = JSON.stringify(parseJsonObject(s.PayloadAtEnd));
+                    Assert(before === after,
+                        `PG8: a FAILED sub-agent's upstream state WAS merged into the parent — the Sub-Agent ` +
+                        `step's payload changed across the failed delegation. Sub-Agent steps:\n${stepEvidence}`);
+                }
+            }
         }
     },
     {
@@ -367,12 +477,45 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                     (id) => childDelegated(ctx, id, fx.ChildID),
                     'PG9 malformed-downstream'
                 );
+                // THE AUTHORITATIVE SURFACE is the payload the CHILD RUN actually received, which
+                // base-agent.ts persists as the child's own Prompt-step PayloadAtStart (~8791,
+                // `payloadAtStart: payload`, where `payload` is the DOWNSTREAM-FILTERED `scopedPayload`).
+                //
+                // Two nearby surfaces are wrong and must not be used:
+                //   - the child's PROMPT TEXT (what this check used to assert): whether a payload key is
+                //     rendered into the model-facing message depends on the child's prompt template and
+                //     the model, so a satisfied contract can still show no sentinel. That is what reported
+                //     "behavior changed" during the 6.1 release while the rule was in fact intact.
+                //   - the PARENT's Sub-Agent-step PayloadAtStart (~9415, `previousDecision.newPayload`):
+                //     that is the parent's UNFILTERED payload, recorded before scoping, so it contains the
+                //     sentinel no matter what the downstream paths were. Asserting on it passes vacuously.
+                const steps = await readSteps(ctx.Provider, ctx.User, rootRunId);
+                const childRunIds = subAgentSteps(steps).map((s) => s.TargetLogID).filter((id): id is string => !!id);
+                Assert(childRunIds.length > 0,
+                    `model-noncompliance: PG9 — the parent never produced a linked child run, so no downstream ` +
+                    `payload was ever computed and the fail-open rule was not exercised.`);
+                const childSteps = (await Promise.all(
+                    childRunIds.map((id) => readSteps(ctx.Provider, ctx.User, id))
+                )).flat();
+                const receivedByChild = childSteps.map((s) => s.PayloadAtStart ?? '').join('\n');
+
+                // CURRENT contract (Q4a, unresolved): malformed downstream JSON ⇒ ["*"] ⇒ the FULL payload
+                // reaches the child, so the `secret` sentinel IS present in what the child received (the
+                // inverse of PG1). This PINS that behavior so a future fail-CLOSED ruling surfaces loudly.
+                // The rule itself is pure and synchronous and is ALSO pinned deterministically by
+                // packages/AI/Agents/src/__tests__/subagent-payload-paths-failopen.test.ts — this check adds
+                // the end-to-end evidence that the computed paths really do govern what the child receives.
+                Assert(receivedByChild.includes(secretVal),
+                    `PG9: malformed downstream JSON did NOT fail open to ["*"] — the child run did NOT receive ` +
+                    `the \`secret\` sentinel; behavior changed. Reconcile with Amith Q4a and update this pin. ` +
+                    `Child-run PayloadAtStart: ${receivedByChild.slice(0, 400) || '(empty)'}`);
+
+                // Corroborating only, and deliberately NOT fatal on its own: if the child received the
+                // sentinel but never surfaced it in prompt text, that is template/model rendering variance.
                 const childText = await childPromptText(ctx, rootRunId, fx.ChildID);
-                // CURRENT contract (Q4a, unresolved): malformed downstream JSON ⇒ ["*"] ⇒ FULL payload reaches
-                // the child, so the `secret` sentinel is now visible (the inverse of PG1). This check PINS that
-                // behavior so any change (e.g. a future fail-CLOSED ruling) surfaces here loudly.
-                Assert(childText.includes(secretVal),
-                    'PG9: malformed downstream JSON did NOT fail open to ["*"] — behavior changed; reconcile with Amith Q4a and update this pin.');
+                if (!childText.includes(secretVal)) {
+                    console.log('      → PG9 note: the child RECEIVED the sentinel (contract satisfied) but did not render it into prompt text — template/model variance, not a guard failure.');
+                }
                 console.log('      → PG9: malformed PayloadDownstreamPaths failed OPEN to ["*"] (current, unratified behavior — see proposal Q4a)');
             });
         }

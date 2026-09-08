@@ -2,6 +2,7 @@ export { IAuthProvider } from './IAuthProvider.js';
 export { BaseAuthProvider } from './BaseAuthProvider.js';
 export { AuthProviderFactory } from './AuthProviderFactory.js';
 export { TokenExpiredError } from './tokenExpiredError.js';
+export { type IEnvironmentConfigurableProvider, isEnvironmentConfigurable } from './IEnvironmentConfigurableProvider.js';
 export { MagicLinkProvider } from './providers/MagicLinkProvider.js';
 export {
   HostIdentityProvider,

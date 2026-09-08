@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, queryAll, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { CodeEditorComponent } from './ng-code-editor.component';
@@ -20,6 +20,20 @@ const MOD = { imports: [CommonModule], declarations: [CodeEditorComponent] };
 const toolbar = (over: Partial<ToolbarConfig> = {}): ToolbarConfig => ({ enabled: true, ...over });
 
 describe('CodeEditorComponent (DOM — toolbar)', () => {
+  // ngOnInit constructs a CodeMirror EditorView. In the M5 joined pnpm workspace
+  // that pulls two physical @codemirror/state copies (CJS vs ESM / two .pnpm
+  // stores) and EditorState.create throws. These specs only cover the Angular
+  // toolbar template, so skip the editor host construction.
+  beforeEach(() => {
+    vi.spyOn(CodeEditorComponent.prototype, 'ngOnInit').mockImplementation(function (this: CodeEditorComponent) {
+      // handleButtonClick no-ops when view is missing; a destroy-only stub is enough.
+      Object.assign(this, { view: { destroy() { /* no-op */ } } });
+    });
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders no toolbar when toolbar.enabled is false (default)', () => {
     const f = renderComponentFixture(CodeEditorComponent, { ...MOD });
     expect(query(f, '.mj-code-editor-toolbar')).toBeNull();

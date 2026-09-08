@@ -45,7 +45,8 @@ import { KanbanCardData, KanbanColumnDef, KanbanCardMovedEvent } from '../models
                                  [draggable]="!ReadOnly"
                                  (dragstart)="onDragStart($event, card, col.Key)"
                                  (dragend)="onDragEnd()"
-                                 (click)="CardClicked.emit(card)">
+                                 (click)="CardClicked.emit(card)"
+                                 (dblclick)="CardDoubleClicked.emit(card)">
                                 <div class="card-title">{{ card.Title }}</div>
                                 @if (card.Subtitle) {
                                     <div class="card-subtitle">{{ card.Subtitle }}</div>
@@ -213,8 +214,11 @@ export class MjKanbanBoardComponent {
     /** Emitted when a card is dragged to a different column. */
     @Output() CardMoved = new EventEmitter<KanbanCardMovedEvent>();
 
-    /** Emitted when a card is clicked (not dragged). */
+    /** Emitted when a card is clicked. */
     @Output() CardClicked = new EventEmitter<KanbanCardData>();
+
+    /** Emitted when a card is double-clicked. */
+    @Output() CardDoubleClicked = new EventEmitter<KanbanCardData>();
 
     /** @internal */
     dragCardID: string | null = null;

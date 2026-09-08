@@ -47,7 +47,7 @@
     {
       "label": "build-mcp-server",
       "type": "shell",
-      "command": "npm run build --workspace=@memberjunction/ai-agents && npm run build --workspace=@memberjunction/ai-mcp-server",
+      "command": "pnpm --filter @memberjunction/ai-agents run build && pnpm --filter @memberjunction/ai-mcp-server run build",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {
@@ -58,7 +58,7 @@
     {
       "label": "Build MetadataSync",
       "type": "shell",
-      "command": "npm run build --workspace=@memberjunction/metadata-sync && npm run build --workspace=@memberjunction/cli",
+      "command": "pnpm --filter @memberjunction/metadata-sync run build && pnpm --filter @memberjunction/cli run build",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {
@@ -81,7 +81,7 @@
     {
       "label": "Build AI Packages",
       "type": "shell",
-      "command": "npm run build --workspace=@memberjunction/ai-prompts && npm run build --workspace=@memberjunction/ai-agents && npm run build --workspace=@memberjunction/ai-cli",
+      "command": "pnpm --filter @memberjunction/ai-prompts run build && pnpm --filter @memberjunction/ai-agents run build && pnpm --filter @memberjunction/ai-cli run build",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {
@@ -92,7 +92,7 @@
     {
       "label": "Build QueryGen",
       "type": "shell",
-      "command": "npm run build --workspace=@memberjunction/query-gen && npm run build --workspace=@memberjunction/cli",
+      "command": "pnpm --filter @memberjunction/query-gen run build && pnpm --filter @memberjunction/cli run build",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {
@@ -101,9 +101,9 @@
       }
     },
     {
-      "label": "Kill Port 4001",
+      "label": "Kill Port 4000",
       "type": "shell",
-      "command": "kill -9 $(lsof -i :4001 -t) 2>/dev/null || true",
+      "command": "kill -9 $(lsof -i :4000 -t) 2>/dev/null || true",
       "presentation": {
         "reveal": "silent",
         "panel": "shared"
@@ -113,7 +113,7 @@
     {
       "label": "Build MJCLI",
       "type": "shell",
-      "command": "npm run build --workspace=@memberjunction/cli",
+      "command": "pnpm --filter @memberjunction/cli run build",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {
@@ -124,7 +124,7 @@
     {
       "label": "Build MetadataSync with SQLLogger",
       "type": "shell",
-      "command": "npm run build --workspace=@memberjunction/sqlserver-dataprovider && npm run build --workspace=@memberjunction/metadata-sync && npm run build --workspace=@memberjunction/cli",
+      "command": "pnpm --filter @memberjunction/sqlserver-dataprovider run build && pnpm --filter @memberjunction/metadata-sync run build && pnpm --filter @memberjunction/cli run build",
       "group": "build",
       "problemMatcher": ["$tsc"],
       "presentation": {

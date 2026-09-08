@@ -15,7 +15,7 @@
  * imports replace the original in-function `await import(...)` (MJ rule: no dynamic import).
  */
 import { RunView, RunQuery, Metadata, UserInfo } from '@memberjunction/core';
-import type { IRunQueryProvider, RunQueryResult } from '@memberjunction/core';
+import type { IRunQueryProvider, RunQueryResult, DatabaseProviderBase } from '@memberjunction/core';
 import { QueryEngine } from '@memberjunction/core-entities';
 import type { MJQueryCategoryEntity, MJQueryEntity, MJQueryEntityEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -133,8 +133,21 @@ export async function createRunQueryFixtures(ctx: IntegrationCheckContext): Prom
     validatedQuery.CategoryID = category.ID;
     validatedQuery.SQL = countSQL;
     validatedQuery.Status = 'Approved';
+    // Column aliases quoted through the dialect, not with T-SQL brackets. `CacheValidationSQL` is
+    // executed verbatim against whichever backend is running, so `AS [MaxUpdatedAt]` fails on
+    // PostgreSQL with `syntax error at or near "["` — and because that SQL is the cache VALIDATOR,
+    // the failure is reported as `cacheStatus: error` rather than as a broken fixture, which reads
+    // like the cache logic is wrong when it is the fixture that never ran.
+    //
+    // `__mj_UpdatedAt` is quoted for a second, separate reason: the PostgreSQL auto-quoting
+    // tokenizer deliberately leaves `__mj_`-prefixed words alone, so an unquoted reference folds to
+    // `__mj_updatedat` — and the shipped PG baseline creates that column case-preserved. Spelling
+    // it out here does not depend on that rule either way.
+    const q = (ctx.Provider as unknown as DatabaseProviderBase).Dialect;
     validatedQuery.CacheValidationSQL =
-        `SELECT MAX(__mj_UpdatedAt) AS [MaxUpdatedAt], COUNT(*) AS [RowCount] FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
+        `SELECT MAX(${q.QuoteIdentifier('__mj_UpdatedAt')}) AS ${q.QuoteIdentifier('MaxUpdatedAt')}, ` +
+        `COUNT(*) AS ${q.QuoteIdentifier('RowCount')} ` +
+        `FROM ${schema}.vwUserSettings WHERE Setting LIKE '${RUNQUERY_SETTING_PREFIX}%'`;
     if (!await validatedQuery.Save()) {
         throw new Error(`Validated fixture query save failed: ${validatedQuery.LatestResult?.CompleteMessage}`);
     }

@@ -7,6 +7,7 @@ import {
   inject,
 } from '@angular/core';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Summary metrics for the dashboard cards */
 export interface ArchiveRunMetrics {
@@ -48,7 +49,7 @@ export interface ArchiveRunDetailRow {
   styleUrls: ['./archive-run-viewer.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
+export class ArchiveRunViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   /** Summary metrics */
@@ -170,7 +171,7 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
 
   /** Fetch run records from the server */
   private async fetchRuns(): Promise<ArchiveRunSummary[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<RunRecord>({
       EntityName: 'MJ: Archive Runs',
       ExtraFilter: '',
@@ -221,7 +222,7 @@ export class ArchiveRunViewerComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const escapedId = runId.replace(/'/g, "''");
       const result = await rv.RunView<DetailRecord>({
         EntityName: 'MJ: Archive Run Details',

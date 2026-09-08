@@ -95,6 +95,16 @@ export interface ResponseTypeInclusionRules {
      * @default true
      */
     pipeline?: boolean;
+
+    /**
+     * Include `'Tasks'` in the nextStep.type union and the `tasks` property.
+     * Auto-aligns with `enableTaskGraphs` unless explicitly set.
+     *
+     * Unlike its siblings this defaults to **false**, because `enableTaskGraphs` does: an agent
+     * that has not opted in must not even see the type, or the model will reach for it.
+     * @default false
+     */
+    tasks?: boolean;
 }
 
 /**
@@ -109,7 +119,9 @@ export const DEFAULT_RESPONSE_TYPE_INCLUSION_RULES: Required<ResponseTypeInclusi
     while: true,
     scratchpad: true,
     artifactToolCalls: true,
-    pipeline: true
+    pipeline: true,
+    // The one section that defaults OFF — see `enableTaskGraphs` (D3).
+    tasks: false
 };
 
 /**
@@ -295,6 +307,25 @@ export interface LoopAgentTypePromptParams {
      */
     includePipelineDocs?: boolean;
 
+    /**
+     * Allow this agent to emit durable task graphs (`nextStep.type === 'Tasks'`).
+     *
+     * **Defaults to false, unlike every other flag here, and is enforced rather than advisory.**
+     * The other flags only shape the prompt: turning one off saves tokens, and an agent that
+     * ignores the omission and emits the feature anyway still works. This one is a capability
+     * gate. A task graph creates durable Task rows that outlive the run, execute on a server-side
+     * dispatcher under the submitting user, and can spawn further agent runs — so an agent
+     * acquiring that reach through prompt drift rather than through deliberate configuration is a
+     * real problem, not a token-budget one. `LoopAgentType` therefore *rejects* a `'Tasks'` step
+     * from a disabled agent with a corrective, on top of omitting the type from the prompt.
+     *
+     * Rollout is per-agent (D3): the launch opt-ins are Sage, Query Builder, and the Research
+     * Agent + its sub-agents, declared in their `AgentTypePromptParams` metadata.
+     *
+     * @default false
+     */
+    enableTaskGraphs?: boolean;
+
     // === Content Limiting ===
 
     /**
@@ -337,6 +368,8 @@ export const DEFAULT_LOOP_AGENT_PROMPT_PARAMS: Required<LoopAgentTypePromptParam
     includeArtifactToolsDocs: true,
     includeConversationToolsDocs: true,
     includePipelineDocs: true,
+    // Deliberately false — a capability gate, not a token-savings flag (D3).
+    enableTaskGraphs: false,
     maxSubAgentsInPrompt: -1,
     maxActionsInPrompt: -1
 };

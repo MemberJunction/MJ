@@ -100,9 +100,9 @@
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Template Contents','TypeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Template Contents')"
+                [NewRecordValues]="NewRecordValues('MJ: Template Contents','TypeID')"
                 [AllowLoad]="IsSectionExpanded('mJTemplateContents')"
-                [ShowToolbar]="false"
+                [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTemplateContents', $event.totalRowCount)"
                 >

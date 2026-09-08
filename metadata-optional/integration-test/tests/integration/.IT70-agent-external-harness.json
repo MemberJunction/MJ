@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT70 - External Agent Harness",
+    "Description": "Proves the External Agent Harness branch of the agent framework wires up against live metadata and a live ClassFactory. Deterministic, read-only, LLM-free, and requires NO harness binary — which is the point: the failures that actually break this feature are wiring failures, and every one of them is invisible to a test that just launches a harness. AEH1 the Harness agent type exists, declares DriverClass 'HarnessAgentType', and has a SystemPromptID (mandatory because AIPromptRun.PromptID is NOT NULL, so a turn with no prompt row records no cost and leaves the cost guardrail with nothing to compare). AEH2 BOTH halves of the dual registration resolve — the single most important check, because AgentRunner falls back to plain BaseAgent when the BaseAgent-side registration is missing, which does NOT error: the agent simply runs as an ordinary prompt agent with no harness, no sandbox and no credentials, and the run still reports success. AEH3 every harness row names a DriverClass an adapter actually registers. AEH4 CapabilitySettings parse and declare only known capability names — a typo reads as 'unsupported' and silently changes runtime behaviour. AEH5 metadata capabilities agree with what each adapter implements, catching the drift that matters most since the runtime EMULATES what an adapter lacks (metadata over-claiming SessionResume means context is never replayed and the harness quietly loses its history every turn). AEH6 Active harness rows carry the AIModelID/AIVendorID accounting anchors their turns need. AEH7 Demo Harness Agent is coherent — right type, names a real harness row, and sets a cost ceiling. 7 checks AEH1-AEH7.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "All 7 checks pass against a database built from migrations + metadata: the Harness agent type is present with a system prompt, 'HarnessAgentType' resolves under BOTH BaseAgentType and BaseAgent, every harness row's DriverClass resolves to a registered adapter, capability declarations are well-formed and agree with the adapters that implement them, Active rows carry their accounting anchors, and the demo agent references a real harness with a cost ceiling set."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "agent-external-harness"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "3C7A1E58-6B92-4D40-9F13-8E5A2C0D7B64"
+  },
+  "sync": {
+    "lastModified": "2026-08-08T01:12:44.636Z",
+    "checksum": "18a25d90ac27b43157e282ca6439dc64ebcca453c28f42cacc47d38d8365250b"
+  }
+}

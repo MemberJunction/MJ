@@ -1,18 +1,203 @@
 /**
- * Unit tests for MJQueryEntityServer deterministic extraction.
+ * Unit tests for the MJ: Queries server-side extraction pipeline heuristics.
  *
- * Tests the parameter merge logic and description heuristics that don't
- * require a database connection. The SQLParser provides the deterministic
- * structure; these tests verify the merge with LLM enrichment and fallbacks.
+ * Drives the REAL production code exported from `custom/query-extraction`:
+ *   - enrich.ts  — MergeParametersWithLLM, GenerateParameterDescription,
+ *                  BuildPassthroughDescription, GenerateSampleValue, NormalizeDefaultForType
+ *   - resolve.ts — ResolveCompositionReferences, BuildPassthroughParams,
+ *                  MergePassthroughParams, MapQueryParamTypeToParserType,
+ *                  EnrichFieldTypesFromCompositions, EnrichFieldTypesFromEntityMetadata
+ *
+ * The SQLParser provides the deterministic structure; these tests verify the merge
+ * with LLM enrichment, passthrough inheritance from dependency queries, and the
+ * heuristic fallbacks — all without a database connection.
  */
 import { describe, it, expect } from 'vitest';
 import { SQLParser } from '@memberjunction/sql-parser';
 import type { MJParameterInfo, SQLSelectColumn } from '@memberjunction/sql-parser';
 import { SQLServerDialect } from '@memberjunction/sql-dialect';
+import { EntityInfo } from '@memberjunction/core';
+import type { IMetadataProvider } from '@memberjunction/core';
+import type {
+    MJQueryEntityExtended,
+    MJQueryFieldEntity,
+    MJQueryParameterEntity,
+} from '@memberjunction/core-entities';
+import {
+    MergeParametersWithLLM,
+    GenerateParameterDescription,
+    BuildPassthroughDescription,
+    GenerateSampleValue,
+    NormalizeDefaultForType,
+} from '../custom/query-extraction/enrich';
+import {
+    ResolveCompositionReferences,
+    ResolveQueryByNameAndCategory,
+    BuildPassthroughParams,
+    MergePassthroughParams,
+    MapQueryParamTypeToParserType,
+    EnrichFieldTypesFromCompositions,
+    EnrichFieldTypesFromEntityMetadata,
+} from '../custom/query-extraction/resolve';
+import type {
+    ExtractedField,
+    ExtractedParameter,
+    ParameterExtractionResult,
+    PassthroughParamContext,
+    ResolvedCompositionReference,
+} from '../custom/query-extraction/types';
 
 const tsqlDialect = new SQLServerDialect();
 const extractSelectColumns = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractSelectColumns(sql, dialect);
 const extractTableRefs = (sql: string, dialect = tsqlDialect) => SQLParser.ExtractTableRefs(sql, dialect);
+
+// ═══════════════════════════════════════════════════
+// Test helpers — minimal structural stubs for the
+// entity types the resolve stage reads from. Only the
+// properties the production functions actually touch
+// are populated; `Pick<>` keeps them honest against
+// the real entity classes.
+// ═══════════════════════════════════════════════════
+
+type QueryParameterStubShape = Pick<
+    MJQueryParameterEntity,
+    'Name' | 'Type' | 'IsRequired' | 'DefaultValue' | 'Description' | 'SampleValue'
+>;
+
+interface StubParameterInput {
+    name: string;
+    type: MJQueryParameterEntity['Type'];
+    isRequired?: boolean;
+    defaultValue?: string | null;
+    description?: string | null;
+    sampleValue?: string | null;
+}
+
+function stubQueryParameter(input: StubParameterInput): MJQueryParameterEntity {
+    const shape: QueryParameterStubShape = {
+        Name: input.name,
+        Type: input.type,
+        IsRequired: input.isRequired ?? true,
+        DefaultValue: input.defaultValue ?? null,
+        Description: input.description ?? null,
+        SampleValue: input.sampleValue ?? null,
+    };
+    return shape as MJQueryParameterEntity;
+}
+
+type QueryFieldStubShape = Pick<
+    MJQueryFieldEntity,
+    'Name' | 'Description' | 'SQLBaseType' | 'SQLFullType' | 'SourceEntityID' | 'SourceFieldName' | 'IsComputed' | 'IsSummary'
+>;
+
+interface StubFieldInput {
+    name: string;
+    sqlBaseType: string;
+    sqlFullType: string;
+    sourceEntityID?: string | null;
+    sourceFieldName?: string | null;
+    isComputed?: boolean;
+    isSummary?: boolean;
+    description?: string | null;
+}
+
+function stubQueryField(input: StubFieldInput): MJQueryFieldEntity {
+    const shape: QueryFieldStubShape = {
+        Name: input.name,
+        Description: input.description ?? null,
+        SQLBaseType: input.sqlBaseType,
+        SQLFullType: input.sqlFullType,
+        SourceEntityID: input.sourceEntityID ?? null,
+        SourceFieldName: input.sourceFieldName ?? null,
+        IsComputed: input.isComputed ?? false,
+        IsSummary: input.isSummary ?? false,
+    };
+    return shape as MJQueryFieldEntity;
+}
+
+type QueryStubShape = Pick<
+    MJQueryEntityExtended,
+    'ID' | 'Name' | 'CategoryPath' | 'Reusable' | 'QueryParameters' | 'QueryFields'
+>;
+
+interface StubQueryInput {
+    id?: string;
+    name: string;
+    /** Real MJQueryEntityExtended.CategoryPath format: slash-separated segments
+     *  WITHOUT leading/trailing slashes (e.g. "Golden-Queries/Membership"). */
+    categoryPath?: string;
+    reusable?: boolean;
+    parameters?: MJQueryParameterEntity[];
+    fields?: MJQueryFieldEntity[];
+}
+
+function stubQuery(input: StubQueryInput): MJQueryEntityExtended {
+    const shape: QueryStubShape = {
+        ID: input.id ?? `query-id-${input.name}`,
+        Name: input.name,
+        CategoryPath: input.categoryPath ?? '',
+        Reusable: input.reusable ?? true,
+        QueryParameters: input.parameters ?? [],
+        QueryFields: input.fields ?? [],
+    };
+    return shape as MJQueryEntityExtended;
+}
+
+function stubMetadataProvider(entities: EntityInfo[] = []): IMetadataProvider {
+    const shape: Pick<IMetadataProvider, 'Entities'> = { Entities: entities };
+    return shape as IMetadataProvider;
+}
+
+interface BuildEntityFieldInput {
+    Name: string;
+    Type: string;
+    /** For nvarchar/nchar the metadata Length is in BYTES (2x the character count). */
+    Length?: number;
+    Precision?: number;
+    Scale?: number;
+    Description?: string | null;
+}
+
+/** Builds a REAL EntityInfo instance (the same class production reads from metadata). */
+function buildEntity(input: {
+    id?: string;
+    name: string;
+    schema: string;
+    baseView: string;
+    fields: BuildEntityFieldInput[];
+}): EntityInfo {
+    return new EntityInfo({
+        ID: input.id ?? `entity-id-${input.name}`,
+        Name: input.name,
+        SchemaName: input.schema,
+        BaseView: input.baseView,
+        BaseTable: input.baseView.replace(/^vw/, ''),
+        EntityFields: input.fields.map((f, i) => ({
+            ID: `entity-field-${input.name}-${i}`,
+            Name: f.Name,
+            Type: f.Type,
+            Length: f.Length ?? 0,
+            Precision: f.Precision ?? 0,
+            Scale: f.Scale ?? 0,
+            Description: f.Description ?? null,
+        })),
+    });
+}
+
+/** Wraps LLM parameters into the ParameterExtractionResult shape the real merge consumes. */
+function llmResult(parameters: ExtractedParameter[]): ParameterExtractionResult {
+    return { parameters };
+}
+
+/** Runs the real resolve path: composition token resolution → passthrough parameter build. */
+function extractPassthroughParams(
+    sql: string,
+    allQueries: MJQueryEntityExtended[],
+    queryName = 'Parent Query'
+): MJParameterInfo[] {
+    const refs = ResolveCompositionReferences(sql, queryName, allQueries);
+    return BuildPassthroughParams(refs).params;
+}
 
 // ═══════════════════════════════════════════════════
 // Test the deterministic extraction via SQLParser
@@ -262,94 +447,11 @@ LEFT JOIN PrimaryChapters pc ON mac.MemberID = pc.MemberID`;
 
 // ═══════════════════════════════════════════════════
 // Test the merge logic and heuristic fallbacks
-// (these test the private methods extracted as pure functions)
+// (real functions from custom/query-extraction/enrich.ts)
 // ═══════════════════════════════════════════════════
 
-// Re-implement the merge and heuristic functions as pure functions for testing
-// (mirrors the private methods in MJQueryEntityServer)
-
-interface ExtractedParameter {
-    name: string;
-    type: 'string' | 'number' | 'date' | 'boolean' | 'array' | 'object';
-    isRequired: boolean;
-    description: string;
-    usage: string[];
-    defaultValue: string | null;
-    sampleValue: string | null;
-}
-
-function generateParameterDescription(param: MJParameterInfo): string {
-    const typeDescriptions: Record<string, string> = {
-        'string': 'text value',
-        'number': 'numeric value',
-        'date': 'date value',
-        'boolean': 'true/false flag',
-        'array': 'list of values',
-    };
-    const typeDesc = typeDescriptions[param.type] || 'value';
-    const requiredDesc = param.isRequired ? 'Required' : 'Optional';
-    const humanName = param.name.replace(/([A-Z])/g, ' $1').trim();
-    const defaultDesc = param.defaultValue !== null ? ` (default: ${param.defaultValue})` : '';
-    return `${requiredDesc} ${typeDesc} for ${humanName}${defaultDesc}`;
-}
-
-function generateSampleValue(param: MJParameterInfo): string | null {
-    if (param.defaultValue !== null) return String(param.defaultValue);
-    switch (param.type) {
-        case 'string': return 'Example';
-        case 'number': return '10';
-        case 'date': return '2024-01-01';
-        case 'boolean': return 'true';
-        case 'array': return 'Value1,Value2';
-        default: return null;
-    }
-}
-
-/**
- * Metadata inherited from a dependency query's parameter for passthrough parameters.
- */
-interface PassthroughParamContext {
-    description: string | null;
-    sampleValue: string | null;
-    depQueryName: string;
-    depParamName: string;
-}
-
-function buildPassthroughDescription(param: MJParameterInfo, context: PassthroughParamContext): string {
-    const suffix = ` (passed through to "${context.depQueryName}" as "${context.depParamName}")`;
-    if (context.description) {
-        return `${context.description}${suffix}`;
-    }
-    return `${generateParameterDescription(param)}${suffix}`;
-}
-
-function mergeParametersWithLLM(
-    deterministicParams: MJParameterInfo[],
-    llmParams: ExtractedParameter[] | null,
-    passthroughContext: Map<string, PassthroughParamContext> = new Map()
-): ExtractedParameter[] {
-    const llm = llmParams ?? [];
-    return deterministicParams.map(dp => {
-        const llmMatch = llm.find(lp => lp.name.toLowerCase() === dp.name.toLowerCase());
-        const ptContext = passthroughContext.get(dp.name.toLowerCase());
-        const inheritedDescription = ptContext
-            ? buildPassthroughDescription(dp, ptContext)
-            : null;
-
-        return {
-            name: dp.name,
-            type: (dp.type === 'unknown' ? (llmMatch?.type ?? 'string') : dp.type) as ExtractedParameter['type'],
-            isRequired: dp.isRequired,
-            description: llmMatch?.description ?? inheritedDescription ?? generateParameterDescription(dp),
-            usage: llmMatch?.usage ?? dp.usageLocations,
-            defaultValue: dp.defaultValue !== null ? String(dp.defaultValue) : (llmMatch?.defaultValue ?? null),
-            sampleValue: llmMatch?.sampleValue ?? ptContext?.sampleValue ?? generateSampleValue(dp),
-        };
-    });
-}
-
 describe('Parameter Merge Logic', () => {
-    describe('mergeParametersWithLLM', () => {
+    describe('MergeParametersWithLLM', () => {
         it('should use deterministic values for name, type, isRequired', () => {
             const det: MJParameterInfo[] = [{
                 name: 'Region',
@@ -370,7 +472,7 @@ describe('Parameter Merge Logic', () => {
                 sampleValue: 'West',
             }];
 
-            const result = mergeParametersWithLLM(det, llm);
+            const result = MergeParametersWithLLM(det, llmResult(llm));
             expect(result).toHaveLength(1);
             expect(result[0].name).toBe('Region'); // deterministic
             expect(result[0].type).toBe('string'); // deterministic wins over LLM's "number"
@@ -389,7 +491,7 @@ describe('Parameter Merge Logic', () => {
                 usageLocations: ['{{ MinActivityCount | sqlNumber }}'],
             }];
 
-            const result = mergeParametersWithLLM(det, null);
+            const result = MergeParametersWithLLM(det, null);
             expect(result).toHaveLength(1);
             expect(result[0].description).toBe('Optional numeric value for Min Activity Count');
             expect(result[0].sampleValue).toBe('10'); // heuristic for number
@@ -415,7 +517,7 @@ describe('Parameter Merge Logic', () => {
                 sampleValue: null,
             }];
 
-            const result = mergeParametersWithLLM(det, llm);
+            const result = MergeParametersWithLLM(det, llmResult(llm));
             expect(result[0].description).toBe('Required date value for Start Date');
             expect(result[0].sampleValue).toBe('2024-01-01');
         });
@@ -430,7 +532,7 @@ describe('Parameter Merge Logic', () => {
                 usageLocations: ['{{ Limit | default(25) | sqlNumber }}'],
             }];
 
-            const result = mergeParametersWithLLM(det, null);
+            const result = MergeParametersWithLLM(det, null);
             expect(result[0].defaultValue).toBe('25');
             expect(result[0].sampleValue).toBe('25'); // uses default as sample
         });
@@ -445,7 +547,7 @@ describe('Parameter Merge Logic', () => {
                 usageLocations: ['{{ RawParam }}'],
             }];
 
-            const result = mergeParametersWithLLM(det, null);
+            const result = MergeParametersWithLLM(det, null);
             expect(result[0].type).toBe('string');
         });
 
@@ -469,7 +571,7 @@ describe('Parameter Merge Logic', () => {
                 sampleValue: '42',
             }];
 
-            const result = mergeParametersWithLLM(det, llm);
+            const result = MergeParametersWithLLM(det, llmResult(llm));
             expect(result[0].type).toBe('number'); // LLM wins when deterministic is unknown
         });
 
@@ -493,7 +595,7 @@ describe('Parameter Merge Logic', () => {
                 sampleValue: '5',
             }];
 
-            const result = mergeParametersWithLLM(det, llm);
+            const result = MergeParametersWithLLM(det, llmResult(llm));
             expect(result[0].description).toBe('Minimum activity threshold');
             expect(result[0].sampleValue).toBe('5');
         });
@@ -514,7 +616,7 @@ describe('Parameter Merge Logic', () => {
                 { name: 'HallucinatedParam', type: 'string', isRequired: true, description: 'Does not exist', usage: [], defaultValue: null, sampleValue: 'fake' },
             ];
 
-            const result = mergeParametersWithLLM(det, llm);
+            const result = MergeParametersWithLLM(det, llmResult(llm));
             expect(result).toHaveLength(1); // Only Region, not HallucinatedParam
             expect(result[0].name).toBe('Region');
         });
@@ -534,7 +636,7 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = mergeParametersWithLLM(det, null, ptContext);
+            const result = MergeParametersWithLLM(det, null, ptContext);
             expect(result).toHaveLength(1);
             expect(result[0].description).toBe(
                 'Number of days to look back for changes (passed through to "Recent Entity Changes" as "lookbackDays")'
@@ -563,7 +665,7 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = mergeParametersWithLLM(det, llm, ptContext);
+            const result = MergeParametersWithLLM(det, llmResult(llm), ptContext);
             expect(result[0].description).toBe('LLM-generated description for numDays'); // LLM wins
             expect(result[0].sampleValue).toBe('14'); // LLM wins
         });
@@ -583,7 +685,7 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = mergeParametersWithLLM(det, null, ptContext);
+            const result = MergeParametersWithLLM(det, null, ptContext);
             expect(result[0].description).toBe(
                 'Required numeric value for fiscal Year (passed through to "Sales Summary" as "year")'
             );
@@ -612,13 +714,60 @@ describe('Parameter Merge Logic', () => {
                 }],
             ]);
 
-            const result = mergeParametersWithLLM(det, llm, ptContext);
+            const result = MergeParametersWithLLM(det, llmResult(llm), ptContext);
             expect(result[0].description).toBe('LLM description'); // LLM wins
             expect(result[0].sampleValue).toBe('West'); // Inherited wins over heuristic
         });
+
+        it('should give caller-provided parameter hints highest priority for sampleValue', () => {
+            const det: MJParameterInfo[] = [{
+                name: 'Region', type: 'string', isRequired: true,
+                defaultValue: null, filters: [], usageLocations: [],
+            }];
+
+            const llm: ExtractedParameter[] = [{
+                name: 'Region', type: 'string', isRequired: true,
+                description: 'Region filter', usage: [], defaultValue: null, sampleValue: 'LLMValue',
+            }];
+
+            const hints = new Map<string, string>([['Region', 'TestedValue']]);
+
+            const result = MergeParametersWithLLM(det, llmResult(llm), new Map<string, PassthroughParamContext>(), hints);
+            expect(result[0].sampleValue).toBe('TestedValue'); // hint beats LLM
+            expect(result[0].description).toBe('Region filter'); // description untouched by hints
+        });
+
+        it('should match parameter hints by lowercased name as fallback', () => {
+            const det: MJParameterInfo[] = [{
+                name: 'MinCount', type: 'number', isRequired: true,
+                defaultValue: null, filters: [], usageLocations: [],
+            }];
+
+            const hints = new Map<string, string>([['mincount', '99']]);
+
+            const result = MergeParametersWithLLM(det, null, new Map<string, PassthroughParamContext>(), hints);
+            expect(result[0].sampleValue).toBe('99');
+        });
+
+        // The old mirrored suite returned the raw default ('Attended') here — the REAL
+        // merge normalizes array-typed defaults into JSON array strings so downstream
+        // consumers (queryParameterProcessor) can parse them safely.
+        it('should normalize array-typed defaults to JSON array strings in the merged defaultValue', () => {
+            const det: MJParameterInfo[] = [{
+                name: 'Statuses', type: 'array', isRequired: false,
+                defaultValue: 'Attended', filters: [], usageLocations: [],
+            }];
+
+            const result = MergeParametersWithLLM(det, null);
+            expect(result[0].defaultValue).toBe('["Attended"]');
+            // NOTE (real behavior): sampleValue still reflects the RAW default,
+            // not the normalized JSON array — GenerateSampleValue stringifies
+            // dp.defaultValue before normalization is applied.
+            expect(result[0].sampleValue).toBe('Attended');
+        });
     });
 
-    describe('buildPassthroughDescription', () => {
+    describe('BuildPassthroughDescription', () => {
         it('should use dependency description with passthrough suffix', () => {
             const param: MJParameterInfo = {
                 name: 'numDays', type: 'number', isRequired: true,
@@ -630,7 +779,7 @@ describe('Parameter Merge Logic', () => {
                 depQueryName: 'Recent Changes',
                 depParamName: 'lookbackDays',
             };
-            expect(buildPassthroughDescription(param, context)).toBe(
+            expect(BuildPassthroughDescription(param, context)).toBe(
                 'How many days to look back (passed through to "Recent Changes" as "lookbackDays")'
             );
         });
@@ -646,15 +795,15 @@ describe('Parameter Merge Logic', () => {
                 depQueryName: 'Activity Query',
                 depParamName: 'minActivityCount',
             };
-            expect(buildPassthroughDescription(param, context)).toBe(
+            expect(BuildPassthroughDescription(param, context)).toBe(
                 'Optional numeric value for Min Count (passed through to "Activity Query" as "minActivityCount")'
             );
         });
     });
 
-    describe('generateParameterDescription', () => {
+    describe('GenerateParameterDescription', () => {
         it('should generate description for required string param', () => {
-            const desc = generateParameterDescription({
+            const desc = GenerateParameterDescription({
                 name: 'Region', type: 'string', isRequired: true,
                 defaultValue: null, filters: [], usageLocations: [],
             });
@@ -662,7 +811,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should generate description for optional number param', () => {
-            const desc = generateParameterDescription({
+            const desc = GenerateParameterDescription({
                 name: 'MinCount', type: 'number', isRequired: false,
                 defaultValue: null, filters: [], usageLocations: [],
             });
@@ -670,7 +819,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should include default value in description', () => {
-            const desc = generateParameterDescription({
+            const desc = GenerateParameterDescription({
                 name: 'Limit', type: 'number', isRequired: true,
                 defaultValue: 25, filters: [], usageLocations: [],
             });
@@ -678,7 +827,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should split camelCase names into human-readable form', () => {
-            const desc = generateParameterDescription({
+            const desc = GenerateParameterDescription({
                 name: 'MinActivityCount', type: 'number', isRequired: false,
                 defaultValue: null, filters: [], usageLocations: [],
             });
@@ -686,9 +835,9 @@ describe('Parameter Merge Logic', () => {
         });
     });
 
-    describe('generateSampleValue', () => {
+    describe('GenerateSampleValue', () => {
         it('should return default value when available', () => {
-            expect(generateSampleValue({
+            expect(GenerateSampleValue({
                 name: 'x', type: 'number', isRequired: true,
                 defaultValue: 42, filters: [], usageLocations: [],
             })).toBe('42');
@@ -704,7 +853,7 @@ describe('Parameter Merge Logic', () => {
             ];
 
             for (const [type, expected] of cases) {
-                expect(generateSampleValue({
+                expect(GenerateSampleValue({
                     name: 'x', type, isRequired: true,
                     defaultValue: null, filters: [], usageLocations: [],
                 })).toBe(expected);
@@ -712,7 +861,7 @@ describe('Parameter Merge Logic', () => {
         });
 
         it('should return null for unknown type', () => {
-            expect(generateSampleValue({
+            expect(GenerateSampleValue({
                 name: 'x', type: 'unknown', isRequired: true,
                 defaultValue: null, filters: [], usageLocations: [],
             })).toBeNull();
@@ -721,98 +870,23 @@ describe('Parameter Merge Logic', () => {
 });
 
 // ═══════════════════════════════════════════════════
-// Test passthrough parameter extraction from composition references
-// (mirrors the private methods in MJQueryEntityServer)
+// Test passthrough parameter extraction from composition
+// references — the REAL resolve path:
+// ResolveCompositionReferences → BuildPassthroughParams
 // ═══════════════════════════════════════════════════
 
-/**
- * Maps a QueryParameterInfo.Type value to the MJParameterInfo type union.
- */
-function mapQueryParamTypeToParserType(
-    type: 'string' | 'number' | 'date' | 'boolean' | 'array'
-): MJParameterInfo['type'] {
-    const validTypes: Set<MJParameterInfo['type']> = new Set(['string', 'number', 'date', 'boolean', 'array']);
-    return validTypes.has(type as MJParameterInfo['type']) ? (type as MJParameterInfo['type']) : 'string';
-}
-
-/**
- * Merges passthrough parameters into the deterministic parameter list,
- * skipping any that are already detected as direct template expressions.
- */
-function mergePassthroughParams(
-    deterministicParams: MJParameterInfo[],
-    passthroughParams: MJParameterInfo[]
-): MJParameterInfo[] {
-    if (passthroughParams.length === 0) return deterministicParams;
-
-    const existingNames = new Set(deterministicParams.map(p => p.name.toLowerCase()));
-    const merged = [...deterministicParams];
-
-    for (const pt of passthroughParams) {
-        if (!existingNames.has(pt.name.toLowerCase())) {
-            merged.push(pt);
-            existingNames.add(pt.name.toLowerCase());
-        }
-    }
-
-    return merged;
-}
-
-/**
- * Simulates extractPassthroughParamsFromCompositions for pure-function testing.
- * Given SQL and a mock query parameter lookup, returns MJParameterInfo[] for passthroughs.
- */
-function extractPassthroughParamsFromSQL(
-    sql: string,
-    depParamLookup: (queryName: string, categoryPath: string, depParamName: string) => {
-        Type: 'string' | 'number' | 'date' | 'boolean' | 'array';
-        IsRequired: boolean;
-        DefaultValue: string | null;
-    } | undefined
-): MJParameterInfo[] {
-    const compositionRefs = SQLParser.ExtractCompositionRefs(sql);
-    const passthroughParams: MJParameterInfo[] = [];
-    const seenParamNames = new Set<string>();
-
-    for (const ref of compositionRefs) {
-        const passthroughMappings = ref.parameters.filter(p => p.isPassThrough);
-        if (passthroughMappings.length === 0) continue;
-
-        for (const mapping of passthroughMappings) {
-            const parentParamName = mapping.value;
-            const parentParamNameLower = parentParamName.toLowerCase();
-
-            if (seenParamNames.has(parentParamNameLower)) continue;
-            seenParamNames.add(parentParamNameLower);
-
-            const depParam = depParamLookup(ref.queryName, ref.categoryPath, mapping.key);
-
-            passthroughParams.push({
-                name: parentParamName,
-                type: depParam ? mapQueryParamTypeToParserType(depParam.Type) : 'string',
-                isRequired: depParam ? depParam.IsRequired : true,
-                defaultValue: depParam?.DefaultValue ?? null,
-                filters: [],
-                usageLocations: [ref.raw],
-            });
-        }
-    }
-
-    return passthroughParams;
-}
-
 describe('Passthrough Parameter Extraction', () => {
-    describe('mapQueryParamTypeToParserType', () => {
+    describe('MapQueryParamTypeToParserType', () => {
         it('should map all valid types 1:1', () => {
-            expect(mapQueryParamTypeToParserType('string')).toBe('string');
-            expect(mapQueryParamTypeToParserType('number')).toBe('number');
-            expect(mapQueryParamTypeToParserType('date')).toBe('date');
-            expect(mapQueryParamTypeToParserType('boolean')).toBe('boolean');
-            expect(mapQueryParamTypeToParserType('array')).toBe('array');
+            expect(MapQueryParamTypeToParserType('string')).toBe('string');
+            expect(MapQueryParamTypeToParserType('number')).toBe('number');
+            expect(MapQueryParamTypeToParserType('date')).toBe('date');
+            expect(MapQueryParamTypeToParserType('boolean')).toBe('boolean');
+            expect(MapQueryParamTypeToParserType('array')).toBe('array');
         });
     });
 
-    describe('mergePassthroughParams', () => {
+    describe('MergePassthroughParams', () => {
         it('should append passthrough params not already in deterministic list', () => {
             const det: MJParameterInfo[] = [{
                 name: 'Region', type: 'string', isRequired: true,
@@ -823,7 +897,7 @@ describe('Passthrough Parameter Extraction', () => {
                 defaultValue: null, filters: [], usageLocations: [],
             }];
 
-            const merged = mergePassthroughParams(det, pt);
+            const merged = MergePassthroughParams(det, pt);
             expect(merged).toHaveLength(2);
             expect(merged.map(p => p.name)).toEqual(['Region', 'Year']);
         });
@@ -838,7 +912,7 @@ describe('Passthrough Parameter Extraction', () => {
                 defaultValue: null, filters: [], usageLocations: ['{{query:"Q(r=region)"}}'],
             }];
 
-            const merged = mergePassthroughParams(det, pt);
+            const merged = MergePassthroughParams(det, pt);
             expect(merged).toHaveLength(1);
             // Deterministic version wins (preserves original type info and filters)
             expect(merged[0].name).toBe('Region');
@@ -852,7 +926,7 @@ describe('Passthrough Parameter Extraction', () => {
                 defaultValue: null, filters: [], usageLocations: [],
             }];
 
-            const merged = mergePassthroughParams(det, []);
+            const merged = MergePassthroughParams(det, []);
             expect(merged).toBe(det); // Same reference — no copy made
         });
 
@@ -863,13 +937,36 @@ describe('Passthrough Parameter Extraction', () => {
                 { name: 'year', type: 'string', isRequired: false, defaultValue: null, filters: [], usageLocations: ['ref2'] },
             ];
 
-            const merged = mergePassthroughParams(det, pt);
+            const merged = MergePassthroughParams(det, pt);
             expect(merged).toHaveLength(1);
             expect(merged[0].name).toBe('Year'); // First one wins
         });
     });
 
-    describe('extractPassthroughParamsFromSQL (integration)', () => {
+    describe('ResolveQueryByNameAndCategory', () => {
+        it('should resolve a query by unique name when no category segments given', () => {
+            const q = stubQuery({ name: 'Sales Summary', categoryPath: 'Reports' });
+            expect(ResolveQueryByNameAndCategory('Sales Summary', [], [q])).toBe(q);
+            expect(ResolveQueryByNameAndCategory('sales summary', [], [q])).toBe(q); // case-insensitive
+        });
+
+        it('should return undefined for an ambiguous name without category disambiguation', () => {
+            const q1 = stubQuery({ id: 'q1', name: 'Report', categoryPath: 'Sales' });
+            const q2 = stubQuery({ id: 'q2', name: 'Report', categoryPath: 'Finance' });
+            expect(ResolveQueryByNameAndCategory('Report', [], [q1, q2])).toBeUndefined();
+        });
+
+        // NOTE (real behavior): the category-qualified branch compares against
+        // "/Segments/" (leading + trailing slashes), but MJQueryEntityExtended.CategoryPath
+        // is built WITHOUT surrounding slashes ("Segments"), so the qualified branch never
+        // matches real metadata and resolution succeeds only via the name-only fallback.
+        it('should fall back to name-only matching when the category-qualified branch does not match', () => {
+            const q = stubQuery({ name: 'Sales Summary', categoryPath: 'Reports' });
+            expect(ResolveQueryByNameAndCategory('Sales Summary', ['Reports'], [q])).toBe(q);
+        });
+    });
+
+    describe('ResolveCompositionReferences + BuildPassthroughParams (real resolve path)', () => {
         it('should extract passthrough params from a composition ref with mixed static and passthrough args', () => {
             const sql = `SELECT base.AgentName, base.TotalRuns, base.TotalCost,
        SUM(ISNULL(r.TotalPromptTokensUsed, 0)) AS TotalInputTokens,
@@ -877,32 +974,34 @@ describe('Passthrough Parameter Extraction', () => {
 FROM {{query:"Demos/AI Agent Run Cost Summary(param1='West', param2=arg2)"}} base
 LEFT JOIN __mj.vwMJAIAgentRuns r ON r.ID = base.ID`;
 
-            const depLookup = (queryName: string, _catPath: string, depParamName: string) => {
-                if (queryName === 'AI Agent Run Cost Summary' && depParamName === 'param2') {
-                    return { Type: 'number' as const, IsRequired: true, DefaultValue: null };
-                }
-                return undefined;
-            };
+            const dep = stubQuery({
+                name: 'AI Agent Run Cost Summary',
+                categoryPath: 'Demos',
+                parameters: [stubQueryParameter({ name: 'param2', type: 'number', isRequired: true })],
+            });
 
-            const params = extractPassthroughParamsFromSQL(sql, depLookup);
+            const params = extractPassthroughParams(sql, [dep]);
             expect(params).toHaveLength(1);
             expect(params[0].name).toBe('arg2');
             expect(params[0].type).toBe('number');  // Inherited from dependency query
             expect(params[0].isRequired).toBe(true); // Inherited from dependency query
+            // Real behavior: usage location records the composition reference path
+            expect(params[0].usageLocations).toEqual(['Demos/AI Agent Run Cost Summary']);
         });
 
         it('should extract multiple passthroughs from a single composition ref', () => {
             const sql = `SELECT * FROM {{query:"Reports/Sales Summary(year=fiscalYear, region=userRegion, limit='100')"}} s`;
 
-            const depLookup = (_q: string, _c: string, depParamName: string) => {
-                const params: Record<string, { Type: 'string' | 'number' | 'date'; IsRequired: boolean; DefaultValue: string | null }> = {
-                    'year': { Type: 'number', IsRequired: true, DefaultValue: null },
-                    'region': { Type: 'string', IsRequired: false, DefaultValue: 'All' },
-                };
-                return params[depParamName];
-            };
+            const dep = stubQuery({
+                name: 'Sales Summary',
+                categoryPath: 'Reports',
+                parameters: [
+                    stubQueryParameter({ name: 'year', type: 'number', isRequired: true }),
+                    stubQueryParameter({ name: 'region', type: 'string', isRequired: false, defaultValue: 'All' }),
+                ],
+            });
 
-            const params = extractPassthroughParamsFromSQL(sql, depLookup);
+            const params = extractPassthroughParams(sql, [dep]);
             expect(params).toHaveLength(2); // fiscalYear, userRegion (limit is static)
 
             const fiscalYear = params.find(p => p.name === 'fiscalYear')!;
@@ -922,17 +1021,18 @@ LEFT JOIN __mj.vwMJAIAgentRuns r ON r.ID = base.ID`;
 FROM {{query:"Golden-Queries/Agent Runs(status=runStatus)"}} a
 LEFT JOIN {{query:"Golden-Queries/Prompt Runs(modelId=selectedModel)"}} b ON a.ID = b.AgentRunID`;
 
-            const depLookup = (queryName: string, _c: string, depParamName: string) => {
-                if (queryName === 'Agent Runs' && depParamName === 'status') {
-                    return { Type: 'string' as const, IsRequired: true, DefaultValue: null };
-                }
-                if (queryName === 'Prompt Runs' && depParamName === 'modelId') {
-                    return { Type: 'string' as const, IsRequired: true, DefaultValue: null };
-                }
-                return undefined;
-            };
+            const agentRuns = stubQuery({
+                name: 'Agent Runs',
+                categoryPath: 'Golden-Queries',
+                parameters: [stubQueryParameter({ name: 'status', type: 'string', isRequired: true })],
+            });
+            const promptRuns = stubQuery({
+                name: 'Prompt Runs',
+                categoryPath: 'Golden-Queries',
+                parameters: [stubQueryParameter({ name: 'modelId', type: 'string', isRequired: true })],
+            });
 
-            const params = extractPassthroughParamsFromSQL(sql, depLookup);
+            const params = extractPassthroughParams(sql, [agentRuns, promptRuns]);
             expect(params).toHaveLength(2);
             expect(params.map(p => p.name).sort()).toEqual(['runStatus', 'selectedModel']);
         });
@@ -942,37 +1042,95 @@ LEFT JOIN {{query:"Golden-Queries/Prompt Runs(modelId=selectedModel)"}} b ON a.I
 FROM {{query:"Q1(year=fiscalYear)"}} a
 JOIN {{query:"Q2(yr=fiscalYear)"}} b ON a.ID = b.ID`;
 
-            const depLookup = () => ({ Type: 'number' as const, IsRequired: true, DefaultValue: null });
+            const q1 = stubQuery({
+                name: 'Q1',
+                parameters: [stubQueryParameter({ name: 'year', type: 'number', isRequired: true })],
+            });
+            const q2 = stubQuery({
+                name: 'Q2',
+                parameters: [stubQueryParameter({ name: 'yr', type: 'number', isRequired: true })],
+            });
 
-            const params = extractPassthroughParamsFromSQL(sql, depLookup);
+            const params = extractPassthroughParams(sql, [q1, q2]);
             expect(params).toHaveLength(1);
             expect(params[0].name).toBe('fiscalYear');
         });
 
         it('should handle composition refs with no passthrough args (all static)', () => {
             const sql = `SELECT * FROM {{query:"Reports/Static Report(year='2024', region='West')"}} r`;
+            const dep = stubQuery({ name: 'Static Report', categoryPath: 'Reports' });
 
-            const params = extractPassthroughParamsFromSQL(sql, () => undefined);
+            const params = extractPassthroughParams(sql, [dep]);
             expect(params).toHaveLength(0);
         });
 
         it('should handle composition refs with no args at all', () => {
             const sql = `SELECT * FROM {{query:"Reports/Simple Report"}} r`;
+            const dep = stubQuery({ name: 'Simple Report', categoryPath: 'Reports' });
 
-            const params = extractPassthroughParamsFromSQL(sql, () => undefined);
+            const params = extractPassthroughParams(sql, [dep]);
             expect(params).toHaveLength(0);
         });
 
-        it('should default to string/required when dependency param not found', () => {
+        it('should default to string/required when the dependency query has no matching parameter', () => {
             const sql = `SELECT * FROM {{query:"Unknown/Q(p=myVar)"}} q`;
+            // Dependency query exists but has no parameter named "p"
+            const dep = stubQuery({ name: 'Q', categoryPath: 'Unknown' });
 
-            // Simulate: dependency query found, but the specific param doesn't exist
-            const params = extractPassthroughParamsFromSQL(sql, () => undefined);
+            const params = extractPassthroughParams(sql, [dep]);
             expect(params).toHaveLength(1);
             expect(params[0].name).toBe('myVar');
             expect(params[0].type).toBe('string');
             expect(params[0].isRequired).toBe(true);
             expect(params[0].defaultValue).toBeNull();
+        });
+
+        // Real behavior the old mirrored suite could not see: an unknown dependency
+        // QUERY (as opposed to an unknown dependency PARAMETER) is a hard error.
+        it('should throw when the referenced dependency query does not exist', () => {
+            const sql = `SELECT * FROM {{query:"Missing/Nope(p=myVar)"}} q`;
+            expect(() => ResolveCompositionReferences(sql, 'Parent Query', []))
+                .toThrow(/no matching query was found/);
+        });
+
+        it('should throw when the referenced dependency query is not marked Reusable', () => {
+            const sql = `SELECT * FROM {{query:"Reports/Private Report(p=myVar)"}} q`;
+            const dep = stubQuery({ name: 'Private Report', categoryPath: 'Reports', reusable: false });
+            expect(() => ResolveCompositionReferences(sql, 'Parent Query', [dep]))
+                .toThrow(/not marked as Reusable/);
+        });
+
+        it('should inherit description and sampleValue into the passthrough context map', () => {
+            const sql = `SELECT * FROM {{query:"Ops/Recent Entity Changes(lookbackDays=numDays)"}} rec`;
+
+            const dep = stubQuery({
+                name: 'Recent Entity Changes',
+                categoryPath: 'Ops',
+                parameters: [stubQueryParameter({
+                    name: 'lookbackDays',
+                    type: 'number',
+                    isRequired: true,
+                    description: 'Number of days to look back for changes',
+                    sampleValue: '30',
+                })],
+            });
+
+            const refs = ResolveCompositionReferences(sql, 'Parent Query', [dep]);
+            const { contextMap } = BuildPassthroughParams(refs);
+
+            const ctx = contextMap.get('numdays')!; // keyed by lowercased parent param name
+            expect(ctx).toBeDefined();
+            expect(ctx.description).toBe('Number of days to look back for changes');
+            expect(ctx.sampleValue).toBe('30');
+            expect(ctx.depQueryName).toBe('Recent Entity Changes');
+            expect(ctx.depParamName).toBe('lookbackDays');
+
+            // And the context feeds the real merge to produce the inherited description
+            // (the suffix names the DEPENDENCY's parameter, not the parent's variable)
+            const merged = MergeParametersWithLLM(BuildPassthroughParams(refs).params, null, contextMap);
+            expect(merged[0].description).toBe(
+                'Number of days to look back for changes (passed through to "Recent Entity Changes" as "lookbackDays")'
+            );
         });
 
         it('should handle SQL with both template expressions and composition passthroughs', () => {
@@ -981,25 +1139,28 @@ FROM {{query:"Golden-Queries/Base Data(year=fiscalYear)"}} base
 WHERE base.Region = {{ Region | sqlString }}
 {% if MinCount %}AND base.Count >= {{ MinCount | sqlNumber }}{% endif %}`;
 
-            const depLookup = (_q: string, _c: string, depParamName: string) => {
-                if (depParamName === 'year') {
-                    return { Type: 'number' as const, IsRequired: true, DefaultValue: null };
-                }
-                return undefined;
-            };
+            const dep = stubQuery({
+                name: 'Base Data',
+                categoryPath: 'Golden-Queries',
+                parameters: [stubQueryParameter({ name: 'year', type: 'number', isRequired: true })],
+            });
 
             // Template expressions (direct)
             const directParams = SQLParser.ExtractParameterInfo(sql);
             expect(directParams).toHaveLength(2);
             expect(directParams.map(p => p.name).sort()).toEqual(['MinCount', 'Region']);
 
-            // Passthrough from composition
-            const passthroughParams = extractPassthroughParamsFromSQL(sql, depLookup);
+            // Passthrough from composition — also verify the SQL alias resolves
+            const refs = ResolveCompositionReferences(sql, 'Parent Query', [dep]);
+            expect(refs).toHaveLength(1);
+            expect(refs[0].alias).toBe('base');
+
+            const passthroughParams = BuildPassthroughParams(refs).params;
             expect(passthroughParams).toHaveLength(1);
             expect(passthroughParams[0].name).toBe('fiscalYear');
 
             // Merged: all three parameters
-            const merged = mergePassthroughParams(directParams, passthroughParams);
+            const merged = MergePassthroughParams(directParams, passthroughParams);
             expect(merged).toHaveLength(3);
             expect(merged.map(p => p.name).sort()).toEqual(['MinCount', 'Region', 'fiscalYear']);
         });
@@ -1010,18 +1171,21 @@ WHERE base.Region = {{ Region | sqlString }}
 FROM {{query:"Base(yr=Year)"}} base
 WHERE base.Category = {{ Year | sqlNumber }}`;
 
-            const depLookup = () => ({ Type: 'number' as const, IsRequired: true, DefaultValue: null });
+            const dep = stubQuery({
+                name: 'Base',
+                parameters: [stubQueryParameter({ name: 'yr', type: 'number', isRequired: true })],
+            });
 
             const directParams = SQLParser.ExtractParameterInfo(sql);
             expect(directParams).toHaveLength(1);
             expect(directParams[0].name).toBe('Year');
 
-            const passthroughParams = extractPassthroughParamsFromSQL(sql, depLookup);
+            const passthroughParams = extractPassthroughParams(sql, [dep]);
             expect(passthroughParams).toHaveLength(1);
             expect(passthroughParams[0].name).toBe('Year');
 
             // Merge should deduplicate — direct template expression takes priority
-            const merged = mergePassthroughParams(directParams, passthroughParams);
+            const merged = MergePassthroughParams(directParams, passthroughParams);
             expect(merged).toHaveLength(1);
             expect(merged[0].name).toBe('Year');
             expect(merged[0].type).toBe('number'); // From direct extraction (sqlNumber filter)
@@ -1030,211 +1194,24 @@ WHERE base.Category = {{ Year | sqlNumber }}`;
 });
 
 // ═══════════════════════════════════════════════════
-// Test field type enrichment from composition references
-// and entity metadata (mirrors the private enrichment
-// methods in MJQueryEntityServer)
+// Field type enrichment from composition references
+// (real EnrichFieldTypesFromCompositions from resolve.ts)
 // ═══════════════════════════════════════════════════
 
-interface ExtractedField {
-    name: string;
-    dynamicName?: boolean;
-    description: string;
-    type: 'number' | 'string' | 'date' | 'boolean';
-    optional: boolean;
-    sourceEntity?: string | null;
-    sourceFieldName?: string | null;
-    isComputed?: boolean;
-    isSummary?: boolean;
-    computationDescription?: string;
-    sqlBaseType?: string | null;
-    sqlFullType?: string | null;
+/** Builds a ResolvedCompositionReference around a stub dependency query's fields. */
+function stubRef(
+    alias: string | null,
+    queryName: string,
+    queryFields: MJQueryFieldEntity[]
+): ResolvedCompositionReference {
+    return {
+        depQuery: stubQuery({ name: queryName, fields: queryFields }),
+        referencePath: `Category/${queryName}`,
+        alias,
+        parameterMapping: null,
+        passthroughMappings: [],
+    };
 }
-
-/**
- * Minimal field info representing a dependency query field or entity field.
- * Mirrors the properties used from QueryFieldInfo / EntityFieldInfo during enrichment.
- */
-interface MockFieldInfo {
-    Name: string;
-    SQLBaseType: string;
-    SQLFullType: string;
-    SourceEntityID?: string | null;
-    SourceFieldName?: string | null;
-    IsComputed?: boolean;
-    IsSummary?: boolean;
-    Type?: string;           // Entity metadata uses "Type" for base SQL type
-}
-
-// ─── Composition field enrichment (pure function) ────────────────────────────
-
-/**
- * Re-implements enrichFieldTypesFromCompositions as a pure function.
- *
- * @param fields - Extracted fields to enrich
- * @param selectColumns - Parsed SELECT columns (from SQLParser.ExtractSelectColumns)
- * @param depFieldsByAlias - Map<alias, Map<fieldNameLower, MockFieldInfo>> representing
- *                           dependency query fields keyed by the composition ref alias
- */
-function enrichFieldsFromCompositionRefs(
-    fields: ExtractedField[],
-    selectColumns: SQLSelectColumn[],
-    depFieldsByAlias: Map<string, Map<string, MockFieldInfo>>
-): ExtractedField[] {
-    // Build outputName → select column map
-    const outputNameToSelectCol = new Map<string, SQLSelectColumn>();
-    for (const col of selectColumns) {
-        outputNameToSelectCol.set(col.OutputName.toLowerCase(), col);
-    }
-
-    // Build flat unqualified lookup (first dep wins for ambiguous names)
-    const flatLookup = new Map<string, MockFieldInfo>();
-    for (const depFields of depFieldsByAlias.values()) {
-        for (const [nameLower, field] of depFields) {
-            if (!flatLookup.has(nameLower)) {
-                flatLookup.set(nameLower, field);
-            }
-        }
-    }
-
-    return fields.map(field => {
-        if (field.sqlBaseType && field.sqlFullType) return field;
-
-        // Try to resolve via parsed SELECT columns
-        const selectCol = outputNameToSelectCol.get(field.name.toLowerCase());
-        let matched: MockFieldInfo | undefined;
-
-        if (selectCol && !selectCol.IsExpression) {
-            if (selectCol.TableQualifier) {
-                const depFields = depFieldsByAlias.get(selectCol.TableQualifier.toLowerCase());
-                if (depFields) {
-                    matched = depFields.get(selectCol.SourceColumn.toLowerCase());
-                }
-            }
-
-            // Unqualified fallback: search all deps by source column name
-            if (!matched) {
-                for (const depFields of depFieldsByAlias.values()) {
-                    matched = depFields.get(selectCol.SourceColumn.toLowerCase());
-                    if (matched) break;
-                }
-            }
-        }
-
-        // Final fallback: flat lookup by output name
-        if (!matched) {
-            matched = flatLookup.get(field.name.toLowerCase());
-        }
-
-        if (matched) {
-            return {
-                ...field,
-                sqlBaseType: matched.SQLBaseType,
-                sqlFullType: matched.SQLFullType,
-                sourceEntity: field.sourceEntity ?? null,
-                sourceFieldName: field.sourceFieldName ?? matched.SourceFieldName ?? null,
-                isComputed: field.isComputed ?? matched.IsComputed ?? false,
-                isSummary: field.isSummary ?? matched.IsSummary ?? false,
-            };
-        }
-
-        return field;
-    });
-}
-
-// ─── Entity metadata field enrichment (pure function) ────────────────────────
-
-/**
- * Re-implements enrichFieldTypesFromEntityMetadata as a pure function.
- *
- * @param fields - Extracted fields to enrich
- * @param selectColumns - Parsed SELECT columns
- * @param entityFieldsByAlias - Map<alias, Map<fieldNameLower, { field: MockFieldInfo, entityName: string }>>
- */
-function enrichFieldsFromEntityMetadata(
-    fields: ExtractedField[],
-    selectColumns: SQLSelectColumn[],
-    entityFieldsByAlias: Map<string, Map<string, { field: MockFieldInfo; entityName: string }>>
-): ExtractedField[] {
-    // Build outputName → select column map
-    const outputNameToSelectCol = new Map<string, SQLSelectColumn>();
-    for (const col of selectColumns) {
-        outputNameToSelectCol.set(col.OutputName.toLowerCase(), col);
-    }
-
-    // Build flat unqualified lookup (first entity wins)
-    const flatLookup = new Map<string, { field: MockFieldInfo; entityName: string }>();
-    for (const entityFields of entityFieldsByAlias.values()) {
-        for (const [nameLower, entry] of entityFields) {
-            if (!flatLookup.has(nameLower)) {
-                flatLookup.set(nameLower, entry);
-            }
-        }
-    }
-
-    return fields.map(field => {
-        if (field.sqlBaseType && field.sqlFullType) return field;
-
-        const selectCol = outputNameToSelectCol.get(field.name.toLowerCase());
-        let matched: { field: MockFieldInfo; entityName: string } | undefined;
-
-        if (selectCol && !selectCol.IsExpression) {
-            // Alias-qualified match
-            if (selectCol.TableQualifier) {
-                const entityFields = entityFieldsByAlias.get(selectCol.TableQualifier.toLowerCase());
-                if (entityFields) {
-                    matched = entityFields.get(selectCol.SourceColumn.toLowerCase());
-                }
-            }
-
-            // Unqualified fallback by source column
-            if (!matched) {
-                matched = flatLookup.get(selectCol.SourceColumn.toLowerCase());
-            }
-        }
-
-        // Final fallback by output name directly
-        if (!matched) {
-            matched = flatLookup.get(field.name.toLowerCase());
-        }
-
-        if (matched) {
-            return {
-                ...field,
-                sqlBaseType: matched.field.Type ?? matched.field.SQLBaseType,
-                sqlFullType: matched.field.SQLFullType,
-                sourceEntity: field.sourceEntity ?? matched.entityName,
-                sourceFieldName: field.sourceFieldName ?? matched.field.Name,
-            };
-        }
-
-        return field;
-    });
-}
-
-// ─── Helper to build dep field maps from simple objects ──────────────────────
-
-function buildDepFieldMap(fields: MockFieldInfo[]): Map<string, MockFieldInfo> {
-    const map = new Map<string, MockFieldInfo>();
-    for (const f of fields) {
-        map.set(f.Name.toLowerCase(), f);
-    }
-    return map;
-}
-
-function buildEntityFieldMap(
-    fields: MockFieldInfo[],
-    entityName: string
-): Map<string, { field: MockFieldInfo; entityName: string }> {
-    const map = new Map<string, { field: MockFieldInfo; entityName: string }>();
-    for (const f of fields) {
-        map.set(f.Name.toLowerCase(), { field: f, entityName });
-    }
-    return map;
-}
-
-// ═══════════════════════════════════════════════════
-// Composition field enrichment tests
-// ═══════════════════════════════════════════════════
 
 describe('Field Type Enrichment from Composition References', () => {
     it('should resolve direct column match via table qualifier', () => {
@@ -1246,13 +1223,11 @@ describe('Field Type Enrichment from Composition References', () => {
             OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false,
         }];
 
-        const depFieldsByAlias = new Map([
-            ['u', buildDepFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
-            ])],
-        ]);
+        const refs = [stubRef('u', 'User Query', [
+            stubQueryField({ name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(100)' }),
+        ])];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(100)');
@@ -1268,21 +1243,19 @@ describe('Field Type Enrichment from Composition References', () => {
             OutputName: 'EntityName', SourceColumn: 'Name', TableQualifier: 'e', IsExpression: false,
         }];
 
-        const depFieldsByAlias = new Map([
-            ['e', buildDepFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', SourceFieldName: 'Name' },
-                { Name: 'ID', SQLBaseType: 'uniqueidentifier', SQLFullType: 'uniqueidentifier' },
-            ])],
-        ]);
+        const refs = [stubRef('e', 'Entity Query', [
+            stubQueryField({ name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(255)', sourceFieldName: 'Name' }),
+            stubQueryField({ name: 'ID', sqlBaseType: 'uniqueidentifier', sqlFullType: 'uniqueidentifier' }),
+        ])];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(255)');
         expect(result[0].sourceFieldName).toBe('Name'); // Resolved source field name
     });
 
-    it('should skip expression fields (IsExpression=true)', () => {
+    it('should fall back to flat lookup for expression fields (IsExpression=true)', () => {
         const fields: ExtractedField[] = [{
             name: 'UserCount', description: 'Count of users', type: 'number', optional: false,
         }];
@@ -1291,13 +1264,11 @@ describe('Field Type Enrichment from Composition References', () => {
             OutputName: 'UserCount', SourceColumn: 'COUNT(*)', TableQualifier: null, IsExpression: true,
         }];
 
-        const depFieldsByAlias = new Map([
-            ['u', buildDepFieldMap([
-                { Name: 'UserCount', SQLBaseType: 'int', SQLFullType: 'int' },
-            ])],
-        ]);
+        const refs = [stubRef('u', 'User Query', [
+            stubQueryField({ name: 'UserCount', sqlBaseType: 'int', sqlFullType: 'int' }),
+        ])];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result).toHaveLength(1);
         // Expression columns are skipped during SELECT column resolution, but flat lookup still applies
         // since the dep has a field named "UserCount". The flat lookup is the final fallback.
@@ -1314,13 +1285,11 @@ describe('Field Type Enrichment from Composition References', () => {
             OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false,
         }];
 
-        const depFieldsByAlias = new Map([
-            ['u', buildDepFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
-            ])],
-        ]);
+        const refs = [stubRef('u', 'User Query', [
+            stubQueryField({ name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(100)' }),
+        ])];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBe('varchar');     // Unchanged
         expect(result[0].sqlFullType).toBe('varchar(50)'); // Unchanged
@@ -1336,13 +1305,11 @@ describe('Field Type Enrichment from Composition References', () => {
             OutputName: 'Status', SourceColumn: 'Status', TableQualifier: null, IsExpression: false,
         }];
 
-        const depFieldsByAlias = new Map([
-            ['a', buildDepFieldMap([
-                { Name: 'Status', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(20)' },
-            ])],
-        ]);
+        const refs = [stubRef('a', 'Some Query', [
+            stubQueryField({ name: 'Status', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(20)' }),
+        ])];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(20)');
@@ -1360,16 +1327,16 @@ describe('Field Type Enrichment from Composition References', () => {
             { OutputName: 'EntityName', SourceColumn: 'Name', TableQualifier: 'e', IsExpression: false },
         ];
 
-        const depFieldsByAlias = new Map([
-            ['u', buildDepFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
-            ])],
-            ['e', buildDepFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)' },
-            ])],
-        ]);
+        const refs = [
+            stubRef('u', 'User Query', [
+                stubQueryField({ name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(100)' }),
+            ]),
+            stubRef('e', 'Entity Query', [
+                stubQueryField({ name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(255)' }),
+            ]),
+        ];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result).toHaveLength(2);
 
         const nameField = result.find(f => f.name === 'Name')!;
@@ -1390,13 +1357,11 @@ describe('Field Type Enrichment from Composition References', () => {
             OutputName: 'UnknownField', SourceColumn: 'UnknownField', TableQualifier: 'x', IsExpression: false,
         }];
 
-        const depFieldsByAlias = new Map([
-            ['u', buildDepFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
-            ])],
-        ]);
+        const refs = [stubRef('u', 'User Query', [
+            stubQueryField({ name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(100)' }),
+        ])];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBeUndefined();
         expect(result[0].sqlFullType).toBeUndefined();
@@ -1412,38 +1377,96 @@ describe('Field Type Enrichment from Composition References', () => {
             OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false,
         }];
 
-        const depFieldsByAlias = new Map([
-            ['u', buildDepFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)' },
-            ])],
-        ]);
+        const refs = [stubRef('u', 'User Query', [
+            stubQueryField({ name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(100)' }),
+        ])];
 
-        const result = enrichFieldsFromCompositionRefs(fields, selectColumns, depFieldsByAlias);
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider());
         expect(result[0].sourceEntity).toBe('Users'); // Preserved, not overwritten
     });
-});
 
-// ═══════════════════════════════════════════════════
-// Entity metadata field enrichment tests
-// ═══════════════════════════════════════════════════
-
-describe('Field Type Enrichment from Entity Metadata', () => {
-    it('should resolve direct column from entity metadata via SQLParser', () => {
-        const sql = 'SELECT u.Name FROM __mj.vwUsers u';
-        const selectColumns = extractSelectColumns(sql, tsqlDialect);
+    // Real behavior the old mirrored suite lacked: the dep field's SourceEntityID
+    // is resolved to the entity NAME via the metadata provider.
+    it('should resolve sourceEntity from the dep field SourceEntityID via metadata', () => {
+        const usersEntity = buildEntity({
+            id: 'users-entity-id',
+            name: 'Users',
+            schema: '__mj',
+            baseView: 'vwUsers',
+            fields: [{ Name: 'Name', Type: 'nvarchar', Length: 200 }],
+        });
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
         }];
 
-        const entityFieldsByAlias = new Map([
-            ['u', buildEntityFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
-                { Name: 'Email', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', Type: 'nvarchar' },
-            ], 'Users')],
-        ]);
+        const selectColumns: SQLSelectColumn[] = [{
+            OutputName: 'Name', SourceColumn: 'Name', TableQualifier: 'u', IsExpression: false,
+        }];
 
-        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        const refs = [stubRef('u', 'User Query', [
+            stubQueryField({
+                name: 'Name', sqlBaseType: 'nvarchar', sqlFullType: 'nvarchar(100)',
+                sourceEntityID: 'users-entity-id',
+            }),
+        ])];
+
+        const result = EnrichFieldTypesFromCompositions(fields, refs, selectColumns, stubMetadataProvider([usersEntity]));
+        expect(result[0].sourceEntity).toBe('Users');
+    });
+
+    it('should return the same array reference when there are no composition refs', () => {
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'User name', type: 'string', optional: false,
+        }];
+
+        const result = EnrichFieldTypesFromCompositions(fields, [], [], stubMetadataProvider());
+        expect(result).toBe(fields);
+    });
+});
+
+// ═══════════════════════════════════════════════════
+// Field type enrichment from entity metadata
+// (real EnrichFieldTypesFromEntityMetadata from resolve.ts,
+// driven with REAL EntityInfo instances and REAL parser output)
+// ═══════════════════════════════════════════════════
+
+describe('Field Type Enrichment from Entity Metadata', () => {
+    // nvarchar Length in metadata is BYTES: Length 200 → nvarchar(100), Length 510 → nvarchar(255)
+    const usersEntity = () => buildEntity({
+        name: 'Users',
+        schema: '__mj',
+        baseView: 'vwUsers',
+        fields: [
+            { Name: 'ID', Type: 'uniqueidentifier' },
+            { Name: 'Name', Type: 'nvarchar', Length: 200 },
+            { Name: 'Email', Type: 'nvarchar', Length: 510 },
+            { Name: '__mj_CreatedAt', Type: 'datetimeoffset' },
+        ],
+    });
+
+    const entitiesEntity = () => buildEntity({
+        name: 'Entities',
+        schema: '__mj',
+        baseView: 'vwEntities',
+        fields: [
+            { Name: 'ID', Type: 'uniqueidentifier' },
+            { Name: 'Name', Type: 'nvarchar', Length: 510 },
+        ],
+    });
+
+    it('should resolve direct column from entity metadata via SQLParser', () => {
+        const sql = 'SELECT u.Name FROM __mj.vwUsers u';
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
+
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'User name', type: 'string', optional: false,
+        }];
+
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(100)');
@@ -1454,22 +1477,21 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should resolve AS alias to source column from entity metadata', () => {
         const sql = 'SELECT u.__mj_CreatedAt AS CreatedAt FROM __mj.vwUsers u';
         const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'CreatedAt', description: 'Creation timestamp', type: 'date', optional: false,
         }];
 
-        const entityFieldsByAlias = new Map([
-            ['u', buildEntityFieldMap([
-                { Name: '__mj_CreatedAt', SQLBaseType: 'datetimeoffset', SQLFullType: 'datetimeoffset(7)', Type: 'datetimeoffset' },
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
-            ], 'Users')],
-        ]);
-
-        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
         expect(result).toHaveLength(1);
         expect(result[0].sqlBaseType).toBe('datetimeoffset');
-        expect(result[0].sqlFullType).toBe('datetimeoffset(7)');
+        // REAL behavior: EntityFieldInfo.SQLFullType does not append precision for
+        // datetimeoffset — the old mirrored suite asserted 'datetimeoffset(7)' against
+        // hand-fed mock data, which real metadata never produces.
+        expect(result[0].sqlFullType).toBe('datetimeoffset');
         expect(result[0].sourceEntity).toBe('Users');
         expect(result[0].sourceFieldName).toBe('__mj_CreatedAt');
     });
@@ -1477,24 +1499,16 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should disambiguate multiple tables by alias', () => {
         const sql = 'SELECT u.Name, e.Name AS EntityName FROM __mj.vwUsers u JOIN __mj.vwEntities e ON u.ID = e.ID';
         const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [
             { name: 'Name', description: 'User name', type: 'string', optional: false },
             { name: 'EntityName', description: 'Entity name', type: 'string', optional: false },
         ];
 
-        const entityFieldsByAlias = new Map([
-            ['u', buildEntityFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
-                { Name: 'ID', SQLBaseType: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', Type: 'uniqueidentifier' },
-            ], 'Users')],
-            ['e', buildEntityFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', Type: 'nvarchar' },
-                { Name: 'ID', SQLBaseType: 'uniqueidentifier', SQLFullType: 'uniqueidentifier', Type: 'uniqueidentifier' },
-            ], 'Entities')],
-        ]);
-
-        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity(), entitiesEntity()])
+        );
         expect(result).toHaveLength(2);
 
         const nameField = result.find(f => f.name === 'Name')!;
@@ -1510,19 +1524,16 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should skip fields that already have sqlBaseType and sqlFullType', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
         const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'Already resolved', type: 'string', optional: false,
             sqlBaseType: 'varchar', sqlFullType: 'varchar(50)',
         }];
 
-        const entityFieldsByAlias = new Map([
-            ['u', buildEntityFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
-            ], 'Users')],
-        ]);
-
-        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
         expect(result[0].sqlBaseType).toBe('varchar');     // Unchanged
         expect(result[0].sqlFullType).toBe('varchar(50)'); // Unchanged
     });
@@ -1531,19 +1542,15 @@ describe('Field Type Enrichment from Entity Metadata', () => {
         // Field "Email" is not in the SELECT clause but exists in the entity
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
         const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Email', description: 'User email', type: 'string', optional: false,
         }];
 
-        const entityFieldsByAlias = new Map([
-            ['u', buildEntityFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
-                { Name: 'Email', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(255)', Type: 'nvarchar' },
-            ], 'Users')],
-        ]);
-
-        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(255)');
         expect(result[0].sourceEntity).toBe('Users');
@@ -1552,42 +1559,51 @@ describe('Field Type Enrichment from Entity Metadata', () => {
     it('should not overwrite existing sourceEntity on the field', () => {
         const sql = 'SELECT u.Name FROM __mj.vwUsers u';
         const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'User name', type: 'string', optional: false,
             sourceEntity: 'Custom Users', // Already set by LLM
         }];
 
-        const entityFieldsByAlias = new Map([
-            ['u', buildEntityFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
-            ], 'Users')],
-        ]);
-
-        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
         expect(result[0].sourceEntity).toBe('Custom Users'); // Preserved
     });
 
     it('should handle unqualified SELECT columns by searching all entities', () => {
         // SELECT Name (no table qualifier)
-        const selectColumns: SQLSelectColumn[] = [{
-            OutputName: 'Name', SourceColumn: 'Name', TableQualifier: null, IsExpression: false,
-        }];
+        const sql = 'SELECT Name FROM __mj.vwUsers u';
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
 
         const fields: ExtractedField[] = [{
             name: 'Name', description: 'Some name', type: 'string', optional: false,
         }];
 
-        const entityFieldsByAlias = new Map([
-            ['u', buildEntityFieldMap([
-                { Name: 'Name', SQLBaseType: 'nvarchar', SQLFullType: 'nvarchar(100)', Type: 'nvarchar' },
-            ], 'Users')],
-        ]);
-
-        const result = enrichFieldsFromEntityMetadata(fields, selectColumns, entityFieldsByAlias);
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
         expect(result[0].sqlBaseType).toBe('nvarchar');
         expect(result[0].sqlFullType).toBe('nvarchar(100)');
         expect(result[0].sourceEntity).toBe('Users');
+    });
+
+    it('should return fields unchanged when no table refs resolve to entities', () => {
+        const sql = 'SELECT u.Name FROM someschema.vwNotAnEntity u';
+        const selectColumns = extractSelectColumns(sql, tsqlDialect);
+        const tableRefs = extractTableRefs(sql, tsqlDialect);
+
+        const fields: ExtractedField[] = [{
+            name: 'Name', description: 'Some name', type: 'string', optional: false,
+        }];
+
+        const result = EnrichFieldTypesFromEntityMetadata(
+            fields, selectColumns, tableRefs, stubMetadataProvider([usersEntity()])
+        );
+        expect(result).toBe(fields); // Early return — same reference
+        expect(result[0].sqlBaseType).toBeUndefined();
     });
 });
 
@@ -1693,8 +1709,6 @@ WHERE a.IsPersonAccount = 1
 // NormalizeDefaultForType (enrich.ts)
 // Ensures array-typed parameter defaults are valid JSON arrays.
 // ═══════════════════════════════════════════════════
-
-import { NormalizeDefaultForType } from '../custom/query-extraction/enrich';
 
 describe('NormalizeDefaultForType', () => {
     it('should pass through non-array types unchanged', () => {

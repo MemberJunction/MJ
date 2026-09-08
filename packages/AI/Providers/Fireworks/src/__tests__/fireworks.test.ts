@@ -76,7 +76,7 @@ describe('FireworksLLM', () => {
   describe('Integration Tests', () => {
     const hasApiKey = !!process.env.AI_VENDOR_API_KEY__FireworksLLM;
 
-    (hasApiKey ? it : it.skip)('should make successful chat completion with Kimi K2.5', async () => {
+    it.skipIf(!hasApiKey)('should make successful chat completion with Kimi K2.5', async () => {
       const params: ChatParams = {
         model: 'accounts/fireworks/models/kimi-k2p5',
         messages: [
@@ -95,7 +95,7 @@ describe('FireworksLLM', () => {
       expect(result.data.usage.completionTokens).toBeGreaterThan(0);
     }, 30000); // 30 second timeout for API call
 
-    (hasApiKey ? it : it.skip)('should handle JSON response format', async () => {
+    it.skipIf(!hasApiKey)('should handle JSON response format', async () => {
       const params: ChatParams = {
         model: 'accounts/fireworks/models/kimi-k2p5',
         messages: [
@@ -117,7 +117,7 @@ describe('FireworksLLM', () => {
       expect(parsed).toHaveProperty('status');
     }, 30000);
 
-    (hasApiKey ? it : it.skip)('should support topK parameter', async () => {
+    it.skipIf(!hasApiKey)('should support topK parameter', async () => {
       const params: ChatParams = {
         model: 'accounts/fireworks/models/kimi-k2p5',
         messages: [
@@ -132,7 +132,7 @@ describe('FireworksLLM', () => {
       expect(result.success).toBe(true);
     }, 30000);
 
-    (hasApiKey ? it : it.skip)('should make successful chat completion with Qwen 3 235B', async () => {
+    it.skipIf(!hasApiKey)('should make successful chat completion with Qwen 3 235B', async () => {
       const params: ChatParams = {
         model: 'accounts/fireworks/models/qwen3-235b-a22b',
         messages: [

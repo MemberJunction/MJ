@@ -103,24 +103,24 @@ describe('FileGridComponent (DOM)', () => {
     expect(rows[1].classList.contains('selected')).toBe(true);
   });
 
-  it('disables single-selection toolbar actions when nothing is selected', () => {
+  it('hides selection bar when nothing is selected', () => {
     const f = render((c) => {
       c.items = [PDF];
       c.filteredItems = [PDF];
       c.selectedItems = [];
     });
-    const download = query(f, '.toolbar-btn:nth-child(3)') as HTMLButtonElement; // Download
-    expect(download.disabled).toBe(true);
+    expect(query(f, '.selection-bar')).toBeNull();
   });
 
-  it('enables single-selection toolbar actions when exactly one item is selected', () => {
+  it('shows selection bar and action buttons when exactly one item is selected', () => {
     const f = render((c) => {
       c.items = [PDF];
       c.filteredItems = [PDF];
       c.selectedItems = [PDF.key];
     });
-    const download = query(f, '.toolbar-btn:nth-child(3)') as HTMLButtonElement; // Download
-    expect(download.disabled).toBe(false);
+    expect(query(f, '.selection-bar')).not.toBeNull();
+    const download = queryAll(f, '.sel-action-btn').find((b) => b.textContent?.includes('Download')) as HTMLButtonElement;
+    expect(download).not.toBeNull();
   });
 
   it('disables the up-navigation button at the root (empty folderPath)', () => {

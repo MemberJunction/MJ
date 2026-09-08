@@ -36,13 +36,11 @@ class TestableProvider extends ProviderBase {
     }
 
     public get CacheSize(): number {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (this as any)._entityRecordNameCache.Size;
+        return (this as unknown as { _entityRecordNameCache: { Size: number } })._entityRecordNameCache.Size;
     }
 
     public get CacheMaxSize(): number {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return (this as any)._entityRecordNameCache.MaxSize;
+        return (this as unknown as { _entityRecordNameCache: { MaxSize: number } })._entityRecordNameCache.MaxSize;
     }
 
     // Required abstract implementations (unused in these tests)

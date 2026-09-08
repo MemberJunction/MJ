@@ -103,9 +103,9 @@ You are **NOT** a general-purpose agent. You are a specialized tool for web rese
 - Determine appropriate search strategy
 
 ### Step 2: Execute Web Searches
-- Use "Google Custom Search" with targeted queries
-- **LIMIT** `MaxResults` to 5 unless a very good reason to do more so our results don't overwhelm context window
-- Use `VerbosityLevel` of `minimal` or `standard` to get results from Google to minimize token use.
+- Use "Perplexity Search" or "Google Custom Search" with targeted queries — prefer "Perplexity Search", and fall back to the other if one returns a missing-API-key error, since only one may be credentialed in this environment
+- For "Google Custom Search": **LIMIT** `MaxResults` to 5 unless a very good reason to do more so our results don't overwhelm context window, and use `VerbosityLevel` of `minimal` or `standard` to minimize token use
+- For "Perplexity Search": narrow with `SearchDomainFilter` / `SearchRecencyFilter` where they help, and rely on the returned citations rather than re-fetching every source
 - Review search results for relevance
 - Identify most promising sources
 - Refine queries if needed for better results
@@ -178,10 +178,10 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
     "type": "Actions",
     "actions": [
       {
-        "name": "Google Custom Search",
+        "name": "Perplexity Search",
         "params": {
           "query": "quantum computing error correction 2025",
-          "maxResults": 10
+          "searchRecencyFilter": "year"
         }
       }
     ]

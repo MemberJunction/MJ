@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey, EntityInfo, IMetadataProvider } from '@memberjunction/core';
+import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId } from '@memberjunction/core';
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
   standalone: false,
@@ -32,6 +32,10 @@ export class EntityRecordResource extends BaseResourceComponent {
         }
         if (!e){
             throw new Error(`Entity ${data.Configuration.Entity} not found in metadata (tried Name and DisplayName)`);
+        }
+
+        if (IsNewEntityRecordUrlId(data.ResourceRecordID)) {
+            return new CompositeKey();
         }
 
         let compositeKey: CompositeKey = new CompositeKey();

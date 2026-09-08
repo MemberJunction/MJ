@@ -1,4 +1,10 @@
 import { Component } from '@angular/core';
+// This component is an Explorer surface (layer 3), which is why the package declares
+// "mjUILayer": "surface" rather than "widgets" — a package holding a BaseResourceComponent
+// subclass cannot be widgets by the gate's own table, and ng-shared is legal at L3.
+// Splitting the surface out from the widgets in this package is still worth doing (MJ#3404);
+// it is registered in three CodeGen-generated manifests, so it needs a CodeGen run, not a
+// hand edit.
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
@@ -12,16 +18,9 @@ import { RegisterClass } from '@memberjunction/global';
   standalone: false,
   selector: 'mj-file-browser-resource',
   template: `
-    <mj-page-layout>
-      <mj-page-header
-        Title="File Browser"
-        Icon="fa-solid fa-folder-tree"
-        Subtitle="Browse and manage files across storage providers">
-      </mj-page-header>
-      <div class="file-browser-body">
-        <mj-file-browser></mj-file-browser>
-      </div>
-    </mj-page-layout>
+    <div class="file-browser-resource-container">
+      <mj-file-browser></mj-file-browser>
+    </div>
   `,
   styles: [`
     :host {
@@ -29,14 +28,14 @@ import { RegisterClass } from '@memberjunction/global';
       width: 100%;
       height: 100%;
     }
-    .file-browser-body {
-      flex: 1;
-      min-height: 0;
-      padding: 0 24px 24px;
+    .file-browser-resource-container {
+      width: 100%;
+      height: 100%;
       display: flex;
+      flex-direction: column;
     }
-    /* The inner mj-file-browser needs to fill the body container. */
-    .file-browser-body :is(mj-file-browser) {
+    /* The inner mj-file-browser needs to fill the container. */
+    .file-browser-resource-container :is(mj-file-browser) {
       flex: 1;
       min-height: 0;
       min-width: 0;

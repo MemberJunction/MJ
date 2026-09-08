@@ -19,7 +19,7 @@
 
 import { RunView, UserInfo, IMetadataProvider, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import type { MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
 import {

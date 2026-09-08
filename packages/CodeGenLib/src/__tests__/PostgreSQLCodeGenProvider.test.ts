@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 import { CRUDType, BaseViewGenerationContext } from '../Database/codeGenDatabaseProvider';
+import { SQLCodeGenBase } from '../Database/sql_codegen';
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
 
 /**
@@ -159,9 +160,9 @@ describe('PostgreSQLCodeGenProvider', () => {
 
             const sql = provider.generateBaseView(context);
             expect(sql).toContain('CREATE OR REPLACE VIEW');
-            expect(sql).toContain('__mj."vwTestEntities"');
+            expect(sql).toContain('"__mj"."vwTestEntities"');
             expect(sql).toContain('t.*');
-            expect(sql).toContain('__mj."TestEntity" AS t');
+            expect(sql).toContain('"__mj"."TestEntity" AS t');
         });
 
         it('should include soft delete WHERE clause', () => {
@@ -550,7 +551,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(indexes.length).toBe(1);
             expect(indexes[0]).toContain('CREATE INDEX IF NOT EXISTS');
             expect(indexes[0]).toContain('"CategoryID"');
-            expect(indexes[0]).toContain('__mj."TestEntity"');
+            expect(indexes[0]).toContain('"__mj"."TestEntity"');
         });
 
         it('should not create index for PK fields', () => {
@@ -888,6 +889,189 @@ describe('PostgreSQLCodeGenProvider', () => {
             const sql = provider.generateCRUDDelete(recordKeyEntity(), '');
             expect(sql).toContain('p_recordkey');
             expect(sql).not.toContain('p_record_key');
+        });
+    });
+});
+
+/**
+ * Layered base views on PostgreSQL: CodeGen writes the INNER view and restars the
+ * application-owned outer wrapper so `g.*` re-expands (see restarLayeredOuterView).
+ */
+describe('PostgreSQLCodeGenProvider layered base views', () => {
+    let provider: PostgreSQLCodeGenProvider;
+
+    beforeEach(() => {
+        provider = new PostgreSQLCodeGenProvider();
+    });
+
+    function contextFor(entity: EntityInfo): BaseViewGenerationContext {
+        return {
+            entity,
+            relatedFieldsSelect: '',
+            relatedFieldsJoins: '',
+            parentFieldsSelect: '',
+            parentJoins: '',
+            rootFieldsSelect: '',
+            rootJoins: '',
+        };
+    }
+
+    const layered = () => createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
+
+    it('creates the INNER view, never the application-owned outer', () => {
+        const sql = provider.generateBaseView(contextFor(layered()));
+        expect(sql).toContain('CREATE OR REPLACE VIEW "__mj"."vwTestEntitiesGenerated"');
+        expect(sql).not.toMatch(/CREATE OR REPLACE VIEW "__mj"."vwTestEntities"\s*\nAS/);
+    });
+
+    it('still selects from the base table, not from the outer view', () => {
+        const sql = provider.generateBaseView(contextFor(layered()));
+        expect(sql).toContain('"__mj"."TestEntity"');
+        expect(sql).not.toContain('FROM "__mj"."vwTestEntities"');
+    });
+
+    it('emits an outer rebind call naming both views', () => {
+        const sql = provider.generateLayeredOuterRebindSQL(layered());
+        expect(sql).toContain('spRebindLayeredOuterView');
+        expect(sql).toContain("'vwTestEntities'");
+        expect(sql).toContain("'vwTestEntitiesGenerated'");
+    });
+
+    it('does not emit a rebind for a non-layered entity', () => {
+        expect(provider.generateLayeredOuterRebindSQL(createMockEntity())).toBe('');
+        expect(provider.generateLayeredOuterRebindSQL(createMockEntity({ BaseViewGenerated: false }))).toBe('');
+    });
+
+    it('logs an outer rebind guarded on the application-owned view existing', () => {
+        class RefreshProbe extends SQLCodeGenBase {
+            public build(entities: EntityInfo[]): string {
+                return this.buildCustomBaseViewRefreshSQL(entities);
+            }
+        }
+        const probe = new RefreshProbe();
+        probe.DBProvider = provider;
+        const sql = probe.build([layered()]);
+        expect(sql).toContain('spRebindLayeredOuterView');
+        expect(sql).toContain('to_regclass');
+        expect(sql).toContain('vwTestEntitiesGenerated');
+    });
+
+    it('still generates normally for every non-layered entity', () => {
+        expect(() => provider.generateBaseView(contextFor(createMockEntity()))).not.toThrow();
+        expect(() => provider.generateBaseView(contextFor(createMockEntity({ BaseViewGenerated: false })))).not.toThrow();
+        expect(() => provider.generateBaseView(contextFor(createMockEntity({ GeneratedBaseViewName: null })))).not.toThrow();
+    });
+
+    it('does not treat a name that differs from BaseView only by case as layered', () => {
+        const entity = createMockEntity({ GeneratedBaseViewName: 'VWTESTENTITIES' });
+        const sql = provider.generateBaseView(contextFor(entity));
+        expect(sql).toContain('CREATE OR REPLACE VIEW "__mj"."vwTestEntities"');
+        expect(provider.generateLayeredOuterRebindSQL(entity)).toBe('');
+    });
+});
+
+/**
+ * Tokenizer coverage for the codegen-time quoting entry point.
+ *
+ * Everything ManageMetadataBase executes routes through `qsql()` → this method, so a quoting
+ * defect here corrupts every codegen-time statement. The tokenizer itself is shared with
+ * PostgreSQLDataProvider and lives in `@memberjunction/sql-dialect`; the exhaustive rule matrix
+ * and the baseline-derived collision guard live there. These tests drive the codegen entry point.
+ */
+describe('PostgreSQLCodeGenProvider.quoteSQLForExecution', () => {
+    const provider = new PostgreSQLCodeGenProvider();
+    const quote = (sql: string) => provider.quoteSQLForExecution(sql);
+
+    const COLLIDING_COLUMNS = [
+        'Action', 'Columns', 'Language', 'Length', 'Log',
+        'Month', 'Name', 'Precision', 'Rank', 'Text', 'Values',
+    ];
+
+    describe('keyword-colliding column names', () => {
+        it.each(COLLIDING_COLUMNS)('quotes %s in a SELECT list', (col) => {
+            expect(quote(`SELECT ${col} FROM t`)).toBe(`SELECT "${col}" FROM t`);
+        });
+
+        it.each(COLLIDING_COLUMNS)('quotes %s in an UPDATE SET clause', (col) => {
+            expect(quote(`UPDATE t SET ${col} = 1`)).toBe(`UPDATE t SET "${col}" = 1`);
+        });
+
+        it('quotes the column list while leaving the VALUES keyword bare', () => {
+            expect(quote(`INSERT INTO t (Name, Values) VALUES ('a', 'b')`))
+                .toBe(`INSERT INTO t ("Name", "Values") VALUES ('a', 'b')`);
+        });
+
+        it('distinguishes the Length column from the LENGTH function in one statement', () => {
+            expect(quote('SELECT Length, LENGTH(Name) FROM t')).toBe('SELECT "Length", LENGTH("Name") FROM t');
+        });
+    });
+
+    describe('ALL-CAPS words that are not keywords', () => {
+        it('quotes the ID and URL acronym columns rather than folding them', () => {
+            expect(quote('SELECT ID, URL FROM t')).toBe('SELECT "ID", "URL" FROM t');
+        });
+    });
+
+    describe('keywords stay bare', () => {
+        it('leaves an ALL-CAPS statement untouched', () => {
+            const sql = 'SELECT * FROM t WHERE x IS NOT NULL ORDER BY 1 DESC';
+            expect(quote(sql)).toBe(sql);
+        });
+
+        it('leaves SET CONSTRAINTS ALL IMMEDIATE bare', () => {
+            expect(quote('SET CONSTRAINTS ALL IMMEDIATE')).toBe('SET CONSTRAINTS ALL IMMEDIATE');
+        });
+
+        it('leaves RETURNING bare — it was previously missing from the codegen keyword set', () => {
+            expect(quote('INSERT INTO t (a) VALUES (1) RETURNING "ID"'))
+                .toBe('INSERT INTO t (a) VALUES (1) RETURNING "ID"');
+        });
+
+        it('leaves TYPE bare in ALTER COLUMN DDL while quoting a Type column', () => {
+            expect(quote('ALTER TABLE __mj."Foo" ALTER COLUMN "Bar" TYPE boolean'))
+                .toBe('ALTER TABLE __mj."Foo" ALTER COLUMN "Bar" TYPE boolean');
+            expect(quote('SELECT Type FROM t')).toBe('SELECT "Type" FROM t');
+        });
+    });
+
+    describe('dot-qualified references', () => {
+        it('quotes a lowercase-first view name after a dot', () => {
+            // New for codegen: the dot rule previously existed only on the runtime copy, so
+            // codegen-time SQL referencing __mj.vwFoo folded the view name to lowercase.
+            expect(quote('SELECT * FROM __mj.vwEntityFields'))
+                .toBe('SELECT * FROM __mj."vwEntityFields"');
+        });
+
+        it('quotes a dot-qualified stored procedure written without quotes', () => {
+            expect(quote('SELECT * FROM __mj.spGetPrimaryKeyForTable($1, $2)'))
+                .toBe('SELECT * FROM __mj."spGetPrimaryKeyForTable"($1, $2)');
+        });
+    });
+
+    describe('constructs the tokenizer skips', () => {
+        it('leaves string literals and dollar-quoted bodies untouched', () => {
+            const sql = `SELECT 1 FROM t WHERE x = 'a TestRun'`;
+            expect(quote(sql)).toBe(sql);
+            const body = '$func$ SELECT Name FROM t $func$';
+            expect(quote(body)).toBe(body);
+        });
+
+        it('QUOTES the mixed-case framework columns, which used to be exempted', () => {
+            // This assertion previously ran the other way — `__mj_CreatedAt > now()` was expected
+            // to come back untouched — which pinned the very carve-out that made those five
+            // columns fold to lowercase and fail. They are ordinary columns.
+            expect(quote('SELECT 1 FROM t WHERE __mj_CreatedAt > now()'))
+                .toBe('SELECT 1 FROM t WHERE "__mj_CreatedAt" > now()');
+            expect(quote('SELECT t.__mj_UpdatedAt FROM __mj.Entity t'))
+                .toBe('SELECT t."__mj_UpdatedAt" FROM __mj."Entity" t');
+            // ...while the all-lowercase internals stay bare via the ordinary lowercase rule.
+            expect(quote('SELECT 1 FROM t WHERE __mj_deleted_at IS NULL'))
+                .toBe('SELECT 1 FROM t WHERE __mj_deleted_at IS NULL');
+        });
+
+        it('is idempotent', () => {
+            const once = quote('SELECT ID, Name, rc.Type FROM __mj.vwRecordChanges rc');
+            expect(quote(once)).toBe(once);
         });
     });
 });

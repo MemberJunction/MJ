@@ -1,5 +1,6 @@
 import { BaseEngine, IMetadataProvider, UserInfo, RunView, BaseEnginePropertyConfig } from "@memberjunction/core";
-import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity } from "@memberjunction/core-entities";
+import { EntityChangeContext } from './EntityChangeContext';
+import { MJActionCategoryEntity, MJActionEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJEntityActionEntity, MJEntityActionParamEntity } from "@memberjunction/core-entities";
 import { MJActionEntityExtended } from "./MJActionEntityExtended";
 
 
@@ -172,8 +173,57 @@ export class ActionParam {
 }
 
 /**
+ * Where an action run came from, when it was dispatched by an Entity Action binding rather than
+ * invoked directly. Carried on {@link RunActionParams.Provenance} and stamped onto
+ * `ActionExecutionLog` so a failed workflow is diagnosable: *which binding fired this, on which
+ * record, from which event.*
+ *
+ * Also supplies the two things the engine cannot work out for itself once the run is under way —
+ * the binding's `LoggingMode`, and the `EntityActionParam` rows the redaction rules need in order
+ * to see a parameter's `ValueType` and per-binding `LogValue` override.
+ *
+ * Absent for direct invocations (a resolver, a script, an agent step, a scheduled action), which
+ * is exactly what the log's NULL provenance columns mean.
+ */
+export class ActionInvocationProvenance {
+   /** The Entity Action binding that caused this run. */
+   public EntityActionID?: string;
+
+   /**
+    * Which lifecycle event fired the binding — `AfterUpdate`, `Validate`, `List` and so on.
+    * Recorded separately from {@link EntityActionID} because one binding may be attached to
+    * several invocation types, and telling a `Validate` refusal apart from an `AfterUpdate` side
+    * effect is the first question anyone asks of the log.
+    */
+   public EntityActionInvocationTypeID?: string;
+
+   /**
+    * The entity of the record the run operated on. Denormalized rather than derived through
+    * {@link EntityActionID} so it survives the binding being deleted or retargeted, and so the log
+    * can be queried by record with no join. Kept generic — every invoker has a subject, not only
+    * Entity Actions.
+    */
+   public TargetEntityID?: string;
+
+   /**
+    * The primary key of the record the run operated on, as text. For multi-record invocation types
+    * (`List`, `View`) one log row is written per record, so this is always a single record.
+    */
+   public TargetRecordID?: string;
+
+   /** The binding's `LoggingMode` — `All` / `FailuresOnly` / `None`. Defaults to `All` when absent. */
+   public LoggingMode?: MJEntityActionEntity['LoggingMode'];
+
+   /**
+    * The binding's parameter rows. Required by the redaction rules: `ValueType` drives the hard
+    * whole-record rule, and `LogValue` supplies the per-binding override.
+    */
+   public EntityActionParams?: MJEntityActionParamEntity[];
+}
+
+/**
  * Class that holds the parameters for an action to be run. This is passed to the Run method of an action.
- * 
+ *
  * @template TContext - Type of the context object passed to the action execution.
  *                      This allows for type-safe context propagation from agents to actions.
  *                      Defaults to any for backward compatibility.
@@ -220,6 +270,30 @@ export class RunActionParams<TContext = any> {
     * Optional, the input and output parameters as defined in the metadata for the action.
     */
    public Params: ActionParam[];
+
+   /**
+    * What changed about the record, when this run was dispatched by an entity action.
+    *
+    * Present only on the entity-action path — a directly invoked action has no record transition to
+    * describe. This is what makes a *transition* filter possible ("when Status becomes Approved"),
+    * as opposed to a state filter over current values, which was all a filter could see before.
+    */
+   public EntityChange?: EntityChangeContext;
+
+   /**
+    * When set, replaces *executing* the action — after validation and filters have passed.
+    *
+    * The seam durable dispatch hangs on. Submitting the work before this point would hand it over
+    * without the scope check and without the binding's filters ever running, so a scoped durable
+    * trigger would fire for every record and a filtered one on every save. Deferring *here* means
+    * the two paths share one gate: whatever decides an inline run should happen decides a durable
+    * one should be submitted.
+    *
+    * **Returning `null` declines the deferral** and the action executes normally. That is what makes
+    * the fallback free: a handoff that could not be completed becomes an ordinary run rather than
+    * requiring the deferral to reimplement execution.
+    */
+   public DeferExecution?: (params: RunActionParams) => Promise<ActionResultSimple | null>;
 
    /**
     * Optional context object that provides runtime-specific information to the action.
@@ -276,6 +350,13 @@ export class RunActionParams<TContext = any> {
     * to honor the caller's provider when supplied while remaining backward compatible.
     */
    public Provider?: IMetadataProvider;
+
+   /**
+    * Optional. Set by the Entity Action invocation path to record which binding, which event and
+    * which record produced this run — see {@link ActionInvocationProvenance}. Left undefined for
+    * direct invocations, which is what the execution log's NULL provenance columns mean.
+    */
+   public Provenance?: ActionInvocationProvenance;
 };
  
 

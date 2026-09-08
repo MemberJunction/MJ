@@ -8,11 +8,14 @@ import {
   MJDialogComponent,
   MJDialogActionsComponent,
   MJEmptyStateComponent,
+  MJAlertComponent,
   MJPageHeaderComponent,
-  MJPageLayoutComponent
+  MJPageLayoutComponent,
+  MjSlidePanelComponent,
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
+import { CredentialsModule } from '@memberjunction/ng-credentials';
 import { CategoryTreeComponent } from './category-tree/category-tree';
 import { FileUploadComponent } from './file-upload/file-upload';
 import { FilesGridComponent } from './files-grid/files-grid';
@@ -22,6 +25,8 @@ import { FileBrowserResource } from './file-browser/file-browser-resource.compon
 import { StorageProvidersListComponent } from './file-browser/storage-providers-list.component';
 import { FolderTreeComponent } from './file-browser/folder-tree.component';
 import { FileGridComponent } from './file-browser/file-grid.component';
+import { RecordAttachmentsComponent } from './record-attachments/record-attachments.component';
+import { StorageAdminDialogComponent } from './admin/storage-admin-dialog.component';
 
 @NgModule({
   declarations: [
@@ -33,7 +38,9 @@ import { FileGridComponent } from './file-browser/file-grid.component';
     FileBrowserResource,
     StorageProvidersListComponent,
     FolderTreeComponent,
-    FileGridComponent
+    FileGridComponent,
+    RecordAttachmentsComponent,
+    StorageAdminDialogComponent,
   ],
   imports: [
     CommonModule,
@@ -41,12 +48,15 @@ import { FileGridComponent } from './file-browser/file-grid.component';
     AgGridModule,
     ContainerDirectivesModule,
     SharedGenericModule,
+    CredentialsModule,
     MJButtonDirective,
     MJDialogComponent,
     MJDialogActionsComponent,
     MJEmptyStateComponent,
+    MJAlertComponent,
     MJPageHeaderComponent,
     MJPageLayoutComponent,
+    MjSlidePanelComponent,
   ],
   exports: [
     CategoryTreeComponent,
@@ -54,7 +64,9 @@ import { FileGridComponent } from './file-browser/file-grid.component';
     FileUploadComponent,
     FileBrowserComponent,
     FileBrowserDemoComponent,
-    FileBrowserResource
+    FileBrowserResource,
+    RecordAttachmentsComponent,
+    StorageAdminDialogComponent,
   ],
 })
 export class FileStorageModule {}

@@ -1,0 +1,39 @@
+/* Design tokens only — no hardcoded colors. */
+.mj-tgp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-sm, 0.5rem);
+  padding: var(--mj-space-md, 1rem);
+  overflow-y: auto;
+  background: var(--mj-bg-surface);
+  color: var(--mj-text-primary);
+}
+
+.mj-tgp__label {
+  font-size: var(--mj-font-size-sm, 0.8125rem);
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  margin-top: var(--mj-space-xs, 0.25rem);
+}
+
+.mj-tgp__assignment {
+  display: flex;
+  gap: var(--mj-space-xs, 0.25rem);
+}
+
+.mj-tgp__edge {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2xs, 0.125rem);
+  padding: var(--mj-space-xs, 0.25rem) 0;
+  border-top: 1px solid var(--mj-border-subtle);
+}
+
+.mj-tgp__edge-name {
+  font-size: var(--mj-font-size-sm, 0.8125rem);
+  color: var(--mj-text-secondary);
+}
+
+.mj-tgp__edge-condition {
+  width: 100%;
+}

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MJ Explorer — Login · B · Immersive Brand</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,100..900;1,100..900&display=swap" />
+<link rel="stylesheet" href="base.css" />
+<style>
+  /* Brand stage — a FLAT solid brand color (no gradient). Uses the brand token so a
+     host's palette themes it. */
+  .pageB {
+    position: relative; min-height: 100vh; overflow: hidden;
+    background: var(--mj-brand-secondary);
+    /* Two equal columns, centered as a pair — story left, card right, each centered
+       in its own half so the composition fills the stage instead of floating left. */
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 480px));
+    justify-content: center; align-items: center; justify-items: center;
+    column-gap: clamp(var(--mj-space-12), 6vw, var(--mj-space-24));
+    padding: var(--mj-space-16) var(--mj-space-8);
+  }
+  [data-theme="dark"] .pageB { background: color-mix(in srgb, var(--mj-color-brand-900) 80%, #000); }
+  /* white text/overlays below sit on the always-dark brand stage → theme-fixed, not tokenized */
+  .storyB { position: relative; z-index: 2; color: #fff; max-width: 480px; }
+  .wordmarkB { width: 210px; height: auto; margin: 0 0 var(--mj-space-11); display: block; filter: brightness(0) invert(1); }
+  .storyB h1 { font-size: clamp(var(--mj-text-4xl), 4.4vw, var(--mj-text-5xl)); line-height: 1.06; font-weight: var(--mj-font-bold); margin: 0 0 var(--mj-space-4); letter-spacing: -.5px; }
+  .storyB p { font-size: var(--mj-text-base); line-height: var(--mj-leading-relaxed); color: rgba(255,255,255,.82); margin: 0; max-width: 40ch; }
+
+  .glassCard {
+    position: relative; z-index: 2; width: 100%; max-width: 430px; justify-self: center;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-2xl);
+    box-shadow: var(--mj-shadow-2xl);
+    padding: var(--mj-space-10) var(--mj-space-9) var(--mj-space-8);
+  }
+  .glassCard h2 { font-size: var(--mj-text-2xl); font-weight: var(--mj-font-bold); margin: 0 0 var(--mj-space-1); }
+  .glassCard .lede { margin: 0 0 var(--mj-space-6); font-size: var(--mj-text-sm); color: var(--mj-text-secondary); }
+  .glassCard .caption { margin-top: var(--mj-space-6); }
+  .single-wrap .caption { margin-top: var(--mj-space-4); }
+
+  @media (max-width: 900px) {
+    .pageB { grid-template-columns: minmax(0, 480px); row-gap: var(--mj-space-9); }
+    .storyB { max-width: none; }
+    .glassCard { max-width: none; }
+  }
+</style>
+</head>
+<body class="mode-multi">
+  <div class="controls">
+    <button class="mj-btn" id="themeBtn" aria-pressed="false" aria-label="Switch to dark mode"
+      onclick="(function(b){const d=document.documentElement.dataset.theme==='dark';document.documentElement.dataset.theme=d?'light':'dark';b.setAttribute('aria-pressed',String(!d));})(this)">
+      <i class="fa-solid fa-circle-half-stroke" aria-hidden="true"></i> Theme
+    </button>
+    <button class="mj-btn" aria-label="Toggle between one and multiple providers" onclick="document.body.classList.toggle('mode-single')">
+      <i class="fa-solid fa-toggle-on" aria-hidden="true"></i> 1 vs 2+ providers
+    </button>
+  </div>
+
+  <div class="pageB">
+    <div class="storyB">
+      <!-- host app supplies its own logo + optional tagline here (MJ shown as a placeholder) -->
+      <img class="wordmarkB" src="assets/MJ_logo.svg" alt="Company logo" />
+      <h1>Welcome back</h1>
+      <p>Sign in to continue.</p>
+    </div>
+
+    <div class="glassCard">
+      <h2>Log in</h2>
+      <p class="lede">Continue with one of your organization's sign-in options.</p>
+
+      <div class="provider-list" role="group" aria-label="Sign-in options">
+        <button type="button" class="mj-btn mj-btn--secondary provider-btn is-default">
+          <span class="ico microsoft" aria-hidden="true"><i class="fa-brands fa-microsoft"></i></span>
+          <span class="label">Continue with Microsoft<span class="sr-only"> (default)</span><span class="default-pill" aria-hidden="true">Default</span></span>
+          <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+        <button type="button" class="mj-btn mj-btn--secondary provider-btn">
+          <span class="ico workos" aria-hidden="true">W</span>
+          <span class="label">Continue with WorkOS</span>
+          <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+        <button type="button" class="mj-btn mj-btn--secondary provider-btn">
+          <span class="ico okta" aria-hidden="true">O</span>
+          <span class="label">Continue with Okta</span>
+          <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+        <button type="button" class="mj-btn mj-btn--secondary provider-btn">
+          <span class="ico google" aria-hidden="true"><i class="fa-brands fa-google"></i></span>
+          <span class="label">Continue with Google</span>
+          <span class="chev" aria-hidden="true"><i class="fa-solid fa-arrow-right"></i></span>
+        </button>
+      </div>
+
+      <div class="single-wrap">
+        <button type="button" class="mj-btn mj-btn--primary provider-btn provider-btn--primary">
+          <span class="ico" aria-hidden="true"><i class="fa-brands fa-microsoft"></i></span>
+          <span>Continue with Microsoft</span>
+        </button>
+        <p class="caption">When only one provider is enabled, sign-in goes directly — no picker.</p>
+      </div>
+
+      <p class="powered-by">Powered by <strong>MemberJunction</strong></p>
+    </div>
+  </div>
+</body>
+</html>

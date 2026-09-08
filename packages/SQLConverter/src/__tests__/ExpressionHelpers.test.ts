@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  QuoteConstraintNames,
   convertIdentifiers,
   convertDateFunctions,
   convertCharIndex,
@@ -851,4 +852,36 @@ describe('convertCommonFunctions', () => {
     const input = 'SELECT col FROM tbl WHERE id = 1';
     expect(convertCommonFunctions(input)).toBe(input);
   });
+});
+
+describe('QuoteConstraintNames — DROP CONSTRAINT IF EXISTS', () => {
+    /**
+     * `IF` sits exactly where a constraint name goes, so a pattern that does not exclude it
+     * captures the keyword, sees uppercase, and quotes it — turning the one drop form that is
+     * meant to be safe to re-run into a syntax error. Four of the five T-SQL migrations in the
+     * repo using this syntax converted broken before the exclusion.
+     */
+    it('leaves the IF EXISTS keywords alone and still quotes the real name', () => {
+        const sql = 'ALTER TABLE __mj."Foo" DROP CONSTRAINT IF EXISTS CK_Foo_Bar;';
+
+        const out = QuoteConstraintNames(sql);
+
+        expect(out).toBe('ALTER TABLE __mj."Foo" DROP CONSTRAINT IF EXISTS CK_Foo_Bar;');
+        expect(out, 'the keyword must never be quoted').not.toContain('"IF"');
+    });
+
+    it('is case-insensitive about the keywords, as T-SQL emits them either way', () => {
+        expect(QuoteConstraintNames('ALTER TABLE t DROP CONSTRAINT if exists CK_A;')).not.toContain('"if"');
+        expect(QuoteConstraintNames('ALTER TABLE t DROP CONSTRAINT If Exists CK_A;')).not.toContain('"If"');
+    });
+
+    it('still quotes an ordinary mixed-case constraint name', () => {
+        expect(QuoteConstraintNames('ALTER TABLE t ADD CONSTRAINT CK_Payment_Status CHECK (x > 0);'))
+            .toContain('CONSTRAINT "CK_Payment_Status"');
+    });
+
+    it('leaves an all-lowercase name unquoted, which folds harmlessly', () => {
+        expect(QuoteConstraintNames('ALTER TABLE t ADD CONSTRAINT ck_lower CHECK (x > 0);'))
+            .toContain('CONSTRAINT ck_lower');
+    });
 });

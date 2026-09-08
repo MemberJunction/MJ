@@ -39,6 +39,20 @@ function escapeRegex(s: string): string {
  * survives even aggressive dead-code elimination, independent of how the host app
  * consumes the manifest.
  *
+ * On the choice of anchor: this is NOT the same mechanism `CLASS_REGISTRATIONS` uses.
+ * That array is anchored by being spread into `combinedClasses` in the host's
+ * `app.module.ts` — a real consumer reference, no `globalThis` involved. The
+ * `globalThis` assignment here is a deliberate variant whose tradeoff is that it
+ * anchors the block without requiring an `app.module.ts` edit per installed app,
+ * at the cost of a module-scope global write. Stated as a tradeoff, not a precedent.
+ *
+ * Note this is defense-in-depth, not the durable fix. A package that self-registers
+ * classes at module scope and still declares `"sideEffects": false` is making a false
+ * declaration; MJ's own such packages set `"sideEffects": true` (e.g.
+ * `@memberjunction/ng-core-entity-forms`), and the Open App scaffold should do the
+ * same for generated `-ng` packages. This block exists because third-party apps we
+ * do not control will get it wrong anyway.
+ *
  * Exported for unit testing of the idempotency / disabled / cleared cases.
  */
 export function applyOpenAppClientBootstrapBlock(content: string, clientEntries: OpenAppClientEntry[]): string {
@@ -51,15 +65,21 @@ export function applyOpenAppClientBootstrapBlock(content: string, clientEntries:
     if (clientEntries.length > 0) {
         const lines: string[] = [];
         const refs: string[] = [];
-        clientEntries.forEach((e, i) => {
+        for (const e of clientEntries) {
             if (e.Enabled === false) {
                 lines.push(`// '${e.PackageName}' disabled by \`mj app disable\``);
-            } else {
-                const alias = `__openAppClient${i}`;
-                lines.push(`import * as ${alias} from '${e.PackageName}';`);
-                refs.push(alias);
+                continue;
             }
-        });
+            // The alias index is `refs.length` — the position the alias is about to occupy
+            // in OPEN_APP_CLIENT_MODULES — so the declared name and the array contents share
+            // a single counter by construction. Numbering off the ENTRY index instead would
+            // leave the two able to drift: any future change that skipped a ref push (or
+            // pushed one for a commented-out entry) would emit an array element naming a
+            // variable that was never declared, which is a build break in the host app.
+            const alias = `__openAppClient${refs.length}`;
+            lines.push(`import * as ${alias} from '${e.PackageName}';`);
+            refs.push(alias);
+        }
         // Anchor: the exported array references every namespace, and the globalThis
         // assignment is an observable side effect the bundler must preserve — which
         // keeps the array, the namespace imports, and their @RegisterClass side effects.

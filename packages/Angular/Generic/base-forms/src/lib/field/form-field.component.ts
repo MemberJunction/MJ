@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -296,6 +296,9 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether the user has interacted with (changed) this field */
   private _touched = false;
 
+  /** Set when an image upload is rejected (type/size) — shown with field validation. */
+  private imageUploadError: string | null = null;
+
   /** Locally computed validation errors for this field */
   private _fieldErrors: ValidationErrorInfo[] = [];
 
@@ -321,6 +324,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Whether this field has active error-level validation failures to display */
   get ShowErrors(): boolean {
+    if (this.imageUploadError) return true;
     return this.ShowValidation && this.FieldErrors.some(e => e.Type === 'Failure');
   }
 
@@ -331,8 +335,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Error messages to render in the template */
   get DisplayErrors(): ValidationErrorInfo[] {
-    if (!this.ShowValidation) return [];
-    return this.FieldErrors.filter(e => e.Type === 'Failure');
+    const errors = this.ShowValidation
+      ? this.FieldErrors.filter(e => e.Type === 'Failure')
+      : [];
+    if (this.imageUploadError) {
+      return [
+        ...errors,
+        new ValidationErrorInfo(this.FieldName, this.imageUploadError, this.Value),
+      ];
+    }
+    return errors;
   }
 
   /** Warning messages to render in the template */
@@ -1876,16 +1888,108 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
   }
 
+  /**
+   * Runtime display kind from EntityField.ExtendedType. Honored ahead of the
+   * generated `LinkType` input so PhotoURL forms still tagged LinkType=URL
+   * render as images once metadata says Image.
+   */
+  get ExtendedDisplay(): 'image' | 'color' | 'json' | null {
+    switch (this.FieldInfo?.ExtendedType) {
+      case 'Image': return 'image';
+      case 'Color': return 'color';
+      case 'JSON':  return 'json';
+      default:      return null;
+    }
+  }
+
+  get ImagePreviewSrc(): string | null {
+    const raw = this.FormatValue();
+    return CoerceImageSrc(raw);
+  }
+
+  get IsInlineImageValue(): boolean {
+    const raw = this.FormatValue().trim();
+    if (!raw) return false;
+    return IsInlineImageDataUri(raw) || CoerceRawImageBase64ToDataUri(raw) != null;
+  }
+
+  get ImageValueSizeLabel(): string {
+    const raw = this.FormatValue();
+    if (!raw) return '';
+    return FormatByteSize(raw.length);
+  }
+
+  get ImageMaxSizeLabel(): string {
+    return FormatByteSize(MaxInlineImageBytes(this.FieldInfo?.MaxLength ?? 0));
+  }
+
+  /** URL box: empty for inline images so we never dump a data URI into a text input. */
+  get ImageUrlInputValue(): string {
+    if (this.IsInlineImageValue) return '';
+    return this.FormatValue();
+  }
+
+  get ImageUrlDisplay(): string {
+    const raw = this.FormatValue().trim();
+    return raw.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+  }
+
+  get ColorPickerValue(): string {
+    return ParseCssHexColor(this.FormatValue()) ?? '#000000';
+  }
+
+  get ColorSwatchValue(): string {
+    return ParseCssHexColor(this.FormatValue()) ?? 'transparent';
+  }
+
+  get JsonDisplayValue(): string {
+    // Pretty-print only in read mode. Edit mode shows the live value; OnJsonBlur pretty-prints.
+    if (this.EditMode) return this.FormatValue();
+    return PrettyPrintJson(this.FormatValue());
+  }
+
   /** Handle value changes coming from the embedded code editor (emits a plain string). */
   OnCodeEditorChange(value: string): void {
     this.Value = value;
   }
 
   /** Format a value for display */
+  /**
+   * Whether this field holds a DATE with no time, as opposed to a timestamp.
+   *
+   * The distinction decides which timezone the value may be rendered in, and getting it wrong
+   * moves the day. A `date` column has no time and no zone: it is a calendar day, and the only
+   * correct way to show it is in the zone it was written in. A `datetime`/`datetimeoffset` names
+   * an instant, and the correct way to show THAT is the reader's local zone.
+   */
+  private get IsDateOnlyField(): boolean {
+    return (this.FieldInfo?.Type ?? '').trim().toLowerCase() === 'date';
+  }
+
   FormatValue(): string {
     const val = this.Value;
     if (val === null || val === undefined) return '';
     if (val instanceof Date) {
+      /**
+       * A DATE-ONLY VALUE IS NOT AN INSTANT, AND toLocaleString() TREATS IT AS ONE.
+       *
+       * A `date` column arrives as UTC midnight. Passing that through a LOCAL-time formatter
+       * subtracts the reader's offset and lands on the previous day for everyone west of
+       * Greenwich: a stored 2026-11-20 rendered as `11/19/2026, 7:00:00 PM` in America/New_York,
+       * and 2026-01-01 rendered as `12/31/2025` — the wrong YEAR.
+       *
+       * The edit path does not have this bug: `DateInputValue` uses `toISOString()`, which is UTC.
+       * So the two modes DISAGREED — a rep opened a record and saw 19 November, clicked Edit and
+       * saw the 20th, on the same field, with no invalid data anywhere. Read mode was simply wrong.
+       *
+       * Pinning the timezone rather than switching to `toISOString()` keeps the reader's locale
+       * format (a US reader still sees 11/20/2026, a UK reader 20/11/2026) and changes only the
+       * zone the day is computed in. A TIMESTAMP is left exactly as it was: it names an instant,
+       * and local time is the right way to show one.
+       */
+      if (this.IsDateOnlyField) {
+        return val.toLocaleDateString(undefined, { timeZone: 'UTC' });
+      }
       return val.toLocaleString();
     }
     return String(val);
@@ -2019,7 +2123,134 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    */
   OnInputChange(event: Event): void {
     const input = event.target as HTMLInputElement;
+    this.imageUploadError = null;
     this.Value = input.value;
+  }
+
+  OnImageUrlInput(event: Event): void {
+    this.OnInputChange(event);
+  }
+
+  OnImageClear(): void {
+    this.imageUploadError = null;
+    this.Value = null;
+    this.cdr.markForCheck();
+  }
+
+  async OnImageFileSelected(event: Event): Promise<void> {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    this.imageUploadError = null;
+    if (!file) return;
+
+    const allowed = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml']);
+    if (file.type && !allowed.has(file.type)) {
+      this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
+      this._touched = true;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const absoluteReadCap = 8 * 1024 * 1024;
+    if (file.size > absoluteReadCap) {
+      this.imageUploadError = `File is too large to read (max ${FormatByteSize(absoluteReadCap)}).`;
+      this._touched = true;
+      this.cdr.markForCheck();
+      return;
+    }
+
+    try {
+      const maxChars = MaxStoredImageChars(this.FieldInfo?.MaxLength ?? 0);
+      const dataUri = await this.readFileAsDataUri(file);
+      if (!IsInlineImageDataUri(dataUri)) {
+        this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
+        this._touched = true;
+        this.cdr.markForCheck();
+        return;
+      }
+      if (dataUri.length <= maxChars) {
+        this.Value = dataUri;
+        this.cdr.markForCheck();
+        return;
+      }
+      const compressed = await this.compressImageDataUriToFit(dataUri, maxChars);
+      if (compressed) {
+        this.Value = compressed;
+        this.cdr.markForCheck();
+        return;
+      }
+      this.imageUploadError = `Image is too large for this field (max ${this.ImageMaxSizeLabel}). Try a smaller file or paste an image URL.`;
+      this._touched = true;
+    } catch {
+      this.imageUploadError = 'Could not read that image.';
+      this._touched = true;
+    }
+    this.cdr.markForCheck();
+  }
+
+  OnColorPickerInput(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    this.imageUploadError = null;
+    this.Value = input.value;
+  }
+
+  OnJsonBlur(): void {
+    const raw = this.FormatValue();
+    const pretty = PrettyPrintJson(raw);
+    if (pretty !== raw) {
+      this.Value = pretty;
+    }
+  }
+
+  private readFileAsDataUri(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ''));
+      reader.onerror = () => reject(reader.error ?? new Error('read failed'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  private loadHtmlImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('image decode failed'));
+      img.src = src;
+    });
+  }
+
+  /**
+   * Re-encode a raster data URI as JPEG, shrinking dimensions/quality until it fits
+   * `maxChars`. GIF/SVG are left alone (would lose animation / vectors).
+   */
+  private async compressImageDataUriToFit(dataUri: string, maxChars: number): Promise<string | null> {
+    if (typeof document === 'undefined') return null;
+    if (/^data:image\/(gif|svg\+xml)/i.test(dataUri)) return null;
+    const img = await this.loadHtmlImage(dataUri);
+    const naturalW = img.naturalWidth || img.width;
+    const naturalH = img.naturalHeight || img.height;
+    if (!naturalW || !naturalH) return null;
+
+    let maxDim = Math.min(Math.max(naturalW, naturalH), 1024);
+    let quality = 0.85;
+    for (let i = 0; i < 8; i++) {
+      const scale = maxDim / Math.max(naturalW, naturalH);
+      const w = Math.max(1, Math.round(naturalW * scale));
+      const h = Math.max(1, Math.round(naturalH * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, w, h);
+      const next = canvas.toDataURL('image/jpeg', quality);
+      if (next.length <= maxChars) return next;
+      maxDim = Math.max(32, Math.round(maxDim * 0.65));
+      quality = Math.max(0.4, quality - 0.1);
+    }
+    return null;
   }
 
   /**
@@ -2056,5 +2287,32 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const date = val instanceof Date ? val : new Date(String(val));
     if (isNaN(date.getTime())) return '';
     return date.toISOString().split('T')[0];
+  }
+
+  /**
+   * The field holds SOMETHING, and the date editor cannot show it.
+   *
+   * WHY A SEPARATE SIGNAL IS THE ONLY OPTION. `DateInputValue` returns '' for a value it cannot
+   * render, and an `<input type="date">` renders '' as an empty box — the same empty box it shows
+   * for a field that was never set. There is no string that makes the element display
+   * `not-a-date`, so the control physically cannot surface the problem itself. The most the getter
+   * can do is refuse to emit garbage; saying WHY has to happen beside it.
+   *
+   * The consequence of not saying it is not cosmetic. The field reads as "no date", and the next
+   * save writes that emptiness over whatever was actually stored — so an unreadable value becomes a
+   * destroyed one, silently, by a user who was never told anything was wrong.
+   *
+   * READ MODE ALREADY DOES THIS and needs nothing: `FormatValue()` shows `Invalid Date` for a bad
+   * Date and the raw text for a bad string. It is only the EDITOR that hides the problem, which is
+   * why this is scoped to EditMode rather than to the field.
+   *
+   * An ABSENT value is not unreadable. Empty means empty, and must never be decorated as a fault.
+   */
+  get StoredDateIsUnreadable(): boolean {
+    if (!this.EditMode) return false;
+    if (this.Type !== 'datepicker' && this.FieldInfo?.TSType !== EntityFieldTSType.Date) return false;
+    const val = this.Value;
+    if (val === null || val === undefined || val === '') return false;
+    return this.DateInputValue === '';
   }
 }

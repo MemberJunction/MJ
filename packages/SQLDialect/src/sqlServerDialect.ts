@@ -207,6 +207,10 @@ export class SQLServerDialect extends SQLDialect {
         return 'GETUTCDATE()';
     }
 
+    AffectedRowCountSQL(dmlStatement: string, alias: string): string {
+        return `${dmlStatement};\nSELECT @@ROWCOUNT AS ${this.QuoteColumnAlias(alias)}`;
+    }
+
     // ─── Type-Name Sets ──────────────────────────────────────────────
     // SQL Server's column-type names as they appear in `sys.columns.name`
     // / `EntityField.Type` for entities backed by a SQL Server schema.
@@ -329,6 +333,18 @@ export class SQLServerDialect extends SQLDialect {
 
     BatchSeparator(): string {
         return 'GO';
+    }
+
+    CreateSavepointSQL(name: string): string {
+        return `SAVE TRANSACTION ${name}`;
+    }
+
+    ReleaseSavepointSQL(_name: string): string | null {
+        return null;
+    }
+
+    RollbackToSavepointSQL(name: string): string {
+        return `ROLLBACK TRANSACTION ${name}`;
     }
 
     ExistenceCheckSQL(objectType: string, schema: string, name: string): string {

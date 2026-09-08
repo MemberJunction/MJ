@@ -37,6 +37,13 @@ export class AIAPIKeys {
     }
     
     public GetAPIKey(AIDriverName: string): string {
+        // A row with no driver class has no key — that is an ANSWER, not a crash (#3532). This threw
+        // `Cannot read properties of null (reading 'toUpperCase')` for one malformed AI model row and
+        // took out prompt execution entirely, naming neither the row nor the operation. Every caller
+        // already handles a falsy key; none of them expected this to throw.
+        if (!AIDriverName) {
+            return undefined;
+        }
         const normalizedKey = AIDriverName.toUpperCase();
         const cached = this.GetCachedAPIKey(normalizedKey);
         if (cached) {

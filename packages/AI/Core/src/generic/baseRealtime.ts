@@ -193,6 +193,15 @@ export abstract class BaseRealtimeModel extends BaseModel {
  * transport settings for self-hosted/proxied drivers. NON-OpenAI-protocol drivers (Gemini,
  * ElevenLabs, AssemblyAI, Inworld) MUST scrub these before forwarding an open config bag to their
  * SDK/wire — a co-agent config carrying them must be safe on every provider.
+ *
+ * **Registering a key here is what makes it safe; forgetting to is a wire leak.** A co-agent
+ * config is authored WITHOUT knowing which vendor will run, so an agnostic key is filed onto
+ * whichever driver resolves — including every driver that does not consume it. Unregistered, it
+ * survives each driver's residual-bag spread and reaches the provider as an unknown field; on the
+ * OpenAI-protocol endpoints a malformed session object is rejected WHOLESALE, taking the prompt
+ * and tools with it. So any key added to the neutral vocabulary belongs in this list at the same
+ * time, and the OpenAI family's own scrub in `ExtractRealtimeFeatures` must delete it too — that
+ * function enumerates its deletes explicitly and does NOT read this list.
  */
 export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'effortLevel',
@@ -201,7 +210,9 @@ export const REALTIME_SHARED_CONFIG_KEYS: readonly string[] = [
     'mcpTools',
     'inputTranscriptionModel',
     'voice',
+    'firstMessage',
     'disableAutoResponse',
+    'turnDetection',
     'endpoint',
     'sampleRate',
     'proxyBaseUrl',

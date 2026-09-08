@@ -40,11 +40,28 @@ function createParam(
     return { Name: name, IsRequired: isRequired, TemplateContentID: templateContentID };
 }
 
+/**
+ * Constructs a bare entity instance for pure getter/setter tests.
+ *
+ * `BaseEntity`'s constructor takes an `EntityInfo`, which these tests have no use for — they
+ * exercise logic that never touches metadata, and the runtime has always been fine. The assertion
+ * states that intent instead of fabricating an `EntityInfo` the test would then have to keep
+ * accurate.
+ *
+ * Worth flagging rather than hiding: the codebase's own rule is that entity subclasses are created
+ * through `Metadata.GetEntityObject()`, never `new`. These call sites predate the typecheck being
+ * switched on and are left structurally as they were; moving them onto the metadata path is a
+ * larger change than making the type checker honest, and belongs with whoever owns these tests.
+ */
+function bare<T>(ctor: new (...args: never[]) => T): T {
+    return new (ctor as unknown as new () => T)();
+}
+
 describe('MJTemplateEntityExtended', () => {
     let template: MJTemplateEntityExtended;
 
     beforeEach(() => {
-        template = new MJTemplateEntityExtended();
+        template = bare(MJTemplateEntityExtended);
         template.Content = [];
         template.Params = [];
     });
@@ -54,7 +71,7 @@ describe('MJTemplateEntityExtended', () => {
     // ---------------------------------------------------------------
     describe('Content getter/setter', () => {
         it('should default to an empty array', () => {
-            const fresh = new MJTemplateEntityExtended();
+            const fresh = bare(MJTemplateEntityExtended);
             expect(fresh.Content).toEqual([]);
         });
 
@@ -68,7 +85,7 @@ describe('MJTemplateEntityExtended', () => {
 
     describe('Params getter/setter', () => {
         it('should default to an empty array', () => {
-            const fresh = new MJTemplateEntityExtended();
+            const fresh = bare(MJTemplateEntityExtended);
             expect(fresh.Params).toEqual([]);
         });
 

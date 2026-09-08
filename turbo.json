@@ -1,5 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
+  "remoteCache": { "signature": true },
   "globalDependencies": [
     "vitest.shared.ts",
     "vitest.dom.shared.ts",
@@ -36,6 +37,17 @@
     "test:watch": {
       "cache": false,
       "persistent": true
+    },
+    "test:types": {
+      "dependsOn": ["build"],
+      "outputs": [],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "tsconfig.json",
+        "tsconfig.spec.json"
+      ],
+      "cache": true
     }
   }
 }

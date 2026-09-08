@@ -15,7 +15,7 @@
 
 import { RunView, LogError, type UserInfo, type DatabaseProviderBase } from '@memberjunction/core';
 import type { MJConversationWidgetInstanceEntity } from '@memberjunction/core-entities';
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import type { UserPayload } from '../types.js';
 
 const WIDGET_ENTITY = 'MJ: Conversation Widget Instances';
@@ -75,6 +75,47 @@ export async function resolveWidgetGuestRunContext(
     pinnedAgentId: widget.PinnedAgentID,
     sessionScopeId: guest.MagicLinkScope?.ResourceID,
   };
+}
+
+/**
+ * Returns the identity a realtime session's AI-RUN-ENTITY work (delegated tool dispatch +
+ * observability run creation/append/finalize) should execute as: the trusted SYSTEM principal when
+ * the caller is a SCOPED anonymous magic-link session, else the caller unchanged (issue #3371).
+ *
+ * A scoped anonymous session (`IsMagicLinkAnonymous` + `MagicLinkScope.ResourceID`) holds only the
+ * narrow relay grants its invite's role carries — deliberately NOT the AI run entities, whose rows
+ * leak the rendered system prompt. Unlike {@link resolveWidgetGuestRunContext} no widget instance is
+ * required: on the realtime path the agent authority is already server-side (the session config's
+ * `targetAgentID`, `CanRun`-gated at session start), so there is no client-supplied agent id to pin.
+ *
+ * PUBLIC WEB-WIDGET guests are deliberately EXCLUDED (returned unchanged): their seeded role writes
+ * run rows under the guest principal, which the `Widget Guest: Own Agent Runs` RLS read filter
+ * depends on — elevating them here would silently break that read-side control.
+ *
+ * Fails CLOSED: when no system user is available the caller is returned unchanged, so the request
+ * fails exactly as it would today rather than proceeding unelevated-but-assumed-elevated.
+ *
+ * Ownership/RLS gates must NEVER use this — they stay on the caller; this only changes who the
+ * work RUNS AS after ownership is proven.
+ */
+export function ResolveScopedAnonymousRunUser(contextUser: UserInfo): UserInfo {
+  const scopeId = contextUser?.MagicLinkScope?.ResourceID;
+  if (!contextUser?.IsMagicLinkAnonymous || !scopeId || contextUser.WidgetGuestContext?.WidgetID) {
+    return contextUser;
+  }
+
+  const systemUser = UserCache.Instance.GetSystemUser();
+  if (!systemUser) {
+    LogError(
+      '[Realtime] Cannot elevate scoped-anonymous run work: no system user available; ' +
+        `falling back to the anonymous caller for scope ${scopeId}.`,
+    );
+    return contextUser;
+  }
+
+  // Deliberately silent on success — callers include per-utterance/per-usage-delta relays, so a
+  // per-call log line would flood a live session's log. The dispatch path logs the elevation once.
+  return systemUser;
 }
 
 /**

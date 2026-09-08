@@ -56,8 +56,8 @@ Alternative titles:
 4. **Convergence detection** — multi-criterion stability detection combining change tracking, confidence thresholds, and semantic comparison
 5. **Cost analysis** — demonstrating 99.5%+ cost reduction vs. manual documentation
 
-### 1.5 Open-Source Availability
-- DBAutoDoc is released as open-source software — the system described in this paper is freely available for use, modification, and extension
+### 1.5 Public Availability
+- DBAutoDoc is released as source-available software — the system described in this paper is publicly available for use, modification, and extension
 - Our goal is to contribute a practical solution to the undocumented database problem, not to gatekeep it behind proprietary tooling
 - All evaluation scripts, benchmark configurations, and prompt templates are included to enable reproducibility and extension by others
 
@@ -563,7 +563,7 @@ Output: Documentation D mapping each table/column to a description
 - Emphasize the iterative refinement insight: treating schema documentation as an iterative learning problem produces significantly better results than single-pass analysis
 - The bidirectional statistical+LLM approach to key discovery outperforms either component alone
 - The 99.5% cost reduction makes comprehensive database documentation economically viable for every organization — not just those with budgets for expensive tooling or consultants
-- **Open-source commitment**: DBAutoDoc is released as open-source software with no licensing fees. The goal is not to create a proprietary advantage but to contribute a practical, working solution to a problem that affects millions of databases worldwide. By making the tool freely available and publishing the methodology, we aim to lower the barrier to database understanding for organizations of all sizes — from solo developers inheriting undocumented systems to enterprises consolidating decades of technical debt. We hope others will build on this work.
+- **Public release**: DBAutoDoc's full source code is public on GitHub — free and unrestricted for nonprofits, forever. The goal is not to create a proprietary advantage but to contribute a practical, working solution to a problem that affects millions of databases worldwide. By making the tool freely available and publishing the methodology, we aim to lower the barrier to database understanding for organizations of all sizes — from solo developers inheriting undocumented systems to enterprises consolidating decades of technical debt. We hope others will build on this work.
 
 ---
 
@@ -655,7 +655,7 @@ Output: Documentation D mapping each table/column to a description
 ### D. Reproducibility
 - System requirements and setup instructions
 - Command-line usage for reproducing experiments on public benchmark databases
-- Links to open-source repository
+- Links to public repository
 
 ---
 

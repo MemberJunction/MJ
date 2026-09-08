@@ -1,0 +1,27 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT85 - Entity Embedded Records (owner-held 1:1)",
+    "Description": "Live-database proof of EmbeddedRecord — an owner-held 1:1 peer that loads, validates and persists as one unit with its owner. No production __mj field is honest composition, so this bundle registers a test-only subclass of MJ: Action Categories that treats the existing nullable ParentID self-FK as an embedded peer (the closest core analogue of Deal.OrderID). EE1: an unprovisioned nullable embed is inert. EE2: Ensure + Save persists the peer first and stamps the owner FK; Load hydrates the peer. EE3: a dirty peer on a clean owner still saves (Dirty rollup). EE4: Clear + orphan nulls the FK and leaves the peer row. EE5: a failing peer rolls the whole graph back. EE6: Load of a self-parented row fails cleanly instead of hanging. All six mutate and carry RequiresMutation; the bundle creates and tears down its own prefixed, tagged Action Category rows and never touches a pre-existing record.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Nullable embed stays inert; Ensure+Save persists the peer first and stamps the FK; Load hydrates; dirty rollup works; Clear orphans; a failed peer rolls back the owner; a self-parented Load fails cleanly."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "entity-embedded",
+          "config": {
+            "runMutationTests": true
+          }
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0DBB48F3-304F-4880-896B-5EB429ABFB19"
+  }
+}

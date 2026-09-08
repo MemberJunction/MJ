@@ -1,6 +1,6 @@
 <!-- Backdrop overlay -->
 <div class="sp-backdrop"
-  [class.visible]="IsVisible"
+  [class.sp-open]="IsVisible"
   [class.sp-dialog-backdrop]="Mode === 'dialog'"
   (click)="OnBackdropClick()">
 </div>
@@ -9,7 +9,7 @@
 @if (Mode === 'slide') {
   <div
     class="sp-panel"
-    [class.visible]="IsVisible"
+    [class.sp-open]="IsVisible"
     [style.width.px]="WidthPx"
     [style.max-width]="(MaxWidthRatio * 100) + 'vw'">
     <!-- Resize handle -->
@@ -38,7 +38,7 @@
 @if (Mode === 'dialog') {
   <div
     class="sp-dialog"
-    [class.visible]="IsVisible"
+    [class.sp-open]="IsVisible"
     [style.width.px]="WidthPx">
     <!-- Header (if Title provided) -->
     @if (Title) {

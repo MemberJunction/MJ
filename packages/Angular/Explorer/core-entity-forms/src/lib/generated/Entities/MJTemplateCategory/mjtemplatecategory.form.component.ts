@@ -19,6 +19,7 @@ export class MJTemplateCategoryFormComponent extends BaseFormComponent {
             { sectionKey: 'categoryInformation', sectionName: 'Category Information', isExpanded: true },
             { sectionKey: 'hierarchyStructure', sectionName: 'Hierarchy Structure', isExpanded: true },
             { sectionKey: 'managementAudit', sectionName: 'Management Audit', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJTemplateCategories', sectionName: 'Template Categories', isExpanded: false },
             { sectionKey: 'mJTemplates', sectionName: 'Templates', isExpanded: false }

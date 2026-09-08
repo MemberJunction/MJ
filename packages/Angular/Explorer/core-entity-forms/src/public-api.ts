@@ -7,6 +7,7 @@ export * from './lib/custom/custom-forms.module';
 
 // Custom entity form components (must be individually exported for manifest builder)
 export { MJEntityFormComponentExtended } from './lib/custom/Entities/entity-form.component';
+export { MJFileFormComponentExtended } from './lib/custom/Files/file-form.component';
 export { MJEntityActionFormComponentExtended } from './lib/custom/EntityActions/entityaction.form.component';
 export { MJTemplateFormComponentExtended } from './lib/custom/Templates/templates-form.component';
 export { MJAIPromptFormComponentExtended } from './lib/custom/AIPrompts/ai-prompt-form.component';
@@ -34,13 +35,24 @@ export { AIAgentRunStepNodeComponent } from './lib/custom/ai-agent-run/ai-agent-
 export { AIAgentRunAnalyticsComponent } from './lib/custom/ai-agent-run/ai-agent-run-analytics.component';
 export { EntityLinkPillComponent } from './lib/custom/Tests/entity-link-pill.component';
 
+// Hero Headers and Overview Mini-Dashboard Panels
+export { AIAgentCategoryHeaderPanel } from './lib/custom/AIAgentCategories/ai-agent-category-header.panel';
+export { AIAgentCategoryOverviewPanel } from './lib/custom/AIAgentCategories/ai-agent-category-overview.panel';
+export { ConversationHeaderPanel } from './lib/custom/Conversations/conversation-header.panel';
+export { ConversationOverviewPanel } from './lib/custom/Conversations/conversation-overview.panel';
+export { EmployeeHeaderPanel } from './lib/custom/Employees/employee-header.panel';
+export { EmployeeOverviewPanel } from './lib/custom/Employees/employee-overview.panel';
+export { CompanyHeaderPanel } from './lib/custom/Companies/company-header.panel';
+export { CompanyOverviewPanel } from './lib/custom/Companies/company-overview.panel';
+export { UserHeaderPanel } from './lib/custom/Users/user-header.panel';
+export { UserOverviewPanel } from './lib/custom/Users/user-overview.panel';
+
 // Agent Dialog components and service
 export { NewAgentDialogComponent } from './lib/custom/AIAgents/new-agent-dialog.component';
 export { NewAgentDialogService } from './lib/custom/AIAgents/new-agent-dialog.service';
 
 // Flow Agent components
 export { FlowAgentFormSectionComponent } from './lib/custom/AIAgents/FlowAgentType/flow-agent-form-section.component';
-// NOTE: Flow editor components have moved to @memberjunction/ng-flow-editor
 
-// NOTE: Action Test Harness components have moved to @memberjunction/ng-actions
- 
+// Visual Hierarchy & Taxonomy Form Panels
+export * from './lib/custom/HierarchyPanels/hierarchy-form-panels';

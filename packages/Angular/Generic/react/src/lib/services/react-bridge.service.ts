@@ -78,6 +78,14 @@ export class ReactBridgeService implements OnDestroy {
 
         await this.adapter.initialize(undefined, undefined, { debug: this.debug });
 
+        // Validate that ReactDOM.createRoot is actually callable.
+        // If CDN scripts loaded in the wrong order (ReactDOM before React),
+        // the ReactDOM object exists but createRoot is broken.
+        const ctx = this.adapter.getRuntimeContext();
+        if (!ctx.ReactDOM?.createRoot || typeof ctx.ReactDOM.createRoot !== 'function') {
+          throw new Error('ReactDOM loaded but createRoot is not available — possible script execution order issue');
+        }
+
         // Register Angular-specific runtime hooks for library compatibility
         reactRootManager.RegisterHook(createAntdDropdownPositionHook());
 

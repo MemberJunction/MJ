@@ -1,7 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseEntity,
-    EntitySaveOptions,
     LogError,
     LogStatus,
     Metadata,
@@ -18,13 +17,9 @@ import {
 import { buildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
 
 /**
- * Server-side extension of MJCompanyIntegrationEntity that:
- *
- *   Awaits `IntegrationConnectorCreationPipeline.Run()` whenever `IsActive`
- *   transitions `false → true` on a successful save.  This is the wizard-Finish
- *   trigger point — when an operator activates a connection (via the wizard,
- *   the Update mutation, direct entity edit, or any other code path that saves
- *   IsActive=true on a previously-inactive row), the pipeline runs:
+ * Server-side extension of MJCompanyIntegrationEntity that exposes
+ * `RunSchemaRefreshPipeline()` — an explicitly-invoked run of
+ * `IntegrationConnectorCreationPipeline` for this connection:
  *
  *     1. TestConnection           — verify credentials still pass
  *     2. IntrospectSchema         — live describe across all objects
@@ -39,19 +34,36 @@ import { buildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
  *   PER-RUN JSONL ARTIFACTS land at:
  *     `<cwd>/logs/integration-runs/<runID>/{manifest,progress,result}.json`
  *
- * SYNCHRONOUS EXECUTION.  The pipeline now AWAITS so the wizard's Finish
- * button (which does `ci.IsActive=true; ci.Save()`) stays in its "Saving..."
- * state until the schema refresh completes.  HubSpot ~130 objects × 8-way
- * parallel describe lands ~10-30s; that becomes the wizard's perceived load
- * time — which is the correct UX (the wizard is, in fact, updating).
+ * ───────────────────────────────────────────────────────────────────────────
+ * NO IMPLICIT TRIGGER — DISCOVERY IS SOMETHING A CALLER ASKS FOR (#3738)
+ * ───────────────────────────────────────────────────────────────────────────
  *
- * IDEMPOTENT BY DESIGN.  The pipeline overlays existing rows; the transition
- * guard (was-false → now-true) keeps repeat saves (renames, config tweaks)
- * from re-firing.
+ * This class used to override `Save()` and await the whole pipeline whenever
+ * `IsActive` transitioned `false → true`.  That put an unbounded live scan of
+ * the source — every object, every field, key inference, catalog write — inside
+ * whatever HTTP request happened to write the row, and it fired for EVERY
+ * writer of that transition, not only the resolvers that wanted it.  On a
+ * ~354-object source it ran for tens of minutes on the single Node event loop,
+ * and the create path reached it BEFORE the credential had been tested — so the
+ * most expensive operation in the flow ran speculatively against a password
+ * that might be wrong, and was thrown away when the connection rolled back.
  *
- * FAILURE ISOLATION.  Pipeline failure does NOT undo the Save.  Operator can
- * re-run via the standalone `IntegrationRefreshConnectorSchema` GraphQL
- * mutation if needed.  The save still returns true even on pipeline failure.
+ * The trigger now lives with the callers that actually want a catalog:
+ * `IntegrationCreateConnection` / `IntegrationUpdateConnection` /
+ * `IntegrationReactivateConnection` (their `runSchemaRefresh` argument) and the
+ * standalone `IntegrationRefreshConnectorSchema` mutation.  `Save()` saves.
+ *
+ * Nothing depended on the old hook having run: every consumer of the persisted
+ * catalog (`IntegrationApplySchema`, `IntegrationApplyAll`,
+ * `IntegrationApplyAllBatch`, `buildSchemaForConnector`) already falls back to
+ * a live introspect when it finds no persisted IntegrationObject rows.
+ *
+ * IDEMPOTENT BY DESIGN.  The pipeline overlays existing rows, so a caller that
+ * refreshes more often than strictly needed costs time, not correctness.
+ *
+ * FAILURE ISOLATION.  Failure throws out of this method and the caller decides.
+ * The resolvers log it and leave the connection in place, since the operator
+ * can always re-run `IntegrationRefreshConnectorSchema`.
  *
  * ───────────────────────────────────────────────────────────────────────────
  * ALGORITHM GAPS — DEFERRED FOR FOLLOWUP PR (not Phase 0 PR1)
@@ -101,45 +113,16 @@ import { buildIntegrationLLMPKCallback } from './IntegrationLLMPKCallback';
  */
 @RegisterClass(BaseEntity, 'MJ: Company Integrations')
 export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity {
-    public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        // Snapshot the pre-save IsActive value so we can detect the transition
-        // AFTER `super.Save()` returns successfully.  When the row is new
-        // (`!this.IsSaved`), prior is `false` by default — the framework's
-        // IsActive defaults to false for new rows and the wizard explicitly
-        // flips it to true on Finish.
-        const priorIsActive = this.IsSaved
-            ? !!this.GetFieldByName('IsActive').OldValue
-            : false;
-        const nowIsActive = !!this.IsActive;
-        const transitionedToActive = !priorIsActive && nowIsActive;
-
-        const saved = await super.Save(options);
-        if (!saved) return false;
-
-        if (transitionedToActive) {
-            // AWAIT the pipeline — the wizard's Finish button stays in its
-            // "Saving…" state until the schema refresh completes, so the
-            // operator sees real visual feedback during the actual work
-            // instead of an instant fake-done.  Pipeline failure is logged
-            // and surfaced via LatestResult but does NOT undo the activation
-            // — the connection is still saved; only the schema discovery
-            // failed and can be retried via IntegrationRefreshConnectorSchema.
-            try {
-                await this.fireSchemaRefreshPipeline();
-            } catch (err) {
-                LogError(`[MJCompanyIntegrationEntityServer] Schema refresh pipeline error (non-fatal): ${err instanceof Error ? err.message : String(err)}`);
-            }
-        }
-
-        return true;
-    }
-
     /**
      * Resolves the registered connector for this CompanyIntegration, runs the
      * Phase 0 v5.39.x pipeline, and refreshes the in-memory caches so the next
      * read sees the newly-persisted IO/IOF rows.
+     *
+     * EXPLICIT CALL ONLY.  Nothing on the save path invokes this — see the
+     * class comment for why the `IsActive false→true` hook was removed (#3738).
+     * A caller that wants a catalog asks for one, and owns the cost of doing so.
      */
-    private async fireSchemaRefreshPipeline(): Promise<void> {
+    public async RunSchemaRefreshPipeline(): Promise<void> {
         const user: UserInfo | undefined = this.ContextCurrentUser;
         if (!user) {
             LogStatus(`[MJCompanyIntegrationEntityServer] Schema refresh skipped for ${this.ID}: no ContextCurrentUser on entity`);
@@ -151,7 +134,7 @@ export class MJCompanyIntegrationEntityServer extends MJCompanyIntegrationEntity
         // single `as` won't compile — narrow to `as IMetadataProvider` via unknown.
         const provider: IMetadataProvider | undefined = this.ProviderToUse as unknown as IMetadataProvider | undefined;
 
-        LogStatus(`[MJCompanyIntegrationEntityServer] IsActive false→true detected on ${this.Integration ?? this.ID} (${this.ID}); firing schema refresh pipeline.`);
+        LogStatus(`[MJCompanyIntegrationEntityServer] Schema refresh requested for ${this.Integration ?? this.ID} (${this.ID}); running pipeline.`);
 
         // Make sure the IntegrationEngine cache is hot so ConnectorFactory.Resolve
         // can look up the registered class for this Integration.

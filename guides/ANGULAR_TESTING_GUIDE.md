@@ -136,11 +136,40 @@ the build `tsconfig.json` usually **excludes** `*.test.ts`. So each DOM package 
 }
 ```
 
+> **⚠️ Enumerated-include packages (e.g. `conversations`).** Some packages can't use a broad
+> `src/**/*.ts` include — a heavy component (WebRTC/media/streaming) elsewhere in the tree breaks the
+> AOT TS program — so their `tsconfig.spec.json` lists files explicitly. In those packages you MUST add
+> **both** the component `.ts` **and** its `.dom.test.ts` to the `include` list. If you don't, the
+> Angular AOT compiler processes the component without decorator metadata, so its constructor param
+> types erase and DI fails at render with **`NG0202`** (only for components that inject a service —
+> a dep-free component silently "passes," masking the misconfig). The tell is a vitest warning:
+> *"…contains Angular decorators but is not in the TypeScript program."*
+
+**Also add the `test:types` gate script** alongside it — this is what actually type-checks your
+specs. Vitest/esbuild is transpile-only: it strips types and silently erases broken `import type`
+statements, so a spec can be vitest-green while carrying real type errors (Phase 3 shipped a batch
+this way; CI's `ngc` build caught them the hard way). The gate closes that hole:
+
+```json
+"scripts": {
+  "test:types": "tsc --noEmit -p tsconfig.spec.json"
+}
+```
+
+CI runs it automatically via the `test:types` turbo task (before the vitest run, on both the
+affected and full-suite paths). Run it locally with `npm run test:types` — do this before pushing;
+`vitest run` passing does NOT mean your spec type-checks.
+
 ### 3d. Naming & location
 
 Name DOM specs `*.component.dom.test.ts` and put them next to the component
 (`src/lib/<feature>/x.component.dom.test.ts`). The `.dom.test.ts` suffix is what the dual-preset
 split keys off; it also reads as "this renders."
+
+**Never place a `*.dom.test.ts` inside a `__tests__/` directory.** In a dual-preset package it
+matches NEITHER vitest project (node excludes `*.dom.test.ts`; dom excludes `__tests__/`), so it
+silently never runs — and `passWithNoTests: true` hides the silence. CI enforces this via
+`scripts/check-dom-spec-placement.mjs` (a fast pre-build step in the Unit Tests workflow).
 
 ---
 
@@ -378,5 +407,18 @@ Per component it reports:
   the "how much it matters" signal, so heavily-used gaps rank to the top.
 
 Gaps are ranked by severity × usage. **Skipped/deferred components still count as gaps**, annotated with
-the reason (e.g. `media/WebRTC → e2e`) — an intentional skip is surfaced, not hidden. This is a
-**team-visibility backlog tool, not a CI gate** (gating is a Phase 4 conversation).
+the reason (e.g. `media/WebRTC → e2e`) — an intentional skip is surfaced, not hidden.
+
+**This is now also a CI gate.** `.github/workflows/test.yml` runs it as a coverage ratchet on every PR:
+
+```bash
+node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134    # Generic ratchet (matches .github/workflows/test.yml)
+node scripts/dom-test-report.mjs packages/Angular/Bootstrap --max-none=0    # Bootstrap ratchet
+```
+
+`--max-none=N` fails the build when more than N components have **no spec and no deferral
+annotation** — an absolute cap that only ratchets down (lower the number as gaps close; never raise
+it). Alongside it, `scripts/classify-explorer-components.mjs --min 85` gates Explorer in-scope DOM
+coverage at 85% (new Explorer components land as in-scope-uncovered and push the percentage down,
+so the gate forces either a spec or a reviewed deferral — see
+`plans/testing/phase-3-explorer-deferral-register.md`).

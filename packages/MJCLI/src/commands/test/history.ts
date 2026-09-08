@@ -1,4 +1,5 @@
 import { Command, Flags } from '@oclif/core';
+import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestHistory extends Command {
   static description = 'View per-test duration and flake history across recent runs';
@@ -23,12 +24,7 @@ export default class TestHistory extends Command {
       char: 'l',
       description: 'Max recent test-run records to analyze (default 50)',
     }),
-    format: Flags.string({
-      char: 'f',
-      description: 'Output format',
-      options: ['console', 'json'],
-      default: 'console',
-    }),
+    format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',
@@ -47,7 +43,12 @@ export default class TestHistory extends Command {
         test: flags.test,
         suite: flags.suite,
         limit: flags.limit,
-        format: flags.format as 'console' | 'json' | 'markdown',
+        format: resolveLegacyFormat({
+          format: flags.format,
+          legacy: 'console' as const,
+          legacyDefault: 'console' as const,
+          map: TEST_FORMAT_MAP,
+        }),
         output: flags.output,
       });
     } catch (error) {

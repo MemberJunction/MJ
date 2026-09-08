@@ -132,13 +132,14 @@ describe('composition tokens', () => {
             expect(RenderPipeline.HasCompositionTokens(`-- {{query:"x/y"}}\nSELECT 1`)).toBe(false);
         });
 
-        // HasCompositionTokens recognizes tokens inside string literals and bracket
-        // identifiers, even though full resolution correctly skips them. Wasted work
-        // only; not a correctness issue.
+        // KNOWN LIMITATION: HasCompositionTokens recognizes tokens inside string literals
+        // and bracket identifiers, even though full resolution correctly skips them.
+        // Wasted work only; not a correctness issue.
         it.skip('returns false when the only token is inside a string literal', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT 'literal {{query:"x/y"}} text' FROM t`)).toBe(false);
         });
 
+        // KNOWN LIMITATION: same string-literal/bracket-identifier blind spot as above.
         it.skip('returns false when the only token is inside a bracket identifier', () => {
             expect(RenderPipeline.HasCompositionTokens(`SELECT [{{query:"x/y"}}] FROM t`)).toBe(false);
         });
@@ -1385,13 +1386,14 @@ describe('dialect parity', () => {
         expect(pgResult.FinalSQL).toMatch(/LIMIT\s+10\b/i);
     });
 
-    // PostgreSQL dollar-quoted strings (`$$ … $$`, `$tag$ … $tag$`) are not
-    // currently recognized by StripComments. Skip until a PG caller exercises this.
+    // KNOWN LIMITATION: PostgreSQL dollar-quoted strings (`$$ … $$`, `$tag$ … $tag$`) are
+    // not currently recognized by StripComments. Skip until a PG caller exercises this.
     it.skip('PG `$$ … $$` dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $$it -- has dashes$$ AS s`, pg);
         expect(out).toContain('$$it -- has dashes$$');
     });
 
+    // KNOWN LIMITATION: same dollar-quoting blind spot as above.
     it.skip('PG tagged dollar-quoted strings are not eaten by comment stripping', () => {
         const out = SQLParser.StripComments(`SELECT $body$function_body -- $/* */$body$ AS s`, pg);
         expect(out).toContain('$body$function_body -- $/* */$body$');

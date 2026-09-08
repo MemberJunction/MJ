@@ -1,5 +1,11 @@
 # MemberJunction Unit Testing Strategy
 
+> **⚠️ Historical document (banner added 2026-08-06).** This was the February 2026 proposal that
+> launched the testing effort. Its "current state" numbers (36 test files, no CI, fragmented
+> Jest/Vitest configs) are long stale — the rollout it proposed has since shipped (~2,000 Vitest
+> test files, CI gates, shared presets). **Superseded — see [`TESTING_GUIDELINES.md`](TESTING_GUIDELINES.md)
+> for the current state.** Kept for the rationale behind the framework choice and architecture.
+
 **Date:** February 7, 2026
 **Scope:** Comprehensive unit testing strategy for the MJ monorepo
 **Status:** Proposal for post-4.0 implementation

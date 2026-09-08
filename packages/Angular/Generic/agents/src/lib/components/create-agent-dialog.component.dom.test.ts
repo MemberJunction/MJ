@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { renderComponentFixture, query, text, hasClass, click, capture } from '@memberjunction/ng-test-utils';
 import { CreateAgentDialogComponent } from './create-agent-dialog.component';
-import type { CreateAgentConfig } from './create-agent-panel.component';
+import type { CreateAgentConfig, CreateAgentResult } from './create-agent-panel.component';
 
 /**
  * Stub for the data-bound <mj-create-agent-panel> child so the wrapper can render
@@ -105,7 +105,10 @@ describe('CreateAgentDialogComponent (DOM)', () => {
     const panel = query(fixture, 'mj-create-agent-panel');
     expect(panel).not.toBeNull();
 
-    const result = { Agent: {} } as never;
+    // Typed double: the provided fields stay type-checked against the real entity
+    // shape; the single seam cast widens the partial agent to the full entity type.
+    const agentDouble = { Name: 'Test Agent' } satisfies Pick<CreateAgentResult['Agent'], 'Name'>;
+    const result = { Agent: agentDouble as unknown as CreateAgentResult['Agent'] } satisfies CreateAgentResult;
     fixture.componentInstance.OnCreated(result);
     expect(created).toEqual([result]);
     expect(fixture.componentInstance.IsVisible).toBe(false);

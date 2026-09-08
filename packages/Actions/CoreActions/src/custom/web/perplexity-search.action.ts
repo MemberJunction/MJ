@@ -1,8 +1,20 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpPost, IsHttpError } from "@memberjunction/network-utils";
 import { getApiIntegrationsConfig } from "../../config";
+
+/** The slice of Perplexity's `/chat/completions` response this action reads. */
+interface PerplexityChatResponse {
+    choices?: Array<{
+        message?: { content?: string };
+        finish_reason?: string;
+    }>;
+    citations?: string[];
+    images?: Array<Record<string, unknown>>;
+    related_questions?: string[];
+    usage?: Record<string, unknown>;
+}
 
 /**
  * Action that performs AI-powered web search using Perplexity's Search API
@@ -27,7 +39,7 @@ import { getApiIntegrationsConfig } from "../../config";
  *     Value: 'climate change research papers 2024'
  *   }, {
  *     Name: 'Model',
- *     Value: 'llama-3.1-sonar-large-128k-online'
+ *     Value: 'sonar-pro'
  *   }, {
  *     Name: 'ReturnRelatedQuestions',
  *     Value: true
@@ -58,9 +70,10 @@ export class PerplexitySearchAction extends BaseAction {
      *
      * @param params - The action parameters containing:
      *   - Query: Search query text (required)
-     *   - Model: Perplexity model to use (default: 'llama-3.1-sonar-small-128k-online')
-     *     Options: llama-3.1-sonar-small-128k-online, llama-3.1-sonar-large-128k-online,
-     *              llama-3.1-sonar-huge-128k-online
+     *   - Model: Perplexity model to use (default: 'sonar')
+     *     Options: sonar, sonar-pro, sonar-reasoning-pro, sonar-deep-research
+     *     Note: the legacy llama-3.1-sonar-* identifiers were retired by Perplexity in
+     *     February 2025 and now fail with an invalid-model error.
      *   - MaxTokens: Maximum tokens in response (default: 1000)
      *   - Temperature: Sampling temperature 0-2 (default: 0.2)
      *   - TopP: Nucleus sampling threshold (default: 0.9)
@@ -90,7 +103,7 @@ export class PerplexitySearchAction extends BaseAction {
             }
 
             // Get optional parameters
-            const model = this.getStringParam(params, 'model') || 'llama-3.1-sonar-small-128k-online';
+            const model = this.getStringParam(params, 'model') || 'sonar';
             const maxTokens = this.getNumericParam(params, 'maxtokens', 1000);
             const temperature = this.getNumericParam(params, 'temperature', 0.2);
             const topP = this.getNumericParam(params, 'topp', 0.9);
@@ -135,24 +148,24 @@ export class PerplexitySearchAction extends BaseAction {
             }
 
             // Make API request
-            const response = await axios.post(
+            const response = await HttpPost<PerplexityChatResponse>(
                 'https://api.perplexity.ai/chat/completions',
                 requestBody,
                 {
-                    headers: {
+                    Headers: {
                         'Authorization': `Bearer ${apiKey}`,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 60000 // 60 second timeout
+                    Timeout: 60000 // 60 second timeout
                 }
             );
 
-            if (!response.data) {
+            if (!response.Data) {
                 return this.createErrorResult("Empty response from Perplexity API", "EMPTY_RESPONSE");
             }
 
             // Extract response data
-            const result = response.data;
+            const result = response.Data;
             const choice = result.choices?.[0];
             const message = choice?.message;
             const content = message?.content || '';
@@ -197,9 +210,9 @@ export class PerplexitySearchAction extends BaseAction {
             };
 
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const status = error.response?.status;
-                const errorData = error.response?.data;
+            if (IsHttpError(error)) {
+                const status = error.Status;
+                const errorData = error.Data as { error?: { message?: string } } | undefined;
 
                 if (status === 401) {
                     return this.createErrorResult(

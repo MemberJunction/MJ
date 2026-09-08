@@ -16,30 +16,101 @@
 
       <!-- Section list -->
       <div class="mj-sm-list">
-        @for (section of OrderedSections; track section.SectionKey; let i = $index) {
-          <div class="mj-sm-row">
-            <div class="mj-sm-row-info">
-              <i [class]="section.Icon" class="mj-sm-row-icon"></i>
-              <span class="mj-sm-row-name">{{ section.SectionName }}</span>
-              <span class="mj-sm-row-badge mj-sm-row-badge--{{ section.Variant }}">
-                {{ GetVariantLabel(section.Variant) }}
-              </span>
+        @if (HasMoreGroup) {
+          <div class="mj-sm-group-label">On the form</div>
+          @for (section of FirstClassSections; track section.SectionKey; let i = $index) {
+            <div class="mj-sm-row">
+              <div class="mj-sm-row-info">
+                <i [class]="section.Icon" class="mj-sm-row-icon"></i>
+                <span class="mj-sm-row-name">{{ section.SectionName }}</span>
+                <span class="mj-sm-row-badge mj-sm-row-badge--{{ section.Variant }}">
+                  {{ GetVariantLabel(section.Variant) }}
+                </span>
+              </div>
+              <div class="mj-sm-row-actions">
+                <button class="mj-sm-arrow"
+                        [disabled]="i === 0"
+                        (click)="OnMoveGroupUp(FirstClassSections, i)"
+                        title="Move up">
+                  <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <button class="mj-sm-arrow"
+                        [disabled]="i === FirstClassSections.length - 1"
+                        (click)="OnMoveGroupDown(FirstClassSections, i)"
+                        title="Move down">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <button class="mj-sm-arrow mj-sm-move"
+                        (click)="OnMoveToMore(section)"
+                        title="Move to More">
+                  <i class="fa-solid fa-folder-plus"></i>
+                </button>
+              </div>
             </div>
-            <div class="mj-sm-row-actions">
-              <button class="mj-sm-arrow"
-                      [disabled]="i === 0"
-                      (click)="OnMoveUp(i)"
-                      title="Move up">
-                <i class="fa-solid fa-chevron-up"></i>
-              </button>
-              <button class="mj-sm-arrow"
-                      [disabled]="i === OrderedSections.length - 1"
-                      (click)="OnMoveDown(i)"
-                      title="Move down">
-                <i class="fa-solid fa-chevron-down"></i>
-              </button>
+          }
+          @if (FirstClassSections.length === 0) {
+            <div class="mj-sm-empty">Nothing on the form yet.</div>
+          }
+
+          <div class="mj-sm-group-label">More</div>
+          @for (section of MoreSections; track section.SectionKey; let i = $index) {
+            <div class="mj-sm-row is-more">
+              <div class="mj-sm-row-info">
+                <i [class]="section.Icon" class="mj-sm-row-icon"></i>
+                <span class="mj-sm-row-name">{{ section.SectionName }}</span>
+                <span class="mj-sm-row-badge mj-sm-row-badge--more">More</span>
+              </div>
+              <div class="mj-sm-row-actions">
+                <button class="mj-sm-arrow"
+                        [disabled]="i === 0"
+                        (click)="OnMoveGroupUp(MoreSections, i)"
+                        title="Move up">
+                  <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <button class="mj-sm-arrow"
+                        [disabled]="i === MoreSections.length - 1"
+                        (click)="OnMoveGroupDown(MoreSections, i)"
+                        title="Move down">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+                <button class="mj-sm-arrow mj-sm-move"
+                        [disabled]="IsLockedInMore(section)"
+                        (click)="OnMoveToForm(section)"
+                        [title]="IsLockedInMore(section) ? 'Always in More' : 'Move to form'">
+                  <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                </button>
+              </div>
             </div>
-          </div>
+          }
+          @if (MoreSections.length === 0) {
+            <div class="mj-sm-empty">Nothing in More.</div>
+          }
+        } @else {
+          @for (section of OrderedSections; track section.SectionKey; let i = $index) {
+            <div class="mj-sm-row">
+              <div class="mj-sm-row-info">
+                <i [class]="section.Icon" class="mj-sm-row-icon"></i>
+                <span class="mj-sm-row-name">{{ section.SectionName }}</span>
+                <span class="mj-sm-row-badge mj-sm-row-badge--{{ section.Variant }}">
+                  {{ GetVariantLabel(section.Variant) }}
+                </span>
+              </div>
+              <div class="mj-sm-row-actions">
+                <button class="mj-sm-arrow"
+                        [disabled]="i === 0"
+                        (click)="OnMoveUp(i)"
+                        title="Move up">
+                  <i class="fa-solid fa-chevron-up"></i>
+                </button>
+                <button class="mj-sm-arrow"
+                        [disabled]="i === OrderedSections.length - 1"
+                        (click)="OnMoveDown(i)"
+                        title="Move down">
+                  <i class="fa-solid fa-chevron-down"></i>
+                </button>
+              </div>
+            </div>
+          }
         }
       </div>
 
@@ -47,7 +118,7 @@
       <div class="mj-sm-footer">
         <button class="mj-sm-reset" (click)="OnReset()">
           <i class="fa-solid fa-arrow-rotate-left"></i>
-          Reset to Default Order
+          Reset to defaults
         </button>
       </div>
     </div>

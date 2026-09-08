@@ -1,5 +1,281 @@
 # @memberjunction/ai-provider-bundle
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [1a2ce13]
+- Updated dependencies [eac9819]
+  - @memberjunction/ai-groq@6.1.0-edge.5
+  - @memberjunction/ai-openai@6.1.0-edge.5
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.5
+  - @memberjunction/ai-anthropic@6.1.0-edge.5
+  - @memberjunction/ai-assemblyai@6.1.0-edge.5
+  - @memberjunction/ai-azure@6.1.0-edge.5
+  - @memberjunction/ai-bedrock@6.1.0-edge.5
+  - @memberjunction/ai-betty-bot@6.1.0-edge.5
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.5
+  - @memberjunction/ai-cerebras@6.1.0-edge.5
+  - @memberjunction/ai-cohere@6.1.0-edge.5
+  - @memberjunction/ai-fireworks@6.1.0-edge.5
+  - @memberjunction/ai-gemini@6.1.0-edge.5
+  - @memberjunction/ai-heygen@6.1.0-edge.5
+  - @memberjunction/ai-inception@6.1.0-edge.5
+  - @memberjunction/ai-inworld@6.1.0-edge.5
+  - @memberjunction/ai-lmstudio@6.1.0-edge.5
+  - @memberjunction/ai-llamacpp@6.1.0-edge.5
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.5
+  - @memberjunction/ai-minimax@6.1.0-edge.5
+  - @memberjunction/ai-mistral@6.1.0-edge.5
+  - @memberjunction/ai-ollama@6.1.0-edge.5
+  - @memberjunction/ai-openrouter@6.1.0-edge.5
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.5
+  - @memberjunction/ai-vertex@6.1.0-edge.5
+  - @memberjunction/ai-zhipu@6.1.0-edge.5
+  - @memberjunction/ai-xai@6.1.0-edge.5
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [7857d8e]
+  - @memberjunction/ai-betty-bot@6.1.0-edge.4
+  - @memberjunction/ai-heygen@6.1.0-edge.4
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.4
+  - @memberjunction/ai-anthropic@6.1.0-edge.4
+  - @memberjunction/ai-assemblyai@6.1.0-edge.4
+  - @memberjunction/ai-azure@6.1.0-edge.4
+  - @memberjunction/ai-bedrock@6.1.0-edge.4
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.4
+  - @memberjunction/ai-cerebras@6.1.0-edge.4
+  - @memberjunction/ai-cohere@6.1.0-edge.4
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.4
+  - @memberjunction/ai-fireworks@6.1.0-edge.4
+  - @memberjunction/ai-gemini@6.1.0-edge.4
+  - @memberjunction/ai-groq@6.1.0-edge.4
+  - @memberjunction/ai-inception@6.1.0-edge.4
+  - @memberjunction/ai-inworld@6.1.0-edge.4
+  - @memberjunction/ai-lmstudio@6.1.0-edge.4
+  - @memberjunction/ai-llamacpp@6.1.0-edge.4
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.4
+  - @memberjunction/ai-minimax@6.1.0-edge.4
+  - @memberjunction/ai-mistral@6.1.0-edge.4
+  - @memberjunction/ai-ollama@6.1.0-edge.4
+  - @memberjunction/ai-openai@6.1.0-edge.4
+  - @memberjunction/ai-openrouter@6.1.0-edge.4
+  - @memberjunction/ai-vertex@6.1.0-edge.4
+  - @memberjunction/ai-zhipu@6.1.0-edge.4
+  - @memberjunction/ai-xai@6.1.0-edge.4
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- Updated dependencies [f5ec13b]
+  - @memberjunction/ai-azure@6.1.0-edge.3
+  - @memberjunction/ai-cerebras@6.1.0-edge.3
+  - @memberjunction/ai-groq@6.1.0-edge.3
+  - @memberjunction/ai-minimax@6.1.0-edge.3
+  - @memberjunction/ai-mistral@6.1.0-edge.3
+  - @memberjunction/ai-ollama@6.1.0-edge.3
+  - @memberjunction/ai-openrouter@6.1.0-edge.3
+  - @memberjunction/ai-zhipu@6.1.0-edge.3
+  - @memberjunction/ai-anthropic@6.1.0-edge.3
+  - @memberjunction/ai-assemblyai@6.1.0-edge.3
+  - @memberjunction/ai-bedrock@6.1.0-edge.3
+  - @memberjunction/ai-betty-bot@6.1.0-edge.3
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.3
+  - @memberjunction/ai-cohere@6.1.0-edge.3
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.3
+  - @memberjunction/ai-fireworks@6.1.0-edge.3
+  - @memberjunction/ai-gemini@6.1.0-edge.3
+  - @memberjunction/ai-heygen@6.1.0-edge.3
+  - @memberjunction/ai-inception@6.1.0-edge.3
+  - @memberjunction/ai-inworld@6.1.0-edge.3
+  - @memberjunction/ai-lmstudio@6.1.0-edge.3
+  - @memberjunction/ai-llamacpp@6.1.0-edge.3
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.3
+  - @memberjunction/ai-openai@6.1.0-edge.3
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.3
+  - @memberjunction/ai-vertex@6.1.0-edge.3
+  - @memberjunction/ai-xai@6.1.0-edge.3
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [102a692]
+- Updated dependencies [11de1a3]
+- Updated dependencies [48ff99f]
+- Updated dependencies [97cbf5f]
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.2
+  - @memberjunction/ai-assemblyai@6.1.0-edge.2
+  - @memberjunction/ai-openai@6.1.0-edge.2
+  - @memberjunction/ai-gemini@6.1.0-edge.2
+  - @memberjunction/ai-inworld@6.1.0-edge.2
+  - @memberjunction/ai-groq@6.1.0-edge.2
+  - @memberjunction/ai-xai@6.1.0-edge.2
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.2
+  - @memberjunction/ai-anthropic@6.1.0-edge.2
+  - @memberjunction/ai-azure@6.1.0-edge.2
+  - @memberjunction/ai-bedrock@6.1.0-edge.2
+  - @memberjunction/ai-betty-bot@6.1.0-edge.2
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.2
+  - @memberjunction/ai-cerebras@6.1.0-edge.2
+  - @memberjunction/ai-cohere@6.1.0-edge.2
+  - @memberjunction/ai-fireworks@6.1.0-edge.2
+  - @memberjunction/ai-heygen@6.1.0-edge.2
+  - @memberjunction/ai-inception@6.1.0-edge.2
+  - @memberjunction/ai-lmstudio@6.1.0-edge.2
+  - @memberjunction/ai-llamacpp@6.1.0-edge.2
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.2
+  - @memberjunction/ai-minimax@6.1.0-edge.2
+  - @memberjunction/ai-mistral@6.1.0-edge.2
+  - @memberjunction/ai-ollama@6.1.0-edge.2
+  - @memberjunction/ai-openrouter@6.1.0-edge.2
+  - @memberjunction/ai-vertex@6.1.0-edge.2
+  - @memberjunction/ai-zhipu@6.1.0-edge.2
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/ai-mistral@6.1.0-edge.1
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.1
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.1
+  - @memberjunction/ai-anthropic@6.1.0-edge.1
+  - @memberjunction/ai-assemblyai@6.1.0-edge.1
+  - @memberjunction/ai-azure@6.1.0-edge.1
+  - @memberjunction/ai-bedrock@6.1.0-edge.1
+  - @memberjunction/ai-betty-bot@6.1.0-edge.1
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.1
+  - @memberjunction/ai-cerebras@6.1.0-edge.1
+  - @memberjunction/ai-cohere@6.1.0-edge.1
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.1
+  - @memberjunction/ai-fireworks@6.1.0-edge.1
+  - @memberjunction/ai-gemini@6.1.0-edge.1
+  - @memberjunction/ai-groq@6.1.0-edge.1
+  - @memberjunction/ai-heygen@6.1.0-edge.1
+  - @memberjunction/ai-inception@6.1.0-edge.1
+  - @memberjunction/ai-inworld@6.1.0-edge.1
+  - @memberjunction/ai-lmstudio@6.1.0-edge.1
+  - @memberjunction/ai-llamacpp@6.1.0-edge.1
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.1
+  - @memberjunction/ai-minimax@6.1.0-edge.1
+  - @memberjunction/ai-ollama@6.1.0-edge.1
+  - @memberjunction/ai-openai@6.1.0-edge.1
+  - @memberjunction/ai-openrouter@6.1.0-edge.1
+  - @memberjunction/ai-vertex@6.1.0-edge.1
+  - @memberjunction/ai-zhipu@6.1.0-edge.1
+  - @memberjunction/ai-xai@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- Updated dependencies [24b22c9]
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.0
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.0
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.0
+  - @memberjunction/ai-anthropic@6.1.0-edge.0
+  - @memberjunction/ai-assemblyai@6.1.0-edge.0
+  - @memberjunction/ai-azure@6.1.0-edge.0
+  - @memberjunction/ai-bedrock@6.1.0-edge.0
+  - @memberjunction/ai-betty-bot@6.1.0-edge.0
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.0
+  - @memberjunction/ai-cerebras@6.1.0-edge.0
+  - @memberjunction/ai-cohere@6.1.0-edge.0
+  - @memberjunction/ai-fireworks@6.1.0-edge.0
+  - @memberjunction/ai-gemini@6.1.0-edge.0
+  - @memberjunction/ai-groq@6.1.0-edge.0
+  - @memberjunction/ai-heygen@6.1.0-edge.0
+  - @memberjunction/ai-inception@6.1.0-edge.0
+  - @memberjunction/ai-inworld@6.1.0-edge.0
+  - @memberjunction/ai-lmstudio@6.1.0-edge.0
+  - @memberjunction/ai-llamacpp@6.1.0-edge.0
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.0
+  - @memberjunction/ai-minimax@6.1.0-edge.0
+  - @memberjunction/ai-mistral@6.1.0-edge.0
+  - @memberjunction/ai-ollama@6.1.0-edge.0
+  - @memberjunction/ai-openai@6.1.0-edge.0
+  - @memberjunction/ai-openrouter@6.1.0-edge.0
+  - @memberjunction/ai-vertex@6.1.0-edge.0
+  - @memberjunction/ai-zhipu@6.1.0-edge.0
+  - @memberjunction/ai-xai@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@6.0.0
+- @memberjunction/ai-vectors-pinecone@6.0.0
+- @memberjunction/ai-anthropic@6.0.0
+- @memberjunction/ai-assemblyai@6.0.0
+- @memberjunction/ai-azure@6.0.0
+- @memberjunction/ai-bedrock@6.0.0
+- @memberjunction/ai-betty-bot@6.0.0
+- @memberjunction/ai-blackforestlabs@6.0.0
+- @memberjunction/ai-cerebras@6.0.0
+- @memberjunction/ai-cohere@6.0.0
+- @memberjunction/ai-elevenlabs@6.0.0
+- @memberjunction/ai-fireworks@6.0.0
+- @memberjunction/ai-gemini@6.0.0
+- @memberjunction/ai-groq@6.0.0
+- @memberjunction/ai-heygen@6.0.0
+- @memberjunction/ai-inception@6.0.0
+- @memberjunction/ai-inworld@6.0.0
+- @memberjunction/ai-lmstudio@6.0.0
+- @memberjunction/ai-llamacpp@6.0.0
+- @memberjunction/ai-local-embeddings@6.0.0
+- @memberjunction/ai-minimax@6.0.0
+- @memberjunction/ai-mistral@6.0.0
+- @memberjunction/ai-ollama@6.0.0
+- @memberjunction/ai-openai@6.0.0
+- @memberjunction/ai-openrouter@6.0.0
+- @memberjunction/ai-vertex@6.0.0
+- @memberjunction/ai-zhipu@6.0.0
+- @memberjunction/ai-xai@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@5.51.0
+- @memberjunction/ai-vectors-pinecone@5.51.0
+- @memberjunction/ai-anthropic@5.51.0
+- @memberjunction/ai-assemblyai@5.51.0
+- @memberjunction/ai-azure@5.51.0
+- @memberjunction/ai-bedrock@5.51.0
+- @memberjunction/ai-betty-bot@5.51.0
+- @memberjunction/ai-blackforestlabs@5.51.0
+- @memberjunction/ai-cerebras@5.51.0
+- @memberjunction/ai-cohere@5.51.0
+- @memberjunction/ai-elevenlabs@5.51.0
+- @memberjunction/ai-fireworks@5.51.0
+- @memberjunction/ai-gemini@5.51.0
+- @memberjunction/ai-groq@5.51.0
+- @memberjunction/ai-heygen@5.51.0
+- @memberjunction/ai-inception@5.51.0
+- @memberjunction/ai-inworld@5.51.0
+- @memberjunction/ai-lmstudio@5.51.0
+- @memberjunction/ai-llamacpp@5.51.0
+- @memberjunction/ai-local-embeddings@5.51.0
+- @memberjunction/ai-minimax@5.51.0
+- @memberjunction/ai-mistral@5.51.0
+- @memberjunction/ai-ollama@5.51.0
+- @memberjunction/ai-openai@5.51.0
+- @memberjunction/ai-openrouter@5.51.0
+- @memberjunction/ai-vertex@5.51.0
+- @memberjunction/ai-zhipu@5.51.0
+- @memberjunction/ai-xai@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

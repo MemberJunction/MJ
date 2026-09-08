@@ -68,6 +68,24 @@ export interface SendNotificationParams {
    * When specified, these channels are used instead of resolving from preferences.
    */
   forceDeliveryChannels?: DeliveryChannels;
+
+  /**
+   * A **ceiling** on delivery, applied last — after preferences, type defaults, and
+   * `forceDeliveryChannels`. Only an explicit `false` restricts a channel; `true` and
+   * `undefined` leave it to normal resolution.
+   *
+   * This exists for callers that carry their own per-record channel toggles — a Scheduled Job's
+   * `NotifyViaEmail`/`NotifyViaInApp`, a User Routine's equivalents — where two different people
+   * have a say: the person who configured the job chose which channels it may use, and the
+   * recipient chose which channels they want. Composing them is an intersection, and neither
+   * existing knob expresses it. `forceDeliveryChannels` would let the job override the
+   * recipient's opt-out, and omitting the toggles entirely would let a channel the job never
+   * asked for fire off a type default.
+   *
+   * Because it can only subtract, a caller cannot use this to escalate past a preference —
+   * which is the property that makes it safe to expose.
+   */
+  allowedDeliveryChannels?: Partial<DeliveryChannels>;
 }
 
 /**

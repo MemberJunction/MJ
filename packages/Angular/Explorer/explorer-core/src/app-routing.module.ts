@@ -6,8 +6,9 @@ import {
   AppLockGuardService as AppLockGuard
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
-import { LogError, Metadata, StartupManager, IMetadataProvider } from '@memberjunction/core';
-import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
+import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
+import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM } from '@memberjunction/core';
+import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
 import { MJGlobal, MJEventType } from '@memberjunction/global';
@@ -115,6 +116,14 @@ export class CustomReuseStrategy implements RouteReuseStrategy {
       componentRef.instance[hookName]();
     }
   }
+}
+
+function readNewRecordValuesQuery(queryParams: { [key: string]: string | string[] | undefined | null }): string | undefined {
+  const raw = queryParams[NEW_RECORD_VALUES_QUERY_PARAM] ?? queryParams['newRecordValues'];
+  if (raw == null) return undefined;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  const trimmed = value?.trim();
+  return trimmed && trimmed.length > 0 ? trimmed : undefined;
 }
 
 @Injectable({
@@ -246,8 +255,10 @@ export class ResourceResolver implements Resolve<void> {
           // /app/:appName/record/:entityName/:recordId
           const entityName = decodeURIComponent(param1);
           const recordId = param2;
+          const isNew = IsNewEntityRecordUrlId(recordId);
+          const newRecordValues = readNewRecordValuesQuery(route.queryParams);
 
-          const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+          const entityInfo = md.EntityByName(entityName);
           if (!entityInfo) {
             LogError(`Entity ${entityName} not found in metadata`);
             return;
@@ -255,15 +266,17 @@ export class ResourceResolver implements Resolve<void> {
 
           this.tabService.OpenTab({
             ApplicationId: app.ID,
-            Title: `${entityName} - ${recordId}`,
+            Title: isNew ? `New ${entityName}` : `${entityName} - ${recordId}`,
             Configuration: {
-              resourceType: 'Records',
+              resourceType: RECORDS_RESOURCE_TYPE,
               Entity: entityName,
-              recordId: recordId,
+              recordId: isNew ? '' : recordId,
+              isNew: isNew || undefined,
+              NewRecordValues: newRecordValues,
               appName: appName,
               appId: app.ID
             },
-            ResourceRecordId: recordId,
+            ResourceRecordId: isNew ? '' : recordId,
             IsPinned: false
           });
           return;
@@ -328,26 +341,6 @@ export class ResourceResolver implements Resolve<void> {
               appId: app.ID
             },
             ResourceRecordId: queryId,
-            IsPinned: false
-          });
-          return;
-        }
-
-        case 'report': {
-          // /app/:appName/report/:reportId
-          const reportId = param1;
-
-          this.tabService.OpenTab({
-            ApplicationId: app.ID,
-            Title: `Report - ${reportId}`,
-            Configuration: {
-              resourceType: 'Reports',
-              reportId,
-              recordId: reportId,
-              appName: appName,
-              appId: app.ID
-            },
-            ResourceRecordId: reportId,
             IsPinned: false
           });
           return;
@@ -511,8 +504,10 @@ export class ResourceResolver implements Resolve<void> {
       // /resource/record/:entityName/:recordId
       const entityName = decodeURIComponent(route.params['entityName']);
       const recordId = route.params['recordId'];
+      const isNew = IsNewEntityRecordUrlId(recordId);
+      const newRecordValues = readNewRecordValuesQuery(route.queryParams);
 
-      const entityInfo = md.Entities.find(e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase());
+      const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) {
         LogError(`Entity ${entityName} not found in metadata`);
         return;
@@ -521,13 +516,15 @@ export class ResourceResolver implements Resolve<void> {
       // Queue tab request via TabService
       this.tabService.OpenTab({
         ApplicationId: SYSTEM_APP_ID,
-        Title: `${entityName} - ${recordId}`,
+        Title: isNew ? `New ${entityName}` : `${entityName} - ${recordId}`,
         Configuration: {
-          resourceType: 'Records',
+          resourceType: RECORDS_RESOURCE_TYPE,
           Entity: entityName,
-          recordId: recordId
+          recordId: isNew ? '' : recordId,
+          isNew: isNew || undefined,
+          NewRecordValues: newRecordValues
         },
-        ResourceRecordId: recordId,
+        ResourceRecordId: isNew ? '' : recordId,
         IsPinned: false
       });
       return;
@@ -668,6 +665,16 @@ const routes: Routes = [
   {
     path: 'oauth/callback',
     component: OAuthCallbackComponent
+  },
+
+  // Identity-claim redemption landing page — the target of claim emails'
+  // /claims/redeem?id=..&token=.. links (IdentityClaimEngineServer.sendClaimEmail).
+  // Same posture as the OAuth callback: no AuthGuard (the component waits for session
+  // restoration itself and tells an unauthenticated visitor to sign in first), and a
+  // direct component rather than a lazy route for the same library-routing reason.
+  {
+    path: 'claims/redeem',
+    component: ClaimRedeemComponent
   },
 
   // App-scoped resource routes (new pattern)

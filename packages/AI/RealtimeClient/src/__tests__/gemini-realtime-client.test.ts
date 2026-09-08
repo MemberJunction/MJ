@@ -246,6 +246,25 @@ describe('GeminiRealtimeClient', () => {
             expect(client.LastConnectArgs?.Config).toEqual({ systemInstruction: 'locked-in-token' });
         });
 
+        it('should pass a server-supplied speechConfig through to live.connect VERBATIM', async () => {
+            // Load-bearing contract: the server driver maps the neutral `voice` key to
+            // speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName (#3721) and relies on this client
+            // applying the config untouched — that verbatim passthrough is why there is no second
+            // translation site on the browser side. Pinned here so a future refactor of this driver
+            // cannot quietly break the guarantee the server side depends on.
+            await connect(client, {
+                model: 'gemini-live-2.5-flash-preview',
+                config: {
+                    systemInstruction: 'be the voice',
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+                },
+            });
+            expect(client.LastConnectArgs?.Config).toEqual({
+                systemInstruction: 'be the voice',
+                speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Kore' } } },
+            });
+        });
+
         it('should stream captured mic chunks as base64 PCM16 @ 16 kHz', async () => {
             await connect(client);
             client.OnPcmChunk?.('UENNMTY=');

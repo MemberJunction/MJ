@@ -123,7 +123,12 @@ export interface TelemetryRunViewParams {
 export interface TelemetryRunViewsBatchParams {
     /** Number of views in the batch */
     BatchSize: number;
-    /** Entity names being queried in the batch */
+    /**
+     * Entity names being queried in the batch, one entry per view. A view identified only by
+     * `ViewEntity` (no EntityName/ViewName/ViewID) is recorded as `''` rather than dropped, so
+     * this array stays index-parallel to {@link Filters}/{@link OrderBys}/{@link StartRows}/
+     * {@link AfterKeys}. The fingerprint skips falsy entries; display sites should too.
+     */
     Entities: string[];
     /**
      * Per-view SQL WHERE clause filters, parallel to {@link Entities} (one entry per view,
@@ -138,6 +143,21 @@ export interface TelemetryRunViewsBatchParams {
      * same order). See {@link Filters} for why per-view detail is needed at batch granularity.
      */
     OrderBys?: (string | undefined)[];
+    /**
+     * Per-view offset-pagination cursors (`StartRow`), parallel to {@link Entities} (one entry
+     * per view, same order). Required for the same reason the single-RunView fingerprint carries
+     * `StartRow`: consecutive pages of a sweep differ ONLY in the cursor, so omitting it collapses
+     * every page onto one fingerprint and the Duplicate analyzer fires from page 2 onward.
+     * This matters for size-1 batches too — a server-side `RunView` with `BypassCache` or `AfterKey`
+     * is routed through `RunViews([params])` (see ProviderBase.RunView), and on the client EVERY
+     * RunView takes that route.
+     */
+    StartRows?: (number | undefined)[];
+    /**
+     * Per-view keyset-pagination cursors (serialized `AfterKey`), parallel to {@link Entities}
+     * (one entry per view, same order). See {@link StartRows}.
+     */
+    AfterKeys?: (string | undefined)[];
     /** Internal marker for engine-initiated calls */
     _fromEngine?: boolean;
     /** When true, every view in the batch opted out of optimization/redundancy analyzers. */
@@ -749,7 +769,7 @@ class DuplicateRunViewAnalyzer implements TelemetryAnalyzer {
             const entityName = isSingleRunViewParams(params)
                 ? params.EntityName || 'Unknown'
                 : isBatchRunViewParams(params)
-                    ? params.Entities.join(', ')
+                    ? params.Entities.filter(Boolean).join(', ')
                     : 'Unknown';
 
             return {
@@ -1370,7 +1390,7 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
         const level = this.GetLevelForCategory(event.category);
         if (this.GetLevelValue(level) < TelemetryLevelValue['verbose']) return;
         const p = event.params as { EntityName?: string; Entities?: string[]; ExemptReason?: string };
-        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.join(', ') : event.operation);
+        const target = p.EntityName ?? (Array.isArray(p.Entities) ? p.Entities.filter(Boolean).join(', ') : event.operation);
         const reason = p.ExemptReason ? ` — ${p.ExemptReason}` : '';
         // eslint-disable-next-line no-console
         console.log(`💡 [Telemetry] Analysis exempt for ${event.category} "${target}"${reason}`);
@@ -1579,10 +1599,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
      */
     private generateRunViewFingerprint(params: TelemetryRunViewParams | TelemetryRunViewsBatchParams): Record<string, unknown> {
         if (isBatchRunViewParams(params)) {
-            // Batch operation - fingerprint from per-view (entity, filter, orderBy) tuples.
+            // Batch operation - fingerprint from per-view (entity, filter, orderBy, cursor) tuples.
             // Including the per-view filter/orderBy (when recorded) means two batches over the
             // SAME entity set but DIFFERENT filters get DISTINCT fingerprints — previously they
             // collided on entity-set alone and were falsely flagged as duplicate RunViews.
+            // The pagination cursors (StartRow / AfterKey) are in the tuple for the same reason
+            // the single-view branch carries them: a paginated sweep issues page after page over
+            // one entity+filter+orderBy, and without the cursor every page collapses onto one
+            // fingerprint and trips the Duplicate analyzer from page 2 onward. That path is hit
+            // even by size-1 batches, because ProviderBase.RunView routes BypassCache / AfterKey
+            // reads (server) and ALL reads (client) through RunViews([params]).
             // Tuples are sorted so batch ordering doesn't affect the fingerprint (parity with
             // the prior entity-only behavior, which sorted the entity list).
             const viewTuples = params.Entities
@@ -1593,7 +1619,13 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
                     }
                     const filter = params.Filters?.[index]?.toLowerCase().trim() ?? '';
                     const orderBy = params.OrderBys?.[index]?.toLowerCase().trim() ?? '';
-                    return `${e}\x1f${filter}\x1f${orderBy}`;
+                    // StartRow 0 and "no StartRow" are the same query, so both normalize to ''.
+                    // Otherwise an explicit 0 wouldn't match an omitted cursor and a genuinely
+                    // duplicated first-page read would go undetected.
+                    const rawStartRow = params.StartRows?.[index];
+                    const startRow = rawStartRow ? String(rawStartRow) : '';
+                    const afterKey = params.AfterKeys?.[index]?.trim() ?? '';
+                    return `${e}\x1f${filter}\x1f${orderBy}\x1f${startRow}\x1f${afterKey}`;
                 })
                 .filter((t): t is string => Boolean(t))
                 .sort();
@@ -1610,13 +1642,16 @@ export class TelemetryManager extends BaseSingleton<TelemetryManager> {
             // Single operation. Pagination cursors (StartRow / AfterKey) are part of the key so that
             // consecutive pages of a sweep over the same entity+filter+orderBy are DISTINCT
             // fingerprints — otherwise page 2 collides with page 1 and trips the Duplicate analyzer.
+            // StartRow 0 and "no StartRow" are the same query (same rule as the batch branch above):
+            // both normalize to undefined so JSON.stringify drops the key for both and a genuinely
+            // duplicated first-page read is still detected.
             return {
                 entity: params.EntityName?.toLowerCase().trim(),
                 filter: params.ExtraFilter?.toLowerCase().trim(),
                 orderBy: params.OrderBy?.toLowerCase().trim(),
                 resultType: params.ResultType,
-                startRow: params.StartRow,
-                afterKey: params.AfterKey
+                startRow: params.StartRow || undefined,
+                afterKey: params.AfterKey?.trim() || undefined
             };
         }
     }

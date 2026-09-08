@@ -4,7 +4,8 @@ import sql from 'mssql';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { ResolveStartupMode, RunView, LogStatus, SetProductionStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { getValidatedConfig } from '../../config';
 
 interface ReclassifyTarget {

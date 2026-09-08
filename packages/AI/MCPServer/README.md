@@ -106,6 +106,33 @@ Dynamically generated from MemberJunction entity metadata. For each configured e
 |---|---|
 | `Run_Agent` | Execute any configured MemberJunction AI agent with conversation history and template data |
 
+### Agent Management Tools
+
+These tools expose the high-level **AgentSpec** object model (from
+`@memberjunction/ai-agent-manager`) so MCP clients such as Claude Code can
+browse, introspect, create, and edit complete agent definitions — hierarchy,
+actions, prompts, sub-agents, flow steps — as one JSON document, without
+knowing the underlying entity schema. The group is enabled by default when the
+MCP server is enabled and can be turned off via
+`mcpServerSettings.agentManagementTools.enabled = false`.
+
+| Tool | Description |
+|---|---|
+| `Get_Agent_Catalog` | List agents with summary metadata (id, name, description, type, status, invocation mode) |
+| `Get_Agent_Spec` | Retrieve the complete AgentSpec for one agent as a single JSON document (recursive over sub-agents) |
+| `Create_Agent` | Create a new agent (including nested sub-agents, actions, prompts) from an AgentSpec document |
+| `Update_Agent` | Full-replace update of an existing agent from an AgentSpec document, with orphan cleanup |
+| `Get_Agent_Type_List` | List agent types (Loop, Flow, Realtime, …) for use as `TypeID` values |
+| `Get_Action_Catalog` | List available actions for use as `ActionID` values when wiring agent capabilities |
+| `Execute_ActionSmith_Agent` | Always-on execute tool for the ActionSmith builder agent (builds new actions conversationally) |
+| `Execute_Codesmith_Agent` | Always-on execute tool for the Codesmith builder agent (writes and refactors code) |
+
+The builder-agent list is configurable via
+`mcpServerSettings.agentManagementTools.builderAgents` (defaults to
+`['ActionSmith', 'Codesmith Agent']`; pass `[]` to expose none). Create/update
+tools are authorized under the `agent:manage` scope; catalog/spec reads under
+`agent:read`; the action catalog under `action:read`.
+
 ### Action Tools
 
 | Tool Pattern | Description |

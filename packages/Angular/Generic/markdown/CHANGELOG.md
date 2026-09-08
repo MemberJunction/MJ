@@ -1,5 +1,93 @@
 # @memberjunction/ng-markdown
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- e93f221: The mermaid engine loads when a diagram exists, not on every render.
+
+  `markdown.service.ts` imported `mermaid` statically and ran `initializeMermaid()` _before_ the block-count check, so every markdown render in every host paid for a diagram engine most documents never use. Both guards already existed — the component gates on `enableMermaid && hasMermaid`, and `renderMermaid()` already early-returned on zero blocks — the engine was simply being loaded above both of them. It now finds the blocks first and imports the engine only if there are any.
+
+  Measured with esbuild `--splitting --format=esm` over the built `dist/public-api.js`, walking the metafile graph from the entry and counting only chunks reachable by **static** edges:
+
+  |                   | before   | after                 |
+  | ----------------- | -------- | --------------------- |
+  | eager, raw        | 2.421 MB | **1.439 MB** (−40.6%) |
+  | eager, gzipped    | 0.509 MB | **0.313 MB** (−38.5%) |
+  | eager chunk count | 18       | 2                     |
+
+  Both remaining eager chunks contain zero mermaid-family inputs. Nothing was removed — the deferred half grows by the same amount, plus 2 KB for one extra chunk boundary.
+
+  A failed chunk load never degrades silently: it logs the cause, tags every block it was going to render with `.mermaid-error`, and shows the existing red box (built from `--mj-status-error` tokens) captioned "Diagram engine failed to load", with the diagram source still readable underneath. A per-diagram render failure routes through the same helper with a distinct message, because a missing chunk and an unparseable diagram are different problems. `loadMermaid()` clears its cached promise and rethrows, so a later render retries.
+
+  `MarkdownService`'s public surface is unchanged — only private members moved.
+
+- Updated dependencies [2197110]
+  - @memberjunction/markdown-core@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- @memberjunction/markdown-core@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Patch Changes
+
+- @memberjunction/markdown-core@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- @memberjunction/markdown-core@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+  - @memberjunction/markdown-core@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- b895f92: Angular DOM unit-testing — Phase 4 (gates, guardrails & spec hygiene). Dev-only; no runtime change.
+  - **`test:types` spec type-check gate**: each DOM-testing package gains a
+    `"test:types": "tsc --noEmit -p tsconfig.spec.json"` script, run as a cached turbo task in CI
+    before the vitest suite (both the affected and full-suite paths). Closes the Phase-3 hole where
+    vitest/esbuild's transpile-only path let real spec type errors (broken `import type` paths,
+    `Subject`-vs-`EventEmitter`) ride green until the `ngc` build failed.
+  - **DOM-spec placement guard** (`scripts/check-dom-spec-placement.mjs`, fast pre-build CI step):
+    fails when a `*.dom.test.ts` sits inside `__tests__/`, where a dual-preset package silently runs
+    it in neither vitest project. Its one real finding — `ng-markdown`'s service DOM spec — was
+    relocated next to its source (test-file move only).
+  - Fixes the pre-existing latent 2-args-of-3 `MCPDashboardComponent` constructor call in the
+    dashboards node test (the gate's prerequisite).
+  - **Anti-pattern lint** (`scripts/check-spec-antipatterns.mjs`, CI): bans vacuous assertions,
+    skipped specs, blanket schemas, and `any`/`as never` casts in `*.dom.test.ts`. Enabling it drove
+    the spec-hygiene cleanup across `ng-agent-requests` / `ng-query-viewer` / `ng-scheduling` /
+    `ng-agents` / `ng-record-changes` (blanket schemas → explicit child stubs; `as never` → typed
+    doubles) and the Explorer specs (real DOM clicks instead of handler calls, SVG prototype-patch
+    teardown, typed context doubles).
+  - **Explorer DOM coverage gate**: `classify-explorer-components.mjs --min 85` in CI — a testable
+    Explorer component shipped without a DOM spec now fails the PR.
+  - @memberjunction/markdown-core@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- @memberjunction/markdown-core@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- @memberjunction/markdown-core@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

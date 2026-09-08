@@ -1,60 +1,14 @@
+/* Structure only. All tab VISUALS live in the global `.mj-tabs*` chrome shipped by
+ * @memberjunction/ng-ui-components (lib/tabs/tabs.scss), shared with the draft/workspace strip —
+ * see tab.component.css for what was removed from the per-tab layer and why local rules must not
+ * come back (component-scoped selectors out-specify the global sheet and the strips drift apart).
+ *
+ * Notably removed here: `height: calc(100vh - 80px)` on the container. A component hardcoding
+ * itself to viewport height blows up inside any host that isn't a full page (a card, a form
+ * section, a lab stage), and every focus/selection change then scrolls the host pane around
+ * inside the oversized box — visible as the whole area jumping. The strip now sizes to its
+ * content; the HOST decides how tall the region is, like every other MJ widget. */
+
 .tabstrip-container {
   display: block;
-  height: calc(100vh - 80px);
-  overflow-y: auto;
-}
-
-.tabstrip-container .tabstrip-container {
-  display: block;
-  height: auto;
-}
-
-.tab-header-outer {
-  position: relative;
-  display: flex;
-  align-items: center;
-  overflow: hidden;
-  /* Hide the overflow */
-  background-color: var(--gray-600);
-}
-
-.tab-header-inner {
-  display: flex;
-  flex-direction: row;
-  white-space: nowrap;
-  /* Prevent wrapping of tabs */
-  position: relative;
-  /* Needed for z-index to work */
-  z-index: 1;
-  /* Place tabs above the content */
-  padding-left: 5px;
-  padding-top: 5px;
-}
-
-.tab-scroll-button-left,
-.tab-scroll-button-right {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 2;
-  /* Ensure buttons are above the content */
-}
-
-.tab-scroll-button-left {
-  left: 0;
-}
-
-.tab-scroll-button-right {
-  right: 0;
-}
-
-.tab-scroll-button {
-  padding: 8px 10px 10px 8px;
-  cursor: pointer;
-  border-radius: 6px;
-  background-color: var(--gray-700);
-}
-
-.tab-scroll-button:hover {
-  background-color: var(--mj-blue);
 }

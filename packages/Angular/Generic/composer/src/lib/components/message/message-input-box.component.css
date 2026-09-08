@@ -142,6 +142,17 @@
   color: var(--mj-text-inverse);
 }
 
+/* Same active treatment as Plan Mode — the two are peers in the strip, so a different one would
+   read as a different KIND of control. Everything else comes from .attach-button-icon. */
+.skills-button-icon--active:not(:disabled) {
+  background: var(--mj-brand-primary);
+  color: var(--mj-text-inverse);
+}
+.skills-button-icon--active:not(:disabled):hover {
+  background: var(--mj-brand-primary-hover, var(--mj-brand-primary));
+  color: var(--mj-text-inverse);
+}
+
 /* Mobile adjustments: 481px - 768px */
 @media (max-width: 768px) {
   .message-input-box-container {

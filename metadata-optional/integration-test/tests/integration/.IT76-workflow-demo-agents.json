@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT76 - Workflow Demo Agents",
+    "Description": "The two shipped Flow demo agents ('Schema Documentation Sweep', 'Content Pipeline') as compiled shapes, bundle 'workflow-demo-agents', WD1-WD4. Between them these agents are the only committed exercise of the graph shapes a linear flow cannot express — an AND-join, a bounded While whose body revises in one pass, and an exclusive pair where exactly one branch runs — and the first shipped agents to use Prompt nodes as loop bodies. Metadata is the easiest thing in this repo to break silently: a renamed action, a step whose Configuration loses a key, or a dropped path condition fails no build and no unit test, and the agent still looks fine on the canvas until someone watches a workflow do nothing at submission time. So the checks assert the compiled shape, not the row count. WD1: both agents exist, are Flow type, and carry the steps their design calls for. WD2: Content Pipeline COMPILES and the compiled graph really has the AND-join, the bounded loop, and the exclusive pair — not merely the steps that ought to produce them. WD3: Schema Documentation Sweep compiles, its Get Records output lands where the ForEach reads it, and its loop body is a Prompt. WD4: the run-tree stored query is callable end to end and assembles into a tree, anchored on a run row the check creates and the bundle Teardown removes. Deterministic — no model calls; compilation is pure.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Both shipped Flow demo agents exist with the steps their design calls for, compile into graphs that genuinely contain the AND-join, bounded loop, exclusive pair, and Prompt loop body they were written to demonstrate, and the run-tree stored query assembles a tree end to end."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "workflow-demo-agents"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C4B12CE5-5A86-48F4-988A-D08B90D34621"
+  }
+}

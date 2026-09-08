@@ -15,11 +15,14 @@
  * a generated stub would have asked you to cover.
  *
  * Usage:
- *   node scripts/dom-test-report.mjs [scopePath] [--json] [--all] [--top=N]
- *     scopePath  subtree to scan (default: packages/Angular/Generic)
- *     --json     machine-readable output
- *     --all      list every component, not just the gaps
- *     --top=N    cap the printed gap list (default 40)
+ *   node scripts/dom-test-report.mjs [scopePath] [--json] [--all] [--top=N] [--max-none=N] [--min-solid=N]
+ *     scopePath     subtree to scan (default: packages/Angular/Generic)
+ *     --json        machine-readable output
+ *     --all         list every component, not just the gaps
+ *     --top=N       cap the printed gap list (default 40)
+ *     --max-none=N  CI gate: fail (exit 1) if more than N components have no spec and no
+ *                   deferral annotation — an absolute ratchet; lower N as specs land
+ *     --min-solid=N CI gate: fail (exit 1) if the solid %% falls below N
  */
 import { readFileSync, readdirSync, existsSync } from "fs";
 import { join, dirname, relative } from "path";
@@ -40,6 +43,27 @@ const DEFERRALS = [
   [/\/livekit-room\//, "media/WebRTC → e2e"],
   [/\/mj-livekit-room\//, "media → e2e"],
   [/\/filter-builder\//, "component-side NG0100"],
+  // New task-graph-editor debug/variables components landed on `next` without DOM specs; deferred
+  // here so the ratchet stays honest until the task-graph team backfills specs (then remove these).
+  [/\/task-graph-debug-toolbar\.component\.ts$/, "new task-graph-editor debug UI; DOM spec pending"],
+  [/\/task-graph-debugger\.component\.ts$/, "new task-graph-editor debug UI; DOM spec pending"],
+  [/\/task-graph-variables\.component\.ts$/, "new task-graph-editor variables UI; DOM spec pending"],
+  // New base-forms panel-slot components landed on `next` in #3811 without DOM specs; deferred
+  // here so the ratchet stays honest until the forms team backfills specs (then remove these).
+  [/\/form-contributions\.component\.ts$/, "new base-forms panel-slot UI; DOM spec pending"],
+  [/\/related-entity-grid-panel\.component\.ts$/, "new base-forms panel-slot UI; DOM spec pending"],
+  // New graph-view component landed on `next` in #3842 without a DOM spec; deferred here so the
+  // ratchet stays honest until a spec is backfilled (then remove this). Note the component also
+  // has open UI-layering violations tracked separately — the spec should be written against
+  // whatever navigation contract that resolves to, not the current one.
+  [/\/graph-view\.component\.ts$/, "new generic graph-view UI; DOM spec pending"],
+  // The hierarchy-tree component landed on `next` in #3927 without a DOM spec. It went unnoticed
+  // because that PR also broke `pnpm install` repo-wide, so this ratchet never ran on it — see
+  // #3945. Its existing specs cover the logic (tree building, cycle breaking, search, focus,
+  // cancelable events) but nothing rendered; the DOM surface is a d3-driven SVG canvas that needs
+  // a spec written against real layout. Deferred so the ratchet stays honest until the authoring
+  // team backfills one (then remove this).
+  [/\/hierarchy-tree\.component\.ts$/, "new generic hierarchy-tree UI (d3/SVG); DOM spec pending"],
 ];
 const deferralReason = (rel) => (DEFERRALS.find(([re]) => re.test(rel)) || [])[1] || "";
 
@@ -131,6 +155,54 @@ function scoreComponent(file) {
 
 const SEVERITY = { none: 3, stub: 2, partial: 1, solid: 0 };
 const rows = walk(scanRoot).map(scoreComponent).filter(Boolean);
+
+// --- CI gates (Phase 4) ---
+// A percentage bar is too coarse on a 350+ component denominator (one new untested component
+// barely moves it), so the primary gate is an ABSOLUTE ratchet on the ungated gap:
+//   --max-none=N   fail when the count of components with NO spec and NO deferral annotation
+//                  exceeds N. Set N to the current count; ratchet DOWN as specs land. A newly
+//                  shipped component without a spec (or a deleted spec) pushes the count past N
+//                  and fails the PR — the exact regression a coverage gate exists to catch.
+//   --min-solid=N  optional secondary floor on the headline solid %.
+function runGates() {
+  const flag = (name) => {
+    const a = args.find((x) => x.startsWith(`${name}=`));
+    if (!a) return null;
+    const v = Number(a.split("=")[1]);
+    if (!Number.isFinite(v) || v < 0) {
+      console.error(`${name} requires a non-negative number, got: ${a.split("=")[1]}`);
+      process.exit(2);
+    }
+    return v;
+  };
+  const maxNone = flag("--max-none");
+  const minSolid = flag("--min-solid");
+  if (maxNone === null && minSolid === null) return;
+
+  const noneUndeferred = rows.filter((r) => r.status === "none" && !r.deferred).length;
+  const solidPct = rows.length ? (rows.filter((r) => r.status === "solid").length / rows.length) * 100 : 100;
+  let failed = false;
+  if (maxNone !== null) {
+    if (noneUndeferred > maxNone) {
+      console.error(`\n❌ Coverage ratchet: ${noneUndeferred} component(s) have no DOM spec and no deferral annotation (gate: --max-none=${maxNone}).`);
+      console.error(`   Either add a spec for the new/changed component(s), or add a reviewed deferral to DEFERRALS in this script.`);
+      console.error(`   Run \`node scripts/dom-test-report.mjs ${scope}\` for the ranked gap list.`);
+      failed = true;
+    } else {
+      console.log(`✅ Coverage ratchet: ${noneUndeferred} unspecified component(s) <= ${maxNone}.${noneUndeferred < maxNone ? ` (You can ratchet --max-none down to ${noneUndeferred}.)` : ""}`);
+    }
+  }
+  if (minSolid !== null) {
+    if (solidPct < minSolid) {
+      console.error(`\n❌ Solid-coverage floor: ${solidPct.toFixed(1)}% < --min-solid=${minSolid}.`);
+      failed = true;
+    } else {
+      console.log(`✅ Solid coverage: ${solidPct.toFixed(1)}% >= ${minSolid}%.`);
+    }
+  }
+  if (failed) process.exit(1);
+}
+runGates();
 
 // --- output ---
 if (asJson) {

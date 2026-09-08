@@ -1,0 +1,16 @@
+<button
+  type="button"
+  class="record-bar"
+  [attr.aria-label]="'Switch records — ' + Count + ' open'"
+  aria-haspopup="dialog"
+  (click)="OnBarClick()">
+  <span class="record-bar-icon" [style.color]="Color || null" aria-hidden="true">
+    <i [class]="Icon"></i>
+  </span>
+  <span class="record-bar-title">{{ Title }}</span>
+  <span class="record-bar-count" aria-hidden="true">
+    <i class="fa-regular fa-folder-open"></i>
+    <span class="record-bar-count-num">{{ Count }}</span>
+    <i class="fa-solid fa-chevron-down record-bar-chevron"></i>
+  </span>
+</button>

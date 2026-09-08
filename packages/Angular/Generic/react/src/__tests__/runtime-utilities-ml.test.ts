@@ -28,14 +28,22 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     ...actual,
     LogError: vi.fn(),
     BaseEntity: { Provider: mockProviderInstance },
-    Metadata: class {
-      Entities = [];
-      GetEntityObject = vi.fn();
-    },
-    RunView: class {
-      RunView = mockRunView;
-      RunViews = vi.fn();
-    },
+    // RuntimeUtilities now reads through a provider rather than constructing a global RunView,
+    // so the mock has to answer the static factory and the global-provider fallback.
+    Metadata: Object.assign(
+      class {
+        Entities = [];
+        GetEntityObject = vi.fn();
+      },
+      { Provider: mockProviderInstance },
+    ),
+    RunView: Object.assign(
+      class {
+        RunView = mockRunView;
+        RunViews = vi.fn();
+      },
+      { FromMetadataProvider: () => ({ RunView: mockRunView, RunViews: vi.fn() }) },
+    ),
     RunQuery: class {
       RunQuery = vi.fn();
     }

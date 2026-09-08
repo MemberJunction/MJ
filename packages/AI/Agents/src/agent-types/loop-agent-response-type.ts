@@ -1,4 +1,4 @@
-import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest } from "@memberjunction/ai-core-plus";
+import { AgentPayloadChangeRequest, ForEachOperation, WhileOperation, AgentResponseForm, ActionableCommand, AutomaticCommand, AgentScratchpad, AgentPipelineRequest, TaskGraphSpec } from "@memberjunction/ai-core-plus";
 import { ArtifactToolCall } from "../ArtifactToolManager";
 import { ConversationToolCall } from "../ConversationToolManager";
 import { MemoryWriteRequest } from "../MemoryWriteManager";
@@ -97,9 +97,9 @@ export interface LoopAgentResponse<P = any> {
      */
     nextStep?: {
         /**
-         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill'
+         * Operation type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks'
          */
-        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan';
+        type: 'Actions' | 'ClientTools' | 'Sub-Agent' | 'Chat' | 'Retry' | 'ForEach' | 'While' | 'Pipeline' | 'Skill' | 'Plan' | 'Tasks';
 
         /**
          * Actions to execute (when type='Actions')
@@ -211,6 +211,18 @@ export interface LoopAgentResponse<P = any> {
          * any Actions or Sub-Agents. See the Plan Mode section for when this is required.
          */
         plan?: string;
+
+        /**
+         * Durable task graph to submit (when type='Tasks'). Required for that type.
+         *
+         * The distinction from `subAgents[]` is durability, not parallelism. `subAgents[]` is
+         * *ephemeral* fan-out: it blocks this run and dies with it. `Tasks` is *durable* fan-out —
+         * dependency-ordered, persisted as real Task rows, visible in the Tasks UI, resumable after
+         * a restart, and able to wait on a human. Emitting one ends your turn; a server-side
+         * dispatcher executes the graph independently and (per `continuation`) either posts the
+         * results into the conversation or starts you a fresh turn with the outcome.
+         */
+        tasks?: TaskGraphSpec;
     };
 }
 

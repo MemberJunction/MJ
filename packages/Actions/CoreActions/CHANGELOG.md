@@ -1,5 +1,860 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- e63ac04: Add two web-read actions — **Tavily Search** and **Read RSS Feed** — and fix an environment-variable fallback that never worked.
+
+  **Tavily Search** (`custom/web/tavily-search.action.ts`) searches through Tavily, whose results arrive as extracted page content rather than as snippets plus links to go fetch. Two capabilities distinguish it from the other search actions here: `Topic: 'news'` is the only topic that returns a publication date per result and the only one the `Days` window applies to, which is what makes recency-sensitive questions answerable; and `IncludeAnswer` returns a synthesized answer alongside the results, so a caller that only needs the conclusion does not have to run its own summarization pass. Authentication is `Authorization: Bearer <key>` — Tavily still accepts an `api_key` body field, but that form puts the credential in the payload and is not used.
+
+  Deliberate behaviours: `MaxResults` is **clamped** to Tavily's cap of 20 rather than rejected, because a caller asking for 50 wants as many as possible and the vendor rejects the whole request above the cap. `Days` on a non-news topic is **dropped with the reason stated** in a `Warnings` output param, since silently forwarding it would leave the caller believing their window applied. Zero results is `Success: true` — a narrow query has a real, empty answer, and reporting failure would send a caller into retrying a query that will keep returning nothing. Failure modes are separated so a caller can act on them: `INVALID_API_KEY` (401/403), `RATE_LIMITED` (429), `INVALID_REQUEST` (400/422, retrying unchanged is pointless), `API_ERROR`, and `SEARCH_FAILED` for a failure with no HTTP response at all.
+
+  **Read RSS Feed** (`custom/web/rss-feed-read.action.ts`, with the parsing and scoring split out as the dependency-free `custom/web/rss-feed-parsing.ts`) reads any number of RSS 2.0 or Atom feeds, filters by article age, and optionally scores articles for keyword relevance and recency. It needs no credential.
+
+  Parsing is regex-based rather than using a strict XML parser, on purpose: feeds in the wild are frequently malformed, and a strict parser fails the entire document over one unescaped ampersand where the regex costs only the affected item's text. Text extraction decodes entities _before_ stripping tags, because RSS descriptions overwhelmingly arrive with their HTML escaped (`&lt;p&gt;`, not `<p>`) — strip first and those tags survive as literal text in the output. A second decode pass afterward finishes values that were escaped twice.
+
+  One feed failing is a `FeedStatuses` entry, not an action failure, unless `RequireAllFeeds` is set; feed URLs must be http(s) so this cannot become a local file reader. Undated articles are excluded by default and **counted**, as are articles dropped by the age window, and every such count appears in the result message — so an unexpectedly small answer is explained rather than merely small. A single injected clock serves the whole run, so the age filter and the recency score cannot disagree about what "now" is.
+
+  **Fix:** `getCoreActionsConfig()` early-returned an empty parsed config whenever no `mj.config.cjs` was found, so environment variables were ignored entirely — contradicting every schema doc comment and every "or `X_API_KEY` environment variable" error message in the package. A deployment configured only through the environment got a config with no keys and every affected action reported its key as missing. The config build is now hoisted out of that early return, so the documented fallbacks (`PERPLEXITY_API_KEY`, `TAVILY_API_KEY`, `GAMMA_API_KEY`, the Google keys) work as described.
+
+  103 new tests cover both actions and the parsing module.
+
+  `minor` because this branch now ships `metadata/**` — the `MJ: Actions` / `MJ: Action Params` / `MJ: Action Result Codes` records these classes need to be invocable. Metadata becomes a migration at release via the build engineer's `mj sync push`, which is exactly what the `minor` trigger tracks. Without the metadata this would be `patch`.
+
+- 88d751d: **Scoped Search now carries the skill principal — and judges it.**
+
+  `ScopeDimensionResolver` binds `Principals.SkillID` into a dimension's expansion query, and
+  `principalsFrom()` sources that from `SearchParams.AISkillID`. `SearchParams` declares the field and
+  `ScopeExplanation.test.ts` asserts on it — but the `Scoped Search` action never set it. The string
+  "skill" did not appear in that file. So the slot existed, was typed, was tested, and no caller could
+  reach it: a scope whose bound depends on the active skill resolved `SkillID` as null forever.
+
+  Adds an optional `AISkillID` input, threaded onto `SearchParams.AISkillID` the way `AIAgentID`
+  already is. Omit it and the skill principal stays null, so no caller gains a skill it did not ask for.
+
+  **Three behaviour changes to note, none of which is the skill threading itself.** First, the
+  `AgentUnscopedAll` fallback is now gated on wieldability, so an install where an agent is
+  `SearchScopeAccess='All'` _and_ the user holds no direct or role grant previously got `Allowed:
+Search` and now additionally requires the agent to be in the metadata cache and runnable by that
+  user. This reaches `SearchKnowledge` and `StreamScopedSearch` as well as the action. Second, a
+  supplied skill is judged wherever it is named, not only at its `All` fallback: a skill binds into
+  the expansion query, whose output _is_ the bound for a `restricts: true` dimension, so judging it
+  only where it grants would let a user holding their own grant widen with any skill they named.
+  The agent is deliberately NOT judged that way — `AIAgentID` is also attribution, and gating it at
+  the point of supply turns an analytics field into a retrieval outage. The skill check does NOT judge the agent —
+  `GetSkillsForAgent` filters the user's rights on the SKILL (`AISkillPermissionHelper`), never on
+  the agent — so the agent is judged at the fallbacks instead, where it widens. Both `'All'` arms
+  consult it, including the skill's: a skill widens through the agent it would activate on, so
+  naming a skill must not buy access to an agent the caller may not run. A stale metadata cache is
+  distinguished from a denial in the MESSAGE, but it does not buy access: an agent that
+  cannot be evaluated cannot back a widening fallback either. (An earlier revision let it through on
+  the reasoning that a cache blip should not refuse a user whose own grant covered the scope — which is
+  impossible, since a direct or role grant returns before any fallback is reached. What it actually did
+  was grant `Search` to users with no grant at all whenever an agent was missing from the cache.)
+
+  Third: **a skill supplied with NO agent is now refused outright**. At base, step 4b granted
+  `SkillUnscopedAll` with no agent at all — an agent-free skill id was a standalone grant, so
+  'refused' replaces an actual widening, not a no-op. A skill is judged relative to the agent it would activate on, so there is nothing to
+  judge it against. The `Scoped Search` action always has an agent, so this is reachable only
+  through `ExplainScope({ AISkillID })` with no `AIAgentID` — most likely a preview UI that lets
+  a skill be picked before an agent. Such a call now returns `PrincipalNotActivatable` rather
+  than quietly resolving on the user's own grant.
+
+  Also at the same call sites: the caller's tenant (`PrimaryScopeRecordID`) now reaches the
+  permission decision everywhere it is available — previously every tenant-scoped grant,
+  including a tenant-scoped `None` (an explicit per-tenant deny), was discarded before the
+  verdict. Denial messages no longer echo principal names back to the caller (ids + `Source`
+  only; audit rows and server logs keep the full reason). The GraphQL resolvers refuse a
+  supplied-but-unloadable `agentID` instead of silently proceeding with an unjudged principal,
+  and the `SearchScopes` listing hides scopes under the same rule (it takes no searchContext, so
+  no tenant applies there). The resolver's `ExtraFilter` interpolations now use `EscapeSQLString`.
+
+  **The skill is a principal, so it is also permission-checked.** `SearchScopePermissionResolver`
+  already had three rules that only fire when `Skill` is supplied — `SkillNone` and
+  `SkillAssignedNotListed` reject a scope the user's own roles allow, and `SkillUnscopedAll` grants one
+  they do not. The action never passed it. Threading the ID without the gate would have enabled the
+  widening half of a two-part mechanism and left the deciding half unwired, and would have put the
+  search at odds with `ExplainScope`, which does pass it — the preview/enforcement drift this code has
+  already been bitten by once. So the skill is resolved _before_ the permission check, handed to
+  `ResolveEffectivePermission`, and attributed on every denial row.
+
+  A value that is not a UUID, or that will not load, is refused with `INVALID_PARAM` rather than
+  dropped: continuing with a null skill would bind an unjudged ID into the expansion query.
+
+  **A principal may only WIDEN if the caller may wield it — checked where it widens.**
+
+  `AgentUnscopedAll` and `SkillUnscopedAll` are the only places a principal changes an outcome: by the
+  time they are reached the user has no grant of their own, and `SearchScopeAccess='All'` is about to
+  supply one. Both permission models are open by default — no permission rows means anyone may run it —
+  so an id a caller merely NAMED could grant `Search` on any scope.
+
+  Two checks do this, split because they answer different questions.
+  `skillIsActivatable()` runs wherever a skill is NAMED (step 1e) and asks
+  `GetSkillsForAgent(agent, user)` — the same call `BaseAgent.preActivateRequestedSkills` gates real
+  activation on. `agentIsWieldable()` runs at the WIDENING fallbacks and asks for Run on the agent.
+  Both fallbacks consult it, the skill's included: `GetSkillsForAgent` filters SKILL permissions
+  (`AISkillPermissionHelper`) and never `AIAgentPermission`, so vouching for a skill says nothing about
+  whether the caller may run the agent it would activate on. Failing either check REFUSES, with
+  `PrincipalNotActivatable` — a widening fallback needs the principal positively confirmed, not merely
+  un-denied.
+
+  **Deliberately NOT gated at the point the id is supplied.** `AIAgentID` is attribution far more often
+  than it is authorization — `agent-pre-execution-rag` threads it purely so `SearchExecutionLog` can
+  attribute the search — and gating supply rather than grant turns an analytics field into a retrieval
+  outage on any install with explicit `AI Agent Permission` rows. A test pins that a non-`'All'` agent
+  supplied WITHOUT a skill never reaches the check — which is the RAG path's shape today. Note a
+  non-`'All'` agent DOES reach it when an `'All'` skill is supplied, because that skill widens through
+  it; if the RAG path ever starts threading `AISkillID`, this is the interaction to re-examine.
+
+  A stale metadata cache is reported as itself. `GetUserAgentPermissions` throws when the agent is
+  absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created after the
+  cache loaded would otherwise read as "not permitted" — a metadata-load problem wearing an
+  authorization message.
+
+  Because the policy sits in the resolver, `ExplainScope` inherits it: preview and search reach the same
+  verdict by running the same code rather than by two copies agreeing.
+
+  **`ExplainScope` inherits the same judgement** (`@memberjunction/search-engine`). It already loaded the skill
+  principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant
+  while the real search refused — the preview-vs-enforcement drift that file already carries a regression
+  test about. Both paths now judge both principals on identical terms, and on the explain path a principal refused
+  for a PRINCIPAL-SIDE reason — `PrincipalNotActivatable`, `AgentNone`, `AgentAssignedNotListed`,
+  `SkillNone`, `SkillAssignedNotListed` — is no longer bound into dimension resolution;
+  `deriveServerValue` parameterises server-authored SQL with it, which is the thing the action refuses
+  outright rather than continuing with. A refusal for a USER-side reason (no grant) still binds them,
+  deliberately: dropping them there drives the expansion query with nulls, which makes a required
+  dimension throw and the explanation announce a dimension failure that does not exist.
+
+  On containment, stated accurately: an expansion query is server-authored SQL, but MJ renders query
+  parameters through Nunjucks with `autoescape: false` and escaping is opt-in (`| sqlString`, or a
+  declared validation chain). So MJ does not itself guarantee that naming a skill cannot widen or
+  inject — the query author does, and the permission gate above is what MJ enforces. Scopes that never
+  reference `SkillID` are unaffected in either direction.
+
+### Patch Changes
+
+- 9cbe17f: Fix a resource leak introduced by the axios→native-`fetch` migration: several call sites (SharePoint/Box/Dropbox drivers, GraphQL Query, URL Metadata Extractor, Web Page Content, the generic file-URL loader, LearnWorlds, SendGrid Inbound Parse delete) discarded a `fetch`/`SafeFetch` response on an error or retry-discard branch without ever reading or cancelling its body, pinning the underlying connection out of Node's keep-alive pool until GC finalized it. Added `DrainResponseBody` to `@memberjunction/network-utils` and wired it into every affected branch, plus closed the same latent gap in `HttpRequest`'s own `ResponseType: 'stream'` + non-2xx path.
+- Updated dependencies [323df0f]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [405c035]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [79483bf]
+- Updated dependencies [22ec804]
+- Updated dependencies [8206993]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [5c1d762]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-agents@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/network-utils@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/search-engine@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/ai-betty-bot@6.1.0-edge.5
+  - @memberjunction/ai-vector-sync@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/content-autotagging@6.1.0-edge.5
+  - @memberjunction/ai-agent-manager@6.1.0-edge.5
+  - @memberjunction/record-set-processor@6.1.0-edge.5
+  - @memberjunction/clustering-engine@6.1.0-edge.5
+  - @memberjunction/ai-mcp-client@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/communication-engine@6.1.0-edge.5
+  - @memberjunction/external-change-detection@6.1.0-edge.5
+  - @memberjunction/lists@6.1.0-edge.5
+  - @memberjunction/react-linter@6.1.0-edge.5
+  - @memberjunction/esignature@6.1.0-edge.5
+  - @memberjunction/geo-core@6.1.0-edge.5
+  - @memberjunction/code-execution@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+  - @memberjunction/record-set-processor-base@6.1.0-edge.5
+  - @memberjunction/lists-base@6.1.0-edge.5
+  - @memberjunction/export-engine@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- a2c528f: Geocoding no longer re-attempts an address it has already determined has no location.
+
+  `ProcessMapping` skipped only on `Status === 'success'`. A row marked permanently not-geocodable — an address that genuinely has no location, like "Conference Room B" — fell through to a full re-attempt on **every pass**, even with the source hash unchanged: mark pending (a write), geocode (nothing to find), mark failed (another write). Per record, forever, for an answer already on file. On a synced entity with geo-typed columns that is three round trips per record per sync, and CodeGen enables geocoding automatically on address-like columns, so it applies to entities nobody opted in.
+
+  `UpdateNotGeocodable`'s own comment describes the intended behaviour exactly — _"Mark as not_geocodable so the retry job skips it. If the user later edits the address, the hash will change and SyncIfChanged will re-attempt."_ The hash **is** the re-attempt condition; it just was not being honoured for that outcome.
+  - New `IsSettledGeoCode(status, retryCount)` in `geo-core`, plus a named `PERMANENT_SKIP_RETRY_COUNT` for the sentinel that was previously a bare `9999`. Settled means success **or** permanently not-geocodable; a plain `failed` is still transient and still retried, which is the retry job's purpose.
+  - `ExistingGeoCodeInfo` gains `RetryCount` — without it a batch caller cannot tell the two kinds of `failed` apart. The scheduled geocoding job now selects and populates it.
+  - The batch path decides from the map **before** loading anything, so an unchanged settled record costs zero round trips. `FindExistingGeoCode`'s comment already claimed it avoided the load when the hash was unchanged; it never checked, and loaded unconditionally.
+
+  No change for a record whose address changed, whose geocode succeeded, or whose failure was transient.
+
+- 7857d8e: Add `@memberjunction/network-utils` and remove `axios` from the repository.
+
+  The SSRF guard added for the web/HTTP actions was Actions-specific but the concern is not, so it
+  moves into a new dependency-free, Node-only package (`node:dns` + `node:net` only) that any
+  server-side package can depend on: `AssertPublicUrl`, `SafeFetch`, `IsBlockedIPAddress`, `SSRFError`.
+
+  The same package ships `HttpClient` / `HttpRequest` — a native-`fetch` HTTP client that replaces
+  `axios` across all 11 packages that used it. Consolidating on one client removes the third-party
+  dependency and puts the SSRF guard one option flag (`ValidateUrl`) away from every outbound call
+  site, which was impossible when each package reached for `axios` directly.
+
+  Also fixes an SSRF sink the original pass missed: the `API Rate Limiter` action takes a
+  caller-controlled URL and returns the response body, and is now guarded.
+
+  Public exports use `PascalCase`, per repo convention.
+
+- faac5b5: Add SSRF protection to server-side web/HTTP actions: private, loopback, link-local (incl. cloud metadata 169.254.169.254), and reserved IP ranges are now blocked, and redirects are re-validated per hop.
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/geo-core@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/network-utils@6.1.0-edge.4
+  - @memberjunction/content-autotagging@6.1.0-edge.4
+  - @memberjunction/ai-betty-bot@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-vector-sync@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/ai-agent-manager@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/record-set-processor@6.1.0-edge.4
+  - @memberjunction/clustering-engine@6.1.0-edge.4
+  - @memberjunction/ai-mcp-client@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/communication-engine@6.1.0-edge.4
+  - @memberjunction/external-change-detection@6.1.0-edge.4
+  - @memberjunction/lists@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/react-linter@6.1.0-edge.4
+  - @memberjunction/esignature@6.1.0-edge.4
+  - @memberjunction/code-execution@6.1.0-edge.4
+  - @memberjunction/record-set-processor-base@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/lists-base@6.1.0-edge.4
+  - @memberjunction/export-engine@6.1.0-edge.4
+
+## 6.1.0-edge.3
+
+### Minor Changes
+
+- 8c9ed6f: Find-agent actions (Find Candidate Agents / Find Best Agent) now search in **hybrid** mode
+  (semantic + lexical) so agents the daily vector sync hasn't embedded yet are still
+  discoverable, and Agent Manager now loads existing agent specs by calling the **Load Agent
+  Spec** action directly instead of delegating to the Flow-based **Agent Spec Loader**
+  sub-agent (which the runtime refuses — a Flow agent cannot run as a sub-agent). The Load
+  Agent Spec action's `AgentSpec` output is now the complete spec (truncation applies only to
+  the human-readable message), so loading and re-saving an agent no longer risks overwriting
+  its sub-agents' prompt templates.
+
+  Scope of the hybrid change — it **narrows** the vector-sync staleness window, it does not
+  close it:
+  - The window affects **updates to already-vectorized agents**, not only new ones. An agent
+    whose name or description was edited keeps matching the old text in semantic search until
+    the next daily sync re-embeds it.
+  - The lexical fallback matches only when the search text appears **verbatim as a substring**
+    of the agent's name/other searchable field (it is not tokenized). A short query like
+    `"invoice"` finds `"Invoice Reconciler"`; a full task description generally will not.
+
+- 3b6be0b: Give web-research agents a second search provider ahead of the Google Custom Search shutdown.
+
+  Google's Custom Search JSON API is closed to new customers and is discontinued on 2027-01-01, and
+  every agent that searched the web was bound to that one action. Perplexity Search already shipped in
+  CoreActions but was unusable and unreachable: its default model, `llama-3.1-sonar-small-128k-online`,
+  was retired by Perplexity in February 2025, and no agent or skill was granted the action.
+  - Default the Perplexity Search action to `sonar`, and document the current model family
+    (`sonar`, `sonar-pro`, `sonar-reasoning-pro`, `sonar-deep-research`) in the action and its
+    Action Param metadata. A new test pins the default and fails on any `llama-3.1-sonar-*`
+    identifier, so a retired model copied from an old example breaks the build rather than the
+    runtime.
+  - Grant `Perplexity Search` alongside `Google Custom Search` to all 11 agent-action bindings across
+    the Research Agent, Sage, Agent Manager and the core agents, plus the Web Research skill.
+  - Update the Web Research skill and the research/Sage prompt templates to treat web search as
+    provider-agnostic: prefer Perplexity, fall back when one provider reports a missing API key, since
+    a deployment may credential only one.
+  - Document the provider choice and the Custom Search end-of-life in the CoreActions README and the
+    `config.ts` schema comments.
+
+  No behavior changes for deployments that have Custom Search access — configuring both providers is
+  supported, and the Google path is untouched.
+
+### Patch Changes
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [d4a5b4c]
+- Updated dependencies [2003cd3]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [199eb2b]
+- Updated dependencies [bb79505]
+- Updated dependencies [52490a7]
+- Updated dependencies [e7f1f88]
+- Updated dependencies [07cb22e]
+- Updated dependencies [711c208]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [8ec1515]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [d907a1b]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [cefc302]
+- Updated dependencies [5b30129]
+- Updated dependencies [9cd81ca]
+- Updated dependencies [2875f6f]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [c643ba3]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [d29d6b9]
+- Updated dependencies [1fdd5d0]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [b46330e]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [53d256f]
+- Updated dependencies [af4bd79]
+- Updated dependencies [f315e44]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [7a630ba]
+- Updated dependencies [b6416f4]
+- Updated dependencies [bc45ded]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [9f6a53b]
+- Updated dependencies [6d7d3da]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [ae2baef]
+- Updated dependencies [4b1257f]
+  - @memberjunction/global@6.1.0-edge.3
+  - @memberjunction/core@6.1.0-edge.3
+  - @memberjunction/core-entities@6.1.0-edge.3
+  - @memberjunction/aiengine@6.1.0-edge.3
+  - @memberjunction/ai-agents@6.1.0-edge.3
+  - @memberjunction/content-autotagging@6.1.0-edge.3
+  - @memberjunction/core-entities-server@6.1.0-edge.3
+  - @memberjunction/integration-engine@6.1.0-edge.3
+  - @memberjunction/ai@6.1.0-edge.3
+  - @memberjunction/ai-core-plus@6.1.0-edge.3
+  - @memberjunction/generic-database-provider@6.1.0-edge.3
+  - @memberjunction/ai-prompts@6.1.0-edge.3
+  - @memberjunction/ai-vector-sync@6.1.0-edge.3
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.3
+  - @memberjunction/react-linter@6.1.0-edge.3
+  - @memberjunction/storage@6.1.0-edge.3
+  - @memberjunction/sql-dialect@6.1.0-edge.3
+  - @memberjunction/search-engine@6.1.0-edge.3
+  - @memberjunction/ai-agent-manager@6.1.0-edge.3
+  - @memberjunction/ai-engine-base@6.1.0-edge.3
+  - @memberjunction/clustering-engine@6.1.0-edge.3
+  - @memberjunction/ai-mcp-client@6.1.0-edge.3
+  - @memberjunction/ai-betty-bot@6.1.0-edge.3
+  - @memberjunction/actions-base@6.1.0-edge.3
+  - @memberjunction/code-execution@6.1.0-edge.3
+  - @memberjunction/actions@6.1.0-edge.3
+  - @memberjunction/communication-types@6.1.0-edge.3
+  - @memberjunction/communication-engine@6.1.0-edge.3
+  - @memberjunction/external-change-detection@6.1.0-edge.3
+  - @memberjunction/lists@6.1.0-edge.3
+  - @memberjunction/record-set-processor-base@6.1.0-edge.3
+  - @memberjunction/record-set-processor@6.1.0-edge.3
+  - @memberjunction/esignature@6.1.0-edge.3
+  - @memberjunction/geo-core@6.1.0-edge.3
+  - @memberjunction/interactive-component-types@6.1.0-edge.3
+  - @memberjunction/lists-base@6.1.0-edge.3
+  - @memberjunction/export-engine@6.1.0-edge.3
+
+## 6.1.0-edge.2
+
+### Patch Changes
+
+- d8adda1: **BREAKING — `UserCache` moved packages. Update the import, not just the call.**
+
+  `UserCache` now lives in `@memberjunction/generic-database-provider`. It is no longer exported
+  from `@memberjunction/sqlserver-dataprovider`, and there is deliberately **no re-export shim**,
+  so every import of the symbol must be repointed or it will fail to resolve:
+
+  ```diff
+  - import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+  + import { UserCache } from '@memberjunction/generic-database-provider';
+  ```
+
+  `Refresh` is now dialect-neutral and takes the configured provider rather than an
+  `mssql.ConnectionPool`:
+
+  ```diff
+  - await UserCache.Instance.Refresh(pool, intervalMs);
+  + await UserCache.Instance.Refresh(provider, intervalMs);
+  ```
+
+  **These are two separate breaks, and the first is much wider than the second.** The import path
+  affects _every_ consumer of the symbol — reads included. The signature affects only the handful
+  of callers of `Refresh`. Anything that imports `UserCache` merely to call `Users`,
+  `GetSystemUser()` or `UserByName()` still has to change its import, so a consumer who reads only
+  "the signature changed" will treat this as a no-op and fail to build. In this repo the split was
+  56 files versus 9 call sites.
+
+  Packages that import `UserCache` must also declare `@memberjunction/generic-database-provider`
+  as a dependency — pnpm resolves strictly, so an undeclared import fails rather than falling
+  through to a hoisted copy.
+
+  **Check for dynamic imports too**, not just static ones. `await import('@memberjunction/sqlserver-dataprovider')`
+  destructuring `UserCache` breaks the same way, and a grep for `import { … } from` will not find it.
+
+  **Unchanged:** the read surface (`Users`, `GetSystemUser`, `UserByName`, `SYSTEM_USER_ID`), and
+  the class name. The name is load-bearing — `BaseSingleton` keys its global store on the
+  constructor name, so keeping it `UserCache` preserves singleton identity across the move.
+
+  **Also fixed:** `_users` now initializes to `[]`. It previously stayed `undefined` after a
+  `Refresh` that never ran or that failed (failures are swallowed into `LogError`), so
+  `GetSystemUser()` threw a `TypeError` off `.find()` instead of returning `undefined` as its
+  callers already assume.
+
+  **Why:** the cache was dialect-neutral except for that one `mssql` type, which left PostgreSQL
+  with no user cache at all and produced four separate hand-rolled "read `vwUsers` + `vwUserRoles`,
+  build `UserInfo[]`" implementations — one of which reached into the singleton's private field
+  through a cast from another package. Those are all removed, and a PostgreSQL process that never
+  goes through the server bootstrap now has a system user.
+
+- ca4feb4: Workflow cost becomes a projection of the run tree, and a graph now runs in the order it was drawn.
+
+  **Cost is the tree, not arithmetic beside it.** `AIAgentRun`'s four `…Rollup` columns are now written from `SumAgentRunTreeCost(LoadAgentRunTree(runID))` at settlement — one basis (per-node own spend), prompt-aware through `Configuration.runtime.promptRunID`, and structurally incapable of disagreeing with what the run viewer shows. The previous per-child loop filtered on `AgentRunID`, so every Prompt step's spend was absent, and mixed a descendant-inclusive number with an own-spend one. The tree now also carries the prompt/completion token split so all four columns share a basis. Writing the sum back makes the column an _output_ of the tree, which is non-circular only because the query reads own cost and never a rollup — stated in the query header and pinned by a test that plants an absurd rollup on a real run. When the tree cannot be summed (load failure, depth cap, graph not reachable), the columns are **cleared** rather than left holding a stale total from an earlier settlement.
+
+  **A loop's passes exist.** The run tree reaches nested work through six relationships and a loop iteration was none of them, so a `While` that spent real money across three passes reported one childless node with no cost. The dispatcher now records one entry per pass (`ITaskStepRuntime.iterations`) and the tree expands them into nodes. On a real workflow this moved `TotalCostRollup` from `0.00049725` to `0.00555375` — the loop had been spent and not counted.
+
+  **A graph is dispatched only once its edges exist.** Children and dependencies are now written in one transaction. Previously a poll could land between the two writes, see tasks with no prerequisites, and claim the whole graph at once — observed running a closing branch before the draft it was meant to judge existed, then reporting Complete.
+
+  **Steps see their payload.** A step with no input mapping fell back to the raw input instead of the merged payload, so a Prompt step — which declares no mapping by design — rendered `{{ _CURRENT_PAYLOAD }}` as `{}` and wrote from an empty brief. Separately, a step with no output mapping _replaced_ the payload with its own output rather than merging; for a loop, whose output is a summary, that discarded everything the iterations had established and made a downstream `payload.x === true` edge unreachable.
+
+  **An output mapping that names a parameter the step never returns now says so** (`unmapped`), naming what the step did return, instead of skipping in silence.
+
+  **Human steps**: a cancelled request re-raises instead of stalling forever; cancelling a graph withdraws its open requests instead of leaving them in someone's inbox; cross-user `assignToUserID` is refused at submission rather than silently reassigned to the submitter; and a step can declare `expiresInHours`, which finally makes the existing expiry machinery reachable.
+
+  **Web Search** captured each result with a non-greedy match that stopped at the first nested `</div>`, cutting the snippet out of every result — ten well-formed hits carrying no content. Results are now sliced between block starts, and an all-snippets-empty parse is reported rather than returned silently.
+
+  **Testing**: a bundle whose every check is gated out now records an explicit skip naming the flag that would run it, instead of reporting PASS with zero checks executed.
+
+- Updated dependencies [71817db]
+- Updated dependencies [255d506]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [59def38]
+- Updated dependencies [11de1a3]
+- Updated dependencies [080f4cd]
+- Updated dependencies [8288711]
+- Updated dependencies [48ff99f]
+- Updated dependencies [9fc0e2d]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [9a29da4]
+- Updated dependencies [e26c866]
+- Updated dependencies [0967ba7]
+- Updated dependencies [de343b5]
+- Updated dependencies [d8adda1]
+- Updated dependencies [15319b4]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/search-engine@6.1.0-edge.2
+  - @memberjunction/core-entities@6.1.0-edge.2
+  - @memberjunction/ai@6.1.0-edge.2
+  - @memberjunction/ai-agents@6.1.0-edge.2
+  - @memberjunction/actions-base@6.1.0-edge.2
+  - @memberjunction/actions@6.1.0-edge.2
+  - @memberjunction/generic-database-provider@6.1.0-edge.2
+  - @memberjunction/core-entities-server@6.1.0-edge.2
+  - @memberjunction/ai-core-plus@6.1.0-edge.2
+  - @memberjunction/global@6.1.0-edge.2
+  - @memberjunction/core@6.1.0-edge.2
+  - @memberjunction/ai-engine-base@6.1.0-edge.2
+  - @memberjunction/aiengine@6.1.0-edge.2
+  - @memberjunction/ai-agent-manager@6.1.0-edge.2
+  - @memberjunction/integration-engine@6.1.0-edge.2
+  - @memberjunction/ai-mcp-client@6.1.0-edge.2
+  - @memberjunction/storage@6.1.0-edge.2
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.2
+  - @memberjunction/clustering-engine@6.1.0-edge.2
+  - @memberjunction/ai-prompts@6.1.0-edge.2
+  - @memberjunction/ai-vector-sync@6.1.0-edge.2
+  - @memberjunction/communication-types@6.1.0-edge.2
+  - @memberjunction/communication-engine@6.1.0-edge.2
+  - @memberjunction/content-autotagging@6.1.0-edge.2
+  - @memberjunction/external-change-detection@6.1.0-edge.2
+  - @memberjunction/lists@6.1.0-edge.2
+  - @memberjunction/react-linter@6.1.0-edge.2
+  - @memberjunction/record-set-processor@6.1.0-edge.2
+  - @memberjunction/esignature@6.1.0-edge.2
+  - @memberjunction/geo-core@6.1.0-edge.2
+  - @memberjunction/ai-betty-bot@6.1.0-edge.2
+  - @memberjunction/code-execution@6.1.0-edge.2
+  - @memberjunction/record-set-processor-base@6.1.0-edge.2
+  - @memberjunction/interactive-component-types@6.1.0-edge.2
+  - @memberjunction/lists-base@6.1.0-edge.2
+  - @memberjunction/export-engine@6.1.0-edge.2
+  - @memberjunction/sql-dialect@6.1.0-edge.2
+
+## 6.1.0-edge.1
+
+### Patch Changes
+
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+  - @memberjunction/actions@6.1.0-edge.1
+  - @memberjunction/storage@6.1.0-edge.1
+  - @memberjunction/core@6.1.0-edge.1
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.1
+  - @memberjunction/generic-database-provider@6.1.0-edge.1
+  - @memberjunction/core-entities@6.1.0-edge.1
+  - @memberjunction/ai-agents@6.1.0-edge.1
+  - @memberjunction/ai-core-plus@6.1.0-edge.1
+  - @memberjunction/content-autotagging@6.1.0-edge.1
+  - @memberjunction/ai-agent-manager@6.1.0-edge.1
+  - @memberjunction/record-set-processor@6.1.0-edge.1
+  - @memberjunction/aiengine@6.1.0-edge.1
+  - @memberjunction/search-engine@6.1.0-edge.1
+  - @memberjunction/esignature@6.1.0-edge.1
+  - @memberjunction/ai-engine-base@6.1.0-edge.1
+  - @memberjunction/clustering-engine@6.1.0-edge.1
+  - @memberjunction/ai-mcp-client@6.1.0-edge.1
+  - @memberjunction/ai-prompts@6.1.0-edge.1
+  - @memberjunction/ai-vector-sync@6.1.0-edge.1
+  - @memberjunction/actions-base@6.1.0-edge.1
+  - @memberjunction/code-execution@6.1.0-edge.1
+  - @memberjunction/communication-types@6.1.0-edge.1
+  - @memberjunction/communication-engine@6.1.0-edge.1
+  - @memberjunction/external-change-detection@6.1.0-edge.1
+  - @memberjunction/integration-engine@6.1.0-edge.1
+  - @memberjunction/interactive-component-types@6.1.0-edge.1
+  - @memberjunction/lists@6.1.0-edge.1
+  - @memberjunction/core-entities-server@6.1.0-edge.1
+  - @memberjunction/react-linter@6.1.0-edge.1
+  - @memberjunction/record-set-processor-base@6.1.0-edge.1
+  - @memberjunction/geo-core@6.1.0-edge.1
+  - @memberjunction/ai@6.1.0-edge.1
+  - @memberjunction/ai-betty-bot@6.1.0-edge.1
+  - @memberjunction/lists-base@6.1.0-edge.1
+  - @memberjunction/export-engine@6.1.0-edge.1
+  - @memberjunction/global@6.1.0-edge.1
+  - @memberjunction/sql-dialect@6.1.0-edge.1
+
+## 6.1.0-edge.0
+
+### Patch Changes
+
+- 0acf96e: Make the SearchScope permission resolver replaceable.
+
+  `SearchEngine` authorizes every search through `SearchScopePermissionResolver`, which answers from `__mj.SearchScopePermission` rows keyed by `UserID` or by one of the user's MJ Roles. That covers MJ's own permission model completely — but it is not the only shape a permission model can take, and until now it was the only one the search path could consult.
+
+  A consumer whose entitlements are neither a user nor an MJ Role has no row that can express them. Its grants are therefore invisible to the check that actually runs, and the failure is silent in the worst way: the grant is configured, an administrator can see it, and the search simply returns nothing. The resolver was a module-level singleton imported directly by `SearchEngine`, so the only remedies were to project the consumer's model into `SearchScopePermission` as derived per-user rows — permission state that can drift from its source — or to fork the search path.
+
+  This adds the seam that was missing:
+  - **`SearchScopePermissionResolverBase`** — the abstract contract registrations bind to.
+  - **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer _replaces_ the policy rather than selecting among several), so a single shared key is the right shape, and it keeps the registry free of the keyless-registration warning.
+  - **`GetSearchScopePermissionResolver()`** — returns the highest-priority registration, falling back to MJ's own.
+
+  **Every path that authorizes a scope now goes through the seam**, not just `SearchEngine`. This matters more than it sounds: a seam honoured on some paths and not others is worse than no seam, because the resulting behaviour is inconsistent rather than merely absent — the same grant authorizes a search issued one way and silently denies it issued another. The five call sites are `SearchEngine.searchOneScope`, `SearchKnowledgeResolver` (both the single-scope check and the visible-scope-list filter), `SearchKnowledgeStreamResolver`, and the `__Scoped_Search` core action. The last is the agent-facing path, so an override that did not reach it would be invisible to exactly the callers most likely to need it.
+
+  Resolution happens per call rather than being cached at module load. A registration made during application startup would otherwise be missed depending on import order — a failure mode that presents as "my resolver works in tests but not in the server", which is expensive to diagnose. The class is stateless and construction is trivial, so there is nothing to gain by caching.
+
+  The intended shape for an override is to subclass the stock resolver and compose with it, **passing no priority**:
+
+  ```ts
+  @RegisterClass(
+    SearchScopePermissionResolverBase,
+    SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
+  )
+  export class MyResolver extends SearchScopePermissionResolver {
+    public override async ResolveEffectivePermission(
+      input: ResolvePermissionInput,
+    ) {
+      const stock = await super.ResolveEffectivePermission(input);
+      if (stock.Allowed) return stock; // never narrow what MJ already granted
+      return this.myOwnGrantCheck(input); // only ever widen
+    }
+  }
+  ```
+
+  Subclassing is what orders the registration, and it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as _one higher than the highest already registered for this (base, key)_, and a subclass cannot be defined without its parent module having loaded first — so MJ's registration always runs before the consumer's, and the consumer always lands above it. The ordering is a side effect of the language rather than a convention anyone has to remember.
+
+  A hardcoded priority forfeits that. Two consumers that pick the same number collide, `Register` warns, and resolution degrades to whichever was registered last — a load-order bug wearing the costume of a configuration value. The priority argument stays for cases where subclassing is genuinely impossible.
+
+  **Nothing changes for existing consumers.** MJ's resolver registers itself as the default, so behaviour is identical when nothing else is registered. `DefaultSearchScopePermissionResolver` is retained and still exported so existing imports keep compiling; it is marked `@deprecated` because it always yields MJ's own implementation and therefore bypasses any registered override.
+
+  The failure posture is unchanged and worth restating for anyone writing an override: `SearchEngine` treats a resolver throw as **denied**, never as allowed. An override that cannot reach its own store must not accidentally open a scope.
+
+  7 tests covering the default, the fallback, an honoured registration, late registration (imperative, because `@RegisterClass` evaluates at module load and so cannot demonstrate lateness), composition with `super`, the deprecated constant, and that a subclass of the stock resolver satisfies the base contract.
+
+- 1100077: Standardize entity semantic search on `Provider.SearchEntity` (Tier 1).
+
+  Retires the bespoke in-memory "find similar by description" code paths in favor of
+  the unified Search-type `EntityDocument` + `Provider.SearchEntity` pipeline introduced
+  in #2709.
+
+  **`@memberjunction/aiengine`** — removed the ephemeral agent/action embedding machinery
+  that re-embedded every agent and action on first search:
+  - Deleted `AgentEmbeddingService` and `ActionEmbeddingService`.
+  - Removed `AIEngine.FindSimilarAgents`, `AIEngine.FindSimilarActions`,
+    `AIEngine.RefreshAgentEmbeddings`, `AIEngine.RefreshActionEmbeddings`, and the
+    `AgentVectorService` / `ActionVectorService` getters.
+  - `RegenerateEmbeddings` and the lazy `ensureEmbeddingsGenerated` path now cover only
+    the remaining local note/example pools (unchanged Pattern B). Callers needing
+    agent/action discovery should use `Provider.SearchEntity({ entityName: 'MJ: AI Agents' | 'MJ: Actions', ... })`.
+
+  **`@memberjunction/core-actions`** — the "Find Best Action", "Find Candidate Actions",
+  "Find Best Agent", "Find Candidate Agents", and "Search Query Catalog" actions are now
+  thin, backward-compatible wrappers around `Provider.SearchEntity` (semantic mode, backed
+  by the daily-synced "Actions Search" / "AI Agents Search" / "Queries Search"
+  EntityDocuments). Their input parameters and output shapes are preserved; new callers
+  should prefer the generic **Search Entity** action directly.
+
+  Also seeds the `Queries Search` EntityDocument + template, and deletes the now-obsolete
+  `scripts/backfill-query-embeddings.ts` (the daily Entity Vector Sync job populates query
+  vectors automatically).
+
+- Updated dependencies [2412415]
+- Updated dependencies [9699d0e]
+- Updated dependencies [052b4c7]
+- Updated dependencies [fe7bd9d]
+- Updated dependencies [9a905e8]
+- Updated dependencies [841e6ea]
+- Updated dependencies [1d88e00]
+- Updated dependencies [27e4d09]
+- Updated dependencies [0acf96e]
+- Updated dependencies [8d0d45a]
+- Updated dependencies [1100077]
+- Updated dependencies [5c6e36c]
+  - @memberjunction/core-entities@6.1.0-edge.0
+  - @memberjunction/actions@6.1.0-edge.0
+  - @memberjunction/actions-base@6.1.0-edge.0
+  - @memberjunction/core@6.1.0-edge.0
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.0
+  - @memberjunction/generic-database-provider@6.1.0-edge.0
+  - @memberjunction/search-engine@6.1.0-edge.0
+  - @memberjunction/react-linter@6.1.0-edge.0
+  - @memberjunction/aiengine@6.1.0-edge.0
+  - @memberjunction/interactive-component-types@6.1.0-edge.0
+  - @memberjunction/ai-agent-manager@6.1.0-edge.0
+  - @memberjunction/ai-agents@6.1.0-edge.0
+  - @memberjunction/ai-engine-base@6.1.0-edge.0
+  - @memberjunction/clustering-engine@6.1.0-edge.0
+  - @memberjunction/ai-core-plus@6.1.0-edge.0
+  - @memberjunction/ai-mcp-client@6.1.0-edge.0
+  - @memberjunction/ai-prompts@6.1.0-edge.0
+  - @memberjunction/ai-vector-sync@6.1.0-edge.0
+  - @memberjunction/communication-types@6.1.0-edge.0
+  - @memberjunction/communication-engine@6.1.0-edge.0
+  - @memberjunction/content-autotagging@6.1.0-edge.0
+  - @memberjunction/external-change-detection@6.1.0-edge.0
+  - @memberjunction/integration-engine@6.1.0-edge.0
+  - @memberjunction/lists@6.1.0-edge.0
+  - @memberjunction/core-entities-server@6.1.0-edge.0
+  - @memberjunction/storage@6.1.0-edge.0
+  - @memberjunction/record-set-processor@6.1.0-edge.0
+  - @memberjunction/esignature@6.1.0-edge.0
+  - @memberjunction/geo-core@6.1.0-edge.0
+  - @memberjunction/code-execution@6.1.0-edge.0
+  - @memberjunction/record-set-processor-base@6.1.0-edge.0
+  - @memberjunction/ai@6.1.0-edge.0
+  - @memberjunction/ai-betty-bot@6.1.0-edge.0
+  - @memberjunction/lists-base@6.1.0-edge.0
+  - @memberjunction/export-engine@6.1.0-edge.0
+  - @memberjunction/global@6.1.0-edge.0
+  - @memberjunction/sql-dialect@6.1.0-edge.0
+
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [a2670a9]
+  - @memberjunction/core@6.0.0
+  - @memberjunction/ai-agent-manager@6.0.0
+  - @memberjunction/ai-agents@6.0.0
+  - @memberjunction/ai-engine-base@6.0.0
+  - @memberjunction/clustering-engine@6.0.0
+  - @memberjunction/ai-core-plus@6.0.0
+  - @memberjunction/aiengine@6.0.0
+  - @memberjunction/ai-mcp-client@6.0.0
+  - @memberjunction/ai-prompts@6.0.0
+  - @memberjunction/ai-vector-sync@6.0.0
+  - @memberjunction/actions-base@6.0.0
+  - @memberjunction/code-execution@6.0.0
+  - @memberjunction/actions@6.0.0
+  - @memberjunction/communication-types@6.0.0
+  - @memberjunction/communication-engine@6.0.0
+  - @memberjunction/content-autotagging@6.0.0
+  - @memberjunction/external-change-detection@6.0.0
+  - @memberjunction/generic-database-provider@6.0.0
+  - @memberjunction/integration-engine@6.0.0
+  - @memberjunction/interactive-component-types@6.0.0
+  - @memberjunction/lists@6.0.0
+  - @memberjunction/core-entities@6.0.0
+  - @memberjunction/core-entities-server@6.0.0
+  - @memberjunction/storage@6.0.0
+  - @memberjunction/react-linter@6.0.0
+  - @memberjunction/record-set-processor-base@6.0.0
+  - @memberjunction/record-set-processor@6.0.0
+  - @memberjunction/sqlserver-dataprovider@6.0.0
+  - @memberjunction/search-engine@6.0.0
+  - @memberjunction/esignature@6.0.0
+  - @memberjunction/geo-core@6.0.0
+  - @memberjunction/ai@6.0.0
+  - @memberjunction/ai-betty-bot@6.0.0
+  - @memberjunction/lists-base@6.0.0
+  - @memberjunction/export-engine@6.0.0
+  - @memberjunction/global@6.0.0
+  - @memberjunction/sql-dialect@6.0.0
+
+## 5.51.0
+
+### Patch Changes
+
+- Updated dependencies [c382605]
+- Updated dependencies [a8fc549]
+  - @memberjunction/ai-agents@5.51.0
+  - @memberjunction/core@5.51.0
+  - @memberjunction/ai-agent-manager@5.51.0
+  - @memberjunction/record-set-processor@5.51.0
+  - @memberjunction/ai-engine-base@5.51.0
+  - @memberjunction/clustering-engine@5.51.0
+  - @memberjunction/ai-core-plus@5.51.0
+  - @memberjunction/aiengine@5.51.0
+  - @memberjunction/ai-mcp-client@5.51.0
+  - @memberjunction/ai-prompts@5.51.0
+  - @memberjunction/ai-vector-sync@5.51.0
+  - @memberjunction/actions-base@5.51.0
+  - @memberjunction/code-execution@5.51.0
+  - @memberjunction/actions@5.51.0
+  - @memberjunction/communication-types@5.51.0
+  - @memberjunction/communication-engine@5.51.0
+  - @memberjunction/content-autotagging@5.51.0
+  - @memberjunction/external-change-detection@5.51.0
+  - @memberjunction/generic-database-provider@5.51.0
+  - @memberjunction/integration-engine@5.51.0
+  - @memberjunction/interactive-component-types@5.51.0
+  - @memberjunction/lists@5.51.0
+  - @memberjunction/core-entities@5.51.0
+  - @memberjunction/core-entities-server@5.51.0
+  - @memberjunction/storage@5.51.0
+  - @memberjunction/react-linter@5.51.0
+  - @memberjunction/record-set-processor-base@5.51.0
+  - @memberjunction/sqlserver-dataprovider@5.51.0
+  - @memberjunction/search-engine@5.51.0
+  - @memberjunction/esignature@5.51.0
+  - @memberjunction/geo-core@5.51.0
+  - @memberjunction/ai@5.51.0
+  - @memberjunction/ai-betty-bot@5.51.0
+  - @memberjunction/lists-base@5.51.0
+  - @memberjunction/export-engine@5.51.0
+  - @memberjunction/global@5.51.0
+  - @memberjunction/sql-dialect@5.51.0
+
 ## 5.50.0
 
 ### Patch Changes

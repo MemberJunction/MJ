@@ -1,10 +1,13 @@
 import { IncomingMessage } from 'http';
+import { createHash, timingSafeEqual } from 'crypto';
 import { default as jwt } from 'jsonwebtoken';
 import 'reflect-metadata';
 import { Subject, firstValueFrom } from 'rxjs';
 import { AuthenticationError, AuthorizationError } from 'type-graphql';
 import sql from 'mssql';
 import { getSigningKeys, getSystemUser, getValidationOptions, verifyUserRecord, extractUserInfoFromPayload } from './auth/index.js';
+import { CloneUserForSessionContext } from './auth/sessionUserClone.js';
+import { GetAPIKeyActingContextResolver } from './auth/actingContextResolver.js';
 import { TokenExpiredError, AuthProviderFactory } from '@memberjunction/auth-providers';
 import { authCache } from './cache.js';
 import { userEmailMap, apiKey, mj_core_schema } from './config.js';
@@ -15,11 +18,12 @@ import { GetReadOnlyDataSource, GetReadWriteDataSource } from './util.js';
 import { v4 as uuidv4 } from 'uuid';
 import e from 'express';
 import type { RequestHandler, Request, Response, NextFunction } from 'express';
-import { DatabaseProviderBase, UserInfo, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
-import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { DatabaseProviderBase, UserInfo, type IMetadataProvider, type MagicLinkScope, type ReturningVisitorContext, type WidgetGuestContext } from '@memberjunction/core';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
+import { IdentityClaimEngineServer } from '@memberjunction/core-entities-server';
 import { UUIDsEqual } from '@memberjunction/global';
-import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { UserCache, resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 // ── Session / login audit (Phase 3) ───────────────────────────────────────────
@@ -319,7 +323,13 @@ const verifyAsync = async (issuer: string, token: string): Promise<jwt.JwtPayloa
       return;
     }
 
-    const verifyOptions: jwt.VerifyOptions = {};
+    const verifyOptions: jwt.VerifyOptions = {
+      // SECURITY: explicitly pin the accepted signature algorithms to the asymmetric family.
+      // The signing key here comes from the issuer's JWKS (an RSA/EC public key), so without an
+      // explicit allow-list a future key-format change or library regression could reintroduce
+      // classic `alg=none` / RS256->HS256 confusion attacks. Pinning fails such tokens closed.
+      algorithms: ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512', 'PS256'],
+    };
     if (Array.isArray(options.audience)) {
       verifyOptions.audience = options.audience as [string, ...string[]];
     } else {
@@ -367,7 +377,8 @@ export const getUserPayload = async (
   requestDomain?: string,
   systemApiKey?: string,
   userApiKey?: string,
-  requestContext?: RequestContext
+  requestContext?: RequestContext,
+  req?: IncomingMessage
 ): Promise<UserPayload> => {
   try {
     const readOnlyDataSource = GetReadOnlyDataSource(dataSources, { allowFallbackToReadWrite: true });
@@ -394,7 +405,7 @@ export const getUserPayload = async (
         systemUser
       );
 
-      if (validationResult.IsValid && validationResult.User) {
+      if (validationResult.IsValid && validationResult.User && validationResult.APIKeyId) {
         // Get the user from UserCache to ensure UserRoles is properly populated
         // The validationResult.User from APIKeyEngine doesn't include UserRoles
         const cachedUser = UserCache.Instance.Users.find(
@@ -402,7 +413,32 @@ export const getUserPayload = async (
         );
 
         // Use cached user if available, otherwise fall back to the validation result
-        const userRecord = cachedUser || validationResult.User;
+        const resolvedUser = cachedUser || validationResult.User;
+
+        // ALWAYS clone before stamping per-session state: the resolved user is
+        // very often the SHARED UserCache instance, and stamping it in place
+        // leaks one session's row-filter bindings / acting context to every
+        // concurrent session of the same user (same pattern as
+        // buildMagicLinkSessionUser — see sessionUserClone.ts).
+        const userRecord = CloneUserForSessionContext(resolvedUser);
+
+        // Row-filter bindings for this key, rebuilt PER REQUEST from the
+        // APIKeysEngineBase cache (staleness envelope = scopeCacheTTLMs, same
+        // as scope enforcement). Consumed by
+        // EntityInfo.GetEffectiveRowFilterWhereClause at every RLS enforcement
+        // point — outside the role-RLS exemption. Throws (fail closed) if the
+        // engine's base cache has not loaded yet.
+        userRecord.APIKeyRowFilters = apiKeyEngine.GetRowFilterBindingsForKey(validationResult.APIKeyId);
+
+        // Acting context: values are deployment-supplied via the registered
+        // resolver (plan §5.8) — server-derived only, never client input. No
+        // resolver (the default) means no acting context, and any filter
+        // requiring {{Acting*}} tokens fails closed.
+        const actingResolver = GetAPIKeyActingContextResolver();
+        if (actingResolver) {
+          userRecord.APIKeyActingContext =
+            (await actingResolver(req, userRecord, validationResult.APIKeyId)) ?? undefined;
+        }
 
         return {
           userRecord,
@@ -420,7 +456,13 @@ export const getUserPayload = async (
     // Check for system API key (x-mj-api-key header)
     // This authenticates as the system user for system-level operations
     if (systemApiKey && systemApiKey != String(undefined)) {
-      if (systemApiKey === apiKey) {
+      // SECURITY: compare the superadmin system API key in constant time. A plain `===`
+      // short-circuits on the first differing byte, leaking a timing side-channel that could
+      // be used to recover the key byte-by-byte. Hash both sides to fixed-length digests so
+      // timingSafeEqual never throws on length mismatch and the comparison is length-agnostic.
+      const systemKeyDigest = createHash('sha256').update(String(systemApiKey)).digest();
+      const providedKeyDigest = createHash('sha256').update(String(apiKey)).digest();
+      if (timingSafeEqual(systemKeyDigest, providedKeyDigest)) {
         const systemUser = await getSystemUser(readOnlyDataSource);
         return {
           userRecord: systemUser,
@@ -513,7 +555,30 @@ export const getUserPayload = async (
       });
     }
 
-    return { userRecord: sessionUser, email: sessionUser.Email, sessionId };
+    // The IdP's OIDC email_verified assertion, read off the JWKS-verified payload. Standard
+    // claim name across Auth0/Okta/Cognito/WorkOS; MSAL and others simply omit it (undefined).
+    const emailVerified = typeof payload.email_verified === 'boolean' ? payload.email_verified : undefined;
+
+    // Automatic claim-on-login — once per issued token (deduped, own prefix so it can't eat the
+    // audit's first-seen slot), fire-and-forget so it never adds latency. Discovers pending
+    // MJ: Identity Claims addressed to this user's email and redeems each through the FULL
+    // RedeemClaim gate (email/verification rules, atomic CAS, driver error handling), passing
+    // the IdP's email_verified assertion so an unverified email can never auto-claim.
+    // Anonymous magic-link guests are skipped: their principal is synthetic and per-session.
+    if (sessionUser.Email && !sessionUser.IsMagicLinkAnonymous && markSessionAuditSeen(sessionAuditKey('claims', payload))) {
+      // Pre-context auth path: per-request providers do not exist yet here, so the global is the
+      // only provider available — same posture as every other pre-context call on this path.
+      // The allowlist marker has to sit on the reference line itself; MultiProviderCompliance
+      // matches per-line, so a marker on its own line above is invisible to the scanner.
+      const claimProvider = Metadata.Provider as unknown as IMetadataProvider; // global-provider-ok: pre-context auth path
+      if (claimProvider) {
+        void IdentityClaimEngineServer.Instance.AutoClaimForUser(sessionUser, claimProvider, { EmailVerified: emailVerified }).catch(
+          (err) => console.warn(`Auto-claim on login failed for ${sessionUser.Email}: ${err instanceof Error ? err.message : err}`),
+        );
+      }
+    }
+
+    return { userRecord: sessionUser, email: sessionUser.Email, sessionId, emailVerified };
   } catch (error) {
     // An anonymous request presenting no credentials at all (a health check, a CORS
     // preflight-adjacent probe, a client mid-handshake) is routine, same as an expired
@@ -622,7 +687,8 @@ export function createUnifiedAuthMiddleware(
         requestDomain,
         systemApiKey,
         userApiKey,
-        requestContext
+        requestContext,
+        req
       );
 
       if (!userPayload) {

@@ -1,11 +1,10 @@
 import { Resolver, Mutation, Arg, Ctx, ObjectType, Field, Int, InputType, PubSub, PubSubEngine } from 'type-graphql';
-import { AppContext } from '../types.js';
+import { AppContext, UserPayload } from '../types.js';
 import { LogError, LogStatus, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { VersionHistoryEngine } from '@memberjunction/version-history';
 import { CreateLabelParams, CreateLabelProgressUpdate, VersionLabelScope } from '@memberjunction/version-history';
 import { KeyValuePairInput } from '../generic/KeyValuePairInput.js';
-import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 
 // =========================================================================
 // GraphQL types
@@ -115,7 +114,7 @@ export class VersionHistoryResolver extends ResolverBase {
 
             // Build progress callback that publishes to PubSub
             const resolvedSessionId = sessionId ?? context.userPayload.sessionId;
-            const onProgress = this.buildProgressCallback(pubSub, resolvedSessionId);
+            const onProgress = this.buildProgressCallback(pubSub, resolvedSessionId, context.userPayload);
 
             const params: CreateLabelParams = {
                 Name: input.Name,
@@ -160,18 +159,16 @@ export class VersionHistoryResolver extends ResolverBase {
      */
     private buildProgressCallback(
         pubSub: PubSubEngine,
-        sessionId: string
+        sessionId: string,
+        userPayload: UserPayload
     ): (progress: CreateLabelProgressUpdate) => void {
         return (progress: CreateLabelProgressUpdate) => {
-            pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                message: JSON.stringify({
-                    resolver: 'VersionHistoryResolver',
-                    type: 'CreateLabelProgress',
-                    status: 'ok',
-                    data: progress,
-                }),
-                sessionId,
-            });
+            this.PublishStatusUpdate(pubSub, sessionId, JSON.stringify({
+                resolver: 'VersionHistoryResolver',
+                type: 'CreateLabelProgress',
+                status: 'ok',
+                data: progress,
+            }), userPayload);
         };
     }
 }

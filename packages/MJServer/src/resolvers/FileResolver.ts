@@ -41,12 +41,70 @@ import { FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { GetReadOnlyProvider } from '../util.js';
 import { configInfo } from '../config.js';
 import { MediaAccessKeyManager } from '../rest/MediaAccessKeys.js';
+import { UploadTokenManager } from '../rest/UploadTokenManager.js';
 import { deriveSidecarPath, parsePeaksSidecar } from './peaksSidecar.js';
 
 @InputType()
 export class CreateUploadURLInput {
   @Field(() => String)
   FileID: string;
+}
+
+@InputType()
+export class UploadStorageFileInput {
+  @Field(() => String, { nullable: true })
+  FileName?: string;
+
+  @Field(() => String, { nullable: true })
+  Base64Data?: string;
+
+  @Field(() => String, { nullable: true })
+  UploadToken?: string;
+
+  @Field(() => String, { nullable: true })
+  MimeType?: string;
+
+  @Field(() => String, { nullable: true })
+  AccountID?: string;
+
+  @Field(() => String, { nullable: true })
+  CategoryID?: string;
+
+  @Field(() => String, { nullable: true })
+  Description?: string;
+
+  @Field(() => String, { nullable: true })
+  PathPrefix?: string;
+}
+
+@ObjectType()
+export class UploadStorageFilePayload {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  FileID?: string;
+
+  @Field(() => MJFile_, { nullable: true })
+  File?: MJFile_;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
+}
+
+@ObjectType()
+export class CreateUploadStageTokenPayload {
+  @Field(() => Boolean)
+  Success: boolean;
+
+  @Field(() => String, { nullable: true })
+  Token?: string;
+
+  @Field(() => String, { nullable: true })
+  Url?: string;
+
+  @Field(() => String, { nullable: true })
+  ErrorMessage?: string;
 }
 
 @ObjectType()
@@ -414,7 +472,8 @@ export class FileResolver extends FileResolverBase {
 
       // Access authorized — mint the capability token.
       const { Token, ExpiresAt } = MediaAccessKeyManager.Instance.Sign(fileId, contextUser.ID);
-      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}?token=${encodeURIComponent(Token)}`;
+      const fileNameSuffix = fileEntity.Name ? `/${encodeURIComponent(fileEntity.Name)}` : '';
+      const url = `${this.resolvePublicBaseUrl()}/media/${encodeURIComponent(fileId)}${fileNameSuffix}?token=${encodeURIComponent(Token)}`;
 
       // Best-effort: surface precomputed waveform peaks from a peaks.json sidecar beside the file, so
       // the player renders the real waveform instantly without fetching/decoding the audio. Never
@@ -573,12 +632,104 @@ export class FileResolver extends FileResolverBase {
     return { File, UploadUrl, NameExists };
   }
 
+  /**
+   * Direct server-side file upload using MJ Storage subsystem.
+   * Uploads file contents directly via the configured storage driver (Box, Azure, S3, Google Drive, Dropbox, etc.)
+   * and creates/persists the MJ: Files database record.
+   */
+  @Mutation(() => UploadStorageFilePayload)
+  async UploadStorageFile(
+    @Arg('input', () => UploadStorageFileInput) input: UploadStorageFileInput,
+    @Ctx() context: AppContext
+  ): Promise<UploadStorageFilePayload> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const user = this.GetUserFromPayload(context.userPayload);
+
+      // Permission check on MJ: Files
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+      fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+
+      let buffer: Buffer;
+      let fileName: string = input.FileName || 'file';
+      let mimeType: string = input.MimeType || 'application/octet-stream';
+
+      if (input.UploadToken) {
+        const staged = UploadTokenManager.Instance.Consume(input.UploadToken, user.ID);
+        if (!staged) {
+          return {
+            Success: false,
+            ErrorMessage: 'Upload token is invalid, expired, or has already been used.',
+          };
+        }
+        buffer = staged.buffer;
+        fileName = input.FileName || staged.fileName || 'file';
+        mimeType = input.MimeType || staged.mimeType || 'application/octet-stream';
+      } else if (input.Base64Data) {
+        buffer = Buffer.from(input.Base64Data, 'base64');
+      } else {
+        return {
+          Success: false,
+          ErrorMessage: 'Either UploadToken or Base64Data must be provided.',
+        };
+      }
+
+      // Ensure FileStorageEngine is configured under the user context
+      await FileStorageEngine.Instance.Config(false, user, provider);
+      if (input.AccountID && !FileStorageEngine.Instance.GetAccountById(input.AccountID)) {
+        await FileStorageEngine.Instance.Config(true, user, provider);
+      }
+
+      const uploadResult = await FileStorageEngine.Instance.UploadFile({
+        content: buffer,
+        fileName,
+        mimeType,
+        contextUser: user,
+        storageAccountId: input.AccountID,
+        categoryID: input.CategoryID,
+        description: input.Description,
+        pathPrefix: input.PathPrefix,
+        provider,
+      });
+
+      const loaded = await fileEntity.Load(uploadResult.FileID);
+      const mapper = new FieldMapper();
+      const File = loaded ? (mapper.MapFields({ ...fileEntity.GetAll() }) as unknown as MJFile_) : undefined;
+
+      return {
+        Success: true,
+        FileID: uploadResult.FileID,
+        File,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      LogError(`UploadStorageFile failed for '${input.FileName}': ${message}`);
+      return {
+        Success: false,
+        ErrorMessage: message,
+      };
+    }
+  }
+
   @FieldResolver(() => String)
   async DownloadUrl(@Root() file: MJFile_, @Ctx() context: AppContext) {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
+
+    await FileStorageEngine.Instance.Config(false, user, md);
+    let accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+    if (accounts.length === 0) {
+      await FileStorageEngine.Instance.Config(true, user, md);
+      accounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
+    }
+
+    if (accounts.length > 0) {
+      const account = accounts[0];
+      const driver = await FileStorageEngine.Instance.GetDriver(account.ID, user);
+      return await driver.CreatePreAuthDownloadUrl(file.ProviderKey ?? file.Name);
+    }
 
     const providerEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', user);
     await providerEntity.Load(file.ProviderID);
@@ -734,16 +885,13 @@ export class FileResolver extends FileResolverBase {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
-    // Load the account and its provider
-    const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
-
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);
 
-    // Create download URL with extended user context (includes account for credential lookup)
-    const userContext = this.buildExtendedUserContext(context, account);
-    const downloadUrl = await createDownloadUrl(providerEntity, input.ObjectName, userContext);
+    await FileStorageEngine.Instance.Config(false, user, md);
+    const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
+    const downloadUrl = await driver.CreatePreAuthDownloadUrl(input.ObjectName);
     return downloadUrl;
   }
 
@@ -762,66 +910,78 @@ export class FileResolver extends FileResolverBase {
    * @see CreateFile for the legacy path that also creates a File entity record.
    */
   @Mutation(() => CreatePreAuthUploadUrlPayload)
-  async CreatePreAuthUploadUrl(@Arg('input', () => CreatePreAuthUploadUrlInput) input: CreatePreAuthUploadUrlInput, @Ctx() context: AppContext) {
+  async CreatePreAuthUploadUrl(
+    @Arg('input', () => CreatePreAuthUploadUrlInput) input: CreatePreAuthUploadUrlInput,
+    @Ctx() context: AppContext
+  ): Promise<CreatePreAuthUploadUrlPayload> {
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
-
-    // Load the account and its provider
-    const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Create, true);
 
-    // Create upload URL with extended user context (includes account for credential lookup)
-    const userContext = this.buildExtendedUserContext(context, account);
-    const { UploadUrl, updatedInput } = await createUploadUrl(
-      providerEntity,
-      {
-        ID: '', // Not needed for direct upload
-        Name: input.ObjectName,
-        ProviderID: providerEntity.ID,
-        ContentType: input.ContentType,
-      },
-      userContext,
-    );
+    await FileStorageEngine.Instance.Config(false, user, md);
+    const driver = await FileStorageEngine.Instance.GetDriver(input.AccountID, user);
+    if (!driver.SupportsPreAuthUpload) {
+      throw new Error(`Storage provider '${driver.constructor.name}' does not support pre-authenticated direct uploads.`);
+    }
 
-    // Extract ProviderKey if it exists (spread into updatedInput by createUploadUrl)
-    const providerKey = (updatedInput as { ProviderKey?: string }).ProviderKey;
+    const result = await driver.CreatePreAuthUploadUrl(input.ObjectName);
 
     return {
-      UploadUrl,
-      ProviderKey: providerKey,
+      UploadUrl: result.UploadUrl,
+      ProviderKey: result.ProviderKey,
     };
+  }
+
+  /**
+   * Mints a cryptographically signed, short-lived media-upload token for staging raw binary files.
+   * Checks user permissions on `MJ: Files` before issuing.
+   */
+  @Mutation(() => CreateUploadStageTokenPayload)
+  async CreateUploadStageToken(
+    @Ctx() context: AppContext
+  ): Promise<CreateUploadStageTokenPayload> {
+    try {
+      const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
+      const user = this.GetUserFromPayload(context.userPayload);
+
+      // Permission check on MJ: Files
+      const fileEntity = await provider.GetEntityObject<MJFileEntity>('MJ: Files', user);
+      fileEntity.CheckPermissions(EntityPermissionType.Create, true);
+
+      const mint = MediaAccessKeyManager.Instance.SignUpload(user.ID);
+
+      return {
+        Success: true,
+        Token: mint.Token,
+        Url: '/media/upload-stage',
+      };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return {
+        Success: false,
+        ErrorMessage: message,
+      };
+    }
   }
 
   @Mutation(() => Boolean)
   async DeleteStorageObject(@Arg('input', () => DeleteStorageObjectInput) input: DeleteStorageObjectInput, @Ctx() context: AppContext) {
-    console.log('[FileResolver] DeleteStorageObject called:', input);
-
     const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
 
     // Load the account and its provider
     const { account, provider: providerEntity } = await this.loadAccountAndProvider(input.AccountID, context);
 
-    console.log('[FileResolver] Provider loaded:', {
-      providerID: providerEntity.ID,
-      providerName: providerEntity.Name,
-      serverDriverKey: providerEntity.ServerDriverKey,
-    });
-
     // Check permissions
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Delete, true);
 
-    console.log('[FileResolver] Permissions checked, calling deleteObject...');
-
     // Delete the object with extended user context (includes account for credential lookup)
     const userContext = this.buildExtendedUserContext(context, account);
     const success = await deleteObject(providerEntity, input.ObjectName, userContext);
-
-    console.log('[FileResolver] deleteObject returned:', success);
 
     return success;
   }

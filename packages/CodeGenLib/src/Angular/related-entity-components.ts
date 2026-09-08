@@ -141,7 +141,7 @@ export class ComponentConfigBase {
  * 
  * **Commonly used BaseFormComponent methods/properties:**
  * - `BuildRelationshipViewParamsByEntityName()` - Creates view parameters for related entities
- * - `NewRecordValues()` - Provides default values for new related records
+ * - `NewRecordValues(relatedEntity, joinField?)` - FK defaults for a new related record (deeplinkable)
  * - `IsCurrentTab()` - Checks if the current tab is active (useful for deferred loading)
  * - `GridEditMode()` - Determines if grids should be in edit mode
  * - `GridBottomMargin()` - Provides consistent bottom margin for grids

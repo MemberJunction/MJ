@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://memberjunction.com/schema/mj-standards.schema.json",
+  "title": "MJ standards adoption",
+  "description": "A repository's record of which MemberJunction engineering standards it enforces, and how strictly. Written and updated by `mj standards adopt`; safe to edit by hand.",
+  "type": "object",
+  "required": ["StandardsVersion", "Checks"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Pointer to this schema, for editor completion."
+    },
+    "StandardsVersion": {
+      "type": "string",
+      "description": "The MJ version this repo adopted standards against. Checks introduced after this version are reported as available and do NOT run — that is what stops a package upgrade from activating new rules here. Bump it deliberately with `mj standards adopt --upgrade`.",
+      "pattern": "^v?\\d+\\.\\d+\\.\\d+"
+    },
+    "Roots": {
+      "type": "array",
+      "description": "Default repo-relative directories to scan, for checks that do not name their own.",
+      "items": { "type": "string" }
+    },
+    "Checks": {
+      "type": "object",
+      "description": "Per-check configuration. A check absent from this map does not run — adoption is explicit.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["Severity"],
+        "additionalProperties": false,
+        "properties": {
+          "Severity": {
+            "enum": ["off", "warn", "error"],
+            "description": "off = registered but not run. warn = reported, exit code stays 0 (what a newly adopted check should be for one cycle). error = reported, exit code 1."
+          },
+          "Roots": {
+            "type": "array",
+            "description": "Overrides the check's default roots.",
+            "items": { "type": "string" }
+          },
+          "Options": {
+            "type": "object",
+            "description": "Check-specific options. See `mj standards list` for what each check accepts.",
+            "additionalProperties": true
+          }
+        }
+      }
+    }
+  }
+}

@@ -11,6 +11,8 @@ name: External Data Sources integration
 # beforeAll, so every service container below is blank — no seed step needed and the
 # runs are deterministic. (Snowflake has no CI job: it needs a hosted account, and its
 # catalog doesn't expose FKs reliably — it's exercised locally with tester-supplied creds.)
+# Microsoft Fabric and Databricks likewise have no service container — both run MANUAL-ONLY
+# (workflow_dispatch) against a hosted endpoint with tester-supplied GitHub Secrets.
 #
 # NOTE: the DB credentials in the service-container/env blocks below are intentionally
 # throwaway literals for ephemeral CI containers (nothing real to leak). Do NOT "promote"
@@ -37,6 +39,16 @@ jobs:
     name: Postgres reference driver (integration)
     runs-on: ubuntu-latest
 
+    env:
+      # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
+      # receive it, so they degrade to a cold local cache rather than failing. Rationale and
+      # setup instructions live once, on the build job in test.yml. Every driver job below
+      # carries the same three vars.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+
     services:
       postgres:
         image: postgres:17
@@ -56,13 +68,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # Turbo builds the driver package plus its full transitive dep graph
       # (Engine, MJCore, core-entities, credentials, …) so the test can resolve
@@ -81,11 +96,17 @@ jobs:
           PG_DATABASE: eds_ci
           PG_USER: eds_ci
           PG_PASSWORD: eds_ci_pass
-        run: npm run test
+        run: pnpm run test
 
   mongo-driver-integration:
     name: MongoDB driver (integration)
     runs-on: ubuntu-latest
+
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     services:
       mongo:
@@ -105,13 +126,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MongoDB external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-mongodb
@@ -128,11 +152,17 @@ jobs:
           MONGO_USER: eds_ci
           MONGO_PASSWORD: eds_ci_pass
           MONGO_AUTH_SOURCE: admin
-        run: npm run test
+        run: pnpm run test
 
   sqlserver-driver-integration:
     name: SQL Server driver (integration)
     runs-on: ubuntu-latest
+
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     services:
       sqlserver:
@@ -147,13 +177,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SQL Server external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
@@ -165,7 +198,10 @@ jobs:
         env:
           SAPW: Eds_CI_pass123
         run: |
-          node -e '
+          # `mssql` is declared by the sqlserver driver package, not at the root.
+          # npm hoisted it so a bare `node -e` from the repo root resolved it;
+          # pnpm links only declared deps, so run this from the package that has it.
+          pnpm --filter @memberjunction/external-data-source-sqlserver exec node -e '
             const sql = require("mssql");
             (async () => {
               for (let i = 0; i < 60; i++) {
@@ -194,11 +230,17 @@ jobs:
           MSSQL_DATABASE: master
           MSSQL_USER: sa
           MSSQL_PASSWORD: Eds_CI_pass123
-        run: npm run test
+        run: pnpm run test
 
   mysql-driver-integration:
     name: MySQL driver (integration)
     runs-on: ubuntu-latest
+
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     services:
       mysql:
@@ -218,13 +260,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build MySQL external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-mysql
@@ -238,11 +283,17 @@ jobs:
           MYSQL_PORT: '3306'
           MYSQL_USER: root
           MYSQL_PASSWORD: eds_ci_pass
-        run: npm run test
+        run: pnpm run test
 
   oracle-driver-integration:
     name: Oracle driver (integration)
     runs-on: ubuntu-latest
+
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
 
     services:
       oracle:
@@ -265,13 +316,16 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build Oracle external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-oracle
@@ -287,7 +341,7 @@ jobs:
           ORA_SERVICE: FREEPDB1
           ORA_USER: eds_it
           ORA_PASSWORD: Eds_CI_pass123
-        run: npm run test
+        run: pnpm run test
 
   # Microsoft Fabric — Entra service-principal auth against a live Fabric Warehouse SQL endpoint.
   # No service container exists for Fabric (like Snowflake), so this runs against a hosted trial via
@@ -300,9 +354,17 @@ jobs:
     # so bound it explicitly — a hung handshake shouldn't burn the default 6-hour cap.
     timeout-minutes: 15
     if: github.event_name == 'workflow_dispatch'
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -310,7 +372,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build SQL Server external driver
         run: npx turbo build --filter=@memberjunction/external-data-source-sqlserver
@@ -326,4 +388,54 @@ jobs:
           FABRIC_TENANT_ID: ${{ secrets.FABRIC_TENANT_ID }}
           FABRIC_CLIENT_ID: ${{ secrets.FABRIC_CLIENT_ID }}
           FABRIC_CLIENT_SECRET: ${{ secrets.FABRIC_CLIENT_SECRET }}
-        run: npm run test -- fabric.integration
+        run: pnpm run test -- fabric.integration
+
+  # Databricks — a live SQL Warehouse over the @databricks/sql SDK (always HTTPS). No service
+  # container exists (like Snowflake/Fabric), so this runs against a hosted workspace via tester-supplied
+  # GitHub Secrets. MANUAL ONLY (workflow_dispatch) so it never runs on normal PRs/pushes and can't fail
+  # for contributors without the secrets. The read-only `samples.tpch` fixture is present in every
+  # workspace, so the suite is deterministic. Either a PAT (DATABRICKS_TOKEN) or an OAuth M2M pair
+  # (DATABRICKS_CLIENT_ID + DATABRICKS_CLIENT_SECRET) authenticates.
+  databricks-integration:
+    name: Databricks (integration, manual)
+    runs-on: ubuntu-latest
+    # Connects to a live external cloud endpoint, so bound it explicitly — a hung handshake shouldn't
+    # burn the default 6-hour cap.
+    timeout-minutes: 15
+    if: github.event_name == 'workflow_dispatch'
+    env: # Turbo remote cache — see the note on pg-driver-integration above.
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # pnpm install links the driver's declared devDependency @databricks/sql, so the driver's
+      # dynamic import resolves and the suite's sdk-availability guard passes (no extra install step).
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Build Databricks external driver
+        run: npx turbo build --filter=@memberjunction/external-data-source-databricks
+
+      # No fixture seeding — reads the read-only `samples.tpch` catalog present in every workspace.
+      - name: Run Databricks integration test
+        working-directory: packages/ExternalDataSources/Providers/Databricks
+        env:
+          RUN_DATABRICKS_INTEGRATION: '1'
+          DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CLIENT_ID }}
+          DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+        run: pnpm run test -- integration

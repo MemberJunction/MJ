@@ -47,6 +47,10 @@ export interface MockRunViewLike {
  * instance) — test code uses it exactly as they would the real
  * `PermissionProviderBase`: providers extend it, and tests instantiate them.
  */
+// NOTE: the helpers below are `public` rather than `protected` only because this class is declared
+// inside a function and returned — TypeScript must name its type in the emitted declaration, and it
+// cannot do that for a type with non-public members. Providers extending this mock are unaffected;
+// the real PermissionProviderBase keeps its own visibility.
 export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
     abstract class MockPermissionProviderBase {
         readonly DomainName: string = '';
@@ -55,7 +59,7 @@ export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
         async GetPermissionsSharedWithUser(): Promise<unknown[]> { return []; }
         GetResourceTypes(): string[] { return []; }
 
-        protected buildNormalizedPermission(args: {
+        public buildNormalizedPermission(args: {
             resourceType: string;
             resourceId: string | null;
             resourceName?: string;
@@ -82,7 +86,7 @@ export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
             };
         }
 
-        protected boolsToActions(flags: Partial<Record<PermissionAction, boolean | null | undefined>>): PermissionAction[] {
+        public boolsToActions(flags: Partial<Record<PermissionAction, boolean | null | undefined>>): PermissionAction[] {
             const order: PermissionAction[] = ['Read', 'Create', 'Update', 'Delete', 'Share', 'Execute', 'Admin'];
             const out: PermissionAction[] = [];
             for (const action of order) {
@@ -91,7 +95,7 @@ export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
             return out;
         }
 
-        protected async fetchRows<T>(
+        public async fetchRows<T>(
             entityName: string,
             extraFilter: string,
             fields: string[],
@@ -108,7 +112,7 @@ export function buildPermissionProviderBase(RunViewCtor: MockRunViewLike) {
             return (result.Results as T[]) ?? [];
         }
 
-        protected async bulkLookupNames(
+        public async bulkLookupNames(
             entityName: string,
             ids: string[],
             nameField = 'Name'

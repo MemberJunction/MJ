@@ -15,7 +15,8 @@
 
 import { BaseEntity, CompositeKey, EntityFieldInfo, EntityInfo, Metadata, RunView, RunQuery, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
-import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { setupSQLServerClient, SQLServerProviderConfigData } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -24,6 +25,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import sql from "mssql";
 import { z } from "zod";
 import { initConfig, ConfigInfo, MCPServerActionToolInfo, MCPServerPromptToolInfo, MCPServerAgentToolInfo, MCPServerEntityToolInfo } from './config.js';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
+import { loadAgentManagementTools } from './tools/agentManagementTools.js';
 import { AgentRunner } from "@memberjunction/ai-agents";
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import * as fs from 'fs/promises';
@@ -68,6 +71,7 @@ import { send401Response } from './auth/WWWAuthenticate.js';
 // OAuth Proxy imports
 import { createOAuthProxyRouter } from './auth/OAuthProxyRouter.js';
 import type { OAuthProxyConfig } from './auth/OAuthProxyTypes.js';
+import { resolveUpstreamOAuthEndpoints } from './auth/UpstreamEndpoints.js';
 
 
 /*******************************************************************************
@@ -844,6 +848,13 @@ async function registerAllTools(
     await loadEntityTools(addToolWithFilter);
     await loadActionTools(addToolWithFilter, systemUser, sessionContext);
     await loadAgentTools(addToolWithFilter, systemUser, sessionContext);
+    await loadAgentManagementTools(
+        addToolWithFilter,
+        systemUser,
+        sessionContext,
+        (agent) => addAgentExecuteTool(addToolWithFilter, agent, sessionContext),
+        _config.mcpServerSettings?.agentManagementTools
+    );
     loadAgentRunDiagnosticTools(addToolWithFilter, sessionContext);
     loadQueryTools(addToolWithFilter, sessionContext);
     await loadPromptTools(addToolWithFilter, systemUser, sessionContext);
@@ -859,6 +870,21 @@ async function registerAllTools(
 /*******************************************************************************
  * SERVER INITIALIZATION
  ******************************************************************************/
+
+/** Process ID this server identifies itself with to the dynamic-package loader (entry `Processes` filters match it). */
+export const MCP_SERVER_PROCESS_ID = 'mcp';
+
+/**
+ * Loads the installed Open Apps' server packages (mj.config.cjs `dynamicPackages.server[]`) and the
+ * host's generated packages so entity/action tools construct the apps' real subclasses — the same
+ * step MJAPI performs at boot. Must run BEFORE the SQL Server client is set up (startup exports
+ * register classes; they never touch a provider). The parsed `configInfo` strips `dynamicPackages`,
+ * so the raw config is re-discovered here.
+ */
+async function loadOpenAppServerPackages(): Promise<void> {
+    const { config, configFilePath } = DiscoverMJConfig();
+    await LoadDynamicPackages({ processId: MCP_SERVER_PROCESS_ID, tier: 'server', config, configFilePath });
+}
 
 /**
  * Initializes and starts the MemberJunction MCP server.
@@ -902,6 +928,7 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
 
         // Initialize configuration (loads .env and mj.config.cjs)
         _config = await initConfig();
+        await loadOpenAppServerPackages();
         mcpServerPort = _config.mcpServerSettings?.port || 3100;
 
         // Store filter options and custom providers for use by tool registration
@@ -1045,43 +1072,26 @@ export async function initializeServer(optionsOrFilterOptions: MCPServerOptions 
                         // Build OAuth proxy configuration
                         oauthProxyBaseUrl = getResourceIdentifier();
 
-                        // Detect Azure AD v2.0 endpoints from issuer
-                        // Azure AD issuer: https://login.microsoftonline.com/{tenant}/v2.0
+                        // Derive the upstream OAuth endpoints from the provider's issuer.
                         // Cast to access provider properties (IAuthProvider interface)
                         const provider = upstreamProvider as {
                             issuer: string;
                             audience: string;
                             name: string;
                             clientId?: string;
+                            domain?: string;
                         };
-                        const issuer = provider.issuer;
-                        const isAzureAD = issuer?.includes('microsoftonline.com') || issuer?.includes('sts.windows.net');
-
-                        let authorizationEndpoint: string;
-                        let tokenEndpoint: string;
-
-                        if (isAzureAD) {
-                            // Azure AD v2.0 endpoints
-                            const baseUrl = issuer.replace(/\/v2\.0\/?$/, '');
-                            authorizationEndpoint = `${baseUrl}/oauth2/v2.0/authorize`;
-                            tokenEndpoint = `${baseUrl}/oauth2/v2.0/token`;
-                        } else {
-                            // Generic OIDC - assume standard paths (Auth0, Okta, etc.)
-                            // Most providers use /.well-known/openid-configuration but we need direct endpoints
-                            // Strip trailing slash from issuer to avoid double slashes in URL
-                            const issuerBase = issuer.replace(/\/+$/, '');
-                            authorizationEndpoint = `${issuerBase}/authorize`;
-                            tokenEndpoint = `${issuerBase}/oauth/token`;
-                        }
+                        const { flavor, authorizationEndpoint, tokenEndpoint } = resolveUpstreamOAuthEndpoints(provider);
 
                         // Build scopes for upstream - use standard OIDC scopes only
                         // Note: We don't include api://.../.default because that would cause
                         // AADSTS90009 "app requesting token for itself" when using a single app registration.
                         // The OAuth proxy only needs to authenticate the user, not access an API resource.
                         const upstreamScopes: string[] = ['openid', 'profile', 'email'];
-                        if (!isAzureAD) {
-                            // For non-Azure providers, we might need additional scopes
-                            // (Azure AD doesn't need offline_access for refresh tokens in v2.0)
+                        if (flavor === 'generic') {
+                            // Auth0/Okta need offline_access to get a refresh token.
+                            // Azure AD v2.0 returns one without it, and Cognito has no such scope at
+                            // all - asking for it makes the hosted UI reject the request as invalid_scope.
                             upstreamScopes.push('offline_access');
                         }
 
@@ -3275,6 +3285,7 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
     try {
         // Initialize configuration (loads .env and mj.config.cjs)
         _config = await initConfig();
+        await loadOpenAppServerPackages();
 
         if (!_config.mcpServerSettings?.enableMCPServer) {
             console.log("MCP Server is disabled in the configuration.");

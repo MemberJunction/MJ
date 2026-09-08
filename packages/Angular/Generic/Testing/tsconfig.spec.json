@@ -13,7 +13,10 @@
     "src/lib/components/widgets/review-status-indicator.component.ts",
     "src/lib/components/widgets/execution-context.component.ts",
     "src/lib/components/widgets/evaluation-mode-toggle.component.ts",
-    "src/lib/components/widgets/**/*.dom.test.ts"
+    "src/lib/components/widgets/**/*.dom.test.ts",
+    "src/lib/components/test-run-dialog.component.ts",
+    "src/lib/components/test-run-dialog.component.dom.test.ts",
+    "src/lib/services/testing-execution.service.ts"
   ],
   "exclude": [
     "node_modules",

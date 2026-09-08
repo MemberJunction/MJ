@@ -21,7 +21,7 @@ import type { CacheChangedEvent } from '@memberjunction/core';
 
 const REDIS_URL = process.env.REDIS_URL;
 
-const describeRedis = REDIS_URL ? describe : describe.skip;
+const describeRedis = describe.skipIf(!REDIS_URL);
 
 describeRedis('Integration: Two-Server Pub/Sub', () => {
     let providerA: InstanceType<typeof import('../RedisLocalStorageProvider.js').RedisLocalStorageProvider>;

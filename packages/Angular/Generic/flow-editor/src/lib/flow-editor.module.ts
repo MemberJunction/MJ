@@ -16,6 +16,7 @@ import { FlowStatusBarComponent } from './components/flow-status-bar.component';
 import { FlowAgentEditorComponent } from './agent-editor/flow-agent-editor.component';
 import { AgentPropertiesPanelComponent } from './agent-editor/agent-properties-panel.component';
 import { AgentStepListComponent } from './agent-editor/agent-step-list.component';
+import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 @NgModule({
   declarations: [
@@ -31,6 +32,7 @@ import { AgentStepListComponent } from './agent-editor/agent-step-list.component
     AgentStepListComponent
   ],
   imports: [
+    SharedGenericModule,
     CommonModule,
     FormsModule,
     FFlowModule,

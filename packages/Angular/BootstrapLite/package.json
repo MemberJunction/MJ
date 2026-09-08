@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-bootstrap-lite",
-  "version": "5.50.0",
+  "version": "6.1.0-edge.5",
   "description": "Lite class registrations manifest excluding lazy-loaded dashboard and settings packages",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,9 +16,9 @@
     }
   },
   "scripts": {
-    "prebuild": "if [ -d dist ]; then mj codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist || echo 'Warning: mj codegen manifest not available, using existing manifest'; else touch .needs-manifest-rebuild; fi",
+    "prebuild": "if [ -d dist ]; then node ../../../packages/MJCLI/bin/run.js codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), using existing manifest'; else touch .needs-manifest-rebuild; fi",
     "build": "tsc && tsc-alias -f",
-    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (mj codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist && tsc && tsc-alias -f || echo 'Warning: mj codegen manifest not available, manifest will be generated on next build'); fi",
+    "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (node ../../../packages/MJCLI/bin/run.js codegen manifest --appDir . --exclude-packages @memberjunction/ng-dashboards --exclude-packages @memberjunction/ng-explorer-settings --output ./src/generated/mj-class-registrations.ts --scan-dist && tsc && tsc-alias -f || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), manifest will be generated on next build'); fi",
     "watch": "tsc --watch",
     "clean": "rimraf dist",
     "test": "vitest run",
@@ -31,28 +31,28 @@
     "lite"
   ],
   "author": "MemberJunction",
-  "license": "MIT",
+  "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/actions-base": "5.50.0",
-    "@memberjunction/ai-core-plus": "5.50.0",
-    "@memberjunction/ai-engine-base": "5.50.0",
-    "@memberjunction/ai-realtime-client": "5.50.0",
-    "@memberjunction/ai-vectors-memory": "5.50.0",
-    "@memberjunction/communication-types": "5.50.0",
-    "@memberjunction/core": "5.50.0",
-    "@memberjunction/core-entities": "5.50.0",
-    "@memberjunction/entity-communications-base": "5.50.0",
-    "@memberjunction/graphql-dataprovider": "5.50.0",
-    "@memberjunction/ng-artifacts": "5.50.0",
-    "@memberjunction/ng-auth-services": "5.50.0",
-    "@memberjunction/ng-conversations": "5.50.0",
-    "@memberjunction/ng-core-entity-forms": "5.50.0",
-    "@memberjunction/ng-dashboard-viewer": "5.50.0",
-    "@memberjunction/ng-entity-action-ux": "5.50.0",
-    "@memberjunction/ng-entity-viewer": "5.50.0",
-    "@memberjunction/ng-explorer-core": "5.50.0",
-    "@memberjunction/ng-file-storage": "5.50.0",
-    "@memberjunction/ng-shared": "5.50.0",
+    "@memberjunction/actions-base": "6.1.0-edge.5",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.5",
+    "@memberjunction/ai-engine-base": "6.1.0-edge.5",
+    "@memberjunction/ai-realtime-client": "6.1.0-edge.5",
+    "@memberjunction/ai-vectors-memory": "6.1.0-edge.5",
+    "@memberjunction/communication-types": "6.1.0-edge.5",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/entity-communications-base": "6.1.0-edge.5",
+    "@memberjunction/graphql-dataprovider": "6.1.0-edge.5",
+    "@memberjunction/ng-artifacts": "6.1.0-edge.5",
+    "@memberjunction/ng-auth-services": "6.1.0-edge.5",
+    "@memberjunction/ng-conversations": "6.1.0-edge.5",
+    "@memberjunction/ng-core-entity-forms": "6.1.0-edge.5",
+    "@memberjunction/ng-dashboard-viewer": "6.1.0-edge.5",
+    "@memberjunction/ng-entity-action-ux": "6.1.0-edge.5",
+    "@memberjunction/ng-entity-viewer": "6.1.0-edge.5",
+    "@memberjunction/ng-explorer-core": "6.1.0-edge.5",
+    "@memberjunction/ng-file-storage": "6.1.0-edge.5",
+    "@memberjunction/ng-shared": "6.1.0-edge.5",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {
@@ -65,5 +65,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/MemberJunction/MJ"
-  }
+  },
+  "mjUILayer": "surface"
 }

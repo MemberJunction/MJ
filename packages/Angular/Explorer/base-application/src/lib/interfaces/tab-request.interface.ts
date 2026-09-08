@@ -23,6 +23,16 @@ export interface TabRequest {
   /** Whether this tab should be pinned (permanent) */
   IsPinned?: boolean;
 
+  /**
+   * When true, opening this tab must NOT mutate other tabs' pin state.
+   * OpenTabForced normally pins all existing temporary tabs (the classic
+   * "only one temp tab at a time" rule); record tabs under the records-style
+   * record-open model live in their own layout region, so opening one must
+   * leave the nav tab's temp status untouched — otherwise the pinned nav tab
+   * forces the main tab bar visible on every nav page forever after.
+   */
+  PreservePinState?: boolean;
+
   /** Tab-specific configuration */
   Configuration?: Record<string, unknown>;
 }

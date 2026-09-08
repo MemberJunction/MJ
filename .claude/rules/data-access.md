@@ -190,6 +190,33 @@ const results = await rv.RunView<TemplateContentEntity>({
 const entities = results.Results; // No casting needed!
 ```
 
+### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — use `EscapeSQLString`
+
+- **NEVER hand-roll `.replace(/'/g, "''")`** when interpolating a dynamic value into SQL text, `ExtraFilter`, or a query predicate. Import `EscapeSQLString` from `@memberjunction/global` instead.
+- **Why**: ad-hoc inline escaping is error-prone, throws on `null`/`undefined`, leaves null bytes (`\0`) in place, and spawns divergent sanitizers across the codebase. `EscapeSQLString` gives you ANSI quote doubling plus null-byte stripping in one audited place.
+
+```typescript
+import { EscapeSQLString } from '@memberjunction/global';
+
+// ✅ CORRECT — centralized, safe SQL escaping
+const filter = `Email = '${EscapeSQLString(user.Email?.trim().toLowerCase())}'`;
+
+// ❌ WRONG — fragile manual regex
+const filter = `Email = '${user.Email.replace(/'/g, "''")}'`;
+```
+
+#### Three things `EscapeSQLString` does **not** do
+
+It escapes **string literals** and nothing else. Quote doubling is the wrong tool — or an insufficient one — in these three cases:
+
+| Context | Why quote doubling is not enough | Use instead |
+|---|---|---|
+| `LIKE` patterns | `%`, `_` and `[` stay live as wildcards, so a user searching for `%` still matches every row | Escape the wildcards too and pair the clause with `ESCAPE '\'`. Reference implementations: `escapeLikeValue()` in [`packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts`](../../packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts) (platform-aware) and `GenericDatabaseProvider.escapeLikeTerm()` |
+| Identifiers — table, column, schema names | Identifiers are quoted with brackets or double quotes, never single quotes, so escaping `'` protects nothing | `ValidateIdentifier()` from `@memberjunction/schema-engine` |
+| A value that must not be missing | `EscapeSQLString(undefined)` returns `''`, so the predicate silently degrades to `Field = ''` and matches nothing instead of failing loudly | Validate the value before building the filter — the escaper will not fail for you |
+
+This is the standard for **new and changed code**. Ad-hoc escaping still exists in packages that have not been migrated; convert those as you touch them rather than in one sweep.
+
 ### RunView Error Handling
 **Important**: RunView does NOT throw exceptions when it fails. Instead, it returns a result object with `Success` and `ErrorMessage` properties:
 
@@ -255,6 +282,98 @@ LogError(`Error: ${entity.LatestResult?.Message}`); // Incomplete info
 - **Always** use `LatestResult?.CompleteMessage` (not `.Message`) for error details — `CompleteMessage` combines all error info
 - **Never** wrap `Save()`/`Delete()` in try/catch expecting them to throw on business logic failures
 - Save/Delete CAN still throw for infrastructure errors (network, connection), but logical failures (validation, permissions, FK violations) return `false`
+
+### Saving a parent AND its children — use an entity graph, not a hand-rolled cascade
+
+**Do not hand-roll a parent/children save.** Declaring a child collection gets you atomicity,
+validation ordering, dirty tracking, orphan handling and client/server parity for free — and avoids
+the five defects every hand-rolled version in this codebase has shipped at least one of.
+
+```typescript
+// On a SHARED (client + server) entity subclass — not a server-only one
+public readonly Lines = this.DeclareRelatedRecords<OrderLineEntity>({
+    Name: 'Lines',
+    RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+    RelatedEntityJoinField: 'OrderHeaderID',
+    OrderBy: 'LineNumber ASC',
+    Load: 'explicit',                        // 'explicit' | 'immediate' | 'lazy' | 'never'
+    Source: 'database',                      // or 'cache' — read from a loaded BaseEngine
+    OnRemove: 'delete',                      // 'delete' | 'orphan' | 'refuse'
+    Sequence: { Field: 'LineNumber', From: 1 },
+});
+
+// Then, on either tier:
+await order.Save();   // header + lines, atomically
+```
+
+**The three mechanisms are not interchangeable:**
+
+| Need | Use | Never use |
+|---|---|---|
+| Parent + its children | `DeclareRelatedRecords()` + `entity.Save()` | ❌ a TransactionGroup — saves are *deferred*, so the parent's PK is unavailable, there is no read-your-writes, and `Save()` returns `true` before anything persists |
+| Several server-side writes together | `RunInEntityTransaction(this.ProviderToUse, work)` | ❌ `ProviderToUse as DatabaseProviderBase` then `BeginTransaction()` — that cast is what makes a class server-only |
+| Unrelated records in one client round trip | TransactionGroup + `Submit()` | — |
+
+Other rules that follow from this:
+
+- **`Load: 'immediate'` never fires from `LoadFromData()`.** For result sets use
+  `RunView({ ..., ResultType: 'entity_object', IncludeRelatedRecords: ['Lines'] })`, which costs `1 + K`
+  queries instead of N+1.
+- **Prefer declaring it in metadata.** Set `EntityRelationship.RelatedRecordCollection` and CodeGen
+  emits the declaration onto the *generated* class — both tiers get it, no subclass needed.
+- **`Source: 'cache'` gives zero-query related records** for entities a `BaseEngine` already caches
+  (action params, prompt models, API key scopes). It resolves generically through
+  `BaseEngineRegistry`, falls back to a database load on a miss, and defaults `ReadOnly: true` —
+  because you are then holding *the engine's own instances*, as a live view. Declare
+  `ReadOnly: false` to get copies you can safely modify. `Load: 'lazy'` requires both, and **throws**
+  on a cache miss rather than returning an empty array.
+- **`await entity.LoadRelatedRecords()`** populates everything: cache-backed for free,
+  database-backed batched into one `RunViews`.
+- **The collection is iterable** — `for (const l of order.Lines)`, `[...order.Lines]`,
+  `order.Lines.length` all work. Use `.Items` for `map`/`filter`/`find`; it is `readonly` on
+  purpose, so mutate through `Add`/`Create`/`Remove` and never by pushing at an array.
+- **Declare collections on a shared subclass**, with server-only behaviour in a class that extends
+  it. `ClassFactory` priority auto-increments by load order, so the server subclass wins server-side
+  with no configuration — and the browser still sees the collection.
+- **`BeginISATransaction()`, `ProviderTransaction` and `PropagateTransactionToParents()` were removed in 6.2.** Use `BeginEntityTransaction()` / `RunInEntityTransaction()`.
+
+Read [`guides/TRANSACTIONS_AND_BATCHING_GUIDE.md`](../../guides/TRANSACTIONS_AND_BATCHING_GUIDE.md)
+before writing anything that saves more than one record together, and
+[`packages/MJCore/docs/related-record-collections.md`](../../packages/MJCore/docs/related-record-collections.md)
+for the full model with flow diagrams.
+
+### 🚨 NEVER WRITE DIRECT SQL DML AGAINST AN ENTITY — unless it opts in
+
+**Do not write `INSERT`, `UPDATE`, or `DELETE` against an entity's base table.** All mutations go through `BaseEntity.Save()` / `.Delete()`, because that is the only path where the platform's guarantees actually run:
+
+| Guarantee | What skipping it looks like |
+|---|---|
+| Record Changes (`TrackRecordChanges`) | An audit trail that **looks** complete but silently isn't |
+| Cache invalidation (`TrustServerCacheCompletely`) | The server RunView cache serves stale rows **indefinitely** |
+| Entity Actions | Create/update/delete hooks never fire |
+| Validation | Field rules and `BaseEntity` subclass overrides never run |
+| Soft delete (`DeleteType='Soft'`) | The row is **destroyed** instead of having `DeletedAt` set |
+
+None of these fail loudly. That's the point — raw DML produces a database that looks fine and is quietly wrong.
+
+**The opt-in.** Three flags on `Entity` declare, per verb, that direct SQL is sanctioned:
+
+```typescript
+const entity = new Metadata().EntityByName('Some Entity');
+if (!entity?.AllowDirectSQLUpdate) {
+    // Not sanctioned — go through BaseEntity.Save()
+}
+```
+
+- `AllowDirectSQLInsert` — bulk loads, ETL/integration sync, rows created as a side effect of a proc
+- `AllowDirectSQLUpdate` — bulk backfills, maintenance routines
+- `AllowDirectSQLDelete` — purge/retention, integration reconciliation
+
+All default to `false`. **They declare; they do not enforce** — nothing stops you executing SQL, so a `false` is a statement that the platform does not expect raw DML here, not a barrier that will catch you.
+
+Setting any of them requires `TrackRecordChanges = 0` **and** `TrustServerCacheCompletely = 0` (a database CHECK enforces it), since direct DML writes no audit row and fires no invalidation event. `AllowDirectSQLDelete` additionally requires `DeleteType = 'Hard'`.
+
+**If you need a bulk operation**, reach for the substrate before reaching for SQL — see [Record Set Processing & Record Processes Guide](../../guides/RECORD_SET_PROCESSING_GUIDE.md), which gives you batching, resume, rate limiting and audit without leaving the `BaseEntity` path.
 
 ### Key Benefits of This Pattern
 - **Type Safety**: Generic method provides full TypeScript typing

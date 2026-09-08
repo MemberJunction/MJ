@@ -3,51 +3,213 @@
   (dragover)="onDragOver($event)"
   (dragleave)="onDragLeave($event)"
   (drop)="onDrop($event)">
-  <!-- Breadcrumb Navigation Bar -->
+
+  <!-- Top Command Bar: Breadcrumbs & Primary Actions -->
   @if (!isLoading && !errorMessage) {
-    <div class="breadcrumb-bar">
-      <div class="nav-buttons">
-        <button class="nav-btn"
-          [disabled]="!canNavigateUp()"
-          (click)="navigateUp()"
-          title="Go up to parent folder">
-          <i class="fa-solid fa-arrow-up"></i>
-        </button>
-        <button class="nav-btn" (click)="refresh()" title="Refresh">
-          <i class="fa-solid fa-arrows-rotate"></i>
-        </button>
-      </div>
-      <div class="breadcrumb-path">
-        <i class="fa-solid fa-folder"></i>
-        <span class="path-text">{{ folderPath || 'Root' }} /</span>
-      </div>
-      <div class="search-bar">
-        <input type="text"
-          class="search-input"
-          [(ngModel)]="searchQuery"
-          (ngModelChange)="onSearchChange($event)"
-          placeholder="Search files and folders..."
-          [disabled]="isLoading || isMultiProviderSearchMode">
-        @if (searchQuery && !isMultiProviderSearchMode) {
-          <button class="search-clear-btn"
-            (click)="clearSearch()"
-            title="Clear search">
-            <i class="fa-solid fa-xmark"></i>
+    <div class="command-bar breadcrumb-bar">
+      <!-- Left: Breadcrumb Navigation Trail -->
+      <div class="command-bar-left">
+        <div class="nav-btn-group nav-buttons">
+          <button
+            type="button"
+            class="mj-tool-btn nav-btn"
+            [disabled]="!canNavigateUp()"
+            (click)="navigateUp()"
+            title="Go up to parent folder">
+            <i class="fa-solid fa-arrow-up"></i>
           </button>
-        }
-        <select class="file-type-filter"
-          [(ngModel)]="fileTypeFilter"
-          (ngModelChange)="onFileTypeFilterChange($event)"
-          [disabled]="isLoading || isMultiProviderSearchMode">
-          <option value="all">All</option>
-          <option value="files">Files</option>
-          <option value="folders">Folders</option>
-        </select>
-        <button class="multi-search-btn"
+          <button
+            type="button"
+            class="mj-tool-btn nav-btn"
+            (click)="refresh()"
+            title="Refresh current folder">
+            <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+        </div>
+
+        <nav class="breadcrumb-trail breadcrumb-path" aria-label="Folder Path">
+          <i class="fa-solid fa-folder-open trail-root-icon"></i>
+          @for (crumb of getPathBreadcrumbs(); track crumb.path; let last = $last) {
+            <button
+              type="button"
+              class="crumb-btn"
+              [class.current]="last"
+              (click)="navigateToBreadcrumb(crumb.path)"
+              [title]="crumb.name">
+              {{ crumb.name }}
+            </button>
+            @if (!last) {
+              <span class="crumb-separator">/</span>
+            }
+          }
+        </nav>
+      </div>
+
+      <!-- Right: Search, Filter, View Mode & Action Buttons -->
+      <div class="command-bar-right">
+        <!-- Search & Filter Bar -->
+        <div class="search-pill search-bar">
+          <i class="fa-solid fa-magnifying-glass search-icon"></i>
+          <input
+            type="text"
+            class="search-input"
+            [(ngModel)]="searchQuery"
+            (ngModelChange)="onSearchChange($event)"
+            placeholder="Search files..."
+            [disabled]="isLoading || isMultiProviderSearchMode" />
+          @if (searchQuery && !isMultiProviderSearchMode) {
+            <button
+              type="button"
+              class="search-clear-btn"
+              (click)="clearSearch()"
+              title="Clear search">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          }
+          <select
+            class="type-filter-select file-type-filter"
+            [(ngModel)]="fileTypeFilter"
+            (ngModelChange)="onFileTypeFilterChange($event)"
+            [disabled]="isLoading || isMultiProviderSearchMode">
+            <option value="all">All Items</option>
+            <option value="files">Files only</option>
+            <option value="folders">Folders only</option>
+          </select>
+        </div>
+
+        <!-- Search Across Accounts Toggle -->
+        <button
+          type="button"
+          class="mj-btn-search-toggle multi-search-btn"
           [class.active]="isMultiProviderSearchMode"
           (click)="toggleMultiAccountSearchMode()"
-          title="Search across all storage providers">
-          <i class="fa-solid fa-magnifying-glass-plus"></i>
+          title="Search across all storage accounts">
+          <i class="fa-solid fa-layer-group"></i>
+          <span>All Accounts</span>
+        </button>
+
+        <!-- View Switcher -->
+        <div class="view-mode-toggle view-toggle">
+          <button
+            type="button"
+            class="view-mode-btn view-btn"
+            [class.active]="viewMode === 'list'"
+            (click)="viewMode = 'list'"
+            title="List View">
+            <i class="fa-solid fa-list"></i>
+          </button>
+          <button
+            type="button"
+            class="view-mode-btn view-btn"
+            [class.active]="viewMode === 'grid'"
+            (click)="viewMode = 'grid'"
+            title="Grid View">
+            <i class="fa-solid fa-table-cells-large"></i>
+          </button>
+        </div>
+
+        <!-- Primary Action CTAs -->
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--secondary toolbar-btn"
+          (click)="onNewFolderClick()"
+          title="Create New Folder">
+          <i class="fa-solid fa-folder-plus"></i>
+          <span>New Folder</span>
+        </button>
+
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--primary toolbar-btn"
+          (click)="onUploadClick()"
+          title="Upload Files">
+          <i class="fa-solid fa-cloud-arrow-up"></i>
+          <span>Upload</span>
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Selection Action Bar (Appears when 1+ items selected) -->
+  @if (selectedItems.length > 0 && !isMultiProviderSearchMode) {
+    <div class="selection-bar">
+      <div class="selection-bar-left">
+        <label class="selection-checkbox-wrap" (click)="$event.stopPropagation()">
+          <input
+            type="checkbox"
+            [checked]="areAllSelected()"
+            (change)="areAllSelected() ? deselectAll() : selectAll()" />
+          <span class="selection-count">{{ selectedItems.length }} item{{ selectedItems.length === 1 ? '' : 's' }} selected</span>
+        </label>
+      </div>
+
+      <div class="selection-bar-right">
+        @if (selectedItems.length === 1 && getSelectedItem()?.type === 'file') {
+          <button
+            type="button"
+            class="sel-action-btn"
+            (click)="openPreview(getSelectedItem()!)"
+            title="Preview file">
+            <i class="fa-solid fa-eye"></i>
+            <span>Preview</span>
+          </button>
+          <button
+            type="button"
+            class="sel-action-btn"
+            (click)="onDownloadClick()"
+            title="Download file">
+            <i class="fa-solid fa-download"></i>
+            <span>Download</span>
+          </button>
+          <button
+            type="button"
+            class="sel-action-btn"
+            (click)="onCopyToAccountClick()"
+            title="Copy to another storage account">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Copy to...</span>
+          </button>
+        }
+        @if (selectedItems.length === 1) {
+          <button
+            type="button"
+            class="sel-action-btn"
+            (click)="onRenameClick()"
+            title="Rename item">
+            <i class="fa-solid fa-pen"></i>
+            <span>Rename</span>
+          </button>
+          <button
+            type="button"
+            class="sel-action-btn"
+            (click)="onCopyClick()"
+            title="Copy to path">
+            <i class="fa-solid fa-copy"></i>
+            <span>Copy</span>
+          </button>
+          <button
+            type="button"
+            class="sel-action-btn"
+            (click)="onMoveClick()"
+            title="Move item">
+            <i class="fa-solid fa-arrows-up-down-left-right"></i>
+            <span>Move</span>
+          </button>
+        }
+        <button
+          type="button"
+          class="sel-action-btn sel-action-btn--danger"
+          (click)="onDeleteClick()"
+          title="Delete selected item(s)">
+          <i class="fa-solid fa-trash"></i>
+          <span>Delete</span>
+        </button>
+        <button
+          type="button"
+          class="sel-action-btn sel-action-btn--ghost"
+          (click)="deselectAll()"
+          title="Deselect all">
+          <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
     </div>
@@ -55,553 +217,735 @@
 
   <!-- Multi-Provider Search Panel -->
   @if (isMultiProviderSearchMode) {
-    <div class="multi-provider-search-panel">
-      <div class="search-panel-header">
-        <h3><i class="fa-solid fa-magnifying-glass"></i> Search Across Providers</h3>
-        <button class="close-panel-btn" (click)="toggleMultiAccountSearchMode()">
+    <div class="multi-search-card multi-provider-search-panel">
+      <div class="multi-search-header search-panel-header">
+        <div class="multi-search-title">
+          <i class="fa-solid fa-layer-group"></i>
+          <h3>Search Across Storage Accounts</h3>
+        </div>
+        <button
+          type="button"
+          class="modal-close-btn close-panel-btn"
+          (click)="toggleMultiAccountSearchMode()"
+          title="Close search">
           <i class="fa-solid fa-xmark"></i>
         </button>
       </div>
-      <div class="search-panel-body">
-        <div class="search-input-row">
-          <input type="text"
-            class="multi-search-input"
+
+      <div class="multi-search-body search-panel-body">
+        <div class="multi-search-bar search-input-row">
+          <input
+            type="text"
+            class="multi-search-text multi-search-input"
             [(ngModel)]="multiProviderSearchQuery"
-            placeholder="Enter search term..."
+            placeholder="Type query to search across connected accounts..."
             (keydown.enter)="executeMultiAccountSearch()"
-            [disabled]="isSearching">
-          <button class="search-execute-btn"
+            [disabled]="isSearching" />
+          <button
+            type="button"
+            class="mj-action-btn mj-action-btn--primary search-execute-btn"
             (click)="executeMultiAccountSearch()"
             [disabled]="isSearching || !multiProviderSearchQuery.trim() || selectedSearchProviders.size === 0">
             @if (isSearching) {
               <i class="fa-solid fa-spinner fa-spin"></i>
+            } @else {
+              <i class="fa-solid fa-magnifying-glass"></i>
             }
-            @if (!isSearching) {
-              <i class="fa-solid fa-search"></i>
-            }
-            {{ isSearching ? 'Searching...' : 'Search' }}
+            <span>{{ isSearching ? 'Searching...' : 'Search Accounts' }}</span>
           </button>
         </div>
-        <div class="provider-selection">
-          <label class="provider-selection-label">Select accounts to search:</label>
-          <div class="provider-checkboxes">
-            @for (a of availableAccounts; track a) {
+
+        <div class="multi-search-accounts provider-selection">
+          <span class="account-select-label provider-selection-label">Target Accounts:</span>
+          <div class="account-pill-list provider-checkboxes">
+            @for (a of availableAccounts; track a.account.ID) {
               <label
-                class="provider-checkbox"
+                class="account-select-pill provider-checkbox"
                 [class.disabled]="!accountSupportsSearch(a)"
-                [title]="accountSupportsSearch(a) ? '' : 'This account does not support search'">
-                <input type="checkbox"
+                [class.checked]="isAccountSelectedForSearch(a.account.ID)">
+                <input
+                  type="checkbox"
                   [checked]="isAccountSelectedForSearch(a.account.ID)"
                   (change)="toggleSearchAccount(a.account.ID)"
-                  [disabled]="!accountSupportsSearch(a)">
-                <span class="provider-name">{{ a.account.Name }}</span>
-                <span class="provider-type">({{ a.provider.Name }})</span>
+                  [disabled]="!accountSupportsSearch(a)" />
+                <span class="pill-account-name provider-name">{{ a.account.Name }}</span>
+                <span class="pill-provider-tag provider-type">{{ a.provider.Name }}</span>
                 @if (!accountSupportsSearch(a)) {
-                  <span class="no-search-badge">(no search)</span>
+                  <span class="pill-no-search no-search-badge">(no search)</span>
                 }
               </label>
             }
           </div>
         </div>
       </div>
+
       <!-- Search Results -->
       @if (multiProviderSearchResults) {
-        <div class="search-results-container">
-          <div class="search-results-summary">
-            <span class="result-count">{{ multiProviderSearchResults.totalResultsReturned }} result(s) found</span>
-            <span class="provider-stats">
-              ({{ multiProviderSearchResults.successfulAccounts }} account(s) searched
-              @if (multiProviderSearchResults.failedAccounts > 0) {
-                <span class="failed-count">
-                  , {{ multiProviderSearchResults.failedAccounts }} failed
-                </span>
-                })
-              </span>
-              <button class="clear-results-btn" (click)="clearMultiProviderSearch()">
-                <i class="fa-solid fa-xmark"></i> Clear
-              </button>
-            </div>
-            <div class="provider-results-list">
-              @for (accountResult of multiProviderSearchResults.accountResults; track accountResult) {
-                <div
-                  class="provider-result-group"
-                  [class.failed]="!accountResult.success">
-                  <div class="provider-result-header">
-                    <i class="fa-solid fa-cloud"></i>
-                    <span class="provider-name">{{ accountResult.accountName }}</span>
-                    @if (accountResult.success) {
-                      <span class="result-count">
-                        ({{ accountResult.results.length }} result(s))
-                      </span>
-                    }
-                    @if (!accountResult.success) {
-                      <span class="error-badge">
-                        <i class="fa-solid fa-exclamation-triangle"></i>
-                        {{ accountResult.errorMessage }}
-                      </span>
-                    }
-                  </div>
-                  @if (accountResult.success && accountResult.results.length > 0) {
-                    <div class="provider-result-files">
-                      @for (file of accountResult.results; track file) {
-                        <div class="search-result-item">
-                          <i [class]="getSearchResultIcon(file)" class="file-icon"></i>
-                          <div class="file-info">
-                            <span class="file-name">{{ file.name }}</span>
-                            <span class="file-path">{{ file.path }}</span>
-                          </div>
-                          <span class="file-size">{{ formatSearchResultSize(file.size) }}</span>
-                          <span class="file-date">{{ formatSearchResultDate(file.lastModified) }}</span>
-                        </div>
-                      }
-                    </div>
-                  }
-                  @if (accountResult.success && accountResult.results.length === 0) {
-                    <div class="no-results-message">
-                      No matching files found
-                    </div>
+        <div class="multi-search-results search-results-container">
+          <div class="results-meta-bar search-results-summary">
+            <span class="meta-count result-count">
+              <strong>{{ multiProviderSearchResults.totalResultsReturned }}</strong> result{{ multiProviderSearchResults.totalResultsReturned === 1 ? '' : 's' }} found
+            </span>
+            <span class="meta-stats provider-stats">
+              ({{ multiProviderSearchResults.successfulAccounts }} account{{ multiProviderSearchResults.successfulAccounts === 1 ? '' : 's' }} searched)
+            </span>
+            <button
+              type="button"
+              class="clear-results-btn"
+              (click)="clearMultiProviderSearch()">
+              <i class="fa-solid fa-xmark"></i> Clear Results
+            </button>
+          </div>
+
+          <div class="results-groups provider-results-list">
+            @for (accountResult of multiProviderSearchResults.accountResults; track accountResult.accountID) {
+              <div class="result-group provider-result-group" [class.failed]="!accountResult.success">
+                <div class="result-group-head provider-result-header">
+                  <i class="fa-solid fa-cloud-bolt group-icon"></i>
+                  <span class="group-account-name provider-name">{{ accountResult.accountName }}</span>
+                  @if (accountResult.success) {
+                    <span class="group-count-badge result-count">{{ accountResult.results.length }}</span>
+                  } @else {
+                    <span class="group-error-badge error-badge">{{ accountResult.errorMessage }}</span>
                   }
                 </div>
+
+                @if (accountResult.success && accountResult.results.length > 0) {
+                  <div class="result-items-grid provider-result-files">
+                    @for (file of accountResult.results; track file.path) {
+                      <div class="search-item-row search-result-item">
+                        <i [class]="getSearchResultIcon(file)" class="search-item-icon file-icon"></i>
+                        <div class="search-item-info file-info">
+                          <span class="search-item-name file-name">{{ file.name }}</span>
+                          <span class="search-item-path file-path">{{ file.path }}</span>
+                        </div>
+                        <span class="search-item-size file-size">{{ formatSearchResultSize(file.size) }}</span>
+                        <span class="search-item-date file-date">{{ formatSearchResultDate(file.lastModified) }}</span>
+                      </div>
+                    }
+                  </div>
+                }
+                @if (accountResult.success && accountResult.results.length === 0) {
+                  <div class="group-empty-text no-results-message">No matching files found in this account</div>
+                }
+              </div>
+            }
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- Loading State -->
+  @if (isLoading && !isMultiProviderSearchMode) {
+    <div class="grid-loading-container loading-state">
+      <mj-loading text="Loading files..."></mj-loading>
+    </div>
+  }
+
+  <!-- Error State -->
+  @if (errorMessage && !isLoading) {
+    <mj-empty-state
+      class="file-grid-empty-fill"
+      Variant="error"
+      Icon="fa-solid fa-triangle-exclamation"
+      Title="Unable to load files"
+      [Message]="errorMessage"
+      ActionText="Retry"
+      ActionIcon="fa-solid fa-arrows-rotate"
+      (Action)="refresh()" />
+  }
+
+  <!-- Grid View -->
+  @if (!isLoading && !errorMessage && filteredItems.length > 0 && viewMode === 'grid') {
+    <div class="file-cards-grid file-grid file-grid-wrapper">
+      @for (item of filteredItems; track item.key) {
+        <div
+          class="file-card grid-item"
+          [class.selected]="selectedItems.includes(item.key)"
+          (click)="onTileClick(item, $event)"
+          (dblclick)="onItemDoubleClick(item)"
+          [title]="item.name">
+
+          <!-- Card Top Row: Checkbox & Quick Actions -->
+          <div class="file-card-header">
+            <label class="file-card-checkbox" (click)="$event.stopPropagation()">
+              <input
+                type="checkbox"
+                [checked]="selectedItems.includes(item.key)"
+                (change)="toggleItemSelection(item, $event)" />
+            </label>
+            <div class="file-card-quick-actions" (click)="$event.stopPropagation()">
+              @if (item.type === 'file') {
+                <button
+                  type="button"
+                  class="quick-action-btn"
+                  (click)="openPreview(item)"
+                  title="Preview">
+                  <i class="fa-solid fa-eye"></i>
+                </button>
+                <button
+                  type="button"
+                  class="quick-action-btn"
+                  (click)="downloadFile(item)"
+                  title="Download">
+                  <i class="fa-solid fa-download"></i>
+                </button>
               }
             </div>
           </div>
-        }
-        <!-- Searching State -->
-        @if (isSearching) {
-          <div class="searching-state">
-            <mj-loading text="Searching across providers..."></mj-loading>
+
+          <!-- Card Thumbnail/Icon -->
+          <div class="file-card-icon-container grid-icon" [class]="getItemColorClass(item)">
+            <i [class]="getItemIcon(item)"></i>
           </div>
-        }
-      </div>
-    }
 
-    <!-- Loading State -->
-    @if (isLoading && !isMultiProviderSearchMode) {
-      <div class="loading-state">
-        <mj-loading text="Loading files..."></mj-loading>
-      </div>
-    }
+          <!-- Card Body: Name & Meta -->
+          <div class="file-card-body">
+            <span class="file-card-name grid-name">{{ item.name }}</span>
+            <div class="file-card-meta grid-meta">
+              <span class="meta-size">{{ item.type === 'folder' ? 'Folder' : formatFileSize(item.size) }}</span>
+              <span class="meta-date">{{ formatDate(item.lastModified) }}</span>
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
 
-    <!-- Error State -->
-    @if (errorMessage && !isLoading) {
-      <mj-empty-state
-        class="file-grid-empty-fill"
-        Variant="error"
-        Icon="fa-solid fa-circle-exclamation"
-        Title="Couldn't load files"
-        [Message]="errorMessage"
-        ActionText="Retry"
-        ActionIcon="fa-solid fa-arrows-rotate"
-        (Action)="refresh()" />
-    }
-
-    <!-- List View -->
-    @if (!isLoading && !errorMessage && filteredItems.length > 0 && viewMode === 'list') {
-      <div class="file-table-wrapper">
-        <table class="file-table">
-          <thead>
-            <tr>
-              <th class="col-name" (click)="onSortChange([{ field: 'name', dir: sort[0].field === 'name' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
-                <span>Name</span>
-                <i class="fa-solid sort-icon"
-                  [class.fa-caret-up]="sort[0].field === 'name' && sort[0].dir === 'asc'"
-                  [class.fa-caret-down]="sort[0].field === 'name' && sort[0].dir === 'desc'"
+  <!-- List View Table -->
+  @if (!isLoading && !errorMessage && filteredItems.length > 0 && viewMode === 'list') {
+    <div class="file-table-container file-table-wrapper">
+      <table class="file-table">
+        <thead>
+          <tr>
+            <th class="th-check">
+              <input
+                type="checkbox"
+                [checked]="areAllSelected()"
+                (change)="areAllSelected() ? deselectAll() : selectAll()" />
+            </th>
+            <th class="th-name col-name" (click)="onSortChange([{ field: 'name', dir: sort[0].field === 'name' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
+              <span>Name</span>
+              <i class="fa-solid sort-arrow sort-icon"
+                [class.fa-caret-up]="sort[0].field === 'name' && sort[0].dir === 'asc'"
+                [class.fa-caret-down]="sort[0].field === 'name' && sort[0].dir === 'desc'"
                 [class.fa-sort]="sort[0].field !== 'name'"></i>
-              </th>
-              <th class="col-type">Type</th>
-              <th class="col-size" (click)="onSortChange([{ field: 'size', dir: sort[0].field === 'size' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
-                <span>Size</span>
-                <i class="fa-solid sort-icon"
-                  [class.fa-caret-up]="sort[0].field === 'size' && sort[0].dir === 'asc'"
-                  [class.fa-caret-down]="sort[0].field === 'size' && sort[0].dir === 'desc'"
+            </th>
+            <th class="th-type col-type">Type</th>
+            <th class="th-size col-size" (click)="onSortChange([{ field: 'size', dir: sort[0].field === 'size' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
+              <span>Size</span>
+              <i class="fa-solid sort-arrow sort-icon"
+                [class.fa-caret-up]="sort[0].field === 'size' && sort[0].dir === 'asc'"
+                [class.fa-caret-down]="sort[0].field === 'size' && sort[0].dir === 'desc'"
                 [class.fa-sort]="sort[0].field !== 'size'"></i>
-              </th>
-              <th class="col-modified" (click)="onSortChange([{ field: 'lastModified', dir: sort[0].field === 'lastModified' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
-                <span>Modified</span>
-                <i class="fa-solid sort-icon"
-                  [class.fa-caret-up]="sort[0].field === 'lastModified' && sort[0].dir === 'asc'"
-                  [class.fa-caret-down]="sort[0].field === 'lastModified' && sort[0].dir === 'desc'"
+            </th>
+            <th class="th-date col-modified" (click)="onSortChange([{ field: 'lastModified', dir: sort[0].field === 'lastModified' && sort[0].dir === 'asc' ? 'desc' : 'asc' }])">
+              <span>Modified</span>
+              <i class="fa-solid sort-arrow sort-icon"
+                [class.fa-caret-up]="sort[0].field === 'lastModified' && sort[0].dir === 'asc'"
+                [class.fa-caret-down]="sort[0].field === 'lastModified' && sort[0].dir === 'desc'"
                 [class.fa-sort]="sort[0].field !== 'lastModified'"></i>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (item of filteredItems; track item) {
-              <tr
-                class="file-row"
-                [class.selected]="selectedItems.includes(item.key)"
-                (click)="onTileClick(item, $event)"
-                (dblclick)="onItemDoubleClick(item)">
-                <td class="col-name">
-                  <i [class]="getItemIcon(item)" class="item-icon"></i>
-                  <span class="item-name">{{ item.name }}</span>
-                </td>
-                <td class="col-type">
-                  <span class="item-type">{{ getFileType(item) }}</span>
-                </td>
-                <td class="col-size">
-                  <span class="item-size">{{ item.type === 'folder' ? '—' : formatFileSize(item.size) }}</span>
-                </td>
-                <td class="col-modified">
-                  <span class="item-date">{{ formatDate(item.lastModified) }}</span>
-                </td>
-              </tr>
-            }
-          </tbody>
-        </table>
-      </div>
-    }
-
-    <!-- Grid View -->
-    @if (!isLoading && !errorMessage && filteredItems.length > 0 && viewMode === 'grid') {
-      <div class="file-grid-wrapper">
-        <div class="file-grid">
-          @for (item of filteredItems; track item) {
-            <div
-              class="grid-item"
+            </th>
+            <th class="th-actions">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of filteredItems; track item.key) {
+            <tr
+              class="file-table-row file-row"
               [class.selected]="selectedItems.includes(item.key)"
               (click)="onTileClick(item, $event)"
               (dblclick)="onItemDoubleClick(item)">
-              <div class="grid-icon">
-                <i [class]="getItemIcon(item)"></i>
-              </div>
-              <div class="grid-name">{{ item.name }}</div>
-              @if (item.type === 'file') {
-                <div class="grid-meta">{{ formatFileSize(item.size) }}</div>
-              }
-              @if (item.type === 'folder') {
-                <div class="grid-meta">Folder</div>
-              }
-            </div>
+              <td class="td-check" (click)="$event.stopPropagation()">
+                <input
+                  type="checkbox"
+                  [checked]="selectedItems.includes(item.key)"
+                  (change)="toggleItemSelection(item, $event)" />
+              </td>
+              <td class="td-name col-name">
+                <div class="row-name-wrap">
+                  <div class="row-icon-badge" [class]="getItemColorClass(item)">
+                    <i [class]="getItemIcon(item)" class="item-icon"></i>
+                  </div>
+                  <span class="row-file-name item-name" [title]="item.name">{{ item.name }}</span>
+                </div>
+              </td>
+              <td class="td-type col-type">
+                <span class="type-badge item-type">{{ getFileType(item) }}</span>
+              </td>
+              <td class="td-size col-size">
+                <span class="size-text item-size">{{ item.type === 'folder' ? '—' : formatFileSize(item.size) }}</span>
+              </td>
+              <td class="td-date col-modified">
+                <span class="date-text item-date">{{ formatDate(item.lastModified) }}</span>
+              </td>
+              <td class="td-actions" (click)="$event.stopPropagation()">
+                <div class="row-action-buttons">
+                  @if (item.type === 'file') {
+                    <button
+                      type="button"
+                      class="row-act-btn"
+                      (click)="openPreview(item)"
+                      title="Preview">
+                      <i class="fa-solid fa-eye"></i>
+                    </button>
+                    <button
+                      type="button"
+                      class="row-act-btn"
+                      (click)="downloadFile(item)"
+                      title="Download">
+                      <i class="fa-solid fa-download"></i>
+                    </button>
+                  }
+                </div>
+              </td>
+            </tr>
           }
+        </tbody>
+      </table>
+    </div>
+  }
+
+  <!-- Empty State -->
+  @if (!isLoading && !errorMessage && filteredItems.length === 0 && !isMultiProviderSearchMode) {
+    <mj-empty-state
+      Icon="fa-solid fa-folder-open"
+      Title="This folder is empty"
+      Message="Drop files here to upload or create a new folder"
+      ActionText="Upload Files"
+      ActionIcon="fa-solid fa-cloud-arrow-up"
+      (Action)="onUploadClick()" />
+  }
+
+  <!-- Bottom Status Bar -->
+  @if (!isLoading && !errorMessage) {
+    <div class="status-bar">
+      <span class="status-count">
+        {{ filteredItems.length }} item{{ filteredItems.length === 1 ? '' : 's' }}
+        @if (searchQuery) {
+          (filtered)
+        }
+      </span>
+      <div class="status-account-badge" *ngIf="account">
+        <i class="fa-solid fa-cloud"></i>
+        <span>{{ account.account.Name }} ({{ account.provider.Name }})</span>
+      </div>
+    </div>
+  }
+
+  <!-- Drag & Drop Upload Overlay -->
+  @if (isDragging) {
+    <div class="drag-drop-overlay">
+      <div class="drag-drop-content">
+        <i class="fa-solid fa-cloud-arrow-up drag-icon"></i>
+        <h3>Drop files here to upload</h3>
+        <p>Files will be stored in {{ folderPath || 'Root' }}</p>
+      </div>
+    </div>
+  }
+
+  <!-- Upload Progress Bar -->
+  @if (isUploading) {
+    <div class="upload-progress-bar-wrap">
+      <div class="upload-progress-card">
+        <div class="upload-info">
+          <i class="fa-solid fa-spinner fa-spin upload-spinner"></i>
+          <span class="upload-text">Uploading {{ uploadingFileName }}...</span>
+        </div>
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="uploadProgress"></div>
         </div>
       </div>
-    }
+    </div>
+  }
+</div>
 
-    <!-- Empty State -->
-    @if (!isLoading && !errorMessage && filteredItems.length === 0) {
-      <mj-empty-state
-        class="file-grid-empty-fill"
-        Icon="fa-solid fa-folder-open"
-        Title="This folder is empty"
-        ActionText="Upload Files"
-        ActionIcon="fa-solid fa-upload"
-        (Action)="onUploadClick()" />
-    }
+<!-- ==========================================================================
+     MODAL DIALOGS (Design Tokens, Smooth Animations, Backdrop Blurs)
+     ========================================================================== -->
 
-    <!-- Bottom Toolbar -->
-    @if (!isLoading && !errorMessage) {
-      <div class="bottom-toolbar">
-        <div class="toolbar-left">
-          <button class="toolbar-btn" (click)="onUploadClick()">
-            <i class="fa-solid fa-upload"></i>
-            Upload
-          </button>
-          <button class="toolbar-btn" (click)="onNewFolderClick()">
-            <i class="fa-solid fa-folder-plus"></i>
-            New Folder
-          </button>
-          <button class="toolbar-btn"
-            [disabled]="selectedItems.length !== 1"
-            (click)="onDownloadClick()">
+<!-- File Preview Modal -->
+@if (showPreviewModal && previewItem) {
+  <div class="mj-modal-backdrop" (click)="closePreview()">
+    <div class="mj-modal-window preview-modal-window" (click)="$event.stopPropagation()">
+      <div class="mj-modal-header">
+        <div class="modal-title-wrap">
+          <div class="row-icon-badge" [class]="getItemColorClass(previewItem)">
+            <i [class]="getItemIcon(previewItem)"></i>
+          </div>
+          <div>
+            <h3 class="modal-title">{{ previewItem.name }}</h3>
+            <span class="modal-subtitle">{{ formatFileSize(previewItem.size) }} &bull; {{ formatDate(previewItem.lastModified) }}</span>
+          </div>
+        </div>
+        <div class="modal-header-actions">
+          <button
+            type="button"
+            class="mj-action-btn mj-action-btn--secondary"
+            (click)="downloadFile(previewItem)"
+            title="Download file">
             <i class="fa-solid fa-download"></i>
-            Download
+            <span>Download</span>
           </button>
-          <button class="toolbar-btn"
-            [disabled]="selectedItems.length !== 1"
-            (click)="onRenameClick()">
-            <i class="fa-solid fa-pen"></i>
-            Rename
-          </button>
-          <button class="toolbar-btn"
-            [disabled]="selectedItems.length !== 1"
-            (click)="onCopyClick()">
-            <i class="fa-solid fa-copy"></i>
-            Copy
-          </button>
-          <button class="toolbar-btn"
-            [disabled]="selectedItems.length !== 1 || getSelectedItem()?.type === 'folder'"
-            (click)="onCopyToAccountClick()"
-            title="Copy file to another storage account">
-            <i class="fa-solid fa-cloud-arrow-up"></i>
-            Copy to...
-          </button>
-          <button class="toolbar-btn"
-            [disabled]="selectedItems.length !== 1"
-            (click)="onMoveClick()">
-            <i class="fa-solid fa-arrows-up-down-left-right"></i>
-            Move
-          </button>
-          <button class="toolbar-btn"
-            [disabled]="selectedItems.length === 0"
-            (click)="onDeleteClick()">
-            <i class="fa-solid fa-trash"></i>
-            Delete
+          <button
+            type="button"
+            class="modal-close-btn"
+            (click)="closePreview()"
+            title="Close preview">
+            <i class="fa-solid fa-xmark"></i>
           </button>
         </div>
-        <div class="toolbar-right">
-          <!-- View Toggle -->
-          <div class="view-toggle">
-            <button class="view-btn"
-              [class.active]="viewMode === 'list'"
-              (click)="viewMode = 'list'"
-              title="List View">
-              <i class="fa-solid fa-list"></i>
-            </button>
-            <button class="view-btn"
-              [class.active]="viewMode === 'grid'"
-              (click)="viewMode = 'grid'"
-              title="Grid View">
-              <i class="fa-solid fa-th"></i>
-            </button>
+      </div>
+
+      <div class="preview-modal-body">
+        @if (isLoadingPreview) {
+          <div class="preview-loading">
+            <mj-loading text="Loading preview..."></mj-loading>
           </div>
-          <span class="item-count">
-            {{ filteredItems.length }} {{ filteredItems.length === 1 ? 'item' : 'filteredItems' }}
-          </span>
-        </div>
-      </div>
-    }
-
-    <!-- Drag & Drop Overlay -->
-    @if (isDragging) {
-      <div class="drag-overlay">
-        <div class="drag-content">
-          <div class="drag-icon">
-            <i class="fa-solid fa-cloud-arrow-up"></i>
-          </div>
-          <h2 class="drag-title">Drop files to upload</h2>
-        </div>
-      </div>
-    }
-
-    <!-- Upload Progress -->
-    @if (isUploading) {
-      <div class="upload-progress">
-        <div class="progress-content">
-          <div class="progress-info">
-            <i class="fa-solid fa-spinner fa-spin"></i>
-            <span>Uploading {{ uploadingFileName }}...</span>
-          </div>
-          <div class="progress-bar-wrap">
-            <div class="progress-bar" [style.width.%]="uploadProgress"></div>
-          </div>
-          <span class="progress-percent">{{ uploadProgress }}%</span>
-        </div>
-      </div>
-    }
-  </div>
-
-  <!-- New Folder Modal -->
-  @if (showNewFolderDialog) {
-    <div class="modal-overlay" (click)="onCancelNewFolder()">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>Create New Folder</h3>
-          <button class="modal-close" (click)="onCancelNewFolder()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <label>Folder name:</label>
-          <input type="text"
-            [(ngModel)]="newFolderName"
-            [disabled]="isCreatingFolder"
-            placeholder="Enter folder name"
-            (keydown.enter)="onCreateFolder()">
-        </div>
-        <div class="modal-footer">
-          <button (click)="onCancelNewFolder()" [disabled]="isCreatingFolder">Cancel</button>
-          <button (click)="onCreateFolder()" [disabled]="!newFolderName.trim() || isCreatingFolder">
-            @if (isCreatingFolder) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-            }
-            {{ isCreatingFolder ? 'Creating...' : 'Create' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- Delete Confirmation Modal -->
-  @if (showDeleteDialog && itemToDelete) {
-    <div class="modal-overlay" (click)="onCancelDelete()">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>Delete {{ itemToDelete.type === 'folder' ? 'Folder' : 'File' }}?</h3>
-          <button class="modal-close" (click)="onCancelDelete()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>Are you sure you want to delete <strong>{{ itemToDelete.name }}</strong>?</p>
-          @if (itemToDelete.type === 'folder') {
-            <p class="warning">This will delete the folder and all its contents.</p>
-          }
-        </div>
-        <div class="modal-footer">
-          <button (click)="onCancelDelete()" [disabled]="isDeleting">Cancel</button>
-          <button (click)="onConfirmDelete()" [disabled]="isDeleting" class="danger">
-            @if (isDeleting) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-            }
-            {{ isDeleting ? 'Deleting...' : 'Delete' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- Rename Modal -->
-  @if (showRenameDialog && itemToRename) {
-    <div class="modal-overlay" (click)="onCancelRename()">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>Rename {{ itemToRename.type === 'folder' ? 'Folder' : 'File' }}</h3>
-          <button class="modal-close" (click)="onCancelRename()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <label>New name:</label>
-          <input type="text"
-            [(ngModel)]="newItemName"
-            [disabled]="isRenaming"
-            placeholder="Enter new name"
-            (keydown.enter)="onConfirmRename()">
-        </div>
-        <div class="modal-footer">
-          <button (click)="onCancelRename()" [disabled]="isRenaming">Cancel</button>
-          <button (click)="onConfirmRename()" [disabled]="isRenaming || !newItemName.trim()">
-            @if (isRenaming) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-            }
-            {{ isRenaming ? 'Renaming...' : 'Rename' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- Copy Modal -->
-  @if (showCopyDialog && itemToCopy) {
-    <div class="modal-overlay" (click)="onCancelCopy()">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>Copy {{ itemToCopy.type === 'folder' ? 'Folder' : 'File' }}</h3>
-          <button class="modal-close" (click)="onCancelCopy()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>Copying: <strong>{{ itemToCopy.name }}</strong></p>
-          <label>Destination path:</label>
-          <input type="text"
-            [(ngModel)]="copyDestinationPath"
-            [disabled]="isCopying"
-            placeholder="Enter destination path"
-            (keydown.enter)="onConfirmCopy()">
-        </div>
-        <div class="modal-footer">
-          <button (click)="onCancelCopy()" [disabled]="isCopying">Cancel</button>
-          <button (click)="onConfirmCopy()" [disabled]="isCopying || !copyDestinationPath.trim()">
-            @if (isCopying) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-            }
-            {{ isCopying ? 'Copying...' : 'Copy' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- Move Modal -->
-  @if (showMoveDialog && itemToMove) {
-    <div class="modal-overlay" (click)="onCancelMove()">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>Move {{ itemToMove.type === 'folder' ? 'Folder' : 'File' }}</h3>
-          <button class="modal-close" (click)="onCancelMove()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>Moving: <strong>{{ itemToMove.name }}</strong></p>
-          <label>Destination folder path:</label>
-          <input type="text"
-            [(ngModel)]="moveDestinationPath"
-            [disabled]="isMoving"
-            placeholder="Enter destination folder (e.g., folder1/folder2/)"
-            (keydown.enter)="onConfirmMove()">
-          <p style="font-size: 11px; color: var(--mj-text-secondary); margin-top: 8px;">
-            File will be moved to: {{ moveDestinationPath }}{{ itemToMove.name }}
-          </p>
-        </div>
-        <div class="modal-footer">
-          <button (click)="onCancelMove()" [disabled]="isMoving">Cancel</button>
-          <button (click)="onConfirmMove()" [disabled]="isMoving || !moveDestinationPath.trim()">
-            @if (isMoving) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
-            }
-            {{ isMoving ? 'Moving...' : 'Move' }}
-          </button>
-        </div>
-      </div>
-    </div>
-  }
-
-  <!-- Copy to Account Modal -->
-  @if (showCopyToProviderDialog && itemToCopyToProvider) {
-    <div class="modal-overlay" (click)="onCancelCopyToAccount()">
-      <div class="modal-dialog" (click)="$event.stopPropagation()">
-        <div class="modal-header">
-          <h3>Copy to Another Account</h3>
-          <button class="modal-close" (click)="onCancelCopyToAccount()">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
-        </div>
-        <div class="modal-body">
-          <p>Copying: <strong>{{ itemToCopyToProvider.name }}</strong></p>
-          <p style="font-size: 12px; color: var(--mj-text-secondary); margin-bottom: 16px;">
-            From: <strong>{{ account?.account?.Name }}</strong>
-          </p>
-          <label>Select destination account(s):</label>
-          <div class="account-checkbox-list">
-            @for (a of availableAccounts; track a) {
-              <div class="account-checkbox-item">
-                <input type="checkbox"
-                  [id]="'dest-account-' + a.account.ID"
-                  [checked]="isDestinationAccountSelected(a.account.ID)"
-                  [disabled]="isCopyingToAccount"
-                  (change)="toggleDestinationAccount(a.account.ID)">
-                <label [for]="'dest-account-' + a.account.ID">
-                  {{ a.account.Name }} <span class="provider-badge">{{ a.provider.Name }}</span>
-                </label>
+        } @else if (previewUrl) {
+          @switch (previewMediaType) {
+            @case ('image') {
+              <div class="preview-media-wrap image-preview-wrap">
+                <img [src]="previewUrl" [alt]="previewItem.name" class="preview-img" />
               </div>
             }
-          </div>
-          <label style="margin-top: 16px;">Destination filename:</label>
-          <input type="text"
-            [(ngModel)]="copyToAccountDestinationPath"
-            [disabled]="isCopyingToAccount"
-            placeholder="Enter destination filename"
-            (keydown.enter)="onConfirmCopyToAccount()">
-          @if (copyToAccountProgress) {
-            <div class="copy-progress">
-              <i class="fa-solid fa-spinner fa-spin"></i>
-              Copying to {{ copyToAccountProgress.currentAccount }} ({{ copyToAccountProgress.current }}/{{ copyToAccountProgress.total }})...
-            </div>
-          }
-        </div>
-        <div class="modal-footer">
-          <button (click)="onCancelCopyToAccount()" [disabled]="isCopyingToAccount">Cancel</button>
-          <button (click)="onConfirmCopyToAccount()"
-            [disabled]="isCopyingToAccount || selectedDestinationAccounts.size === 0 || !copyToAccountDestinationPath.trim()">
-            @if (isCopyingToAccount) {
-              <i class="fa-solid fa-spinner fa-spin"></i>
+            @case ('pdf') {
+              <div class="preview-media-wrap pdf-preview-wrap">
+                <iframe [src]="previewUrl" class="preview-iframe" title="PDF Preview"></iframe>
+              </div>
             }
-            {{ isCopyingToAccount ? 'Copying...' : 'Copy to ' + selectedDestinationAccounts.size + ' account' + (selectedDestinationAccounts.size !== 1 ? 's' : '') }}
-          </button>
-        </div>
+            @case ('video') {
+              <div class="preview-media-wrap video-preview-wrap">
+                <video [src]="previewUrl" controls autoplay class="preview-video"></video>
+              </div>
+            }
+            @case ('audio') {
+              <div class="preview-media-wrap audio-preview-wrap">
+                <i class="fa-solid fa-music preview-audio-icon"></i>
+                <audio [src]="previewUrl" controls class="preview-audio"></audio>
+              </div>
+            }
+            @default {
+              <div class="preview-fallback">
+                <i [class]="getItemIcon(previewItem)" class="preview-fallback-icon"></i>
+                <h4>{{ previewItem.name }}</h4>
+                <p>Preview is not supported for this file type.</p>
+                <button
+                  type="button"
+                  class="mj-action-btn mj-action-btn--primary"
+                  (click)="downloadFile(previewItem)">
+                  <i class="fa-solid fa-download"></i>
+                  <span>Download File</span>
+                </button>
+              </div>
+            }
+          }
+        } @else {
+          <div class="preview-fallback">
+            <i class="fa-solid fa-triangle-exclamation preview-fallback-icon"></i>
+            <h4>Preview unavailable</h4>
+            <p>Could not generate a preview link for this file.</p>
+            <button
+              type="button"
+              class="mj-action-btn mj-action-btn--primary"
+              (click)="downloadFile(previewItem)">
+              <i class="fa-solid fa-download"></i>
+              <span>Download File</span>
+            </button>
+          </div>
+        }
       </div>
     </div>
-  }
+  </div>
+}
+
+<!-- New Folder Modal -->
+@if (showNewFolderDialog) {
+  <div class="mj-modal-backdrop modal-overlay" (click)="onCancelNewFolder()">
+    <div class="mj-modal-window modal-compact modal-dialog" (click)="$event.stopPropagation()">
+      <div class="mj-modal-header modal-header">
+        <h3 class="modal-title">Create New Folder</h3>
+        <button type="button" class="modal-close-btn modal-close" (click)="onCancelNewFolder()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-modal-body modal-body">
+        <label class="form-label">Folder name:</label>
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="newFolderName"
+          [disabled]="isCreatingFolder"
+          placeholder="Enter folder name"
+          (keydown.enter)="onCreateFolder()"
+          autofocus />
+      </div>
+      <div class="mj-modal-footer modal-footer">
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--secondary"
+          (click)="onCancelNewFolder()"
+          [disabled]="isCreatingFolder">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--primary"
+          (click)="onCreateFolder()"
+          [disabled]="!newFolderName.trim() || isCreatingFolder">
+          @if (isCreatingFolder) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          }
+          <span>{{ isCreatingFolder ? 'Creating...' : 'Create' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Delete Confirmation Modal -->
+@if (showDeleteDialog && itemToDelete) {
+  <div class="mj-modal-backdrop modal-overlay" (click)="onCancelDelete()">
+    <div class="mj-modal-window modal-compact modal-dialog" (click)="$event.stopPropagation()">
+      <div class="mj-modal-header modal-header">
+        <h3 class="modal-title">Delete {{ itemToDelete.type === 'folder' ? 'Folder' : 'File' }}?</h3>
+        <button type="button" class="modal-close-btn modal-close" (click)="onCancelDelete()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-modal-body modal-body">
+        <p class="modal-body-text">
+          Are you sure you want to delete <strong>{{ itemToDelete.name }}</strong>?
+        </p>
+        @if (itemToDelete.type === 'folder') {
+          <div class="modal-warning-banner warning">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span>This will delete the folder and all its contents.</span>
+          </div>
+        }
+      </div>
+      <div class="mj-modal-footer modal-footer">
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--secondary"
+          (click)="onCancelDelete()"
+          [disabled]="isDeleting">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--danger danger"
+          (click)="onConfirmDelete()"
+          [disabled]="isDeleting">
+          @if (isDeleting) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          }
+          <span>{{ isDeleting ? 'Deleting...' : 'Delete' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Rename Modal -->
+@if (showRenameDialog && itemToRename) {
+  <div class="mj-modal-backdrop modal-overlay" (click)="onCancelRename()">
+    <div class="mj-modal-window modal-compact modal-dialog" (click)="$event.stopPropagation()">
+      <div class="mj-modal-header modal-header">
+        <h3 class="modal-title">Rename {{ itemToRename.type === 'folder' ? 'Folder' : 'File' }}</h3>
+        <button type="button" class="modal-close-btn modal-close" (click)="onCancelRename()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-modal-body modal-body">
+        <label class="form-label">New name:</label>
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="newItemName"
+          [disabled]="isRenaming"
+          placeholder="Enter new name"
+          (keydown.enter)="onConfirmRename()"
+          autofocus />
+      </div>
+      <div class="mj-modal-footer modal-footer">
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--secondary"
+          (click)="onCancelRename()"
+          [disabled]="isRenaming">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--primary"
+          (click)="onConfirmRename()"
+          [disabled]="isRenaming || !newItemName.trim()">
+          @if (isRenaming) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          }
+          <span>{{ isRenaming ? 'Renaming...' : 'Rename' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Copy Modal -->
+@if (showCopyDialog && itemToCopy) {
+  <div class="mj-modal-backdrop" (click)="onCancelCopy()">
+    <div class="mj-modal-window modal-compact" (click)="$event.stopPropagation()">
+      <div class="mj-modal-header">
+        <h3 class="modal-title">Copy {{ itemToCopy.type === 'folder' ? 'Folder' : 'File' }}</h3>
+        <button type="button" class="modal-close-btn" (click)="onCancelCopy()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-modal-body">
+        <p class="modal-body-text">Copying <strong>{{ itemToCopy.name }}</strong></p>
+        <label class="form-label">Destination Path</label>
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="copyDestinationPath"
+          [disabled]="isCopying"
+          placeholder="path/to/destination"
+          (keydown.enter)="onConfirmCopy()" />
+      </div>
+      <div class="mj-modal-footer">
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--secondary"
+          (click)="onCancelCopy()"
+          [disabled]="isCopying">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--primary"
+          (click)="onConfirmCopy()"
+          [disabled]="isCopying || !copyDestinationPath.trim()">
+          @if (isCopying) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          }
+          <span>{{ isCopying ? 'Copying...' : 'Copy' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Move Modal -->
+@if (showMoveDialog && itemToMove) {
+  <div class="mj-modal-backdrop" (click)="onCancelMove()">
+    <div class="mj-modal-window modal-compact" (click)="$event.stopPropagation()">
+      <div class="mj-modal-header">
+        <h3 class="modal-title">Move {{ itemToMove.type === 'folder' ? 'Folder' : 'File' }}</h3>
+        <button type="button" class="modal-close-btn" (click)="onCancelMove()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-modal-body">
+        <p class="modal-body-text">Moving <strong>{{ itemToMove.name }}</strong></p>
+        <label class="form-label">Destination Folder</label>
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="moveDestinationPath"
+          [disabled]="isMoving"
+          placeholder="destination/folder/"
+          (keydown.enter)="onConfirmMove()" />
+      </div>
+      <div class="mj-modal-footer">
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--secondary"
+          (click)="onCancelMove()"
+          [disabled]="isMoving">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--primary"
+          (click)="onConfirmMove()"
+          [disabled]="isMoving || !moveDestinationPath.trim()">
+          @if (isMoving) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          }
+          <span>{{ isMoving ? 'Moving...' : 'Move' }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- Copy to Account Modal -->
+@if (showCopyToProviderDialog && itemToCopyToProvider) {
+  <div class="mj-modal-backdrop" (click)="onCancelCopyToAccount()">
+    <div class="mj-modal-window" (click)="$event.stopPropagation()">
+      <div class="mj-modal-header">
+        <h3 class="modal-title">Copy to Another Account</h3>
+        <button type="button" class="modal-close-btn" (click)="onCancelCopyToAccount()">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="mj-modal-body">
+        <p class="modal-body-text">
+          Copying <strong>{{ itemToCopyToProvider.name }}</strong> from <strong>{{ account?.account?.Name }}</strong>
+        </p>
+
+        <label class="form-label">Select Destination Storage Accounts</label>
+        <div class="account-picker-list">
+          @for (a of availableAccounts; track a.account.ID) {
+            <label class="account-picker-item" [for]="'dest-acc-' + a.account.ID">
+              <input
+                type="checkbox"
+                [id]="'dest-acc-' + a.account.ID"
+                [checked]="isDestinationAccountSelected(a.account.ID)"
+                [disabled]="isCopyingToAccount"
+                (change)="toggleDestinationAccount(a.account.ID)" />
+              <span class="picker-name">{{ a.account.Name }}</span>
+              <span class="picker-badge">{{ a.provider.Name }}</span>
+            </label>
+          }
+        </div>
+
+        <label class="form-label" style="margin-top: 14px;">Destination Filename</label>
+        <input
+          type="text"
+          class="form-input"
+          [(ngModel)]="copyToAccountDestinationPath"
+          [disabled]="isCopyingToAccount"
+          placeholder="Filename"
+          (keydown.enter)="onConfirmCopyToAccount()" />
+
+        @if (copyToAccountProgress) {
+          <div class="copy-progress-indicator">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <span>Copying to {{ copyToAccountProgress.currentAccount }} ({{ copyToAccountProgress.current }}/{{ copyToAccountProgress.total }})...</span>
+          </div>
+        }
+      </div>
+      <div class="mj-modal-footer">
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--secondary"
+          (click)="onCancelCopyToAccount()"
+          [disabled]="isCopyingToAccount">
+          Cancel
+        </button>
+        <button
+          type="button"
+          class="mj-action-btn mj-action-btn--primary"
+          (click)="onConfirmCopyToAccount()"
+          [disabled]="isCopyingToAccount || selectedDestinationAccounts.size === 0 || !copyToAccountDestinationPath.trim()">
+          @if (isCopyingToAccount) {
+            <i class="fa-solid fa-spinner fa-spin"></i>
+          }
+          <span>{{ isCopyingToAccount ? 'Copying...' : 'Copy to ' + selectedDestinationAccounts.size + ' Account' + (selectedDestinationAccounts.size !== 1 ? 's' : '') }}</span>
+        </button>
+      </div>
+    </div>
+  </div>
+}

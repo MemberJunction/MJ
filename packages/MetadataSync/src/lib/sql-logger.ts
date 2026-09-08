@@ -61,7 +61,9 @@ export class SQLLogger {
       params.forEach((param, index) => {
         const placeholder = `@param${index + 1}`;
         const value = this.formatParamValue(param);
-        formattedSql = formattedSql.replace(new RegExp(placeholder, 'g'), value);
+        // Function replacement: a parameter value containing `$&`/`` $` ``/`$'`/`$$`
+        // would otherwise be expanded, logging SQL that never ran. See issue #3171.
+        formattedSql = formattedSql.replace(new RegExp(placeholder, 'g'), () => value);
       });
     }
     

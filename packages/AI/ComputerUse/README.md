@@ -1015,4 +1015,4 @@ For more details, see [scripts/README.md](scripts/README.md).
 
 ## License
 
-This package is part of the MemberJunction project and is licensed under the MIT License. See [LICENSE](../../../LICENSE) for details.
+Business Source License 1.1 — see [LICENSE](../../../LICENSE) for details.

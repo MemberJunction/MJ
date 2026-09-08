@@ -416,9 +416,15 @@ export interface TestRunResult {
   failedChecks: number;
 
   /**
-   * Total number of checks
+   * Total number of checks executed (passed + failed)
    */
   totalChecks: number;
+
+  /**
+   * Number of checks skipped (tier-gated / environment gaps) — counted separately
+   * from the executed totals so a partially-skipped run is visibly not full coverage.
+   */
+  skippedChecks?: number;
 
   /**
    * Oracle evaluation results
@@ -589,7 +595,8 @@ export interface TestSuiteRunResult {
   passedTests: number;
 
   /**
-   * Tests that failed
+   * Tests that HARD-failed (status Failed, Error, or Timeout). Skipped tests are
+   * NOT failures — they are counted in skippedTests.
    */
   failedTests: number;
 
@@ -598,6 +605,12 @@ export interface TestSuiteRunResult {
    * A subset of `passedTests` — surfaces flakiness without masking it.
    */
   flakyTests?: number;
+
+  /**
+   * Tests whose driver reported 'Skipped' (env-gated tier, unreachable dependency).
+   * Surfaced separately so a suite run that silently shrank is visibly not a full run.
+   */
+  skippedTests?: number;
 
   /**
    * Total tests

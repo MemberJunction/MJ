@@ -214,4 +214,4 @@ Checks if the registry server is healthy.
 
 ## License
 
-MIT
+Business Source License 1.1 — see [LICENSE](../../LICENSE) for details.

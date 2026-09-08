@@ -3,14 +3,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 /* ------------------------------------------------------------------ */
 /*  Hoisted mocks                                                     */
 /* ------------------------------------------------------------------ */
-const mockAxiosPost = vi.hoisted(() => vi.fn());
-const mockAxiosGet = vi.hoisted(() => vi.fn());
+const mockHttpPost = vi.hoisted(() => vi.fn());
+const mockHttpGet = vi.hoisted(() => vi.fn());
 
-vi.mock('axios', () => ({
-  default: {
-    post: mockAxiosPost,
-    get: mockAxiosGet,
-  },
+vi.mock('@memberjunction/network-utils', () => ({
+  HttpPost: mockHttpPost,
+  HttpGet: mockHttpGet,
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -73,8 +71,8 @@ describe('HeyGenVideoGenerator', () => {
   /* ---- CreateAvatarVideo request building ---- */
   describe('CreateAvatarVideo', () => {
     it('should build correct API request and return videoId on success', async () => {
-      mockAxiosPost.mockResolvedValueOnce({
-        data: { data: { video_id: 'vid-123' } },
+      mockHttpPost.mockResolvedValueOnce({
+        Data: { data: { video_id: 'vid-123' } },
       });
 
       const params = {
@@ -93,7 +91,7 @@ describe('HeyGenVideoGenerator', () => {
       expect(result.success).toBe(true);
       expect(result.videoId).toBe('vid-123');
 
-      expect(mockAxiosPost).toHaveBeenCalledWith(
+      expect(mockHttpPost).toHaveBeenCalledWith(
         'https://api.heygen.com/v2/video/generate',
         expect.objectContaining({
           video_inputs: expect.arrayContaining([
@@ -106,13 +104,13 @@ describe('HeyGenVideoGenerator', () => {
           dimension: { width: 1920, height: 1080 },
         }),
         expect.objectContaining({
-          headers: expect.objectContaining({ 'X-Api-Key': 'test-heygen-key' }),
+          Headers: expect.objectContaining({ 'X-Api-Key': 'test-heygen-key' }),
         }),
       );
     });
 
     it('should return error result on API failure', async () => {
-      mockAxiosPost.mockRejectedValueOnce(new Error('HeyGen API error'));
+      mockHttpPost.mockRejectedValueOnce(new Error('HeyGen API error'));
 
       const params = {
         avatarId: 'avatar1',
@@ -135,8 +133,8 @@ describe('HeyGenVideoGenerator', () => {
   /* ---- GetAvatars ---- */
   describe('GetAvatars', () => {
     it('should parse avatar list from API response', async () => {
-      mockAxiosGet.mockResolvedValueOnce({
-        data: {
+      mockHttpGet.mockResolvedValueOnce({
+        Data: {
           data: {
             avatars: [
               {
@@ -167,7 +165,7 @@ describe('HeyGenVideoGenerator', () => {
     });
 
     it('should return empty array on error', async () => {
-      mockAxiosGet.mockRejectedValueOnce(new Error('API error'));
+      mockHttpGet.mockRejectedValueOnce(new Error('API error'));
       const avatars = await video.GetAvatars();
       expect(avatars).toEqual([]);
     });

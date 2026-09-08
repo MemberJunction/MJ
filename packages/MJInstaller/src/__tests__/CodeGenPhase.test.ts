@@ -34,28 +34,9 @@ function makeContext(overrides?: Partial<CodeGenContext>): CodeGenContext {
     Dir: '/test/install',
     Emitter: emitter,
     Fast: false,
+    PackageManager: 'npm',
     ...overrides,
   };
-}
-
-/**
- * Configure mockRunner.Run so that specific commands return specific results.
- * Falls back to a default success result for unmatched commands.
- */
-function mockRunCommand(
-  matchers: Array<{
-    match: (cmd: string, args: string[]) => boolean;
-    result: { ExitCode: number; Stdout: string; Stderr: string; TimedOut: boolean };
-  }>
-) {
-  mockRunner.Run.mockImplementation(
-    async (cmd: string, args: string[]) => {
-      for (const { match, result } of matchers) {
-        if (match(cmd, args)) return result;
-      }
-      return { ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false };
-    }
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -131,7 +112,7 @@ describe('CodeGenPhase', () => {
   describe('Run — retry on first failure', () => {
     it('should rebuild + retry once and return RetryUsed=true on second success', async () => {
       let callCount = 0;
-      mockRunner.Run.mockImplementation(async (cmd: string, args: string[]) => {
+      mockRunner.Run.mockImplementation(async (_cmd: string, args: string[]) => {
         // resolveCli uses `node` with local path when FileExists is true
         const isCodegen = args.includes('codegen');
         if (isCodegen) {
@@ -153,7 +134,7 @@ describe('CodeGenPhase', () => {
     });
 
     it('should throw CODEGEN_FAILED when both attempts fail', async () => {
-      mockRunner.Run.mockImplementation(async (cmd: string, args: string[]) => {
+      mockRunner.Run.mockImplementation(async (_cmd: string, args: string[]) => {
         const isCodegen = args.includes('codegen');
         if (isCodegen) {
           return { ExitCode: 1, Stdout: '', Stderr: 'persistent error', TimedOut: false };
@@ -508,5 +489,63 @@ describe('CodeGenPhase', () => {
       expect(rpePatch).toBeDefined();
       expect(rpePatch!.Status).toBe('skipped');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Package-manager awareness
+// ---------------------------------------------------------------------------
+
+describe('CodeGenPhase package-manager awareness (pnpm)', () => {
+  let phase: CodeGenPhase;
+
+  beforeEach(() => {
+    for (const mock of [mockFs, mockRunner]) {
+      for (const fn of Object.values(mock)) {
+        if (typeof fn === 'function' && 'mockReset' in fn) {
+          (fn as ReturnType<typeof vi.fn>).mockReset();
+        }
+      }
+    }
+
+    phase = new CodeGenPhase();
+
+    mockRunner.Run.mockResolvedValue({ ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false });
+    mockFs.DirectoryExists.mockResolvedValue(true);
+    mockFs.ReadText.mockResolvedValue('');
+    mockFs.WriteText.mockResolvedValue(undefined);
+    mockFs.GetModifiedTime.mockResolvedValue(Date.now());
+    mockFs.FileExists.mockResolvedValue(true);
+  });
+
+  it('routes every package-manager shell-out through pnpm (no npm/npx calls)', async () => {
+    const ctx = makeContext({ PackageManager: 'pnpm' });
+    await phase.Run(ctx);
+
+    const cmds = mockRunner.Run.mock.calls.map((c: [string, string[]]) => c[0]);
+    expect(cmds).not.toContain('npm');
+    expect(cmds).not.toContain('npx');
+  });
+
+  it('runs turbo through pnpm exec', async () => {
+    const ctx = makeContext({ PackageManager: 'pnpm' });
+    await phase.Run(ctx);
+
+    const turboCall = mockRunner.Run.mock.calls.find(
+      (c: [string, string[]]) => c[0] === 'pnpm' && c[1]?.[0] === 'exec' && c[1]?.[1] === 'turbo'
+    );
+    expect(turboCall).toBeDefined();
+  });
+
+  it('falls back to pnpm dlx for the CLI when no local binary exists', async () => {
+    mockFs.FileExists.mockResolvedValue(false);
+    const ctx = makeContext({ PackageManager: 'pnpm', VersionTag: 'v6.1.0' });
+    await phase.Run(ctx);
+
+    const dlxCall = mockRunner.Run.mock.calls.find(
+      (c: [string, string[]]) =>
+        c[0] === 'pnpm' && c[1]?.[0] === 'dlx' && c[1]?.[1] === '@memberjunction/cli@6.1.0'
+    );
+    expect(dlxCall).toBeDefined();
   });
 });

@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, ShouldJoinRecordGeoCodes, HasNativeLatLngFields, NativeLatitudeField, NativeLongitudeField, ListEmbeddedGeoSpecs } from '@memberjunction/core';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -6,15 +6,17 @@ import path from 'path';
 import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
 
-import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { autoIndexForeignKeys, autoIndexSoftPrimaryKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
+import { entityInCustomBaseViewRefreshScope, shouldEmitCascadeForRelatedEntity } from './schema-filters';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 
-import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { MJEntityEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
+import { writeFileIfChanged as writeFileIfChangedShared } from '../Misc/file-write';
 
 
 export const SPType = {
@@ -24,6 +26,19 @@ export const SPType = {
   } as const;
 
 export type SPType = typeof SPType[keyof typeof SPType];
+
+/**
+ * Entities whose SchemaName is not in excludeSchemas (case-insensitive).
+ * This is the CodeGen run's in-scope set: SQL objects and GRANTs are
+ * generated and executed only for these. excludeSchemas means "not this run".
+ */
+export function entitiesNotInExcludedSchemas<T extends { SchemaName: string }>(
+    entities: T[],
+    excludeSchemas: string[],
+): T[] {
+    const exclude = new Set(excludeSchemas.map((s) => s.toLowerCase()));
+    return entities.filter((e) => !exclude.has(e.SchemaName.toLowerCase()));
+}
 
 
 /**
@@ -86,8 +101,17 @@ export class SQLCodeGenBase {
      */
     protected orderedEntitiesForDeleteSPRegeneration: string[] = [];
 
+    /**
+     * `schema.routine` keys (lowercased) present in the database at the start of
+     * this SQL-generation pass. Used to force-log CREATE PROC for routines that
+     * were dropped out-of-band (BigSchemaDemo recreate, a failed prior batch)
+     * while the entity itself is not in newEntityList/modifiedEntityList.
+     */
+    protected existingRoutines: Set<string> | null = null;
+
     public async manageSQLScriptsAndExecution(pool: CodeGenConnection, entities: EntityInfo[], directory: string, currentUser: UserInfo): Promise<boolean> {
         try {
+            this.existingRoutines = null;
             // Build list of entities qualified for forced regeneration if entityWhereClause is provided
             if (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.entityWhereClause) {
                 this.filterEntitiesQualifiedForRegeneration = true; // Enable filtering
@@ -125,14 +149,14 @@ export class SQLCodeGenBase {
             }
             succeedSpinner(`Custom SQL scripts completed (${(new Date().getTime() - startTime.getTime())/1000}s)`);
 
+            await this.loadExistingRoutines(pool, entities);
+
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
             // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
 
             // OPTIMIZATION: Use a Set for O(1) lookups instead of O(n) array finds to improve performance
-            const excludeSchemasSet = new Set(configInfo.excludeSchemas.map(s => s.toLowerCase()));
-            const includedEntities = baselineEntities.filter(e => !excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that are NOT in the excludeSchemas list
-            const excludedEntities = baselineEntities.filter(e => excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that ARE in the excludeSchemas list in this array
+            const includedEntities = entitiesNotInExcludedSchemas(baselineEntities, configInfo.excludeSchemas);
 
             // Initialize temp batch files for each schema
             // These will be populated as SQL is generated and will be used for actual execution
@@ -169,18 +193,18 @@ export class SQLCodeGenBase {
 
             // Track per-batch success without short-circuiting. Historically,
             // any single batch failure here returned `false` immediately, which
-            // skipped the cascade-regen and excluded-perms batches and left
-            // their entities with no SQL emitted at all. The post-run CRUD
-            // validator (in runCodeGen.ts) is the authoritative ship-gate now,
-            // so we want every batch to attempt its work and surface the
-            // complete picture of what's missing — partial generation is
-            // strictly more useful than nothing.
+            // skipped the cascade-regen batch and left those entities with no
+            // SQL emitted at all. The post-run CRUD validator (in runCodeGen.ts)
+            // is the authoritative ship-gate now, so we want every in-scope
+            // batch to attempt its work and surface the complete picture of
+            // what's missing — partial generation is strictly more useful than
+            // nothing.
             let entityGenSuccess = true;
 
             // Build a UNION will-regenerate set across every batch we're about
-            // to launch (main + cascade-regen + excluded-perms). The PG view
-            // fallback's restoreDependents path uses this to skip restoring
-            // captured dependents that codegen will recreate later in the run.
+            // to launch (main + cascade-regen). The PG view fallback's
+            // restoreDependents path uses this to skip restoring captured
+            // dependents that codegen will recreate later in the run.
             // Without the union, batch 1's fallback only sees batch 1's
             // entities — so a dependent like vwAIAgentRuns (which lives in
             // batch 2 cascade-regen) is "missing from willRegenerate", the
@@ -192,7 +216,6 @@ export class SQLCodeGenBase {
             const allBatchEntities: EntityInfo[] = [
                 ...entitiesWithoutCascadeRegeneration,
                 ...entitiesForCascadeRegeneration,
-                ...excludedEntities,
             ];
             const globalWillRegenerate = new Set(
                 allBatchEntities
@@ -213,7 +236,8 @@ export class SQLCodeGenBase {
             // AI Engine init because vwAIModels is gone. SQL Server doesn't
             // hit this because its execution path is bulk-monolithic, not
             // phased per-entity.
-            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : 5;
+            const configuredBatch = configInfo.fileEmit?.sqlEntityBatchSize ?? 8;
+            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : configuredBatch;
 
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
@@ -230,7 +254,7 @@ export class SQLCodeGenBase {
                 willRegenerate: globalWillRegenerate
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
-                logError('Main entity SQL generation batch had failures — continuing with cascade-regen and excluded-perms batches; validator will report any missing routines.');
+                logError('Main entity SQL generation batch had failures — continuing with cascade-regen; validator will report any missing routines.');
                 entityGenSuccess = false;
             }
 
@@ -255,23 +279,19 @@ export class SQLCodeGenBase {
                 genResult.Files.push(...cascadeGenResult.Files);
             }
 
-            // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
-            updateSpinner(`Generating permissions for ${excludedEntities.length} excluded entities...`);
-            const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                pool,
-                entities: excludedEntities,
-                directory,
-                onlyPermissions: true,
-                skipExecution: true, // skip execution because we execute it all in a giant batch below
-                batchSize: perEntityBatchSize,
-                writeFiles: true,
-                enableSQLLoggingForNewOrModifiedEntities: false, /*don't log this stuff, it is just permissions for excluded entities*/
-                willRegenerate: globalWillRegenerate
-            });
-            if (!genResult2.Success) {
-                logError('Excluded-entities permissions batch had failures — continuing; validator will report any missing routines.');
-                entityGenSuccess = false;
-            }
+            // STEP 2(c) used to generate+apply GRANT files for excludeSchemas entities
+            // ("we don't want to generate SQL, we do want to generate the permissions").
+            // That is wrong once excludeSchemas means "not this CodeGen run":
+            //
+            //   - Open Apps exclude sibling schemas (__mj_BizAppsCommon, …) and __mj.
+            //     GRANT SELECT ON [__mj_BizAppsCommon].[vwContactMethods] then runs from
+            //     the orders (or other) repo, pollutes SQL Scripts/generated/<sibling>/,
+            //     and fails the whole run (exit 1) when that object is missing or lives
+            //     in a schema the executing login does not resolve.
+            //   - Core (__mj) permissions already ship in MJ migrations. Refreshing them
+            //     from an app CodeGen is not this app's job.
+            //
+            // Permissions are applied in STEP 4 for includedEntities only.
             if (entityGenSuccess) {
                 succeedSpinner(`Entity generation completed (${(new Date().getTime() - step2StartTime.getTime())/1000}s)`);
             } else {
@@ -280,8 +300,8 @@ export class SQLCodeGenBase {
 
             // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
             startSpinner('Creating combined SQL files...');
-            const allEntityFiles = this.createCombinedEntitySQLFiles(directory, baselineEntities);
-            succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} schemas`);
+            const allEntityFiles = this.createCombinedEntitySQLFiles(directory, includedEntities);
+            succeedSpinner(`Created combined SQL files for ${allEntityFiles.length} file(s)`);
 
             // STEP 2(e) ---- FINALLY, we execute SQL in proper dependency order
             // Use temp batch files (which maintain CodeGen log order) if available, otherwise fall back to combined files
@@ -290,7 +310,7 @@ export class SQLCodeGenBase {
 
             let executionSuccess = false;
             if (useProviderPhasedExecution) {
-                // Per-entity phased execution already ran during steps 2(b)/(c).
+                // Per-entity phased execution already ran during step 2(b).
                 // Skip the bulk file re-execution — replaying the same SQL here
                 // would re-trigger 42P16 without the phased recovery wrapper and
                 // undo the work the phased executor just did.
@@ -403,10 +423,13 @@ export class SQLCodeGenBase {
                 }
             }
 
-            // STEP 4- Apply permissions, executing all .permissions files
+            // STEP 4- Apply permissions for THIS run's schemas only. Excluded-schema
+            // GRANT files are not generated (see STEP 2(c) note) and must not be
+            // executed: a missing sibling object would fail CodeGen with
+            // "Cannot find the object 'vw…'" even though this app's work succeeded.
             startSpinner('Applying permissions...');
             const step4StartTime: Date = new Date();
-            if (! await this.applyPermissions(pool, directory, baselineEntities)) {
+            if (! await this.applyPermissions(pool, directory, includedEntities)) {
                 failSpinner('Failed to apply permissions');
                 overallSuccess = false;
             }
@@ -775,11 +798,18 @@ export class SQLCodeGenBase {
         // base view references. These MUST exist before phase 1 (view) runs;
         // otherwise PG raises `function does not exist` and phase 2 (CRUD)
         // gets gated off.
-        const tvfSQL = entity.BaseViewGenerated && !entity.VirtualEntity
-            ? this.generateRecursiveFKTVFs(entity)
-            : '';
+        // A LAYERED entity still generates. `BaseViewGenerated = 0` means "do not write BaseView",
+        // and when GeneratedBaseViewName is set that is exactly the intent — the application owns
+        // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
+        // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
+        // from an object that does not exist.
+        // One pass: overlay already applied → Pass 1 sees extra BaseView columns and logs
+        // EntityField INSERTs; Pass 2 DROPs/creates only GeneratedViewName, never the overlay.
+        const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
 
-        const viewPieces = entity.BaseViewGenerated && !entity.VirtualEntity
+        const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';
+
+        const viewPieces = generatesView
             ? await this.generateBaseViewPieces(pool, entity)
             : { viewSQL: '', viewPermSQL: '' };
 
@@ -809,7 +839,7 @@ export class SQLCodeGenBase {
     }
 
     /**
-     * Concatenates the root-ID TVF SQL for every recursive ParentID-style FK
+     * Concatenates the hierarchy TVF SQL for every recursive ParentID-style FK
      * on this entity. Mirrors the inline TVF generation in
      * `generateSingleEntitySQLToSeparateFiles` so the phased executor can run
      * the same DDL ahead of the base view.
@@ -819,10 +849,10 @@ export class SQLCodeGenBase {
         if (recursiveFKs.length === 0) return '';
         let combined = '';
         for (const field of recursiveFKs) {
-            const functionName = `fn${entity.BaseTable}${field.Name}_GetRootID`;
-            combined += this.generateSingleEntitySQLFileHeader(entity, functionName)
-                + this.generateRootIDFunction(entity, field)
-                + '\n' + this._dbProvider.BatchSeparator + '\n';
+            const fns = this.getHierarchyFunctionsForField(entity, field);
+            for (const fn of fns) {
+                combined += fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+            }
         }
         return combined;
     }
@@ -833,14 +863,7 @@ export class SQLCodeGenBase {
      * This avoids false timestamp updates and unnecessary I/O.
      */
     protected writeFileIfChanged(filePath: string, newContent: string): boolean {
-        if (fs.existsSync(filePath)) {
-            const existing = fs.readFileSync(filePath, 'utf-8');
-            if (existing === newContent) {
-                return false;
-            }
-        }
-        fs.writeFileSync(filePath, newContent);
-        return true;
+        return writeFileIfChangedShared(filePath, newContent);
     }
 
     /**
@@ -861,7 +884,7 @@ export class SQLCodeGenBase {
         }
 
         try {
-            const viewName = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+            const viewName = entity.GeneratedViewName;
 
             // PostgreSQL: pg_get_viewdef() returns a heavily reformatted definition (re-qualified
             // columns, normalized whitespace/casing, re-ordered expressions) that never byte-matches
@@ -1073,16 +1096,48 @@ export class SQLCodeGenBase {
             modifiedOrNewNames.includes(e.Name) &&
             !e.BaseViewGenerated &&
             e.IncludeInAPI &&
-            !e.VirtualEntity
+            !e.VirtualEntity &&
+            entityInCustomBaseViewRefreshScope(
+                e.SchemaName,
+                configInfo.excludeSchemas ?? [],
+                configInfo.includeSchemas,
+            )
         );
     }
 
     /**
      * Builds a combined SQL string of sp_refreshview statements for the given entities.
+     *
+     * For a LAYERED entity the outer refresh is guarded on the application-owned `BaseView`
+     * existing, matching {@link generateCustomBaseViewRefreshAndPermissions}. On the first pass
+     * after layering is enabled the outer view cannot exist yet — it selects from the inner view
+     * that same pass creates — so an unguarded refresh here fails the documented setup procedure.
+     *
+     * The inner view is refreshed first, before the outer. That ordering is defensive rather than
+     * load-bearing: every entity reaching this method is in the modified/new list (see
+     * {@link getModifiedCustomBaseViewEntities}), and `logSQLForNewOrModifiedEntity` forces a
+     * modified entity's base view DDL into the same migration regardless of whether its text
+     * changed — so the inner view is already dropped and recreated in an earlier step, which
+     * resets its cached column list more thoroughly than a refresh would. The ordering is kept
+     * anyway so this path cannot become wrong if that coupling is ever loosened.
      */
     protected buildCustomBaseViewRefreshSQL(entities: EntityInfo[]): string {
         return entities
-            .map(e => this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView))
+            .map(e => {
+                const outer = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.BaseView);
+                if (!e.HasLayeredBaseView) {
+                    return outer; // fully custom — one view, and it is a standing prerequisite
+                }
+                const inner = this._dbProvider.generateViewRefreshSQL(e.SchemaName, e.GeneratedViewName);
+                const rebind = this._dbProvider.generateLayeredOuterRebindSQL(e);
+                const outerSql = outer.trim().length > 0
+                    ? this.guardOnApplicationOwnedView(e, outer)
+                    : '';
+                const rebindSql = rebind.trim().length > 0
+                    ? this.guardOnApplicationOwnedView(e, rebind.trim())
+                    : '';
+                return [inner, outerSql, rebindSql].filter((s) => s && s.trim().length > 0).join('\n');
+            })
             .join('\n');
     }
 
@@ -1123,9 +1178,21 @@ export class SQLCodeGenBase {
             let baseViewChanged = false;
             // Indexes for Fkeys for the table (skip for virtual entities — views can't have indexes)
             if (!options.onlyPermissions && !options.entity.VirtualEntity){
-                const shouldGenerateIndexes = autoIndexForeignKeys() || (configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+                const forceIndexes = !!(configInfo.forceRegeneration?.enabled && configInfo.forceRegeneration?.indexes);
+                const shouldGenerateIndexes = autoIndexForeignKeys() || forceIndexes;
                 const indexSQL = shouldGenerateIndexes ? this.generateIndexesForForeignKeys(options.pool, options.entity) : ''; // generate indexes if auto-indexing is on OR force regeneration is enabled
-                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys') + indexSQL; 
+                // The soft-PK index rides in the same generated file (and therefore the same
+                // migration log), but on its own setting — see generateIndexForSoftPrimaryKey.
+                // Appended rather than prepended so the file's existing content stays
+                // byte-identical for every entity that has no soft PK, which is nearly all of
+                // them: writeFileIfChanged compares content, and reordering would rewrite the
+                // whole tree for no functional gain.
+                const softPKSQL = (autoIndexSoftPrimaryKeys() || forceIndexes)
+                    ? this.generateIndexForSoftPrimaryKey(options.entity)
+                    : '';
+                const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Index for Foreign Keys')
+                    + indexSQL
+                    + (softPKSQL ? (indexSQL ? '\n\n' : '') + softPKSQL : '');
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('index', options.entity.SchemaName, options.entity.BaseTable, false, true));
                     this.writeFileIfChanged(filePath, s);
@@ -1136,34 +1203,38 @@ export class SQLCodeGenBase {
             }
 
             // BASE VIEW AND RELATED TVFs
-            // Only generate if BaseViewGenerated is true (respects custom views where it's false)
-            // forceRegeneration.baseViews only forces regeneration of views where BaseViewGenerated=true
+            // Generate when the entity has a view for CodeGen to write: either BaseViewGenerated
+            // (the ordinary case, writing BaseView) or a LAYERED entity, where BaseViewGenerated is
+            // false because the application owns BaseView while CodeGen still writes the inner view
+            // underneath it. Gating on BaseViewGenerated alone would leave the custom layer selecting
+            // from an object that was never created.
+            // forceRegeneration.baseViews only forces regeneration of views CodeGen owns.
             if (!options.onlyPermissions &&
-                options.entity.BaseViewGenerated &&
+                (options.entity.BaseViewGenerated || options.entity.HasLayeredBaseView) &&
                 !options.entity.VirtualEntity) {
 
-                // ROOT ID FUNCTIONS (TVFs) + BASE VIEW
+                // HIERARCHY & ROOT ID FUNCTIONS (TVFs) + BASE VIEW
                 // TVFs must be created BEFORE the view that references them.
                 // We defer TVF logging until after baseViewChanged is computed so that
                 // TVFs are force-logged to the TempBatchFile whenever the view changes.
                 // This prevents "Invalid object name" errors when the view references
                 // TVFs that haven't been executed yet (e.g., when soft FKs are newly added).
                 const recursiveFKs = this.detectRecursiveForeignKeys(options.entity);
-                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string}> = [];
+                const tvfEntries: Array<{sql: string, filePath: string, fieldName: string, description: string}> = [];
                 if (recursiveFKs.length > 0) {
                     for (const field of recursiveFKs) {
-                        const functionName = `fn${options.entity.BaseTable}${field.Name}_GetRootID`;
-                        const tvfSQL = this.generateSingleEntitySQLFileHeader(options.entity, functionName) +
-                                  this.generateRootIDFunction(options.entity, field);
-                        const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, functionName, false, true));
-                        tvfEntries.push({sql: tvfSQL, filePath: tvfFilePath, fieldName: field.Name});
-                        // Add function SQL to output BEFORE the view
-                        sRet += tvfSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        const fns = this.getHierarchyFunctionsForField(options.entity, field);
+                        for (const fn of fns) {
+                            const tvfFilePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('function', options.entity.SchemaName, fn.functionName, false, true));
+                            tvfEntries.push({sql: fn.sql, filePath: tvfFilePath, fieldName: fn.fieldName, description: fn.description});
+                            // Add function SQL to output BEFORE the view
+                            sRet += fn.sql + '\n' + this._dbProvider.BatchSeparator + '\n';
+                        }
                     }
                 }
 
                 // Generate the base view (which may reference the TVFs created above)
-                const s = this.generateSingleEntitySQLFileHeader(options.entity,options.entity.BaseView) + await this.generateBaseView(options.pool, options.entity)
+                const s = this.generateSingleEntitySQLFileHeader(options.entity, options.entity.GeneratedViewName) + await this.generateBaseView(options.pool, options.entity)
 
                 // Compare generated view SQL against what's currently in the database.
                 // If the SELECT body differs, force-log just this base view via the forceLog flag
@@ -1175,12 +1246,12 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     for (const tvf of tvfEntries) {
                         this.writeFileIfChanged(tvf.filePath, tvf.sql);
-                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, `Root ID Function SQL for ${options.entity.Name}.${tvf.fieldName}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, tvf.sql, tvf.description, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
                         files.push(tvf.filePath);
                     }
                 }
 
-                const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.BaseView, false, true));
+                const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('view', options.entity.SchemaName, options.entity.GeneratedViewName, false, true));
                 if (options.writeFiles) {
                     this.writeFileIfChanged(filePath, s);
                     this.logSQLForNewOrModifiedEntity(options.entity, s, `Base View SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
@@ -1189,7 +1260,17 @@ export class SQLCodeGenBase {
                 sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
             }
             // always generate permissions for the base view
-            const s = this.generateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView) + this.generateViewPermissions(options.entity)
+            const permHeader = this.generateSingleEntitySQLFileHeader(options.entity, 'Permissions for ' + options.entity.BaseView);
+            const rawPermBody = this.generateViewPermissions(options.entity);
+            // Guarded for the same reason as in generateBaseViewPieces: these GRANTs target the
+            // application-owned BaseView, which does not exist during a layered entity's bootstrap
+            // pass. This copy is what gets written to the permissions FILE and logged into the
+            // migration, so leaving it unguarded would fail on other environments even though the
+            // executed copy (generateCustomBaseViewRefreshAndPermissions, below) is guarded.
+            const permBody = options.entity.HasLayeredBaseView && rawPermBody.trim().length > 0
+                ? '\n' + this.guardOnApplicationOwnedView(options.entity, rawPermBody.trim())
+                : rawPermBody;
+            const s = permHeader + permBody;
             if (s.length > 0)
                 permissionsSQL += s + '\n' + this._dbProvider.BatchSeparator + '\n';
             if (options.writeFiles) {
@@ -1202,14 +1283,7 @@ export class SQLCodeGenBase {
             // now, append the permissions to the return string IF we did NOT generate the base view - because if we generated the base view, that
             // means we already generated the permissions for it above and it is part of sRet already, but we always save it to a file, (per above line)
             if (!options.entity.BaseViewGenerated) {
-                // For custom base views (BaseViewGenerated=false), emit sp_refreshview before permissions
-                // so that SQL Server picks up schema changes (new columns from migrations) before we
-                // grant permissions. Developers no longer need to remember to add this manually.
-                if (this._dbProvider.NeedsViewRefresh && !options.entity.VirtualEntity) {
-                    const refreshSQL = this._dbProvider.generateViewRefreshSQL(options.entity.SchemaName, options.entity.BaseView);
-                    sRet += refreshSQL + '\n' + this._dbProvider.BatchSeparator + '\n';
-                }
-                sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
+                sRet += this.generateCustomBaseViewRefreshAndPermissions(options.entity, permHeader, permBody);
             }
 
             // CREATE SP
@@ -1223,7 +1297,7 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1234,7 +1308,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true))
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spCreate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                     files.push(filePath);
                 }
 
@@ -1255,7 +1329,7 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1266,7 +1340,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spUpdate Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                     files.push(filePath);
                 }
 
@@ -1293,7 +1367,7 @@ export class SQLCodeGenBase {
                     if (options.writeFiles) {
                         const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, false, true))
                         this.writeFileIfChanged(filePath, s);
-                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                        this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete SQL for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                         files.push(filePath);
                     }
                     sRet += s + '\n' + this._dbProvider.BatchSeparator + '\n';
@@ -1304,7 +1378,7 @@ export class SQLCodeGenBase {
                 if (options.writeFiles) {
                     const filePath = path.join(options.directory, this.SQLUtilityObject.getDBObjectFileName('sp', options.entity.SchemaName, spName, true, true));
                     this.writeFileIfChanged(filePath, s);
-                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, baseViewChanged);
+                    this.logSQLForNewOrModifiedEntity(options.entity, s, `spDelete Permissions for ${options.entity.Name}`, options.enableSQLLoggingForNewOrModifiedEntities, this.forceLogForRoutine(options.entity, spName, baseViewChanged));
                     files.push(filePath);
                 }
 
@@ -1356,6 +1430,44 @@ export class SQLCodeGenBase {
 
     public getSPName(entity: EntityInfo, type: SPType): string {
         return this._dbProvider.getCRUDRoutineName(entity, type as 'Create' | 'Update' | 'Delete');
+    }
+
+    /**
+     * Snapshot every CRUD routine currently in the database (one query) so
+     * generate-and-log can force-emit CREATE PROC for objects that vanished
+     * without the entity landing on newEntityList/modifiedEntityList.
+     */
+    protected async loadExistingRoutines(pool: CodeGenConnection, entities: EntityInfo[]): Promise<void> {
+        this.existingRoutines = new Set<string>();
+        const schemas = [...new Set(entities.map((e) => e.SchemaName).filter((s) => !!s))];
+        const sql = this._dbProvider.getRoutineNamesBySchemaSQL(schemas);
+        if (!sql || !sql.trim()) {
+            return;
+        }
+        try {
+            const result = await pool.query(sql);
+            for (const row of result.recordset ?? []) {
+                const schemaName = String(row.schema_name ?? '').toLowerCase();
+                const routineName = String(row.routine_name ?? '').toLowerCase();
+                if (schemaName && routineName) {
+                    this.existingRoutines.add(`${schemaName}.${routineName}`);
+                }
+            }
+        } catch (e) {
+            logWarning(`Could not load existing CRUD routines (missing-proc self-heal disabled this run): ${e instanceof Error ? e.message : String(e)}`);
+            this.existingRoutines = null;
+        }
+    }
+
+    protected isRoutineMissing(schema: string, routineName: string): boolean {
+        if (!this.existingRoutines) {
+            return false;
+        }
+        return !this.existingRoutines.has(`${schema}.${routineName}`.toLowerCase());
+    }
+
+    protected forceLogForRoutine(entity: EntityInfo, routineName: string, baseViewChanged: boolean): boolean {
+        return baseViewChanged || this.isRoutineMissing(entity.SchemaName, routineName);
     }
 
     public getEntityPermissionFileNames(entity: EntityInfo): string[] {
@@ -1502,14 +1614,79 @@ export class SQLCodeGenBase {
     }
 
     /**
+     * Generates the composite index covering the entity's SOFT primary key. Empty for every
+     * entity with a real `PRIMARY KEY` constraint, which is nearly all of them.
+     *
+     * Kept separate from {@link generateIndexesForForeignKeys} and gated by its own setting: a
+     * soft-PK index serves MJ's own per-record existence check on the create path, which is a
+     * different concern from indexing foreign keys for joins and filters, and an operator's
+     * opinion about one is not an opinion about the other.
+     */
+    generateIndexForSoftPrimaryKey(entity: EntityInfo): string {
+        const indexStatements = this._dbProvider.generateSoftPrimaryKeyIndex(entity);
+        return indexStatements.join('\n\n');
+    }
+
+    /**
      * Detects self-referential foreign keys in an entity (e.g., ParentTaskID pointing back to Task table)
      * Returns array of field info objects representing recursive relationships
      */
     protected detectRecursiveForeignKeys(entity: EntityInfo): EntityFieldInfo[] {
-        return entity.Fields.filter(field =>
+        const hierarchyFKs = entity.Fields.filter(field =>
             field.RelatedEntityID != null &&
-            UUIDsEqual(field.RelatedEntityID, entity.ID)
+            UUIDsEqual(field.RelatedEntityID, entity.ID) &&
+            !field.IsVirtual &&
+            field.IsHierarchy === true
         );
+        if (hierarchyFKs.length === 0) {
+            return [];
+        }
+        if (entity.PrimaryKeys.length !== 1) {
+            logWarning(
+                `[Hierarchy] Entity '${entity.Name}' has ${hierarchyFKs.length} hierarchy foreign key(s) ` +
+                `(${hierarchyFKs.map(f => f.Name).join(', ')}), but has ${entity.PrimaryKeys.length} primary key fields. ` +
+                `MemberJunction hierarchy TVF generation and traversal require a single-column primary key. Skipping hierarchy generation for this entity.`
+            );
+            return [];
+        }
+        return hierarchyFKs;
+    }
+
+    /**
+     * Helper to get the canonical hierarchy function definitions and metadata for an entity and recursive FK field.
+     */
+    protected getHierarchyFunctionsForField(entity: EntityInfo, field: EntityFieldInfo): Array<{functionName: string, sql: string, description: string, fieldName: string}> {
+        const metaFnName = this._dbProvider.getHierarchyMetaFunctionName(entity, field);
+        const descFnName = this._dbProvider.getDescendantsFunctionName(entity, field);
+        const ancFnName = this._dbProvider.getAncestorsFunctionName(entity, field);
+        const rootFnName = this._dbProvider.getRootIDFunctionName(entity, field);
+
+        return [
+            {
+                functionName: metaFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, metaFnName) + this._dbProvider.generateHierarchyMetaFunction(entity, field),
+                description: `Hierarchy Metadata Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: descFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, descFnName) + this._dbProvider.generateDescendantsFunction(entity, field),
+                description: `Descendants Traversal Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: ancFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, ancFnName) + this._dbProvider.generateAncestorsFunction(entity, field),
+                description: `Ancestors Traversal Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            },
+            {
+                functionName: rootFnName,
+                sql: this.generateSingleEntitySQLFileHeader(entity, rootFnName) + this._dbProvider.generateRootIDFunction(entity, field),
+                description: `Root ID Function SQL for ${entity.Name}.${field.Name}`,
+                fieldName: field.Name
+            }
+        ];
     }
 
     /**
@@ -1535,36 +1712,48 @@ export class SQLCodeGenBase {
             .join('\n');
     }
 
-
     /**
-     * Generates the SELECT clause additions for root fields from TVFs
-     * Example: , root_ParentID.RootID AS [RootParentID]
+     * Generates the SELECT clause additions for hierarchy metadata fields from TVFs
+     * Projects: Root<Field>, <Field>Depth, <Field>Path, <Field>IsLeaf, <Field>ChildCount
      */
-    protected generateRootFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+    protected generateHierarchyFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
         if (recursiveFKs.length === 0) return '';
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `root_${field.Name}`;
-            sOutput += `,\n    ${this._dbProvider.generateRootFieldSelect(entity, field, alias)}`;
+            const alias = `hier_${field.Name}`;
+            sOutput += `,\n    ${this._dbProvider.generateHierarchyFieldSelect(entity, field, alias)}`;
         }
         return sOutput;
     }
 
     /**
-     * Generates OUTER APPLY joins to inline Table Value Functions for root ID calculation
-     * Each recursive FK gets an OUTER APPLY that calls its corresponding function
+     * Generates JOIN clauses to inline Table Value Functions for hierarchy metadata calculation
      */
-    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+    protected generateHierarchyJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
         if (recursiveFKs.length === 0) return '';
         let sOutput = '';
         for (let i = 0; i < recursiveFKs.length; i++) {
             const field = recursiveFKs[i];
-            const alias = `root_${field.Name}`;
+            const alias = `hier_${field.Name}`;
             if (sOutput.length > 0) sOutput += '\n';
-            sOutput += this._dbProvider.generateRootFieldJoin(entity, field, alias);
+            sOutput += this._dbProvider.generateHierarchyFieldJoin(entity, field, alias);
         }
         return '\n' + sOutput;
+    }
+
+    /**
+     * Generates the SELECT clause additions for root and hierarchy fields from TVFs
+     */
+    protected generateRootFieldSelects(entity: EntityInfo, recursiveFKs: EntityFieldInfo[], classNameFirstChar: string): string {
+        return this.generateHierarchyFieldSelects(entity, recursiveFKs, classNameFirstChar);
+    }
+
+    /**
+     * Generates joins to inline Table Value Functions for hierarchy and root ID calculation
+     */
+    protected generateRootIDJoins(recursiveFKs: EntityFieldInfo[], classNameFirstChar: string, entity: EntityInfo): string {
+        return this.generateHierarchyJoins(recursiveFKs, classNameFirstChar, entity);
     }
 
     /**
@@ -1660,18 +1849,38 @@ export class SQLCodeGenBase {
         let relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
 
-        // Geo support: add __mj_Latitude and __mj_Longitude virtual fields for geo-enabled entities
-        // Skip for Record Geo Codes itself to avoid circular self-reference in the view
+        // Geo WRITE source: native lat/lng aliases, or RecordGeoCode JOIN when the entity
+        // has writable Geo* fields and no native coords. Display-only entities (Person/Org
+        // virtual PrimaryAddress*) do not get a RecordGeoCode join on their own ID.
         if (entity.SupportsGeoCoding && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
             const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
-            const geoFieldsSelect = this.hasNativeGeoFields(entity.Fields)
+            const geoFieldsSelect = HasNativeLatLngFields(entity.Fields)
                 ? this.generateNativeGeoFields(entity.Fields, classNameFirstChar, qi)
-                : this.generateRecordGeoCodeFields(qi);
+                : (ShouldJoinRecordGeoCodes(entity) ? this.generateRecordGeoCodeFields(qi) : '');
             if (geoFieldsSelect) {
                 relatedFieldsString += (relatedFieldsString ? ',\n' : '') + geoFieldsSelect;
             }
         }
-        const permissions: string = this.generateViewPermissions(entity);
+        const embeddedGeo = this.generateEmbeddedGeoSelect(entity, classNameFirstChar);
+        if (embeddedGeo.select) {
+            relatedFieldsString += (relatedFieldsString ? ',\n' : '') + embeddedGeo.select;
+        }
+        // GRANTs target the PUBLIC view (BaseView), not the one this method generates. For a
+        // LAYERED entity those are different objects, and the outer one may not exist yet: the
+        // documented setup is "name the inner view -> run CodeGen -> then create BaseView", so the
+        // bootstrap pass necessarily grants against a view that is not there. Unguarded, that pass
+        // fails on the very step meant to enable the feature. Guarded here rather than at the call
+        // sites because generateBaseView concatenates this onto the view DDL and the phased
+        // executor consumes it separately — both need it.
+        const rawPermissions: string = this.generateViewPermissions(entity);
+        // The leading newline must stay OUTSIDE the guard. `generateViewPermissions` returns
+        // "\nGRANT ..." and the view DDL it is concatenated onto ends in `GO`; wrapping the string
+        // verbatim pulls that newline inside the sp_executesql literal and emits `GOIF OBJECT_ID`,
+        // fusing the batch separator to the next statement. Non-layered entities keep the raw
+        // string byte-for-byte so this cannot churn every other entity's generated SQL.
+        const permissions: string = entity.HasLayeredBaseView && rawPermissions.trim().length > 0
+            ? '\n' + this.guardOnApplicationOwnedView(entity, rawPermissions.trim())
+            : rawPermissions;
 
         // Detect recursive foreign keys and generate TVF joins and root field selects
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
@@ -1701,6 +1910,59 @@ export class SQLCodeGenBase {
         return this._dbProvider.generateViewPermissions(entity);
     }
 
+    /**
+     * Emits the refresh + permission statements for an entity whose `BaseView` CodeGen does NOT
+     * write — fully custom, or the application-owned outer half of a layered entity.
+     *
+     * The refresh runs before the grants so SQL Server picks up schema changes (new columns from
+     * migrations) before permissions are applied; developers no longer add it by hand.
+     *
+     * Two things are specific to LAYERED entities:
+     *
+     * - **Inner before outer.** The custom view selects `g.*` from the generated one, and a view
+     *   caches its column list. Refreshing the outer against a stale inner re-caches the OLD
+     *   columns, so a newly added column stays missing — indistinguishable from never having been
+     *   added at all, which is the exact failure layering exists to eliminate.
+     * - **The outer view may not exist yet.** On the first pass after layering is enabled it cannot
+     *   exist: it selects from the inner view that this very pass creates. Unguarded, the refresh
+     *   and the `GRANT` both fail — and the step they fail on is the documented setup procedure, so
+     *   there would be no way to adopt the feature at all. Guarding makes the bootstrap pass skip
+     *   them and leaves every later pass identical to the unguarded form.
+     */
+    protected generateCustomBaseViewRefreshAndPermissions(entity: EntityInfo, permissionsHeader: string, permissionsBody: string): string {
+        const separator: string = '\n' + this._dbProvider.BatchSeparator + '\n';
+        let sOutput: string = '';
+
+        if (this._dbProvider.NeedsViewRefresh && !entity.VirtualEntity) {
+            if (entity.HasLayeredBaseView) {
+                sOutput += this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.GeneratedViewName) + separator;
+            }
+            const refreshSQL: string = this._dbProvider.generateViewRefreshSQL(entity.SchemaName, entity.BaseView);
+            sOutput += this.guardOnApplicationOwnedView(entity, refreshSQL) + separator;
+        }
+        if (entity.HasLayeredBaseView && !entity.VirtualEntity) {
+            const rebindSQL: string = this._dbProvider.generateLayeredOuterRebindSQL(entity);
+            if (rebindSQL.trim().length > 0) {
+                sOutput += this.guardOnApplicationOwnedView(entity, rebindSQL.trim()) + separator;
+            }
+        }
+
+        return sOutput + permissionsHeader + this.guardOnApplicationOwnedView(entity, permissionsBody) + separator;
+    }
+
+    /**
+     * Wraps SQL in an existence check on the application-owned `BaseView`, but only for a layered
+     * entity — that is the one arrangement where the view legitimately may not exist yet. For a
+     * fully custom base view the object is a standing prerequisite, so a missing one stays a loud
+     * failure rather than becoming a silent skip.
+     */
+    private guardOnApplicationOwnedView(entity: EntityInfo, sql: string): string {
+        if (!entity.HasLayeredBaseView || sql.trim().length === 0) {
+            return sql;
+        }
+        return this._dbProvider.generateIfViewExistsSQL(entity.SchemaName, entity.BaseView, sql);
+    }
+
     protected generateBaseViewJoins(entity: EntityInfo, entityFields: EntityFieldInfo[]): string {
         let sOutput: string = '';
         const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
@@ -1726,10 +1988,9 @@ export class SQLCodeGenBase {
             }
         }
 
-        // Geo support: add LEFT JOIN to vwRecordGeoCodes for entities with SupportsGeoCoding = 1
-        // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly).
-        // Skip for Record Geo Codes itself to avoid circular self-reference in the view.
-        if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields) && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
+        // Geo WRITE source: RecordGeoCode JOIN only when there are writable Geo* fields
+        // and no native lat/lng. Display-only entities skip this join.
+        if (ShouldJoinRecordGeoCodes(entity)) {
             const dialect = this._dbProvider.Dialect;
             const qi = dialect.QuoteIdentifier.bind(dialect);
             const qs = dialect.QuoteSchema.bind(dialect);
@@ -1757,6 +2018,8 @@ export class SQLCodeGenBase {
             sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
         }
 
+        sOutput += this.generateEmbeddedGeoJoins(entity, classNameFirstChar);
+
         return sOutput;
     }
 
@@ -1774,9 +2037,7 @@ export class SQLCodeGenBase {
      * on any geo-eligible entity whose RecordGeoCode-based view ran once.
      */
     protected hasNativeGeoFields(entityFields: EntityFieldInfo[]): boolean {
-        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
-        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
-        return hasLat && hasLng;
+        return HasNativeLatLngFields(entityFields);
     }
 
     /**
@@ -1788,10 +2049,43 @@ export class SQLCodeGenBase {
         classNameFirstChar: string,
         qi: (name: string) => string
     ): string {
-        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
-        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
+        const latField = NativeLatitudeField(entityFields);
+        const lngField = NativeLongitudeField(entityFields);
         if (!latField || !lngField) return '';
         return `    ${qi(classNameFirstChar)}.${qi(latField.Name)} AS ${qi('__mj_Latitude')},\n    ${qi(classNameFirstChar)}.${qi(lngField.Name)} AS ${qi('__mj_Longitude')}`;
+    }
+
+    /**
+     * Bubble lat/lng from EmbeddedRecord peers as `__mj_Latitude_{FK}`.
+     * Geocode lives on the Address (or other source); the parent only displays it.
+     */
+    protected generateEmbeddedGeoSelect(entity: EntityInfo, classNameFirstChar: string): { select: string; joins: string } {
+        const specs = ListEmbeddedGeoSpecs(entity.Fields);
+        if (specs.length === 0) return { select: '', joins: '' };
+        const md = new Metadata();
+        const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+        const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+        const selects: string[] = [];
+        const joins: string[] = [];
+        for (const spec of specs) {
+            const related = md.Entities.find(e => e.ID.toLowerCase() === spec.relatedEntityID.toLowerCase());
+            if (!related) continue;
+            const latF = NativeLatitudeField(related.Fields) ?? related.Fields.find(f => f.Name === '__mj_Latitude' || f.Name === 'PrimaryAddressLatitude');
+            const lngF = NativeLongitudeField(related.Fields) ?? related.Fields.find(f => f.Name === '__mj_Longitude' || f.Name === 'PrimaryAddressLongitude');
+            if (!latF || !lngF) continue;
+            const alias = `__mj_emb_${spec.foreignKeyField}`;
+            const schema = spec.relatedSchemaName || related.SchemaName;
+            const table = spec.relatedBaseTable || related.BaseTable;
+            const joinKind = spec.allowsNull ? 'LEFT OUTER' : 'INNER';
+            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`);
+            selects.push(`    ${alias}.${qi(latF.Name)} AS ${qi(spec.lat)},\n    ${alias}.${qi(lngF.Name)} AS ${qi(spec.lng)}`);
+        }
+        return { select: selects.join(',\n'), joins: joins.join('\n') };
+    }
+
+    protected generateEmbeddedGeoJoins(entity: EntityInfo, classNameFirstChar: string): string {
+        const { joins } = this.generateEmbeddedGeoSelect(entity, classNameFirstChar);
+        return joins ? ((entity.Fields.length ? '\n' : '') + joins) : '';
     }
 
     /**
@@ -2081,6 +2375,13 @@ export class SQLCodeGenBase {
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
+                if (!shouldEmitCascadeForRelatedEntity(
+                    entity.SchemaName,
+                    e.SchemaName,
+                    configInfo.allowCrossSchemaCascadeDeletes === true,
+                )) {
+                    continue;
+                }
                 for (const ef of e.Fields) {
                     if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         const cascadeSql = await this.generateSingleCascadeOperation(entity, e, ef, pool);
@@ -2221,6 +2522,13 @@ export class SQLCodeGenBase {
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
+                if (!shouldEmitCascadeForRelatedEntity(
+                    entity.SchemaName,
+                    e.SchemaName,
+                    configInfo.allowCrossSchemaCascadeDeletes === true,
+                )) {
+                    continue;
+                }
                 for (const ef of e.Fields) {
                     if (UUIDsEqual(ef.RelatedEntityID, entity.ID) && ef.IsVirtual === false) {
                         // Skip self-referential foreign keys (e.g., ParentID pointing to same entity)

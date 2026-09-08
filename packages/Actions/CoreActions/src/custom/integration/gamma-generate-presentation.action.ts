@@ -1,8 +1,21 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
-import axios from "axios";
+import { HttpGet, HttpPost, IsHttpError } from "@memberjunction/network-utils";
 import { getApiIntegrationsConfig } from "../../config";
+
+/** Response from Gamma's `POST /v0.2/generations`. */
+interface GammaGenerationResponse {
+    generationId?: string;
+}
+
+/** Response from Gamma's `GET /v0.2/generations/{id}`. */
+interface GammaStatusResponse {
+    status?: 'pending' | 'completed' | 'failed';
+    gammaUrl?: string;
+    credits?: number;
+    error?: string;
+}
 
 /**
  * Action that generates presentations using Gamma's Generations API
@@ -165,23 +178,23 @@ export class GammaGeneratePresentationAction extends BaseAction {
             }
 
             // Make API request to start generation
-            const response = await axios.post(
+            const response = await HttpPost<GammaGenerationResponse>(
                 'https://public-api.gamma.app/v0.2/generations',
                 requestBody,
                 {
-                    headers: {
+                    Headers: {
                         'X-API-KEY': apiKey,
                         'Content-Type': 'application/json'
                     },
-                    timeout: 60000 // 60 second timeout
+                    Timeout: 60000 // 60 second timeout
                 }
             );
 
-            if (!response.data || !response.data.generationId) {
+            if (!response.Data || !response.Data.generationId) {
                 return this.createErrorResult("Invalid response from Gamma API", "INVALID_RESPONSE");
             }
 
-            const generationId = response.data.generationId;
+            const generationId = response.Data.generationId;
             this.addOutputParam(params, 'GenerationId', generationId);
 
             // If polling is disabled, return immediately
@@ -205,17 +218,17 @@ export class GammaGeneratePresentationAction extends BaseAction {
             while (Date.now() - startTime < maxPollTimeMs) {
                 await this.sleep(pollIntervalMs);
 
-                const statusResponse = await axios.get(
+                const statusResponse = await HttpGet<GammaStatusResponse>(
                     `https://public-api.gamma.app/v0.2/generations/${generationId}`,
                     {
-                        headers: {
+                        Headers: {
                             'X-API-KEY': apiKey
                         },
-                        timeout: 30000
+                        Timeout: 30000
                     }
                 );
 
-                const statusData = statusResponse.data;
+                const statusData = statusResponse.Data;
 
                 if (statusData.status === 'completed') {
                     // Add output parameters
@@ -250,9 +263,9 @@ export class GammaGeneratePresentationAction extends BaseAction {
             );
 
         } catch (error) {
-            if (axios.isAxiosError(error)) {
-                const status = error.response?.status;
-                const errorData = error.response?.data;
+            if (IsHttpError(error)) {
+                const status = error.Status;
+                const errorData = error.Data as { error?: string } | undefined;
 
                 if (status === 401) {
                     return this.createErrorResult(

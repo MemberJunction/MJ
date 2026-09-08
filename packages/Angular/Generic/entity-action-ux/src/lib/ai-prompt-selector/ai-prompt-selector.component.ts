@@ -18,6 +18,7 @@ import {
     inject,
 } from '@angular/core';
 import { RunView, type IMetadataProvider } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { filterPromptGroups, groupPromptsByCategory, type PromptGroup, type PromptOption } from '../prompt-grouping';
 
@@ -94,7 +95,7 @@ import { filterPromptGroups, groupPromptsByCategory, type PromptGroup, type Prom
         .ps-empty { padding: 16px; text-align: center; color: var(--mj-text-muted); font-size: 13px; }
     `],
 })
-export class AIPromptSelectorComponent implements OnInit {
+export class AIPromptSelectorComponent extends BaseAngularComponent implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     private host = inject(ElementRef);
 
@@ -160,7 +161,7 @@ export class AIPromptSelectorComponent implements OnInit {
     }
 
     private async loadPrompts(): Promise<void> {
-        const runView = this.Provider ? RunView.FromMetadataProvider(this.Provider) : new RunView();
+        const runView = RunView.FromMetadataProvider(this.ProviderToUse);
         const rv = await runView.RunView<PromptOption>({
             EntityName: 'MJ: AI Prompts',
             Fields: ['ID', 'Name', 'Category'],

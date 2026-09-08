@@ -2718,12 +2718,15 @@ export class ComputerUseEngine {
         const template = this.getActiveParams()?.ControllerPrompt ?? DEFAULT_CONTROLLER_PROMPT;
         const dynamicSections = this.buildDynamicSections(request);
 
+        // Function replacements throughout: the goal, URL and rendered sections are
+        // runtime data, and a string replacement would expand `$&`/`` $` ``/`$'`/`$$`
+        // inside them — corrupting the prompt the model is steered by. See issue #3171.
         return template
-            .replace(/\{\{goal\}\}/g, request.Goal)
-            .replace(/\{\{stepNumber\}\}/g, String(request.StepNumber))
-            .replace(/\{\{maxSteps\}\}/g, String(request.MaxSteps))
-            .replace(/\{\{currentUrl\}\}/g, request.CurrentUrl)
-            .replace(/\{\{dynamicSections\}\}/g, dynamicSections);
+            .replace(/\{\{goal\}\}/g, () => request.Goal)
+            .replace(/\{\{stepNumber\}\}/g, () => String(request.StepNumber))
+            .replace(/\{\{maxSteps\}\}/g, () => String(request.MaxSteps))
+            .replace(/\{\{currentUrl\}\}/g, () => request.CurrentUrl)
+            .replace(/\{\{dynamicSections\}\}/g, () => dynamicSections);
     }
 
     /**
@@ -2840,11 +2843,12 @@ export class ComputerUseEngine {
         const template = this.getActiveParams()?.JudgePrompt ?? DEFAULT_JUDGE_PROMPT;
 
         const rendered = template
-            .replace(/\{\{goal\}\}/g, request.Goal)
-            .replace(/\{\{stepNumber\}\}/g, String(request.StepNumber))
-            .replace(/\{\{maxSteps\}\}/g, String(request.MaxSteps))
-            .replace(/\{\{currentUrl\}\}/g, request.CurrentUrl)
-            .replace(/\{\{stepSummary\}\}/g, request.StepSummary);
+            // Function replacements — see renderControllerPrompt (#3171).
+            .replace(/\{\{goal\}\}/g, () => request.Goal)
+            .replace(/\{\{stepNumber\}\}/g, () => String(request.StepNumber))
+            .replace(/\{\{maxSteps\}\}/g, () => String(request.MaxSteps))
+            .replace(/\{\{currentUrl\}\}/g, () => request.CurrentUrl)
+            .replace(/\{\{stepSummary\}\}/g, () => request.StepSummary);
 
         const sections = [rendered];
 

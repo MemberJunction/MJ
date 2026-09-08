@@ -1,9 +1,15 @@
 import {
+    AppliedMessageFilters,
     BaseCommunicationProvider,
+    CombineFilterClauses,
+    MessageRetrievalCapabilities,
     CreateDraftParams,
     CreateDraftResult,
     ForwardMessageParams,
     ForwardMessageResult,
+    GetEventsParams,
+    GetEventsResult,
+    GetEventsEvent,
     GetMessagesParams,
     GetMessagesResult,
     GetSingleMessageParams,
@@ -124,6 +130,17 @@ interface ResolvedMSGraphCredentials {
  * The maximum lifetime, in minutes, that Microsoft Graph allows for a mail-resource
  * change-notification subscription (~3 days). Requested expirations are clamped to this.
  */
+/**
+ * Format an instant the way an OData `$filter` comparison wants it: ISO-8601, UTC, UNQUOTED.
+ *
+ * Quoting it makes Graph compare a datetime against a string and reject the request, which is the
+ * mistake this exists to keep out of the call sites. `toISOString` is always UTC with a trailing Z
+ * regardless of the Date's origin, so a caller passing a local-time Date still filters correctly.
+ */
+function ODataInstant(when: Date): string {
+    return when.toISOString();
+}
+
 const MSGRAPH_MAX_SUBSCRIPTION_MINUTES = 4230;
 
 /** Options carried in {@link CreateSubscriptionParams.ContextData} for MS Graph. */
@@ -168,6 +185,13 @@ type MSGraphSubscriptionContext = {
  */
 @RegisterClass(BaseCommunicationProvider, 'Microsoft Graph')
 export class MSGraphProvider extends BaseCommunicationProvider {
+    /**
+     * Graph filters both of these server-side, so neither is emulated here — `receivedDateTime`
+     * comparisons and `isRead` are ordinary `$filter` clauses.
+     */
+    public override get MessageRetrieval(): MessageRetrievalCapabilities {
+        return { FilterByReceivedDate: true, FilterByUnread: true };
+    }
 
     private HTMLConverter: compiledFunction;
 
@@ -436,16 +460,33 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const contextData = params.ContextData;
         const emailToUse = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
 
-        let filter: string = "";
         const top: number = params.NumMessages;
+        const applied: AppliedMessageFilters = { ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false };
+        const clauses: string[] = [];
 
         if (params.UnreadOnly) {
-            filter = "(isRead eq false)";
+            clauses.push("(isRead eq false)");
+            applied.UnreadOnly = true;
         }
 
-        if (contextData && contextData.Filter) {
-            filter = contextData.Filter as string;
+        if (params.ReceivedAfter) {
+            clauses.push(`(receivedDateTime ge ${ODataInstant(params.ReceivedAfter)})`);
+            applied.ReceivedAfter = true;
         }
+
+        if (params.ReceivedBefore) {
+            clauses.push(`(receivedDateTime le ${ODataInstant(params.ReceivedBefore)})`);
+            applied.ReceivedBefore = true;
+        }
+
+        // COMPOSED, not assigned. This branch used to overwrite `filter` outright, so a caller that
+        // passed UnreadOnly together with a ContextData.Filter silently lost the UnreadOnly clause
+        // and got read mail back. Anything the caller supplies here now narrows alongside the rest.
+        if (contextData && contextData.Filter) {
+            clauses.push(String(contextData.Filter));
+        }
+
+        const filter: string = CombineFilterClauses(clauses, " and ");
 
         // Use email address directly in API path
         const messagesPath: string = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages`;
@@ -464,7 +505,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const messageResults: GetMessagesResult = {
             Success: true,
             SourceData: sourceMessages,
-            Messages: []
+            Messages: [],
+            AppliedFilters: applied
         };
 
 
@@ -807,6 +849,159 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     // ========================================================================
 
     /**
+     * Reads calendar events for one mailbox.
+     *
+     * @requires MS Graph Scope: Calendars.Read (Application)
+     *
+     * TWO ENDPOINTS, AND THE CHOICE IS VISIBLE TO THE CALLER. Graph exposes calendar data two ways
+     * and they do not return the same thing:
+     *
+     *   - `/calendarView` REQUIRES a start and end and EXPANDS recurring series into one entry per
+     *     occurrence. A weekly stand-up in a two-week window comes back as two events, each with its
+     *     own start time and id.
+     *   - `/events` needs no window and does NOT expand. That same stand-up is one row, the series
+     *     master, whose start time is whenever the series began - possibly years ago.
+     *
+     * A caller logging what actually happened wants occurrences; one asking "what meetings exist"
+     * may want masters. Silently picking would be a trap, because the two are indistinguishable by
+     * inspection - so the window decides, and `RecurrenceExpanded` on the result REPORTS which
+     * happened rather than leaving the caller to infer it.
+     *
+     * CANCELLED EVENTS ARE EXCLUDED BY DEFAULT and cannot be recovered afterwards - Graph does not
+     * return them once filtered - so `IncludeCancelled` is honoured before the `$top` cap rather
+     * than by discarding rows after the fetch, which would silently shrink the page.
+     */
+    public async GetEvents(
+        params: GetEventsParams,
+        credentials?: MSGraphCredentials
+    ): Promise<GetEventsResult> {
+        const creds = this.resolveCredentials(credentials);
+        const client = this.getGraphClient(creds);
+
+        const contextData = params.ContextData;
+        const mailbox = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
+        if (!mailbox) {
+            return {
+                Success: false,
+                Events: [],
+                ErrorMessage: 'GetEvents needs an Identifier (mailbox) or credentials scoped to one.'
+            };
+        }
+
+        const expand = !!params.StartDateTime && !!params.EndDateTime;
+        const base = `${this.getApiUri()}/${encodeURIComponent(mailbox)}`;
+
+        try {
+            let request = expand
+                ? client
+                      .api(`${base}/calendarView`)
+                      .query({
+                          startDateTime: params.StartDateTime!.toISOString(),
+                          endDateTime: params.EndDateTime!.toISOString()
+                      })
+                      .orderby('start/dateTime')
+                : client.api(`${base}/events`).orderby('lastModifiedDateTime desc');
+
+            // Ask for UTC explicitly rather than relying on it. Graph returns start/end in UTC when no
+            // `Prefer: outlook.timezone` is sent, so this changes nothing today — but the default is
+            // Microsoft's to change, and every other value would need a tz database to resolve. Saying
+            // it makes the mapper's UTC assumption a request rather than a bet. `graphInstant` keeps
+            // its null fallback for the case where a non-UTC zone comes back anyway.
+            request = request.header('Prefer', 'outlook.timezone="UTC"');
+
+            // Applied server-side so the $top cap counts only events the caller asked for. Filtering
+            // after the fetch would return fewer than NumEvents and look like an empty calendar.
+            //
+            // $filter AND $orderby TOGETHER ARE ACCEPTED HERE. Outlook's backend requires every
+            // $orderby property to also appear in $filter for MESSAGES, returning 400
+            // `InefficientFilter` otherwise, and Microsoft's announcement of that rule is titled for
+            // Mail, Calendar and Contacts — so this combination looks like it should fail. It does
+            // not: both shapes below were sent against a live tenant and returned 200. Recorded here
+            // because the unit tests mock the Graph client and can never catch a 400, so the next
+            // reader has no way to re-derive it short of running the query again.
+            if (!params.IncludeCancelled) {
+                request = request.filter('isCancelled eq false');
+            }
+
+            const response = await request.top(params.NumEvents).get();
+            if (!response) {
+                return { Success: false, Events: [], ErrorMessage: 'Graph returned no response for the calendar read.' };
+            }
+
+            const sourceEvents: Record<string, unknown>[] = response.value ?? [];
+            return {
+                Success: true,
+                SourceData: sourceEvents,
+                RecurrenceExpanded: expand,
+                Events: sourceEvents.map((e) => this.toGetEventsEvent(e))
+            };
+        } catch (err) {
+            // Surfaced, not swallowed into an empty list: a caller advancing a watermark must be able
+            // to tell "could not read" from "nothing scheduled".
+            return {
+                Success: false,
+                Events: [],
+                ErrorMessage: `Graph calendar read failed for ${mailbox}: ${err instanceof Error ? err.message : String(err)}`
+            };
+        }
+    }
+
+    /**
+     * Graph event -> the normalized shape. Lossy by design; `SourceData` keeps the original.
+     *
+     * A start Graph cannot express as an instant becomes NULL rather than a guess. Graph returns
+     * naive local strings plus a separate timeZone, so a value with neither a zone suffix nor a UTC
+     * marker genuinely has no instant here, and inventing one would file a meeting at the wrong time.
+     */
+    private toGetEventsEvent(raw: Record<string, unknown>): GetEventsEvent {
+        const event = raw as {
+            id?: string;
+            seriesMasterId?: string;
+            subject?: string;
+            bodyPreview?: string;
+            start?: { dateTime?: string; timeZone?: string };
+            end?: { dateTime?: string; timeZone?: string };
+            location?: { displayName?: string };
+            organizer?: { emailAddress?: { address?: string } };
+            attendees?: { emailAddress?: { address?: string } }[];
+            isCancelled?: boolean;
+        };
+
+        const organizer = event.organizer?.emailAddress?.address?.trim().toLowerCase() || undefined;
+        const attendees = (event.attendees ?? [])
+            .map((a) => a.emailAddress?.address?.trim().toLowerCase())
+            .filter((a): a is string => !!a && a !== organizer);
+
+        return {
+            ExternalSystemRecordID: event.id ?? '',
+            SeriesID: event.seriesMasterId ?? null,
+            Subject: event.subject ?? '',
+            Body: event.bodyPreview ?? '',
+            StartTime: MSGraphProvider.graphInstant(event.start),
+            EndTime: MSGraphProvider.graphInstant(event.end),
+            Location: event.location?.displayName ?? null,
+            Organizer: organizer,
+            Attendees: [...new Set(attendees)],
+            IsCancelled: event.isCancelled === true
+        };
+    }
+
+    /** A Graph date slot as an instant, or null when it does not determine one. */
+    private static graphInstant(slot: { dateTime?: string; timeZone?: string } | undefined): Date | null {
+        const raw = slot?.dateTime?.trim();
+        if (!raw) return null;
+        // Both alternatives anchored. Unanchored, the `[Zz]` matched a "z" ANYWHERE in the string, so
+        // a value that merely contained one counted as carrying an offset and skipped the UTC check.
+        const hasOffset = /(?:[Zz]|[+-]\d{2}:?\d{2})$/.test(raw);
+        const zone = (slot?.timeZone ?? 'UTC').trim().toUpperCase();
+        // Only UTC is safe to assume. Any other named zone would need a tz database to resolve, and
+        // guessing puts the meeting hours away from when it happened.
+        if (!hasOffset && zone !== 'UTC') return null;
+        const parsed = new Date(hasOffset ? raw : `${raw}Z`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    /**
      * Returns the list of operations supported by MS Graph provider.
      * MS Graph supports all mailbox operations.
      */
@@ -829,7 +1024,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             'CreateSubscription',
             'RenewSubscription',
             'DeleteSubscription',
-            'ParseNotification'
+            'ParseNotification',
+            'GetEvents'
         ];
     }
 

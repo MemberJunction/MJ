@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { TypeformBaseAction } from '../typeform-base.action';
+import { TypeformBaseAction, TypeformForm } from '../typeform-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -106,8 +106,8 @@ export class CreateTypeformAction extends TypeformBaseAction {
                 formData.workspace = { href: `https://api.typeform.com/workspaces/${workspaceId}` };
             }
 
-            const response = await this.getAxiosInstance(apiToken).post('/forms', formData);
-            const createdForm = response.data;
+            const response = await this.getHttpClient(apiToken).Post<TypeformForm>('/forms', formData);
+            const createdForm = response.Data;
 
             const formUrl = createdForm._links?.display || `https://form.typeform.com/to/${createdForm.id}`;
 

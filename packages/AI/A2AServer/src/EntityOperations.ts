@@ -1,5 +1,5 @@
 import { BaseEntity, EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunQuery, UserInfo, CompositeKey} from "@memberjunction/core";
-import { UserCache } from "@memberjunction/sqlserver-dataprovider";
+import { UserCache } from "@memberjunction/generic-database-provider";
 import { a2aServerSettings } from './config.js';
 
 export interface OperationResult {

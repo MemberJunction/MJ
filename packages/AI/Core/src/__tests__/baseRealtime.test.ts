@@ -9,6 +9,7 @@ import {
     RealtimeUsage,
     RealtimeSessionError,
     ClientRealtimeSessionConfig,
+    REALTIME_SHARED_CONFIG_KEYS,
 } from '../generic/baseRealtime';
 import { IsTranscriptContinuation } from '../generic/transcriptContinuation';
 
@@ -340,6 +341,37 @@ describe('IRealtimeSession', () => {
 // ════════════════════════════════════════════════════════════════════
 // IsTranscriptContinuation — streamed-transcription turn-boundary rescue
 // ════════════════════════════════════════════════════════════════════
+
+/**
+ * Membership of the shared neutral vocabulary. This is the half of the contract the DRIVER suites
+ * cannot pin: each of them proves it scrubs whatever is in this registry, using a representative
+ * list, so nothing on their side notices if a key is missing from the real one. That gap is exactly
+ * how `firstMessage` reached the OpenAI wire (issue #3557) — it was added as an agnostic persona
+ * slot, filed onto every driver, and registered nowhere.
+ */
+describe('REALTIME_SHARED_CONFIG_KEYS', () => {
+    it.each([
+        ['voice', 'the agnostic voice id (#3530)'],
+        ['firstMessage', 'the agnostic opening utterance (#3557)'],
+    ])('registers %s — %s', (key) => {
+        expect(REALTIME_SHARED_CONFIG_KEYS).toContain(key);
+    });
+
+    it('every neutral persona slot filed onto drivers is registered here', () => {
+        // The persona's WIRE-level slots in RealtimeVoicePersona (@memberjunction/ai-agents) are
+        // filed onto WHICHEVER driver resolves, consumed or not, so each one has to be scrubbable.
+        // Stated as a list rather than derived: ai-agents depends on this package, not the reverse,
+        // so importing the persona type here would invert the dependency.
+        const agnosticPersonaWireSlots = ['voice', 'firstMessage'];
+        for (const slot of agnosticPersonaWireSlots) {
+            expect(REALTIME_SHARED_CONFIG_KEYS, `persona slot '${slot}' is filed onto every driver but not registered as shared`).toContain(slot);
+        }
+    });
+
+    it('holds no duplicates (a duplicate hides a rename that only half-landed)', () => {
+        expect(new Set(REALTIME_SHARED_CONFIG_KEYS).size).toBe(REALTIME_SHARED_CONFIG_KEYS.length);
+    });
+});
 
 describe('IsTranscriptContinuation', () => {
     // Verbatim strings from a live Grok session (session 72989D0A) where ONE spoken sentence was

@@ -42,6 +42,17 @@ describe('classifyChange (retry-aware compare)', () => {
         expect(classifyChange(t('Passed', 1, false), t('Passed', 0.5, true))).toBe('regression');
     });
 
+    // Ported from next's inline classifier when this logic was extracted: a skip is
+    // "not executed", so an env gate opening or closing is neither side's business.
+    it('a Passed <-> Skipped transition is unchanged, in both directions', () => {
+        expect(classifyChange(t('Passed'), t('Skipped', null))).toBe('unchanged');
+        expect(classifyChange(t('Skipped', null), t('Passed'))).toBe('unchanged');
+    });
+
+    it('a skip does not become a regression even when the score cratered', () => {
+        expect(classifyChange(t('Passed', 0.9), t('Skipped', 0))).toBe('unchanged');
+    });
+
     it('two clean passes are unchanged', () => {
         expect(classifyChange(t('Passed'), t('Passed'))).toBe('unchanged');
     });

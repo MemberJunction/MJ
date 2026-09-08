@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { renderComponentFixture, queryAll, capture } from '@memberjunction/ng-test-utils';
 import { SubwayLinesComponent } from './subway-lines.component';
 import type { FlowModel, FlowNode } from './agent-run-flow.model';
@@ -10,11 +10,20 @@ import type { FlowModel, FlowNode } from './agent-run-flow.model';
  * We assert station COUNT (= leaves) + agent-line labels + empty state, not geometry.
  */
 
+// jsdom's SVG path prototype chain is SVGElement → Element (no SVGPathElement/SVGGeometryElement),
+// so getTotalLength must be stubbed on SVGElement.prototype. Installed in beforeAll and restored in
+// afterAll so the patch cannot leak into other specs if per-file process isolation is ever relaxed.
+let savedGetTotalLength: PropertyDescriptor | undefined;
+
 beforeAll(() => {
-  // jsdom's SVG path prototype chain is SVGElement → Element (no SVGPathElement/SVGGeometryElement),
-  // so getTotalLength must be stubbed on SVGElement.prototype (test-file scope only).
-  const proto = SVGElement.prototype as unknown as { getTotalLength?: () => number };
-  if (!proto.getTotalLength) proto.getTotalLength = () => 100;
+  savedGetTotalLength = Object.getOwnPropertyDescriptor(SVGElement.prototype, 'getTotalLength');
+  const stub = (): number => 100;
+  Object.defineProperty(SVGElement.prototype, 'getTotalLength', { value: stub, configurable: true, writable: true });
+});
+
+afterAll(() => {
+  if (savedGetTotalLength) Object.defineProperty(SVGElement.prototype, 'getTotalLength', savedGetTotalLength);
+  else Reflect.deleteProperty(SVGElement.prototype, 'getTotalLength');
 });
 
 function node(over: Partial<FlowNode>): FlowNode {

@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Directive, OnInit, OnDestroy, Input, inject } from "@angular/core";
-import { Subject } from "rxjs";
+import { Subject, Subscription } from "rxjs";
 import { filter, takeUntil } from "rxjs/operators";
-import { BaseEntity } from "@memberjunction/core";
+import { BaseEntity, LogError } from "@memberjunction/core";
 import { BaseNavigationComponent } from "./base-navigation-component";
 import { ResourceData } from "@memberjunction/core-entities";
 import { NavigationService, TabQueryParamUpdateGuard } from "./navigation.service";
@@ -15,7 +15,15 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     private _lastDeliveredParamsKey: string | null = null;
     protected destroy$ = new Subject<void>();
     protected navigationService = inject(NavigationService);
-    private changeDetectorRef = inject(ChangeDetectorRef);
+    /**
+     * Optional: the tab container instantiates LIGHTWEIGHT throwaway instances
+     * of resource components (via runInInjectionContext with an environment
+     * injector) purely to call GetResourceDisplayName for background tab
+     * titles. ChangeDetectorRef only exists in node injectors, so a required
+     * inject() there throws NG0201 and silently kills every background title
+     * resolution — tabs keep raw "Entity - ID|guid" titles until opened.
+     */
+    private changeDetectorRef = inject(ChangeDetectorRef, { optional: true });
 
     /**
      * Tab ID for query param notification scoping. Set by resource wrappers
@@ -23,6 +31,19 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * If not set, falls back to Data.Configuration.tabId.
      */
     @Input() ParentTabId: string | null = null;
+
+    /**
+     * Tab id this component was RE-HOMED to by a cache reattach. The
+     * component cache keys on driver+record+app — NOT tab id — so a cached
+     * component can be reattached to a different tab than it was born under.
+     * Without rebinding, its query-param subscription listens to the DEAD
+     * birth tab forever and every delivery to the live tab is lost (the
+     * "crumb lands on the dashboard root after promote/demote" bug).
+     */
+    private reboundTabId: string | null = null;
+
+    /** Handle for the reactive param subscription so RebindTabId can replace it */
+    private reactiveParamSub: Subscription | null = null;
 
     public get Data(): ResourceData {
         return this._data;
@@ -38,9 +59,12 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
 
     /**
      * Watchdog window: if a resource component hasn't called {@link NotifyLoadComplete} within this
-     * time, we log a warning naming the offending class. The app loading screen waits on
-     * NotifyLoadComplete, so a resource that never calls it hangs the screen forever — this makes the
-     * culprit obvious in the console instead of leaving a mystery "stuck loading" state.
+     * time, we log a warning naming the offending class AND fail open — forcing NotifyLoadComplete
+     * so the app loading screen (which blocks on that signal) is released. Without the fail-open, a
+     * resource that never signals — because it errored, hung, or has its own `ngOnInit` that
+     * bypasses BaseDashboard's guarded lifecycle — would hang the whole Explorer forever. This is
+     * the safety net covering EVERY BaseResourceComponent subclass, not just BaseDashboard (whose
+     * own try/finally already guarantees the signal on the normal path).
      */
     private static readonly LOAD_COMPLETE_WATCHDOG_MS = 15_000;
     private _loadCompleteWatchdog: ReturnType<typeof setTimeout> | null = null;
@@ -105,10 +129,18 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
                 // eslint-disable-next-line no-console
                 console.warn(
                     `[LoadComplete WATCHDOG] ${this.constructor.name} has NOT called NotifyLoadComplete() ` +
-                    `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s. The app loading screen ` +
-                    `waits on this signal — if the screen is stuck, this resource is the likely cause. ` +
+                    `within ${BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS / 1000}s — FAILING OPEN: forcing ` +
+                    `load-complete to release the app loading screen. This resource either errored/hung without ` +
+                    `signalling, or is simply still loading (a slow-but-healthy load re-signals harmlessly when ` +
+                    `it finishes). If you are chasing a "stuck loading" report, start here. ` +
                     `(tabId=${this.getTabId() || 'n/a'})`
                 );
+                // Fail-open: the shell's loading screen blocks on NotifyLoadComplete. A subclass that
+                // never calls it — one whose own ngOnInit bypasses BaseDashboard's guarded lifecycle,
+                // or whose load genuinely hangs — would otherwise brick the whole Explorer. Force the
+                // signal so no single resource can take down the shell. (Idempotent-safe: NotifyLoad
+                // Complete is already called repeatedly on the normal path, e.g. every Refresh.)
+                this.NotifyLoadComplete();
             }
         }, BaseResourceComponent.LOAD_COMPLETE_WATCHDOG_MS);
     }
@@ -136,12 +168,30 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
     /**
      * Push query param changes to the URL. Creates a browser history entry.
      * Safe to call during OnQueryParamsChanged — auto-suppressed to prevent loops.
+     *
+     * The write is ALWAYS scoped to this component's own tab. A component that cannot
+     * identify its tab does not write at all — see the guard below.
      */
     protected UpdateQueryParams(params: Record<string, string | null>): void {
         if (this._suppressQueryParamSync) return;
         const tabId = this.getTabId();
         if (!tabId) {
-            this.navigationService.UpdateActiveTabQueryParams(params);
+            // Deliberately NO fallback to "the active tab". The active tab is whatever the user is
+            // looking at RIGHT NOW — which, for a background dashboard finishing an async load, is
+            // somebody else's deep link. That fallback silently rewrote the visible tab's URL from an
+            // invisible tab (a background Studio dashboard replacing a Review tab's ?id=…&tab=… with
+            // its own ?section=… twelve seconds after the user navigated). A correctly scoped write
+            // is already harmless from a background tab, so refusing here costs nothing and closes
+            // the corruption entirely.
+            //
+            // Fix the HOST, not this guard: whoever renders a resource component must give it a tab
+            // id — Data.Configuration.tabId (what the tab container sets) or the ParentTabId input
+            // (what a wrapper rendering a child dashboard sets).
+            LogError(
+                `${this.constructor.name}.UpdateQueryParams: no tab id — query-param update DROPPED ` +
+                `(params: ${Object.keys(params).join(', ') || 'none'}). The host rendering this component must set ` +
+                `ParentTabId or Data.Configuration.tabId; writing to the active tab would corrupt whichever tab the user is viewing.`
+            );
             return;
         }
 
@@ -170,7 +220,7 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
                 }),
                 takeUntil(this.destroy$)
             )
-            .subscribe(event => this.deliverQueryParams(event.Params));
+            .subscribe(event => this.deliverQueryParams(event.Params, event.Force === true));
     }
 
     /**
@@ -186,7 +236,8 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         if (!tabId) {
             return; // No tab scope (e.g. embedded usage) — nothing to observe.
         }
-        this.navigationService.ObserveTabQueryParams(tabId)
+        this.reactiveParamSub?.unsubscribe();
+        this.reactiveParamSub = this.navigationService.ObserveTabQueryParams(tabId)
             .pipe(takeUntil(this.destroy$))
             .subscribe(params => this.deliverQueryParams(params));
     }
@@ -196,16 +247,23 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * identical deliveries (the two paths overlap on back/forward) and labels the first
      * meaningful delivery as a 'deeplink', subsequent ones as 'popstate'.
      */
-    private deliverQueryParams(params: Record<string, string>): void {
+    private deliverQueryParams(params: Record<string, string>, force = false): void {
         const key = this.queryParamsKey(params);
-        if (key === this._lastDeliveredParamsKey) {
+        // The duplicate guard assumes delivered params == applied state, but a
+        // component's state can DRIFT after a delivery (internal navigation
+        // whose write-back was suppressed or lost). Explicit restores (origin
+        // crumb) pass force to reach OnQueryParamsChanged regardless.
+        if (key === this._lastDeliveredParamsKey && !force) {
             return; // Already delivered these exact params.
         }
         const isInitial = this._lastDeliveredParamsKey === null;
         // Don't fire an initial no-op: a component entered without deep-link params has
         // nothing to apply. Leave _lastDeliveredParamsKey null so the first real params
         // (whenever they arrive) are still treated as the deep-link entry.
-        if (isInitial && Object.keys(params).length === 0) {
+        // FORCED empties bypass this too: an explicit reset (SwitchToAppHome
+        // returning a drifted dashboard to its landing) must reach
+        // OnQueryParamsChanged even when nothing was ever delivered.
+        if (isInitial && Object.keys(params).length === 0 && !force) {
             return;
         }
         this._lastDeliveredParamsKey = key;
@@ -238,7 +296,56 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * wrappers for child dashboards), then falls back to Data.Configuration.tabId.
      */
     public getTabId(): string {
-        return this.ParentTabId || this.Data?.Configuration?.['tabId'] as string || '';
+        return this.ParentTabId || this.reboundTabId || this.Data?.Configuration?.['tabId'] as string || '';
+    }
+
+    /**
+     * Re-home this component to a different tab (cache reattach across tab
+     * ids). Replaces the reactive param subscription with one bound to the
+     * new tab and resets the duplicate-delivery key so the new tab's
+     * CURRENT params apply as a fresh mount would — the replay-on-subscribe
+     * delivers them immediately.
+     */
+    public RebindTabId(tabId: string): void {
+        if (this.getTabId() === tabId) {
+            return;
+        }
+        this.reboundTabId = tabId;
+        this._lastDeliveredParamsKey = null;
+        this.setupInitialParamDelivery();
+        this.onTabIdRebound(tabId);
+    }
+
+    /**
+     * Hook for a host that instantiates CHILD resource components: re-home them here.
+     *
+     * A host stamps its children with its tab id when it creates them, which is a SNAPSHOT. A cache
+     * reattach moves the host to a different tab without recreating anything, so a child left
+     * holding the birth tab's id would go on reading and — worse — writing that tab's params from
+     * inside a tab it no longer belongs to. That is the same cross-tab corruption this class refuses
+     * elsewhere, just arriving by a slower route, so the stamp has to move when the host does.
+     *
+     * Default is a no-op: a component with no children has nothing to re-home.
+     */
+    protected onTabIdRebound(_tabId: string): void {
+        // no children by default
+    }
+
+    /**
+     * Re-homes a child this component created to `tabId`.
+     *
+     * The `ParentTabId` stamp is cleared FIRST and deliberately: `getTabId()` prefers it over the
+     * rebound id, so leaving the old stamp in place would make the child's own `RebindTabId` a
+     * no-op — it early-returns when `getTabId()` already matches — and the child would keep
+     * answering with the tab it was born in. Clearing it lets the rebind be the authority, and the
+     * child re-delivers the NEW tab's current params exactly as a fresh mount would.
+     */
+    protected rehomeChildToTab(child: BaseResourceComponent | null | undefined, tabId: string): void {
+        if (!child) {
+            return;
+        }
+        child.ParentTabId = null;
+        child.RebindTabId(tabId);
     }
 
     private getQueryParamUpdateGuard(): TabQueryParamUpdateGuard {
@@ -293,7 +400,8 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
      * any LATER async state change that must reach the DOM outside those signals.
      */
     protected RefreshView(): void {
-        this.changeDetectorRef.markForCheck();
+        // Null on lightweight non-view instances (background title resolution)
+        this.changeDetectorRef?.markForCheck();
     }
 
 

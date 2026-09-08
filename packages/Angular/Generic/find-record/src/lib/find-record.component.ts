@@ -153,7 +153,7 @@ export class FindRecordComponent extends BaseAngularComponent implements OnInit,
 
   // Stub function for simulating a database search (replace with actual search logic)
   protected async doSearch(searchTerm: string): Promise<BaseEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: this.EntityName, 
       UserSearchString: searchTerm, 

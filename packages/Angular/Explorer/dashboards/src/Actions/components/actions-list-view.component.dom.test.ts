@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { Component, EventEmitter, Input, Output, forwardRef } from '@angular/core';
+import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule, NG_VALUE_ACCESSOR, type ControlValueAccessor } from '@angular/forms';
-import { renderComponentFixture, query, queryAll, text, attr, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { FormsModule } from '@angular/forms';
+import { renderComponentFixture, query, queryAll, text, attr, capture, createFakeProvider, StubDropdownComponent, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import type { RunViewParams } from '@memberjunction/core';
 import { ActionsListViewComponent } from './actions-list-view.component';
 
@@ -16,22 +16,6 @@ import { ActionsListViewComponent } from './actions-list-view.component';
  * Async ngOnInit flips isLoading, so tests await microtasks then a non-strict detectChanges.
  */
 
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading { @Input() showText = true; @Input() size = ''; }
-@Component({ standalone: true, selector: 'mj-empty-state', template: '<span class="stub-empty">{{ Title }}</span>' })
-class StubEmptyState { @Input() Variant = ''; @Input() Icon = ''; @Input() Title = ''; @Input() Message = ''; }
-// The dropdowns use [ngModel], so the stub must be a ControlValueAccessor or Angular throws NG01203.
-@Component({
-  standalone: true,
-  selector: 'mj-dropdown',
-  template: '',
-  providers: [{ provide: NG_VALUE_ACCESSOR, useExisting: forwardRef(() => StubDropdown), multi: true }],
-})
-class StubDropdown implements ControlValueAccessor {
-  @Input() Data: unknown; @Input() TextField = ''; @Input() ValueField = ''; @Input() ValuePrimitive = false;
-  @Output() ValueChange = new EventEmitter<unknown>();
-  writeValue(): void {} registerOnChange(): void {} registerOnTouched(): void {}
-}
 @Component({ standalone: true, selector: 'button[mjButton]', template: '<ng-content></ng-content>' })
 class StubButton { @Input() variant = ''; @Input() size = ''; }
 
@@ -46,7 +30,7 @@ async function render(actions: unknown[], categories: unknown[] = []) {
     runViewResults: (p: RunViewParams) => (p.EntityName === 'MJ: Action Categories' ? categories : actions),
   });
   const fixture = renderComponentFixture(ActionsListViewComponent, {
-    imports: [CommonModule, FormsModule, StubLoading, StubEmptyState, StubDropdown, StubButton],
+    imports: [CommonModule, FormsModule, StubLoadingComponent, StubEmptyStateComponent, StubDropdownComponent, StubButton],
     declarations: [ActionsListViewComponent],
     inputs: { Provider: provider },
   });

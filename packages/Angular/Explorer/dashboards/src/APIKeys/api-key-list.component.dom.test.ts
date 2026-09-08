@@ -1,8 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider } from '@memberjunction/ng-test-utils';
+import { renderComponentFixture, query, queryAll, text, capture, createFakeProvider, StubEmptyStateComponent, StubLoadingComponent } from '@memberjunction/ng-test-utils';
 import { APIKeyListComponent } from './api-key-list.component';
 
 /**
@@ -14,18 +13,6 @@ import { APIKeyListComponent } from './api-key-list.component';
  * counts, the empty state, and the KeySelected / CreateRequested outputs. mj-empty-state carries an
  * (Action) output the empty-state's CTA fires. Async ngOnInit flips IsLoading → await + detect.
  */
-
-@Component({ standalone: true, selector: 'mj-loading', template: '' })
-class StubLoading { @Input() text = ''; }
-@Component({
-  standalone: true,
-  selector: 'mj-empty-state',
-  template: '<button class="stub-empty-action" (click)="Action.emit()">{{ Title }}</button>',
-})
-class StubEmptyState {
-  @Input() Variant = ''; @Input() Icon = ''; @Input() Title = ''; @Input() ActionText = ''; @Input() ActionIcon = '';
-  @Output() Action = new EventEmitter<void>();
-}
 
 // NOTE: the component default-sorts by `__mj_CreatedAt DESC`, so any test that asserts row ORDER
 // must give each key an explicit, DISTINCT __mj_CreatedAt (newest first in the rendered grid).
@@ -39,7 +26,7 @@ const rowsFor = (keys: unknown[]) =>
 async function render(keys: unknown[], Filter: string = 'all') {
   const provider = createFakeProvider({ runViewResults: rowsFor(keys) });
   const fixture = renderComponentFixture(APIKeyListComponent, {
-    imports: [CommonModule, FormsModule, StubLoading, StubEmptyState],
+    imports: [CommonModule, FormsModule, StubLoadingComponent, StubEmptyStateComponent],
     declarations: [APIKeyListComponent],
     inputs: { Provider: provider, Filter },
   });
@@ -82,7 +69,8 @@ describe('APIKeyListComponent (DOM)', () => {
   it('renders the empty state when no keys exist', async () => {
     const fixture = await render([]);
     expect(query(fixture, '.grid-row')).toBeNull();
-    expect(text(fixture, '.stub-empty-action')).toBe('No API keys created yet');
+    expect(text(fixture, '.stub-empty')).toBe('No API keys created yet');
+    expect(text(fixture, '.stub-empty-action')).toBe('Generate Your First Key');
   });
 
   it('emits KeySelected with the key when a row is clicked', async () => {

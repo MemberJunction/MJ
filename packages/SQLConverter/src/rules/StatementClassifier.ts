@@ -67,6 +67,12 @@ export function classifyBatch(batch: string): StatementType {
 
   // IF EXISTS (without NOT) — SQL Server pre-flight checks (drop extended property, etc.)
   if (/^IF\s+EXISTS\s*\(/i.test(upper) && !/^IF\s+NOT\s/i.test(upper)) {
+    // ...except a guarded constraint drop, which has a direct PG equivalent
+    // (DROP CONSTRAINT IF EXISTS). Skipping it loses the DROP, and the paired
+    // ADD CONSTRAINT later in the same migration then fails with "already exists".
+    if (/\bDROP\s+CONSTRAINT\b/i.test(upper)) {
+      return 'CONDITIONAL_DDL';
+    }
     return 'SKIP_SQLSERVER';
   }
 

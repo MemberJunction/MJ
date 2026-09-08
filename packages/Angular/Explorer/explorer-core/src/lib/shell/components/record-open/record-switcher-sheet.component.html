@@ -1,0 +1,34 @@
+<mj-bottom-sheet
+  [Visible]="Visible"
+  (VisibleChange)="OnSheetVisibleChange($event)"
+  Title="Open Records"
+  AriaLabel="Record switcher">
+  <div class="switcher-list">
+    @for (entry of Entries; track entry.TabId) {
+      <div class="switcher-row" [class.switcher-row--active]="entry.IsActive">
+        <button
+          type="button"
+          class="switcher-row-main"
+          [attr.aria-current]="entry.IsActive ? 'true' : null"
+          (click)="OnRowClick(entry)">
+          <span class="switcher-row-icon" [style.color]="entry.Color || null" aria-hidden="true">
+            <i [class]="entry.Icon"></i>
+          </span>
+          <span class="switcher-row-text">
+            <span class="switcher-row-title">{{ entry.Title }}</span>
+            @if (entry.OriginLabel) {
+              <span class="switcher-row-origin">{{ entry.OriginLabel }}</span>
+            }
+          </span>
+        </button>
+        <button
+          type="button"
+          class="switcher-row-close"
+          [attr.aria-label]="'Close ' + entry.Title"
+          (click)="OnCloseClick($event, entry)">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      </div>
+    }
+  </div>
+</mj-bottom-sheet>

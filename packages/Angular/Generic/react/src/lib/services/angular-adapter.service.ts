@@ -294,6 +294,9 @@ export class AngularAdapterService {
       this.runtime = undefined;
       this.runtimeContext = undefined;
     }
+    // Clear the cached initialization promise so a subsequent initialize()
+    // actually runs doInitialize() instead of returning the stale resolved promise.
+    this.initializationPromise = undefined;
   }
 
   /**

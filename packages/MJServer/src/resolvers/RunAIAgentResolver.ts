@@ -8,7 +8,6 @@ import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, ExecuteAgentResult
 import { AIEngine } from '@memberjunction/aiengine';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
 import { ResolverBase } from '../generic/ResolverBase.js';
-import { PUSH_STATUS_UPDATES_TOPIC } from '../generic/PushStatusResolver.js';
 import { startLivenessPulse } from '../generic/FireAndForgetHeartbeat.js';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { GetReadWriteProvider } from '../util.js';
@@ -306,28 +305,22 @@ export class RunAIAgentResolver extends ResolverBase {
     }
 
     private PublishProgressUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, { 
-            message: JSON.stringify({
-                resolver: 'RunAIAgentResolver',
-                type: 'ExecutionProgress',
-                status: 'ok',
-                data,
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunAIAgentResolver',
+            type: 'ExecutionProgress',
+            status: 'ok',
+            data,
+        }), userPayload);
     }
 
 
     private PublishStreamingUpdate(pubSub: PubSubEngine, data: any, userPayload: UserPayload) {
-        pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, { 
-            message: JSON.stringify({
-                resolver: 'RunAIAgentResolver',
-                type: 'StreamingContent',
-                status: 'ok',
-                data,
-            }),
-            sessionId: userPayload.sessionId,
-        });
+        this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+            resolver: 'RunAIAgentResolver',
+            type: 'StreamingContent',
+            status: 'ok',
+            data,
+        }), userPayload);
     }
 
     /**
@@ -394,10 +387,18 @@ export class RunAIAgentResolver extends ResolverBase {
         planMode?: boolean,
         /** Skill IDs the user requested (via `/skill-name`) — threaded into ExecuteAgentParams.requestedSkillIDs.
          *  The framework intersects them with the agent's accepted skills AND the user's Run permission. */
-        requestedSkillIDs?: string[]
+        requestedSkillIDs?: string[],
+        /** JSON `{ paused?: boolean }` — seeds `$.debug` on a submitted task graph at insert. */
+        taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
         const startTime = Date.now();
-        
+        // Best-effort handle for persistInFlightAgentFailure. Populated from a
+        // progress event carrying metadata.agentRun, or from the successful
+        // result. A throw before the first such event leaves this null, so the
+        // run is not marked Failed — the early-failure case we most want to
+        // persist, but we have no run object yet.
+        const agentRunRef = runRef ?? { current: null as MJAIAgentRunEntityExtended | null };
+
         try {
             LogStatus(`=== RUNNING AI AGENT FOR ID: ${agentId} ===`);
 
@@ -428,10 +429,6 @@ export class RunAIAgentResolver extends ResolverBase {
             // singleton's transaction state with concurrent requests (e.g. conversation deletes).
             const agentRunner = new AgentRunner(p);
 
-            // Track agent run for streaming (use ref to update later). Reuse the caller-supplied
-            // ref when provided so the fire-and-forget liveness pulse can observe the run.
-            const agentRunRef = runRef ?? { current: null as any };
-
             console.log(`🚀 Starting agent execution with sessionId: ${sessionId}`);
 
             // Execute the agent in conversation context - handles conversation, artifacts, etc.
@@ -448,6 +445,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 configurationId: configurationId,
                 planMode: planMode,
                 requestedSkillIDs: requestedSkillIDs,
+                taskGraphDebug: parseTaskGraphDebug(taskGraphDebug),
                 data: parsedData,
                 context: {
                     dataSource: dataSource
@@ -543,11 +541,15 @@ export class RunAIAgentResolver extends ResolverBase {
         } catch (error) {
             const executionTime = Date.now() - startTime;
             LogError(`AI Agent run failed:`, undefined, error);
-            
-            // Create error payload
+            const errorMessage = (error as Error).message || 'Unknown error occurred';
+
+            // Fire-and-forget clients otherwise leave the run Running and the
+            // conversation detail In-Progress (Explorer red-pill timer).
+            await this.persistInFlightAgentFailure(p, userPayload, agentRunRef.current, conversationDetailId, errorMessage);
+
             const errorResult = {
                 success: false,
-                errorMessage: (error as Error).message || 'Unknown error occurred',
+                errorMessage,
                 executionTimeMs: executionTime
             };
             
@@ -557,6 +559,51 @@ export class RunAIAgentResolver extends ResolverBase {
                 executionTimeMs: executionTime,
                 result: JSON.stringify(errorResult)
             };
+        }
+    }
+
+    /**
+     * When executeAIAgent throws after the run/detail exist, close them so Explorer
+     * does not leave a red-pill timer on Status=Running / ConversationDetail In-Progress.
+     */
+    private async persistInFlightAgentFailure(
+        provider: DatabaseProviderBase,
+        userPayload: UserPayload,
+        run: MJAIAgentRunEntityExtended | null | undefined,
+        conversationDetailId: string | undefined,
+        errorMessage: string
+    ): Promise<void> {
+        try {
+            if (run && run.Status === 'Running') {
+                await run.EnsureSaveComplete();
+                run.Status = 'Failed';
+                run.ErrorMessage = errorMessage;
+                run.CompletedAt = new Date();
+                if (!(await run.Save())) {
+                    LogError(`Failed to persist Failed status on in-flight AIAgentRun ${run.ID}`);
+                }
+            }
+            const user = this.GetUserFromPayload(userPayload);
+            if (!user) {
+                return;
+            }
+            if (conversationDetailId) {
+                const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+                    'MJ: Conversation Details',
+                    user
+                );
+                if (await detail.Load(conversationDetailId) && detail.Status === 'In-Progress') {
+                    await detail.EnsureSaveComplete();
+                    detail.Status = 'Error';
+                    detail.Message = errorMessage;
+                    detail.Error = errorMessage;
+                    if (!(await detail.Save())) {
+                        LogError(`Failed to persist Error on conversation detail ${conversationDetailId}`);
+                    }
+                }
+            }
+        } catch (persistError) {
+            LogError(`persistInFlightAgentFailure failed: ${persistError}`, undefined, persistError);
         }
     }
 
@@ -639,7 +686,9 @@ export class RunAIAgentResolver extends ResolverBase {
         @Arg('planMode', { nullable: true }) planMode?: boolean,
         /** Skill IDs the user requested — symmetric with RunAIAgentFromConversationDetail. Intersected
          *  server-side with the agent's accepted skills AND the user's Run permission. */
-        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[]
+        @Arg('requestedSkillIDs', () => [String], { nullable: true }) requestedSkillIDs?: string[],
+        /** JSON `{ paused?: boolean }` — start-paused for a Flow agent that submits a graph. */
+        @Arg('taskGraphDebug', { nullable: true }) taskGraphDebug?: string
     ): Promise<AIAgentRunResult> {
         // Check API key scope authorization for agent execution
         await this.CheckAPIKeyScopeAuthorization('agent:execute', agentId, userPayload);
@@ -653,7 +702,7 @@ export class RunAIAgentResolver extends ResolverBase {
                 p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
                 data, payload, lastRunId, autoPopulateLastRunPayload, configurationId,
                 conversationDetailId, createArtifacts || false, createNotification || false,
-                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs
+                sourceArtifactId, sourceArtifactVersionId, undefined /*conversationId*/, planMode, requestedSkillIDs, taskGraphDebug
             );
 
             LogStatus(`🔥 Fire-and-forget: Agent ${agentId} execution started in background for session ${sessionId}`);
@@ -687,7 +736,8 @@ export class RunAIAgentResolver extends ResolverBase {
             undefined, // conversationId (not pre-resolved on this path)
             undefined, // runRef
             planMode,
-            requestedSkillIDs
+            requestedSkillIDs,
+            taskGraphDebug
         );
     }
 
@@ -814,17 +864,15 @@ export class RunAIAgentResolver extends ResolverBase {
                 LogStatus(`📬 Notification sent via ${channelList} (ID: ${result.inAppNotificationId})`);
 
                 // Publish real-time notification event so client updates immediately
-                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                    userPayload: JSON.stringify(userPayload),
-                    message: JSON.stringify({
-                        type: 'notification',
-                        notificationId: result.inAppNotificationId,
-                        action: 'create',
-                        title: `${agentName} completed your request`,
-                        message: message,
-                        conversationId: conversationId
-                    })
-                });
+                // NOTE (B49): normalized from a malformed no-sessionId payload
+                this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                    type: 'notification',
+                    notificationId: result.inAppNotificationId,
+                    action: 'create',
+                    title: `${agentName} completed your request`,
+                    message: message,
+                    conversationId: conversationId
+                }), userPayload);
 
                 LogStatus(`📡 Published notification event to client`);
             } else if (!result.success) {
@@ -926,16 +974,14 @@ export class RunAIAgentResolver extends ResolverBase {
                 LogStatus(`📬 Feedback request notification sent (ID: ${notifResult.inAppNotificationId})`);
 
                 // Publish real-time notification event
-                pubSub.publish(PUSH_STATUS_UPDATES_TOPIC, {
-                    userPayload: JSON.stringify(userPayload),
-                    message: JSON.stringify({
-                        type: 'notification',
-                        notificationId: notifResult.inAppNotificationId,
-                        action: 'create',
-                        title: `${agentName} needs your input`,
-                        message: truncatedMessage
-                    })
-                });
+                // NOTE (B49): normalized from a malformed no-sessionId payload
+                this.PublishStatusUpdate(pubSub, userPayload.sessionId, JSON.stringify({
+                    type: 'notification',
+                    notificationId: notifResult.inAppNotificationId,
+                    action: 'create',
+                    title: `${agentName} needs your input`,
+                    message: truncatedMessage
+                }), userPayload);
             } else if (!notifResult.success) {
                 LogError(`Feedback request notification failed: ${notifResult.errors?.join(', ')}`);
             }
@@ -1287,13 +1333,15 @@ export class RunAIAgentResolver extends ResolverBase {
         /** Per-request Plan Mode toggle — threaded through to ExecuteAgentParams.planMode. */
         planMode?: boolean,
         /** Skill IDs the user requested — threaded through to ExecuteAgentParams.requestedSkillIDs. */
-        requestedSkillIDs?: string[]
+        requestedSkillIDs?: string[],
+        taskGraphDebug?: string
     ): void {
         // Ref the liveness pulse reads to enrich heartbeats once the run is created.
         const runRef: { current: MJAIAgentRunEntityExtended | null } = { current: null };
         const pulse = startLivenessPulse({
             pubSub,
             sessionId,
+            ownerUserId: userPayload.userRecord.ID,
             resolver: 'RunAIAgentResolver',
             readStatus: () => runRef.current
                 ? { runId: runRef.current.ID, status: runRef.current.Status }
@@ -1305,7 +1353,7 @@ export class RunAIAgentResolver extends ResolverBase {
             p, dataSource, agentId, userPayload, messagesJson, sessionId, pubSub,
             data, payload, undefined, lastRunId, autoPopulateLastRunPayload,
             configurationId, conversationDetailId, createArtifacts, createNotification,
-            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs
+            sourceArtifactId, sourceArtifactVersionId, conversationId, runRef, planMode, requestedSkillIDs, taskGraphDebug
         ).catch((error: unknown) => {
             // Background execution failed unexpectedly (executeAIAgent has its own try-catch,
             // so this would only fire for truly unexpected errors).
@@ -1597,4 +1645,12 @@ export class RunAIAgentResolver extends ResolverBase {
         }
     }
 
+}
+
+function parseTaskGraphDebug(raw?: string): { paused?: boolean } | undefined {
+    if (!raw) return undefined;
+    const parsed: unknown = SafeJSONParse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
+    const paused = (parsed as { paused?: unknown }).paused;
+    return paused === true ? { paused: true } : undefined;
 }

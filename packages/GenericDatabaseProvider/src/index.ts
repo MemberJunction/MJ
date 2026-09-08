@@ -1,4 +1,4 @@
-export { GenericDatabaseProvider, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export { GenericDatabaseProvider, DoomedTransactionError, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
 export type {
     SaveCoercedValue,
     SaveCallBinding,
@@ -13,6 +13,7 @@ export {
     useJsonArgShape,
 } from './crudSprocFieldRules.js';
 export { resolveDbPlatformFromEnv } from './dbPlatformEnv.js';
+export { UserCache } from './UserCache.js';
 export { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 export { SqlLoggingSessionImpl } from './SqlLogger.js';
 export { QueryCompositionEngine, CompositionCTEInfo, CompositionResult } from './queryCompositionEngine.js';

@@ -39,6 +39,9 @@ beforeAll(async () => {
   await writeFixtureFile('distribution.turbo.json', '{ "tasks": {} }');
   await writeFixtureFile('distribution.config.cjs', 'module.exports = {};');
   await writeFixtureFile('distribution.README.md', '# Distribution');
+  // The distribution README points readers at a LICENSE, so the bundle has to
+  // actually carry one; ROOT_FILES treats it as required.
+  await writeFixtureFile('LICENSE', 'Business Source License 1.1');
   await writeFixtureFile('install.config.json', '{}');
   await writeFixtureFile('packages/Update_MemberJunction_Packages_To_Latest.ps1', '# update script');
   await writeFixtureFile('packages/MJAPI/package.json', '{ "name": "mj_api", "scripts": { "build": "tsc && tsc-alias -f" } }');
@@ -79,6 +82,9 @@ describe('createDistributionBundle', () => {
       const names = new Set(new AdmZip(out).getEntries().map((e) => e.entryName));
       expect(names.has('package.json')).toBe(true);
       expect(names.has('apps/MJAPI/src/index.ts')).toBe(true);
+      // A customer distribution is the most literal "copy of the Licensed Work"
+      // MJ produces, and the BUSL requires the licence travel with each copy.
+      expect(names.has('LICENSE')).toBe(true);
       expect([...names].some((n) => n.startsWith('migrations/'))).toBe(false); // omitted by default
     } finally {
       await rm(outDir, { recursive: true, force: true });

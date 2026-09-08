@@ -196,6 +196,22 @@ describe('LocalCacheManager — slot maintenance matrix (slot type x mutation)',
             expect(hasNarrowing([...base, 'futureSegment:whatever'])).toBe(true);    // UNKNOWN → deny
         });
 
+        it('classifies a dataset slot as non-maintainable (M3)', () => {
+            // `ds:` is deliberately NOT allowlisted, even though a dataset item's rows are usually
+            // the full field set. `DatasetItem.Columns` lets an item project a COLUMN SUBSET, and
+            // upserting a full row into a projected slot poisons its shape for the next reader —
+            // exactly why a narrow `f:<fields>` is treated as narrowing above. The segment does not
+            // carry the projection, so it cannot be distinguished; deny-by-default is the safe read.
+            //
+            // The cost is a cache refill rather than an in-place upsert when an entity in a dataset
+            // is saved, which for MJ_Metadata means the next GetDatasetByName re-queries SQL. That
+            // is the correct behavior after a metadata change, and it also closes the reverse
+            // hazard: a maintained slot could carry the scaffolding exemption forward indefinitely.
+            const hasNarrowing = (cache as unknown as { hasNarrowingSegment(p: string[]): boolean }).hasNarrowingSegment.bind(cache);
+            const base = ['E', '_', '_', '-1', '0', '_', '_'];
+            expect(hasNarrowing([...base, 'ds:MJ_Metadata/Entities'])).toBe(true);
+        });
+
         it('classifies a user-search slot as non-maintainable (N1)', () => {
             // The blind spot was positional: hasNarrowingSegment starts at index 7, the filter
             // check reads index 1, and UserSearch sits at 6 — a row predicate hiding between the

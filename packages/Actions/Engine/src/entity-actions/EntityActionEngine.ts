@@ -64,11 +64,14 @@ export class EntityActionEngineServer extends BaseSingleton<EntityActionEngineSe
 
 
     /**
-     * Method will invoke an action given the provided parameters. The method will return true if the action was successfully invoked, false otherwise.
+     * Method will invoke an action given the provided parameters.
      * @param params Parameters for the action invocation
+     * @returns the action's result, or **null when the action did not run** because the binding is
+     *          scoped away from this record. Callers must distinguish "did not run" from "ran and
+     *          failed" — they are not the same answer.
      * @returns 
      */
-    public async RunEntityAction(params: EntityActionInvocationParams): Promise<EntityActionResult> {
+    public async RunEntityAction(params: EntityActionInvocationParams): Promise<EntityActionResult | null> {
         /*
             Logic for invoking an Entity Action:
             1) Validate the params, making sure that we have the right stuff
