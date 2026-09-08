@@ -7,7 +7,7 @@ import type { BaseEntity } from '@memberjunction/core';
 import type { AfterRowClickEventArgs, AfterRowDoubleClickEventArgs, AfterDataLoadEventArgs } from '@memberjunction/ng-entity-viewer';
 import { renderComponentFixture, capture } from '@memberjunction/ng-test-utils';
 import { ExplorerEntityDataGridComponent } from './explorer-entity-data-grid.component';
-import { RelatedGridHeightPx } from './related-grid-height';
+import { RELATED_GRID_HSCROLLBAR_PX, RelatedGridHeightPx } from './related-grid-height';
 import { FormRecordRefreshCoordinator } from './form-record-refresh.coordinator';
 
 /**
@@ -295,7 +295,8 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
       expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300, 15));
       expect(inner(f).Height).toBe(RelatedGridHeightPx(1, 300, 15));
       expect(host.style.height).toBe(`${RelatedGridHeightPx(1, 300, 15)}px`);
-      expect(RelatedGridHeightPx(1, 300, 15)).toBe(RelatedGridHeightPx(1, 300) + 15);
+      // A measurement REPLACES the fixed reserve an unmeasured grid gets, it is not added on top.
+      expect(RelatedGridHeightPx(1, 300, 15)).toBe(RelatedGridHeightPx(1, 300) - RELATED_GRID_HSCROLLBAR_PX + 15);
     });
 
     it('budgets nothing when the grid has no horizontal overflow (scroller collapsed to 0)', async () => {
@@ -304,7 +305,7 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
 
       await loadRows(f, 1);
 
-      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300));
+      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300, 0));
     });
 
     it('budgets nothing for an overlay scrollbar, which AG Grid positions absolutely', async () => {
@@ -313,7 +314,7 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
 
       await loadRows(f, 1);
 
-      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300));
+      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300, 0));
     });
 
     it('still honours MaxHeight when the scroller is present', async () => {
@@ -332,7 +333,7 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
       const scroller = mountFakeScroller(f, 0);
 
       await loadRows(f, 1);
-      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300));
+      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300, 0));
 
       const ro = MockResizeObserver.instances.find((o) => o.targets.includes(host));
       expect(ro).toBeDefined();
@@ -352,7 +353,7 @@ describe('ExplorerEntityDataGridComponent (DOM)', () => {
       await nextFrames(2);
       f.detectChanges();
 
-      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300));
+      expect(f.componentInstance.ResolvedHeight).toBe(RelatedGridHeightPx(1, 300, 0));
     });
 
     it('creates the observer on first sized load when the panel ancestry is only detectable later', async () => {

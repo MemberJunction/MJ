@@ -138,7 +138,7 @@ The `PostgreSQLTransactionGroup` supports variable dependencies between transact
 
 #### Nested transactions (SAVEPOINTs)
 
-`BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()` support arbitrary nesting that mirrors the `SQLServerDataProvider`'s depth/savepoint-stack model:
+`BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()` use the shared `GenericDatabaseProvider` depth machine. PostgreSQL supplies the physical hooks (acquire client + `BEGIN`, `COMMIT`/`ROLLBACK` + release) and savepoint names `mj_sp_n`:
 
 | Depth | Begin emits | Commit emits | Rollback emits |
 |---|---|---|---|
@@ -153,7 +153,7 @@ await provider.RollbackTransaction();   // ROLLBACK TO + RELEASE mj_sp_1; depth=
 await provider.CommitTransaction();     // COMMIT; depth=0
 ```
 
-Use `provider.TransactionDepth` to inspect the current nesting depth (0 = no active transaction). If `COMMIT` or `ROLLBACK` itself fails at depth 1, the provider force-releases the client to avoid leaking a poisoned connection back to the pool.
+Use `provider.TransactionDepth` to inspect the current nesting depth (0 = no active transaction). If `COMMIT` or `ROLLBACK` itself fails at depth 1, `AbandonPhysicalTransaction` releases the client so a poisoned connection is not returned to the pool. A server abort (`25P01`) throws `DoomedTransactionError` rather than opening a second client. `ResetTransactionState()` is the public recovery path.
 
 ### Connection Pool Sharing
 

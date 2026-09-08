@@ -251,6 +251,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'materialized-read': 3,
         'metadata-consistency': 7,
         'metadata-sync': 9,
+        'nested-transactions': 11,
         'open-app-teardown': 2,
         'permission-engine': 14,
         'predictive-studio': 5,
@@ -312,7 +313,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(86);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(87);
     });
 });
 
@@ -411,6 +412,17 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'entity-writes.EW6',
         'entity-writes.EW7',
         'entity-writes.EW9',
+        'nested-transactions.NT1',
+        'nested-transactions.NT10',
+        'nested-transactions.NT2',
+        'nested-transactions.NT3',
+        'nested-transactions.NT4',
+        'nested-transactions.NT5',
+        'nested-transactions.NT6',
+        'nested-transactions.NT7',
+        'nested-transactions.NT8',
+        'nested-transactions.NT8b',
+        'nested-transactions.NT9',
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',

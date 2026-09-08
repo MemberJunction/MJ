@@ -158,7 +158,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
 
         if (!validationResult.isValid) {
           if (nonInteractive) {
-            return this.fail(startTime, [{ context: 'validation', message: 'Validation failed. Cannot proceed with push.' }]);
+            return this.fail(startTime, formatter.formatValidationResultAsCLIErrors(validationResult, 'push'));
           }
           const shouldContinue = await confirm({
             message: 'Validation failed with errors. Do you want to continue anyway?',
@@ -463,7 +463,7 @@ export class SyncPullPlugin extends BaseCLIPlugin {
           if (isText) this.Host.Log('\n' + formatter.formatValidationResult(validationResult, this.Host.Verbose));
           if (!validationResult.isValid) {
             if (nonInteractive) {
-              return { success: false, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, errors: [{ context: 'validation', message: 'Validation failed. Cannot proceed with pull.' }] };
+              return { success: false, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, errors: formatter.formatValidationResultAsCLIErrors(validationResult, 'pull') };
             }
             const shouldContinue = await confirm({ message: 'Validation failed with errors. Continue anyway?', default: false });
             if (!shouldContinue) {

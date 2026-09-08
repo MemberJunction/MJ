@@ -163,6 +163,17 @@ describe('check-changeset-bump', () => {
         expect(code).toBe(1);
     });
 
+    it('allows patch when the only metadata change is an authoring doc (CLAUDE.md / README.md)', () => {
+        // People read those files; `mj sync push` never does, so they become no migration.
+        const { code, output } = runOnBranch('metadata-doc-patch', () => {
+            write('metadata/CLAUDE.md', '# guidance');
+            write('metadata/ai-models/README.md', '# readme');
+            write('.changeset/l.md', changeset({ '@memberjunction/foo': 'patch' }));
+        });
+        expect(code).toBe(0);
+        expect(output).toContain('no migration and no metadata');
+    });
+
     it('accepts a mixed changeset on a DB branch as long as SOMETHING carries the minor', () => {
         // The release train only needs the highest bump to be right; every package in a `fixed`
         // group moves together anyway, so demanding minor on every entry would be noise.

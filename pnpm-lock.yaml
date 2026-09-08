@@ -1180,6 +1180,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      express-rate-limit:
+        specifier: ^8.2.1
+        version: 8.2.1(express@5.2.1)
       jsonwebtoken:
         specifier: 9.0.3
         version: 9.0.3

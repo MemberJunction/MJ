@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
@@ -23,14 +23,10 @@ import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
-// Configuration for parallel processing.
-// The side-effect-as-data pattern (processFlattenedRecord returns mutations instead of
-// mutating shared state) makes parallel execution safe from a sync-engine perspective.
-// However, entity Save() overrides (e.g., MJActionEntityServer, MJAIPromptEntityServer)
-// may start transactions, do check-then-create patterns, or interact with shared singletons
-// that assume sequential execution. Default stays at 1 for safety; users can opt in to
-// higher values via --parallel-batch-size after verifying their entity subclasses are safe.
-const PARALLEL_BATCH_SIZE = 1;
+// Parallelism is safe when each record gets its own provider instance (shared pool,
+// own transaction stack) — the same pattern MJAPI uses per request. Default 10.
+// Do NOT default to 1 to paper over a shared provider.
+const PARALLEL_BATCH_SIZE = 10;
 
 export interface PushOptions {
   dir?: string;
@@ -795,7 +791,7 @@ export class PushService {
               const batchResults = await Promise.all(
                 batch.map(async (flattenedRecord) => {
                   try {
-                    const result = await this.processFlattenedRecord(
+                    const result = await this.processFlattenedRecordOnIndependentProvider(
                       flattenedRecord,
                       entityDir,
                       options,
@@ -962,7 +958,11 @@ export class PushService {
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
   }
 
-  private async processFlattenedRecord(
+  /**
+   * Run one record on a forked provider (shared pool, own TX stack) so parallel
+   * Saves cannot interleave EntityTransactionScope on the CLI's singleton provider.
+   */
+  private async processFlattenedRecordOnIndependentProvider(
     flattenedRecord: FlattenedRecord,
     entityDir: string,
     options: PushOptions,
@@ -970,6 +970,33 @@ export class PushService {
     callbacks?: PushCallbacks,
     entityConfig?: EntityConfig,
     allowDefer: boolean = true
+  ): Promise<ProcessRecordResult> {
+    const host = Metadata.Provider as unknown as DatabaseProviderBase;
+    let scoped: DatabaseProviderBase | undefined;
+    try {
+      scoped = await host.CreateIndependentInstance();
+    } catch (e) {
+      callbacks?.onLog?.(
+        `⚠️  CreateIndependentInstance unavailable (${(e as Error).message}); this record uses the shared provider`
+      );
+      return this.processFlattenedRecord(flattenedRecord, entityDir, options, batchContext, callbacks, entityConfig, allowDefer);
+    }
+    try {
+      return await this.processFlattenedRecord(flattenedRecord, entityDir, options, batchContext, callbacks, entityConfig, allowDefer, scoped);
+    } finally {
+      await scoped.ReleaseIndependentInstance();
+    }
+  }
+
+  private async processFlattenedRecord(
+    flattenedRecord: FlattenedRecord,
+    entityDir: string,
+    options: PushOptions,
+    batchContext: BatchContext,
+    callbacks?: PushCallbacks,
+    entityConfig?: EntityConfig,
+    allowDefer: boolean = true,
+    recordProvider?: IMetadataProvider
   ): Promise<ProcessRecordResult> {
     const metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
@@ -1031,7 +1058,9 @@ export class PushService {
     }
 
     // Get or create entity instance
-    entity = await metadata.GetEntityObject(entityName, this.contextUser);
+    entity = recordProvider
+      ? await recordProvider.GetEntityObject(entityName, this.contextUser)
+      : await metadata.GetEntityObject(entityName, this.contextUser);
     if (!entity) {
       throw new Error(`Failed to create entity object for ${entityName}`);
     }
@@ -1372,8 +1401,9 @@ export class PushService {
       // Skip embedding generation during sync — vectors can be computed later by the
       // API server. This avoids loading the ~50MB Xenova model in short-lived CLI processes.
       entity.SkipEmbeddings = true;
-      // Pass IgnoreDirtyState option when alwaysPush is enabled
-      const saveOptions = alwaysPush ? { IgnoreDirtyState: true } : undefined;
+      const saveOptions = new EntitySaveOptions();
+      if (alwaysPush) saveOptions.IgnoreDirtyState = true;
+      if (entityConfig?.push?.skipGeoCoding) saveOptions.SkipGeoCoding = true;
       saveResult = await entity.Save(saveOptions);
     } catch (saveError: any) {
       // Helper to log to both console and callbacks

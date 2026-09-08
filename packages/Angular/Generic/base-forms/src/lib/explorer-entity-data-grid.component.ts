@@ -144,9 +144,12 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
     /**
      * Height AG Grid's horizontal scrollbar currently takes INSIDE our box (0 when the
      * columns fit, or on platforms with overlay scrollbars). Measured from the DOM after
-     * layout, never assumed — see `measureHorizontalScrollbarPx`.
+     * layout, never assumed — see `measureHorizontalScrollbarPx`. `undefined` until AG Grid
+     * has rendered its scroller and a measurement exists: `RelatedGridHeightPx` then falls
+     * back to its fixed `RELATED_GRID_HSCROLLBAR_PX` reserve, so an unmeasured grid on a
+     * classic-scrollbar platform never shows a clipped row before the first measurement.
      */
-    private scrollbarPx = 0;
+    private scrollbarPx: number | undefined;
     private _hostResizeObserver?: ResizeObserver;
     private _scrollbarMeasureFrame = 0;
     private _destroyed = false;
@@ -386,13 +389,15 @@ export class ExplorerEntityDataGridComponent implements AfterViewInit, OnDestroy
      * when the columns overflow and collapses to 0 when they fit. Overlay scrollbars
      * (macOS "show when scrolling") get `.ag-scrollbar-invisible`, which positions the
      * element absolutely — it is drawn over the rows and takes no layout space, so it
-     * needs no budget.
+     * needs no budget. Returns `undefined` when the scroller has not been rendered yet.
      */
-    private measureHorizontalScrollbarPx(): number {
+    private measureHorizontalScrollbarPx(): number | undefined {
         const host = this.elementRef.nativeElement as HTMLElement | null;
         const scroller = host?.querySelector<HTMLElement>('.ag-body-horizontal-scroll');
         if (!scroller) {
-            return 0;
+            // No scroller element yet is NOT a measurement of 0: AG Grid has not laid the grid
+            // out. Stay unmeasured so the sizing keeps the fixed reserve until it has.
+            return undefined;
         }
         // Watch the scroller too: its height flips 0 <-> N when AG Grid toggles the
         // scrollbar without the host changing size. Re-observing the same target is a no-op.
