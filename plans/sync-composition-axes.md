@@ -1,19 +1,23 @@
 # Metadata Sync + Loom: first-class composition axes
 
 **Branch:** `an-dev-sync-composition-axes`  
-**Status:** proposal — one implementation phase, three PRs (Loom, MJ, cheese). Cheese is the test.  
-**Owner:** MJ Core (`@memberjunction/metadata-sync`) + Loom + more-cheese  
+**Status:** proposal, rev 2 (post-review) — one implementation phase, five PRs. Cheese is the test.  
+**Owner:** MJ Core (`@memberjunction/core` + `@memberjunction/metadata-sync`) + Orders + Loom + more-cheese  
 **Depends on:** Entity companions & graph save (`plans/base-entity-composite-graph.md`, shipped); Embedded records (`plans/embedded-records.md`); IsA parent/child on `BaseEntity`
 
-This is **one phase**, not a staged rollout. Three PRs land together:
+This is **one phase**, not a staged rollout. Five PRs land together:
 
 | PR | Repo | Job |
 |---|---|---|
-| **MJ** | MemberJunction/MJ | First-class `collections` / `embeds` / `extension` in mj sync JSON; graph apply then one Save |
-| **Loom** | Loom | Domain `composition` + emit that JSON; validate IsA/collections/embeds |
+| **MJ core** | MemberJunction/MJ | **Prospective subtype resolution** — `EntitySubtypeResolver` via `ClassFactory`, `Entity.SubtypeSelector`, `BaseEntity.ResolveSubtypeEntityName()` / `EnsureISAChild()` (§4.4). Dependency for everything below |
+| **MJ sync** | MemberJunction/MJ | First-class `collections` / `embeds` / `extension` in mj sync JSON; graph apply then one Save. **No discriminator logic** |
+| **Orders** | bizapps-orders | Register one resolver (or just declare the selector); delete the six re-derivations of the same rule |
+| **Loom** | Loom | Domain `composition` + emit that JSON; validate IsA/collections/embeds from `SubtypeSelector` metadata |
 | **Cheese** | more-cheese | World model uses the new shape; **this PR is the test** (workshop order shows Event details / Person = ShipTo; no SQL IsA inserts) |
 
 Loom is the producer. MJ is the consumer. Cheese proves both. Event Order Lines are an exemplar, not a one-off.
+
+> **What changed in rev 2, in one line:** conditional IsA turned out not to be a sync feature at all — it is the missing *prospective* half of MJ's IsA axis (§2.1), so resolution moves into core, six copies of the rule in Orders collapse to one, and `@memberjunction/metadata-sync` stops needing to know that `ProductType` exists. Full rationale in §11.
 
 ---
 
@@ -77,9 +81,45 @@ Documented in `plans/embedded-records.md`. Sync does not use them.
 | **Related collection** | FK **on the child** | Owner first, stamp child FK | `EntityRelationship.RelatedRecordCollection` | `order.Lines.Create()` / `Load()` / `Remove()` |
 | **Embedded** | FK **on the owner** | **Peer first**, stamp owner FK | `EntityField.EmbeddedRecord` | `order.ShipToAddressID_Object` / `_EnsureObject()` |
 
-**Conditional IsA** is metadata, not a fourth axis. `ProductType.ProductExtensionEntity` and `ProductType.OrderLineExtensionEntity` name which IsA child (if any) this product or line must carry. Event Order Line is an Order Line when the product type says so. Event Product is a Product the same way. Accounting Company Profile is unconditional IsA of Company (no discriminator).
-
 Lookups (`EventOrderLine.PersonID → Person`) stay FKs. They are not composition.
+
+### 2.1 IsA today is **retrospective only** — and that is the whole gap
+
+This is the fact the rest of the plan turns on, so it is stated before the JSON.
+
+MJ already models the IsA *shape*. `Entity.ParentID` is set for both Orders cases today — `bizapps-orders/migrations/V202607061432__v0.1.x__Tables_and_Objects.sql:51334` (Event Products → Products) and `:51340` (Event Order Lines → Order Lines). So `EntityInfo.ChildEntities` (`entityInfo.ts:2717`) and `IsParentType` (`:2765`) already resolve, generically, with no app knowledge.
+
+The two directions are asymmetric:
+
+| Direction | Resolved by | When | Works for a **new** record? |
+|---|---|---|---|
+| child → parent (`InitializeParentEntity`) | metadata `Entity.ParentID`, at `GetEntityObject` time | construction | ✅ |
+| parent → child (`InitializeChildEntity`) | `FindISAChildEntity` — a **UNION ALL data probe** over `ChildEntities` (`databaseProviderBase.ts:681`) | after `Load()`, PK required | ❌ nothing to probe |
+
+So on an **existing** line, core already does the whole job: probe finds the `EventOrderLine` row, `createAndLinkChildEntity` chains it, `line.ISAChild` is a live `EventOrderLineEntity`. **Zero new code needed for that path**, and it is already generic over one child or many (`FindISAChildEntities`).
+
+On a **new** record there is no row to probe. Worse than returning null: `createAndLinkChildEntity` **explicitly unlinks and bails when `InnerLoad` returns false** (`baseEntity.ts:1456-1461`) — hand it the correct entity name today and it still discards the child, because that path was written for discovery, not creation.
+
+**Conditional IsA is therefore not a fourth axis and not a new runtime mechanism. It is the missing prospective half of an axis MJ already has**: nothing can answer *“which subtype **should** this record have?”* the way `FindISAChildEntity` answers *“which subtype **does** exist?”*
+
+And with `ChildEntities.length === 1` on both Order Lines and Products, the question is narrower still. It is not *selection among N*; it is **existence** — a t-shirt line has no extension, a workshop line does. That degrades cleanly:
+
+| Case | Answer | Config needed |
+|---|---|---|
+| `ChildEntities.length === 0` | no subtype | none |
+| exactly one child, unconditional (Company → Accounting Company Profile) | that one | **none** |
+| conditional existence, or more than one child | needs a rule | ← the only real gap |
+
+### 2.2 Because core cannot answer it, every consumer re-derives it
+
+The rule “read `ProductType.OrderLineExtensionEntity` off the product, then `EnsureEntity(name)`” exists in **six places in bizapps-orders alone**: `CheckoutSessionService.ts:527`, `:927`, `:1343`; `order-lines-editor.component.ts:165, 395, 465-471, 492, 510`. And the drift has already happened — `product-form.component.ts:91` reads the metadata column, hardcodes the expected value `'MJ_BizApps_Orders: Event Products'`, **and** falls back to string-matching the type name:
+
+```ts
+return typeName.toLowerCase().includes('event') || typeName.toLowerCase().includes('conference')
+    || typeName.toLowerCase().includes('summit') || this.record?.ISAChild != null;
+```
+
+A second product extension type silently misfires that getter today. Implementing §4.2 as a ladder inside `@memberjunction/metadata-sync` would make sync **copy #7**, and would put the app-specific column names `ProductExtensionEntity` / `OrderLineExtensionEntity` into MJ core, which is clean of them today. §4.4 is the fix.
 
 ---
 
@@ -91,6 +131,7 @@ Lookups (`EventOrderLine.PersonID → Person`) stay FKs. They are not compositio
 | Shared PK + sibling file/dir | Two records, two Saves; IsA parent not wired | `EnsureEntity` / IsA child on the **same instance**, then one graph Save |
 | SQL `INSERT` into `EventOrderLine` | Row in table/view; companion never built | Form hydrates `line.Extension` via `InnerLoad` **and** future saves go through `persistExtension` |
 | `@parent:ID` | String after parent is already saved | Collection `Create()` stamps FK; IsA copies parent PK; embed does not use `@parent` at all |
+| A **new** record that should carry a conditional IsA child | Nothing — the probe has no row to find, and `createAndLinkChildEntity` unlinks on `InnerLoad` miss (`baseEntity.ts:1456-1461`) | A **prospective** resolver: “which subtype should this record have?” (§4.4) |
 
 Cheese Event Order Lines showed this: 7,714 rows in `vwEventOrderLines`, order form still empty, because the object graph the form uses was never constructed.
 
@@ -185,7 +226,26 @@ Unconditional IsA (profile **is** the company):
 |---|---|---|
 | `collections` | Collection **property name** (`Lines`), not entity name | Child has own PK; FK on child set by `Create()`, not by authoring `@parent:ID` |
 | `embeds` | Owner **FK field** (`ShipToAddressID`) | Peer has own PK; owner FK stamped after peer exists |
-| `extension` | Conditional or unconditional IsA / companion | **Shared PK with owner.** JSON does **not** invent a new ID. Optional `"entity": "MJ_BizApps_Orders: Event Order Lines"` is an **assertion** — fail if metadata resolves a different type |
+| `extension` | Conditional or unconditional IsA / companion | **Shared PK with owner.** JSON does **not** invent a new ID. Two accepted forms — see below |
+
+`extension` accepts **two shapes**, because MJ supports both disjoint and overlapping subtypes and the singular form cannot express the latter:
+
+```json
+// shorthand — disjoint. Type resolved per §4.2.
+"extension": { "fields": { … } }
+
+// explicit map — the key IS the assertion. Required for overlapping subtypes
+// (Entity.AllowMultipleSubtypes = true), where _childEntities is a LIST and
+// ISAChild returns null (baseEntity.ts:1060-1071).
+"extension": {
+  "MJ_BizApps_Common: Members":  { "fields": { … } },
+  "MJ_BizApps_Common: Speakers": { "fields": { … } }
+}
+```
+
+The map form subsumes the old `"entity"` assertion key, which is therefore **not** introduced. Disambiguation is positional: a child object containing `fields` is the shorthand; anything else is read as an entity-name map. **Pull always emits the map form when the owner is an overlapping parent, and the shorthand otherwise** — never “map only when currently ambiguous,” which would silently rewrite a file whenever an unrelated app adds a subtype.
+
+`bizapps-common`'s `Person` is the family's IsA parent and `bizapps-sales` KI-1 already tracks flipping it to `AllowMultipleSubtypes = true`. Reserving this shape now is free; changing it later is breaking.
 
 `extension.fields` are **leaf-owned columns only**. Inherited Order Line / Product columns do not belong here. Sync must reject them (same rule as `SelectSimpleExtensionFields` using `ParentEntityFieldNames`).
 
@@ -193,24 +253,102 @@ New `@owner:Field` (and keep `@parent` / `@root` for `relatedEntities`): read fr
 
 ### 4.2 Resolving `extension` (conditional IsA)
 
-After `fields` are applied (so `ProductID` / `ProductTypeID` exist on the object):
+**Sync does not resolve this. It asks core.** After `fields` are applied, push calls `owner.ResolveSubtypeEntityName()` (§4.4) and passes the answer to `owner.EnsureISAChild(name)`. `@memberjunction/metadata-sync` contains **no** discriminator ladder and names **no** app columns.
 
-1. If `extension.entity` is set, use it (assert against metadata).
-2. Else if this entity has exactly one IsA child type (`Entity.ChildEntities.length === 1` and not overlapping), use that (Company → Accounting Company Profile).
-3. Else if a related **Product** (or declared discriminator path) is set, load `ProductType.ProductExtensionEntity` or `ProductType.OrderLineExtensionEntity` (which field depends on whether the owner is a Product or an Order Line). Empty string/null ⇒ **no extension**; `extension` in JSON is then an error.
-4. Else fail loud: cannot resolve extension type.
+Core's resolution order, once, for every consumer — sync, the Angular line editor, checkout, CodeGen, agents:
 
-This is the general discriminator: **metadata on a related type names the IsA entity.** Not Event-specific.
+1. **Explicit map key.** `extension` in the entity-name map form (§4.1) — the key is the answer, asserted against metadata (must be a declared IsA child of this entity, else fail loud).
+2. **Registered resolver**, if one is registered for this entity — `ClassFactory` key = entity name (§4.4). Wins over the metadata selector, so an app can override a shipped rule without a migration.
+3. **`Entity.SubtypeSelector`** metadata path, if declared (§4.4).
+4. **Exactly one child, no selector, no resolver** ⇒ that child. Unconditional IsA (Company → Accounting Company Profile) needs **no configuration at all**.
+5. **Otherwise** `null` ⇒ no subtype. `extension` present in the JSON is then a **hard error**, naming the entity and what it checked.
 
-### 4.3 Inference for old `relatedEntities` (compat, not the Loom target)
+Steps 1–3 returning empty string / null also mean “no subtype,” and `extension` present is the same hard error. A resolver or selector that returns an entity which is **not** a declared IsA child of the owner is a hard error, not a silent skip.
 
-When flattening `relatedEntities[ChildName]`:
+**The inverse is a warning, not an error**: a selector resolves a subtype and the JSON has no `extension`. That is the cheese bug expressed at validate time — the one check that would have caught it before the push instead of in the UI — but a partial seed is a legitimate thing to author, so it must not block.
 
-- If `Child.ParentID` is this entity **and** child `primaryKey` equals parent PK → treat as `extension` (do not independent-Save).
-- Else if this entity has a `RelatedRecordCollection` whose related entity is `ChildName` → treat as that collection.
-- Else today’s behavior (independent GetEntityObject + Save, `@parent:ID`).
+### 4.3 Consistency check the retrospective half enables
 
-Loom **emits the new keys**. Inference exists so older Action/Prompt files keep working and so a mistaken Event Order Line sibling dir can be diagnosed instead of silently double-saved.
+Because core now has *both* halves, on `Load()` it can compare them: the probe found child `X`, the selector resolves `Y`. Today nothing can even notice — a Product whose type changed after its extension row was written is undetectable. With both, it is a reportable inconsistency.
+
+Scope for this phase: **detect and surface, never auto-repair.** `mj sync validate` reports it; push does not silently delete or re-point an extension row. Auto-migration of a flipped discriminator is explicitly out of scope (§10).
+
+### 4.4 Core framework additions (MJ, `@memberjunction/core`)
+
+Two layers, because the two have different reach and both are needed.
+
+**Layer 1 — declarative: `Entity.SubtypeSelector` (new nullable JSONType column on `__mj.Entity`).**
+
+```jsonc
+// Entity 'MJ_BizApps_Orders: Order Lines'
+{ "Path": "ProductID.ProductTypeID.OrderLineExtensionEntity" }
+// Entity 'MJ_BizApps_Orders: Products'
+{ "Path": "ProductTypeID.ProductExtensionEntity" }
+```
+
+A dotted FK-dereference path ending at a column whose **value is an MJ entity name**. Empty / null ⇒ no subtype.
+
+This layer is not optional, and the reason is reach, not taste: **a registered resolver only exists where app code is loaded.** That is the Angular UI ✅ and MJAPI ✅ and `mj sync push` ✅ (via `dynamicPackages`). It is **not** Loom — a generator with no MJ runtime, which §7 requires to validate “child exists iff `when`” — and it is not CodeGen. A code-only answer serves the consumers in this plan and leaves the producer blind.
+
+**Layer 2 — runtime override: `ClassFactory`, keyed by entity name.** No bespoke registry; MJ already resolves behavior this way.
+
+```ts
+// @memberjunction/core
+export abstract class EntitySubtypeResolver {
+    /** Sync return is FIRST-CLASS, not a convenience — see the N+1 note below. */
+    public abstract Resolve(record: BaseEntity): string | null | Promise<string | null>;
+}
+
+// @mj-biz-apps/orders-entities — the SHARED package, so browser and server both get it
+@RegisterClassEx(EntitySubtypeResolver, {
+    key: 'MJ_BizApps_Orders: Order Lines',
+    metadata: { entity: 'MJ_BizApps_Orders: Order Lines', kind: 'subtype-selector' },
+})
+export class OrderLineSubtypeResolver extends EntitySubtypeResolver { … }
+```
+
+Three notes that are load-bearing:
+
+- **Dispatch on the `key`, not on `metadata`.** `GetRegistration` is memoized per `baseClassName|normalizedKey` (`ClassFactory.ts:101`), so keyed lookup is O(1) on a hot path. `metadata` is for *discovery* only (`GetAllRegistrationsByMetadata`) so tooling can enumerate which entities have a resolver.
+- **Resolve with `TryCreateInstance`, never `CreateInstance`.** `CreateInstance` falls back to `new BaseClass(...)` for an unregistered key (`ClassFactory.ts:50-54`) — on an abstract base that is exactly the documented trap. “No resolver registered” must be an explicit miss, not an instance that answers wrongly.
+- **`priority` gives override-an-app's-rule for free**, and registration is a side effect of import, so the anti-tree-shaking manifest already covers it.
+
+**The two public methods on `BaseEntity`** — a thin facade over the above, so callers never touch `ClassFactory` directly:
+
+```ts
+/** Prospective counterpart to FindISAChildEntity. Order per §4.2. Null = no subtype. */
+public async ResolveSubtypeEntityName(): Promise<string | null>;
+
+/**
+ * Create-safe. Unlike createAndLinkChildEntity, does NOT unlink when InnerLoad
+ * finds no row — that is the create case. Idempotent. Defaults to
+ * ResolveSubtypeEntityName() when no name is passed.
+ */
+public async EnsureISAChild(entityName?: string): Promise<BaseEntity | null>;
+```
+
+`EnsureISAChild` is what makes step 5 of §5 implementable at all: `replaceChildParentChain` is **private** (`baseEntity.ts:1503`), so no package outside `MJCore` can wire a shared-PK child today, and the only existing path that does discards the child on the create case.
+
+**Performance — design for it now, not after.** Resolution is per record. Cheese is 17,075 order lines × (Product → ProductType); async-only would guarantee an N+1 in exactly the bulk path this feature exists to serve. Therefore:
+
+- `Resolve` **may return synchronously**, and core must not wrap every call in an await-chain that defeats that.
+- The built-in `Path` walker prefers `BaseEngineRegistry.FindCachedEntity()` — the same mechanism `RelatedRecordCollection` uses for `Source: 'cache'` — degrading to a query on a miss. ProductTypes is tiny and cheese has 16 Products; this should cost zero queries.
+- Core memoizes per (entity, FK value) for the life of a push run.
+
+**This is a core capability, not an Orders workaround.** It is what makes MJ's ORM able to say “this record is of type X because the data says so,” in the browser and on the server, from one declaration — which server-only ORMs do not do.
+
+### 4.5 Old `relatedEntities`: **diagnose, never re-route**
+
+Earlier drafts had push silently reinterpret a `relatedEntities` payload as an `extension` or a collection when the shape matched. That is implicit migration: files that push correctly today would change transaction boundary and `RecordChange` output on upgrade, with no opt-in and no message — and the second rule made an app adding a `DeclareRelatedRecords` change how unrelated metadata files push.
+
+**Push behaviour follows what the file says. Full stop.** Existing `relatedEntities` keeps today's independent `GetEntityObject` + `Save` + `@parent:ID`, forever, unchanged.
+
+The detection is still worth having — as a **diagnostic**, in `mj sync validate` and as a push warning:
+
+- child `primaryKey` equals parent PK **and** `Child.ParentID` is this entity → *"`relatedEntities['X']` looks like an IsA child (shared PK). Use `extension` — see §4.1."*
+- a `RelatedRecordCollection` exists whose related entity is that child → *"…could be `collections['Lines']`."*
+
+Author changes the file; the machine never changes it for them. If auto-adoption is ever wanted it gets an explicit `.mj-sync.json` flag and logs every record it touched.
 
 ---
 
@@ -222,7 +360,9 @@ For a JSON **root** that uses `collections` / `embeds` / `extension` (or inferre
 2. `Set` `fields`.
 3. **Embeds** (peer first): for each `embeds[fkField]`, `{fkField}_EnsureObject()`, recurse apply, do **not** Save the peer yet — `EntitySavePlan` already orders embed-before-owner.
 4. **Collections:** `owner.Lines.Create()` (or load existing by PK into the collection), recurse apply on the child entity. Do **not** `child.Save()` here.
-5. **Extension:** resolve type (§4.2). If the owner is an `OrderLineEntity` (or any subclass with `Extension` companion), `await owner.Extension.EnsureEntity(resolvedName)` and `Set` leaf fields on `owner.Extension.Entity`. Otherwise use IsA: `GetEntityObject` child, bind shared PK, replace parent chain with this owner (`replaceChildParentChain`), set leaf fields, attach as `_childEntity`. Still no independent Save.
+5. **Extension:** `const child = await owner.EnsureISAChild(name?)` (§4.4), then `Set` the leaf fields on `child`. Still no independent Save.
+
+   That is the whole step. Sync does **not** branch on `OrderLineEntity`, does **not** duck-type an `Extension` property, and does **not** know that `OrderLineExtensionCompanion` exists — all three would put an app convention inside `@memberjunction/metadata-sync`. `null` from `EnsureISAChild` when the JSON supplied an `extension` is a **hard error**, never a skip; a silent skip is the original bug (rows land, Save succeeds, form empty).
 6. **`await owner.Save()` once.** Companions / `persistExtension` / collection plan persist the graph. RecordChange, validation, and IsA parent hydration run.
 
 `relatedEntities` that remain “independent children” still flatten to later levels on the same `graphId` (Action Params). Mix is allowed: an Action can have `relatedEntities` Params **and** someday a collection.
@@ -237,6 +377,8 @@ Dry-run: build the object graph, skip Save, still register batch context for `@o
 - SQL-insert IsA tables.
 - `GetEntityObject('Event Order Lines')` as if it were unrelated to the line.
 - Require authors to put inherited virtuals (`OrderHeaderID`, `Quantity`, …) on the extension payload.
+- Name **any** app column, entity, or companion class. `ProductExtensionEntity` / `OrderLineExtensionEntity` / `Extension` must not appear anywhere in `@memberjunction/metadata-sync` or `@memberjunction/core`. Core is clean of them today; §4.4 is what keeps it that way.
+- Silently ignore an unrecognised top-level key. `json-write-helper.ts:42` hardcodes `knownKeys` and preserves unknown keys as-is, and `ValidationService` only checks that `fields` exists (`:254-265`) — so `"colections"` pushes green and does nothing, which is the same green-run failure this plan exists to fix. The three new keys go in `knownKeys`, **and** `validate` rejects unknown top-level keys with a did-you-mean (the codebase already does this for `field` → `fields` at `ValidationService.ts:264`).
 
 ---
 
@@ -251,6 +393,11 @@ Pull writes the same shape it reads.
 
 Checksums: hash `fields` + composition payloads, excluding `sync`.
 
+Two rules the bullets above leave open:
+
+- **Round-trip is a test, not an intention.** `pull` after `push` of the same file must produce byte-identical composition (modulo `sync`). Without it enforced, the same relationship ends up as `relatedEntities` in some repos and `collections` in others, permanently, because nobody rewrites working metadata.
+- **No double ownership.** An entity is a collection member **or** its own sync root, never both — otherwise the same row is writable from two files and push resolves it last-writer-wins with no complaint. Cheese's `order-lines/` is a sync root with 17,075 records today, so this decides §8.1(b). `validate` must reject a `primaryKey` claimed by two files. And a `Load: 'never'` collection must be **skipped with a stated reason** on pull, never emitted as `[]` — an empty array is indistinguishable from "no lines" and would delete them on the next push under authoritative mode.
+
 ---
 
 ## 7. Loom (producer contract — implemented in Loom, consumed here)
@@ -262,7 +409,18 @@ Loom domain grows a `composition` block that **maps onto this JSON**, not onto S
 - `embeds` → emit `embeds[fkField]`.
 - Ordinary FKs stay `fields` + `@lookup`.
 
-`createDomainConfigFromMJEntities` must read `ParentID`, `RelatedRecordCollection`, `EmbeddedRecord`, and the two ProductType extension columns so cheese `domain.json` only adds `when` and path-match rules.
+`createDomainConfigFromMJEntities` must read `ParentID`, `RelatedRecordCollection`, `EmbeddedRecord`, and **`Entity.SubtypeSelector`** (§4.4) so cheese `domain.json` adds almost nothing. It must **not** read `ProductType.OrderLineExtensionEntity` directly — that is the app column the selector exists to abstract, and hardcoding it in Loom recreates the divergence in the producer.
+
+**Loom is why the selector must be metadata and not only a registered resolver.** Loom has no MJ runtime, so it cannot execute an `EntitySubtypeResolver`; it can only read `__mj.Entity`. An entity whose subtype rule lives *only* in a registered resolver is one Loom cannot validate — that must be a **named, explicit** Loom warning ("subtype rule for X is runtime-only; cannot validate"), never a silent pass.
+
+Two consumers in Loom that this plan previously did not mention, and both fail quietly:
+
+- **`readEntityMetadata()` (`packages/engine/src/emitters/metadata.ts:196`) is the accumulation read path.** It requires `{ primaryKey, fields }` and flattens by spread — a record carrying `extension`/`collections`/`embeds` still has both keys, so it will not throw; it will **silently drop the composition**, and the next accumulation cycle diverges on rows it cannot see. Fail loud first, then support the keys.
+- **`checkpoint.json.activeEntityIds` is keyed by entity name** (`packages/contracts/src/state.ts:6`). Any child that stops being emitted as its own entity directory must still register its IDs there, or continuity loses them and the next cycle re-mints. Part-file chunking (5,000 records per entity) has the same problem: nesting moves chunking to per-root and every boundary shifts.
+
+If cheese keeps order lines as a flat sync root (see §8.1), none of these three arise.
+
+Also state what happens when `domain.json` and MJ metadata **disagree** (domain says `isA`, metadata has no `ParentID`). Generating confidently-wrong composition against a stale metadata snapshot is this contract's most expensive failure, because the output is well-formed and MJ's fail-loud only fires at push, long after 20 MB has been regenerated. Loom must fail at load, not emit.
 
 Loom still does not call `BaseEntity.Save` during generation. Intelligence is: **the emitted graph is the runtime graph**, so this push path can `EnsureEntity` / `Lines.Create` / `_EnsureObject` and Save once.
 
@@ -270,11 +428,15 @@ Validation in Loom (not MJ): IsA child PK = parent PK; child exists iff `when`; 
 
 ---
 
-## 8. One phase, three PRs
+## 8. One phase, five PRs
 
 No MJ-only slice, no “Loom later,” no cheese SQL leftover. Implement the full contract in one go:
 
-**MJ PR** — `RecordData` keys, push graph apply (embeds, collections, unconditional + conditional `extension`), pull emits the same shape, compat inference for old `relatedEntities`, unit tests in §9.
+**MJ core PR** (new, and it is the dependency for everything else) — `EntitySubtypeResolver` + `ClassFactory` seam, `BaseEntity.ResolveSubtypeEntityName()` / `EnsureISAChild()`, `Entity.SubtypeSelector` column + migration + CodeGen + `EntityInfo` accessor, cached path walker. **§10's old claim that no IsA runtime API changes was wrong** — this completes the prospective half of an axis that only ever shipped its retrospective half.
+
+**MJ sync PR** — `RecordData` keys, push graph apply (embeds, collections, `extension` via `EnsureISAChild`), pull emits the same shape, `validate` rejects unknown top-level keys, `relatedEntities` diagnostics (§4.5), unit tests in §9. Contains **zero** discriminator logic.
+
+**Orders PR** (new) — register one `OrderLineSubtypeResolver` / `ProductSubtypeResolver` (or just declare `SubtypeSelector` and register nothing), then delete the six re-derivations: `CheckoutSessionService.ts:527/927/1343` and `order-lines-editor.component.ts`. `product-form.component.ts:91`'s `HasEventExtension` — hardcoded entity name plus `includes('event')`/`'conference'`/`'summit'` string matching — goes away entirely; it is drift that already happened. While in there, `CheckoutSessionService.ts:532` uses `md.Entities.find(e => e.Name === …)` where the case- and whitespace-insensitive `EntityByName` is required.
 
 **Loom PR** — `composition` on the domain contract, generate/emit/validate per §7, `createDomainConfigFromMJEntities` reads MJ metadata. Emits only the new JSON (no sibling IsA directories, no SQL).
 
@@ -282,7 +444,15 @@ No MJ-only slice, no “Loom later,” no cheese SQL leftover. Implement the ful
 
 Product **prices** stay a normal entity (`ProductPrice` is not IsA). They can remain `relatedEntities` or become a collection if Orders declares one.
 
-Stack the PRs so MJ can merge first if Loom/cheese need the pusher, but they are reviewed as one change. Cheese does not ship until MJ + Loom are on the same bits.
+Stack them: **MJ core → MJ sync → Loom → cheese**, with Orders landing any time after MJ core. Reviewed as one change; cheese does not ship until the rest are on the same bits.
+
+### 8.1 Open decisions — a builder must not guess these
+
+Two calls that are the plan owner's, not the implementer's. Both were raised in review and are deliberately unresolved here rather than silently defaulted.
+
+**(a) Collection membership semantics.** Nothing above says whether `collections.Lines[]` is **authoritative** (DB rows absent from the file get removed) or **additive** (a partial overlay). Both readings fail silently and in opposite directions: `RelatedRecordCollection` defaults to `OnRemove: 'delete'`, so authoritative means a file listing 2 of 5 lines **deletes 3 rows**; additive without a `Load()` means every re-push **appends duplicates**, and `mj sync push` is idempotent today. Whichever is chosen, it must be **explicit and per-collection** in the JSON or `.mj-sync.json`, e.g. `"Lines": { "mode": "authoritative", "items": [ … ] }`. Three riders: `deleteRecord` inside a collection item must work or be rejected; collection-implied deletes must **not** bypass the Phase-0 deletion audit + confirmation (`PushService.ts:2117`); and `Load: 'never'` collections (a documented write-only staging mode) must **fail loud**, never fall through to append.
+
+**(b) Does cheese nest, or only add `extension`?** `extension` on a **flat** `order-lines/` record fixes the reported bug on its own — Event Order Line is an IsA child of Order Line, and nothing about the empty-form defect requires `collections`. Nesting instead turns 15,420 orders (9.5 MB) + 17,075 lines (11 MB) into 15,420 single-root graphs, one provider/TX each, where `order-lines` is today one flat directory pushed in parallel by dependency level (`PushService.ts:835`); folding line bytes into the root checksum then re-pushes a whole order for a one-line edit. Recommendation: **ship the format for all three keys, prove `extension` on cheese's real 17k-row path, and prove `collections`/`embeds` on something small** (an Action + Params, or a few hundred hand-authored orders). Still one phase, still cheese as the gate — it just does not stake the 20 MB regeneration path on the axis with the least-settled semantics.
 
 ---
 
@@ -295,15 +465,39 @@ Stack the PRs so MJ can merge first if Loom/cheese need the pusher, but they are
 - Action + `relatedEntities` Params still independent-saves (regression).
 - `extension.fields.Quantity` (parent-owned) rejected.
 - Product type with null `OrderLineExtensionEntity` + `extension` in JSON → error.
-- `@owner:ShipToPersonID` resolves from header in memory, not batch context after Save.
+- `@owner:ShipToPersonID` resolves from header in memory, not batch context after Save; `@owner` with no owner (root level, or inside `relatedEntities`) is an error, not `undefined` written as null.
 
-**Cheese PR (the test, not a follow-on):** load a workshop order → Event details shows Person = ShipTo. Confirm still books. No raw `EventOrderLine` INSERT in the seed path. That green run is the merge gate for all three PRs.
+**Core (`@memberjunction/core`), §4.4:**
+
+- `EnsureISAChild` on a **new** owner with no existing child row **keeps the link** — the direct regression against `createAndLinkChildEntity`'s unlink-on-`InnerLoad`-miss (`baseEntity.ts:1456-1461`).
+- `EnsureISAChild` is idempotent: twice → one child instance, same object.
+- Resolution order (§4.2): map key > registered resolver > `SubtypeSelector` > single-child > null. A registered resolver overrides a declared selector.
+- Unregistered key resolves to an explicit miss — asserts `TryCreateInstance` is used, **not** `CreateInstance` (which would return `new EntitySubtypeResolver()` per `ClassFactory.ts:50-54`).
+- A resolver returning an entity that is not a declared IsA child of the owner → hard error.
+- A **synchronous** `Resolve` is not wrapped into an extra microtask per record; the `Path` walker issues **zero** queries when the target entity is in a loaded `BaseEngine` cache.
+- Overlapping parent (`AllowMultipleSubtypes = true`): the map form attaches N children; the shorthand form errors with a message naming the map form.
+
+**Failure and idempotency — the class of bug this plan exists to fix:**
+
+- **Re-push idempotency.** Push the same file twice → zero changes, no duplicate collection rows, no churned child IDs, stable `sync.checksum`. Highest-value test in the set.
+- Unknown top-level key (`"colections"`, `"extensions"`) → `validate` error with a did-you-mean, not a green no-op push.
+- Selector resolves a subtype, JSON omits `extension` → **warning**; JSON has `extension`, selector resolves null → **error**.
+- Deletion: item removed from `collections.Lines[]`; `deleteRecord` inside a collection item; collection-implied deletes still hit the Phase-0 audit + confirmation.
+- Discriminator flip on an existing record (Product Event → non-Event with an extension row present) → **reported, never auto-repaired** (§4.3).
+- Mid-graph failure (line 3 of 5 fails validation) → whole root rolls back **and** the file's `sync` block is left untouched, so a retry is clean. A half-saved graph with an updated checksum is unrecoverable by retry.
+- Dry-run builds the graph and resolves `@owner` / the subtype without saving.
+
+**Cheese PR (the test, not a follow-on):** load a workshop order → Event details shows Person = ShipTo. Confirm still books. No raw `EventOrderLine` INSERT in the seed path.
+
+**Make that gate mechanical.** A human looking at a screen cannot tell you the second push doubled the lines. The gate is a script that pushes, loads through the same object path the form uses (`LoadWithLines` → the line's IsA child / `Extension.Entity`), asserts the child hydrated and `PersonID === header.ShipToPersonID` — then **runs the push a second time and asserts a no-op**. That green run is the merge gate for all PRs in §8.
 
 ---
 
 ## 10. Out of scope
 
-- Changing IsA or companion runtime APIs (already shipped).
+- ~~Changing IsA or companion runtime APIs (already shipped).~~ **Wrong, and corrected in §4.4.** The retrospective half shipped; the prospective half never existed. Adding it is the point of the MJ core PR.
+- Auto-repairing a flipped discriminator (§4.3 detects and reports; it never re-points or deletes an extension row).
+- Auto-migrating existing `relatedEntities` files to the new keys (§4.5 diagnoses only).
 - Teaching Loom `OrderLineExtensionCompanion` class names.
 - Flattening ProductPrice into IsA.
 - SQL seed of composition children.
@@ -312,4 +506,14 @@ Stack the PRs so MJ can merge first if Loom/cheese need the pusher, but they are
 
 ## 11. Decision log
 
-- **2026-09-08:** One phase, three PRs (Loom / MJ / cheese). Cheese is the test. No staged MJ-only rollout.
+- **2026-09-08 (rev 1):** One phase, three PRs (Loom / MJ / cheese). Cheese is the test. No staged MJ-only rollout.
+- **2026-09-08 (rev 2, post-review):** Conditional IsA reclassified. It is **not** a sync concern and not a fourth axis — it is the **missing prospective half of MJ's IsA axis** (§2.1). `Entity.ParentID` is already set for both Orders cases, and the retrospective probe already works generically on existing records; only the new-record path is unserved. Consequences:
+  - Resolution moves **out of `metadata-sync` and into `@memberjunction/core`** (§4.4). Sync calls `EnsureISAChild` and contains no ladder. No app column name may appear in core — it is clean of them today.
+  - **Two layers, both required**: `Entity.SubtypeSelector` metadata (readable offline by Loom and CodeGen) plus a `ClassFactory`-registered `EntitySubtypeResolver` keyed by entity name for override. Runtime-only rules are invisible to the producer, so metadata cannot be skipped.
+  - Registration uses **`RegisterClassEx` + `TryCreateInstance`**, not a bespoke registry. Dispatch on `key`; `metadata` is for discovery only.
+  - Sync resolution is **synchronous-capable and cache-first** — 17k records is the target path, not the edge case.
+  - `extension` gains an **entity-name map form** so overlapping subtypes are expressible; the `"entity"` assertion key is dropped as redundant.
+  - §4.5 inference **downgraded to a diagnostic** — no silent reinterpretation of files that push correctly today.
+  - A **fourth PR** (MJ core) is added ahead of MJ sync, and one for Orders to delete its six re-derivations.
+  - §10's "no IsA runtime API changes" was **wrong** and is corrected.
+  - Two decisions deliberately left open for the owner in **§8.1**: collection membership semantics, and whether cheese nests or only adds `extension`.
