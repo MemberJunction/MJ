@@ -416,4 +416,63 @@ describe('PayloadManager', () => {
             expect(result.result.level1.level2.level3.other).toBe('preserved');
         });
     });
+
+    // ════════════════════════════════════════════════════════════════════
+    // mergeUpstreamPayload — shells left by deletions
+    // ════════════════════════════════════════════════════════════════════
+
+    describe('mergeUpstreamPayload — array elements vacated by deletion', () => {
+        /**
+         * A sub-agent that legitimately drops one element returns a SHORTER array. Every scalar
+         * under the now-vacant trailing index is deleted, and `_.unset` leaves the containers
+         * that held them. The element must not survive as a nameless shell: downstream consumers
+         * read array elements as real records.
+         */
+        it('should drop an element whose scalars were all deleted, leaving only empty containers', () => {
+            const parent = {
+                name: 'Dashboard',
+                dependencies: [
+                    { name: 'Cards', namespace: 'ns' },
+                    { name: 'Chart', namespace: 'ns' },
+                    {
+                        name: 'Grid',
+                        namespace: 'ns2',
+                        dataRequirements: { entities: ['Events'] },
+                        typeDefinitions: { ColumnDef: { properties: { field: 'string' } } },
+                        properties: [{ name: 'columns', constraints: [{ config: { min: 1 } }] }],
+                    },
+                ],
+            };
+            // The sub-agent removed 'Cards' and returned the two survivors.
+            const subAgent = {
+                name: 'Dashboard',
+                dependencies: [
+                    { name: 'Chart', namespace: 'ns' },
+                    { name: 'Grid', namespace: 'ns2' },
+                ],
+            };
+
+            const merged = pm.mergeUpstreamPayload<any>('TPM', parent, subAgent, ['dependencies.*']);
+
+            expect(merged.result.dependencies.map((d: any) => d?.name)).toEqual(['Chart', 'Grid']);
+        });
+
+        it('should still drop a literally empty object element', () => {
+            const parent = { items: [{ keep: 'yes' }, { gone: 'value' }] };
+            const subAgent = { items: [{ keep: 'yes' }] };
+
+            const merged = pm.mergeUpstreamPayload<any>('sub', parent, subAgent, ['items.*']);
+
+            expect(merged.result.items).toEqual([{ keep: 'yes' }]);
+        });
+
+        it('should preserve elements holding falsy primitives, which are content', () => {
+            const parent = { flags: [{ enabled: true }, { enabled: false, label: '' }] };
+            const subAgent = { flags: [{ enabled: true }, { enabled: false, label: '' }] };
+
+            const merged = pm.mergeUpstreamPayload<any>('sub', parent, subAgent, ['flags.*']);
+
+            expect(merged.result.flags).toEqual([{ enabled: true }, { enabled: false, label: '' }]);
+        });
+    });
 });

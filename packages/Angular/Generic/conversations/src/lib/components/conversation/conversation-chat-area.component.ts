@@ -39,6 +39,7 @@ import { GenerateAndApplyConversationName } from '../../services/conversation-na
 import type { ExportBranding } from '../../services/export.service';
 import { RealtimeNavigateRequest, RealtimeStartLiveRequest } from '../realtime/realtime-session-overlay.component';
 import { RealtimeSessionTimelineMeta } from '../../utils/realtime-session-timeline';
+import { decideArtifactPanelAction, snapshotArtifactVersions, ArtifactPanelAction, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
@@ -2085,8 +2086,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       LogStatusEx({message: `🎉 Handling completion for message ${message.ID}`, verboseOnly: true});
 
-      // Snapshot artifact IDs before reload to detect newly created artifacts
-      const artifactIdsBefore = this.collectAllArtifactIds();
+      // Snapshot artifact versions before the reloads below so we can tell a NEW artifact from a
+      // new VERSION of one already on screen (#529).
+      const versionsBefore = snapshotArtifactVersions(this.allArtifactRefs());
 
       // Reload message from database to get final content and status
       await message.Load(message.ID);
@@ -2129,12 +2131,18 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         .filter(m => m.Status === 'In-Progress')
         .map(m => m.ID)];
 
-      // Auto-open artifact panel if NEW artifacts were discovered (not just the triggering message).
+      // Open/refresh the artifact panel from the version diff (not just the triggering message).
       // When Sage delegates to a sub-agent (e.g., Skip), the artifact is on the sub-agent's
       // message, not Sage's. Checking only the triggering message would miss delegated artifacts.
-      if (!this.showArtifactPanel) {
-        await this.autoOpenNewArtifact(artifactIdsBefore, expectedConversationId);
-      }
+      // #529: a delegated build discovered here must surface even with the panel already open on
+      // another artifact, so this is NOT gated on `!this.showArtifactPanel`.
+      const action = decideArtifactPanelAction({
+        panelOpen: this.showArtifactPanel,
+        selectedArtifactId: this.selectedArtifactId,
+        before: versionsBefore,
+        after: this.allArtifactRefs(),
+      });
+      await this.applyArtifactPanelAction(action, expectedConversationId);
 
       // Remove task from ActiveTasksService (clears spinner in conversation list)
       const task = this.activeTasks.getByConversationDetailId(message.ID);
@@ -2184,8 +2192,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
 
-    // Snapshot artifact IDs before reload to detect newly created artifacts
-    const artifactIdsBefore = this.collectAllArtifactIds();
+    // Snapshot artifact versions before reload so we can tell a NEW artifact from a new VERSION
+    // of one already on screen (#529).
+    const versionsBefore = snapshotArtifactVersions(this.allArtifactRefs());
 
     // Reload artifact mapping for this message to pick up newly created artifacts
     await this.reloadArtifactsForMessage(event.message.ID, event.message.ConversationID);
@@ -2193,10 +2202,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // Auto-open artifact panel if NEW artifacts were discovered
-    if (!this.showArtifactPanel) {
-      await this.autoOpenNewArtifact(artifactIdsBefore, event.message.ConversationID);
-    }
+    // #529: open a newly created artifact even with the panel already open on another one, refresh
+    // the shown artifact when it gained a version, and switch to a retargeted one.
+    const action = decideArtifactPanelAction({
+      panelOpen: this.showArtifactPanel,
+      selectedArtifactId: this.selectedArtifactId,
+      before: versionsBefore,
+      after: this.allArtifactRefs(),
+    });
+    await this.applyArtifactPanelAction(action, event.message.ConversationID);
 
     // Force change detection to update the UI
     this.cdr.detectChanges();
@@ -2334,44 +2348,44 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     return uniqueArtifactIds.size;
   }
 
-  /**
-   * Collect all currently known artifact IDs across all messages.
-   * Used as a "before" snapshot to detect newly created artifacts after a reload.
-   */
-  private collectAllArtifactIds(): Set<string> {
-    const ids = new Set<string>();
+  /** Every (artifactId, versionNumber) pair currently known across all messages. */
+  private allArtifactRefs(): ArtifactVersionRef[] {
+    const refs: ArtifactVersionRef[] = [];
     for (const artifactList of this.artifactsByDetailId.values()) {
       for (const info of artifactList) {
-        ids.add(info.artifactId);
+        refs.push({ artifactId: info.artifactId, versionNumber: info.versionNumber });
       }
     }
-    return ids;
+    return refs;
   }
 
   /**
-   * Auto-open the artifact panel for the most recent NEW artifact.
-   * Compares current artifacts against a pre-reload snapshot to find
-   * only artifacts that were just discovered (avoiding re-opening for old artifacts).
-   * Searches artifactsByDetailId directly rather than iterating this.messages,
-   * because reloadMessagesForActiveConversation can temporarily remove messages
-   * from this.messages during concurrent operations.
+   * Carry out the decision from {@link decideArtifactPanelAction}: open the panel on an artifact
+   * version, refresh the already-open viewer, or do nothing.
    */
-  private async autoOpenNewArtifact(artifactIdsBefore: Set<string>, expectedConversationId: string | null | undefined = this.conversationId): Promise<void> {
-    if (!this.isActiveConversation(expectedConversationId)) {
-      return;
-    }
-    for (const [detailId, artifactList] of this.artifactsByDetailId) {
-      const newArtifact = artifactList.find(a => !artifactIdsBefore.has(a.artifactId));
-      if (newArtifact) {
-        this.selectedArtifactId = newArtifact.artifactId;
+  private async applyArtifactPanelAction(action: ArtifactPanelAction, conversationId: string | null | undefined): Promise<void> {
+    switch (action.kind) {
+      case 'open':
+        this.selectedArtifactId = action.artifactId;
+        this.selectedVersionNumber = action.versionNumber;
         this.showArtifactPanel = true;
-        await this.loadArtifactPermissions(newArtifact.artifactId, expectedConversationId, newArtifact.artifactId);
-        if (!this.isActiveConversation(expectedConversationId) || !UUIDsEqual(this.selectedArtifactId, newArtifact.artifactId)) {
+        await this.loadArtifactPermissions(action.artifactId, conversationId, action.artifactId);
+        // The permission load is async: the user may have switched conversations or picked a
+        // different artifact while it was in flight, so only narrate what is still on screen.
+        if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, action.artifactId)) {
           return;
         }
-        LogStatusEx({message: `🎨 Auto-opening new artifact ${newArtifact.artifactId} from detail ${detailId}`, verboseOnly: true});
+        LogStatusEx({
+          message: `🎨 Opening artifact ${action.artifactId} v${action.versionNumber} after agent run (decided from the conversation-wide version diff, so no single detail id applies)`,
+          verboseOnly: true
+        });
         return;
-      }
+      case 'refresh':
+        this.selectedVersionNumber = action.versionNumber;
+        this.artifactViewerRefresh$.next({ artifactId: action.artifactId, versionNumber: action.versionNumber });
+        return;
+      case 'none':
+        return;
     }
   }
 
@@ -2892,8 +2906,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // Snapshot artifact IDs before reload to detect newly created artifacts
-    const artifactIdsBefore = this.collectAllArtifactIds();
+    // Snapshot artifact versions across the conversation before reload so we can tell a NEW
+    // artifact from a new VERSION of an existing one (the event itself carries placeholder ids).
+    const versionsBefore = snapshotArtifactVersions(this.allArtifactRefs());
 
     // Reload artifacts to get full entities (processes ALL messages in the conversation)
     await this.reloadArtifactsForMessage(data.conversationDetailId, data.conversationId);
@@ -2901,27 +2916,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // Auto-open artifact panel if no artifact currently shown
-    if (!this.showArtifactPanel) {
-      // Use robust auto-open that checks ALL messages for new artifacts.
-      // When a sub-agent (e.g., Skip) creates an artifact on a different ConversationDetail
-      // than the one specified in the event, checking only data.conversationDetailId would miss it.
-      await this.autoOpenNewArtifact(artifactIdsBefore, data.conversationId);
-    } else if (this.selectedArtifactId) {
-      // Panel is already open - check if new artifact is a new version of currently displayed artifact
-      const artifactList = this.artifactsByDetailId.get(data.conversationDetailId);
-      if (artifactList && artifactList.length > 0) {
-        const currentArtifact = artifactList.find(a => a.artifactId === this.selectedArtifactId);
-        if (currentArtifact) {
-          // New version of the same artifact - refresh to show latest version
-          const latestVersion = artifactList[artifactList.length - 1];
-          this.artifactViewerRefresh$.next({
-            artifactId: latestVersion.artifactId,
-            versionNumber: latestVersion.versionNumber
-          });
-        }
-      }
-    }
+    // #529: a new artifact opens even over an open panel (build); a bumped version of the shown
+    // artifact refreshes; a bumped version of another artifact switches to it (retargeting).
+    const action = decideArtifactPanelAction({
+      panelOpen: this.showArtifactPanel,
+      selectedArtifactId: this.selectedArtifactId,
+      before: versionsBefore,
+      after: this.allArtifactRefs(),
+    });
+    await this.applyArtifactPanelAction(action, data.conversationId);
 
     // Force change detection to update the UI immediately
     this.cdr.detectChanges();

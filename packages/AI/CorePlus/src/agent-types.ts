@@ -481,6 +481,33 @@ export type AgentSkillInvocationProvenance = {
 }
 
 /**
+ * How the framework should persist a step's payload as an artifact. Set by the agent — the only
+ * party that knows whether the payload is a finished deliverable, a draft awaiting feedback, or a
+ * plan proposal. When absent, `AgentRunner.ProcessAgentArtifacts` applies its legacy priority chain
+ * (run's sourceArtifactId → previous artifact on the message → new artifact), so existing agents are
+ * unaffected.
+ *
+ * Precedence: caller `createArtifacts=false` → agent `ArtifactCreationMode='Never'` → this directive
+ * → legacy chain. The two vetoes still win.
+ * @since 5.52.0
+ */
+export type ArtifactDirective = {
+    /**
+     * - 'create-new': create a new artifact (version 1) even when the run carries a sourceArtifactId.
+     * - 'version-source': add a version to `targetArtifactId`, else to the run's sourceArtifactId,
+     *   else fall back to the legacy chain.
+     * - 'suppress': create or version nothing for this step.
+     */
+    behavior: 'create-new' | 'version-source' | 'suppress';
+    /** Artifact to version when behavior is 'version-source' and it differs from the run's sourceArtifactId. */
+    targetArtifactId?: string;
+    /** Name for a newly created artifact (behavior 'create-new'). */
+    name?: string;
+    /** Description for a newly created artifact (behavior 'create-new'). */
+    description?: string;
+};
+
+/**
  * Represents the next step determination from an agent type.
  * 
  * Agent types analyze the output of prompt execution and determine what should
@@ -568,6 +595,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 2.116.0
      */
     automaticCommands?: AutomaticCommand[];
+    /**
+     * Optional per-step artifact handling for `newPayload`. See {@link ArtifactDirective}.
+     * Absent ⇒ AgentRunner's legacy artifact priority chain.
+     * @since 5.52.0
+     */
+    artifactDirective?: ArtifactDirective;
     /** Index of the message to expand when step is 'expand-message' */
     messageIndex?: number;
     /** Reason for expanding the message when step is 'expand-message' */
@@ -700,6 +733,12 @@ export type ExecuteAgentResult<P = any> = {
      * @since 2.116.0
      */
     automaticCommands?: AutomaticCommand[];
+    /**
+     * Artifact handling requested by the agent's final step. See {@link ArtifactDirective}.
+     * Populated from the agent's final step.
+     * @since 5.52.0
+     */
+    artifactDirective?: ArtifactDirective;
     /**
      * Optional memory context that was injected into the agent execution.
      * Includes the notes and examples that were retrieved and used for context.

@@ -710,9 +710,42 @@ export class PayloadManager {
     }
 
     /**
+     * True when a value carries no primitive content anywhere inside it.
+     *
+     * `_.unset` removes leaf properties but leaves the containers that held them, so deleting
+     * every scalar from an array element does not reduce it to `{}` — it reduces it to a shell
+     * of empty objects and arrays (`{ config: {}, items: [null] }`). Such a shell is data-free
+     * but not key-free, which is why {@link cleanupEmptyArrayElements} needs this rather than an
+     * `Object.keys().length` test.
+     *
+     * Only arrays and plain objects are descended into: a `Date`, a class instance, or any other
+     * boxed value has no own enumerable keys and would otherwise read as vacant.
+     *
+     * @private
+     */
+    private isVacantValue(value: unknown): boolean {
+        if (value === null || value === undefined) {
+            return true;
+        }
+        if (Array.isArray(value)) {
+            return value.every(element => this.isVacantValue(element));
+        }
+        if (_.isPlainObject(value)) {
+            return Object.values(value as Record<string, unknown>).every(v => this.isVacantValue(v));
+        }
+        // A primitive — including `false`, `0` and `''` — is content.
+        return false;
+    }
+
+    /**
      * Recursively cleans up empty objects from arrays after merge operations.
      * This is necessary because property-level deletions can leave empty object shells in arrays.
-     * 
+     *
+     * A sub-agent that returns a SHORTER array than the parent holds triggers exactly this: every
+     * scalar under the vacated trailing index is deleted, leaving a nameless shell behind that
+     * downstream consumers then treat as a real element. Emptiness is therefore judged by
+     * {@link isVacantValue} — no primitive content anywhere — not by an absent-keys check.
+     *
      * @private
      */
     private cleanupEmptyArrayElements(obj: any): void {
@@ -727,13 +760,13 @@ export class PayloadManager {
             for (let readIndex = 0; readIndex < obj.length; readIndex++) {
                 const element = obj[readIndex];
                 
-                // Keep the element if it's not an empty object
-                // An empty object is one that is an object with no own properties
+                // Keep the element unless it is an object shell holding no data at all —
+                // either literally `{}` or a nest of empty containers left by deletions.
                 const shouldKeep = !(
-                    element !== null && 
-                    typeof element === 'object' && 
-                    !Array.isArray(element) && 
-                    Object.keys(element).length === 0
+                    element !== null &&
+                    typeof element === 'object' &&
+                    !Array.isArray(element) &&
+                    this.isVacantValue(element)
                 );
                 
                 if (shouldKeep) {
