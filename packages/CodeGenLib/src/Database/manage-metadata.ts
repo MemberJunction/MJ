@@ -3418,7 +3418,7 @@ export class ManageMetadataBase {
       // Load VE EntityField rows from DB (we need the ID and auto-update flags)
       const schema = mj_core_schema();
       const fieldsSQL = `
-         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, AutoUpdateExtendedType, GeneratedFormSection, DisplayName, ExtendedType, CodeType
+         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, AutoUpdateExtendedType, GeneratedFormSection, DisplayName, ExtendedType, CodeType, ValueListType
          FROM ${this.qs(schema, 'EntityField')}
          WHERE EntityID = '${entity.ID}'
       `;
@@ -3426,7 +3426,7 @@ export class ManageMetadataBase {
       const dbFields = fieldsResult.recordset as Array<{
          ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; 
          AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; 
-         ExtendedType: string; CodeType: string
+         ExtendedType: string; CodeType: string; ValueListType?: string | null;
       }>;
 
       if (dbFields.length === 0) return false;
@@ -7078,6 +7078,7 @@ export class ManageMetadataBase {
                ef.IsVirtual,
                ef.AllowUpdateAPI,
                ef.IsNameField,
+               ef.ValueListType,
                ef.DefaultInView,
                ef.IncludeInUserSearchAPI,
                ef.UserSearchPredicateAPI,
@@ -7279,9 +7280,11 @@ export class ManageMetadataBase {
          }
 
          // Form Layout Generation
-         // Fires iff a field needs a category (blank, AutoUpdateCategory=1) OR a field was re-opened for DisplayName/ExtendedType review (§3.4).
-         const needsCategoryGeneration = fields.some((f: Record<string, unknown>) => Boolean(f.AutoUpdateCategory) && (!f.Category || String(f.Category).trim() === ''))
-            || hasNewFields || hasDescriptionReopened || hasTypeReopened;
+         // Fires only on change events (new entity, new fields, reopened description/type) AND when there is work to do
+         // (blank categories with AutoUpdateCategory=1, or reopened fields to review). Gated on events so omitted blank fields don't loop (§3.4).
+         const hasCategoryNeeded = fields.some((f: Record<string, unknown>) => Boolean(f.AutoUpdateCategory) && (!f.Category || String(f.Category).trim() === ''));
+         const needsCategoryGeneration = (isNewEntity || hasNewFields || hasDescriptionReopened || hasTypeReopened)
+            && (hasCategoryNeeded || hasDescriptionReopened || hasTypeReopened);
          if (needsCategoryGeneration) {
             CodeGenReporter.Instance.counter('ai.formLayoutCalls');
             // Build IS-A parent chain context if this entity has a parent
@@ -8033,7 +8036,7 @@ export class ManageMetadataBase {
    protected async applyFormLayout(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string; CodeType: string }>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string; CodeType: string; ValueListType?: string | null }>,
       result: FormLayoutResult,
       isNewEntity: boolean = false
    ): Promise<void> {
@@ -8165,7 +8168,7 @@ export class ManageMetadataBase {
    protected async applyFieldCategories(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string | null; CodeType: string | null }>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string | null; CodeType: string | null; ValueListType?: string | null }>,
       fieldCategories: Array<{
          fieldName: string;
          category: string;

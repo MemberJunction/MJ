@@ -25,6 +25,7 @@ export interface FieldMetadataState {
    AutoUpdateCategory: boolean;
    AutoUpdateDisplayName: boolean;
    AutoUpdateExtendedType: boolean;
+   ValueListType?: string | null;
 }
 
 export interface FieldMetadataProposal {
@@ -138,7 +139,8 @@ export function computeFieldMetadataUpdate(
             }
          } else {
             const valid = validateExtendedType(proposal.extendedType.trim());
-            if (!valid) {
+            const isValueList = Boolean(field.ValueListType && field.ValueListType !== 'None');
+            if (!valid || (valid === 'Code' && isValueList)) {
                update.skipped.push({ column: 'ExtendedType', reason: 'invalid' });
             } else {
                if (valid === field.ExtendedType) {

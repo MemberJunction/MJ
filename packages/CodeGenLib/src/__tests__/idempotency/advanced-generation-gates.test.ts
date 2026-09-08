@@ -197,11 +197,11 @@ describe('T4 — Advanced Generation Gates (C3, FM4, §3.4)', () => {
       expect(CodeGenReporter.Instance.counters['ai.formLayoutCalls']).toBe(1);
    });
 
-   it('existing entity with a blank old field and no new fields → Form Layout only', async () => {
+   it('existing entity with a blank old field and no new/reopened fields → neither path invoked (breaks re-trigger loop)', async () => {
       const entity = new EntityInfo({ ID: 'entity-1', Name: 'Customer' });
       const fields = [
          { ...baseFields[0] },
-         { ...baseFields[1], Category: null }, // Blank Category
+         { ...baseFields[1], Category: null }, // Blank Category, but no change event
       ];
       const fieldsByEntity = new Map<string, any[]>([
          ['entity-1', fields],
@@ -210,10 +210,39 @@ describe('T4 — Advanced Generation Gates (C3, FM4, §3.4)', () => {
       await mm.callProcessEntityAdvancedGeneration(pool, entity, fieldsByEntity, ag, dummyUser);
 
       expect(ag.identifyFieldsCalls.length).toBe(0);
+      expect(ag.generateFormLayoutCalls.length).toBe(0);
+      expect(CodeGenReporter.Instance.counters['ai.smartFieldCalls'] ?? 0).toBe(0);
+      expect(CodeGenReporter.Instance.counters['ai.formLayoutCalls'] ?? 0).toBe(0);
+   });
+
+   it('existing entity with a blank old field AND a new field → Form Layout invoked', async () => {
+      const entity = new EntityInfo({ ID: 'entity-1', Name: 'Customer' });
+      ManageMetadataBase.registerNewField('entity-1', 'Notes');
+
+      const fields = [
+         { ...baseFields[0] },
+         { ...baseFields[1], Category: null },
+         {
+            ID: 'f-3',
+            EntityID: 'entity-1',
+            Name: 'Notes',
+            Category: null,
+            AutoUpdateCategory: true,
+            AutoUpdateIsNameField: false,
+            AutoUpdateDefaultInView: true,
+            AutoUpdateIncludeInUserSearchAPI: true,
+            AutoUpdateUserSearchPredicate: true,
+            AutoUpdateFullTextSearch: true,
+         },
+      ];
+      const fieldsByEntity = new Map<string, any[]>([
+         ['entity-1', fields],
+      ]);
+
+      await mm.callProcessEntityAdvancedGeneration(pool, entity, fieldsByEntity, ag, dummyUser);
+
       expect(ag.generateFormLayoutCalls.length).toBe(1);
       expect(ag.generateFormLayoutCalls[0].isNewEntity).toBe(false);
-
-      expect(CodeGenReporter.Instance.counters['ai.smartFieldCalls'] ?? 0).toBe(0);
       expect(CodeGenReporter.Instance.counters['ai.formLayoutCalls']).toBe(1);
    });
 
