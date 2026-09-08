@@ -2,13 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { renderComponentFixture } from '@memberjunction/ng-test-utils';
 import { RealtimeWhiteboardHostComponent } from './whiteboard-host.component';
 import { WhiteboardState } from './whiteboard-state';
-import { WhiteboardToolRoster } from './whiteboard-tool-roster';
+import { WhiteboardTool, WhiteboardToolRoster } from './whiteboard-tool-roster';
 
 /**
  * DOM spec for <mj-realtime-whiteboard-host> — the FIRST host-level spec in the package,
  * and it exists for one reason: `ToolRoster` is a single fact the host reads in three
  * places, and two of those three (the `document:keydown` tool-key gate and the
- * `ngOnChanges` clamp) live on the host itself, over pure helpers that are unit-tested
+ * setter clamp) live on the host itself, over pure helpers that are unit-tested
  * but never wired end to end. This renders the real host — header, board and toolbar
  * together — and drives the roster through every door a user has: the toolbar button,
  * the single-letter shortcut, and the canvas right-click "add ... here" action.
@@ -101,7 +101,7 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
     expect(f.componentInstance.Tool).toBe('html');
   });
 
-  // ── 4. the ngOnChanges clamp ───────────────────────────────────────────────────────
+  // ── 4. the setter clamp ────────────────────────────────────────────────────────────
 
   it('clamps the active tool to the roster first entry when a roster arrives that excludes it', () => {
     const f = render();
@@ -142,6 +142,48 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
 
     expect(f.componentInstance.Tool).toBe('pan');
     expect(toolTitles(f)).toEqual(['Pan', 'Pen', 'Undo', 'Redo']);
+  });
+
+  it('ignores a disallowed WRITE rather than clamping: Escape stays put under a roster without select', () => {
+    // Escape assigns 'select'. Under ['pen','eraser'] that is disallowed, and the right answer
+    // is to stay on pen, NOT to bounce to the roster fallback.
+    const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+      inputs: { State: new WhiteboardState() },
+      setup: (instance) => { instance.ToolRoster = ['pen', 'eraser']; },
+    });
+    expect(f.componentInstance.Tool).toBe('pen'); // clamped on mount: select is not on the roster
+
+    (f.nativeElement as HTMLElement).focus();
+    pressKey(f, 'Escape');
+
+    expect(f.componentInstance.Tool).toBe('pen');
+  });
+
+  it('enforces the roster on a direct Tool write, in either assignment order', () => {
+    const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+      inputs: { State: new WhiteboardState() },
+      setup: (instance) => {
+        instance.ToolRoster = ['pan', 'pen'];
+        instance.Tool = 'html'; // disallowed: must be ignored, not applied
+      },
+    });
+    expect(f.componentInstance.Tool).toBe('pan');
+  });
+
+  it('does not re-clamp when the same roster value is set again', () => {
+    // A consumer re-binding an identical array must not fight the user for the active tool.
+    const roster: WhiteboardTool[] = ['pan', 'pen'];
+    const f = renderComponentFixture(RealtimeWhiteboardHostComponent, {
+      inputs: { State: new WhiteboardState() },
+      setup: (instance) => { instance.ToolRoster = roster; },
+    });
+    f.componentInstance.Tool = 'pen';
+    expect(f.componentInstance.Tool).toBe('pen');
+
+    f.componentRef.setInput('ToolRoster', roster);
+    f.detectChanges();
+
+    expect(f.componentInstance.Tool).toBe('pen');
   });
 
   // ── 5. the right-click door on the canvas ──────────────────────────────────────────

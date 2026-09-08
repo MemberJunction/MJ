@@ -111,7 +111,9 @@ The serialized shape is **version 2 (paged)**:
 
 The host renders the complete experience: header (title, saved chip, ownership legend, "What [Agent] sees" popover, Focus toggle, export menu), the canvas with floating toolbar, page strip + zoom cluster, the agent-action toast with Undo, and the status footer.
 
-**Narrowing the tools.** Pass `[ToolRoster]="['select','pan','pen','sticky','text','eraser']"` to offer a subset. The roster is one fact read in three places, so a tool you leave out is unreachable everywhere: the toolbar button, its keyboard shortcut, and the canvas right-click "add … here" action. `null` (the default) is all eleven.
+**Narrowing the tools.** Pass `[ToolRoster]="['select','pan','pen','sticky','text','eraser']"` to offer a subset; `null` (the default) is all eleven. The roster governs **which tools are available**, and it closes every door to a tool it leaves out: the toolbar button, the single-letter keyboard shortcut, and the canvas right-click "add … here" action. Gating only the toolbar would be the CSS hack with a nicer API — the keyboard and the context menu were exactly how a hidden tool stayed reachable. If the active tool leaves the roster the host moves to `select`, or to the roster's first entry when `select` is not on it, and a request to switch to a tool that is not on the roster is ignored rather than redirected. An empty roster narrows the palette to nothing but does **not** make the board read-only, which is a separate input.
+
+What the roster does **not** do: it is not a content policy. It does not restrict what already exists on the board or what an agent places, and it does not gate authoring actions on existing items — Restyle, Duplicate, and pasting an image all keep working regardless of the roster. Use `ReadOnly` for that axis.
 
 The zoom cluster supports **hold-to-zoom**: a plain click on + / − steps through the usual presets, while holding the button down zooms continuously in small smooth increments (~3.5% every 50 ms) until release — same 25%–200% clamp.
 

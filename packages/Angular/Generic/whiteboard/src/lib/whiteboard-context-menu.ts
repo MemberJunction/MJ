@@ -1,5 +1,5 @@
 import { WhiteboardItem, WhiteboardPageInfo } from './whiteboard-state';
-import type { WhiteboardTool } from './whiteboard-toolbar.component';
+import type { WhiteboardTool } from './whiteboard-tool-roster';
 import { WhiteboardToolRoster, IsToolAllowed } from './whiteboard-tool-roster';
 
 /**
