@@ -13822,6 +13822,7 @@ The context is now within limits. Please retry your request with the recovered c
             responseForm: finalStep.responseForm,
             actionableCommands: resolvedActionableCommands,
             automaticCommands: finalStep.automaticCommands,
+            artifactDirective: finalStep.artifactDirective,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined,

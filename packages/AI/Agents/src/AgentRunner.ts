@@ -12,9 +12,10 @@
 
 import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, IsValidUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact, ArtifactDirective } from '@memberjunction/ai-core-plus';
+import { planArtifactTarget } from './artifact-target-plan';
 import { BaseAgent } from './base-agent';
 import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, ArtifactMetadataEngine, ExtractBase64FromDataUrl, DecideInlineStorage } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
@@ -82,6 +83,9 @@ export function selectPrimaryArtifact(
  * ```
  */
 export class AgentRunner {
+    /** Fallback artifact type for agent payloads when the agent declares no DefaultArtifactTypeID. */
+    private static readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
+
     private readonly _provider: IMetadataProvider;
 
     constructor(provider?: IMetadataProvider) {
@@ -829,7 +833,10 @@ export class AgentRunner {
      * Handles artifact creation, versioning, and linking to conversation details.
      *
      * This method implements intelligent artifact versioning:
-     * 1. If sourceArtifactId is provided (explicit continuity), creates new version of that artifact
+     * 0. If the agent supplied an artifactDirective, it decides: 'suppress' → nothing;
+     *    'create-new' → new artifact (sourceArtifactId ignored); 'version-source' → version
+     *    targetArtifactId, else sourceArtifactId.
+     * 1. Otherwise, if sourceArtifactId is provided (explicit continuity), creates new version of that artifact
      * 2. Otherwise, checks for previous artifacts on this conversation detail
      * 3. If previous artifact exists, creates new version of it
      * 4. If no previous artifact, creates entirely new artifact
@@ -889,29 +896,60 @@ export class AgentRunner {
 
         try {
             const md = provider || this._provider;
-            const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
-            // Determine if creating new artifact or new version
+            // Target selection: the agent's directive first (it knows what the payload IS —
+            // a deliverable, a draft, a plan), then the legacy chain
+            // (sourceArtifactId → previous artifact on this message → new artifact).
+            const directive = agentResult.artifactDirective;
+            let plan = planArtifactTarget(directive, sourceArtifactId);
+            if (plan.kind === 'suppress') {
+                LogStatus(`Skipping artifact creation - agent "${agent?.Name}" suppressed artifacts for this step`);
+                return undefined;
+            }
+
+            // A target the AGENT named is model output, and it lands unescaped in the `ExtraFilter`
+            // fragments built by GetMaxVersionForArtifact / CheckForDuplicateVersion. Reject anything
+            // that is not a UUID-shaped string and fall back to the historical chain, exactly as if
+            // the agent had named no target. `sourceArtifactId` is caller-supplied and already
+            // reached these filters before directives existed; hardening it is tracked separately
+            // (see the PR description). This guard covers only the new, model-authored source of ids
+            // — and because directives arrive as parsed JSON, the value need not even be a string.
+            if (
+                plan.kind === 'version' &&
+                plan.artifactId === directive?.targetArtifactId &&
+                (typeof plan.artifactId !== 'string' || !IsValidUUID(plan.artifactId))
+            ) {
+                const rejected = String(plan.artifactId).replace(/\s+/g, ' ').slice(0, 64);
+                LogError(`Ignoring artifact directive from agent "${agent?.Name}": targetArtifactId is not a valid artifact ID ("${rejected}")`);
+                plan = planArtifactTarget(undefined, sourceArtifactId);
+            }
+
+            // UUID-shaped is not the same as real: the agent can name any well-formed id, including
+            // one from another environment or one this user cannot read. Load it first and fall back
+            // to the historical chain when it does not resolve. Runs ONLY for a directive-named
+            // target — when the id came from `sourceArtifactId`, or no directive was supplied at all,
+            // this block is skipped and the default path is byte-for-byte unchanged.
+            if (plan.kind === 'version' && plan.artifactId === directive?.targetArtifactId) {
+                const target = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+                if (!(await target.Load(plan.artifactId))) {
+                    LogError(`Ignoring artifact directive from agent "${agent?.Name}": target artifact ${plan.artifactId} not found or not readable`);
+                    plan = planArtifactTarget(undefined, sourceArtifactId);
+                }
+            }
+
             let artifactId: string;
             let newVersionNumber: number;
             let isNewArtifact = false;
 
-            // Priority 1: Use explicit source artifact if provided
-            if (sourceArtifactId) {
-                const maxVersion = await this.GetMaxVersionForArtifact(sourceArtifactId, contextUser, provider);
-                artifactId = sourceArtifactId;
+            if (plan.kind === 'version') {
+                const maxVersion = await this.GetMaxVersionForArtifact(plan.artifactId, contextUser, provider);
+                artifactId = plan.artifactId;
                 newVersionNumber = maxVersion + 1;
-                LogStatus(`Creating version ${newVersionNumber} of source artifact ${artifactId}`);
-            }
-            // Priority 2: Try to find previous artifact for this message (only when running in
-            // a conversation context — outside one there is no message to look behind)
-            else {
-                const previousArtifact = conversationDetailId
-                    ? await this.FindPreviousArtifactForMessage(
-                        conversationDetailId,
-                        contextUser,
-                        md
-                    )
+                LogStatus(`Creating version ${newVersionNumber} of artifact ${artifactId} (${plan.artifactId === directive?.targetArtifactId ? 'agent directive' : 'sourceArtifactId'})`);
+            } else {
+                // Legacy: look behind this message (only inside a conversation). 'create-new' skips the lookup.
+                const previousArtifact = (plan.kind === 'legacy' && conversationDetailId)
+                    ? await this.FindPreviousArtifactForMessage(conversationDetailId, contextUser, md)
                     : null;
 
                 if (previousArtifact) {
@@ -919,40 +957,11 @@ export class AgentRunner {
                     newVersionNumber = previousArtifact.versionNumber + 1;
                     LogStatus(`Creating version ${newVersionNumber} of existing artifact ${artifactId}`);
                 } else {
-                    // Create new artifact header
-                    const artifact = await md.GetEntityObject<MJArtifactEntity>(
-                        'MJ: Artifacts',
-                        contextUser
-                    );
-
-                    const agentName = agent?.Name || 'Agent';
-                    artifact.Name = `${agentName} Payload - ${new Date().toLocaleString()}`;
-                    artifact.Description = `Payload returned by ${agentName}`;
-
-                    // Use agent's DefaultArtifactTypeID if available
-                    const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
-                    artifact.TypeID = defaultArtifactTypeId || JSON_ARTIFACT_TYPE_ID;
-
-                    artifact.UserID = contextUser.ID;
-                    artifact.EnvironmentID = (contextUser as any).EnvironmentID ||
-                                            'F51358F3-9447-4176-B313-BF8025FD8D09';
-
-                    // Set visibility based on agent's ArtifactCreationMode
-                    if (creationMode === 'System Only') {
-                        artifact.Visibility = 'System Only';
-                        LogStatus(`Artifact marked as "System Only" per agent configuration`);
-                    } else {
-                        artifact.Visibility = 'Always';
-                    }
-
-                    if (!(await artifact.Save())) {
-                        throw new Error('Failed to save artifact');
-                    }
-
+                    const artifact = await this.createArtifactHeader(md, contextUser, agent, creationMode, directive);
                     artifactId = artifact.ID;
                     newVersionNumber = 1;
                     isNewArtifact = true;
-                    LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})`);
+                    LogStatus(`Created new artifact: ${artifact.Name} (${artifactId})${plan.kind === 'create-new' ? ' per agent directive' : ''}`);
                 }
             }
 
@@ -986,8 +995,8 @@ export class AgentRunner {
 
             LogStatus(`Created artifact version ${newVersionNumber} (${version.ID})`);
 
-            // If first version of new artifact, check for extracted Name attribute
-            if (isNewArtifact && newVersionNumber === 1) {
+            // First version of a new artifact: adopt the extracted Name attribute unless the agent named it
+            if (isNewArtifact && newVersionNumber === 1 && !directive?.name?.trim()) {
                 const nameAttr = (version as any).Attributes?.find((attr: any) =>
                     attr.StandardProperty === 'name' || attr.Name?.toLowerCase() === 'name'
                 );
@@ -1022,6 +1031,44 @@ export class AgentRunner {
             LogError(`Failed to process agent artifacts: ${(error as Error).message}`);
             return undefined;
         }
+    }
+
+    /**
+     * Creates the artifact header row. Name and description come from the agent's directive when
+     * it supplied them (e.g. Skip's artifactRequest); otherwise the historical placeholder.
+     */
+    private async createArtifactHeader(
+        md: IMetadataProvider,
+        contextUser: UserInfo,
+        agent: (typeof AIEngine.Instance.Agents)[number] | undefined,
+        creationMode: string | undefined,
+        directive: ArtifactDirective | undefined
+    ): Promise<MJArtifactEntity> {
+        const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', contextUser);
+
+        const agentName = agent?.Name || 'Agent';
+        artifact.Name = directive?.name?.trim() || `${agentName} Payload - ${new Date().toLocaleString()}`;
+        artifact.Description = directive?.description?.trim() || `Payload returned by ${agentName}`;
+
+        // Use agent's DefaultArtifactTypeID if available
+        const defaultArtifactTypeId = (agent as any)?.DefaultArtifactTypeID;
+        artifact.TypeID = defaultArtifactTypeId || AgentRunner.JSON_ARTIFACT_TYPE_ID;
+
+        artifact.UserID = contextUser.ID;
+        artifact.EnvironmentID = (contextUser as any).EnvironmentID || 'F51358F3-9447-4176-B313-BF8025FD8D09';
+
+        // Set visibility based on agent's ArtifactCreationMode
+        if (creationMode === 'System Only') {
+            artifact.Visibility = 'System Only';
+            LogStatus(`Artifact marked as "System Only" per agent configuration`);
+        } else {
+            artifact.Visibility = 'Always';
+        }
+
+        if (!(await artifact.Save())) {
+            throw new Error('Failed to save artifact');
+        }
+        return artifact;
     }
 
     /**
