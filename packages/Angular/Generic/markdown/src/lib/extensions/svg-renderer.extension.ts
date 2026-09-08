@@ -7,57 +7,65 @@
  * after the SVG has been inserted into the page.
  */
 
+/** URL schemes that can execute script or smuggle markup when used as a link or resource target. */
+const SCRIPT_URL_SCHEME = /^(javascript|vbscript|data):/;
+
+/** Attributes whose value is a URL the browser will navigate to or load. */
+const URL_ATTRIBUTES = new Set(['href', 'xlink:href', 'src', 'action', 'formaction']);
+
 /**
- * Helper function to sanitize SVG content by removing potentially dangerous elements.
+ * True when an attribute value is a script-capable URL. Whitespace and control
+ * characters are removed before the scheme check because browsers ignore them
+ * (a tab inside `javascript:` still navigates), and the comparison is case-insensitive.
+ *
+ * `data:image/...` (other than SVG, which can carry script) is allowed on `<image>`
+ * so embedded raster images inside an SVG keep working.
+ */
+function isScriptUrl(element: Element, attributeName: string, value: string): boolean {
+  // eslint-disable-next-line no-control-regex
+  const normalized = value.replace(/[\u0000-\u0020\u007f]/g, '').toLowerCase();
+  if (!SCRIPT_URL_SCHEME.test(normalized)) {
+    return false;
+  }
+  const isImageData =
+    element.tagName.toLowerCase() === 'image' &&
+    (attributeName === 'href' || attributeName === 'xlink:href') &&
+    normalized.startsWith('data:image/') &&
+    !normalized.startsWith('data:image/svg');
+  return !isImageData;
+}
+
+/**
+ * Sanitize rendered SVG in place by removing the vectors that can run script.
  * Call this on the container element after rendering if you need additional security.
+ *
+ * Removes `<script>` and `<foreignObject>` elements, every `on*` event-handler
+ * attribute (not a fixed list: any attribute whose name starts with `on`),
+ * `javascript:` / `vbscript:` / `data:` URLs on link and resource attributes, and
+ * `<use>` elements that reference an external document.
  *
  * @param container The DOM element containing rendered SVG
  */
 export function sanitizeSvgContent(container: HTMLElement): void {
-  // Remove script elements
-  const scripts = container.querySelectorAll('script');
-  scripts.forEach(script => script.remove());
+  container.querySelectorAll('script').forEach((script) => script.remove());
+  container.querySelectorAll('foreignObject').forEach((fo) => fo.remove());
 
-  // Remove event handlers from all elements
-  const allElements = container.querySelectorAll('*');
-  allElements.forEach(el => {
-    // Remove common event handler attributes
-    const dangerousAttrs = [
-      'onload', 'onerror', 'onclick', 'onmouseover', 'onmouseout',
-      'onfocus', 'onblur', 'onchange', 'onsubmit', 'onreset',
-      'onkeydown', 'onkeyup', 'onkeypress'
-    ];
-
-    dangerousAttrs.forEach(attr => {
-      if (el.hasAttribute(attr)) {
-        el.removeAttribute(attr);
+  container.querySelectorAll('*').forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith('on')) {
+        el.removeAttribute(attr.name);
+        continue;
       }
-    });
-
-    // Remove javascript: URLs from href/xlink:href
-    if (el.hasAttribute('href')) {
-      const href = el.getAttribute('href') || '';
-      if (href.toLowerCase().startsWith('javascript:')) {
-        el.removeAttribute('href');
-      }
-    }
-    if (el.hasAttribute('xlink:href')) {
-      const href = el.getAttribute('xlink:href') || '';
-      if (href.toLowerCase().startsWith('javascript:')) {
-        el.removeAttribute('xlink:href');
+      if (URL_ATTRIBUTES.has(name) && isScriptUrl(el, name, attr.value)) {
+        el.removeAttribute(attr.name);
       }
     }
   });
 
-  // Remove foreignObject elements (can contain HTML/scripts)
-  const foreignObjects = container.querySelectorAll('foreignObject');
-  foreignObjects.forEach(fo => fo.remove());
-
-  // Remove use elements pointing to external resources
-  const useElements = container.querySelectorAll('use');
-  useElements.forEach(use => {
-    const href = use.getAttribute('href') || use.getAttribute('xlink:href') || '';
-    if (href.startsWith('http://') || href.startsWith('https://') || href.startsWith('//')) {
+  container.querySelectorAll('use').forEach((use) => {
+    const href = (use.getAttribute('href') || use.getAttribute('xlink:href') || '').trim();
+    if (/^(https?:)?\/\//i.test(href)) {
       use.remove();
     }
   });
