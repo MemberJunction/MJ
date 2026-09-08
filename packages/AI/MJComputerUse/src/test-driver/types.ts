@@ -75,7 +75,7 @@ import type { ReplayTier } from '@memberjunction/computer-use';
  * The Computer Use driver's slice of `Test.Configuration`.
  *
  * Two properties in that same JSON are **framework-level, not driver-level**, and
- * are deliberately absent here: `TestJSONScript` (the recorded replay script) and
+ * are deliberately absent here: `ReplayScript` (the recorded replay script) and
  * `AllowLLMFallback`. Both are typed by the entity's own JSONType and read through
  * the generated `MJTestEntity.ConfigurationObject` accessor in `script-store.ts`,
  * so they stay strongly typed without this driver restating them. Do not add

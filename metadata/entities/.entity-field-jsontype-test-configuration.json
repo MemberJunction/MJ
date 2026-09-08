@@ -22,7 +22,7 @@
           },
           "_comments": [
             "Test.Configuration — per-test bag shared by every test type. Named props are",
-            "framework-level (TestJSONScript, AllowLLMFallback); an index signature carries",
+            "framework-level (ReplayScript, AllowLLMFallback); an index signature carries",
             "each driver's own config through untouched."
           ],
           "primaryKey": {

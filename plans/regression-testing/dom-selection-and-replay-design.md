@@ -2,7 +2,7 @@
 
 **Status:** For review · 2026-09-08 · Branch `CB-DOM-selection-and-replay`
 
-Feedback welcome on anything here, but §7 lists the questions I most want answered.
+The four questions this opened with have been answered; §7 records where each landed.
 
 ---
 
@@ -134,7 +134,7 @@ permanent assertion.
 
 ## 5. Where scripts live
 
-**A script lives in the test row, in `Configuration.TestJSONScript`.**
+**A script lives in the test row, in `Configuration.ReplayScript`.**
 
 An earlier draft committed scripts to the repository as `T042.trace.json` files,
 reasoning that they are compiled artifacts like snapshot files and belong in git where
@@ -149,7 +149,7 @@ migration**. What this branch adds is JSONType metadata on the existing column, 
 CodeGen emits a typed accessor:
 
 ```ts
-const script = test.ConfigurationObject?.TestJSONScript;   // fully typed, lazily parsed
+const script = test.ConfigurationObject?.ReplayScript;   // fully typed, lazily parsed
 ```
 
 The interface lives at `metadata/entities/JSONType-interfaces/ITestConfiguration.ts`
@@ -157,13 +157,13 @@ and is registered by a metadata push, the same way `MJ: Entities.Configuration` 
 about twenty other JSONType columns already are.
 
 `Configuration` is shared by every test type, so `ITestConfiguration` declares only the
-framework-level properties — `TestJSONScript` and `AllowLLMFallback` — over an index
+framework-level properties — `ReplayScript` and `AllowLLMFallback` — over an index
 signature that carries each driver's own configuration through untouched. Adding a
 framework-level option later is an edit to that interface plus `mj sync push`, never a
 migration.
 
 **Keeping the type honest.** The script shape exists twice: once as `ComputerUseTrace`
-in `@memberjunction/computer-use`, once as `ITestJSONScript` in the JSONType. It has to,
+in `@memberjunction/computer-use`, once as `IReplayScript` in the JSONType. It has to,
 because CodeGen emits the JSONType definition verbatim into `@memberjunction/core-entities`,
 which sits below the engine package and can name nothing from it.
 
@@ -179,7 +179,7 @@ assertions, checked by tsc through `typecheck` in `vitest.config.ts`. So
 directions:
 
 ```ts
-expectTypeOf<MJTestEntity_ITestJSONScript>().toEqualTypeOf<ComputerUseTrace>();
+expectTypeOf<MJTestEntity_IReplayScript>().toEqualTypeOf<ComputerUseTrace>();
 ```
 
 Two things about that were checked rather than assumed, because both have bitten this
@@ -220,46 +220,55 @@ matters wherever a silent re-derivation could paper over the regression the test
 to catch: the agent is good enough to find another route to the goal, and on a pinned
 test that is the failure mode, not the feature.
 
-### 6.1 What we gave up
+### 6.1 The review gate
 
-Committed scripts made UI drift a reviewable PR diff, and a promotion step is where a
-human saw it. Writing to the row removes that.
+A regenerated script does not take effect on its own. It lands in a second slot,
+`Configuration.PendingReplayScript`, and replay keeps using the promoted
+`ReplayScript` until a human has seen the difference and said yes:
 
-What replaces it is telemetry, not review. Every replayed run reports healed and
-diverged step counts, and those survive a green fallback — the drift signal is attached
-to the attempt, not to the verdict. A merge that changes the UI shows up as a suite-wide
-spike in healing rather than as a diff. That is a weaker signal in kind, but a
-continuous one, and it does not depend on anyone reading a generated JSON file
-carefully.
+```
+mj test scripts                                  # what changed, and how much of it matters
+mj test scripts --promote --test "T042 - …"      # ratify one
+mj test scripts --discard --test "T042 - …"      # keep the promoted script
+```
 
-I think this is the right trade. It is also the part of this design I am least sure
-about — see §7.
+The listing separates routine churn from real movement. A selector that changed while
+role and name held is heal-class drift and is reported as such; a changed target, verb,
+URL, or step count means the UI moved, and that is the count the summary leads with.
+
+A test's *first* script skips the gate and goes straight to `ReplayScript`. There is no
+baseline to diff it against, and the run that produced it already passed the judge and
+every gating oracle — a review with nothing to compare is a rubber stamp.
+
+**What the gate costs.** Between a UI change and its promotion, the affected tests
+replay, diverge, and fall back to the agent on every run. They stay green, and they pay
+full model price each time. That is the honest price of not letting the suite rewrite
+itself: the pending script is a queue, and the cost of ignoring it is measured in
+tokens. `mj test scripts` with no arguments is the queue length.
 
 ### 6.2 The push trade
 
 `mj sync push` writes `Configuration` wholesale from the test metadata files, so a push
-resets every stored script. This is deliberate rather than overlooked: a script is a
-regenerable cache, and the cost of a reset is that the next run pays for one
-agent-driven pass per test to re-record.
+resets both slots. This is deliberate: a script is a regenerable cache, and the cost of
+a reset is one agent-driven pass per test to re-record.
 
-That cost is real. After a metadata push, the suite runs at full model price once. The
-alternative — teaching push to preserve a database-written key inside a JSON column —
-is new machinery with its own merge semantics, and it buys back one expensive run.
+The escape hatch, when scripts are worth keeping across a push, is `mj sync pull` —
+`Configuration` comes down with the rest of the row, scripts included, and the files
+then carry them back up. `excludeFields` and `externalizeFields` on the pull config
+shape how much of that lands in the repo. Teaching *push* to preserve a
+database-written key inside a JSON column would be new merge machinery buying back what
+pull already does.
 
-## 7. Questions I want feedback on
+## 7. Resolved questions
 
-1. **Is telemetry enough to replace the review gate (§6.1)?** If a UI change quietly
-   rewrites forty scripts and every test stays green, do we want to have seen that? A
-   middle option exists — record into a pending slot and promote deliberately — at the
-   cost of a human step in the loop.
-2. **Is the push reset (§6.2) acceptable, or should push preserve scripts?** The answer
-   depends on how often the test metadata actually gets pushed, which I do not know.
-3. **Should `AllowLLMFallback` be one flag or two?** It currently governs both "run the
-   agent" and "overwrite the script". Separating them would allow "re-derive but do not
-   ratify". I have not seen a case that needs it, so it is one flag.
-4. **Is `TestJSONScript` the right name?** Inside a test's configuration, `Test` is
-   redundant and `JSON` is implied. `ReplayScript` reads better to me. Easy to change
-   now, tedious later.
+The four questions this document opened with, and where they landed:
+
+| # | Question | Resolution |
+|---|---|---|
+| 1 | Is telemetry enough to replace the review gate? | **No.** A UI change must be seen and promoted deliberately — §6.1. Telemetry stays, as the continuous signal; the gate is what decides. |
+| 2 | Is the push reset acceptable? | **Yes** — `mj sync pull` persists scripts when it matters, so push needs no preservation machinery (§6.2). |
+| 3 | One `AllowLLMFallback` flag or two? | **One.** It governs both re-deriving and ratifying, and no case has come up that wants them apart. |
+| 4 | Is `TestJSONScript` the right name? | **No** — renamed `ReplayScript`. Inside a test's configuration, `Test` was redundant and `JSON` was implied. |
 
 ## 8. Status
 
@@ -270,6 +279,7 @@ Landed on this branch, with unit tests, against `origin/next`:
 | DOM selection | `browser/selector-resolution.ts`, `browser/element-extraction.ts`, `browser/page-perception.ts` |
 | Script record/replay | `types/trace.ts`, `engine/trace.ts`, `engine/replay.ts`, `ComputerUseEngine.Replay` |
 | Storage | `metadata/entities/JSONType-interfaces/ITestConfiguration.ts`, `test-driver/script-store.ts`, `__tests__/script-store.test-d.ts` |
+| Review gate | `mj test scripts` — `TestingFramework/CLI/src/commands/scripts.ts`, `utils/script-drift.ts` |
 | Driver | tier dispatch and write-back in `ComputerUseTestDriver` |
 | Reporting | `tier` and `ReplayTelemetry` on the testing-framework result types |
 

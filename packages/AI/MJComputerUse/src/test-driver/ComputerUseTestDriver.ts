@@ -951,8 +951,11 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             });
             const saved = await saveScript(context.test, trace);
             if (saved.saved) {
+                const where = saved.slot === 'pending'
+                    ? 'Configuration.PendingReplayScript — awaiting review; run `mj test scripts` to see the diff and promote it'
+                    : 'Configuration.ReplayScript';
                 this.logToTestRun(context, 'info',
-                    `Recorded replay script (${trace.Steps.length} step(s), ${goalPostconditions.length} postcondition(s)) to Test.Configuration.TestJSONScript`);
+                    `Recorded replay script (${trace.Steps.length} step(s), ${goalPostconditions.length} postcondition(s)) to ${where}`);
             } else {
                 this.logToTestRun(context, 'warn', `Could not save replay script (non-fatal): ${saved.error}`);
             }

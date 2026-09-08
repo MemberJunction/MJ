@@ -38,7 +38,7 @@ function sampleScript(testId = 'test-1'): ComputerUseTrace {
 
 describe('loadScript', () => {
     it('returns the script stored on the test row', () => {
-        const test = fakeTest(JSON.stringify({ TestJSONScript: sampleScript(), headless: true }));
+        const test = fakeTest(JSON.stringify({ ReplayScript: sampleScript(), headless: true }));
         const script = loadScript(test);
         expect(script?.TestId).toBe('test-1');
         expect(script?.Steps).toHaveLength(1);
@@ -57,8 +57,8 @@ describe('loadScript', () => {
     });
 
     it('rejects a stored value that is not shaped like a script', () => {
-        expect(loadScript(fakeTest(JSON.stringify({ TestJSONScript: { TestId: 'x' } })))).toBeNull();
-        expect(loadScript(fakeTest(JSON.stringify({ TestJSONScript: 'a string' })))).toBeNull();
+        expect(loadScript(fakeTest(JSON.stringify({ ReplayScript: { TestId: 'x' } })))).toBeNull();
+        expect(loadScript(fakeTest(JSON.stringify({ ReplayScript: 'a string' })))).toBeNull();
     });
 });
 
@@ -91,19 +91,48 @@ describe('saveScript', () => {
         expect(written.headless).toBe(true);
         expect(written.maxSteps).toBe(35);
         expect(written.AllowLLMFallback).toBe(false);
-        expect(written.TestJSONScript.TestId).toBe('test-1');
+        expect(written.ReplayScript.TestId).toBe('test-1');
     });
 
-    it('overwrites an existing script in place', async () => {
-        const test = fakeTest(JSON.stringify({ TestJSONScript: sampleScript('stale') }));
-        await saveScript(test, sampleScript('fresh'));
-        expect(JSON.parse(test.Configuration!).TestJSONScript.TestId).toBe('fresh');
+    it('reports the promoted slot for a test recording its first script', async () => {
+        const test = fakeTest(JSON.stringify({ headless: true }));
+        expect((await saveScript(test, sampleScript())).slot).toBe('promoted');
+    });
+
+    it('holds a replacement as pending, leaving the promoted script untouched', async () => {
+        const test = fakeTest(JSON.stringify({ ReplayScript: sampleScript('promoted') }));
+        const result = await saveScript(test, sampleScript('fresh'));
+
+        expect(result.slot).toBe('pending');
+        const written = JSON.parse(test.Configuration!);
+        expect(written.ReplayScript.TestId).toBe('promoted');
+        expect(written.PendingReplayScript.TestId).toBe('fresh');
+    });
+
+    it('replaces an earlier pending script rather than stacking them', async () => {
+        const test = fakeTest(JSON.stringify({
+            ReplayScript: sampleScript('promoted'),
+            PendingReplayScript: sampleScript('older-pending'),
+        }));
+        await saveScript(test, sampleScript('newest'));
+
+        const written = JSON.parse(test.Configuration!);
+        expect(written.ReplayScript.TestId).toBe('promoted');
+        expect(written.PendingReplayScript.TestId).toBe('newest');
     });
 
     it('writes a script onto a test that had no configuration', async () => {
         const test = fakeTest(null);
         expect((await saveScript(test, sampleScript())).saved).toBe(true);
-        expect(JSON.parse(test.Configuration!).TestJSONScript.TestId).toBe('test-1');
+        expect(JSON.parse(test.Configuration!).ReplayScript.TestId).toBe('test-1');
+    });
+
+    it('never lets a pending script reach the replay path', () => {
+        const test = fakeTest(JSON.stringify({
+            ReplayScript: sampleScript('promoted'),
+            PendingReplayScript: sampleScript('pending'),
+        }));
+        expect(loadScript(test)?.TestId).toBe('promoted');
     });
 
     it('reports the save failure instead of throwing', async () => {

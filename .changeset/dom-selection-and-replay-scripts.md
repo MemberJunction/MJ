@@ -4,6 +4,8 @@
 "@memberjunction/testing-engine-base": minor
 "@memberjunction/testing-engine": minor
 "@memberjunction/core-entities": minor
+"@memberjunction/testing-cli": minor
+"@memberjunction/cli": minor
 ---
 
 DOM-grounded selection and replay scripts for Computer Use tests.
@@ -34,7 +36,7 @@ fresh values — so a script holds no credentials and stays valid when the value
 A replayed run is scored by deterministic goal postconditions distilled from the passing
 run, not by a model verdict, which is what keeps the tier free.
 
-**Storage.** Scripts live in the test row, at `Configuration.TestJSONScript` on
+**Storage.** Scripts live in the test row, at `Configuration.ReplayScript` on
 `MJ: Tests`. That column already exists, so there is **no migration** — this registers
 JSONType metadata on it (`ITestConfiguration`, alongside the ~20 JSONType columns already
 registered this way) and CodeGen emits a typed `ConfigurationObject` accessor. Reads are
@@ -50,8 +52,15 @@ tests in `core-entities`. The assertions were confirmed to fail on injected drif
 than assumed to work, since that precedent's own typecheck program was once empty and
 every assertion passing for free.
 
-**Fallback.** A diverged replay falls back to the model within the same attempt and a
-green fallback overwrites the script. The fallback restarts clean rather than inheriting
+**Fallback and review.** A diverged replay falls back to the model within the same
+attempt. The re-derived script does not take effect on its own: it lands in
+`PendingReplayScript` and replay keeps using the promoted `ReplayScript` until someone
+runs `mj test scripts`, sees what changed, and promotes it — so a UI change can never
+rewrite the suite unnoticed. The listing separates routine selector churn from a moved
+target, verb, or URL. A test's first script skips the gate, having no baseline to be
+diffed against. Until a pending script is promoted, the affected tests fall back on
+every run: they stay green and pay full model price, which is the cost of not letting
+the suite rewrite itself. The fallback restarts clean rather than inheriting
 the failed replay's memo, and a replay is never re-recorded (that would launder healed
 selectors into storage without re-deriving them). A test can refuse the pathway with
 `Configuration.AllowLLMFallback: false`, which makes a divergence the result instead —

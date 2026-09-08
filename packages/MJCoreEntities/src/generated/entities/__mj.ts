@@ -119365,11 +119365,23 @@ export interface MJTestEntity_ITestConfiguration {
      * the first run records one. Held structurally identical to `ComputerUseTrace`
      * by compile-time assertions in `@memberjunction/computer-use-engine`.
      */
-    TestJSONScript?: MJTestEntity_ITestJSONScript;
+    ReplayScript?: MJTestEntity_IReplayScript;
+
+    /**
+     * A newly recorded script awaiting review, written when a run re-derives a
+     * test that already had a {@link ReplayScript}. Replay always uses the
+     * promoted script, never this one, so a UI change never takes effect until
+     * someone has seen the diff and promoted it (`mj test scripts`).
+     *
+     * A test's *first* script skips this and lands in {@link ReplayScript}
+     * directly — there is no baseline to diff it against, and the run that
+     * produced it already passed the judge and every gating oracle.
+     */
+    PendingReplayScript?: MJTestEntity_IReplayScript;
 
     /**
      * Whether a failed replay may fall back to the agent, re-derive the goal, and
-     * overwrite {@link TestJSONScript}. Defaults to **true**. Set `false` to pin a
+     * overwrite {@link ReplayScript}. Defaults to **true**. Set `false` to pin a
      * test to deterministic execution, wherever a silent re-derivation could paper
      * over the regression the test exists to catch.
      */
@@ -119385,7 +119397,7 @@ export interface MJTestEntity_ITestConfiguration {
  * `GoalHash` falls back to the agent, the script no longer describing what the
  * test asks for.
  */
-export interface MJTestEntity_ITestJSONScript {
+export interface MJTestEntity_IReplayScript {
     /** Stable per-test identifier the script is keyed by. */
     TestId: string;
     /** Opaque build identity at record time. Compared, never parsed; empty when unknown. */
@@ -119397,7 +119409,7 @@ export interface MJTestEntity_ITestJSONScript {
     /** ISO-8601 timestamp when this script was recorded. */
     RecordedAt: string;
     /** Viewport at record time; replay must match it for coordinate-era guards. */
-    Viewport: MJTestEntity_ITestJSONScriptViewport;
+    Viewport: MJTestEntity_IReplayScriptViewport;
     /**
      * Names of the variables the test declares. Values are never stored: recording
      * leaves `%name%` tokens in step text and URLs, and replay substitutes fresh
@@ -119405,30 +119417,30 @@ export interface MJTestEntity_ITestJSONScript {
      */
     Variables: string[];
     /** The resolved, ordered replay steps. */
-    Steps: MJTestEntity_ITestJSONScriptStep[];
+    Steps: MJTestEntity_IReplayScriptStep[];
     /** Final goal-level deterministic assertions. */
-    GoalPostconditions: MJTestEntity_ITestJSONScriptGoalPostcondition[];
+    GoalPostconditions: MJTestEntity_IReplayScriptGoalPostcondition[];
 }
 
 /** Viewport at record time. */
-export interface MJTestEntity_ITestJSONScriptViewport {
+export interface MJTestEntity_IReplayScriptViewport {
     Width: number;
     Height: number;
 }
 
 /** One recorded, replayable step. */
-export interface MJTestEntity_ITestJSONScriptStep {
+export interface MJTestEntity_IReplayScriptStep {
     /** Human-readable intent, carried from the agent's own reasoning. */
     Instruction: string;
     /** Normalized URL at the start of this step. */
     UrlBefore: string;
-    Action: MJTestEntity_ITestJSONScriptAction;
-    Precondition: MJTestEntity_ITestJSONScriptPrecondition;
-    Postcondition?: MJTestEntity_ITestJSONScriptPostcondition;
+    Action: MJTestEntity_IReplayScriptAction;
+    Precondition: MJTestEntity_IReplayScriptPrecondition;
+    Postcondition?: MJTestEntity_IReplayScriptPostcondition;
 }
 
 /** The deterministic subset of browser actions a step can record — elements, never pixels. */
-export type MJTestEntity_ITestJSONScriptActionMethod =
+export type MJTestEntity_IReplayScriptActionMethod =
     | 'click'
     | 'type'
     | 'navigate'
@@ -119439,11 +119451,11 @@ export type MJTestEntity_ITestJSONScriptActionMethod =
     | 'goForward'
     | 'refresh';
 
-/** Only the fields relevant to {@link MJTestEntity_ITestJSONScriptAction.Method} are populated. */
-export interface MJTestEntity_ITestJSONScriptAction {
-    Method: MJTestEntity_ITestJSONScriptActionMethod;
+/** Only the fields relevant to {@link MJTestEntity_IReplayScriptAction.Method} are populated. */
+export interface MJTestEntity_IReplayScriptAction {
+    Method: MJTestEntity_IReplayScriptActionMethod;
     /** Target for click / type / scroll actions. */
-    Target?: MJTestEntity_ITestJSONScriptTarget;
+    Target?: MJTestEntity_IReplayScriptTarget;
     /** Text to type, possibly with `%placeholder%` variable tokens. */
     Text?: string;
     /** Key or chord to press. */
@@ -119464,15 +119476,15 @@ export interface MJTestEntity_ITestJSONScriptAction {
  * fallback, re-resolved from a fresh element list when the selector stops
  * matching; `BoundingBox` is weakest, kept only for pre-grounding recordings.
  */
-export interface MJTestEntity_ITestJSONScriptTarget {
+export interface MJTestEntity_IReplayScriptTarget {
     Role?: string;
     Name?: string;
     Selector?: string;
-    BoundingBox?: MJTestEntity_ITestJSONScriptBoundingBox;
+    BoundingBox?: MJTestEntity_IReplayScriptBoundingBox;
 }
 
 /** Rendered position of a target at record time. */
-export interface MJTestEntity_ITestJSONScriptBoundingBox {
+export interface MJTestEntity_IReplayScriptBoundingBox {
     XMin: number;
     YMin: number;
     XMax: number;
@@ -119483,7 +119495,7 @@ export interface MJTestEntity_ITestJSONScriptBoundingBox {
  * Guard evaluated BEFORE a step. Fail-fast by contract: a target that never becomes
  * attached and visible fails the step — replay never proceeds anyway.
  */
-export interface MJTestEntity_ITestJSONScriptPrecondition {
+export interface MJTestEntity_IReplayScriptPrecondition {
     /** Wait for the action's target to be attached and visible before acting. */
     WaitForTarget: boolean;
     /** Expected normalized URL pattern at the start of this step. */
@@ -119496,18 +119508,18 @@ export interface MJTestEntity_ITestJSONScriptPrecondition {
  * Guard evaluated AFTER a step, confirming it advanced the page as the recording
  * did. Failing one marks the step diverged and starts the heal ladder.
  */
-export interface MJTestEntity_ITestJSONScriptPostcondition {
+export interface MJTestEntity_IReplayScriptPostcondition {
     /** Expected normalized URL pattern after the step's action ran. */
     UrlPattern?: string;
     /** An element expected to be visible after the step. */
-    ExpectVisible?: MJTestEntity_ITestJSONScriptTarget;
+    ExpectVisible?: MJTestEntity_IReplayScriptTarget;
 }
 
 /**
  * A goal-level assertion distilled from a passing run. Replay scores by executing
  * these, so the model-based judge runs only on the agent tier.
  */
-export interface MJTestEntity_ITestJSONScriptGoalPostcondition {
+export interface MJTestEntity_IReplayScriptGoalPostcondition {
     /**
      * - `'url'` — the final URL matches `UrlPattern`.
      * - `'visible'` — `Target` is present in the end state.
@@ -119515,7 +119527,7 @@ export interface MJTestEntity_ITestJSONScriptGoalPostcondition {
      */
     Kind: 'url' | 'visible' | 'absent';
     UrlPattern?: string;
-    Target?: MJTestEntity_ITestJSONScriptTarget;
+    Target?: MJTestEntity_IReplayScriptTarget;
     /** Provenance — the validation criterion this was distilled from. */
     Description?: string;
 }
