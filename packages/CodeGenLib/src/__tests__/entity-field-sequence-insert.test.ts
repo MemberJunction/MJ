@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
+import { SQLLogging } from '../Misc/sql_logging';
 import { SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
 import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
@@ -19,11 +20,17 @@ class TestableManageMetadata extends ManageMetadataBase {
   public insertSQL(id: string, field: Record<string, unknown>): string {
     return this.getPendingEntityFieldINSERTSQL(id, field);
   }
+  public sequenceExpr(entityID: string): string {
+    return this.applyTimeEntityFieldSequenceSQL(entityID);
+  }
 }
+
+const ENTITY_ID = 'C70448F9-9792-41D7-A82C-784B66429D54';
+const APPLY_TIME_SEQUENCE = `(SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [__mj].[EntityField] WHERE [EntityID] = '${ENTITY_ID}')`;
 
 function field(over: Record<string, unknown>): Record<string, unknown> {
   return {
-    EntityID: 'C70448F9-9792-41D7-A82C-784B66429D54',
+    EntityID: ENTITY_ID,
     EntityName: 'Organizations',
     FieldName: 'RootParentID',
     SourceOrdinal: 20,
@@ -46,12 +53,14 @@ function field(over: Record<string, unknown>): Record<string, unknown> {
   };
 }
 
-/** A connection whose transaction commits and rolls back without a database. */
-class StubConnection implements CodeGenConnection {
+/** A connection that records every query and whose transaction commits without a database. */
+class RecordingConnection implements CodeGenConnection {
+  public readonly Queries: string[] = [];
   public get Dialect(): SQLDialect {
     return new SQLServerDialect();
   }
-  public async query(): Promise<CodeGenQueryResult> {
+  public async query(sql: string): Promise<CodeGenQueryResult> {
+    this.Queries.push(sql);
     return { recordset: [] };
   }
   public async queryWithParams(): Promise<CodeGenQueryResult> {
@@ -62,7 +71,7 @@ class StubConnection implements CodeGenConnection {
   }
   public async beginTransaction(): Promise<CodeGenTransaction> {
     return {
-      query: async (): Promise<CodeGenQueryResult> => ({ recordset: [] }),
+      query: async (sql: string): Promise<CodeGenQueryResult> => this.query(sql),
       commit: async (): Promise<void> => undefined,
       rollback: async (): Promise<void> => undefined,
     };
@@ -89,7 +98,7 @@ function splitList(list: string): string[] {
   return items;
 }
 
-/** The emitted value for a named column of the INSERT. */
+/** The emitted value for a named column of the INSERT (the emitter annotates EntityID with a `-- Entity:` comment). */
 function valueOf(sql: string, column: string): string {
   const cleaned = sql.replace(/--[^\n]*/g, '');
   const cols = cleaned.slice(cleaned.indexOf('(') + 1, cleaned.search(/\)\s*VALUES/i));
@@ -100,36 +109,19 @@ function valueOf(sql: string, column: string): string {
   return splitList(tuple)[idx];
 }
 
-/** The value in the Sequence position of the emitted INSERT (third column). */
-function sequenceValue(sql: string): string {
-  // The emitter annotates the EntityID value with a trailing `-- Entity: <name>` comment.
-  const values = sql.slice(sql.search(/VALUES/i)).replace(/--[^\n]*/g, '');
-  const m = values.match(/\(\s*'[^']*',\s*'[^']*',\s*([\s\S]*?),\s*'RootParentID'/);
-  if (!m) throw new Error(`could not locate the Sequence value in:\n${sql}`);
-  return m[1].trim();
-}
-
 describe('EntityField Sequence on insert', () => {
   const mm = new TestableManageMetadata();
 
-  it('emits an apply-time MAX(Sequence) expression scoped to the entity, offset by the schema ordinal', () => {
-    const sql = mm.insertSQL('11111111-1111-1111-1111-111111111111', field({}));
-    const seq = sequenceValue(sql);
-    expect(seq).toMatch(/^\(SELECT COALESCE\(MAX\(\[Sequence\]\), 0\) FROM \[__mj\]\.\[EntityField\] WHERE \[EntityID\] = 'C70448F9-9792-41D7-A82C-784B66429D54'\) \+ 20$/);
+  it('emits the apply-time MAX(Sequence)+1 expression scoped to the entity', () => {
+    expect(mm.sequenceExpr(ENTITY_ID)).toBe(APPLY_TIME_SEQUENCE);
+    expect(valueOf(mm.insertSQL('11111111-1111-1111-1111-111111111111', field({})), 'Sequence')).toBe(APPLY_TIME_SEQUENCE);
   });
 
-  it('never emits a bare integer in the Sequence position, whatever the SELECT computed', () => {
-    for (const over of [{ Sequence: 20 }, { Sequence: 100020 }, { SourceOrdinal: 3, Sequence: 3 }]) {
-      const seq = sequenceValue(mm.insertSQL('11111111-1111-1111-1111-111111111111', field(over)));
+  it('never emits a bare integer in the Sequence position, whatever the pending SELECT computed', () => {
+    for (const over of [{ Sequence: 20 }, { Sequence: 100020 }, { SourceOrdinal: 3, Sequence: 3 }, { FieldName: 'Status', IsVirtual: false }]) {
+      const seq = valueOf(mm.insertSQL('11111111-1111-1111-1111-111111111111', field(over)), 'Sequence');
       expect(seq).not.toMatch(/^\d+$/);
-      expect(seq).toContain('MAX(');
-    }
-  });
-
-  it('falls back to ordinal 1 when the source ordinal is missing or invalid', () => {
-    for (const bad of [undefined, 0, -4, 'x']) {
-      const seq = sequenceValue(mm.insertSQL('11111111-1111-1111-1111-111111111111', field({ SourceOrdinal: bad })));
-      expect(seq.endsWith(') + 1')).toBe(true);
+      expect(seq).toBe(APPLY_TIME_SEQUENCE);
     }
   });
 
@@ -149,39 +141,37 @@ describe('EntityField Sequence on insert', () => {
     expect(new PostgreSQLCodeGenProvider().getPendingEntityFieldsSQL('__mj')).toMatch(/ORDER BY\s+"EntityID",\s*"Sequence"/i);
   });
 
-  it('does not park existing rows: the batch is INSERTs only, one apply-time expression each, in one sequential round trip', async () => {
-    const statements: string[] = [];
-    let batchCalls = 0;
-    class Capturing extends TestableManageMetadata {
-      protected override async runQuery(_pool: CodeGenConnection, _sql: string): Promise<CodeGenQueryResult> {
-        return {
-          recordset: [
-            field({ FieldName: 'HousingID', SourceOrdinal: 16, Sequence: 100016, IsVirtual: false }),
-            field({ FieldName: 'Housing', SourceOrdinal: 17, Sequence: 100017, IsVirtual: true }),
-          ],
-        };
+  describe('createNewEntityFieldsFromSchema', () => {
+    // LogSQLAndExecute refuses to run with SQL capture enabled and no log file open; there is no file here.
+    let restoreSQLOutput: () => void;
+    beforeAll(() => { restoreSQLOutput = SQLLogging.suppressOutputForTests(); });
+    afterAll(() => restoreSQLOutput());
+
+    it('sends the batch as INSERTs only — no park UPDATE — in one sequential round trip, in schema order', async () => {
+      class Pending extends TestableManageMetadata {
+        protected override async runQuery(_pool: CodeGenConnection, _sql: string): Promise<CodeGenQueryResult> {
+          return {
+            recordset: [
+              field({ FieldName: 'HousingID', SourceOrdinal: 16, Sequence: 100016, IsVirtual: false }),
+              field({ FieldName: 'Housing', SourceOrdinal: 17, Sequence: 100017, IsVirtual: true }),
+            ],
+          };
+        }
+        public async run(pool: CodeGenConnection): Promise<boolean> {
+          return this.createNewEntityFieldsFromSchema(pool);
+        }
       }
-      protected override async LogSQLBatchAndExecute(_pool: CodeGenConnection, batch: string[]): Promise<unknown> {
-        batchCalls++;
-        statements.push(...batch);
-        return undefined;
-      }
-      public async run(): Promise<boolean> {
-        return this.createNewEntityFieldsFromSchema(new StubConnection());
-      }
-    }
-    expect(await new Capturing().run()).toBe(true);
-    // One chunk, one round trip, statements in emission order: each INSERT's MAX() sees the one before it.
-    // Executing the chunk with Promise.all would let two INSERTs read the same MAX and collide.
-    expect(batchCalls).toBe(1);
-    expect(statements).toHaveLength(2);
-    expect(statements[0]).toContain("'HousingID'");
-    expect(statements[1]).toContain("'Housing'");
-    for (const stmt of statements) {
-      expect(stmt).toMatch(/INSERT INTO \[__mj\]\.\[EntityField\]/);
-      expect(stmt).not.toMatch(/UPDATE\s+\[__mj\]\.\[EntityField\]/i);
-      expect(stmt).not.toContain('100000');
-      expect(stmt).toContain('COALESCE(MAX([Sequence]), 0)');
-    }
+      const pool = new RecordingConnection();
+      expect(await new Pending().run(pool)).toBe(true);
+      // One chunk, one round trip: each INSERT's MAX() sees the one before it. Executing statements
+      // concurrently would let two INSERTs read the same MAX and collide on the unique constraint.
+      expect(pool.Queries).toHaveLength(1);
+      const batch = pool.Queries[0];
+      expect(batch).not.toMatch(/UPDATE\s+\[__mj\]\.\[EntityField\]/i);
+      expect(batch).not.toContain('100000');
+      expect(batch.match(/INSERT INTO \[__mj\]\.\[EntityField\]/g)).toHaveLength(2);
+      expect(batch.indexOf("'HousingID'")).toBeLessThan(batch.indexOf("'Housing'"));
+      expect(batch.split(APPLY_TIME_SEQUENCE)).toHaveLength(3);
+    });
   });
 });

@@ -93,7 +93,7 @@ jobs:
         # Same rationale as the ID-determinism self-test above: the positional parser is load-bearing for a bug
         # that only appears on fresh installs (MJ#3670, MJ#4202), so its fixtures run on every PR.
         # Runs after Set up node: the detector is a Node script.
-        run: .github/scripts/check-migration-entityfield-sequence.sh --self-test
+        run: node .github/scripts/check-migration-entityfield-sequence.mjs --self-test
 
       - name: Check changed migrations for a literal EntityField Sequence
         # BLOCKING, unlike the advisory ID-determinism check further down: a literal Sequence in a CodeGen
@@ -104,7 +104,7 @@ jobs:
         # this PR adds to migration files it adds or modifies. See migrations/CLAUDE.md, MJ#3670, MJ#4202.
         if: steps.check_migrations.outputs.has_migrations == 'true'
         run: |
-          .github/scripts/check-migration-entityfield-sequence.sh \
+          node .github/scripts/check-migration-entityfield-sequence.mjs \
             '${{ steps.base.outputs.sha }}' \
             '${{ github.sha }}'
 

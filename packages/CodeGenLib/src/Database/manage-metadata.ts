@@ -381,48 +381,19 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Returns a sequence value safe to use for an EntityField INSERT under the given
-    * EntityID, defaulting to `candidate` when it doesn't collide. Otherwise returns
-    * `MAX(Sequence) + 1` for that entity.
+    * The `Sequence` expression for every EntityField INSERT CodeGen emits:
+    * `(SELECT COALESCE(MAX(Sequence), 0) + 1 FROM EntityField WHERE EntityID = '<id>')`.
     *
-    * Why this exists: several insert paths (virtual-entity field sync, IS-A parent
-    * field sync, schema-derived field creation) compute a deterministic sequence
-    * up-front, but a partial prior run can leave rows at that exact ordinal under
-    * the target EntityID. SS hides the collision because retried runs typically
-    * succeed before failing; PG raises UQ_EntityField_EntityID_Sequence (~4 errors
-    * per advanced-generation run). The values are temporary anyway —
-    * spUpdateExistingEntityFieldsFromSchema renumbers them on the next pass.
+    * Evaluated at APPLY time, never a literal. The value is disposable — the run's own
+    * spUpdateExistingEntityFieldsFromSchema pass and R__RefreshMetadata renumber every field from
+    * the schema — but it must be unique on ANY database in ANY order, because the INSERT is
+    * appended verbatim to a migration and Flyway runs every versioned migration before the
+    * repeatable renumber. Each INSERT re-evaluates MAX after the one before it, so a batch that
+    * executes sequentially in emission order rises in that order (#3670, #4202).
     */
-   protected async nextAvailableEntityFieldSequence(
-      pool: CodeGenConnection,
-      entityId: string,
-      candidate: number
-   ): Promise<number> {
-      const schema = mj_core_schema();
-      const tbl = this.qs(schema, 'EntityField');
-      const seqCol = this.qi('Sequence');
-      const entityIdCol = this.qi('EntityID');
-      const sql = `SELECT
-                      ${this.coalesce(`MAX(${seqCol})`, '0')} AS ${this.qi('MaxSeq')},
-                      ${this.coalesce(`MAX(CASE WHEN ${seqCol} = @Candidate THEN 1 ELSE 0 END)`, '0')} AS ${this.qi('Hit')}
-                   FROM ${tbl}
-                   WHERE ${entityIdCol} = @EntityID`;
-      try {
-         const result = await this.runQueryWithParams(pool, sql, {
-            EntityID: entityId,
-            Candidate: candidate,
-         });
-         const row = result.recordset?.[0];
-         if (!row) return candidate;
-         const hit = Number(row.Hit ?? 0) > 0;
-         if (!hit) return candidate;
-         const maxSeq = Number(row.MaxSeq ?? 0);
-         return maxSeq + 1;
-      } catch {
-         // If the lookup itself fails, fall back to the candidate. The downstream
-         // INSERT will surface the real error if there's a true collision.
-         return candidate;
-      }
+   protected applyTimeEntityFieldSequenceSQL(entityID: string): string {
+      // COALESCE is valid on both platforms and is the form the docs and the gate describe.
+      return `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) + 1 FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${entityID}')`;
    }
 
    /**
@@ -2977,11 +2948,8 @@ export class ManageMetadataBase {
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
             newEntityFieldUUID = this.createNewUUID();
-            // Compute a non-colliding sequence by querying MAX(Sequence) for this entity. The
-            // ordinal `fieldSequence` (column index in the view) is correct for stable ordering
-            // when nothing exists yet, but a partial prior run could have left rows at the same
-            // ordinal under this EntityID — UQ_EntityField_EntityID_Sequence then fires on PG.
-            const safeSequence = await this.nextAvailableEntityFieldSequence(pool, entity.ID, fieldSequence);
+            // Apply-time Sequence: see applyTimeEntityFieldSequenceSQL. A literal here would be
+            // replayed verbatim from the CodeGen capture and collide on a fresh install.
             const q = (n: string) => this.qi(n);
             const sqlAdd = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
                                       ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
@@ -2990,7 +2958,7 @@ export class ManageMetadataBase {
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
                             VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${String(veField.FieldName).replace(/'/g, "''")}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${safeSequence}, ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)},
+                                       ${this.applyTimeEntityFieldSequenceSQL(entity.ID)}, ${this.boolLit(wantPrimaryKey)}, ${this.boolLit(wantUnique)},
                                        ${this.utcNow()}, ${this.utcNow()}
                                     )`;
             await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
@@ -3593,13 +3561,8 @@ export class ManageMetadataBase {
          } else {
             // Create new virtual field record for this parent field
             const newFieldID = this.createNewUUID();
-            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema.
-            // Query MAX(Sequence) at insert time so we never collide with an existing row
-            // (e.g. partial prior run left a record at the candidate ordinal under this
-            // EntityID — UQ_EntityField_EntityID_Sequence then fires on PG).
-            const candidate = 100000 + parentFields.indexOf(parentField);
-            const sequence = await this.nextAvailableEntityFieldSequence(pool, childEntity.ID, candidate);
-
+            // Apply-time Sequence (see applyTimeEntityFieldSequenceSQL); reordered by
+            // updateExistingEntityFieldsFromSchema afterwards.
             const q = (n: string) => this.qi(n);
             const sqlInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
                   ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
@@ -3611,7 +3574,7 @@ export class ManageMetadataBase {
                   '${newFieldID}', '${childEntity.ID}', '${parentField.Name}',
                   '${parentField.Type}', ${this.boolLit(parentField.AllowsNull)},
                   ${parentField.Length}, ${parentField.Precision}, ${parentField.Scale},
-                  ${sequence}, ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)},
+                  ${this.applyTimeEntityFieldSequenceSQL(childEntity.ID)}, ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)},
                   ${this.utcNow()}, ${this.utcNow()})`;
             await this.LogSQLAndExecute(pool, sqlInsert,
                `Create IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
@@ -4878,21 +4841,10 @@ export class ManageMetadataBase {
       const conflictCheck = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID = '${newEntityFieldUUID}' OR (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')`;
       const guard = this.dbProvider.wrapInsertWithConflictGuard(conflictCheck);
 
-      // Sequence is emitted as an expression evaluated AT APPLY TIME, never as a literal.
-      // The value is disposable: right after this batch, manageEntityFields calls
-      // spUpdateExistingEntityFieldsFromSchema, which rewrites every field on the entity
-      // from the live schema, and R__RefreshMetadata does the same on every deploy. What
-      // must hold is uniqueness on UQ_EntityField_EntityID_Sequence on ANY database, in
-      // ANY order — including a from-scratch replay where this INSERT was appended
-      // verbatim to a migration and Flyway runs every versioned migration before the
-      // repeatable renumber. MAX(Sequence) at apply time sits above every row the entity
-      // has at that moment, including the rows this batch inserted before it, so values rise
-      // in emission order (the batch is emitted in schema order and executes sequentially);
-      // the schema-ordinal offset only widens the gaps. A literal — the catalog ordinal, or
-      // the MAX+100000+ordinal placeholder the pending SELECT computes — is only valid on the
-      // database CodeGen ran against (#3670, #4202).
-      const sequenceExpr =
-         `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${n.EntityID}') + ${sourceOrdinal}`;
+      // Sequence is an apply-time expression, never a literal: see applyTimeEntityFieldSequenceSQL.
+      // `n.Sequence` (MAX+100000+ordinal from the pending SELECT) is only that query's ORDER BY key
+      // and must never be written; `sourceOrdinal` above feeds DefaultInView only.
+      const sequenceExpr = this.applyTimeEntityFieldSequenceSQL(n.EntityID);
 
       return `
       ${guard.prefix}

@@ -6,21 +6,21 @@
  *
  * ── WHY ─────────────────────────────────────────────────────────────────────────
  * CodeGen's EntityField INSERT is appended VERBATIM to a migration. Whatever number the
- * generating database had free — the catalog ordinal, or the MAX+100000+ordinal placeholder —
- * is only valid there. Flyway runs ALL versioned migrations before ANY repeatable script, so on
- * a database built only from migrations the renumber (spUpdateExistingEntityFieldsFromSchema,
- * via R__RefreshMetadata) never runs in between, and a later migration touching the same
- * entity collides on UQ_EntityField_EntityID_Sequence. Without SET XACT_ABORT ON the unique
- * violation aborts one statement, execution continues, and the run dies later on an
- * unrelated-looking FK error against EntityFieldValue. It cannot fail on a working dev
- * database; it fails only on fresh installs. See MJ#3670 and MJ#4202.
+ * generating database had free — the catalog ordinal, or a MAX+100000+ordinal placeholder — is
+ * only valid there. Flyway runs ALL versioned migrations before ANY repeatable script, so on a
+ * database built only from migrations the renumber (spUpdateExistingEntityFieldsFromSchema, via
+ * R__RefreshMetadata) never runs in between, and a later migration touching the same entity
+ * collides on UQ_EntityField_EntityID_Sequence. Without SET XACT_ABORT ON the unique violation
+ * aborts one statement, execution continues, and the run dies later on an unrelated-looking FK
+ * error against EntityFieldValue. It cannot fail on a working dev database; it fails only on
+ * fresh installs. See MJ#3670 and MJ#4202.
  *
  * ── THE RULE ────────────────────────────────────────────────────────────────────
- * The Sequence must be an expression evaluated at APPLY time:
+ * The Sequence must be an expression evaluated at APPLY time, one INSERT statement per row:
  *
- *     (SELECT COALESCE(MAX([Sequence]), 0)
+ *     (SELECT COALESCE(MAX([Sequence]), 0) + 1
  *        FROM [${flyway:defaultSchema}].[EntityField]
- *       WHERE [EntityID] = '<entity-id>') + <schema-ordinal>
+ *       WHERE [EntityID] = '<entity-id>')
  *
  * CodeGen emits exactly this (manage-metadata.ts, getPendingEntityFieldINSERTSQL). This gate
  * exists for hand-authored SQL and for a regression in the emitter — #4048 shipped one that
@@ -29,108 +29,95 @@
  * Sequence column, and flags any bare integer in that position of every VALUES tuple.
  *
  * ── SCOPE ───────────────────────────────────────────────────────────────────────
- * Default: only the LINES a PR adds to migration files it adds or modifies. Committed migrations
- * carrying the literal form (hundreds of them, including the baselines) are left alone
- * deliberately: they apply today, and rewriting them would change Flyway checksums on every
- * existing database. `--all` scans every committed migration and is informational.
+ * CI form (`<base> <head>`): migration files added, modified, copied or renamed between the two
+ * commits; only LINES the PR adds are reported. Local form (no arguments): the working tree plus
+ * untracked files against merge-base(BASE_REF, HEAD) — the state right after appending a fresh
+ * CodeGen capture. Only Flyway versioned files (`V<12 digits>__*.sql`) are scanned, as the sibling
+ * guards do: baselines (`B*__Baseline.sql`) are dumps of EntityField and literal by construction, and
+ * fixture SQL under a `tests/` directory is never run by Flyway. Committed migrations carrying the literal form (hundreds, including the baselines)
+ * are left alone deliberately: they apply today, and rewriting them would change Flyway checksums
+ * on every existing database. `--all` scans every migration and is informational (exit 0).
  *
  * Usage (from any directory inside the repository):
- *   node check-migration-entityfield-sequence.mjs                 # working tree + untracked vs merge-base(BASE_REF, HEAD)
- *   node check-migration-entityfield-sequence.mjs <base> <head>   # explicit tree-ish pair (CI)
- *   node check-migration-entityfield-sequence.mjs --all           # every committed migration
+ *   node check-migration-entityfield-sequence.mjs                 # local form, see SCOPE
+ *   node check-migration-entityfield-sequence.mjs <base> <head>   # CI form
+ *   node check-migration-entityfield-sequence.mjs --all           # every migration, informational
  *   node check-migration-entityfield-sequence.mjs --self-test     # the detector's own fixtures
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
+// Offset-preserving masker: blanks comments (nested too) and string literals, preserves newlines
+// and bracketed identifiers verbatim. Positions in the masked text equal positions in the source.
+import { stripSqlComments } from './check-codegen-tail.mjs';
 
 const RED = '\x1b[0;31m', YELLOW = '\x1b[0;33m', GREEN = '\x1b[0;32m', DIM = '\x1b[2m', NC = '\x1b[0m';
+const GIT_MAX_BUFFER = Number(process.env.MJ_GIT_MAX_BUFFER) || 256 * 1024 * 1024;
+/** Flyway versioned migrations only: baselines are literal by construction, fixture SQL never runs. */
+const VERSIONED_MIGRATION_RE = /(^|\/)V\d{12}__[^/]*\.sql$/;
+const FIXTURE_DIR_RE = /(^|\/)tests?\//;
+const inScope = (f) => VERSIONED_MIGRATION_RE.test(f) && !FIXTURE_DIR_RE.test(f);
 
 /** Opening of an EntityField INSERT in either quoting dialect; `EntityFieldValue` etc. do not match. */
 const EF_INSERT_RE = /INSERT\s+INTO\s+(?:[^\s(]*?[.\]"`])?(?:\[EntityField\]|"EntityField"|`EntityField`|EntityField)\s*\(/gi;
 
-/** Index of the first character at or after `pos` that is not whitespace or inside a -- / block comment. */
-export function skipInsignificant(text, pos) {
-    let i = pos;
-    while (i < text.length) {
-        const ch = text[i];
-        if (ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') { i++; continue; }
-        if (ch === '-' && text[i + 1] === '-') { const nl = text.indexOf('\n', i); i = nl === -1 ? text.length : nl + 1; continue; }
-        if (ch === '/' && text[i + 1] === '*') { const end = text.indexOf('*/', i + 2); i = end === -1 ? text.length : end + 2; continue; }
-        break;
-    }
-    return i;
-}
+// ─── Parsing (operates on MASKED text: no comments, no string literal contents) ────────────────
 
 /**
  * Parse a parenthesised, comma-separated list starting at `text[open]` (which must be `(`).
- * Respects '...' and "..." literals (with doubled-quote escapes), [...] identifiers, nested
- * parentheses, and -- / block comments. Returns the items (comment-stripped, trimmed), the
- * offset in `text` where each item's first significant character sits (so a hit can be
- * attributed to the right line), and the index just past the closing parenthesis; null if
- * unbalanced.
+ * Bracketed identifiers are opaque (`]]` escapes honoured); nested parentheses are balanced.
+ * Returns each item trimmed, the offset of its first significant character (for line
+ * attribution), and the index just past the closing parenthesis; null if unbalanced.
  */
 export function parseParenList(text, open) {
     if (text[open] !== '(') return null;
-    const items = [];
-    const offsets = [];
-    const pushItem = (from, to) => {
-        items.push(stripComments(text.slice(from, to)).trim());
-        offsets.push(Math.min(skipInsignificant(text, from), to));
+    const items = [], offsets = [];
+    const push = (from, to) => {
+        const raw = text.slice(from, to);
+        const lead = raw.search(/\S/);
+        items.push(raw.trim());
+        offsets.push(lead === -1 ? to : from + lead);
     };
     let depth = 0, i = open, start = open + 1;
     while (i < text.length) {
         const ch = text[i];
-        if (ch === "'" || ch === '"') {
-            const q = ch; i++;
-            while (i < text.length) {
-                if (text[i] === q) { if (text[i + 1] === q) { i += 2; continue; } break; }
-                i++;
+        if (ch === '[') {
+            let j = i + 1;
+            for (;;) {
+                const close = text.indexOf(']', j);
+                if (close === -1) { j = text.length; break; }
+                if (text[close + 1] === ']') { j = close + 2; continue; }
+                j = close + 1; break;
             }
-            i++; continue;
+            i = j; continue;
         }
-        if (ch === '[') { const close = text.indexOf(']', i + 1); i = close === -1 ? text.length : close + 1; continue; }
-        if (ch === '-' && text[i + 1] === '-') { const nl = text.indexOf('\n', i); i = nl === -1 ? text.length : nl + 1; continue; }
-        if (ch === '/' && text[i + 1] === '*') { const end = text.indexOf('*/', i + 2); i = end === -1 ? text.length : end + 2; continue; }
         if (ch === '(') { depth++; i++; continue; }
         if (ch === ')') {
             depth--;
-            if (depth === 0) { pushItem(start, i); return { items, offsets, end: i + 1 }; }
+            if (depth === 0) { push(start, i); return { items, offsets, end: i + 1 }; }
             i++; continue;
         }
-        if (ch === ',' && depth === 1) { pushItem(start, i); start = i + 1; i++; continue; }
+        if (ch === ',' && depth === 1) { push(start, i); start = i + 1; i++; continue; }
         i++;
     }
     return null;
 }
 
-/** Remove -- and block comments outside string literals, so a commented value cannot hide a literal. */
-export function stripComments(s) {
-    let out = '', i = 0;
-    while (i < s.length) {
-        const ch = s[i];
-        if (ch === "'" || ch === '"') {
-            const q = ch; let j = i + 1;
-            while (j < s.length) {
-                if (s[j] === q) { if (s[j + 1] === q) { j += 2; continue; } break; }
-                j++;
-            }
-            out += s.slice(i, j + 1); i = j + 1; continue;
-        }
-        if (ch === '-' && s[i + 1] === '-') { const nl = s.indexOf('\n', i); i = nl === -1 ? s.length : nl; continue; }
-        if (ch === '/' && s[i + 1] === '*') { const end = s.indexOf('*/', i + 2); i = end === -1 ? s.length : end + 2; continue; }
-        out += ch; i++;
-    }
-    return out;
-}
-
-/** Strip identifier quoting: [Sequence], "Sequence", `Sequence`, Sequence → sequence. */
+/** Strip identifier quoting: [Sequence], "Sequence", `Sequence` → sequence. */
 function bareIdentifier(s) {
     return s.replace(/^[\[\]"`\s]+|[\[\]"`\s]+$/g, '').toLowerCase();
 }
 
-/** Offsets of every newline in `text`, so line lookup is a binary search rather than a rescan per hit. */
+/** Index of the first non-whitespace character at or after `pos` (comments are already masked). */
+function skipSpace(text, pos) {
+    const m = /\S/g;
+    m.lastIndex = pos;
+    const r = m.exec(text);
+    return r ? r.index : text.length;
+}
+
+/** Offsets of every newline, so line lookup is a binary search rather than a rescan per hit. */
 function newlineIndex(text) {
     const offsets = [];
     for (let i = text.indexOf('\n'); i !== -1; i = text.indexOf('\n', i + 1)) offsets.push(i);
@@ -148,29 +135,28 @@ function lineAt(newlines, offset) {
 }
 
 /**
- * Scan SQL text for EntityField INSERTs whose Sequence position holds a bare integer.
+ * Scan SQL for EntityField INSERTs whose Sequence position holds a bare integer.
  * @returns {{ line: number, value: string, columnIndex: number }[]}
  */
-export function scanContent(text) {
+export function scanContent(source) {
+    const text = stripSqlComments(source);
     const hits = [];
     const newlines = newlineIndex(text);
     EF_INSERT_RE.lastIndex = 0;
     let m;
     while ((m = EF_INSERT_RE.exec(text)) !== null) {
-        const open = m.index + m[0].length - 1;
-        const cols = parseParenList(text, open);
+        const cols = parseParenList(text, m.index + m[0].length - 1);
         if (!cols) continue;
         let cursor = cols.end;
         const seqIdx = cols.items.findIndex((c) => bareIdentifier(c) === 'sequence');
-        // The token right after the column list decides the shape. Only `VALUES` carries
-        // tuples to inspect; `INSERT ... SELECT` and anything else is skipped as a whole so a
-        // later, unrelated VALUES can never be read with this INSERT's column positions.
-        const afterCols = skipInsignificant(text, cols.end);
+        // Only a VALUES right after the column list carries tuples to inspect. INSERT ... SELECT
+        // (or anything else) is skipped whole, so a later unrelated VALUES is never read with
+        // this INSERT's column positions.
+        const afterCols = skipSpace(text, cols.end);
         if (seqIdx !== -1 && /^VALUES\b/i.test(text.slice(afterCols, afterCols + 6))) {
             cursor = afterCols + 'VALUES'.length;
-            // One or more tuples: VALUES (...), (...) — comments allowed anywhere between.
             for (;;) {
-                const openAt = skipInsignificant(text, cursor);
+                const openAt = skipSpace(text, cursor);
                 if (text[openAt] !== '(') break;
                 const tuple = parseParenList(text, openAt);
                 if (!tuple) break;
@@ -179,7 +165,7 @@ export function scanContent(text) {
                     hits.push({ line: lineAt(newlines, tuple.offsets[seqIdx]), value, columnIndex: seqIdx });
                 }
                 cursor = tuple.end;
-                const sep = skipInsignificant(text, cursor);
+                const sep = skipSpace(text, cursor);
                 if (text[sep] !== ',') break;
                 cursor = sep + 1;
             }
@@ -189,43 +175,39 @@ export function scanContent(text) {
     return hits;
 }
 
-function git(args) {
-    return execFileSync('git', args, { encoding: 'utf8' }).trim();
-}
+// ─── Git ───────────────────────────────────────────────────────────────────────────────────────
 
-/** The repository root; every pathspec and file read is anchored here so the gate works from any cwd. */
-function repoRoot() {
-    return git(['rev-parse', '--show-toplevel']);
-}
-
-function gitAt(root, args) {
-    return git(['-C', root, ...args]);
+/** git anchored at the repository root, with the hardenings the sibling guards carry. */
+function makeGit(root) {
+    return (args) => execFileSync('git', ['-C', root, '-c', 'core.quotePath=false', ...args], {
+        encoding: 'utf8',
+        maxBuffer: GIT_MAX_BUFFER,
+    }).trim();
 }
 
 /**
- * Migration files changed between `base` and `head`, or — when `head` is undefined — between
- * `base` and the working tree, plus untracked migration files. The working-tree form is what a
- * developer runs before committing; a freshly generated, not-yet-added capture must be visible.
+ * Migration files to scan. CI form: added/copied/modified/renamed between base and head. Local
+ * form (no head): the same against the working tree, plus untracked files.
+ * @returns {{ file: string, allLinesNew: boolean }[]}
  */
-function changedMigrations(root, base, head) {
-    const diffArgs = ['diff', '--name-only', '--diff-filter=ACM', base, ...(head ? [head] : []), '--', 'migrations'];
-    const changed = gitAt(root, diffArgs).split('\n');
-    const untracked = head ? [] : gitAt(root, ['ls-files', '--others', '--exclude-standard', '--', 'migrations']).split('\n');
-    return [...changed, ...untracked].filter((f) => f.endsWith('.sql'));
+export function changedMigrations(git, base, head) {
+    const out = git(['diff', '--name-status', '-M', '--diff-filter=ACMR', base, ...(head ? [head] : []), '--', 'migrations']);
+    const entries = out.split('\n').filter(Boolean).map((line) => {
+        const parts = line.split('\t');
+        return { file: parts[parts.length - 1], allLinesNew: parts[0].startsWith('A') };
+    });
+    if (!head) {
+        for (const f of git(['ls-files', '--others', '--exclude-standard', '--', 'migrations']).split('\n')) {
+            if (f) entries.push({ file: f, allLinesNew: true });
+        }
+    }
+    return entries.filter((e) => inScope(e.file));
 }
 
-/**
- * 1-based line numbers `file` gains between `base` and `head`, read off the `@@ -a,b +c,d @@` hunk
- * headers of a zero-context diff. Only these lines are reported: a legacy literal in an old
- * migration someone touched for another reason is not this PR's to fix (and rewriting it would
- * change the Flyway checksum on every existing database).
- */
-export function addedLines(root, base, head, file) {
-    // An untracked file has no diff: every line is new.
-    if (!head && gitAt(root, ['ls-files', '--', file]) === '') return null;
-    const diff = gitAt(root, ['diff', '-U0', base, ...(head ? [head] : []), '--', file]);
+/** 1-based line numbers added by a unified diff, read off its `@@ -a,b +c,d @@` hunk headers. */
+export function addedLinesFromDiff(diffText) {
     const added = new Set();
-    for (const m of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
+    for (const m of diffText.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
         const start = Number(m[1]);
         const count = m[2] === undefined ? 1 : Number(m[2]);
         for (let l = start; l < start + count; l++) added.add(l);
@@ -233,12 +215,9 @@ export function addedLines(root, base, head, file) {
     return added;
 }
 
-function allMigrations(root) {
-    return gitAt(root, ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'migrations'])
-        .split('\n').filter((f) => f.endsWith('.sql'));
-}
+// ─── Self-test fixtures (also driven by the vitest suite) ──────────────────────────────────────
 
-const SELF_TEST_FIXTURES = [
+export const SELF_TEST_FIXTURES = [
     ['multi-line CodeGen block with the 100000-band placeholder', true, `
       IF NOT EXISTS (SELECT 1 FROM [__mj].[EntityField] WHERE ID = 'abc') BEGIN
          INSERT INTO [\${flyway:defaultSchema}].[EntityField]
@@ -284,12 +263,6 @@ const SELF_TEST_FIXTURES = [
             16,
             'HousingID'
          )`],
-    ['single-line hand-authored INSERT with a literal', true,
-        `INSERT INTO [\${flyway:defaultSchema}].[EntityField] ([ID], [EntityID], [Sequence], [Name], [Description]) VALUES ('30BBD5D1-7CB6-497F-AEF0-D09D877A77BE', '58C8C895-E3AA-48C2-BA68-808337235873', 1, 'ID', N'Primary key, (a) with commas, and parens');`],
-    ['quoted value containing commas and parentheses BEFORE the Sequence column', true,
-        `INSERT INTO [__mj].[EntityField] ([Description], [ID], [EntityID], [Sequence], [Name]) VALUES (N'x, (y), ''z''', 'id', 'eid', 7, 'Name');`],
-    ['a parenthesised integer is still a literal', true,
-        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('id', 'eid', (16), 'Name');`],
     ['a literal whose digits also appear in an earlier UUID value, on a later line', true, `
          INSERT INTO [__mj].[EntityField]
          (
@@ -302,16 +275,26 @@ const SELF_TEST_FIXTURES = [
             16,
             'HousingID'
          )`],
+    ['single-line hand-authored INSERT with a literal', true,
+        `INSERT INTO [\${flyway:defaultSchema}].[EntityField] ([ID], [EntityID], [Sequence], [Name], [Description]) VALUES ('30BBD5D1-7CB6-497F-AEF0-D09D877A77BE', '58C8C895-E3AA-48C2-BA68-808337235873', 1, 'ID', N'Primary key, (a) with commas, and parens');`],
+    ['quoted value containing commas and parentheses BEFORE the Sequence column', true,
+        `INSERT INTO [__mj].[EntityField] ([Description], [ID], [EntityID], [Sequence], [Name]) VALUES (N'x, (y), ''z''', 'id', 'eid', 7, 'Name');`],
     ['a comment between VALUES and the tuple, and between tuples', true,
         `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence]) VALUES -- rows\n('a', 'e', (SELECT 1)), -- next\n('b', 'e', 16);`],
-    ['INSERT ... SELECT followed by an unrelated VALUES is not misread', false,
-        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) SELECT 'a', 'e', 1, 'A';\nINSERT INTO [__mj].[EntityFieldValue] ([ID], [EntityFieldID], [Sequence], [Value]) VALUES ('a', 'f', 3, 'Active');`],
-    ['INSERT ... SELECT does not hide the real INSERT that follows it', true,
-        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Name], [Sequence]) SELECT 'a', 'e', 'A', 1;\nINSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('b', 'e', 16, 'B');`],
+    ['a literal behind a comment on the previous line', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence]) VALUES ('a', 'e', -- ordinal\n 16);`],
+    ['a literal inside a nested block comment does not hide the real one', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence]) VALUES ('a', 'e', /* outer /* 99 */ still comment */ 16);`],
+    ['a bracketed column name containing -- is still an identifier', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [Seq--uence], [Sequence]) VALUES ('a', 5, 16);`],
+    ['a parenthesised integer is still a literal', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('id', 'eid', (16), 'Name');`],
     ['PostgreSQL quoting', true,
         `INSERT INTO "__mj"."EntityField" ("ID", "EntityID", "Sequence", "Name") VALUES ('id', 'eid', 12, 'Name');`],
     ['multi-tuple VALUES with a literal in the second tuple', true,
         `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('a', 'e', (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [__mj].[EntityField] WHERE [EntityID] = 'e'), 'A'), ('b', 'e', 5, 'B');`],
+    ['INSERT ... SELECT does not hide the real INSERT that follows it', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Name], [Sequence]) SELECT 'a', 'e', 'A', 1;\nINSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('b', 'e', 16, 'B');`],
     ['the computed form CodeGen emits', false, `
          INSERT INTO [\${flyway:defaultSchema}].[EntityField]
          (
@@ -323,12 +306,14 @@ const SELF_TEST_FIXTURES = [
          VALUES
          (
             'da98df59-65aa-469a-b44a-8059aa839366',
-            '34248F34-2837-EF11-86D4-6045BDEE16E6',
-            (SELECT COALESCE(MAX([Sequence]), 0) FROM [__mj].[EntityField] WHERE [EntityID] = '34248F34-2837-EF11-86D4-6045BDEE16E6') + 20,
+            '34248F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: Actions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [__mj].[EntityField] WHERE [EntityID] = '34248F34-2837-EF11-86D4-6045BDEE16E6'),
             'RunMode'
          )`],
-    ['the hand-written +1 form', false,
-        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('a', 'e', (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [__mj].[EntityField] WHERE [EntityID] = 'e'), 'A');`],
+    ['the older + <ordinal> form is also an expression', false,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('a', 'e', (SELECT COALESCE(MAX([Sequence]), 0) FROM [__mj].[EntityField] WHERE [EntityID] = 'e') + 20, 'A');`],
+    ['INSERT ... SELECT followed by an unrelated VALUES is not misread', false,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) SELECT 'a', 'e', 1, 'A';\nINSERT INTO [__mj].[EntityFieldValue] ([ID], [EntityFieldID], [Sequence], [Value]) VALUES ('a', 'f', 3, 'Active');`],
     ['a literal in an unrelated table', false,
         `INSERT INTO [\${flyway:defaultSchema}].[SomeOtherTable] ([ID], [Sequence]) VALUES ('abc', 100025);`],
     ['EntityFieldValue is not EntityField', false,
@@ -337,6 +322,8 @@ const SELF_TEST_FIXTURES = [
         `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Name]) VALUES ('a', 'e', 'A');`],
     ['a literal in a different position than Sequence', false,
         `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Length], [Sequence], [Name]) VALUES ('a', 'e', 255, (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [__mj].[EntityField] WHERE [EntityID] = 'e'), 'A');`],
+    ['a digit string inside a string literal in the Sequence position is not an integer', false,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence]) VALUES ('a', 'e', '16');`],
 ];
 
 function selfTest() {
@@ -355,45 +342,9 @@ function selfTest() {
     return 0;
 }
 
-function main(argv) {
-    if (argv[0] === '--self-test') return selfTest();
+// ─── CLI ───────────────────────────────────────────────────────────────────────────────────────
 
-    const root = repoRoot();
-    let files, base, head;
-    if (argv[0] === '--all') {
-        files = allMigrations(root);
-    } else {
-        if (argv.length >= 2) {
-            [base, head] = argv;
-        } else {
-            // Local form: the working tree (including untracked files) against the merge base.
-            base = gitAt(root, ['merge-base', process.env.BASE_REF || 'origin/next', 'HEAD']);
-        }
-        files = changedMigrations(root, base, head);
-    }
-    if (files.length === 0) { console.log(`${DIM}no changed migrations to check${NC}`); return 0; }
-
-    let violations = 0;
-    for (const f of files) {
-        const full = join(root, f);
-        if (!existsSync(full)) continue;
-        let hits = scanContent(readFileSync(full, 'utf8'));
-        if (base !== undefined) {
-            const added = addedLines(root, base, head, f);
-            if (added) hits = hits.filter((h) => added.has(h.line));
-        }
-        if (hits.length === 0) continue;
-        violations++;
-        console.log(`${RED}✗ ${f}${NC}`);
-        for (const h of hits) console.log(`    ${YELLOW}line ${h.line}${NC}: Sequence = ${h.value}`);
-    }
-    if (violations > 0 && argv[0] === '--all') {
-        // Informational: committed migrations are left alone by policy (Flyway checksums).
-        console.log(`\n${YELLOW}${violations} committed migration(s) carry a literal Sequence — left alone by policy; see migrations/CLAUDE.md${NC}`);
-        return 0;
-    }
-    if (violations > 0) {
-        console.log(`
+const REMEDIATION = `
 ${RED}EntityField INSERT with a literal Sequence${NC}
 
 That number was only ever free on the database CodeGen ran against. Flyway runs every
@@ -403,21 +354,56 @@ same entity collides on UQ_EntityField_EntityID_Sequence. Without SET XACT_ABORT
 unique violation aborts one statement, execution continues, and the run dies later on an
 unrelated-looking FK error against EntityFieldValue.
 
-Replace the literal with an apply-time expression. CodeGen emits the first form (a batch
-executes in emission order, so the values rise in that order; the schema-ordinal offset
-only widens the gaps); the second is fine for a hand-written correction of a single field:
-
-    (SELECT COALESCE(MAX([Sequence]), 0)
-       FROM [\${flyway:defaultSchema}].[EntityField]
-      WHERE [EntityID] = '<entity-id>') + <schema-ordinal>
+Replace the literal with the apply-time expression CodeGen emits, one INSERT statement
+per row (a multi-row VALUES evaluates every subquery against the same snapshot):
 
     (SELECT COALESCE(MAX([Sequence]), 0) + 1
        FROM [\${flyway:defaultSchema}].[EntityField]
       WHERE [EntityID] = '<entity-id>')
 
-Background: migrations/CLAUDE.md, MJ#3670, MJ#4202.`);
-        return 1;
+Background: migrations/CLAUDE.md, MJ#3670, MJ#4202.`;
+
+function main(argv) {
+    if (argv[0] === '--self-test') return selfTest();
+
+    const root = execFileSync('git', ['rev-parse', '--show-toplevel'], { encoding: 'utf8' }).trim();
+    const git = makeGit(root);
+    let entries, base, head;
+    if (argv[0] === '--all') {
+        entries = git(['ls-files', '--cached', '--others', '--exclude-standard', '--', 'migrations'])
+            .split('\n').filter(inScope).map((file) => ({ file, allLinesNew: true }));
+    } else {
+        if (argv.length >= 2) {
+            [base, head] = argv;
+        } else {
+            base = git(['merge-base', process.env.BASE_REF || 'origin/next', 'HEAD']);
+        }
+        entries = changedMigrations(git, base, head);
     }
+    if (entries.length === 0) { console.log(`${DIM}no changed migrations to check${NC}`); return 0; }
+
+    let violations = 0;
+    for (const { file, allLinesNew } of entries) {
+        const full = join(root, file);
+        if (!existsSync(full)) continue;
+        let hits = scanContent(readFileSync(full, 'utf8'));
+        if (hits.length === 0) continue;
+        // Only now pay for a diff, and only for this file: legacy literals in untouched lines of an
+        // edited migration are not this PR's to fix (and rewriting them would change checksums).
+        if (base !== undefined && !allLinesNew) {
+            const added = addedLinesFromDiff(git(['diff', '-U0', base, ...(head ? [head] : []), '--', file]));
+            hits = hits.filter((h) => added.has(h.line));
+            if (hits.length === 0) continue;
+        }
+        violations++;
+        console.log(`${RED}✗ ${file}${NC}`);
+        for (const h of hits) console.log(`    ${YELLOW}line ${h.line}${NC}: Sequence = ${h.value}`);
+    }
+    if (violations > 0 && argv[0] === '--all') {
+        console.log(`\n${YELLOW}${violations} committed migration(s) carry a literal Sequence — left alone by policy; see migrations/CLAUDE.md${NC}`);
+        return 0;
+    }
+    if (violations > 0) { console.log(REMEDIATION); return 1; }
     console.log(`${GREEN}✓ no literal EntityField sequences in ${argv[0] === '--all' ? 'any' : 'changed'} migrations${NC}`);
     return 0;
 }

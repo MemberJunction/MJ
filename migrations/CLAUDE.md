@@ -186,14 +186,9 @@ If an appended CodeGen block inserts `EntityField` rows, the `Sequence` must be 
 evaluated **at apply time**, never the number CodeGen wrote:
 
 ```sql
--- ✅ correct — what CodeGen emits. Unique on any database in any order. The batch is emitted in
---    schema order and executes sequentially, so values rise in that order; the SCHEMA ORDINAL
---    offset only widens the gaps. The values are disposable either way (see below).
-(SELECT COALESCE(MAX([Sequence]), 0)
-   FROM [${flyway:defaultSchema}].[EntityField]
-  WHERE [EntityID] = '<entity-id>') + <schema-ordinal>
-
--- ✅ also fine for a HAND-written correction of a single field, where there is no batch to order
+-- ✅ correct — what CodeGen emits, one INSERT statement per row. Unique on any database in any
+--    order: each INSERT re-evaluates MAX after the one before it. (A multi-row VALUES evaluates
+--    every subquery against the same snapshot — do not batch rows that way.)
 (SELECT COALESCE(MAX([Sequence]), 0) + 1
    FROM [${flyway:defaultSchema}].[EntityField]
   WHERE [EntityID] = '<entity-id>')
@@ -216,10 +211,10 @@ one before it: the batch is emitted in schema order (the pending-fields SELECT o
 in pass 1 before pass 2 adds the virtual ones. Two invariants, both pinned by
 `entity-field-sequence-insert.test.ts`: keep the `ORDER BY`, and never parallelize the chunk.
 
-**Why this is not a style preference.** The number CodeGen emits is a *temporary* placeholder —
-`MAX(Sequence) + 100000 + ordinal` — that `spUpdateExistingEntityFieldsFromSchema` rewrites to a
-proper low value moments later, both live and from `R__RefreshMetadata.sql`. Locally it is always
-correct by the time anyone looks.
+**Why this is not a style preference.** Whatever value the INSERT lands on is a *temporary*
+placeholder that `spUpdateExistingEntityFieldsFromSchema` rewrites to a proper low value moments
+later, both live and from `R__RefreshMetadata.sql`. Locally it is always correct by the time anyone
+looks — which is exactly why a literal copied from the generating database looks fine there.
 
 But Flyway runs **every versioned migration before any repeatable script**. On a database built only
 from migrations, that renumber never happens in between. So two migrations that add columns to the
@@ -242,13 +237,19 @@ CodeGen run — across two appended migrations the park has nothing reliable to 
 second migration collides (MJ#4202). Two guard rails back the rule up, and CI runs both in the
 "Check migrations" workflow (the self-test on every PR, the scan on every PR that touches
 `migrations/`). The scan is positional — it parses the INSERT's column list and flags **any** bare
-integer in the `Sequence` position, high band or low — and it BLOCKS the PR:
+integer in the `Sequence` position, high band or low — and it BLOCKS the PR. All three CodeGen
+emitters (schema-derived fields, virtual-entity fields, IS-A parent fields) use the same
+`applyTimeEntityFieldSequenceSQL` helper:
 
 ```bash
-.github/scripts/check-migration-entityfield-sequence.sh              # changed migrations (CI gate)
-.github/scripts/check-migration-entityfield-sequence.sh --self-test  # the detector's own fixtures
-.github/scripts/check-migration-entityfield-sequence.sh --all        # every committed migration (informational)
+node .github/scripts/check-migration-entityfield-sequence.mjs               # local: working tree + untracked vs merge-base(origin/next)
+node .github/scripts/check-migration-entityfield-sequence.mjs <base> <head> # CI: lines added between two commits
+node .github/scripts/check-migration-entityfield-sequence.mjs --self-test   # the detector's own fixtures
+node .github/scripts/check-migration-entityfield-sequence.mjs --all         # every migration (informational)
 ```
+
+Scope on both forms: Flyway versioned files only (`V<12 digits>__*.sql`) — baselines are dumps of
+`EntityField` and literal by construction, and `tests/` fixtures never run.
 
 Existing migrations using the literal form are left alone deliberately — they apply cleanly today,
 and rewriting them would change Flyway checksums on every existing database for no benefit.
