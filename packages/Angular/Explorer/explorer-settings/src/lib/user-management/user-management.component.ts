@@ -952,12 +952,21 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
       if (usersNeedingRole.length > 0) {
         const tg = await this.metadata.CreateTransactionGroup();
-        // Each Save() only ENROLS the row in the group — the write is deferred to Submit(). But
-        // validation runs eagerly, so a row refused by the server-side role-elevation guard
-        // (`MJUserRoleEntityServer`, issue #4282: a non-Owner may only assign a role they hold
-        // themselves) returns false HERE and is never enrolled. Ignoring that return meant an
-        // all-refused batch left the group empty, Submit() returned true for having nothing to do,
-        // and the screen reported success having assigned nothing.
+        // Each Save() only ENROLS the row in the group — the write is deferred to Submit(). Inside
+        // a TransactionGroup, Save() therefore reports ENROLMENT, not the write's outcome: the
+        // provider queues the item locally and returns true with no round trip
+        // (`GraphQLDataProvider.Save` — "part of a TG always return true").
+        //
+        // So the role-elevation guard is NOT what this check catches. `MJUserRoleEntityServer`
+        // (issue #4282) lives in `@memberjunction/core-entities-server`, which no browser package
+        // depends on, so it never registers here — it refuses on the server, during Submit(), and
+        // surfaces through the Submit() failure below.
+        //
+        // What this check DOES catch is a CLIENT-side refusal — a CheckPermissions denial or a
+        // field-rule failure — which really does return false here, leaving that row unenrolled.
+        // Ignoring the return meant an all-refused batch left the group EMPTY, and an empty group's
+        // Submit() returns true for having nothing to do, so the screen reported success having
+        // assigned nothing. That is the failure this guards; keep it.
         const refusals: string[] = [];
         for (const userId of usersNeedingRole) {
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
@@ -970,7 +979,8 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
           }
         }
         if (refusals.length > 0) {
-          // Nothing was written: refused rows never enrolled, and the rest are still only queued.
+          // Nothing was written: the refused rows never enrolled, and the rest are still only
+          // queued because Submit() is not reached.
           throw new Error(`Failed to assign roles — nothing was changed.\n${refusals.join('\n')}`);
         }
 
