@@ -724,18 +724,38 @@ describe('BaseEntity save guard', () => {
         expect(saved).toBe(false);
         expect(saveSpy).not.toHaveBeenCalled(); // rejected BEFORE any SQL was generated
         expect(entity.LatestResult?.CompleteMessage).toMatch(
-            /Field 'Bonus' does not exist on entity 'Employees' or you do not have access to it/
+            /You do not have permission to update field 'Bonus' on entity 'Employees'/
         );
     });
 
-    it('the rejection message does not disclose whether the field is missing or forbidden', async () => {
+    it('names the missing permission when the user CAN read the field', async () => {
+        // Bonus is readable and not updatable. The ambiguous wording protects two facts — that
+        // the column exists, and that it is restricted for this user — and both are already
+        // theirs: they can read Bonus and see its value. Withholding the reason would only tell
+        // someone that a field they are looking at might not exist.
         const { entity } = makeEntity(buildUser([INTERN_ROLE_ID]));
         entity.Set('Bonus', 999999);
         await entity.Save(opts());
 
         const message = entity.LatestResult?.CompleteMessage ?? '';
+        expect(message).toContain("You do not have permission to update field 'Bonus'");
+        expect(message).not.toContain('or you do not have access to it');
+    });
+
+    it('keeps the ambiguous wording when the user CANNOT read the field', async () => {
+        // Reachable in production, not a hypothetical: SetMany deliberately skips the readability
+        // assertion (it is the hydration / resolver-apply path), so server-side code can dirty a
+        // read-denied field and land on the update gate. Naming the reason there WOULD disclose
+        // that a column the caller cannot see exists and is restricted.
+        const { entity } = makeEntity(buildUser([INTERN_ROLE_ID]));
+        entity.SetMany({ Salary: 999999 }); // Salary is read-denied for Intern; Set() would throw
+        expect(entity.Fields.find(f => f.Name === 'Salary')!.Dirty).toBe(true); // non-vacuous
+
+        await entity.Save(opts());
+
+        const message = entity.LatestResult?.CompleteMessage ?? '';
         expect(message).toContain('or you do not have access to it');
-        expect(message).not.toMatch(/restricted|denied|permission|forbidden/i);
+        expect(message).not.toMatch(/permission to update/i);
     });
 
     it('allows the same save for a user who holds the granting role', async () => {
@@ -889,6 +909,52 @@ describe('BaseEntity Get/Set field-security gate', () => {
         expect(() => entity.Get('Salary')).toThrow();
         expect(entity.Fields.find(f => f.Name === 'Salary')!.Value).toBe(250000);
         expect(entity.GetAll()['Salary']).toBe(250000);
+    });
+
+    // ── GetRecordName: the read that runs whether or not anyone asked for it ──
+    //
+    // `CacheRecordName()` calls `GetRecordName()` automatically after every Load, LoadFromData
+    // and Save. `GetRecordName()` reads the name field through `Get()`, which THROWS for a denied
+    // field — so denying an entity's NAME field made every record on it fail to open, with an
+    // error naming the Name field that read like the record itself was broken. Found in manual
+    // Phase 5 testing: "Failed to load Clients record. Field 'Name' does not exist on entity
+    // 'Clients' or you do not have access to it."
+
+    /** Treat the Intern-denied `Salary` field as the entity's name field. */
+    function withDeniedNameField(entity: BaseEntity): void {
+        const info = entity.EntityInfo;
+        Object.defineProperty(info, 'NameField', {
+            get: () => info.Fields.find(f => f.Name === 'Salary'),
+            configurable: true,
+        });
+    }
+
+    it('GetRecordName returns null rather than throwing when the name field is denied', () => {
+        const entity = makeEntity(buildUser([INTERN_ROLE_ID]));
+        withDeniedNameField(entity);
+
+        expect(() => entity.GetRecordName()).not.toThrow();
+        expect(entity.GetRecordName()).toBeNull();
+    });
+
+    it('GetRecordName still returns the value when the name field IS readable', () => {
+        // The guard must not silently blank the name for everyone.
+        const entity = makeEntity(buildUser([HR_ROLE_ID]));
+        withDeniedNameField(entity);
+
+        expect(entity.GetRecordName()).toBe(250000);
+    });
+
+    it('hydration completes when the name field is denied — the record-open failure', () => {
+        // The user-visible bug: CacheRecordName runs as part of hydration, so the throw took out
+        // the load itself, not just the title.
+        const entityInfo = provider.Entities.find(e => e.Name === 'Employees')!;
+        const entity = new TypedTestEntity(entityInfo);
+        Object.defineProperty(entity, 'ActiveUser', { get: () => buildUser([INTERN_ROLE_ID]), configurable: true });
+        withDeniedNameField(entity);
+
+        expect(() => entity.LoadFromData({ ID: '1', Name: 'Ada', Salary: 250000, Bonus: 10, Notes: 'n' })).not.toThrow();
+        expect(entity.Get('Name')).toBe('Ada'); // readable fields still hydrated normally
     });
 
 });

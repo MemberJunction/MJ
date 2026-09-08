@@ -4606,6 +4606,10 @@ export abstract class BaseEntity<T = unknown> {
      * so the resolver strips denied-read fields from the client payload before applying it
      * (`StripDeniedReadFieldsFromClientInput`), restoring the "never dirty" premise this
      * dirty-fields-only check rests on.
+     *
+     * The refusal names the missing permission when the caller can READ the field, and falls back
+     * to the ambiguous "does not exist or you do not have access" wording when they cannot. See
+     * {@link FieldSecurityWriteDenialMessage} for why that split discloses nothing.
      */
     protected CheckFieldLevelUpdatePermissions(): void {
         if (!this.IsSaved) {
@@ -4615,13 +4619,30 @@ export abstract class BaseEntity<T = unknown> {
         if (!denied) {
             return;
         }
+        // Resolved once, and only if we are actually going to reject: the wording depends on
+        // whether the caller can READ the field they were refused a write on.
+        let deniedRead: Set<string> | null | undefined;
         for (const field of this.Fields) {
-            if (field.Dirty && denied.has(field.Name.trim().toLowerCase())) {
+            const key = field.Name.trim().toLowerCase();
+            if (field.Dirty && denied.has(key)) {
                 LogDebug(
                     `[FieldSecurity] Rejected save on '${this.EntityInfo.Name}': ` +
                     `field '${field.Name}' is not updatable by this user`
                 );
-                throw new FieldSecurityError(field.Name, this.EntityInfo.Name);
+                // A field the caller can READ gets the real reason. Both facts the ambiguous
+                // wording protects — that the column exists, and that it is restricted for them —
+                // are already theirs, so withholding the reason only tells someone a field whose
+                // values they are looking at might not exist.
+                //
+                // A field they CANNOT read keeps the ambiguous wording. Not hypothetical: SetMany
+                // deliberately skips the readability assertion (hydration / resolver-apply path),
+                // so server-side code can dirty a read-denied field and land here.
+                if (deniedRead === undefined) {
+                    deniedRead = this.deniedFieldsForActiveUser(u => this.EntityInfo.GetDeniedReadFields(u));
+                }
+                throw deniedRead?.has(key)
+                    ? new FieldSecurityError(field.Name, this.EntityInfo.Name)
+                    : FieldSecurityError.WriteDenial(field.Name, this.EntityInfo.Name);
             }
         }
     }
@@ -5661,9 +5682,20 @@ export abstract class BaseEntity<T = unknown> {
         if (!f) {
             return null;
         }
-        else {
-            return this.Get(f.Name)
+        // Field security: the name field is an ordinary field and can be denied like any other.
+        // `Get()` THROWS for a denied field, and this method runs AUTOMATICALLY after every
+        // Load / LoadFromData / Save via CacheRecordName — so an unguarded read here does not
+        // hide a name, it makes the record fail to load at all, with a message about the name
+        // field that reads like the record itself is broken.
+        //
+        // Returning null is the same answer callers already handle for "this entity has no name
+        // field", and every one of them degrades to the primary key. It also keeps a denied name
+        // OUT of the provider's record-name cache, which is keyed by entity + primary key and NOT
+        // by user — caching it would leak it to the next caller.
+        if (!this.EntityInfo.IsFieldReadableByUser(f.Name, this.ActiveUser)) {
+            return null;
         }
+        return this.Get(f.Name);
     }
 
 
