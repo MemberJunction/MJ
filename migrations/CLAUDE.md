@@ -199,6 +199,10 @@ evaluated **at apply time**, never the number CodeGen wrote:
 
 -- ❌ wrong — a placeholder that was only ever valid on the database CodeGen ran against
 100025,
+
+-- ❌ equally wrong — the catalog ordinal. Low, so it LOOKS like a real value; it is not.
+--    Only free on the database CodeGen ran against (v6.1.0-edge.4/5, MJ#4202).
+16,
 ```
 
 **Values are disposable; order is not.** `spUpdateExistingEntityFieldsFromSchema` overwrites `Sequence`
@@ -227,12 +231,19 @@ Note what makes this invisible to ordinary review: whether your migration collid
 migration **someone else wrote**, and on the state of a database **nobody is looking at**. It cannot
 fail on a working dev database. It fails only on fresh installs — CI, new developers, releases.
 
-CodeGen now emits the computed form (`manage-metadata.ts`, `getPendingEntityFieldINSERTSQL`), so
-newly generated blocks are already correct. Two guard rails back it up:
+CodeGen emits the computed form (`manage-metadata.ts`, `getPendingEntityFieldINSERTSQL`), so newly
+generated blocks are correct. It has regressed once already: #4048 (v6.1.0-edge.4) switched the
+emitter to the catalog ordinal plus a `+100000` "park" `UPDATE`, which is safe only within one
+CodeGen run — across two appended migrations the park has nothing reliable to move, and the
+second migration collides (MJ#4202). Two guard rails back the rule up, and CI runs both in the
+"Check migrations" workflow (the self-test on every PR, the scan on every PR that touches
+`migrations/`). The scan is positional — it parses the INSERT's column list and flags **any** bare
+integer in the `Sequence` position, high band or low — and it BLOCKS the PR:
 
 ```bash
 .github/scripts/check-migration-entityfield-sequence.sh              # changed migrations (CI gate)
-.github/scripts/check-migration-entityfield-sequence.sh --self-test  # the detector's own tests
+.github/scripts/check-migration-entityfield-sequence.sh --self-test  # the detector's own fixtures
+.github/scripts/check-migration-entityfield-sequence.sh --all        # every committed migration (informational)
 ```
 
 Existing migrations using the literal form are left alone deliberately — they apply cleanly today,

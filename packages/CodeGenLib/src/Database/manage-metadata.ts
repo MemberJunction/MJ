@@ -4874,17 +4874,21 @@ export class ManageMetadataBase {
       const conflictCheck = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ID = '${newEntityFieldUUID}' OR (EntityID = '${n.EntityID}' AND Name = '${n.FieldName}')`;
       const guard = this.dbProvider.wrapInsertWithConflictGuard(conflictCheck);
 
-      // Sequence is the catalog ordinal of this column on the entity's BaseView
-      // (`SourceOrdinal` / column_id). Existing rows on the same entity are parked
-      // at Sequence+100000 first (see parkEntityFieldSequencesSQL) so this INSERT
-      // cannot collide on UQ_EntityField_EntityID_Sequence. Immediately after the
-      // batch, manageEntityFields calls spUpdateExistingEntityFieldsFromSchema
-      // which rewrites EVERY field on the entity from the live view — including
-      // parked rows. That proc must run AFTER views are current (CodeGen Pass 2,
-      // after SQL generation). Pass 1 still emits this SQL against whatever the
-      // view is at that moment; Pass 2 is the one that matches the finished BaseView.
+      // Sequence is emitted as an expression evaluated AT APPLY TIME, never as a literal.
+      // The value is disposable: right after this batch, manageEntityFields calls
+      // spUpdateExistingEntityFieldsFromSchema, which rewrites every field on the entity
+      // from the live schema, and R__RefreshMetadata does the same on every deploy. What
+      // must hold is uniqueness on UQ_EntityField_EntityID_Sequence on ANY database, in
+      // ANY order — including a from-scratch replay where this INSERT was appended
+      // verbatim to a migration and Flyway runs every versioned migration before the
+      // repeatable renumber. MAX(Sequence) at apply time sits above every row the entity
+      // has at that moment; adding the field's schema ordinal (SourceOrdinal / column_id)
+      // keeps a batch of new fields in relative order regardless of execution order.
+      // A literal — the catalog ordinal, or the MAX+100000+ordinal placeholder the pending
+      // SELECT computes — is only valid on the database CodeGen ran against (#3670, #4202).
       const sourceOrdinal = typeof n.SourceOrdinal === 'number' && n.SourceOrdinal > 0 ? n.SourceOrdinal : 1;
-      const sequenceExpr = String(sourceOrdinal);
+      const sequenceExpr =
+         `(SELECT COALESCE(MAX(${this.qi('Sequence')}), 0) FROM ${this.qs(mj_core_schema(), 'EntityField')} WHERE ${this.qi('EntityID')} = '${n.EntityID}') + ${sourceOrdinal}`;
 
       return `
       ${guard.prefix}
@@ -4960,35 +4964,6 @@ export class ManageMetadataBase {
     * @param sqlDefaultValue
     * @returns
     */
-   /**
-    * Park existing EntityField.Sequence values out of the 1..N catalog range so a
-    * following INSERT can use the real BaseView column_id without colliding on
-    * UQ_EntityField_EntityID_Sequence. The +100000 band is unique-safe; the
-    * subsequent spUpdateExistingEntityFieldsFromSchema rewrite brings every row
-    * (parked and new) back to live catalog order.
-    *
-    * Parks ONLY when nothing on the entity is parked yet, which is what makes a second
-    * emission for the same entity in the same run a no-op. `Sequence < 100000` alone does
-    * not achieve that: after the first park the rows below the band are precisely the ones
-    * the first pass just INSERTED at their catalog ordinals, so a second park lifts THOSE
-    * into the band — onto the row the first park moved from the same ordinal, and the
-    * migration dies on UQ_EntityField_EntityID_Sequence with a duplicate at 100000+ordinal.
-    * Reachable whenever an entity gains fields in both CodeGen passes: pass 1 for the real
-    * columns, pass 2 for the denormalized name column a new foreign key introduces.
-    */
-   protected parkEntityFieldSequencesSQL(entityID: string): string {
-      const table = this.qs(mj_core_schema(), 'EntityField');
-      return `UPDATE ${table}
-         SET ${this.qi('Sequence')} = ${this.qi('Sequence')} + 100000
-       WHERE ${this.qi('EntityID')} = '${entityID}'
-         AND ${this.qi('Sequence')} < 100000
-         AND NOT EXISTS (
-             SELECT 1 FROM ${table}
-              WHERE ${this.qi('EntityID')} = '${entityID}'
-                AND ${this.qi('Sequence')} >= 100000
-         );`;
-   }
-
    protected parseDefaultValue(sqlDefaultValue: string): string {
       if (sqlDefaultValue === null || sqlDefaultValue === undefined) {
          return null!;
@@ -5021,16 +4996,11 @@ export class ManageMetadataBase {
                // Batch size is configurable via `metadataInsertBatchSize` (default 250).
                const CHUNK_SIZE = configInfo.metadataInsertBatchSize ?? 250;
                const inserts: string[] = [];
-               const parkedEntityIDs = new Set<string>();
                for (let i = 0; i < newEntityFields.length; ++i) {
                   const n = newEntityFields[i];
                   if (n.EntityID !== null && n.EntityID !== undefined && n.EntityID.length > 0) {
                      // need to check for null entity id = that is because the above query can return candidate Entity Fields but the entities may not have been created if the entities
                      // that would have been created violate rules - such as not having an ID column, etc.
-                     if (!parkedEntityIDs.has(n.EntityID)) {
-                        inserts.push(this.parkEntityFieldSequencesSQL(n.EntityID));
-                        parkedEntityIDs.add(n.EntityID);
-                     }
                      const newEntityFieldUUID = this.createNewUUID();
                      inserts.push(this.getPendingEntityFieldINSERTSQL(newEntityFieldUUID, n));
                   }
