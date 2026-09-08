@@ -77,6 +77,8 @@ describe('SQLLogging batch separators in the replayable log', () => {
             expect(SQLLogging.declaresBatchScopedVariable(proc)).toBe(false);
             const fn = 'CREATE OR ALTER FUNCTION [__mj].[fnX]() RETURNS INT\nAS\nBEGIN\n    DECLARE @n INT = 1;\n    RETURN @n;\nEND';
             expect(SQLLogging.declaresBatchScopedVariable(fn)).toBe(false);
+            const altered = 'ALTER PROCEDURE [__mj].[spX]\nAS\nBEGIN\n    DECLARE @id UNIQUEIDENTIFIER;\nEND';
+            expect(SQLLogging.declaresBatchScopedVariable(altered)).toBe(false);
         });
 
         it('matches a batch-scoped DECLARE that follows a routine and its GO in the same unit', () => {
@@ -126,6 +128,18 @@ describe('SQLLogging batch separators in the replayable log', () => {
         await SQLLogging.appendToSQLLogFile('DECLARE @n INT;\nSELECT @n = 1;\nGO', 'self-terminated');
         const written = fs.readFileSync(logPath, 'utf-8');
         expect(written.match(/^\s*GO\s*$/gim)).toHaveLength(1);
+    });
+
+    it('suppressOutputForTests closes an open capture file and restores it', async () => {
+        const restore = SQLLogging.suppressOutputForTests();
+        try {
+            expect(SQLLogging.SQLLoggingFilePath).toBe('');
+            await SQLLogging.appendToSQLLogFile('SELECT 1', 'while suppressed');
+            expect(fs.readFileSync(logPath, 'utf-8')).toBe('');
+        } finally {
+            restore();
+        }
+        expect(SQLLogging.SQLLoggingFilePath).toBe(logPath);
     });
 
     it('leaves statements without variables alone', async () => {

@@ -140,12 +140,12 @@ export class SQLLogging {
         return folderPath;
     }
     public static initSQLLogging() {
-        SQLLogging._OmitRecurringScriptsFromLog = configInfo.SQLOutput.omitRecurringScriptsFromLog;
+        const config = configInfo.SQLOutput;
+        if (!config) {
+            throw new Error("SQLOutput config is required to enable metadata logging");
+        }
+        SQLLogging._OmitRecurringScriptsFromLog = config.omitRecurringScriptsFromLog;
         if (!SQLLogging.SQLLoggingFilePath) {
-            const config = configInfo.SQLOutput;
-            if(!config){
-                throw new Error("SQLOutput config is required to enable metadata logging");
-            }
 
             if (!config.enabled)
                 return;
@@ -199,18 +199,25 @@ export class SQLLogging {
     }
 
     /**
-     * Test hook — turns SQL capture off for the process so {@link LogSQLAndExecute} does not refuse
-     * to run against a stub connection with no CodeGen_Run file open. Returns a function that
-     * restores the previous setting; call it from `afterAll`.
+     * Test hook — turns SQL capture off for the process: disables `SQLOutput` so
+     * {@link LogSQLAndExecute} does not refuse to run against a stub connection with no CodeGen_Run
+     * file open, and closes any capture file already open so nothing is written meanwhile. Returns a
+     * function that restores both; call it from `afterAll`.
      */
     public static suppressOutputForTests(): () => void {
         const output = configInfo.SQLOutput;
-        if (!output) {
-            return () => undefined;
+        const previousEnabled = output?.enabled;
+        const previousPath = SQLLogging._SQLLoggingFilePath;
+        if (output) {
+            output.enabled = false;
         }
-        const previous = output.enabled;
-        output.enabled = false;
-        return () => { output.enabled = previous; };
+        SQLLogging._SQLLoggingFilePath = '';
+        return () => {
+            if (output && previousEnabled !== undefined) {
+                output.enabled = previousEnabled;
+            }
+            SQLLogging._SQLLoggingFilePath = previousPath;
+        };
     }
 
      public static finishSQLLogging() {
@@ -336,7 +343,7 @@ export class SQLLogging {
 
     /**
      * True when the SQL text declares a batch-scoped T-SQL local variable: a `DECLARE @name ...` at the
-     * start of any line with no routine header (`CREATE [OR ALTER] PROCEDURE|FUNCTION|TRIGGER`) before
+     * start of any line with no routine header (`CREATE|ALTER [OR ALTER] PROCEDURE|FUNCTION|TRIGGER`) before
      * it. T-SQL variables are scoped to the batch wherever they are declared — after `SET NOCOUNT ON`,
      * inside `IF ... BEGIN ... END` — so the match is not limited to the first statement. A declaration
      * inside a routine body is routine-scoped and cannot collide across units, so it does not count.
@@ -347,7 +354,7 @@ export class SQLLogging {
         }
         // `[ \t]*` rather than `\s*` so the multiline anchors cannot walk across blank lines.
         const declaration = /^[ \t]*DECLARE\s+@/im;
-        const routineHeader = /^[ \t]*CREATE\s+(OR\s+ALTER\s+)?(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/im;
+        const routineHeader = /^[ \t]*(CREATE\s+(OR\s+ALTER\s+)?|ALTER\s+)(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/im;
         // A routine body ends at its GO, so judge each batch of the unit on its own: a DECLARE after a
         // routine's GO is batch-scoped again.
         for (const batch of sql.split(/^[ \t]*GO[ \t]*$/im)) {
