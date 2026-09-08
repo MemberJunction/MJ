@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 
 // Mock sql-formatter (used by SqlLoggingSessionImpl)
 vi.mock('sql-formatter', () => ({
@@ -26,7 +26,7 @@ import { MJQueryEntityExtended, MJUserViewEntityExtended, QueryEngine } from '@m
  * Overrides resolveQuery to use injected mock queries instead of
  * requiring full provider Config().
  */
-class TestPipelineProvider extends GenericDatabaseProvider {
+class TestPipelineProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 

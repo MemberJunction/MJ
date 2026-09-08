@@ -11,14 +11,14 @@
  * @since 2.49.0
  */
 
-import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended } from '@memberjunction/core-entities';
+import { MJAIAgentTypeEntity,  MJTemplateParamEntity, MJActionParamEntity, MJAIAgentRelationshipEntity, MJAIAgentNoteEntity, MJAIAgentExampleEntity, MJConversationDetailEntity, MJAIAgentRequestEntity, MJAIAgentRequestTypeEntity, FileStorageEngineBase, MJAISkillEntity, MJEnvironmentEntityExtended, MJConversationSkillEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { UserInfo, Metadata, RunView, LogStatus, LogStatusEx, LogError, LogErrorEx, IsVerboseLoggingEnabled, IMetadataProvider, DatabaseProviderBase } from '@memberjunction/core';
 import { AgentRunWatchdog } from './agent-run-watchdog';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { ChatMessage, ChatMessageContent, ChatMessageContentBlock, AIErrorType, BaseRealtimeModel, GetAIAPIKey, IRealtimeSession, JSONObject, RealtimeSessionParams, RealtimeTranscript, RealtimeToolCall, RealtimeUsage } from '@memberjunction/ai';
 import { BaseAgentType } from './agent-types/base-agent-type';
-import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual } from '@memberjunction/global';
+import { CopyScalarsAndArrays, JSONValidator, MJGlobal, SafeExpressionEvaluator, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
 // token optimization via @memberjunction/context-crush (SmartCrusher/CacheAligner-inspired)
 import { CrushJSON, DescribeCrush, PartitionStablePrefix, type JsonValue } from '@memberjunction/context-crush';
 // AST-aware code reduction (CodeCompressor-inspired) — opt-in per agent type
@@ -103,7 +103,8 @@ import {
     AgentSkillActivationRequest,
     AgentSkillInvocation,
     ExtractPromptResultText,
-    GetTaskGraphSubmitter
+    GetTaskGraphSubmitter,
+    SkillAvailabilityPurpose
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -980,9 +981,41 @@ export class BaseAgent {
      * IDs of skills already activated during this run. Prevents re-activation from re-appending
      * the same instructions to context / re-pushing duplicate actionChanges/subAgentChanges entries
      * when the LLM references an already-active skill again.
-     * @private
+     *
+     * `protected`, not private: a subclass that gates activation with its own policy (a tenant
+     * licensing check, an entitlement model) needs to know what actually activated — to hand the
+     * active skill to a search as its principal, to stamp a UI chip, to persist a mode. Read it;
+     * mutate only through the activation paths. See also {@link ActivatedSkillIDs}.
      */
-    private _activatedSkillIDs: string[] = [];
+    protected _activatedSkillIDs: string[] = [];
+
+    /** The skills activated so far in this run (requested or self-activated), in activation order. */
+    protected get ActivatedSkillIDs(): readonly string[] {
+        return this._activatedSkillIDs;
+    }
+
+    /**
+     * The skills active for THIS RUN as a whole: what the root agent activated (carried down through
+     * `ExecuteAgentParams.parentActivatedSkillIDs`, since skills activate on the root only) plus anything
+     * this instance activated itself. Stamped as `Context.ActiveSkillIDs` on every action call and handed
+     * to every sub-agent, so a Scoped Search issued three levels down still binds to the root's skill.
+     */
+    protected activeSkillIDsForRun(params: ExecuteAgentParams): string[] {
+        const merged: string[] = [...(params.parentActivatedSkillIDs ?? [])];
+        for (const id of this._activatedSkillIDs) {
+            if (!merged.some(m => UUIDsEqual(m, id))) merged.push(id);
+        }
+        return merged;
+    }
+
+    /**
+     * Skill IDs that entered this run from the conversation's persisted set (`MJ: Conversation
+     * Skills`, Status Active) rather than from the caller's explicit request. Two uses: a gate refusing
+     * one of these gets no system note (the user did not mention it this turn), and re-activating one
+     * skips the persistence upsert — its row is known to be Active already, so the steady-state turn
+     * of a conversation in a mode costs one read, not one per skill. See {@link preActivateRequestedSkills}.
+     */
+    private _conversationSkillIDs: string[] = [];
 
     /**
      * Full observability records for every skill activated this run — one {@link AgentSkillInvocation}
@@ -992,8 +1025,10 @@ export class BaseAgent {
      * steps record the full set in effect for the turn, and Actions/Sub-Agent steps record the
      * skill(s) that granted the executed tool (see {@link getSkillAttributionForAction} /
      * {@link getSkillAttributionForSubAgent}).
+     *
+     * `protected` for the same reason as {@link _activatedSkillIDs}.
      */
-    private _skillInvocations: AgentSkillInvocation[] = [];
+    protected _skillInvocations: AgentSkillInvocation[] = [];
 
     /**
      * Whether Plan Mode is active for this run — resolved once in {@link initializeAgentRun} via
@@ -4248,7 +4283,9 @@ export class BaseAgent {
         // never via this step. This is the same set the prompt catalog was built from, so a
         // well-behaved model can only name skills that pass; the re-check here is the enforcement
         // boundary against hallucinated or smuggled names.
-        const availableSkills = AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser);
+        const availableSkills = await this.availableSkills(
+            AIEngine.Instance.GetAutoActivatableSkillsForAgent(params.agent, params.contextUser),
+            'auto-activation', params.agent, params.contextUser);
 
         const missingSkills = requested.filter(req => {
             if (!req.name || typeof req.name !== 'string') {
@@ -6625,7 +6662,8 @@ The context is now within limits. Please retry your request with the recovered c
             // and filtered by the acting user's Run permission (open-by-default) so the agent
             // is never even offered a skill the user isn't entitled to — the permission
             // boundary is enforced at the catalog, not just at activation.
-            const availableSkills = engine.GetAutoActivatableSkillsForAgent(agent, _contextUser);
+            const availableSkills = await this.availableSkills(
+                engine.GetAutoActivatableSkillsForAgent(agent, _contextUser), 'catalog', agent, _contextUser);
             const skillsCatalog = this.formatSkillsCatalog(availableSkills);
 
             const contextData: AgentContextData = {
@@ -6988,6 +7026,12 @@ The context is now within limits. Please retry your request with the recovered c
             // directly onto the original context object.
             const actionContext = typeof params.context === 'object' && params.context ? params.context : {};
             (actionContext as Record<string, unknown>).AgentID = params.agent.ID;
+            // The skills active in THIS run, as a fact the action can trust. An action that takes a
+            // skill principal (Scoped Search's AISkillID) must not have to believe a parameter the model
+            // authored: with this it can default the principal to the run's active skill and refuse a
+            // named skill the run never activated. Always stamped — an empty array means "inside an
+            // agent run, with no skill active", which is a different fact from "no agent at all".
+            (actionContext as Record<string, unknown>).ActiveSkillIDs = this.activeSkillIDsForRun(params);
             if (this._resolvedStorageAccountId) {
                 (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
             }
@@ -7211,6 +7255,7 @@ The context is now within limits. Please retry your request with the recovered c
                 parentDepth: this._depth,
                 parentStepCounts: parentStepCountsToPass,
                 parentRun: this._agentRun,
+                parentActivatedSkillIDs: this.activeSkillIDsForRun(params), // the root's active skills reach the sub-agent's actions
                 payload: payload, // pass the payload if provided
                 configurationId: params.configurationId, // propagate configuration ID to sub-agent
                 effortLevel: params.effortLevel, // propagate effort level to sub-agent
@@ -11566,7 +11611,9 @@ The context is now within limits. Please retry your request with the recovered c
             return await this.executePromptStep(params, config, previousDecision, stepCount);
         }
 
-        const resolvedSkills = this.resolveSkillActivations(requested, params.agent, params.contextUser);
+        const resolvedSkills = await this.availableSkills(
+            this.resolveSkillActivations(requested, params.agent, params.contextUser),
+            'auto-activation', params.agent, params.contextUser);
         const newlyActivated = resolvedSkills.filter(
             skill => !this._activatedSkillIDs.some(id => UUIDsEqual(id, skill.ID))
         );
@@ -11588,6 +11635,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.enableSkillCapabilities(skill, params);
             this._activatedSkillIDs.push(skill.ID);
             this._skillInvocations.push(invocation);
+            await this.persistConversationSkillActivation(skill, params);
         }
 
         const activationMessage = this.buildSkillActivationMessage(newlyActivated);
@@ -11601,6 +11649,65 @@ The context is now within limits. Please retry your request with the recovered c
         } as AgentChatMessage);
 
         return await this.executePromptStep(params, config, previousDecision, stepCount);
+    }
+
+    /**
+     * THE ONE PLACE an application decides whether a skill is available to this user on this agent,
+     * beyond MJ's own gates. MJ resolves availability at four sites — the prompt catalog the model
+     * sees (every prompt turn), the validation of a model-initiated `Skill` step, the execution of
+     * that step, and the pre-activation of a user's explicit `/skill` request — and every one of
+     * them calls this after MJ's gates
+     * (AcceptsSkills, Status, agent grant, user Run permission, the ActivationMode double gate) and
+     * before anything activates. The default is the identity: MJ's gates are the whole policy.
+     *
+     * Override it to layer a policy MJ has no table for — a tenant licensing model, a per-organization
+     * entitlement, a feature flag — and it applies everywhere at once. Without this seam a subclass
+     * could gate the requested path (by overriding `preActivateRequestedSkills`) but not the catalog,
+     * so a self-activating agent would be OFFERED a skill the policy would then refuse.
+     *
+     * Rules for an override: return a subset of `skills` (never add — MJ's gates ran first); be fast
+     * (the catalog is built every prompt turn, so cache your policy lookups); and FAIL CLOSED — on an
+     * error return `[]`, never `skills`. BaseAgent enforces the last rule itself: if an override
+     * throws, the site treats the result as `[]` (nothing offered / nothing activates, the user's
+     * explicit request gets the usual refusal note) and logs the error — it never fails the run.
+     *
+     * @param skills   the skills MJ's gates admitted, for this purpose
+     * @param purpose  'catalog' — what the model is offered (auto-activatable set);
+     *                 'auto-activation' — a model-initiated Skill step being validated/executed;
+     *                 'requested' — a user's explicit request (requestedSkillIDs)
+     * @param agent    the agent the skills would activate on
+     * @param contextUser the acting user
+     * @protected
+     */
+    protected async filterAvailableSkills(
+        skills: MJAISkillEntity[],
+        purpose: SkillAvailabilityPurpose,
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo,
+    ): Promise<MJAISkillEntity[]> {
+        void purpose; void agent; void contextUser; // named (not `_`-prefixed) so an override reads naturally
+        return skills;
+    }
+
+    /**
+     * Every availability site goes through here, never straight to {@link filterAvailableSkills}: it
+     * is what makes the hook fail CLOSED uniformly. An override that throws yields `[]` at that site
+     * (an empty catalog, a refused activation, a refused request with its note) and one logged error,
+     * instead of a failed prompt step, a failed run, or a swallowed request depending on which site
+     * happened to be running.
+     */
+    private async availableSkills(
+        gated: MJAISkillEntity[],
+        purpose: SkillAvailabilityPurpose,
+        agent: MJAIAgentEntityExtended,
+        contextUser?: UserInfo,
+    ): Promise<MJAISkillEntity[]> {
+        try {
+            return await this.filterAvailableSkills(gated, purpose, agent, contextUser);
+        } catch (error) {
+            this.logError(`filterAvailableSkills threw for '${purpose}' — treating every skill as unavailable: ${error instanceof Error ? error.message : String(error)}`, { agent, category: 'AgentSkills' });
+            return [];
+        }
     }
 
     /**
@@ -11625,16 +11732,32 @@ The context is now within limits. Please retry your request with the recovered c
         if (this._depth !== 0) {
             return; // skills are root-agent only; never pre-activate on sub-agents
         }
-        const requestedIds = params.requestedSkillIDs;
-        if (!requestedIds || requestedIds.length === 0) {
+        // CONVERSATION-SCOPED SKILLS. A skill with ActivationScope='Conversation' that activated in an
+        // earlier run of this conversation is still active: its MJ: Conversation Skills row (Status
+        // Active) joins the request, so a persona or a mode survives to the next turn without the
+        // client having to re-send it. Every gate below still applies on every run.
+        this._conversationSkillIDs = await this.loadConversationSkillIDs(params);
+        const explicitIds = params.requestedSkillIDs ?? [];
+        const requestedIds = this.mergeSkillIDs(explicitIds, this._conversationSkillIDs);
+        if (requestedIds.length === 0) {
             return;
         }
 
-        // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set.
-        const allowed = AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser);
+        // Guard: intersect the requested IDs with the agent-accepted ∩ user-permitted set, then with
+        // whatever policy the application layers on top (filterAvailableSkills; identity by default).
+        const allowed = await this.availableSkills(
+            AIEngine.Instance.GetSkillsForAgent(params.agent, params.contextUser),
+            'requested', params.agent, params.contextUser);
         const droppedIds = requestedIds.filter(id => !allowed.some(s => UUIDsEqual(id, s.ID)));
-        if (droppedIds.length > 0) {
-            this.notifyDroppedSkillRequests(droppedIds, params);
+        // A refused skill the USER asked for gets the system note. A refused skill that came only from
+        // the conversation's persisted set gets nothing this turn — the user did not mention it — and
+        // its row is LEFT ACTIVE: a gate miss can be transient (the engine mid-load, a grant being
+        // re-added, a skill briefly Pending while edited), and ending the row here would turn that
+        // into silent, permanent loss of a persona. Retiring a mode is an explicit act:
+        // EndConversationSkill, from the app's exit gesture or the composer.
+        const droppedExplicit = droppedIds.filter(id => explicitIds.some(e => UUIDsEqual(e, id)));
+        if (droppedExplicit.length > 0) {
+            this.notifyDroppedSkillRequests(droppedExplicit, params);
         }
         const newlyActivated = allowed.filter(
             s => requestedIds.some(id => UUIDsEqual(id, s.ID)) &&
@@ -11643,7 +11766,14 @@ The context is now within limits. Please retry your request with the recovered c
         if (newlyActivated.length === 0) {
             return;
         }
+        await this.activateRequestedSkills(newlyActivated, params);
+    }
 
+    /**
+     * Activate the requested skills that passed every gate: record the activation step, enable each
+     * skill's capabilities, persist Conversation-scoped ones, and append the activation message.
+     */
+    protected async activateRequestedSkills(newlyActivated: MJAISkillEntity[], params: ExecuteAgentParams): Promise<void> {
         const currentPayload = params.payload;
         for (const skill of newlyActivated) {
             const invocation = this.buildSkillInvocation(skill, params.agent, 'requested');
@@ -11651,6 +11781,7 @@ The context is now within limits. Please retry your request with the recovered c
             this.enableSkillCapabilities(skill, params);
             this._activatedSkillIDs.push(skill.ID);
             this._skillInvocations.push(invocation);
+            await this.persistConversationSkillActivation(skill, params);
         }
 
         const activationMessage = this.buildSkillActivationMessage(newlyActivated);
@@ -11665,6 +11796,115 @@ The context is now within limits. Please retry your request with the recovered c
                 messageType: 'skill-activation'
             }
         } as AgentChatMessage);
+    }
+
+    /** `explicit` first, then any `persisted` id not already present (case-insensitive UUIDs). */
+    protected mergeSkillIDs(explicit: readonly string[], persisted: readonly string[]): string[] {
+        const merged = [...explicit];
+        for (const id of persisted) {
+            if (!merged.some(m => UUIDsEqual(m, id))) merged.push(id);
+        }
+        return merged;
+    }
+
+    /**
+     * The skills persisted as Active for this run's conversation (`MJ: Conversation Skills`), or `[]`
+     * when the run has no conversation or the read fails. FAIL-SOFT: a persisted skill is a convenience
+     * layered on the request; losing it means the user re-invokes the skill, not that the turn fails.
+     * Override to source persisted activations from somewhere else.
+     *
+     * @protected
+     */
+    protected async loadConversationSkillIDs(params: ExecuteAgentParams): Promise<string[]> {
+        const conversationId = params.conversationId;
+        if (!conversationId || !params.contextUser) return [];
+        try {
+            const rv = new RunView(); // file precedent for reads (ProviderToUse is an IMetadataProvider, not an IRunViewProvider)
+            const result = await rv.RunView<{ SkillID: string }>({
+                EntityName: 'MJ: Conversation Skills',
+                ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND Status = 'Active'`,
+                Fields: ['SkillID'],
+                ResultType: 'simple',
+            }, params.contextUser);
+            if (!result.Success) {
+                LogErrorEx({ message: `Could not read conversation skills for ${conversationId}: ${result.ErrorMessage}`, severity: 'warning', category: 'AgentSkills' });
+                return [];
+            }
+            return (result.Results ?? []).map(r => r.SkillID).filter(id => typeof id === 'string' && id.length > 0);
+        } catch (e) {
+            LogErrorEx({ message: `Could not read conversation skills for ${conversationId}: ${e instanceof Error ? e.message : String(e)}`, severity: 'warning', category: 'AgentSkills' });
+            return [];
+        }
+    }
+
+    /**
+     * After a skill activates: if its `ActivationScope` is 'Conversation' and this run belongs to a
+     * conversation, record it as Active for that conversation (creating the `MJ: Conversation Skills`
+     * row, or re-activating an Ended one). Idempotent. FAIL-SOFT for the same reason as
+     * {@link loadConversationSkillIDs}. Override to persist elsewhere.
+     *
+     * @protected
+     */
+    protected async persistConversationSkillActivation(skill: MJAISkillEntity, params: ExecuteAgentParams): Promise<void> {
+        const conversationId = params.conversationId;
+        if (!conversationId || !params.contextUser) return;
+        if (skill.ActivationScope !== 'Conversation') return;
+        // Already persisted for this conversation (it is how the skill got into this run): nothing to write.
+        if (this._conversationSkillIDs.some(id => UUIDsEqual(id, skill.ID))) return;
+        try {
+            const provider = params.provider ?? this.ProviderToUse;
+            const rv = new RunView(); // reads: file precedent (ProviderToUse is an IMetadataProvider, not an IRunViewProvider); the WRITE below goes through the run's provider
+            const existing = await rv.RunView<MJConversationSkillEntity>({
+                EntityName: 'MJ: Conversation Skills',
+                ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skill.ID)}'`,
+                ResultType: 'entity_object', MaxRows: 1,
+            }, params.contextUser);
+            if (!existing.Success) {
+                LogErrorEx({ message: `Could not read conversation skill '${skill.Name}': ${existing.ErrorMessage}`, severity: 'warning', category: 'AgentSkills' });
+                return;
+            }
+            const hit = existing.Results?.[0];
+            if (hit?.Status === 'Active') return;
+            const row = hit ?? await provider.GetEntityObject<MJConversationSkillEntity>('MJ: Conversation Skills', params.contextUser);
+            if (!hit) {
+                row.ConversationID = conversationId;
+                row.SkillID = skill.ID;
+            }
+            row.Status = 'Active';
+            row.EndedAt = null;
+            row.ActivatedByRunID = this._agentRun?.ID ?? null;
+            if (!(await row.Save())) {
+                LogErrorEx({ message: `Could not persist conversation skill '${skill.Name}': ${row.LatestResult?.CompleteMessage ?? 'save failed'}`, severity: 'warning', category: 'AgentSkills' });
+            }
+        } catch (e) {
+            LogErrorEx({ message: `Could not persist conversation skill '${skill.Name}': ${e instanceof Error ? e.message : String(e)}`, severity: 'warning', category: 'AgentSkills' });
+        }
+    }
+
+    /**
+     * Leave a conversation-scoped skill: its `MJ: Conversation Skills` row becomes Ended, so it is no
+     * longer re-requested on later runs. The app's "exit the mode" gesture (a menu option, a chip
+     * removed in the composer) calls this. Idempotent; a missing row is not an error. FAIL-SOFT.
+     */
+    public async EndConversationSkill(conversationId: string, skillId: string, contextUser?: UserInfo): Promise<void> {
+        if (!conversationId || !skillId || !contextUser) return;
+        try {
+            const rv = new RunView(); // file precedent for reads (ProviderToUse is an IMetadataProvider, not an IRunViewProvider)
+            const existing = await rv.RunView<MJConversationSkillEntity>({
+                EntityName: 'MJ: Conversation Skills',
+                ExtraFilter: `ConversationID = '${EscapeSQLString(conversationId)}' AND SkillID = '${EscapeSQLString(skillId)}' AND Status = 'Active'`,
+                ResultType: 'entity_object', MaxRows: 1,
+            }, contextUser);
+            const row = existing.Success ? existing.Results?.[0] : undefined;
+            if (!row) return;
+            row.Status = 'Ended';
+            row.EndedAt = new Date();
+            if (!(await row.Save())) {
+                LogErrorEx({ message: `Could not end conversation skill ${skillId}: ${row.LatestResult?.CompleteMessage ?? 'save failed'}`, severity: 'warning', category: 'AgentSkills' });
+            }
+        } catch (e) {
+            LogErrorEx({ message: `Could not end conversation skill ${skillId}: ${e instanceof Error ? e.message : String(e)}`, severity: 'warning', category: 'AgentSkills' });
+        }
     }
 
     /**
@@ -11682,7 +11922,7 @@ The context is now within limits. Please retry your request with the recovered c
         );
         const reason = params.agent.AcceptsSkills === 'None'
             ? `agent '${params.agent.Name}' does not accept skills (AcceptsSkills='None')`
-            : `the skill(s) are not available to agent '${params.agent.Name}' — not Active, not assigned to it (AcceptsSkills='Limited'), or the user lacks Run permission`;
+            : `the skill(s) are not available to agent '${params.agent.Name}' — not Active, not assigned to it (AcceptsSkills='Limited'), or the user lacks Run permission, or the application's skill-availability policy refused it`;
         LogErrorEx({
             message: `Requested skill activation dropped for [${names.join(', ')}]: ${reason}`,
             severity: 'warning',
@@ -11708,7 +11948,10 @@ The context is now within limits. Please retry your request with the recovered c
      * is responsible for rejecting unknown/disallowed names before execution ever reaches this
      * point, so by the time `executeSkillStep` runs, every requested name is expected to match.
      *
-     * Override to change resolution semantics (e.g. resolve by ID instead of Name).
+     * Override to change resolution semantics (e.g. resolve by ID instead of Name). The result is
+     * then passed through the application policy ({@link filterAvailableSkills}, purpose
+     * 'auto-activation') by `executeSkillStep` — a subclass calling this directly gets the
+     * pre-policy set.
      *
      * @protected
      */

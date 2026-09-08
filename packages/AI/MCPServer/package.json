@@ -34,6 +34,7 @@
     "@memberjunction/api-keys": "6.1.0-edge.5",
     "@memberjunction/config": "6.1.0-edge.5",
     "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/dynamic-packages": "6.1.0-edge.5",
     "@memberjunction/core-entities": "6.1.0-edge.5",
     "@memberjunction/credentials": "6.1.0-edge.5",
     "@memberjunction/encryption": "6.1.0-edge.5",
@@ -54,6 +55,7 @@
     "@memberjunction/auth-providers": "6.1.0-edge.5"
   },
   "devDependencies": {
+    "@memberjunction/cli": "6.1.0-edge.5",
     "@types/express": "^5.0.6",
     "@types/jsonwebtoken": "^9.0.10",
     "@types/yargs": "^17.0.35",

@@ -181,16 +181,16 @@ metadata/
 Run from the **repository root** (not from inside `metadata/`):
 ```bash
 # Push all metadata
-npx mj sync push --dir=metadata
+pnpm mj sync push --dir=metadata
 
 # Push only specific entity directories (use --include)
-npx mj sync push --dir=metadata --include="prompts"
+pnpm mj sync push --dir=metadata --include="prompts"
 
 # Exclude problematic directories (use --exclude)
-npx mj sync push --dir=metadata --exclude="api-application-scopes"
+pnpm mj sync push --dir=metadata --exclude="api-application-scopes"
 
 # Multiple patterns (comma-separated)
-npx mj sync push --dir=metadata --include="prompts,agents"
+pnpm mj sync push --dir=metadata --include="prompts,agents"
 ```
 
 **Important:**
@@ -304,7 +304,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
    }
    ```
 3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — see rule 1.
-4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**
 - Version-controlled, declarative, and human-readable

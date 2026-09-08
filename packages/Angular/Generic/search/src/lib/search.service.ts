@@ -420,8 +420,13 @@ export class SearchService {
             const unresolved = logs.filter((l) => !this.recentRecordNameCache.has(`${l.Entity}||${l.RecordID}`));
             if (unresolved.length > 0) {
                 try {
+                    // Recents span arbitrary entities whose key column can have any name; `FromID`
+                    // assumed `ID` and left those records showing a raw id instead of a name.
                     const results = await this.Provider.GetEntityRecordNames(
-                        unresolved.map((l) => ({ EntityName: l.Entity, CompositeKey: CompositeKey.FromID(l.RecordID) })),
+                        unresolved.map((l) => ({
+                            EntityName: l.Entity,
+                            CompositeKey: CompositeKey.FromURLSegment(this.Provider.EntityByName(l.Entity), l.RecordID),
+                        })),
                         this.Provider.CurrentUser ?? undefined,
                     );
                     for (const r of results ?? []) {

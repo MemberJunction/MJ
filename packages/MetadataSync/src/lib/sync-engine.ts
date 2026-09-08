@@ -17,6 +17,7 @@ import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provi
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
+import { describeMissingEntitySubclass } from './entity-subclass-guard';
 import { BatchContextIndex, BatchContextStub } from './batch-context-index';
 import { SyncMetadataEngine } from './sync-metadata-engine';
 import {
@@ -147,6 +148,22 @@ export class SyncEngine {
 
   public setMetadataEngine(engine: SyncMetadataEngine): void {
     this.syncMetadataEngine = engine;
+  }
+
+  /**
+   * Where non-fatal warnings raised inside the engine go (the BaseEntity-fallback notice on the
+   * lookup auto-create path, for one). PushService points this at its own warnings list so the
+   * message reaches the command's result envelope; with no sink set it falls back to console.
+   */
+  public WarningSink: ((message: string) => void) | null = null;
+
+  /** Routes a warning through {@link WarningSink}, else the console. Never throws. */
+  private warn(message: string): void {
+    if (this.WarningSink) {
+      this.WarningSink(message);
+    } else {
+      console.warn(`⚠️  ${message}`);
+    }
   }
 
   public getMetadataEngine(): SyncMetadataEngine | null {
@@ -721,7 +738,12 @@ export class SyncEngine {
     
     // If not found and auto-create is enabled, create the record
     if (autoCreate) {
-      
+      // Same silent-fallback hazard as PushService (issue #4199), on the lookup auto-create path.
+      const subclassWarning = describeMissingEntitySubclass(entityName);
+      if (subclassWarning) {
+        this.warn(subclassWarning);
+      }
+
       const newEntity = await this.metadata.GetEntityObject(entityName, this.contextUser);
       if (!newEntity) {
         throw new Error(`Failed to create entity object for: ${entityName}`);

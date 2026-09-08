@@ -684,7 +684,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Live draft persistence (store debounces the server write). */
   public OnDraftStateChanged(conversationId: string | null, serialized: string): void {
-    console.log(`[Drafts] chat-area: draft change for '${conversationId ?? 'new'}' (${serialized.length} chars)`);
+    // verboseOnly: fires on every keystroke, same as the store's own SetDraft log below it.
+    LogStatusEx({ message: `[Drafts] chat-area: draft change for '${conversationId ?? 'new'}' (${serialized.length} chars)`, verboseOnly: true });
     this.draftStore.SetDraft(conversationId, serialized);
   }
 

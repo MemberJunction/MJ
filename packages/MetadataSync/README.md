@@ -989,6 +989,24 @@ The inheritance works as follows:
 
 The `__mj_sync_notes` key uses a double underscore prefix (`__`) to clearly indicate it is system-managed. Do not manually edit this section -- it is regenerated on each push when `emitSyncNotes` is enabled.
 
+## Which entity class does a push use?
+
+`mj sync push` writes through `BaseEntity.Save()`, so an entity's custom validation, `Save()`
+override and lifecycle hooks run **only if the class that carries them is registered in the CLI
+process**. MJ core's server subclasses always are (the CLI imports the lite manifest). An Open App's
+classes, and a host's own generated entities, are loaded by the `mj` prerun hook through
+`@memberjunction/dynamic-packages` from `mj.config.cjs` (`dynamicPackages.server[]`,
+`codeGeneration.packages`) and from an `mj-app.json` beside the config — before the push opens the
+database provider.
+
+When no subclass is registered for an entity being pushed, the push **warns once per entity**
+("No entity subclass is registered for 'X' … records will be written with the generic BaseEntity")
+on both the directory-push path and the lookup auto-create path; the warning lands in the result
+envelope's `warnings` and never changes the exit code. `--no-app-packages` (or
+`MJ_DYNAMIC_PACKAGES=none`) skips the app packages deliberately — restoring a dump, bulk ingestion
+without side effects. Details and troubleshooting:
+[`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
+
 ## CLI Commands
 
 All MetadataSync functionality is accessed through the MemberJunction CLI (`mj`) under the `sync` namespace:

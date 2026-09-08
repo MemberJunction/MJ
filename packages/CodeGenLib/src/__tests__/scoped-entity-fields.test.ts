@@ -42,6 +42,12 @@ describe('Phase A — scoped entity field plumbing', () => {
             expect(sql).toContain('EntityFieldID IS NULL');
             expect(sql).toMatch(/AND\s+sf\.EntityID\s+IN\b/);
         });
+
+        it('adds SchemaName NOT IN when excludeSchemas is supplied (includeSchemas compile)', () => {
+            const sql = provider.getPendingEntityFieldsSQL('__mj', undefined, ['__mj_BizAppsCommon', '__mj']);
+            expect(sql).toContain("e.SchemaName NOT IN ('__mj_BizAppsCommon','__mj')");
+            expect(sql).toContain('EntityFieldID IS NULL');
+        });
     });
 
     describe('PostgreSQLCodeGenProvider.getPendingEntityFieldsSQL', () => {
