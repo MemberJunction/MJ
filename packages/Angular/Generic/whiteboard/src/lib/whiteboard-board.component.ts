@@ -14,7 +14,7 @@ import {
   WhiteboardItem, WhiteboardItemPatch, WhiteboardMarkdownItem, WhiteboardPageInfo,
   WhiteboardPoint, WhiteboardShapeItem, WhiteboardState, WhiteboardStickyItem, WhiteboardTextItem
 } from './whiteboard-state';
-import { WhiteboardTool, WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import { WhiteboardTextStyleEvent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import {
   EvaluateWidgetInteractionMessage, EvaluateWidgetSubmitMessage,
   WHITEBOARD_WIDGET_INTERACTION_MAX_CHARS, WHITEBOARD_WIDGET_SUBMIT_MAX_CHARS,
@@ -25,7 +25,7 @@ import {
   BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu,
   WhiteboardContextMenuAction, WhiteboardContextMenuActionID
 } from './whiteboard-context-menu';
-import { WhiteboardToolRoster } from './whiteboard-tool-roster';
+import { WhiteboardTool, WhiteboardToolRoster } from './whiteboard-tool-roster';
 import { RealtimeWhiteboardPagesComponent, WhiteboardPageChipContextMenuEvent } from './whiteboard-pages.component';
 
 /** The agent presence cursor state (input-driven; the host animates it to mutation points). */
@@ -167,7 +167,12 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   @Input({ required: true }) State!: WhiteboardState;
   /** Display name of the session's agent ("Sage") — chips, highlight tags, presence label. */
   @Input() AgentName = 'Agent';
-  /** The host's tool roster; gates the canvas context menu's "add … here" actions. `null` = all. */
+  /**
+   * The host's tool roster, used HERE for one thing only: gating the canvas context menu's
+   * "add … here" actions. The board does not own the active tool — the host does, and the host
+   * enforces the roster on it. A standalone consumer binding this input gets the menu narrowed
+   * and nothing else. `null` = all.
+   */
   @Input() ToolRoster: WhiteboardToolRoster = null;
   /** Active tool (owned by the host; toolbar + keyboard drive it). */
   @Input()

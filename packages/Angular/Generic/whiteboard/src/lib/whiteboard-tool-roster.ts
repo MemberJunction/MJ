@@ -1,4 +1,24 @@
-import type { WhiteboardTool } from './whiteboard-toolbar.component';
+/**
+ * Every tool the board knows, in the toolbar's own display order. This is the runtime
+ * companion to {@link WhiteboardTool}: the clamp needs to tell a real tool from a typo, and a
+ * union alone cannot do that once it has been erased.
+ *
+ * It lives HERE rather than beside the toolbar because the roster is the only thing that has
+ * to reason about tools as data. The toolbar imports the type back; it must not re-export it,
+ * because `public-api.ts` `export *`s both modules and two modules exporting one name that way
+ * is a TS2308 ambiguity.
+ */
+export const WHITEBOARD_TOOLS = [
+  'select', 'pan', 'pen', 'shape', 'sticky', 'text', 'markdown', 'html', 'image', 'connector', 'eraser'
+] as const;
+
+/** A user-selectable board tool. */
+export type WhiteboardTool = typeof WHITEBOARD_TOOLS[number];
+
+/** Whether `name` is one of the board's tools — the guard the clamp uses to skip typos. */
+export function IsKnownTool(name: string): name is WhiteboardTool {
+  return (WHITEBOARD_TOOLS as readonly string[]).includes(name);
+}
 
 /**
  * A host-supplied subset of the board's tools. `null` means "all of them" (today's behaviour).
@@ -11,9 +31,15 @@ import type { WhiteboardTool } from './whiteboard-toolbar.component';
  */
 export type WhiteboardToolRoster = readonly WhiteboardTool[] | null;
 
-/** May `tool` be offered under `roster`? A `null` roster allows everything. */
+/**
+ * May `tool` be offered under `roster`? A `null` roster allows everything.
+ *
+ * `== null` deliberately, not `=== null`: the package compiles with `strictNullChecks: false`,
+ * so the type does not stop a consumer handing us `undefined`, and an undefined roster must
+ * read as "no roster" rather than throw on `.includes`.
+ */
 export function IsToolAllowed(roster: WhiteboardToolRoster, tool: WhiteboardTool): boolean {
-  return roster === null || roster.includes(tool);
+  return roster == null || roster.includes(tool);
 }
 
 /**
@@ -26,13 +52,24 @@ export function VisibleToolbarEntries<T extends { Tool: WhiteboardTool }>(entrie
 }
 
 /**
- * The tool the host should hold after a roster change: the current one if it is still
- * allowed, else the first roster entry, else (empty roster) the current one unchanged so the
- * board never has "no tool".
+ * The tool the host should hold when `current` is no longer allowed: `select` when the roster
+ * offers it, else the roster's first KNOWN entry, else `current` unchanged.
+ *
+ * Why `select` first rather than `roster[0]`: roster order is documented as meaningless for
+ * rendering ({@link VisibleToolbarEntries} always uses list order), so it must not quietly
+ * become load-bearing here. `select` is the neutral tool; falling back to roster order instead
+ * would let a host land the user on the eraser by writing the roster in an innocuous order.
+ *
+ * An empty or all-typo roster returns `current`, so the board never has "no tool" — narrowing
+ * the palette to nothing is not the same as making the board read-only.
  */
 export function ClampToolToRoster(current: WhiteboardTool, roster: WhiteboardToolRoster): WhiteboardTool {
   if (IsToolAllowed(roster, current)) {
     return current;
   }
-  return roster !== null && roster.length > 0 ? roster[0] : current;
+  const known = (roster ?? []).filter(IsKnownTool);
+  if (known.length === 0) {
+    return current;
+  }
+  return known.includes('select') ? 'select' : known[0];
 }

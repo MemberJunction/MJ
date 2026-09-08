@@ -5,7 +5,7 @@ import {
 import {
   BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu, WhiteboardContextMenuActionID
 } from '../lib/whiteboard-context-menu';
-import type { WhiteboardTool } from '../lib/whiteboard-toolbar.component';
+import type { WhiteboardTool } from '../lib/whiteboard-tool-roster';
 
 /**
  * RIGHT-CLICK CONTEXT MENU — the pure menu-model builder (action set per item kind /
@@ -60,7 +60,7 @@ describe('BuildWhiteboardContextMenu — model per target', () => {
     expect(only[0].SeparatorBefore).toBe(false);
   });
 
-  it('a roster never touches an ITEM menu (edit / delete are authoring, not tool selection)', () => {
+  it('a roster never touches an ITEM menu (edit / restyle / delete are authoring, not tool selection)', () => {
     const sticky = makeItem(state, 'sticky');
     expect(BuildWhiteboardContextMenu(sticky, []).map((a) => a.ID)).toEqual(ids(sticky));
   });

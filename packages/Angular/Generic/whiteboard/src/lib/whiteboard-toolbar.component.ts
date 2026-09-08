@@ -1,13 +1,12 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { WHITEBOARD_FONT_SIZES, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
-import { WhiteboardToolRoster, VisibleToolbarEntries } from './whiteboard-tool-roster';
-
-/** A user-selectable board tool. */
-export type WhiteboardTool = 'select' | 'pan' | 'pen' | 'shape' | 'sticky' | 'text' | 'markdown' | 'html' | 'image' | 'connector' | 'eraser';
+// WhiteboardTool is imported, never re-exported: public-api.ts `export *`s this file and the
+// roster module, and two modules exporting the same name that way is a TS2308 ambiguity.
+import { WhiteboardTool, WhiteboardToolRoster, VisibleToolbarEntries } from './whiteboard-tool-roster';
 
 /** One entry in the floating toolbar. */
-export interface ToolbarEntry {
+interface ToolbarEntry {
   Tool: WhiteboardTool;
   Icon: string;
   Title: string;
