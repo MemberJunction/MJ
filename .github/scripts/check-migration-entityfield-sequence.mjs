@@ -154,7 +154,7 @@ export function scanContent(text) {
             const tuple = parseParenList(text, openAt);
             if (!tuple) break;
             const value = tuple.items[seqIdx];
-            if (value !== undefined && /^[+-]?\d+$/.test(value)) {
+            if (value !== undefined && /^\(?\s*[+-]?\d+\s*\)?$/.test(value)) {
                 const valueOffset = text.indexOf(value, openAt);
                 hits.push({ line: lineAt(newlines, valueOffset), value, columnIndex: seqIdx });
             }
@@ -249,6 +249,8 @@ const SELF_TEST_FIXTURES = [
         `INSERT INTO [\${flyway:defaultSchema}].[EntityField] ([ID], [EntityID], [Sequence], [Name], [Description]) VALUES ('30BBD5D1-7CB6-497F-AEF0-D09D877A77BE', '58C8C895-E3AA-48C2-BA68-808337235873', 1, 'ID', N'Primary key, (a) with commas, and parens');`],
     ['quoted value containing commas and parentheses BEFORE the Sequence column', true,
         `INSERT INTO [__mj].[EntityField] ([Description], [ID], [EntityID], [Sequence], [Name]) VALUES (N'x, (y), ''z''', 'id', 'eid', 7, 'Name');`],
+    ['a parenthesised integer is still a literal', true,
+        `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence], [Name]) VALUES ('id', 'eid', (16), 'Name');`],
     ['PostgreSQL quoting', true,
         `INSERT INTO "__mj"."EntityField" ("ID", "EntityID", "Sequence", "Name") VALUES ('id', 'eid', 12, 'Name');`],
     ['multi-tuple VALUES with a literal in the second tuple', true,
