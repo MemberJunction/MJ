@@ -952,13 +952,26 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
 
       if (usersNeedingRole.length > 0) {
         const tg = await this.metadata.CreateTransactionGroup();
+        // Each Save() only ENROLS the row in the group — the write is deferred to Submit(). But
+        // validation runs eagerly, so a row refused by the server-side role-elevation guard
+        // (`MJUserRoleEntityServer`, issue #4282: a non-Owner may only assign a role they hold
+        // themselves) returns false HERE and is never enrolled. Ignoring that return meant an
+        // all-refused batch left the group empty, Submit() returned true for having nothing to do,
+        // and the screen reported success having assigned nothing.
+        const refusals: string[] = [];
         for (const userId of usersNeedingRole) {
           const userRole = await this.metadata.GetEntityObject<MJUserRoleEntity>('MJ: User Roles');
           userRole.NewRecord();
           userRole.UserID = userId;
           userRole.RoleID = this.bulkRoleId;
           userRole.TransactionGroup = tg;
-          await userRole.Save();
+          if (!await userRole.Save()) {
+            refusals.push(`${this.describeUser(userId)}: ${userRole.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+          }
+        }
+        if (refusals.length > 0) {
+          // Nothing was written: refused rows never enrolled, and the rest are still only queued.
+          throw new Error(`Failed to assign roles — nothing was changed.\n${refusals.join('\n')}`);
         }
 
         if (!await tg.Submit()) {
@@ -1042,5 +1055,14 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   public getUserRoles(userId: string): MJRoleEntity[] {
     const roleIds = this.userRoleMap.get(userId) || [];
     return this.roles.filter(role => roleIds.some(id => UUIDsEqual(id, role.ID)));
+  }
+
+  /**
+   * Names a user for an error message. Falls back to the raw ID rather than to a placeholder so a
+   * refusal for a user who has dropped out of the loaded page is still traceable.
+   */
+  private describeUser(userId: string): string {
+    const user = this.users.find(u => UUIDsEqual(u.ID, userId));
+    return user?.Email ?? user?.Name ?? userId;
   }
 }

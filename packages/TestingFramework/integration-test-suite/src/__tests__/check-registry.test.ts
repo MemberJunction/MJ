@@ -270,6 +270,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-features': 16,
         'runquery-params': 10,
         'runview-features': 6,
+        'role-elevation': 6,
         'runview-matrix': 18,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
@@ -314,7 +315,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(88);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(89);
     });
 });
 
@@ -427,6 +428,7 @@ describe('gated-skip snapshot (a check must not start self-skipping silently)', 
         'permission-engine.PE11',
         'permission-engine.PE12',
         'permission-engine.PE13',
+        'role-elevation.RE6',
         'server-cache.S17',
         'server-cache.S23',
         'server-cache.S24',
