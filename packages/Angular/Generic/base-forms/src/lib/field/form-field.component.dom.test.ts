@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@an
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { MjFormFieldComponent } from './form-field.component';
 
 /**
@@ -655,25 +655,39 @@ describe('MjFormFieldComponent — field-level security', () => {
     });
   }
 
-  function makeSecuredWidget(user: unknown): BaseEntity {
+  function makeSecuredWidget(user: UserInfo | null): BaseEntity {
     const entity = new TestWidgetEntity(makeSecuredEntityInfo());
     entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret', Notes: 'jotting' }, true, true);
     // The ENTITY resolves its own acting user for BaseEntity.Get()'s gate. Set it explicitly so
     // the component's provider and the entity agree — otherwise the component would allow a
     // render that the entity then refuses, which is exactly the crash being guarded against.
-    entity.ContextCurrentUser = user as never;
+    if (user) {
+      entity.ContextCurrentUser = user;
+    }
     return entity;
   }
 
-  /** Stands in for the provider's signed-in user. */
-  function userWithRoles(roleIds: string[]): unknown {
-    return {
+  /**
+   * Stands in for the provider's signed-in user.
+   *
+   * The widening cast lives HERE, once, rather than at each assignment. `satisfies` keeps the
+   * literal honest against the real `UserInfo` members this double claims to stand in for, so a
+   * rename or retype on `UserInfo` still breaks this file — which a blanket cast at the call
+   * sites would have silently swallowed. Only `UserRoles` needs the seam: the aggregation reads
+   * `RoleID` off each entry, and building real `UserRoleInfo` instances would pull in metadata
+   * construction this spec has no use for.
+   */
+  function userWithRoles(roleIds: string[]): UserInfo {
+    const user = {
       ID: 'C0000000-0000-0000-0000-000000000001',
       Name: 'Test User',
       Email: 'test@example.com',
       IsActive: true,
       UserRoles: roleIds.map((RoleID) => ({ RoleID, Role: `Role-${RoleID}` })),
+    } satisfies Pick<UserInfo, 'ID' | 'Name' | 'Email' | 'IsActive'> & {
+      UserRoles: ReadonlyArray<{ RoleID: string; Role: string }>;
     };
+    return user as unknown as UserInfo;
   }
 
   function renderAs(fieldName: string, roleIds: string[] | null): ComponentFixture<MjFormFieldComponent> {
@@ -767,7 +781,7 @@ describe('MjFormFieldComponent — field-level security', () => {
     // takes its default. The read-only control is the only signal the user gets.
     const user = userWithRoles([INTERN_ROLE_ID]);
     const entity = new TestWidgetEntity(makeSecuredEntityInfo());
-    entity.ContextCurrentUser = user as never;
+    entity.ContextCurrentUser = user;
     entity.NewRecord();
     const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
     expect(f.componentInstance.Record.IsSaved).toBe(false);
@@ -779,7 +793,7 @@ describe('MjFormFieldComponent — field-level security', () => {
     // memo would answer with the create-time verb for the rest of the form's life.
     const user = userWithRoles([HR_ROLE_ID]);
     const entity = new TestWidgetEntity(makeSecuredEntityInfo());
-    entity.ContextCurrentUser = user as never;
+    entity.ContextCurrentUser = user;
     entity.NewRecord();
     const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
     expect(f.componentInstance.IsFieldWritableByUser).toBe(true);

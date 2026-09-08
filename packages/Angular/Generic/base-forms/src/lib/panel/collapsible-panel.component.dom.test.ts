@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { Subject, of } from 'rxjs';
 import { CommonModule } from '@angular/common';
-import { Subject } from 'rxjs';
 import { renderComponentFixture, query, text, hasClass } from '@memberjunction/ng-test-utils';
 import { CompositeKey } from '@memberjunction/core';
 import { MjCollapsiblePanelComponent } from './collapsible-panel.component';
