@@ -251,7 +251,13 @@ function writePackagesIndex(packageEntries) {
 }
 
 function mdCell(text) {
-  return (text ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+  // Backslashes first, so a description ending in a backslash cannot neutralise the
+  // escaped pipe that follows it.
+  return (text ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/\|/g, '\\|')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function writeReleasesIndex(releaseEntries, written) {

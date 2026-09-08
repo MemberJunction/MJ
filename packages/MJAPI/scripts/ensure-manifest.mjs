@@ -14,20 +14,19 @@
  * The array is legitimately empty here because `--exclude-packages @memberjunction` excludes every
  * package in this repo, so a real run emits the same shape. A later real run overwrites it.
  */
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const target = resolve(here, '../src/generated/class-registrations-manifest.ts');
 
-if (existsSync(target)) {
-    process.exit(0);
-}
-
 mkdirSync(dirname(target), { recursive: true });
-writeFileSync(
-    target,
+try {
+    // 'wx' creates the file only if it does not exist, in one operation: no window between
+    // an existence check and the write in which a real generator run could be clobbered.
+    writeFileSync(
+        target,
     `/**
  * AUTO-GENERATED FILE - DO NOT EDIT
  * Written by scripts/ensure-manifest.mjs because 'mj codegen manifest' could not run
@@ -54,6 +53,12 @@ export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 /** Total @RegisterClass decorated classes discovered in dependency tree */
 export const CLASS_REGISTRATIONS_COUNT = 0;
 `,
-    'utf8'
-);
+        { encoding: 'utf8', flag: 'wx' }
+    );
+} catch (error) {
+    if (error && error.code === 'EEXIST') {
+        process.exit(0);
+    }
+    throw error;
+}
 console.log('[ensure-manifest] wrote the empty class-registrations manifest (generator unavailable).');

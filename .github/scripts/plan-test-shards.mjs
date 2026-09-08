@@ -231,7 +231,7 @@ export function extractDurationsFromLog(logText) {
  */
 export function recordWeights(logText, { weightsPath = DEFAULT_WEIGHTS_PATH, source = 'a job log' } = {}) {
     const measured = extractDurationsFromLog(logText);
-    const previous = existsSync(weightsPath) ? JSON.parse(readFileSync(weightsPath, 'utf8')) : {};
+    const previous = readJsonIfPresent(weightsPath);
     const merged = { ...(previous.packages ?? {}), ...measured };
 
     const out = {
@@ -242,6 +242,19 @@ export function recordWeights(logText, { weightsPath = DEFAULT_WEIGHTS_PATH, sou
     };
     writeFileSync(weightsPath, `${JSON.stringify(out, null, 2)}\n`);
     return { measured: Object.keys(measured).length, total: Object.keys(merged).length, weightsPath };
+}
+
+/**
+ * Parse a JSON file that may not exist yet. Reading and catching ENOENT (rather than
+ * existsSync then read) avoids the window in which the file changes between the two.
+ */
+function readJsonIfPresent(filePath) {
+    try {
+        return JSON.parse(readFileSync(filePath, 'utf8'));
+    } catch (error) {
+        if (error && error.code === 'ENOENT') return {};
+        throw error;
+    }
 }
 
 /** Append a `name=value` line to GITHUB_OUTPUT, when running under Actions. */

@@ -237,17 +237,22 @@ function walkFiles(dir, out = []) {
  */
 function importInFreshProcess(entryPath, timeoutMs = IMPORT_TIMEOUT_MS) {
     const url = pathToFileURL(entryPath).href;
+    // The entry URL and the marker reach the child as process arguments, never as text
+    // spliced into the script: generated source is how a path with a quote or a line
+    // separator turns into code (CodeQL js/bad-code-sanitization). The script itself is a
+    // constant.
     const childScript = [
-        `import(${JSON.stringify(url)}).then(`,
+        'const [url, marker] = process.argv.slice(1);',
+        'import(url).then(',
         '  () => process.exit(0),',
-        `  (e) => { console.error(${JSON.stringify(FAILURE_MARKER)} + JSON.stringify({ code: e.code ?? null, message: String(e.message ?? e) })); process.exit(1); }`,
+        '  (e) => { console.error(marker + JSON.stringify({ code: e.code ?? null, message: String(e.message ?? e) })); process.exit(1); }',
         ');',
     ].join('\n');
 
     return new Promise((resolveResult) => {
         execFile(
             process.execPath,
-            ['--input-type=module', '-e', childScript],
+            ['--input-type=module', '-e', childScript, url, FAILURE_MARKER],
             { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 10 * 1024 * 1024 },
             (error, _stdout, stderr) => {
                 if (!error) {

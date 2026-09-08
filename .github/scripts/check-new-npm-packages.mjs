@@ -329,7 +329,7 @@ ${trustStep}
 Nothing to paste, nothing to take on trust — step 5 is the proof, and step 6 reads it.
 You can check the same thing yourself at any time:
 
-     curl -s ${REGISTRY_URL}/-/npm/v1/attestations/${first?.replace('/', '%2f')}@<version>
+     curl -s ${REGISTRY_URL}/-/npm/v1/attestations/${first?.replace(/\//g, '%2f')}@<version>
 
 --------------------------------------------------------------------------------
 IF YOU DO NOT HAVE NPM ACCESS
@@ -450,12 +450,12 @@ export async function fetchRegistryJson(url, fetchImpl = fetch, delayMs = NPM_RE
 
 /** Registry path for a scoped package name. */
 export function packumentUrl(name) {
-    return `${REGISTRY_URL}/${name.replace('/', '%2f')}`;
+    return `${REGISTRY_URL}/${name.replace(/\//g, '%2f')}`;
 }
 
 /** Registry path for one version's attestations. */
 export function attestationUrl(name, version) {
-    return `${REGISTRY_URL}/-/npm/v1/attestations/${name.replace('/', '%2f')}@${version}`;
+    return `${REGISTRY_URL}/-/npm/v1/attestations/${name.replace(/\//g, '%2f')}@${version}`;
 }
 
 /**

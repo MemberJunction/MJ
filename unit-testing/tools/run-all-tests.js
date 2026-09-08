@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readdirSync, statSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
@@ -77,7 +77,9 @@ function runPackageTests(pkg, runDir) {
 
   try {
     // Run vitest with JSON reporter
-    execSync(`npm test -- --reporter=json --outputFile=${resultsFile}`, {
+    // Argument array, not a shell string: the results path is built from the package name
+    // and must never be interpreted by a shell.
+    execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test', '--', '--reporter=json', `--outputFile=${resultsFile}`], {
       cwd: pkg.path,
       stdio: 'pipe',
       encoding: 'utf-8'
