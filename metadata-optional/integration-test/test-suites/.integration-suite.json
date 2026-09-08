@@ -1028,7 +1028,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT88 - FLS Lifecycle and System-User Guards",
+            "TestID": "@lookup:MJ: Tests.Name=IT91 - FLS Lifecycle and System-User Guards",
             "Sequence": 48,
             "Status": "Active"
           },

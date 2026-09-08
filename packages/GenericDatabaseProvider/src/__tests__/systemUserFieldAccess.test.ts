@@ -213,7 +213,7 @@ describe('FindSystemUserFieldAccessViolations', () => {
         // field, because those two verbs cannot decide anything there — the field is excluded from
         // the create input type and from the update SET list. Without the guard knowing that, every
         // joined display column on an FLS-enabled entity reads as lost update access. This is what
-        // IT88's LC9 ("a clean database must report zero violations") caught: six Supervisor* and
+        // IT91's LC9 ("a clean database must report zero violations") caught: six Supervisor* and
         // FirstLast columns on MJ: Employees.
         systemUserHolding(ROLE_A);
         const display = fieldNamed('Supervisor', { readOnly: true, rules: [readOnlyGrant(ROLE_A)] });
