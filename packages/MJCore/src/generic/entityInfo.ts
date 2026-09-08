@@ -508,6 +508,30 @@ export type FieldPermissionRuleForRole = FieldPermissionRuleVerbs & {
 };
 
 /**
+ * The transport-only key carrying the server's authoritative answer to "which fields on this
+ * entity may the caller of THIS request read".
+ *
+ * **Why it lists READABLE fields rather than denied ones.** The two carry the same information
+ * only while the client already holds the full permission matrix, which it does today — the
+ * `MJ_Metadata` dataset ships `MJ: Entity Fields` and `MJ: Entity Field Permissions` unfiltered.
+ * That is scheduled to change (MJ issue #3485, metadata filtering for restricted users), and a
+ * payload that named DENIED fields would hand back exactly what such filtering exists to withhold:
+ * the names of columns you are not allowed to know about. A readable list names only fields the
+ * caller may already see, so it discloses nothing under any filtering design.
+ *
+ * **Why it is needed at all.** The server omits denied fields from the response object, but
+ * GraphQL emits every SELECTED field regardless — so a denied field the client asked for arrives
+ * as an explicit `null`, indistinguishable from a genuine one. The client cannot settle that from
+ * its own metadata: in the window after a permission change (and permanently, once metadata is
+ * filtered) the client's copy disagrees with the server's. This key is the server stating it
+ * in-band, for the request that actually ran.
+ *
+ * Suffixed `___` following the established transport-only convention (`OldValues___`,
+ * `RestoreContext___`) so it cannot collide with a real column name.
+ */
+export const ReadableFieldsTransportKey = 'ReadableFields___';
+
+/**
  * True when a rule takes access AWAY rather than granting or abstaining.
  *
  * `Deny` is the only restricting value *within a single rule*. `No Access` is the aggregation's
@@ -549,24 +573,64 @@ export function FieldSecurityDenialMessage(fieldName: string, entityName: string
 }
 
 /**
+ * The wording for "you may not WRITE this field" — used only when the caller can READ it.
+ *
+ * Naming the reason here discloses nothing. The caller can see the field and its values, so
+ * both facts the ambiguous wording withholds — that the column exists, and that it is
+ * restricted for them — are already theirs. All this adds is *which* permission is missing,
+ * which they would learn by trying anyway.
+ *
+ * The two justifications behind {@link FieldSecurityDenialMessage} do not reach this case:
+ * predicate probing is a question about columns the caller cannot READ, and the
+ * [#3485](https://github.com/MemberJunction/MJ/issues/3485) argument — that "does not exist"
+ * becomes literally true once restricted fields stop shipping to clients — is false for a
+ * readable field, which keeps shipping. Ambiguity there does not age into truth; it just tells
+ * someone that a field they are looking at might not exist.
+ *
+ * A field the caller cannot read must still use the ambiguous wording. That is not hypothetical:
+ * `SetMany` deliberately skips the readability assertion (it is the hydration and resolver-apply
+ * path), so server-side code can dirty a read-denied field and reach the update gate.
+ */
+export function FieldSecurityWriteDenialMessage(fieldName: string, entityName: string): string {
+    return `You do not have permission to update field '${fieldName}' on entity '${entityName}'.`;
+}
+
+/**
  * The error thrown when field-level security refuses a request — a caller-authored predicate
- * naming an unreadable field, or a typed accessor touching one.
+ * naming an unreadable field, a typed accessor touching one, or a save modifying a field the
+ * caller may not write.
  *
  * A DISTINCT class because its message is the one security rejection that is deliberately safe
- * to show a caller: {@link FieldSecurityDenialMessage} was designed for exactly that surface and
- * discloses nothing (see its doc). Transport layers that rightly swallow arbitrary resolver
- * errors (whose messages can carry SQL text or internal state) recognize this one and let it
- * through, so the ambiguous wording reaches the wire instead of degenerating into a generic
- * transport error.
+ * to show a caller: both {@link FieldSecurityDenialMessage} and
+ * {@link FieldSecurityWriteDenialMessage} were designed for exactly that surface and disclose
+ * nothing (see their docs). Transport layers that rightly swallow arbitrary resolver errors
+ * (whose messages can carry SQL text or internal state) recognize this one and let it through,
+ * so the intended wording reaches the wire instead of degenerating into a generic transport
+ * error.
  *
  * Recognize it by `name === FieldSecurityError.ErrorName` rather than `instanceof` where
  * bundling might duplicate the class.
  */
 export class FieldSecurityError extends Error {
     public static readonly ErrorName = 'FieldSecurityError';
-    constructor(fieldName: string, entityName: string) {
-        super(FieldSecurityDenialMessage(fieldName, entityName));
+    /**
+     * Defaults to the ambiguous wording, which is correct for every READ denial. Pass `message`
+     * only through a named factory such as {@link FieldSecurityError.WriteDenial}, so the choice
+     * of wording is always a deliberate, reviewable decision rather than an inline string.
+     */
+    constructor(fieldName: string, entityName: string, message?: string) {
+        super(message ?? FieldSecurityDenialMessage(fieldName, entityName));
         this.name = FieldSecurityError.ErrorName;
+    }
+
+    /**
+     * A write refusal on a field the caller CAN read — names the missing permission instead of
+     * hiding behind "or it does not exist", which would be actively misleading about a field
+     * whose values they are looking at. Callers must confirm readability first; see
+     * {@link FieldSecurityWriteDenialMessage}.
+     */
+    public static WriteDenial(fieldName: string, entityName: string): FieldSecurityError {
+        return new FieldSecurityError(fieldName, entityName, FieldSecurityWriteDenialMessage(fieldName, entityName));
     }
 }
 
