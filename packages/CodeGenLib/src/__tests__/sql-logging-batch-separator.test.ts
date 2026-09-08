@@ -79,6 +79,11 @@ describe('SQLLogging batch separators in the replayable log', () => {
             expect(SQLLogging.declaresBatchScopedVariable(fn)).toBe(false);
         });
 
+        it('matches a batch-scoped DECLARE that follows a routine and its GO in the same unit', () => {
+            const unit = 'CREATE FUNCTION [__mj].[fnX]() RETURNS INT\nAS\nBEGIN\n    RETURN 1;\nEND\nGO\nDECLARE @c NVARCHAR(255);\nSELECT @c = 1;';
+            expect(SQLLogging.declaresBatchScopedVariable(unit)).toBe(true);
+        });
+
         it('does not match ordinary statements or PostgreSQL DO blocks', () => {
             expect(SQLLogging.declaresBatchScopedVariable('ALTER TABLE [__mj].[X] ADD CONSTRAINT [DF_X] DEFAULT (GETUTCDATE()) FOR [Y]')).toBe(false);
             expect(SQLLogging.declaresBatchScopedVariable("DO $$ DECLARE c text; BEGIN SELECT 1; END $$;")).toBe(false);

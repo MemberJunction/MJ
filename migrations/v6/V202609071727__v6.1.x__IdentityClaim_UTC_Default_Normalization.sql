@@ -28,7 +28,7 @@ BEGIN
         SET @constraintName = QUOTENAME(@constraintName);
         EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + @constraintName);
     END
-    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF___mj_IdentityClaimType___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
+    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF_${flyway:defaultSchema}_IdentityClaimType___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
 END
 GO
 
@@ -46,7 +46,7 @@ BEGIN
         SET @constraintName = QUOTENAME(@constraintName);
         EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] DROP CONSTRAINT ' + @constraintName);
     END
-    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF___mj_IdentityClaimType___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
+    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaimType] ADD CONSTRAINT [DF_${flyway:defaultSchema}_IdentityClaimType___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
 END
 GO
 
@@ -64,7 +64,7 @@ BEGIN
         SET @constraintName = QUOTENAME(@constraintName);
         EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + @constraintName);
     END
-    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF___mj_IdentityClaim___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
+    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF_${flyway:defaultSchema}_IdentityClaim___mj_CreatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_CreatedAt];
 END
 GO
 
@@ -82,6 +82,6 @@ BEGIN
         SET @constraintName = QUOTENAME(@constraintName);
         EXEC('ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] DROP CONSTRAINT ' + @constraintName);
     END
-    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF___mj_IdentityClaim___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
+    ALTER TABLE [${flyway:defaultSchema}].[IdentityClaim] ADD CONSTRAINT [DF_${flyway:defaultSchema}_IdentityClaim___mj_UpdatedAt] DEFAULT (GETUTCDATE()) FOR [__mj_UpdatedAt];
 END
 GO

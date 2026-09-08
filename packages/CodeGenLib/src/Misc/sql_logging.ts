@@ -183,6 +183,15 @@ export class SQLLogging {
         }
      }
 
+    /**
+     * The batch separator for the active platform: `GO` on SQL Server, none on PostgreSQL. Used as the
+     * default for callers that do not pass the provider's separator, so a PostgreSQL capture can never
+     * pick up a literal `GO` from a forgotten argument.
+     */
+    public static defaultBatchSeparator(): string {
+        return dbPlatform() === 'postgresql' ? '' : 'GO';
+    }
+
     /** Test hook — SQLLogging is a process-wide singleton. */
     public static resetForTests(): void {
         SQLLogging._SQLLoggingFilePath = '';
@@ -249,7 +258,7 @@ export class SQLLogging {
      * @param batchSeparator - the batch separator string to use (e.g., 'GO' for SQL Server). Only used when includeBatchSeparator is true.
      * @returns
      */
-    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<void> {
+    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator()): Promise<void> {
         try{
             if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
                 return; // is a recurring script and the flag to omit recurring scripts is set
@@ -313,7 +322,7 @@ export class SQLLogging {
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator()): Promise<any> {
         if (configInfo.SQLOutput?.enabled && !SQLLogging.SQLLoggingFilePath) {
             throw new Error(
                 'SQLOutput.enabled but no CodeGen_Run log file is open. Refusing to apply metadata SQL with no artifact. ' +
@@ -336,13 +345,22 @@ export class SQLLogging {
         if (!sql) {
             return false;
         }
-        // `[ \t]*` rather than `\s*` so the multiline anchor cannot walk across blank lines.
-        const declaration = sql.search(/^[ \t]*DECLARE\s+@/im);
-        if (declaration === -1) {
-            return false;
+        // `[ \t]*` rather than `\s*` so the multiline anchors cannot walk across blank lines.
+        const declaration = /^[ \t]*DECLARE\s+@/im;
+        const routineHeader = /^[ \t]*CREATE\s+(OR\s+ALTER\s+)?(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/im;
+        // A routine body ends at its GO, so judge each batch of the unit on its own: a DECLARE after a
+        // routine's GO is batch-scoped again.
+        for (const batch of sql.split(/^[ \t]*GO[ \t]*$/im)) {
+            const declAt = batch.search(declaration);
+            if (declAt === -1) {
+                continue;
+            }
+            const headerAt = batch.search(routineHeader);
+            if (headerAt === -1 || declAt < headerAt) {
+                return true;
+            }
         }
-        const routineHeader = sql.search(/^[ \t]*CREATE\s+(OR\s+ALTER\s+)?(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/im);
-        return routineHeader === -1 || declaration < routineHeader;
+        return false;
     }
 
     protected static getFileLength(filePath: string): number {
