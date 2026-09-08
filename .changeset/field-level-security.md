@@ -90,6 +90,6 @@ Also in this release:
   build a partial entity and write defaults over real data on the next save.
 
 New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
-restricting anything — in particular, do not restrict NOT NULL columns, and do not grant
-`MJ: Record Changes` read to roles that carry field denials, since the audit trail holds the old
-and new values. Saved queries are not field-filtered; run access to a query is the grant.
+restricting anything — in particular, do not grant `MJ: Record Changes` read to roles that carry
+field denials, since the audit trail holds the old and new values. Saved queries are not
+field-filtered; run access to a query is the grant.
