@@ -224,7 +224,15 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="Configuration"
-            Type="code"
+            Type="textarea"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SubtypeSelector"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -2651,7 +2659,7 @@
     <mj-collapsible-panel
         SectionKey="mJIdentityClaims"
         SectionName="Identity Claims"
-        Icon="fa fa-id-card"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
