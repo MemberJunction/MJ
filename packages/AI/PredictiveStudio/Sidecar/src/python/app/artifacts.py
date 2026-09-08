@@ -24,13 +24,79 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import pickle
 import threading
 from collections import OrderedDict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 import joblib
+from joblib.numpy_pickle import NumpyUnpickler
 
 ENVELOPE_VERSION = 1
+
+
+# ---------------------------------------------------------------------------
+# Restricted unpickling
+# ---------------------------------------------------------------------------
+#
+# joblib is pickle underneath, and pickle resolves and CALLS arbitrary importable
+# callables while loading (that is how ``os.system`` in a ``__reduce__`` becomes remote
+# code execution, CWE-502). Artifact bytes come back to this process from storage and
+# from callers of ``/predict``, so they are not trusted input. Rather than switch
+# formats (which would orphan every stored model) the loader below only resolves
+# globals from the libraries an estimator legitimately serializes. Anything else is
+# refused before it is constructed.
+#
+# Keep the lists tight. If a new estimator family needs another module, add the
+# narrowest prefix that unblocks it and cover it in test_artifact_unpickle_guard.py.
+
+#: Top-level packages whose every module may be resolved.
+_ALLOWED_MODULE_PREFIXES: Tuple[str, ...] = (
+    "sklearn.",
+    "numpy.",
+    "scipy.",
+    "xgboost.",
+    "lightgbm.",
+    "pandas.",
+    "joblib.",
+)
+
+#: Exact (module, name) pairs from the standard library that estimator pickles need.
+_ALLOWED_GLOBALS: FrozenSet[Tuple[str, str]] = frozenset(
+    {
+        ("builtins", "object"),
+        ("builtins", "set"),
+        ("builtins", "frozenset"),
+        ("builtins", "slice"),
+        ("builtins", "range"),
+        ("builtins", "bytearray"),
+        ("builtins", "complex"),
+        ("collections", "OrderedDict"),
+        ("collections", "defaultdict"),
+        ("collections", "deque"),
+        ("copyreg", "_reconstructor"),
+        ("_codecs", "encode"),
+    }
+)
+
+
+def _is_allowed_global(module: str, name: str) -> bool:
+    """True when ``module.name`` may be resolved while loading an artifact."""
+    if (module, name) in _ALLOWED_GLOBALS:
+        return True
+    return any(module == prefix[:-1] or module.startswith(prefix) for prefix in _ALLOWED_MODULE_PREFIXES)
+
+
+class RestrictedModelUnpickler(NumpyUnpickler):
+    """joblib's unpickler with ``find_class`` gated by the allow-lists above."""
+
+    def find_class(self, module: str, name: str) -> Any:  # noqa: D401 - pickle API
+        if not _is_allowed_global(module, name):
+            raise pickle.UnpicklingError(
+                f"Refusing to load {module}.{name} from a model artifact: "
+                "not an allowed estimator library"
+            )
+        return super().find_class(module, name)
 
 
 # ---------------------------------------------------------------------------
@@ -45,8 +111,13 @@ def _model_to_bytes(estimator: Any) -> bytes:
 
 
 def _bytes_to_model(raw: bytes) -> Any:
-    """Deserialize raw joblib bytes back into an estimator."""
-    return joblib.load(io.BytesIO(raw))
+    """Deserialize raw joblib bytes back into an estimator.
+
+    Uses :class:`RestrictedModelUnpickler` rather than ``joblib.load`` so a crafted
+    artifact cannot execute code during deserialization. ``_model_to_bytes`` writes an
+    uncompressed stream, which is what this reader expects.
+    """
+    return RestrictedModelUnpickler("<artifact>", io.BytesIO(raw)).load()
 
 
 def serialize_envelope(
