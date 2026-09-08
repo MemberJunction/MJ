@@ -15,7 +15,7 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
 import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
@@ -1825,13 +1825,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     /**
      * Field-level security, client side. The current user's denied-READ set is computable HERE
      * because `EntityFieldPermission` records ship to clients with entity metadata — so the
-     * provider can (a) exclude denied fields from the
-     * selection sets it requests (a GraphQL response always contains every REQUESTED key, so
-     * key-omission — which drives `EntityField.NotLoaded` marking in the hydration paths —
-     * only happens for fields never requested; this also stops denied NOT-NULL columns from
-     * erroring response serialization for MJ clients), and (b) prune null-valued denied keys
-     * from payloads as the safety net for a stale local denied set. Empty for unrestricted
-     * users and non-FLS entities — zero behavior change there.
+     * provider can exclude denied fields from the selection sets it requests (a GraphQL response
+     * always contains every REQUESTED key, so key-omission — which drives
+     * `EntityField.NotLoaded` marking in the hydration paths — only happens for fields never
+     * requested). Empty for unrestricted users and non-FLS entities.
+     *
+     * **This is an optimization, not the correctness boundary.** It is computed from metadata
+     * this client holds, which can lag the server's — and which it may not hold at all once
+     * metadata filtering lands (issue #3485). What makes a response correct regardless is the
+     * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
      */
     private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
         if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
@@ -1841,17 +1843,66 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
-     * Deletes null-valued keys belonging to the current user's denied-read set from a
-     * server payload, so hydration sees genuine key-omission and marks the fields
-     * {@link EntityField.NotLoaded}. Only null values are pruned — a denied field can never
-     * legitimately arrive non-null, and a non-null value here means the local denied set is
-     * stale in the safe direction (the server actually allowed it).
+     * The `ReadableFields___` selection to append to a query, or `''` when it should not be asked
+     * for. See {@link ReadableFieldsTransportKey} for what it carries.
+     *
+     * **Gated on the ENTITY's field-security flag, deliberately not on whether THIS user currently
+     * has denials.** Gating on the user's denied set would re-introduce the dependence on local
+     * metadata this key exists to remove: in the window right after a permission change the client
+     * believes it is unrestricted, would not ask, and would silently load the server's nulls as
+     * real values. The entity-level flag is stable configuration by comparison.
+     *
+     * Not asking on non-FLS entities — which is nearly all of them — also keeps this client
+     * working against a server whose generated schema predates the key. On an FLS-enabled entity
+     * the two must match versions, which is the narrow and acceptable coupling: restricting a
+     * non-nullable column is broken on such a server regardless.
      */
-    private PruneDeniedNullFields<T>(entityInfo: EntityInfo, row: T): T {
+    private FieldSecurityTransportSelection(entityInfo: EntityInfo): string {
+        return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
+    }
+
+    /**
+     * Turns fields the SERVER withheld into genuine key-absence on a response payload, so the
+     * hydration paths mark them {@link EntityField.NotLoaded} rather than loading a null over
+     * them.
+     *
+     * This is needed because deleting the key server-side is not sufficient by itself: GraphQL
+     * emits every SELECTED field, so a withheld field the client asked for arrives as an explicit
+     * `null` that is indistinguishable from a genuine one. Rewriting it back to absence here is
+     * what preserves the "key-absence means not-loaded, never means null" contract end to end.
+     *
+     * Two sources, in priority order:
+     *
+     * 1. **The server's `ReadableFields___`** — authoritative. It describes the request that
+     *    actually ran, so it is correct even when this client's metadata is stale, and it stays
+     *    correct once metadata filtering (issue #3485) means the client may not hold the
+     *    permission rules at all. Anything not on that list is withheld, whatever value arrived.
+     * 2. **This client's own denied set** — the fallback, for a server predating the transport
+     *    key. Only null values are pruned here: a non-null arrival means the local set is stale
+     *    in the safe direction (the server actually allowed the field), and dropping a real value
+     *    would be a regression rather than a protection.
+     *
+     * The transport key itself is always removed — it is not an entity field, and leaving it on
+     * the payload would trip `SetMany`'s field-not-found warning during hydration.
+     */
+    protected ApplyServerFieldAccess<T>(entityInfo: EntityInfo, row: T): T {
         if (!row || typeof row !== 'object') return row;
+        const record = row as Record<string, unknown>;
+        const readable = record[ReadableFieldsTransportKey];
+        delete record[ReadableFieldsTransportKey];
+
+        if (Array.isArray(readable)) {
+            const allowed = new Set(readable.map(n => String(n).trim().toLowerCase()));
+            for (const field of entityInfo.Fields) {
+                if (allowed.has(field.Name.trim().toLowerCase())) continue;
+                delete record[field.Name];
+                delete record[field.CodeName];
+            }
+            return row;
+        }
+
         const denied = this.GetDeniedReadFieldNamesForCurrentUser(entityInfo);
         if (denied.size === 0) return row;
-        const record = row as Record<string, unknown>;
         for (const field of entityInfo.Fields) {
             if (!denied.has(field.Name.trim().toLowerCase())) continue;
             if (record[field.Name] === null) delete record[field.Name];
@@ -1922,6 +1973,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.filter(f => !isDeniedRead(f.Name))
                     .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -2042,7 +2094,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         result.Success = true;
                         // Prune stale-metadata nulls so the entity's post-save refresh
                         // (finalizeSave) sees key-omission and marks NotLoaded correctly.
-                        result.NewValues = this.PruneDeniedNullFields(entity.EntityInfo, this.ConvertBackToMJFields(results));
+                        result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(results));
                     }
                     else {
                         // the transaction failed, nothing to update, but we need to call Reject so the
@@ -2062,7 +2114,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     result.EndedAt = new Date();
                     // Prune stale-metadata nulls so finalizeSave's re-hydration sees
                     // key-omission and marks NotLoaded correctly on the refresh.
-                    result.NewValues = this.PruneDeniedNullFields(entity.EntityInfo, this.ConvertBackToMJFields(d[mutationName]));
+                    result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[mutationName]));
                     return result.NewValues;
                 }
                 else
@@ -2117,10 +2169,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
-            // Field security: never request the current user's denied-read fields — the keys
-            // come back genuinely absent, InnerLoad marks them NotLoaded (D-1), and a denied
-            // NOT-NULL column no longer nulls out the whole single-record response (the R6
-            // breakage) for MJ clients. Empty set for unrestricted users — no change.
+            // Field security: don't request fields this client believes it cannot read — the keys
+            // come back genuinely absent and InnerLoad marks them NotLoaded (D-1). This is an
+            // optimization, NOT the correctness mechanism: it is only as good as this client's
+            // metadata. `ReadableFields___` (requested just below) is what makes the result
+            // correct when that metadata is stale. Empty set for unrestricted users — no change.
             const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
@@ -2134,6 +2187,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                         }
                                       })
                                       .join('\n                    ')}
+                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
                     ${rel}
                 }
             }
@@ -2143,7 +2197,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             if (d && d[graphQLTypeName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
                 // (plus the stale-metadata null prune, so InnerLoad's key-omission marking is exact)
-                return this.PruneDeniedNullFields(entity.EntityInfo, this.ConvertBackToMJFields(d[graphQLTypeName]));
+                return this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[graphQLTypeName]));
             }
             else
                 return null;

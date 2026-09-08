@@ -14,6 +14,7 @@ import {
   LogError,
   LogStatus,
   Metadata,
+  ReadableFieldsTransportKey,
   RunView,
   RunViewParams,
   RunViewResult,
@@ -140,6 +141,18 @@ export class ResolverBase {
         }
       });
 
+      // Field security, second half: say IN-BAND which fields this caller may read. Deleting the
+      // key above is not enough on its own — GraphQL emits every SELECTED field regardless, so a
+      // denied field the client asked for arrives as an explicit null it cannot tell apart from a
+      // genuine one. The client must not settle that from its own metadata: during the window
+      // after a permission change its copy disagrees with ours, and once metadata filtering lands
+      // (issue #3485) it may not hold the permission rows at all. Null for unrestricted callers,
+      // which is nearly every request.
+      const readableFields = this.BuildReadableFieldsTransportValue(entityInfo, denied);
+      if (readableFields) {
+        dataObject[ReadableFieldsTransportKey] = readableFields;
+      }
+
       // Handle encrypted fields - data from raw SQL queries is still encrypted
       const encryptedFields = entityInfo.EncryptedFields;
       if (encryptedFields.length > 0) {
@@ -254,6 +267,28 @@ export class ResolverBase {
       mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider, deniedReadFields));
     }
     return mapped;
+  }
+
+  /**
+   * The CodeNames this user may read on this entity, for the field-security transport key — or
+   * null when there is nothing to state (no denials, so every field is readable and the client
+   * needs no help distinguishing a withheld null from a genuine one).
+   *
+   * Carries entity field NAMES, not CodeNames and not the `_mj__` transport shape. The client
+   * consumes this after it has already reversed the transport mapping, and it matches names
+   * against `EntityFieldInfo.Name` — the same key the denied set itself is built from. Sending
+   * the one shape both sides already agree on avoids a second mapping that could drift.
+   */
+  protected BuildReadableFieldsTransportValue(
+    entityInfo: EntityInfo,
+    deniedReadFields: Set<string> | null | undefined
+  ): string[] | null {
+    if (!deniedReadFields || deniedReadFields.size === 0) {
+      return null;
+    }
+    return entityInfo.Fields
+      .filter((f) => !deniedReadFields.has(f.Name.trim().toLowerCase()))
+      .map((f) => f.Name);
   }
 
   /**
