@@ -1,4 +1,4 @@
-import { Component, Input, forwardRef, HostBinding } from '@angular/core';
+import { Component, Input, forwardRef, HostBinding, ChangeDetectorRef, inject } from '@angular/core';
 import { NG_VALUE_ACCESSOR, ControlValueAccessor } from '@angular/forms';
 
 /**
@@ -22,11 +22,40 @@ export class MJNumericInputComponent implements ControlValueAccessor {
   @Input() Step: number = 1;
   @Input() Format: string = '';
   @Input() Decimals: number | null = null;
-  @Input() Disabled = false;
+  /**
+   * Host-driven disable. Composed with Angular Forms' `setDisabledState()` into `IsDisabled`
+   * (the actual gate) — see `syncDisabled`. A setter, not a bare field, because this input is
+   * routinely bound to an expression that changes over the control's lifetime, and the gate has
+   * to follow it every time.
+   */
+  @Input()
+  set Disabled(value: boolean) { this.disabledInput = value; this.syncDisabled(); }
+  get Disabled(): boolean { return this.disabledInput; }
   @Input() Placeholder = '';
   @HostBinding('class.mj-numeric-input-host') readonly hostClass = true;
 
+  /** The rendered `[disabled]` state — true when EITHER source says so. Assign via `syncDisabled()`. */
   IsDisabled = false;
+  private disabledInput = false;
+  private formDisabled = false;
+  private cdr = inject(ChangeDetectorRef);
+
+  /**
+   * Recompute the gate from both of its sources. Called whenever either one changes.
+   *
+   * `IsDisabled` is derived state, and the only thing that assigned it was `setDisabledState()`.
+   * The forms-driven half was in fact fine — `setUpControl` also wires `registerOnDisabledChange`,
+   * so that hook fires on every `control.disable()`/`enable()`, not just at registration. What had
+   * no recompute path at all was the `Disabled` @Input: a plain field, so the gate froze at
+   * whatever the first compose produced and every later change to the input was dropped.
+   */
+  private syncDisabled(): void {
+    const disabled = this.disabledInput || this.formDisabled;
+    if (disabled === this.IsDisabled) return;
+    this.IsDisabled = disabled;
+    this.cdr.markForCheck();
+  }
+
   DisplayValue: string | number = '';
   private internalValue: number | null = null;
   private onChange: (value: number | null) => void = () => {};
@@ -47,7 +76,7 @@ export class MJNumericInputComponent implements ControlValueAccessor {
   writeValue(value: number | null): void { this.internalValue = value; this.formatDisplay(); }
   registerOnChange(fn: (value: number | null) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  setDisabledState(isDisabled: boolean): void { this.IsDisabled = isDisabled || this.Disabled; }
+  setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
 
   private clamp(value: number): number {
     if (this.Min != null && value < this.Min) return this.Min;
