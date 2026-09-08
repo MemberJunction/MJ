@@ -142,8 +142,23 @@ depth):
   `User Roles` — restricting the configuration surface is self-referential lockout, not
   security.
 
-Permission changes take effect on the normal metadata refresh (API restart or cache refresh),
-like entity permissions.
+**Read-only fields take Read rules but not write rules.** A read-only field — a joined foreign-key
+display column, a computed column, anything with `AllowUpdateAPI` off — cannot be written through
+the API by any user, so an Update or Create verb on it decides nothing in either direction: a
+`Deny` prevents nothing that was possible and an `Allow` grants nothing that was not. Those two
+verbs are refused at save time, and reconciliation does not author them. **Read is untouched** —
+restricting read on a foreign-key display column ("hide which client this contract belongs to") is
+one of the main things field security is for.
+
+Permission changes take effect within about a second. Metadata is built from the `MJ_Metadata`
+dataset, and every provider records which entities compose it — so a save or delete of any of
+those member entities (`MJ: Entities`, `MJ: Entity Permissions`, `MJ: Entity Field Permissions`,
+`MJ: Roles`, …) schedules a debounced refresh of the server's own metadata, and connected
+clients run a staleness check on the same class of change. Membership is the dataset definition
+itself: adding a `DatasetItem` row extends coverage with no code change, and no entity names are
+hardcoded anywhere in the mechanism. A change made outside the entity layer — direct SQL, a
+migration — is picked up on the periodic metadata refresh cycle, whose staleness check always
+reads database timestamps (never its own cache), or an API restart.
 
 ## 2. What is enforced (API tier)
 
@@ -162,38 +177,95 @@ denied set on an entity:
 | **Typed accessors (`Get` / `Set`)** | Reading or writing a denied field **by name** throws, so a restricted field surfaces as a clear failure instead of a silent blank. Framework-internal machinery — validation, save-SQL generation, serialization — reads values directly and is exempt, which is what keeps stored values intact through a restricted user's round trip. |
 | **Entity forms** | Fields the user cannot read are **not rendered at all**. The form checks access before touching a value, so one denied column cannot take out the form it sits in. |
 
-### The denial message — deliberately ambiguous
+### The denial message — ambiguous for READ, explicit for WRITE
 
-Rejections read:
+**READ denials** — a predicate naming an unreadable field, or a typed accessor touching one — read:
 
 > `Field 'X' does not exist on entity 'Y' or you do not have access to it.`
 
-It never discloses *which* of the two is true, modeled on SQL Server's posture. Confirming
-"this field exists and is restricted" would turn any predicate into a probe for which columns
-a deployment considers sensitive. Recognize this wording as (possibly) FLS at work; do not
+That never discloses *which* of the two is true, modeled on SQL Server's posture. Confirming
+"this field exists and is restricted" would turn any predicate into a probe for which columns a
+deployment considers sensitive. Recognize this wording as (possibly) FLS at work; do not
 "improve" it to name the reason.
+
+**WRITE denials on a field the caller can read** name the missing permission:
+
+> `You do not have permission to update field 'X' on entity 'Y'.`
+
+Nothing is disclosed by that. Both facts the ambiguous wording protects — that the column exists,
+and that it is restricted for this caller — are already theirs: they can read the field and see
+its values. All the explicit wording adds is *which* permission is missing, which they would learn
+by attempting the save regardless. Telling someone that a field they are looking at might not
+exist is misleading rather than discreet, and it generates support questions instead of
+preventing probes.
+
+The split is not cosmetic — it holds under [#3485](https://github.com/MemberJunction/MJ/issues/3485)
+too. Part of the case for ambiguity is that once metadata is filtered for restricted users,
+"does not exist" becomes literally true from the client's vantage point. That is true for a field
+they cannot read, which stops shipping to them. It is false for a readable one, which keeps
+shipping.
+
+A write refusal on a field the caller **cannot** read keeps the ambiguous wording. That path is
+reachable: `SetMany` deliberately skips the readability assertion (it is the hydration and
+resolver-apply path), so server-side code can dirty a read-denied field and reach the update gate.
 
 Rejections are logged at debug level (`[FieldSecurity] …`); routine output stripping is not
 logged (it happens on every request to a restricted entity and carries no signal).
 
 ## 3. Configuration constraints — read before restricting a field
 
-### 3.1 Do not restrict NOT NULL columns
+### 3.1 NOT NULL columns can be restricted — with one exception on CREATE
 
-**FLS-restricted fields should be nullable.** The generated GraphQL object types mark NOT NULL
-columns non-nullable, and FLS omission makes such a field resolve to null for denied users.
-Verified consequences:
+**Restricting READ on a NOT NULL column is fully supported**, including foreign-key display
+columns, which inherit non-nullability from the key they display. Earlier versions could not do
+this: the generated GraphQL object types derived their non-null marker from the column's NOT NULL
+constraint, and an omitted field then failed response serialization.
 
-- **Single-record loads break**: the whole record resolves to null for the denied user.
-- **Update responses break**: the denied user's save **succeeds in the database**, but the
-  mutation *response* fails serialization — the client reports a failed save for an edit that
-  actually landed.
-- **Creation can break**: NOT NULL + no default + a denied user means nobody supplies the
-  value and validation fails — that user cannot create records at all.
+That derivation was wrong, and it is the thing that changed. A database constraint and a GraphQL
+`!` say different things:
 
-Nullable denied fields degrade gracefully (they simply come back absent/null). If a sensitive
-column is currently NOT NULL, make it nullable (or leave it unrestricted) before adding FLS
-rows.
+- **NOT NULL** — no *row* stores an empty value in this column.
+- **`String!`** — every *response*, to every caller, carries a value for this field.
+
+The second does not follow from the first. It only coincided while every caller saw every column
+of every row they could read, which is exactly what field security ends. Generated output types
+now promise presence only where field security is structurally incapable of stripping a field —
+primary keys and `__mj_` system columns. Input types are unchanged: they carry the *write*
+contract, which the database constraint does still govern.
+
+**The one real remaining constraint is on CREATE**, and it is not a GraphQL problem:
+
+> A user denied **Create** on a column that is **NOT NULL with no database default** cannot create
+> records on that entity.
+
+Nobody can supply the value — the user is not permitted to and the database has no default to fall
+back on. Depending on whether the user can also *read* the field, this surfaces in one of two
+places: as a validation failure ("field is required") when the form cannot render it, or as a
+stored-procedure error when it can. NOT NULL *with* a default is fine — the create suppression
+omits the field and the column takes its default, which is exactly what an unrestricted user gets
+by leaving it blank.
+
+So: before denying **Create** on a column, check whether it is NOT NULL with no default. Denying
+**Read** or **Update** carries no such constraint.
+
+### 3.1.1 Distinguishing "restricted" from "genuinely NULL"
+
+A denied field is omitted from the response object, but GraphQL emits every field the client
+*selected* — so a denied field the client asked for arrives as an explicit `null`. To keep those
+apart, responses carry `ReadableFields___`: the server's own list of the fields this caller may
+read, for the request that actually ran. Anything not on it is marked `NotLoaded` on the entity
+rather than loaded as null.
+
+This is deliberately the server's answer rather than the client's. A client computing it from its
+own metadata is wrong in the window right after a permission change — and will be wrong
+permanently once metadata is filtered for restricted users. It lists *readable* fields rather than
+denied ones for the same forward-looking reason: naming denied fields would hand back exactly what
+metadata filtering exists to withhold.
+
+The field is emitted on every generated object type and is null for callers with no restrictions.
+Clients request it only on entities with field security enabled, so a client still works against a
+server whose schema predates it — except on a field-security-enabled entity, where the two must
+match versions.
 
 ### 3.2 Record Changes is a trust boundary
 
