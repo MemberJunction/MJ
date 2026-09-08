@@ -12347,6 +12347,9 @@ importers:
       '@memberjunction/sql-dialect':
         specifier: 6.1.0-edge.5
         version: link:../SQLDialect
+      '@memberjunction/sql-parser':
+        specifier: 6.1.0-edge.5
+        version: link:../SQLParser
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.5
         version: link:../SQLServerDataProvider
