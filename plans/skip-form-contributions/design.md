@@ -1,6 +1,6 @@
 # Skip Form Contributions — Design
 
-**Status:** Approved design (team review 2026-09-08); implementation plan in [implementation.md](implementation.md)
+**Status:** Proposed — pending team approval; implementation plan in [implementation.md](implementation.md)
 **Date:** 2026-09-08
 **Foundations:** [`../form-contributions.md`](../form-contributions.md) · [`../form-chrome-layering.md`](../form-chrome-layering.md) · [`../interactive-forms/plan.md`](../interactive-forms/plan.md) · [Forms Architecture Guide §7c–7d](../../guides/FORMS_ARCHITECTURE_GUIDE.md) · [PANELS.md](../../packages/Angular/Generic/base-forms/PANELS.md)
 **Repos:** MemberJunction (`MJ`), Skip-Brain, Skip-Client-Open-App

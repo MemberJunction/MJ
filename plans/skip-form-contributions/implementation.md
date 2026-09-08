@@ -1,7 +1,5 @@
 # Skip Form Contributions Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
-
 **Goal:** Let a database row plus a React `componentRole: 'form-panel'` component act as a form contribution, peer to compiled `BaseFormPanel`s, so Skip (and any OpenApp without Angular) can add, replace, or claim one piece of an entity form without replacing the form.
 
 **Architecture:** A second registration source (`MJ: Entity Form Contributions`, cached by `InteractiveFormsEngine`) is merged with `ClassFactory` registrations by one collector. The unchanged composer and chrome resolver consume the merged list. A generic `InteractiveFormPanelComponent extends BaseFormPanel` renders metadata winners through `<mj-react-component>` with `FormPanelHostProps`. Apply actions mirror the interactive-form action family. A client-built composition snapshot travels to Skip through the existing app-context conduit.
