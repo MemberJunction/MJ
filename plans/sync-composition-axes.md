@@ -1,11 +1,19 @@
 # Metadata Sync + Loom: first-class composition axes
 
 **Branch:** `an-dev-sync-composition-axes`  
-**Status:** proposal — edit this file in place; implementation follows the git diff  
-**Owner:** MJ Core (`@memberjunction/metadata-sync`) + Loom consume contract  
+**Status:** proposal — one implementation phase, three PRs (Loom, MJ, cheese). Cheese is the test.  
+**Owner:** MJ Core (`@memberjunction/metadata-sync`) + Loom + more-cheese  
 **Depends on:** Entity companions & graph save (`plans/base-entity-composite-graph.md`, shipped); Embedded records (`plans/embedded-records.md`); IsA parent/child on `BaseEntity`
 
-This is one MJ change. Loom is a **producer** of the JSON this change defines. Cheese Event Order Lines are the first consumer, not the design.
+This is **one phase**, not a staged rollout. Three PRs land together:
+
+| PR | Repo | Job |
+|---|---|---|
+| **MJ** | MemberJunction/MJ | First-class `collections` / `embeds` / `extension` in mj sync JSON; graph apply then one Save |
+| **Loom** | Loom | Domain `composition` + emit that JSON; validate IsA/collections/embeds |
+| **Cheese** | more-cheese | World model uses the new shape; **this PR is the test** (workshop order shows Event details / Person = ShipTo; no SQL IsA inserts) |
+
+Loom is the producer. MJ is the consumer. Cheese proves both. Event Order Lines are an exemplar, not a one-off.
 
 ---
 
@@ -262,16 +270,19 @@ Validation in Loom (not MJ): IsA child PK = parent PK; child exists iff `when`; 
 
 ---
 
-## 8. Phasing
+## 8. One phase, three PRs
 
-1. **JSON + RecordData + docs** — reserved keys, validation (unknown collection name, extension fields that are parent-owned, missing discriminator).
-2. **Push graph apply** — embeds, collections, unconditional extension; unit tests with fakes of `Lines.Create` / `Extension.EnsureEntity` / `DeclareEmbeddedRecord`.
-3. **Conditional extension** — ProductType `*ExtensionEntity` resolution; Event Product + Event Order Line fixtures.
-4. **Pull** emits the new shape.
-5. **Compat inference** for `relatedEntities` that are actually IsA/collections; warn when a sibling Event Order Line dir should have been `extension`.
-6. **Loom** consumes the contract (separate Loom PR). Cheese deletes SQL/emitter IsA dumps.
+No MJ-only slice, no “Loom later,” no cheese SQL leftover. Implement the full contract in one go:
+
+**MJ PR** — `RecordData` keys, push graph apply (embeds, collections, unconditional + conditional `extension`), pull emits the same shape, compat inference for old `relatedEntities`, unit tests in §9.
+
+**Loom PR** — `composition` on the domain contract, generate/emit/validate per §7, `createDomainConfigFromMJEntities` reads MJ metadata. Emits only the new JSON (no sibling IsA directories, no SQL).
+
+**Cheese PR** — `domain.json` + generated metadata in the new shape; delete `scripts/emit-catalog-completeness.mjs` IsA dumps and any `EventOrderLine` SQL. **This PR is the integration test:** `mj sync push` of cheese generated data, then Explorer: workshop order Event details, Person = ShipTo, confirm still books. If cheese fails, none of the three merge.
 
 Product **prices** stay a normal entity (`ProductPrice` is not IsA). They can remain `relatedEntities` or become a collection if Orders declares one.
+
+Stack the PRs so MJ can merge first if Loom/cheese need the pusher, but they are reviewed as one change. Cheese does not ship until MJ + Loom are on the same bits.
 
 ---
 
@@ -286,7 +297,7 @@ Product **prices** stay a normal entity (`ProductPrice` is not IsA). They can re
 - Product type with null `OrderLineExtensionEntity` + `extension` in JSON → error.
 - `@owner:ShipToPersonID` resolves from header in memory, not batch context after Save.
 
-Cheese / Explorer: load a workshop order → Event details shows Person = ShipTo. Confirm still books. No raw `EventOrderLine` INSERT in the seed path.
+**Cheese PR (the test, not a follow-on):** load a workshop order → Event details shows Person = ShipTo. Confirm still books. No raw `EventOrderLine` INSERT in the seed path. That green run is the merge gate for all three PRs.
 
 ---
 
@@ -299,6 +310,6 @@ Cheese / Explorer: load a workshop order → Event details shows Person = ShipTo
 
 ---
 
-## 11. Decision log (edit here)
+## 11. Decision log
 
-_Leave blank for review edits. Implementation starts after this section is stable._
+- **2026-09-08:** One phase, three PRs (Loom / MJ / cheese). Cheese is the test. No staged MJ-only rollout.
