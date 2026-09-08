@@ -432,6 +432,7 @@ export class DeletionAuditor {
                 depth: 0,
                 path: '<DATABASE>', // Special marker indicating this is a DB-only record
                 dependencies: new Set<string>(),
+                graphId: syntheticId,
                 id: syntheticId,
                 originalIndex: -1, // Not from a file
             };
