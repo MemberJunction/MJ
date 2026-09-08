@@ -663,7 +663,17 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI', 'Developer'],
+    // 'UI' ONLY, deliberately (issue #4260). Auto-provisioning is on by default above, with no
+    // domain restriction, so this list is the standing authority of anyone the configured IdP will
+    // issue a token for. On the baseline seed 'Developer' and 'Integration' hold unfiltered
+    // CanUpdate on ~439 of the database's ~446 entities, so defaulting every such identity into
+    // either grants broad data-plane access no host should hand out by default. (The MJ: Users
+    // escalation this list also used to guard against — writing your own Type to 'Owner' — is now
+    // closed at the entity layer regardless of role: see MJUserEntityServer in
+    // @memberjunction/core-entities-server.) 'UI' carries the end-user surface (conversations,
+    // views, dashboards, settings) and no write on MJ: Users. Hosts that need more grant it
+    // per-deployment.
+    newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
     // The seeded system user, named by `Name`. Its Email ('not.set@nowhere.com') resolves too —
