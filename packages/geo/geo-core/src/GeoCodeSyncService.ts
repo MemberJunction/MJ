@@ -240,8 +240,10 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         entityProvider?: IMetadataProvider
     ): Promise<MJRecordGeoCodeEntity | null> {
         // Prefer the owning entity's provider so RecordGeoCode writes join the
-        // same connection/TX as the save that triggered geocoding.
-        const md = entityProvider ?? new Metadata();
+        // same connection/TX as the save that triggered geocoding. When the
+        // caller did not pass one (scheduled job, tests), fall back to the
+        // process-wide Metadata facade — that path is single-provider.
+        const md = entityProvider ?? new Metadata(); // global-provider-ok: optional-provider helper; ?? is the documented fallback when the owning entity's provider was not passed in
 
         // Batch mode: O(1) map lookup + single PK load
         if (existingGeoCodesMap) {
@@ -285,7 +287,10 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         contextUser: UserInfo,
         entityProvider?: IMetadataProvider
     ): Promise<MJRecordGeoCodeEntity | null> {
-        const md = entityProvider ?? new Metadata();
+        // Prefer the owning entity's provider so the new RecordGeoCode row is
+        // saved on the same connection as the entity that triggered geocoding.
+        // Fall back to the process-wide Metadata facade when none was passed.
+        const md = entityProvider ?? new Metadata(); // global-provider-ok: optional-provider helper; ?? is the documented fallback when the owning entity's provider was not passed in
         const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
         row.NewRecord();
         row.EntityID = entityID;
