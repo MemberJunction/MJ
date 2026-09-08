@@ -68,7 +68,7 @@ export interface ComputerUseOracleConfig {
  * Configuration for a Computer Use test.
  * Stored as JSON in TestEntity.Configuration.
  */
-import type { ArtifactRetentionPolicy } from './artifact-retention.js';
+import type { ArtifactRetentionPolicy } from './driver-policy.js';
 import type { ReplayTier } from '@memberjunction/computer-use';
 
 /**

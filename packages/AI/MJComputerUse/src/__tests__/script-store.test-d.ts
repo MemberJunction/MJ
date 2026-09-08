@@ -1,37 +1,21 @@
 /**
- * Type-level tests: the replay script's two declarations must stay identical.
+ * The replay script's two declarations must stay identical.
  *
- * ## Why these exist
+ * `ComputerUseTrace` (what the engine records and replays) and
+ * `MJTestEntity_ITestJSONScript` (what CodeGen emits from the JSONType) describe
+ * one object in two packages. They have to: CodeGen inlines a JSONType verbatim
+ * into `core-entities`, which sits below the engine package and can import
+ * nothing from it. This package depends on both, so it is the only place they can
+ * be compared.
  *
- * The script shape is declared twice, and has to be:
+ * The failure mode is quiet — add a field to one and everything still compiles
+ * and every runtime test still passes, while `ConfigurationObject` hands back a
+ * property TypeScript says does not exist. Ordinary vitest transpiles without
+ * typechecking, so these live in a `*.test-d.ts` checked by tsc.
  *
- *  - `ComputerUseTrace` in `@memberjunction/computer-use` — what the engine records
- *    and replays.
- *  - `MJTestEntity_ITestJSONScript` in `@memberjunction/core-entities` — what CodeGen
- *    emits from the JSONType definition at
- *    `metadata/entities/JSONType-interfaces/ITestConfiguration.ts`.
- *
- * CodeGen inlines a JSONType definition verbatim into `core-entities`, which sits
- * below the engine package and can import nothing from it, so the second declaration
- * cannot simply reference the first. This package depends on both, which makes it the
- * only place the two can be compared at all.
- *
- * The failure mode is quiet. Add a field to `ComputerUseTrace` and forget the JSONType,
- * and everything still compiles and every runtime test still passes — the recorder
- * writes the field, the JSON column stores it, and `ConfigurationObject` hands it back
- * as a property TypeScript says does not exist. Callers lose the field silently.
- *
- * Ordinary vitest transpiles without typechecking, so a `.test.ts` cannot catch that.
- * This is a `*.test-d.ts`, checked by tsc via `typecheck` in `vitest.config.ts`, and
- * checked again by the package build (the build tsconfig includes `src/**` and this
- * package sets `strict: true`).
- *
- * ## Verified, not assumed
- *
- * Both directions were confirmed to fail before being committed, by renaming `TestId`
- * to `TestIdRENAMED` in the generated interface, and separately by making the required
- * `GoalHash` optional. `strict: true` is what makes the second case work — under a
- * package without `strictNullChecks`, required-vs-optional drift would pass silently.
+ * Both directions were confirmed to fail before this was committed, by renaming a
+ * field and separately by making a required field optional. The second case works
+ * only because this package sets `strict: true`.
  */
 import { describe, it, expectTypeOf } from 'vitest';
 import type { MJTestEntity_ITestJSONScript, MJTestEntity_ITestConfiguration } from '@memberjunction/core-entities';

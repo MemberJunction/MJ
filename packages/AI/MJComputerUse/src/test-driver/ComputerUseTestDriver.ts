@@ -101,9 +101,19 @@ import {
     shouldLogToConsole,
     resolveConsoleLogLevel,
     formatConsoleLine,
+    readSuiteComputerUseConfig,
+    mergeComputerUseConfig,
+    isOracleAdvisory,
+    partitionGatingOracles,
+    classifyFailure,
+    isSevereBrowserFault,
+    shouldCaptureArtifact,
+    shouldRetainArtifact,
+    computeDivergence,
     type ConsoleLogLevel,
-} from './log-importance.js';
-import { readSuiteComputerUseConfig, mergeComputerUseConfig } from './suite-config.js';
+    type FailureSignals,
+    type ArtifactRetentionPolicy,
+} from './driver-policy.js';
 import { allowsLLMFallback, loadScript, saveScript } from './script-store.js';
 
 import { GoalCompletionOracle } from './oracles/GoalCompletionOracle.js';
@@ -111,10 +121,6 @@ import { UrlMatchOracle } from './oracles/UrlMatchOracle.js';
 import { StepCountOracle } from './oracles/StepCountOracle.js';
 import { NoConsoleErrorsOracle } from './oracles/NoConsoleErrorsOracle.js';
 import { DomAssertOracle } from './oracles/DomAssertOracle.js';
-import { isOracleAdvisory, partitionGatingOracles } from './oracle-scoring.js';
-import { classifyFailure, isSevereBrowserFault, FailureSignals } from './classify-failure.js';
-import { ArtifactRetentionPolicy, shouldCaptureArtifact, shouldRetainArtifact } from './artifact-retention.js';
-import { computeDivergence } from './divergence.js';
 import { promises as fs } from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -379,10 +385,7 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             const outputs = this.buildOutputs(result);
             await this.appendTraceArtifact(outputs, result, tracePolicy, status === 'Passed', context);
 
-            // 7b. record the replay script from a green, recordable LLM leg (never
-            //     from a pure replay — that would launder healed selectors without
-            //     fresh derivation). Overwrites the test row's script in place, so
-            //     the next run replays it.
+            // 7b. record the replay script from a green, recordable LLM leg.
             await this.maybeRecordScript({ result, status, gating, tier, fellBackToLlm, runParams, input, variableValues, context });
 
             // 8. Build result
@@ -832,22 +835,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * Tier dispatch. Reads this test's script from its own row (no I/O — the test
-     * entity is already in the TestingEngine cache), decides the tier
-     * (`config.forceTier` override, else `decideReplayTier` over build/goal), and:
-     *  - replay/replay-with-heal (script present) → `engine.Replay`; on divergence
-     *    (Status ≠ Completed) fall back to `engine.Run` WITHIN this attempt — the
-     *    returned `replayInfo` still carries the divergence, so the drift signal
-     *    survives a green fallback;
-     *  - llm (no script / goal reword / heal-rate demote) → `engine.Run`.
+     * Tier dispatch: read the script off the test row, pick a tier, replay or run.
+     * A diverged replay falls back to `engine.Run` within this attempt unless the
+     * test sets `AllowLLMFallback: false`.
      *
-     * A test may refuse the fallback (`Configuration.AllowLLMFallback: false`). Then
-     * a divergence stands as the result instead of being re-derived by the model.
-     * That is the point of the flag: on a pinned test, a silent re-derivation would
-     * hide the regression the test exists to catch.
-     *
-     * Returns the tier that PRODUCED the result (a fallback reports 'llm') so the
-     * caller can correctly gate recording and stamp telemetry.
+     * Returns the tier that PRODUCED the result — a fallback reports 'llm' — so the
+     * caller gates recording correctly. `replayInfo` is returned either way, so the
+     * drift signal survives a green fallback.
      */
     private async dispatchRun(
         engine: MJComputerUseEngine,
@@ -869,26 +863,19 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                 return { result: replayResult, tier: decision.tier, replayInfo: replayResult.Replay, fellBackToLlm: false };
             }
 
-            // The test can pin itself to deterministic execution. Then a stale
-            // script is a finding, not something to re-derive: the divergence
-            // stands as the result and the script is left exactly as recorded.
+            // Pinned to deterministic execution: a stale script is a finding, so the
+            // divergence stands and the script is left exactly as recorded.
             if (!allowsLLMFallback(context.test)) {
                 this.logToTestRun(context, 'warn',
                     `Replay failed (${replayResult.Replay?.Diverged ?? 0} diverged step(s)) and this test sets ` +
                     `Configuration.AllowLLMFallback = false — reporting the divergence instead of re-deriving the goal`);
                 return { result: replayResult, tier: decision.tier, replayInfo: replayResult.Replay, fellBackToLlm: false };
             }
-            // A failed replay means the stored script no longer describes this
-            // build — a MECHANICAL staleness fact, not an agent attempt. So the LLM
-            // leg restarts CLEAN: we deliberately do NOT feed `replayResult.
-            // FailureMemo` into `PreviousAttemptSummary`. That memo narrates the
-            // dead trajectory ("all steps hit but the tour is incomplete: 1/4
-            // checkpoints reached"), and priming a fresh run with another run's
-            // partial progress made the agent behave as if work were already done
-            // that its own context had never performed. The LLM leg gets its own
-            // RunContext, its own step budget, and its own agent-time budget.
-            // The stale script stays on the row until this leg comes back green,
-            // at which point `maybeRecordScript` overwrites it.
+            // The LLM leg restarts CLEAN — deliberately NOT fed `replayResult.
+            // FailureMemo`. A stale script is a mechanical fact about the build, not
+            // an agent attempt, and priming a fresh run with another run's partial
+            // progress made the agent act as though work its own context never
+            // performed was already done.
             this.logToTestRun(context, 'warn',
                 `Replay failed (${replayResult.Replay?.Diverged ?? 0} diverged step(s)) — the stored script is stale for this build; ` +
                 `restarting clean on the LLM tier and re-recording it`);
@@ -905,19 +892,12 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * Record this run's replay script onto the test row when a green LLM leg is
-     * recordable.
+     * Overwrite the test row's replay script when a green LLM leg is recordable.
      *
-     * Gate (ALL required): the executing leg was LLM — a pure replay is never
-     * re-recorded, which would launder healed selectors into the stored script
-     * without ever re-deriving them; status Passed; every gating oracle green (a
-     * Layer-2 fact the recorder cannot see); and the engine's own
-     * `isRecordableRun` (clean Completed run, only replayable actions).
-     *
-     * The write overwrites whatever script the row held. There is no review gate:
-     * drift surfaces as the healed/diverged counts in the run report, not as a
-     * diff. A save failure is logged and swallowed — it costs the next run a
-     * re-record, which is not worth failing a green test over.
+     * All four gates required: the leg was LLM (re-recording a replay would launder
+     * healed selectors in without re-deriving them), status Passed, every gating
+     * oracle green, and the engine's own `isRecordableRun`. A save failure is
+     * logged and swallowed — it costs the next run a re-record.
      */
     private async maybeRecordScript(args: {
         result: ComputerUseResult;

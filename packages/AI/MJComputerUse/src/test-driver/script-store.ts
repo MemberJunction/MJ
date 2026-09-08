@@ -1,40 +1,32 @@
 /**
- * Script store — the driver's read/write path for replay scripts.
+ * Reading and writing a test's replay script, which lives in the test row itself
+ * at `Configuration.TestJSONScript`.
  *
- * A script lives in the test row it belongs to, as `TestJSONScript` inside the
- * `Configuration` column of `MJ: Tests`. That column is a JSONType, so the
- * generated `MJTestEntity.ConfigurationObject` accessor parses and caches it and
- * the shape is checked by the compiler rather than at runtime.
- *
- * Three consequences worth knowing:
- *
- *  - **Reads are free.** The TestingEngine already caches `MJ: Tests` locally, so
- *    by the time a driver runs, the script is in memory. There is no second store
- *    to mount, no file to find, and no way for a script to drift away from the
- *    test it describes.
- *  - **Writes are a `Save()`.** A passing agent-driven run overwrites the script
- *    in place. Nothing is promoted, reviewed, or committed; drift shows up as
- *    healed/diverged counts in the run report instead of as a diff.
- *  - **`mj sync push` resets scripts.** The test metadata files own the
- *    `Configuration` column, and push writes it wholesale. That is deliberate: a
- *    script is a regenerable cache, so a push simply costs the next run one
- *    agent-driven pass per test to re-record.
+ * Reads are free — the TestingEngine already caches `MJ: Tests`, and the column is
+ * a JSONType, so the generated accessor parses it lazily into a typed object.
+ * Writes are a `Save()`: a passing agent-driven run overwrites the script in
+ * place, with no review gate, so drift surfaces as the healed/diverged counts in
+ * the run report rather than as a diff. `mj sync push` resets scripts, which is
+ * deliberate — a script is a regenerable cache.
  *
  * @see plans/regression-testing/dom-selection-and-replay-design.md
  */
-import { MJTestEntity, MJTestEntity_ITestConfiguration, MJTestEntity_ITestJSONScript } from '@memberjunction/core-entities';
+import { MJTestEntity, MJTestEntity_ITestConfiguration } from '@memberjunction/core-entities';
 import { ComputerUseTrace } from '@memberjunction/computer-use';
 
+/** Outcome of a {@link saveScript} call. */
+export interface ScriptSaveResult {
+    saved: boolean;
+    /** Why the save failed, when it did — from `LatestResult.CompleteMessage`. */
+    error?: string;
+}
+
 /**
- * Read this test's replay script. Null when the test has never recorded one, or
- * when what is stored is not a script — either sends the run to the agent tier,
- * the correct default for a test with nothing to replay.
+ * This test's replay script, or null when it has never recorded one or what is
+ * stored is not a script. Either way the run falls to the agent tier.
  *
- * The return needs no cast because `MJTestEntity_ITestJSONScript` and
- * `ComputerUseTrace` are the same shape. They are declared separately — CodeGen
- * emits the JSONType into `@memberjunction/core-entities`, which sits below the
- * engine package and can name nothing from it — and held identical by the
- * type-level tests in `__tests__/script-store.test-d.ts`.
+ * The return needs no cast: `MJTestEntity_ITestJSONScript` and `ComputerUseTrace`
+ * are held to one shape by `__tests__/script-store.test-d.ts`.
  */
 export function loadScript(test: MJTestEntity): ComputerUseTrace | null {
     const script = readConfiguration(test)?.TestJSONScript;
@@ -45,25 +37,19 @@ export function loadScript(test: MJTestEntity): ComputerUseTrace | null {
 }
 
 /**
- * Whether this test permits the agent fallback: re-deriving the goal with the
- * model when replay fails, and overwriting its script with the result.
- *
- * Defaults to **true**, so a test that says nothing behaves as it always has. A
- * test pinned to `false` fails on divergence instead, which is what you want when
- * a re-derivation could mask the regression the test exists to catch.
+ * Whether this test lets a failed replay re-derive the goal with the model and
+ * overwrite its script. Defaults to true, so a test that says nothing behaves as
+ * it always has; `false` makes the divergence the result instead.
  */
 export function allowsLLMFallback(test: MJTestEntity): boolean {
     return readConfiguration(test)?.AllowLLMFallback !== false;
 }
 
 /**
- * Write a freshly recorded script onto the test row, preserving every other key
- * in `Configuration`. The entity already carries the run's context user, so this
- * saves as whoever loaded the test.
- *
- * Reports the failure rather than throwing it: a script that fails to save costs
- * the next run a re-record, which is not worth failing a green test over. The
- * caller logs `error` and carries on.
+ * Write a freshly recorded script onto the test row, preserving every other key in
+ * `Configuration`. Reports the failure rather than throwing it — a script that
+ * fails to save costs the next run a re-record, which is not worth failing a green
+ * test over.
  */
 export async function saveScript(test: MJTestEntity, script: ComputerUseTrace): Promise<ScriptSaveResult> {
     try {
@@ -78,18 +64,10 @@ export async function saveScript(test: MJTestEntity, script: ComputerUseTrace): 
     }
 }
 
-/** Outcome of a {@link saveScript} call. */
-export interface ScriptSaveResult {
-    saved: boolean;
-    /** Why the save failed, when it did — from `LatestResult.CompleteMessage`. */
-    error?: string;
-}
-
 /**
- * The test's parsed configuration, or null. The generated accessor throws on
- * malformed JSON, and a hand-edited `Configuration` is exactly where malformed
- * JSON comes from — so treat that as "no configuration" and let the run proceed
- * on the agent tier rather than failing the test on a parse error.
+ * The test's parsed configuration, or null. A hand-edited `Configuration` is where
+ * malformed JSON comes from and the generated accessor throws on it, so treat that
+ * as "no configuration" rather than failing the test on a parse error.
  */
 function readConfiguration(test: MJTestEntity): MJTestEntity_ITestConfiguration | null {
     try {
