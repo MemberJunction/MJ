@@ -63,4 +63,15 @@ describe('selectDistinctLatestArtifacts', () => {
     selectDistinctLatestArtifacts(input);
     expect(input).toEqual(copy);
   });
+
+  it('groups ids as UUIDs, so casing alone never splits one artifact into two cards', () => {
+    // SQL Server hands UUIDs back upper-case and PostgreSQL lower-case, so one message's list can
+    // carry both spellings of the same id.
+    const result = selectDistinctLatestArtifacts([
+      make('7A1B2C3D-4E5F-4A7B-8C9D-0E1F2A3B4C5D', 1),
+      make('7a1b2c3d-4e5f-4a7b-8c9d-0e1f2a3b4c5d', 2),
+    ]);
+    expect(result).toHaveLength(1);
+    expect(result[0].versionNumber).toBe(2);
+  });
 });
