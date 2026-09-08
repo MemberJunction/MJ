@@ -9,6 +9,7 @@ import {
   WhiteboardItemRemovedEventArgs, WhiteboardItemRemovingEventArgs,
   WhiteboardItemUpdatedEventArgs, WhiteboardItemUpdatingEventArgs, WhiteboardState
 } from './whiteboard-state';
+import { WhiteboardToolRoster, ClampToolToRoster, IsToolAllowed } from './whiteboard-tool-roster';
 import {
   BuildWhiteboardExportHtml, BuildWhiteboardExportHtmlAllPages, BuildWhiteboardExportSvg,
   BuildWhiteboardExportSvgPages
@@ -94,6 +95,25 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * exposure has been accepted — it is an accessibility regression, not a convenience flag.
    */
   @Input() EnableGlobalShortcuts = false;
+
+  /**
+   * Which tools this surface offers. `null` (default) is all eleven: today's rendering. The
+   * roster gates the toolbar, the single-letter shortcuts AND the canvas context menu's
+   * "add … here" actions, so a hidden tool is unreachable by every path, not merely unlisted.
+   * If the active tool leaves the roster, the host moves to the roster's first entry.
+   */
+  @Input()
+  set ToolRoster(value: WhiteboardToolRoster) {
+    this.toolRoster = value;
+    // Clamp HERE rather than in ngOnChanges: a setter also fires when a host assigns the
+    // property directly on a dynamically-created component (which is how a realtime
+    // channel's BindSurface wires this one), where ngOnChanges never runs at all.
+    this.Tool = ClampToolToRoster(this.Tool, value);
+  }
+  get ToolRoster(): WhiteboardToolRoster {
+    return this.toolRoster;
+  }
+  private toolRoster: WhiteboardToolRoster = null;
 
   /** Debounced (750 ms), coalesced scene-delta JSON — the live perception feed. */
   @Output() SceneDelta = new EventEmitter<string>();
@@ -477,7 +497,8 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
         break;
       default: {
         const tool = RealtimeWhiteboardHostComponent.toolForKey(event.key);
-        if (tool) {
+        // a key for a tool outside the roster is a no-op, not a switch to a hidden tool
+        if (tool && IsToolAllowed(this.ToolRoster, tool)) {
           this.Tool = tool;
         }
         break;

@@ -25,6 +25,7 @@ import {
   BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu,
   WhiteboardContextMenuAction, WhiteboardContextMenuActionID
 } from './whiteboard-context-menu';
+import { WhiteboardToolRoster } from './whiteboard-tool-roster';
 import { RealtimeWhiteboardPagesComponent, WhiteboardPageChipContextMenuEvent } from './whiteboard-pages.component';
 
 /** The agent presence cursor state (input-driven; the host animates it to mutation points). */
@@ -166,6 +167,8 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   @Input({ required: true }) State!: WhiteboardState;
   /** Display name of the session's agent ("Sage") — chips, highlight tags, presence label. */
   @Input() AgentName = 'Agent';
+  /** The host's tool roster; gates the canvas context menu's "add … here" actions. `null` = all. */
+  @Input() ToolRoster: WhiteboardToolRoster = null;
   /** Active tool (owned by the host; toolbar + keyboard drive it). */
   @Input()
   set Tool(value: WhiteboardTool) {
@@ -1458,7 +1461,7 @@ export class RealtimeWhiteboardBoardComponent implements OnInit, OnDestroy, Afte
   }
 
   private openContextMenu(event: MouseEvent, item: WhiteboardItem | null): void {
-    this.showContextMenu(event, BuildWhiteboardContextMenu(item), item ? item.ID : null, null);
+    this.showContextMenu(event, BuildWhiteboardContextMenu(item, this.ToolRoster), item ? item.ID : null, null);
   }
 
   /** Position + open the shared context-menu panel for any target (item / canvas / page chip). */

@@ -111,6 +111,8 @@ The serialized shape is **version 2 (paged)**:
 
 The host renders the complete experience: header (title, saved chip, ownership legend, "What [Agent] sees" popover, Focus toggle, export menu), the canvas with floating toolbar, page strip + zoom cluster, the agent-action toast with Undo, and the status footer.
 
+**Narrowing the tools.** Pass `[ToolRoster]="['select','pan','pen','sticky','text','eraser']"` to offer a subset. The roster is one fact read in three places, so a tool you leave out is unreachable everywhere: the toolbar button, its keyboard shortcut, and the canvas right-click "add … here" action. `null` (the default) is all eleven.
+
 The zoom cluster supports **hold-to-zoom**: a plain click on + / − steps through the usual presets, while holding the button down zooms continuously in small smooth increments (~3.5% every 50 ms) until release — same 25%–200% clamp.
 
 ```typescript
@@ -125,6 +127,7 @@ import { RealtimeWhiteboardHostComponent, WhiteboardState } from '@memberjunctio
       [State]="Board"
       [AgentName]="'Sage'"
       [BoardTitle]="'Planning board'"
+      [ToolRoster]="['select', 'pan', 'pen', 'sticky', 'text', 'eraser']"
       (SceneDelta)="onSceneDelta($event)"
       (WidgetSubmitted)="onWidgetInput($event)"
       (SaveToArtifactsRequested)="saveBoard()" />
