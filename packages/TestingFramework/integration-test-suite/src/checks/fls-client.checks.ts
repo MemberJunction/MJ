@@ -2,7 +2,7 @@
  * fls-client.checks.ts — the 'fls-enforcement-client' bundle (client transport, needs MJAPI):
  * Field-Level Security proven OVER THE WIRE. Covers test-plan 3.8 (single-record GraphQL
  * payload) and the wire-level halves of 3.1/3.2/3.4 — the legs the server-transport bundle
- * (IT87) cannot reach, because there enforcement and observation share a process.
+ * (IT90) cannot reach, because there enforcement and observation share a process.
  *
  * THE IDENTITY MODEL (why this bundle mints API keys): a GraphQL client authenticates as ONE
  * wire identity, and a passed contextUser does not change what the server returns (see the
@@ -143,7 +143,7 @@ async function buildUserKeyProvider(rawKey: string): Promise<IMetadataProvider> 
 
 /**
  * One employees read through the given wire identity. BypassCache so every read observes the
- * server's CURRENT enforcement state — cache-hit stripping semantics are IT87/FLS11's subject,
+ * server's CURRENT enforcement state — cache-hit stripping semantics are IT90/FLS11's subject,
  * not this bundle's; here a cached pre-tightening slot would only add noise.
  */
 async function readEmployees(provider: IMetadataProvider, user?: UserInfo): Promise<Record<string, unknown>[]> {

@@ -159,7 +159,7 @@ describe('migrated bundles (coverage-loss guard)', () => {
         // move of this count has been deliberate, which is what the guard is for.
         ['task-graph-execution', TaskGraphExecutionChecks, 27],
         ['entity-actions', EntityActionChecks, 8], // EA1-EA8 the entity-action substrate end to end (IT75)
-        ['fls-enforcement', FlsEnforcementChecks, 21], // FLS1-FLS21 field-level security against a live DB (IT87); FLS21 measures metadata-refresh cost
+        ['fls-enforcement', FlsEnforcementChecks, 21], // FLS1-FLS21 field-level security against a live DB (IT90); FLS21 measures metadata-refresh cost
         ['fls-lifecycle', FlsLifecycleChecks, 9], // LC1-LC9 FLS lifecycle + system-user guards, mutation tier (IT88)
         ['fls-enforcement-client', FlsClientChecks, 4], // FC1-FC4 FLS over the wire via per-user API keys (IT89)
     ];

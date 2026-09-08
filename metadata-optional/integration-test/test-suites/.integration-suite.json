@@ -1017,7 +1017,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT87 - Field-Level Security Enforcement",
+            "TestID": "@lookup:MJ: Tests.Name=IT90 - Field-Level Security Enforcement",
             "Sequence": 48,
             "Status": "Active"
           },
