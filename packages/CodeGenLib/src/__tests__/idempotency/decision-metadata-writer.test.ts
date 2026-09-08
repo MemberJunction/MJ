@@ -60,7 +60,6 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
                      Category: 'Subtype Configuration',
                      GeneratedFormSection: 'Category',
                      ExtendedType: 'JSON',
-                     CodeType: null,
                      DefaultInView: false,
                      IncludeInUserSearchAPI: false,
                      UserSearchPredicateAPI: 'Contains',
@@ -163,7 +162,33 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
       expect(content[0].fields.Name).toBe('MJ: Entities');
       expect(content[0].fields.Icon).toBe('fa-solid fa-table');
       expect(content[0].relatedEntities['MJ: Entity Fields'][0].fields.DisplayName).toBe('Subtype Selector');
-      expect(content[0].relatedEntities['MJ: Entity Fields'][0].fields.CodeType).toBeNull();
+      expect(content[0].relatedEntities['MJ: Entity Fields'][0].fields.CodeType).toBeUndefined();
+      expect('CodeType' in content[0].relatedEntities['MJ: Entity Fields'][0].fields).toBe(false);
+   });
+
+   it('omits null-valued keys always (D17)', async () => {
+      const writer = DecisionMetadataWriter.Instance;
+
+      writer.recordFieldDecision('Customer', 'Notes', 'CodeType', null);
+      writer.recordFieldDecision('Customer', 'Notes', 'ExtendedType', null);
+      writer.recordFieldDecision('Customer', 'Notes', 'DisplayName', 'Notes Display');
+
+      const entity = {
+         Name: 'Customer',
+         SchemaName: 'dbo',
+         Fields: [{ Name: 'Notes', Sequence: 1 }]
+      };
+
+      await writer.flushEntity(entity);
+
+      const filePath = path.join(tmpDir, 'entities', 'decisions', '.dbo.customer.json');
+      expect(await fs.pathExists(filePath)).toBe(true);
+
+      const content = await fs.readJson(filePath);
+      const fields = content[0].relatedEntities['MJ: Entity Fields'][0].fields;
+      expect(fields.DisplayName).toBe('Notes Display');
+      expect('CodeType' in fields).toBe(false);
+      expect('ExtendedType' in fields).toBe(false);
    });
 
    it('flushEntity removes dropped/renamed fields from existing decision file', async () => {

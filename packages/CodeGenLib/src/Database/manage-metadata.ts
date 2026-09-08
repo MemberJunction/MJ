@@ -31,7 +31,7 @@ import {
 import { mapExternalNativeTypeToMJ } from "../Misc/externalTypeMapping";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, ResolveSingleEntityResourceTarget, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 
 import * as fs from 'fs';
 import path from 'path';
@@ -40,6 +40,25 @@ import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 import { computeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
 import { DecisionMetadataWriter } from "./decision-metadata-writer";
+import {
+   TRACKED_FIELD_COLUMNS,
+   FieldChangeReason,
+   DISPLAYNAME_REOPEN_REASONS,
+   TYPE_REOPEN_REASONS,
+   EntityFieldSnapshotRow,
+   EntityFieldChange,
+   diffEntityFieldSnapshots,
+} from './entity-field-change-tracking';
+
+export {
+   TRACKED_FIELD_COLUMNS,
+   FieldChangeReason,
+   DISPLAYNAME_REOPEN_REASONS,
+   TYPE_REOPEN_REASONS,
+   EntityFieldSnapshotRow,
+   EntityFieldChange,
+   diffEntityFieldSnapshots,
+} from './entity-field-change-tracking';
 
 
 export class ValidatorResult {
@@ -281,41 +300,24 @@ export interface ViewRegenEntry {
    Reason: ViewRegenReason;
 }
 
-/**
- * Individual schema-change reasons reported by spUpdateExistingEntityFieldsFromSchema.
- * Represents which attribute of a database column was updated during metadata sync.
- */
-export type FieldChangeReason =
-   | 'Description' | 'Type' | 'Length' | 'Precision' | 'Scale' | 'AllowsNull'
-   | 'DefaultValue' | 'AutoIncrement' | 'IsVirtual' | 'IsComputed' | 'RelatedEntityID'
-   | 'RelatedEntityFieldName' | 'IsPrimaryKey' | 'IsUnique' | 'AllowUpdateAPI' | 'Sequence'
-   | 'Unknown';
-
-/** Reasons that re-open DisplayName (§3.4). */
-export const DISPLAYNAME_REOPEN_REASONS: ReadonlySet<FieldChangeReason> = new Set(['Description']);
-
-/** Reasons that re-open the type-derived columns (§3.4). */
-export const TYPE_REOPEN_REASONS: ReadonlySet<FieldChangeReason> = new Set(['Type', 'Length', 'Precision', 'Scale', 'AllowsNull']);
-
 export const ALL_FIELD_CHANGE_REASONS: ReadonlySet<FieldChangeReason> = new Set([
-   'Description', 'Type', 'Length', 'Precision', 'Scale', 'AllowsNull',
-   'DefaultValue', 'AutoIncrement', 'IsVirtual', 'IsComputed', 'RelatedEntityID',
-   'RelatedEntityFieldName', 'IsPrimaryKey', 'IsUnique', 'AllowUpdateAPI', 'Sequence', 'Unknown'
+   ...TRACKED_FIELD_COLUMNS,
 ]);
 
 /**
  * Parses a comma-delimited ChangeReasons string into an array of FieldChangeReason.
- * Unknown tokens are mapped to 'Unknown'. Empty/null/undefined input returns [].
+ * Unknown tokens are ignored. Empty/null/undefined input returns [].
  */
 export function parseChangeReasons(changeReasons: string | null | undefined): FieldChangeReason[] {
    if (!changeReasons) return [];
    const rawTokens = String(changeReasons).split(',').map(s => s.trim()).filter(Boolean);
-   return rawTokens.map(tok => {
+   const result: FieldChangeReason[] = [];
+   for (const tok of rawTokens) {
       if (ALL_FIELD_CHANGE_REASONS.has(tok as FieldChangeReason)) {
-         return tok as FieldChangeReason;
+         result.push(tok as FieldChangeReason);
       }
-      return 'Unknown';
-   });
+   }
+   return result;
 }
 
 export class ManageMetadataBase {
@@ -567,6 +569,7 @@ export class ManageMetadataBase {
 
    private static _newFieldSet = new Set<string>();
    private static _changedFields = new Map<string, Set<FieldChangeReason>>();
+   private static _changedFieldReport: { entityName: string; fieldName: string; reasons: FieldChangeReason[] }[] = [];
 
    private static fieldKey(entityID: string, name: string): string | null {
       const eid = (entityID ?? '').trim().toLowerCase();
@@ -637,9 +640,37 @@ export class ManageMetadataBase {
       return this._changedFields.size;
    }
 
+   public static get changedFieldReport(): ReadonlyArray<{ entityName: string; fieldName: string; reasons: FieldChangeReason[] }> {
+      return this._changedFieldReport;
+   }
+
    public static clearFieldTracking(): void {
       this._newFieldSet.clear();
       this._changedFields.clear();
+      this._changedFieldReport = [];
+   }
+
+   /**
+    * Takes a snapshot of EntityField rows from vwEntityFields for diffing.
+    * Only queries columns in TRACKED_FIELD_COLUMNS (Sequence is excluded).
+    */
+   protected async snapshotEntityFields(pool: CodeGenConnection, entityIDs?: string[]): Promise<Map<string, EntityFieldSnapshotRow>> {
+      const isScoped = entityIDs !== undefined && entityIDs.length > 0;
+      const filter = isScoped
+         ? `WHERE ${this.qi('EntityID')} IN (${entityIDs!.map(id => `'${id}'`).join(',')})`
+         : '';
+      const cols = TRACKED_FIELD_COLUMNS.map(c => this.qi(c)).join(', ');
+      const sSQL = `SELECT ${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Entity')} AS ${this.qi('EntityName')}, ${this.qi('Name')}, ${cols}
+                    FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
+                    ${filter}`;
+      const result = await this.runQuery(pool, sSQL);
+      const map = new Map<string, EntityFieldSnapshotRow>();
+      if (result && result.recordset) {
+         for (const r of result.recordset as EntityFieldSnapshotRow[]) {
+            map.set(String(r.ID).toLowerCase(), r);
+         }
+      }
+      return map;
    }
 
    protected findFieldByName<T extends { Name: string }>(fields: T[], name: string | null | undefined): T | undefined {
@@ -685,7 +716,7 @@ export class ManageMetadataBase {
       return this._generatedValidators;
    }
 
-   private static _softPKFKConfigCache: any = null;
+   private static _softPKFKConfigCache: Record<string, unknown> | null = null;
    private static _softPKFKConfigPath: string = '';
    /**
     * Drops the cached soft PK/FK config so the next {@link getSoftPKFKConfig} call re-reads the
@@ -708,7 +739,7 @@ export class ManageMetadataBase {
     * Cached per process to avoid repeated I/O within a CodeGen run; the in-process (RSU) path calls
     * {@link invalidateSoftPKFKConfigCache} at the start of each run so a rewritten file is picked up.
     */
-   private static getSoftPKFKConfig(): any {
+   public static getSoftPKFKConfig(): Record<string, unknown> | null {
       // Return cached config if path hasn't changed
       const configPath = configInfo.additionalSchemaInfo
          ? path.join(currentWorkingDirectory, configInfo.additionalSchemaInfo)
@@ -1381,9 +1412,10 @@ export class ManageMetadataBase {
                continue;
             }
 
-            // Look up the entity by BaseTable + SchemaName
+            // Look up the entity by BaseTable + SchemaName, selecting current values for the named attributes
+            const attrCols = attrs.map(([k]) => `${this.qi(k)}`).join(', ');
             const entityResult = await this.runQueryWithParams(pool, `
-                  ${this.selectTop(1, 'ID, Name',
+                  ${this.selectTop(1, `ID, Name, ${attrCols}`,
                      `FROM ${this.qs(schema, 'vwEntities')}
                   WHERE BaseTable = @BaseTable AND SchemaName = @SchemaName`)}
                `,
@@ -1395,23 +1427,55 @@ export class ManageMetadataBase {
                continue;
             }
 
-            const entityId = entityResult.recordset[0].ID;
-            const entityName = entityResult.recordset[0].Name;
+            const currentRow = entityResult.recordset[0] as Record<string, unknown>;
+            const entityId = String(currentRow.ID);
+            const entityName = String(currentRow.Name);
 
-            // Build a parameterized UPDATE with one SET clause per attribute
-            const queryParams: Record<string, unknown> = { 'EntityID': entityId };
-            const setClauses: string[] = [];
+            // Compare each attribute against the current database value; only include differing attributes
+            const differingAttrs: Array<{ key: string; literalValue: string; summary: string }> = [];
             for (const [key, value] of attrs) {
-               const paramName = `attr_${key}`;
-               // Pass booleans through — both mssql and pg drivers handle native boolean values
-               const sqlValue = value;
-               queryParams[paramName] = sqlValue;
-               setClauses.push(`${this.qi(key)} = @${paramName}`);
+               const curVal = currentRow[key];
+               let differs = false;
+               let litVal = 'NULL';
+
+               if (typeof value === 'boolean') {
+                  const curBool = curVal === true || curVal === 1 || curVal === '1';
+                  differs = curBool !== value;
+                  litVal = this.boolLit(value);
+               } else if (typeof value === 'number') {
+                  const curNum = curVal === null || curVal === undefined ? null : Number(curVal);
+                  differs = curNum !== value;
+                  litVal = String(value);
+               } else if (typeof value === 'string') {
+                  const curStr = curVal === null || curVal === undefined ? '' : String(curVal);
+                  differs = curStr !== value;
+                  litVal = `'${value.replace(/'/g, "''")}'`;
+               } else if (value === null) {
+                  differs = curVal !== null && curVal !== undefined;
+                  litVal = 'NULL';
+               } else {
+                  differs = JSON.stringify(curVal) !== JSON.stringify(value);
+                  litVal = `'${JSON.stringify(value).replace(/'/g, "''")}'`;
+               }
+
+               if (differs) {
+                  differingAttrs.push({ key, literalValue: litVal, summary: `${key}=${value}` });
+               }
             }
 
-            await this.runQueryWithParams(pool, `UPDATE ${this.qs(schema, 'Entity')} SET ${setClauses.join(', ')} WHERE ID = @EntityID`, queryParams);
+            if (differingAttrs.length === 0) {
+               continue;
+            }
 
-            const attrSummary = attrs.map(([k, v]) => `${k}=${v}`).join(', ');
+            // Build an UPDATE with literal values and execute through LogSQLAndExecute for migration capture
+            const setClauses = differingAttrs.map(a => `${this.qi(a.key)} = ${a.literalValue}`);
+            setClauses.unshift(`${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}`);
+            const updateSQL = `UPDATE ${this.qs(schema, 'Entity')}
+                              SET ${setClauses.join(', ')}
+                              WHERE ${this.qi('ID')} = '${entityId}'`;
+            await this.LogSQLAndExecute(pool, updateSQL, `Update attributes on "${entityName}" from additionalSchemaInfo`);
+
+            const attrSummary = differingAttrs.map(a => a.summary).join(', ');
             logStatus(`    > Entities config: Set ${attrSummary} on "${entityName}"`);
             updatedCount++;
          } catch (err) {
@@ -3530,7 +3594,7 @@ export class ManageMetadataBase {
          }
 
          const escapedDescription = fd.description.replace(/'/g, "''");
-         let setClauses = `Description='${escapedDescription}'`;
+         let setClauses = `Description='${escapedDescription}', ${this.qi('AutoUpdateDescription')} = ${this.boolLit(false)}`;
 
          // Apply extended type if provided, valid, and the field is not locked
          const isFieldNew = ManageMetadataBase.isFieldNew(entity.ID, field.Name);
@@ -4468,6 +4532,9 @@ export class ManageMetadataBase {
       try {
          logStatus(`         Found ${configInfo.additionalSchemaInfo}, applying soft PK/FK configuration...`);
          const config = ManageMetadataBase.getSoftPKFKConfig();
+         if (!config) {
+            return true;
+         }
 
          let totalPKs = 0;
          let totalFKs = 0;
@@ -4499,6 +4566,19 @@ export class ManageMetadataBase {
             const primaryKeys = table.PrimaryKey || [];
             if (primaryKeys.length > 0) {
                for (const pk of primaryKeys) {
+                  const checkSQL = `SELECT ${this.qi('IsPrimaryKey')}, ${this.qi('IsSoftPrimaryKey')}
+                                    FROM ${this.qs(schema, 'EntityField')}
+                                    WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${pk.FieldName}'`;
+                  const checkRes = await this.runQuery(pool, checkSQL);
+                  if (checkRes.recordset.length > 0) {
+                     const row = checkRes.recordset[0];
+                     const isPk = row.IsPrimaryKey === true || row.IsPrimaryKey === 1 || row.IsPrimaryKey === '1';
+                     const isSoftPk = row.IsSoftPrimaryKey === true || row.IsSoftPrimaryKey === 1 || row.IsSoftPrimaryKey === '1';
+                     if (isPk && isSoftPk) {
+                        continue; // Already correctly set, skip write
+                     }
+                  }
+
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
                                 SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
                                     ${this.qi('IsPrimaryKey')} = ${this.boolLit(true)},
@@ -4529,11 +4609,32 @@ export class ManageMetadataBase {
 
                   const relatedEntityId = relatedEntityResult.recordset[0].ID;
 
+                  const checkSQL = `SELECT ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityFieldName')}, ${this.qi('IsSoftForeignKey')}, ${this.qi('AutoUpdateRelatedEntityInfo')}
+                                    FROM ${this.qs(schema, 'EntityField')}
+                                    WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
+                  const checkRes = await this.runQuery(pool, checkSQL);
+                  if (checkRes.recordset.length > 0) {
+                     const row = checkRes.recordset[0];
+                     const curRelId = String(row.RelatedEntityID ?? '').trim().toLowerCase();
+                     const curRelField = String(row.RelatedEntityFieldName ?? '').trim().toLowerCase();
+                     const curSoftFk = row.IsSoftForeignKey === true || row.IsSoftForeignKey === 1 || row.IsSoftForeignKey === '1';
+                     const curAutoUpdate = row.AutoUpdateRelatedEntityInfo === true || row.AutoUpdateRelatedEntityInfo === 1 || row.AutoUpdateRelatedEntityInfo === '1';
+                     if (
+                        curRelId === String(relatedEntityId).trim().toLowerCase() &&
+                        curRelField === String(fk.RelatedField).trim().toLowerCase() &&
+                        curSoftFk &&
+                        !curAutoUpdate
+                     ) {
+                        continue; // Already correctly set, skip write
+                     }
+                  }
+
                   const sSQL = `UPDATE ${this.qs(schema, 'EntityField')}
                                 SET ${this.qi(EntityInfo.UpdatedAtFieldName)}=${this.utcNow()},
                                     ${this.qi('RelatedEntityID')} = '${relatedEntityId}',
                                     ${this.qi('RelatedEntityFieldName')} = '${fk.RelatedField}',
-                                    ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)}
+                                    ${this.qi('IsSoftForeignKey')} = ${this.boolLit(true)},
+                                    ${this.qi('AutoUpdateRelatedEntityInfo')} = ${this.boolLit(false)}
                                 WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = '${fk.FieldName}'`;
                   const result = await this.LogSQLAndExecute(pool, sSQL, `Set soft FK for ${tableSchema}.${tableName}.${fk.FieldName} → ${fk.RelatedTable}.${fk.RelatedField}`);
 
@@ -4871,12 +4972,12 @@ export class ManageMetadataBase {
             const result = await ag.generateEntityDescription(
                e,
                data[0].BaseTable,
-               fields.map((f: any) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
+               fields.map((f: { Name: string; Type: string; AllowsNull: boolean; Description: string | null }) => ({ Name: f.Name, Type: f.Type, IsNullable: f.AllowsNull, Description: f.Description })),
                currentUser
             );
 
             if (result?.entityDescription && result.entityDescription.length > 0) {
-               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET Description = '${esc(result.entityDescription)}' WHERE Name = '${esc(e)}'`;
+               const sSQL = `UPDATE ${this.qs(mj_core_schema(), 'Entity')} SET ${this.qi('Description')} = '${esc(result.entityDescription)}', ${this.qi('AutoUpdateDescription')} = ${this.boolLit(false)} WHERE ${this.qi('Name')} = '${esc(e)}'`;
                await this.LogSQLAndExecute(pool, sSQL, `SQL text to update entity description for entity ${e}`);
             }
             else {
@@ -5075,7 +5176,7 @@ export class ManageMetadataBase {
             ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
             ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
             ${this.boolLit(n.IsNameField !== null ? n.IsNameField : false)},
-            ${this.boolLit(n.FieldName === 'ID' || n.IsNameField)},
+            ${this.boolLit(Boolean(n.IsNameField))},
             ${this.boolLit(n.RelatedEntityID && n.RelatedEntityID.length > 0)},
             ${this.boolLit(bDefaultInView)},
             ${this.boolLit(n.IsPrimaryKey)},
@@ -5234,7 +5335,7 @@ export class ManageMetadataBase {
          // result contains the updated entities, and there is a property of each row called Name which has the entity name that was modified
          // add these to the modified entity list if they're not already in there
          if (result && result.length > 0 ) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Name: any; }) => r.Name));
+            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { Name: string; }) => r.Name));
          }
          return true;
       }
@@ -5270,24 +5371,21 @@ export class ManageMetadataBase {
          const label = isScoped
             ? `SQL text to update existing entity fields from schema (${entityIDs!.length} scoped entities)`
             : `SQL text to update existing entity fields from schema`;
-         const result = await this.LogSQLAndExecute(pool, sSQL, label, true);
-         // result contains the updated entity fields. Get a distinct list of entity names
-         // and add them to the modified entity list if they're not already in there.
-         if (result && result.length > 0) {
-            ManageMetadataBase.addNewEntitiesToModifiedList(result.map((r: { EntityName: any; }) => r.EntityName));
-            let loggedStaleWarning = false;
-            for (const r of result) {
-               let reasons: FieldChangeReason[];
-               if (r.ChangeReasons !== undefined && r.ChangeReasons !== null) {
-                  reasons = parseChangeReasons(r.ChangeReasons);
-               } else {
-                  if (!loggedStaleWarning) {
-                     logWarning('spUpdateExistingEntityFieldsFromSchema did not return ChangeReasons. Stored procedure may be stale. Defaulting change reasons to Unknown.');
-                     loggedStaleWarning = true;
-                  }
-                  reasons = ['Unknown'];
-               }
-               ManageMetadataBase.registerFieldChange(r.EntityID, r.EntityFieldName, reasons);
+
+         const before = await this.snapshotEntityFields(pool, entityIDs);
+         await this.LogSQLAndExecute(pool, sSQL, label, true);
+         const after = await this.snapshotEntityFields(pool, entityIDs);
+
+         const changes = diffEntityFieldSnapshots(before, after, (e, n) => ManageMetadataBase.isFieldNew(e, n));
+         if (changes.length > 0) {
+            ManageMetadataBase.addNewEntitiesToModifiedList(changes.map(c => c.entityName));
+            for (const c of changes) {
+               ManageMetadataBase.registerFieldChange(c.entityID, c.fieldName, c.reasons);
+               ManageMetadataBase._changedFieldReport.push({
+                  entityName: c.entityName,
+                  fieldName: c.fieldName,
+                  reasons: [...c.reasons],
+               });
             }
          }
          return true;
@@ -8226,6 +8324,8 @@ WHERE
       const canonicalInfo = canonicalJSONStringify(categoryInfo, 2);
       const infoJSON = canonicalInfo.replace(/'/g, "''");
 
+      const ENTITY_SETTING_NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8';
+
       // Upsert FieldCategoryInfo (new format)
       const checkNewSQL = `SELECT ${this.qi('ID')}, ${this.qi('Value')} FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'`;
       const existingNew = await this.runQuery(pool, checkNewSQL);
@@ -8253,12 +8353,13 @@ WHERE
             }
          }
       } else {
-         const newId = uuidv4();
+         const newId = uuidv5(`${entityId}|FieldCategoryInfo`, ENTITY_SETTING_NAMESPACE);
          try {
-            await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', ${this.utcNow()}, ${this.utcNow()})
-            `, `Insert FieldCategoryInfo setting for entity`, false);
+            const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'`;
+            const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', ${this.utcNow()}, ${this.utcNow()})`;
+            const sSQL = this.conditionalInsert(checkQuery, insertSQL);
+            await this.LogSQLAndExecute(pool, sSQL, `Insert FieldCategoryInfo setting for entity`, false);
          }
          catch (ex) {
             logError('Error Applying Category Info Settings: Part 2', ex)
@@ -8304,12 +8405,13 @@ WHERE
             }
          }
       } else {
-         const newId = uuidv4();
+         const newId = uuidv5(`${entityId}|FieldCategoryIcons`, ENTITY_SETTING_NAMESPACE);
          try {
-            await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
-               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', ${this.utcNow()}, ${this.utcNow()})
-            `, `Insert FieldCategoryIcons setting (legacy)`, false);
+            const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'`;
+            const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
+               VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', ${this.utcNow()}, ${this.utcNow()})`;
+            const sSQL = this.conditionalInsert(checkQuery, insertSQL);
+            await this.LogSQLAndExecute(pool, sSQL, `Insert FieldCategoryIcons setting (legacy)`, false);
          }
          catch (ex) {
             logError('Error Applying Category Info Settings: Part 4', ex)

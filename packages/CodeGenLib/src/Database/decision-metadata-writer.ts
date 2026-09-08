@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { BaseSingleton, ordinalCompare } from '@memberjunction/global';
-import { configInfo } from '../Config/config';
+import { configInfo, outputDir } from '../Config/config';
 import { CodeGenReporter } from '../Misc/codegen-reporter';
 import {
   ALLOWED_ENTITY_DECISION_COLUMNS,
@@ -52,6 +52,10 @@ export class DecisionMetadataWriter extends BaseSingleton<DecisionMetadataWriter
   private _settingDecisions = new Map<string, Map<string, unknown>>();
   private _appEntityDecisions = new Map<string, Map<string, Map<string, unknown>>>();
 
+  private _configOwnedEntityColumns: Map<string, Set<string>> | null = null;
+  private _configOwnedFieldColumns: Map<string, Map<string, Set<string>>> | null = null;
+  private _loggedConflicts = new Set<string>();
+
   public clear(): void {
     this._warnedMissingDir = false;
     this.droppedDisallowedColumnCount = 0;
@@ -63,6 +67,137 @@ export class DecisionMetadataWriter extends BaseSingleton<DecisionMetadataWriter
     this._fieldDecisions.clear();
     this._settingDecisions.clear();
     this._appEntityDecisions.clear();
+    this._configOwnedEntityColumns = null;
+    this._configOwnedFieldColumns = null;
+    this._loggedConflicts.clear();
+  }
+
+  private ensureConfigOwnedColumnsLoaded(): void {
+    if (this._configOwnedEntityColumns !== null) return;
+    this._configOwnedEntityColumns = new Map<string, Set<string>>();
+    this._configOwnedFieldColumns = new Map<string, Map<string, Set<string>>>();
+
+    if (!configInfo.additionalSchemaInfo) return;
+    const configPath = path.isAbsolute(configInfo.additionalSchemaInfo)
+      ? configInfo.additionalSchemaInfo
+      : path.join(process.cwd(), configInfo.additionalSchemaInfo);
+
+    if (!fs.existsSync(configPath)) return;
+
+    try {
+      const raw = fs.readFileSync(configPath, 'utf8');
+      const config = JSON.parse(raw) as Record<string, unknown>;
+      this.loadConfigOwnedColumns(config);
+    } catch {
+      // ignore parse errors
+    }
+  }
+
+  public loadConfigOwnedColumns(config: Record<string, unknown>): void {
+    if (!this._configOwnedEntityColumns) this._configOwnedEntityColumns = new Map<string, Set<string>>();
+    if (!this._configOwnedFieldColumns) this._configOwnedFieldColumns = new Map<string, Map<string, Set<string>>>();
+
+    // 1. Entities[]
+    const entities = Array.isArray(config.Entities) ? config.Entities : [];
+    const reservedKeys = new Set(['basetable', 'schemaname', 'entityname', 'tablename']);
+    for (const ec of entities) {
+      if (typeof ec === 'object' && ec !== null) {
+        const rec = ec as Record<string, unknown>;
+        const entityKey = String(rec.EntityName ?? rec.BaseTable ?? '').trim().toLowerCase();
+        if (entityKey) {
+          let cols = this._configOwnedEntityColumns.get(entityKey);
+          if (!cols) {
+            cols = new Set<string>();
+            this._configOwnedEntityColumns.set(entityKey, cols);
+          }
+          for (const k of Object.keys(rec)) {
+            if (!reservedKeys.has(k.toLowerCase())) {
+              cols.add(k.toLowerCase());
+            }
+          }
+        }
+      }
+    }
+
+    // 2. PrimaryKey & ForeignKeys from Tables or Schema-as-key
+    const tableConfigs: Array<{ TableName: string; PrimaryKey?: Array<{ FieldName: string }>; ForeignKeys?: Array<{ FieldName: string }> }> = [];
+    if (Array.isArray(config.Tables)) {
+      tableConfigs.push(...(config.Tables as Array<{ TableName: string; PrimaryKey?: Array<{ FieldName: string }>; ForeignKeys?: Array<{ FieldName: string }> }>));
+    }
+    for (const [key, val] of Object.entries(config)) {
+      if (key !== 'Tables' && key !== 'Entities' && key !== 'Schemas' && Array.isArray(val)) {
+        tableConfigs.push(...(val as Array<{ TableName: string; PrimaryKey?: Array<{ FieldName: string }>; ForeignKeys?: Array<{ FieldName: string }> }>));
+      }
+    }
+
+    for (const tc of tableConfigs) {
+      const entityKey = String(tc.TableName ?? '').trim().toLowerCase();
+      if (!entityKey) continue;
+      let eMap = this._configOwnedFieldColumns.get(entityKey);
+      if (!eMap) {
+        eMap = new Map<string, Set<string>>();
+        this._configOwnedFieldColumns.set(entityKey, eMap);
+      }
+
+      if (Array.isArray(tc.PrimaryKey)) {
+        for (const pk of tc.PrimaryKey) {
+          const fKey = String(pk.FieldName ?? '').trim().toLowerCase();
+          if (!fKey) continue;
+          let cols = eMap.get(fKey);
+          if (!cols) {
+            cols = new Set<string>();
+            eMap.set(fKey, cols);
+          }
+          cols.add('isprimarykey');
+          cols.add('issoftprimarykey');
+        }
+      }
+
+      if (Array.isArray(tc.ForeignKeys)) {
+        for (const fk of tc.ForeignKeys) {
+          const fKey = String(fk.FieldName ?? '').trim().toLowerCase();
+          if (!fKey) continue;
+          let cols = eMap.get(fKey);
+          if (!cols) {
+            cols = new Set<string>();
+            eMap.set(fKey, cols);
+          }
+          cols.add('relatedentityid');
+          cols.add('relatedentityfieldname');
+          cols.add('issoftforeignkey');
+          cols.add('autoupdaterelatedentityinfo');
+        }
+      }
+    }
+  }
+
+  public isEntityColumnOwnedByConfig(entityName: string, column: string): boolean {
+    this.ensureConfigOwnedColumnsLoaded();
+    if (!this._configOwnedEntityColumns) return false;
+    const nameLower = (entityName ?? '').trim().toLowerCase();
+    const baseLower = nameLower.includes(':') ? nameLower.split(':').pop()!.trim() : nameLower;
+    const cols = this._configOwnedEntityColumns.get(nameLower) ?? this._configOwnedEntityColumns.get(baseLower);
+    return cols ? cols.has(column.toLowerCase()) : false;
+  }
+
+  public isFieldColumnOwnedByConfig(entityName: string, fieldName: string, column: string): boolean {
+    this.ensureConfigOwnedColumnsLoaded();
+    if (!this._configOwnedFieldColumns) return false;
+    const nameLower = (entityName ?? '').trim().toLowerCase();
+    const baseLower = nameLower.includes(':') ? nameLower.split(':').pop()!.trim() : nameLower;
+    const eMap = this._configOwnedFieldColumns.get(nameLower) ?? this._configOwnedFieldColumns.get(baseLower);
+    if (!eMap) return false;
+    const cols = eMap.get((fieldName ?? '').trim().toLowerCase());
+    return cols ? cols.has(column.toLowerCase()) : false;
+  }
+
+  private logConfigConflictOnce(entityName: string, fieldName: string | undefined, column: string): void {
+    const key = `${entityName}:${fieldName ?? ''}:${column}`.toLowerCase();
+    if (!this._loggedConflicts.has(key)) {
+      this._loggedConflicts.add(key);
+      const target = fieldName ? `${entityName}.${fieldName}.${column}` : `${entityName}.${column}`;
+      console.warn(`[DecisionMetadataWriter] Skipping '${target}' owned by additionalSchemaInfo config.`);
+    }
   }
 
   // ─── Recording API ──────────────────────────────────────────────────────────
@@ -73,6 +208,13 @@ export class DecisionMetadataWriter extends BaseSingleton<DecisionMetadataWriter
       return;
     }
     if (!ALLOWED_ENTITY_DECISION_COLUMNS.has(column)) {
+      return;
+    }
+
+    if (this.isEntityColumnOwnedByConfig(entityName, column)) {
+      this.logConfigConflictOnce(entityName, undefined, column);
+      this.recordsSkippedCount++;
+      CodeGenReporter.Instance.counter('metadata.decisionRecordsSkipped', 1);
       return;
     }
 
@@ -93,6 +235,13 @@ export class DecisionMetadataWriter extends BaseSingleton<DecisionMetadataWriter
       return;
     }
     if (!ALLOWED_FIELD_DECISION_COLUMNS.has(column)) {
+      return;
+    }
+
+    if (this.isFieldColumnOwnedByConfig(entityName, fieldName, column)) {
+      this.logConfigConflictOnce(entityName, fieldName, column);
+      this.recordsSkippedCount++;
+      CodeGenReporter.Instance.counter('metadata.decisionRecordsSkipped', 1);
       return;
     }
 
@@ -155,19 +304,27 @@ export class DecisionMetadataWriter extends BaseSingleton<DecisionMetadataWriter
   // ─── Directory Resolution & Persistence ────────────────────────────────────
 
   public resolveDecisionsDirectory(): string | null {
-    const enabledSetting = configInfo.decisionMetadata?.enabled ?? 'auto';
+    const enabledSetting = configInfo.decisionMetadata?.enabled;
     if (enabledSetting === false) {
       return null;
     }
 
-    const metaDir = configInfo.metadataDirectory || './metadata';
-    const resolvedMetaDir = path.resolve(process.cwd(), metaDir);
+    const metaDir = outputDir('MetadataSync', false) ?? (configInfo.metadataDirectory ? path.resolve(process.cwd(), configInfo.metadataDirectory) : null);
+    if (!metaDir) {
+      if (!this._warnedMissingDir) {
+        console.warn(`[DecisionMetadataWriter] No 'MetadataSync' output entry found in config. Decision metadata writes disabled.`);
+        this._warnedMissingDir = true;
+      }
+      return null;
+    }
+
+    const resolvedMetaDir = path.resolve(metaDir);
     const entitiesDir = path.join(resolvedMetaDir, 'entities');
     const syncConfigPath = path.join(entitiesDir, '.mj-sync.json');
 
     if (!fs.existsSync(syncConfigPath)) {
       if (!this._warnedMissingDir) {
-        console.warn(`[DecisionMetadataWriter] Metadata directory '${entitiesDir}' missing or lacks .mj-sync.json. Decision metadata writes disabled.`);
+        console.warn(`[DecisionMetadataWriter] Metadata directory '${entitiesDir}' lacks .mj-sync.json. Decision metadata writes disabled.`);
         this._warnedMissingDir = true;
       }
       return null;

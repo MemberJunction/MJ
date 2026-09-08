@@ -334,10 +334,12 @@ BEGIN
       OR __mj."fnNormalizeDefaultValue"(ef."DefaultValue") IS DISTINCT FROM __mj."fnNormalizeDefaultValue"(sq."DefaultValue")
       OR ef."AutoIncrement" <> (sq."AutoIncrement" <> 0)
       OR ef."IsVirtual" <> (sq."IsVirtual" <> 0)
-      OR ef."IsComputed" <> (sq."IsComputed" <> 0)
-      OR COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
-         COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
-      OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
+      -- Soft-FK guard: preserve soft FKs and respect AutoUpdateRelatedEntityInfo
+      OR (ef."AutoUpdateRelatedEntityInfo" AND NOT ef."IsSoftForeignKey" AND (
+            COALESCE(ef."RelatedEntityID", '00000000-0000-0000-0000-000000000000'::uuid) <>
+            COALESCE(re."ID", '00000000-0000-0000-0000-000000000000'::uuid)
+         OR COALESCE(TRIM(ef."RelatedEntityFieldName"), '') <> COALESCE(TRIM(fk."referenced_column"::text), '')
+      ))
       -- U2 — soft-PK guard: a soft primary key (IsSoftPrimaryKey, set from additionalSchemaInfo)
       -- has NO physical PK/unique constraint, so the physical-schema comparison would flag it as
       -- "changed" on EVERY run and the UPDATE below would wipe it. Soft-PK rows are excluded from
@@ -416,8 +418,8 @@ BEGIN
     "IsVirtual"     = fr.new_is_virtual,
     "IsComputed"    = fr.new_is_computed,
     "Sequence"      = fr.new_sequence,
-    "RelatedEntityID"        = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" THEN fr.related_entity_id ELSE tgt."RelatedEntityID" END,
-    "RelatedEntityFieldName" = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" THEN fr.related_entity_field_name ELSE tgt."RelatedEntityFieldName" END,
+    "RelatedEntityID"        = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" AND NOT tgt."IsSoftForeignKey" THEN fr.related_entity_id ELSE tgt."RelatedEntityID" END,
+    "RelatedEntityFieldName" = CASE WHEN tgt."AutoUpdateRelatedEntityInfo" AND NOT tgt."IsSoftForeignKey" THEN fr.related_entity_field_name ELSE tgt."RelatedEntityFieldName" END,
     -- U2 — soft-PK guard: never let the physical-schema sync wipe a soft PK's flags
     "IsPrimaryKey"  = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsPrimaryKey" ELSE fr.new_is_primary_key END,
     "IsUnique"      = CASE WHEN tgt."IsSoftPrimaryKey" THEN tgt."IsUnique"     ELSE fr.new_is_unique     END,

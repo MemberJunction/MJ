@@ -1,6 +1,7 @@
 ---
 "@memberjunction/codegen-lib": minor
 "@memberjunction/core": patch
+"@memberjunction/core-entities": patch
 "@memberjunction/global": patch
 "@memberjunction/metadata-sync": patch
 ---
@@ -13,3 +14,5 @@ Achieve 100% CodeGen idempotency relative to database state and eliminate metada
 - **Stable Form Submodule Partitioning**: Replaced array index-chunking in Angular form submodule generation with stable hash buckets of entity names, preventing unrelated form files from shifting when an entity is added or removed.
 - **Deterministic Ordering**: Unified entity, field, and relationship sorting around `OrdinalCompare` across TypeScript and SQL, eliminating locale and database collation discrepancies.
 - **MetadataSync Preservation**: Preserved runtime and CodeGen-managed fields during push synchronization while maintaining deterministic lookup index caching.
+- **Description Lock Protection**: Corrected inverted `AutoUpdateDescription` logic in `MJEntityFieldEntityExtended` and `MJEntityEntityExtended` so that user edits to `Description` flip `AutoUpdateDescription` to `false`, preventing subsequent CodeGen runs from overwriting customized descriptions.
+

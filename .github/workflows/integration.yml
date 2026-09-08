@@ -94,6 +94,9 @@ on:
 # EXCEPTION 2: schedule events get a per-cron group so the Sunday weekly cron (30 6 * * 0) does
 # not cancel the in-flight nightly (0 6 * * *) — both fire on refs/heads/next and would otherwise
 # share a group, killing the nightly mutation/rig/drift lanes ~30 min in every Sunday.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
@@ -184,7 +187,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -395,7 +398,7 @@ jobs:
 
       - name: Set up pnpm
         if: steps.prereq.outputs.READY == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         if: steps.prereq.outputs.READY == 'true'
@@ -530,7 +533,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -652,7 +655,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -764,7 +767,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"

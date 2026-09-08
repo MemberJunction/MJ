@@ -90,6 +90,7 @@ export const DISALLOWED_COLUMNS = new Set([
   'ValueListType',
   'RelatedEntityID',
   'RelatedEntityFieldName',
+  'RelatedEntityNameFieldMap',
   'Configuration',
   'JSONType',
   'JSONTypeDefinition',
@@ -237,17 +238,31 @@ const ENTITY_ORDER_PREFERENCE = [
   'SupportsGeoCoding'
 ];
 
+function stripNulls(obj: Record<string, unknown>): Record<string, unknown> {
+  const res: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== null && v !== undefined) {
+      res[k] = v;
+    }
+  }
+  return res;
+}
+
 function sortObjectKeysByOrder(obj: Record<string, unknown>, preferredOrder: string[]): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   const remainingKeys = Object.keys(obj).filter(k => !preferredOrder.includes(k)).sort(ordinalCompare);
 
   for (const key of preferredOrder) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      result[key] = obj[key];
+      if (obj[key] !== null && obj[key] !== undefined) {
+        result[key] = obj[key];
+      }
     }
   }
   for (const key of remainingKeys) {
-    result[key] = obj[key];
+    if (obj[key] !== null && obj[key] !== undefined) {
+      result[key] = obj[key];
+    }
   }
   return result;
 }
@@ -277,7 +292,7 @@ function normalizeRecord(record: Record<string, unknown>): Record<string, unknow
             Value: JSON.parse(canonicalJSONStringify(fieldsObj.Value))
           };
         } else {
-          result.fields = fieldsObj;
+          result.fields = stripNulls(fieldsObj);
         }
       } else if (key === 'relatedEntities' && record.relatedEntities && typeof record.relatedEntities === 'object') {
         const rel = record.relatedEntities as Record<string, unknown>;
