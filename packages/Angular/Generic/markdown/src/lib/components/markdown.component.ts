@@ -14,6 +14,8 @@ import {
   AfterViewInit,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import DOMPurify from 'dompurify';
+import { escapeHtmlAsText } from '../utils/escape-html';
 import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
@@ -615,77 +617,24 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
   }
 
   /**
-   * Strip JavaScript from HTML content while preserving layout HTML.
-   * Removes <script> tags, on* event handlers, and javascript: URLs.
+   * Sanitize HTML that bypasses Angular's sanitizer (SVG renderer or HTML passthrough
+   * enabled) while preserving layout HTML.
+   *
+   * DOMPurify with the HTML + SVG profiles keeps structural markup, inline styles, data
+   * attributes and inline vector graphics, and removes the script vectors: `<script>`,
+   * `on*` handlers, `javascript:` / `vbscript:` / `data:` URLs on navigation and script
+   * sinks (data: image URLs on `<img>` and `<image>` are kept), `<iframe>`, `<object>`,
+   * `<embed>`, `<base>`, `<foreignObject>`, `srcdoc`, and friends. It replaces a
+   * hand-written deny-list, which is the class of sanitizer static analysis rightly flags
+   * for incomplete tag and attribute matching.
+   *
+   * Without a DOM (no `window`) there is nothing safe to sanitize with, so the markup is
+   * rendered as visible text rather than trusted.
    */
   private stripJavaScript(html: string): string {
-    if (typeof DOMParser === 'undefined') {
-      // Fallback for environments without DOMParser
-      return this.fallbackStripJavaScript(html);
+    if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
+      return escapeHtmlAsText(html);
     }
-
-    try {
-      const parser = new DOMParser();
-      const doc = parser.parseFromString('<body>' + html + '</body>', 'text/html');
-
-      const cleanNode = (node: Element) => {
-        const tagName = node.tagName.toLowerCase();
-
-        // Remove unsafe elements completely
-        if (tagName === 'script' || tagName === 'iframe' || tagName === 'object' || tagName === 'embed' || tagName === 'base') {
-          node.parentNode?.removeChild(node);
-          return;
-        }
-
-        if (node.attributes) {
-          const attrs = Array.from(node.attributes);
-          for (const attr of attrs) {
-            const name = attr.name.toLowerCase();
-            // Remove whitespace and control chars from value to prevent bypasses like "java\nscript:"
-            // eslint-disable-next-line no-control-regex
-            const valueStr = attr.value.toLowerCase().replace(/[\s\x00-\x20]/g, '');
-
-            if (
-              name.startsWith('on') ||
-              ((name === 'href' || name === 'xlink:href' || name === 'src' || name === 'action' || name === 'formaction') &&
-                (valueStr.startsWith('javascript:') || valueStr.startsWith('vbscript:') || valueStr.startsWith('data:text/html')))
-            ) {
-              node.removeAttribute(attr.name);
-            }
-          }
-        }
-
-        // Recursively clean children (Array.from prevents issues with live collections when removing nodes)
-        Array.from(node.children).forEach(cleanNode);
-      };
-
-      Array.from(doc.body.children).forEach(cleanNode);
-      return doc.body.innerHTML;
-    } catch (e) {
-      // If parsing fails completely, fall back to aggressive regex
-      return this.fallbackStripJavaScript(html);
-    }
-  }
-
-  /**
-   * Fallback regex-based sanitization when DOMParser is unavailable.
-   * Note: This is less robust than DOM parsing and should only be a fallback.
-   */
-  private fallbackStripJavaScript(html: string): string {
-    // Remove <script> tags and their content
-    html = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-
-    // Remove on* event handlers (onclick, onload, onerror, etc.)
-    html = html.replace(/\s+on\w+\s*=\s*["'][^"']*["']/gi, '');
-    html = html.replace(/\s+on\w+\s*=\s*[^\s>]+/gi, '');
-
-    // Remove javascript: URLs from href and src attributes
-    html = html.replace(/\s+href\s*=\s*["']?javascript:[^"'>\s]*["']?/gi, '');
-    html = html.replace(/\s+src\s*=\s*["']?javascript:[^"'>\s]*["']?/gi, '');
-
-    // Remove data: URLs that could contain scripts (data:text/html, etc.)
-    html = html.replace(/\s+src\s*=\s*["']?data:text\/html[^"'>\s]*["']?/gi, '');
-
-    return html;
+    return DOMPurify.sanitize(html, { USE_PROFILES: { html: true, svg: true, svgFilters: true } });
   }
 }

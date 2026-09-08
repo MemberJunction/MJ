@@ -7775,6 +7775,9 @@ importers:
       '@memberjunction/markdown-core':
         specifier: 6.1.0-edge.5
         version: link:../../../MarkdownCore
+      dompurify:
+        specifier: ^3.3.0
+        version: 3.3.1
       mermaid:
         specifier: ^11.12.2
         version: 11.12.2

@@ -426,15 +426,14 @@ export class MarkdownService {
                                testDoc.body.innerHTML.includes('<'));
 
           if (hasStructure) {
-            // Replace the <pre> with the actual HTML content
-            const wrapper = document.createElement('div');
-            wrapper.className = 'unwrapped-html';
-            wrapper.innerHTML = content;
-
-            // Move all children from wrapper to replace pre
-            const fragment = document.createDocumentFragment();
-            while (wrapper.firstChild) {
-              fragment.appendChild(wrapper.firstChild);
+            // Replace the <pre> with the actual HTML content. Build the nodes inside the
+            // inert DOMParser documents, never the live `document`: setting innerHTML on a
+            // live element fires image error handlers and similar at parse time, before any
+            // downstream sanitizer has seen the markup (the component sanitizes the string
+            // this method returns, not the nodes it builds).
+            const fragment = doc.createDocumentFragment();
+            for (const child of Array.from(testDoc.body.childNodes)) {
+              fragment.appendChild(doc.importNode(child, true));
             }
             pre.parentNode?.replaceChild(fragment, pre);
             modified = true;
