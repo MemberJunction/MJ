@@ -12,9 +12,10 @@
 # The principle: exclude code nobody wrote and code that never ships. Do not exclude
 # anything an engineer authored that reaches a customer.
 #
-# VERIFIED against MemberJunction/MJ@next on 5 September 2026 by verify-paths.sh:
+# VERIFIED against MemberJunction/MJ@next on 5 September 2026 by a file-count sweep:
 # 19,900 files in the tree, 8,183 of them JavaScript/TypeScript. Every pattern below
-# matched something real, except node_modules — see the note against it.
+# matched something real, except node_modules — see the note against it. The plans/**
+# entry was added on 8 September 2026 and verified the same way (703 files).
 
 name: "MemberJunction CodeQL config"
 
@@ -105,12 +106,19 @@ paths-ignore:
   - '**/docs/**'
   - '**/*.md'
 
-  # --- design documents and mockups -----------------------------------------------
-  # plans/ holds design documents and HTML mockups (plans/composer-adoption/mockups is
-  # the largest set). Nothing under it is built, imported or shipped: the same "code
-  # nobody ships" class as generated output. Excluded 8 September 2026 after the first
-  # full js-rest scan reported 4 high alerts in a mockup; recorded in BC-POL-012 Annex A
-  # and exception EX-2026-002 alongside the generated-code exclusion.
+  # --- design documents and mockups ---------------------------------------------------
+  # plans/ holds design documents and HTML mockups: 703 non-markdown files on 8 September
+  # 2026, of which 197 are HTML (the largest sets are plans/lists/mockups at 28 and
+  # plans/predictive-studio/mockups at 22), 451 PNG, 35 SQL drafts and 9 CSS. Nothing under
+  # it is built or shipped; two manual scripts there import from package output for ad-hoc
+  # checks and are not part of any test tier. Added 8 September 2026 after the js-rest
+  # analysis reported 4 high alerts in plans/composer-adoption/mockups. The markdown was
+  # already excluded by **/*.md above; this covers the rest.
+  #
+  # This exclusion MUST be recorded in BC-POL-012 Annex A and in exception EX-2026-002
+  # alongside the generated-code exclusion; those records are not in this repository.
+  # Not excluded on purpose: experiments/ (buildable prototype code with real alerts) and
+  # the plans/ directories nested inside packages, which hold only markdown today.
   - 'plans/**'
 
 # Deliberately NOT excluded, because they are authored code that reaches customers.
@@ -123,6 +131,7 @@ paths-ignore:
 #   packages/MJGlobal/**             73    — SQL expression validation
 #
 # NOT COVERED BY ANY ANALYSIS IN THIS WORKFLOW, STATED SO IT IS NOT MISTAKEN FOR COVERAGE:
+#   plans/       —  design documents and mockups, excluded above on 8 September 2026.
 #   migrations/  —  690 .sql files and 4 .md. CodeQL has no SQL analysis, so schema
 #   migrations are outside the reach of code scanning entirely. Review of migrations
 #   remains a human control under BC-POL-012 §10, and the automated migration check

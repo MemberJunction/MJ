@@ -61,10 +61,8 @@ paths-ignore:
   - '**/docs/**'
   - '**/*.md'
 
-  # --- design documents and mockups -----------------------------------------------
-  # plans/ holds design documents and HTML mockups (plans/composer-adoption/mockups is
-  # the largest set). Nothing under it is built, imported or shipped: the same "code
-  # nobody ships" class as generated output. Excluded 8 September 2026 after the first
-  # full js-rest scan reported 4 high alerts in a mockup; recorded in BC-POL-012 Annex A
-  # and exception EX-2026-002 alongside the generated-code exclusion.
+  # --- design documents and mockups ---------------------------------------------------
+  # Kept for parity with the shared baseline; rationale in codeql-config.yml. In this job
+  # the paths: allowlist above already confines analysis to six packages, so this pattern
+  # matches nothing here until that allowlist is widened.
   - 'plans/**'
