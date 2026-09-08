@@ -241,7 +241,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     ): Promise<MJRecordGeoCodeEntity | null> {
         // Prefer the owning entity's provider so RecordGeoCode writes join the
         // same connection/TX as the save that triggered geocoding.
-        const md = entityProvider ?? (new Metadata() as unknown as IMetadataProvider);
+        const md = entityProvider ?? new Metadata();
 
         // Batch mode: O(1) map lookup + single PK load
         if (existingGeoCodesMap) {
@@ -285,7 +285,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         contextUser: UserInfo,
         entityProvider?: IMetadataProvider
     ): Promise<MJRecordGeoCodeEntity | null> {
-        const md = entityProvider ?? (new Metadata() as unknown as IMetadataProvider);
+        const md = entityProvider ?? new Metadata();
         const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
         row.NewRecord();
         row.EntityID = entityID;

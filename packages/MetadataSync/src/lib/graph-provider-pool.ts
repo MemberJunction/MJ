@@ -6,9 +6,11 @@
  * host connection with a graph instance in the same tree is a deadlock (child FK
  * waits on an uncommitted parent).
  *
- * Providers are released as soon as a graph's last dependency level is done, so
- * peak live instances is bounded by `--parallel-batch-size` (plus graphs that
- * still have later levels), not by the file's root count.
+ * Drain: a graph is released at the end of a batch when (a) it will not appear
+ * at a later level, or (b) its TransactionDepth is 0 (Save already committed,
+ * so a fresh instance at the next level is safe). Graphs with leftover depth
+ * stay live until their last level. Peak live independent instances is therefore
+ * bounded by `--parallel-batch-size`, plus any still-open leftover-depth graphs.
  */
 
 export interface GraphProviderLike {
@@ -24,7 +26,6 @@ export class GraphProviderPool {
   private readonly lastLevelByGraph = new Map<string, number>();
   private independentUnavailable = false;
   private unavailableLogged = false;
-  private readonly failedGraphs = new Set<string>();
   private anyFailed = false;
 
   constructor(
@@ -45,9 +46,9 @@ export class GraphProviderPool {
     }
   }
 
-  markFailed(graphId?: string): void {
+  /** One record error anywhere in the file rolls back every graph in that file. */
+  markFailed(): void {
     this.anyFailed = true;
-    if (graphId) this.failedGraphs.add(graphId);
   }
 
   get hasFailed(): boolean {
@@ -56,9 +57,12 @@ export class GraphProviderPool {
 
   /**
    * Provider for this graph. Never returns a mix: either every graph in the
-   * file gets its own independent instance, or (if CreateIndependentInstance
-   * is unimplemented) every graph uses the host. Mixing those topologies is
-   * the deadlock this pool exists to prevent.
+   * file gets its own independent instance, or (if the *first*
+   * CreateIndependentInstance fails) every graph uses the host.
+   *
+   * If independent instances already exist and a later CreateIndependentInstance
+   * throws, this throws rather than handing the rest of the file to the host.
+   * Mid-file topology change is the deadlock this pool exists to prevent.
    *
    * The host itself is never stored in the map, so release cannot
    * RollbackTransaction the global push TX.
@@ -73,11 +77,18 @@ export class GraphProviderPool {
       this.providers.set(graphId, created);
       return created;
     } catch (e) {
+      const reason = (e as Error).message;
+      if (this.providers.size > 0) {
+        throw new Error(
+          `CreateIndependentInstance failed after ${this.providers.size} graph(s) already had independent instances (${reason}). ` +
+            `Refusing mixed host + independent topology in one file.`
+        );
+      }
       this.independentUnavailable = true;
       if (!this.unavailableLogged) {
         this.unavailableLogged = true;
         this.log(
-          `⚠️  CreateIndependentInstance unavailable (${(e as Error).message}); ` +
+          `⚠️  CreateIndependentInstance unavailable (${reason}); ` +
             `ALL graphs in this file use the host provider (inside the push transaction). ` +
             `Mixing host + independent instances in one file is a deadlock — we refuse that topology.`
         );
@@ -87,15 +98,20 @@ export class GraphProviderPool {
   }
 
   /**
-   * Commit-or-rollback + release every graph in `graphIds` whose last level is
-   * `levelIndex`. Graphs that still appear at a later level stay live.
-   * Returns the first settle error (commit/rollback failure) so the caller can
-   * fail the push instead of reporting success with uncommitted rows.
+   * Commit-or-rollback + release graphs in this batch that are done:
+   * their last level is `levelIndex`, or TransactionDepth is already 0
+   * (Save settled; a fresh instance at a later level is safe).
+   * Leftover-depth graphs that still appear later stay live.
+   * Returns the first settle error so the caller cannot report success
+   * with uncommitted rows.
    */
   async drainBatch(graphIds: string[], levelIndex: number): Promise<Error | undefined> {
-    const ending = graphIds.filter(
-      (id) => (this.lastLevelByGraph.get(id) ?? levelIndex) === levelIndex
-    );
+    const ending = graphIds.filter((id) => {
+      const last = this.lastLevelByGraph.get(id) ?? levelIndex;
+      if (last === levelIndex) return true;
+      const provider = this.providers.get(id);
+      return !provider || provider.TransactionDepth === 0;
+    });
     return this.releaseGraphs(ending);
   }
 
@@ -111,10 +127,9 @@ export class GraphProviderPool {
       this.providers.delete(id);
       if (!provider || provider === this.host) continue;
 
-      const failed = this.anyFailed || this.failedGraphs.has(id);
       try {
         if (provider.TransactionDepth > 0) {
-          if (failed) {
+          if (this.anyFailed) {
             // Explicit rollback at the call site — do not rely on
             // ReleaseIndependentInstance's implicit leftover-depth rollback.
             await provider.RollbackTransaction();
@@ -124,7 +139,6 @@ export class GraphProviderPool {
         }
       } catch (e) {
         this.anyFailed = true;
-        this.failedGraphs.add(id);
         settleError ??= e as Error;
         this.log(`Failed to settle graph ${id} transaction: ${(e as Error).message}`);
         try {

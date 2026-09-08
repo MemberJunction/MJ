@@ -775,13 +775,14 @@ export class PushService {
         const batchContext = new BatchContextIndex();
 
         // One provider per JSON-root graph (Action + nested Action Params share a
-        // connection). Parallelize sibling roots only. Drain each graph as soon as
-        // its last dependency level finishes so peak live instances stay bounded
-        // by --parallel-batch-size, not by the file's root count.
+        // connection). Parallelize sibling roots only. Drain a graph when its last
+        // level finishes, or when TransactionDepth is already 0 (Save settled).
+        // Peak live independent instances is then the current batch plus any
+        // leftover-depth graphs still spanning later levels.
         const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase;
         const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
 
-        const applyProcessResult = (result: ProcessRecordResult, graphId: string): void => {
+        const applyProcessResult = (result: ProcessRecordResult): void => {
           if (result.batchContextEntry) {
             batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
           }
@@ -805,7 +806,7 @@ export class PushService {
             // A non-throwing record error must not commit leftover graph depth —
             // the previous per-record release rolled that work back.
             errors++;
-            graphPool.markFailed(graphId);
+            graphPool.markFailed();
           }
           else if (result.status === 'deferred') {
             created++;
@@ -861,7 +862,7 @@ export class PushService {
                       );
                       results.push({ success: true, result, record: flattenedRecord, graphId });
                     } catch (error) {
-                      graphPool.markFailed(graphId);
+                      graphPool.markFailed();
                       results.push({ success: false, error, record: flattenedRecord, graphId });
                       break;
                     }
@@ -879,7 +880,7 @@ export class PushService {
                     callbacks?.onLog?.(`   ${err.message}\n`);
                     throw err;
                   }
-                  applyProcessResult(batchResult.result, batchResult.graphId);
+                  applyProcessResult(batchResult.result);
                 }
               }
 

@@ -1214,11 +1214,15 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Bind this instance to a provider after construction.
      *
+     * **Rule (ORM, not just metadata-sync):** every DB read and write on this
+     * instance — Save, Load, Delete, RunView, GetEntityObject of children/embeds,
+     * lookups, RecordGeoCode — MUST use this provider. Mixing another provider
+     * (especially the process-wide host) into the same record graph is a deadlock:
+     * a child FK waits on an uncommitted parent on another connection.
+     *
      * {@link ProviderBase.GetEntityObject} always calls this so a subclass that
      * declares `constructor(Entity: EntityInfo)` and drops the second ClassFactory
-     * argument cannot silently run Save/Load/RunView on the global host. Mixing the
-     * host connection with a graph-scoped instance in the same JSON tree is a
-     * deadlock (child FK waits on an uncommitted parent on another connection).
+     * argument cannot silently run on the global host.
      */
     public BindProvider(provider: IEntityDataProvider | null): void {
         this._provider = provider;
