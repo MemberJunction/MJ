@@ -49,7 +49,9 @@ function buildEntity(existingSalaryRows: Record<string, unknown>[] = []): Entity
         ],
         Fields: [
             { ID: 'F1', EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true },
-            { ID: SALARY_FIELD_ID, EntityID: ENTITY_ID, Sequence: 2, Name: 'Salary', Entity: 'Employees', Type: 'money', EntityFieldPermissions: existingSalaryRows },
+            // AllowUpdateAPI makes this an ordinary writable column. Without it the field is
+            // read-only, and the snapshot deliberately authors no Update/Create verbs.
+            { ID: SALARY_FIELD_ID, EntityID: ENTITY_ID, Sequence: 2, Name: 'Salary', Entity: 'Employees', Type: 'money', AllowUpdateAPI: true, EntityFieldPermissions: existingSalaryRows },
         ],
     });
 }

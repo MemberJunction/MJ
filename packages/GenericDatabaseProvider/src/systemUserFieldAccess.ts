@@ -191,6 +191,14 @@ function lostVerb(
     if (!after.CanRead) {
         return 'read';
     }
+    // A read-only field cannot be written through the API by ANY user — it is excluded from the
+    // generated create input and from the update SET list — so the write verbs decide nothing on
+    // it and their absence costs the system user nothing. Reconciliation deliberately authors
+    // `No Access` there rather than an inert `Allow`; without this the guard would read that as
+    // lost access and report every joined display column on an FLS-enabled entity as a violation.
+    if (field.ReadOnly) {
+        return null;
+    }
     if (entityAccess.CanUpdate && !after.CanUpdate) {
         return 'update';
     }

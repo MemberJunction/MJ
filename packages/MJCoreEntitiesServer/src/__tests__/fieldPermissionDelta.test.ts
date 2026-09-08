@@ -19,6 +19,7 @@ const ID_FIELD_ID = 'F0000000-0000-0000-0000-000000000001';
 const SALARY_FIELD_ID = 'F0000000-0000-0000-0000-000000000002';
 const NOTES_FIELD_ID = 'F0000000-0000-0000-0000-000000000003';
 const SYSTEM_FIELD_ID = 'F0000000-0000-0000-0000-000000000004';
+const DISPLAY_FIELD_ID = 'F0000000-0000-0000-0000-000000000005';
 
 const HR_ROLE_ID = 'A0000000-0000-0000-0000-000000000001';
 const FINANCE_ROLE_ID = 'A0000000-0000-0000-0000-000000000002';
@@ -74,6 +75,8 @@ function buildEntity(opts: {
     notesRows?: Record<string, unknown>[];
     pkRows?: Record<string, unknown>[];
     systemRows?: Record<string, unknown>[];
+    displayRows?: Record<string, unknown>[];
+    includeDisplayField?: boolean;
     entityName?: string;
 } = {}): EntityInfo {
     const entityName = opts.entityName ?? 'Employees';
@@ -87,9 +90,18 @@ function buildEntity(opts: {
         Permissions: opts.permissions ?? [entityPermission({ RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true })],
         Fields: [
             { ID: ID_FIELD_ID, EntityID: ENTITY_ID, Sequence: 1, Name: 'ID', Entity: entityName, Type: 'uniqueidentifier', IsPrimaryKey: true, EntityFieldPermissions: opts.pkRows ?? [] },
-            { ID: SALARY_FIELD_ID, EntityID: ENTITY_ID, Sequence: 2, Name: 'Salary', Entity: entityName, Type: 'money', EntityFieldPermissions: opts.salaryRows ?? [] },
-            { ID: NOTES_FIELD_ID, EntityID: ENTITY_ID, Sequence: 3, Name: 'Notes', Entity: entityName, Type: 'nvarchar', EntityFieldPermissions: opts.notesRows ?? [] },
+            // AllowUpdateAPI is what makes these ordinary WRITABLE columns. Without it
+            // EntityFieldInfo.ReadOnly is true, and the snapshot correctly refuses to author
+            // Update/Create verbs that could never decide anything — see the read-only test below.
+            { ID: SALARY_FIELD_ID, EntityID: ENTITY_ID, Sequence: 2, Name: 'Salary', Entity: entityName, Type: 'money', AllowUpdateAPI: true, EntityFieldPermissions: opts.salaryRows ?? [] },
+            { ID: NOTES_FIELD_ID, EntityID: ENTITY_ID, Sequence: 3, Name: 'Notes', Entity: entityName, Type: 'nvarchar', AllowUpdateAPI: true, EntityFieldPermissions: opts.notesRows ?? [] },
             { ID: SYSTEM_FIELD_ID, EntityID: ENTITY_ID, Sequence: 4, Name: '__mj_UpdatedAt', Entity: entityName, Type: 'datetimeoffset', EntityFieldPermissions: opts.systemRows ?? [] },
+            // Opt-in so the field-count assertions in the other tests stay meaningful. A joined
+            // foreign-key display column: read-only, and a legitimate READ-restriction target
+            // ("hide which client this record belongs to").
+            ...(opts.includeDisplayField
+                ? [{ ID: DISPLAY_FIELD_ID, EntityID: ENTITY_ID, Sequence: 5, Name: 'Department', Entity: entityName, Type: 'nvarchar', IsVirtual: true, AllowUpdateAPI: false, EntityFieldPermissions: opts.displayRows ?? [] }]
+                : []),
         ],
     });
 }
@@ -129,6 +141,23 @@ describe('ComputeFieldPermissionDelta — snapshot initialization', () => {
         });
         expect(insertFor(delta, SALARY_FIELD_ID, INTERN_ROLE_ID)).toMatchObject({
             ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE,
+        });
+    });
+
+    it('authors no write verbs on a read-only field, but still authors Read', () => {
+        // A read-only field cannot be written through the API by anyone — it is excluded from the
+        // generated create input and from the update SET list — so an Allow on Update or Create
+        // would read as a granted permission and be inert. Read stays meaningful: restricting a
+        // foreign-key display column is one of the main things FLS is for.
+        const delta = ComputeFieldPermissionDelta(buildEntity({ includeDisplayField: true }));
+
+        expect(insertFor(delta, DISPLAY_FIELD_ID, HR_ROLE_ID)).toMatchObject({
+            ReadAccess: ALLOW, UpdateAccess: NONE, CreateAccess: NONE,
+        });
+        // ...even though the role holds entity-level update AND create, which is what the
+        // writable fields on the same entity pick up.
+        expect(insertFor(delta, SALARY_FIELD_ID, HR_ROLE_ID)).toMatchObject({
+            ReadAccess: ALLOW, UpdateAccess: ALLOW, CreateAccess: ALLOW,
         });
     });
 

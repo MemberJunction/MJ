@@ -5,6 +5,7 @@ import {
     EntityFieldInfo,
     EntitySaveOptions,
     EntityInfo,
+    FieldPermissionAccess,
     FieldPermissionRuleForRole,
     FieldPermissionRuleVerbs,
     IMetadataProvider,
@@ -60,6 +61,12 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
             if (rejection) {
                 result.Errors.push(
                     new ValidationErrorInfo('EntityFieldID', rejection, this.EntityFieldID, ValidationErrorType.Failure)
+                );
+            }
+            const writeVerbRejection = MJEntityFieldPermissionEntityServer.WriteVerbRejectionReason(targetField, this);
+            if (writeVerbRejection) {
+                result.Errors.push(
+                    new ValidationErrorInfo('EntityFieldID', writeVerbRejection, this.EntityFieldID, ValidationErrorType.Failure)
                 );
             }
         }
@@ -249,6 +256,42 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
             `The server runs background work as that account and shares one engine cache across all users — ` +
             `restricting it would let partially loaded records reach everyone. ` +
             `Remove the role from the system user first, or apply this rule to a different role.`
+        );
+    }
+
+    /**
+     * Why this rule's Update/Create verbs may not target this field, or null when they may.
+     *
+     * A **read-only** field cannot be written through the API by anyone: it is excluded from the
+     * generated create input type and from the update SET list, and `BaseEntity` never marks it
+     * dirty. So an Update or Create verb on it is inert in both directions — a `Deny` prevents
+     * nothing that was possible, and an `Allow` grants nothing that was not. Left to save, it
+     * reads on screen as a working permission and silently is not one.
+     *
+     * **Read is untouched, deliberately.** Restricting READ on a read-only field is legitimate
+     * and is one of the main things administrators want: foreign-key display columns are
+     * read-only, and "hide which client this contract belongs to" is exactly a read restriction
+     * on one. Only the two write verbs are refused.
+     *
+     * Note `EntityFieldInfo.ReadOnly` is the right predicate here, not `IsVirtual`: IS-A parent
+     * fields are virtual but ARE writable through the child's save chain, and `ReadOnly` is
+     * defined off `AllowUpdateAPI` precisely to tell those apart from joined display columns.
+     */
+    public static WriteVerbRejectionReason(field: EntityFieldInfo, rule: FieldPermissionRuleVerbs): string | null {
+        if (!field.ReadOnly) {
+            return null;
+        }
+        const offending: string[] = [];
+        if (rule.UpdateAccess !== FieldPermissionAccess.NoAccess) offending.push('Update');
+        if (rule.CreateAccess !== FieldPermissionAccess.NoAccess) offending.push('Create');
+        if (offending.length === 0) {
+            return null;
+        }
+        return (
+            `Field '${field.Entity}.${field.Name}' is read-only, so its ${offending.join(' and ')} ` +
+            `${offending.length > 1 ? 'permissions have' : 'permission has'} no effect — the field cannot be written ` +
+            `through the API by any user. Set ${offending.length > 1 ? 'them' : 'it'} to 'No Access'. ` +
+            `Read permission on this field still applies normally.`
         );
     }
 

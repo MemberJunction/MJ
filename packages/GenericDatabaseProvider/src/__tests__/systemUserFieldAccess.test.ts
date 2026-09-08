@@ -75,15 +75,29 @@ function entityWith(entityAccess: { CanRead: boolean; CanUpdate: boolean; CanCre
 
 function fieldNamed(
     name: string,
-    opts: { unrestrictableField?: boolean; unrestrictableEntity?: boolean; rules?: FieldPermissionRuleForRole[] } = {}
+    opts: {
+        unrestrictableField?: boolean;
+        unrestrictableEntity?: boolean;
+        readOnly?: boolean;
+        rules?: FieldPermissionRuleForRole[];
+    } = {}
 ): EntityFieldInfo {
     return {
         Name: name,
         IsUnrestrictableField: opts.unrestrictableField ?? false,
         IsOnUnrestrictableEntity: opts.unrestrictableEntity ?? false,
+        ReadOnly: opts.readOnly ?? false,
         FieldPermissions: opts.rules ?? [],
     } as unknown as EntityFieldInfo;
 }
+
+/** A rule granting only read — what reconciliation authors for a READ-ONLY field. */
+const readOnlyGrant = (roleID: string): FieldPermissionRuleForRole => ({
+    RoleID: roleID,
+    ReadAccess: 'Allow',
+    UpdateAccess: 'No Access',
+    CreateAccess: 'No Access',
+});
 
 const FULL = { CanRead: true, CanUpdate: true, CanCreate: true };
 
@@ -192,6 +206,41 @@ describe('FindSystemUserFieldAccessViolations', () => {
         const entity = entityWith(FULL, [bad, good]);
         const violations = FindSystemUserFieldAccessViolations(providerWith([entity]));
         expect(violations).toEqual([{ EntityName: 'MJ: Employees', FieldName: 'Salary', Verb: 'read' }]);
+    });
+
+    it('does not report a READ-ONLY field for the write verbs it can never have', () => {
+        // Reconciliation authors Read=Allow / Update=No Access / Create=No Access on a read-only
+        // field, because those two verbs cannot decide anything there — the field is excluded from
+        // the create input type and from the update SET list. Without the guard knowing that, every
+        // joined display column on an FLS-enabled entity reads as lost update access. This is what
+        // IT88's LC9 ("a clean database must report zero violations") caught: six Supervisor* and
+        // FirstLast columns on MJ: Employees.
+        systemUserHolding(ROLE_A);
+        const display = fieldNamed('Supervisor', { readOnly: true, rules: [readOnlyGrant(ROLE_A)] });
+        const entity = entityWith(FULL, [display]);
+
+        expect(FindSystemUserFieldAccessViolations(providerWith([entity]))).toEqual([]);
+    });
+
+    it('still reports a READ-ONLY field that loses READ — the verb that does apply', () => {
+        systemUserHolding(ROLE_A);
+        const display = fieldNamed('Supervisor', { readOnly: true, rules: [neutral(ROLE_A)] });
+        const entity = entityWith(FULL, [display]);
+
+        expect(FindSystemUserFieldAccessViolations(providerWith([entity]))).toEqual([
+            { EntityName: 'MJ: Employees', FieldName: 'Supervisor', Verb: 'read' },
+        ]);
+    });
+
+    it('still reports a WRITABLE field that loses update', () => {
+        // The read-only carve-out must not widen into "write verbs never matter".
+        systemUserHolding(ROLE_A);
+        const writable = fieldNamed('Salary', { readOnly: false, rules: [readOnlyGrant(ROLE_A)] });
+        const entity = entityWith(FULL, [writable]);
+
+        expect(FindSystemUserFieldAccessViolations(providerWith([entity]))).toEqual([
+            { EntityName: 'MJ: Employees', FieldName: 'Salary', Verb: 'update' },
+        ]);
     });
 
     it('skips entities with field security switched off — dormant rules restrict nothing', () => {

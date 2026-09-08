@@ -36,7 +36,7 @@
  * If the entity is ALREADY FLS-enabled (a real administrator configured it), the fixture
  * refuses to mutate and the bundle skips-as-pass with a loud note.
  */
-import { RunView, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage } from '@memberjunction/core';
+import { RunView, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityWriteDenialMessage } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider, RunViewParams, EntityFieldInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Assert, AssertEqual, IntegrationCheckRegistry } from '@memberjunction/testing-integration';
@@ -318,9 +318,16 @@ export async function CheckFls1_EnableSnapshotShape(ctx: IntegrationCheckContext
 
 /**
  * FLS2 — snapshot DEFAULTS mirror entity-level permissions (2.2), and enabling changed no
- * behavior (2.3): the Writer role (read+create+update) gets Allow/Allow/Allow, the read-only
- * Reader role gets Allow/No Access/No Access, and the reader user's visible column set is
- * still complete — a live RunView returns Email.
+ * behavior (2.3): the Writer role (read+create+update) gets Allow/Allow/Allow on every WRITABLE
+ * field, the read-only Reader role gets Allow/No Access/No Access, and the reader user's visible
+ * column set is still complete — a live RunView returns Email.
+ *
+ * The snapshot is uniform per (role x writability), NOT per role. A READ-ONLY field — a joined
+ * foreign-key display column, a computed column — cannot be written through the API by anyone, so
+ * reconciliation authors `No Access` on its two write verbs rather than an `Allow` that could
+ * never decide anything. Asserting a single uniform shape per role would demand exactly the inert
+ * grant the snapshot deliberately withholds, so the split is asserted here instead: it is the
+ * stronger statement of the two.
  */
 export async function CheckFls2_SnapshotDefaultsChangeNothing(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS2')) return;
@@ -328,16 +335,32 @@ export async function CheckFls2_SnapshotDefaultsChangeNothing(ctx: IntegrationCh
     const schema = schemaOf(ctx);
     const entity = flsEntity(ctx);
 
-    const shapes = await q<{ RoleID: string; ReadAccess: string; UpdateAccess: string; CreateAccess: string; n: number }>(ctx,
-        `SELECT p.RoleID, p.ReadAccess, p.UpdateAccess, p.CreateAccess, COUNT(*) AS n ` +
+    // Grouped by writability as well as by verb triple. Within the snapshot set (primary keys and
+    // `__mj_` columns are already excluded from it), `AllowUpdateAPI = 0` IS the read-only test —
+    // the same one `EntityFieldInfo.ReadOnly` reduces to there.
+    const shapes = await q<{ RoleID: string; ReadAccess: string; UpdateAccess: string; CreateAccess: string; Writable: number; n: number }>(ctx,
+        `SELECT p.RoleID, p.ReadAccess, p.UpdateAccess, p.CreateAccess, ` +
+        `CAST(f.AllowUpdateAPI AS int) AS Writable, COUNT(*) AS n ` +
         `FROM [${schema}].EntityFieldPermission p JOIN [${schema}].EntityField f ON f.ID = p.EntityFieldID ` +
-        `WHERE f.EntityID = '${entity.ID}' GROUP BY p.RoleID, p.ReadAccess, p.UpdateAccess, p.CreateAccess`);
-    const forRole = (roleId: string) => shapes.filter(s => UUIDsEqual(s.RoleID, roleId));
+        `WHERE f.EntityID = '${entity.ID}' ` +
+        `GROUP BY p.RoleID, p.ReadAccess, p.UpdateAccess, p.CreateAccess, CAST(f.AllowUpdateAPI AS int)`);
+    const forRole = (roleId: string, writable: boolean) =>
+        shapes.filter(s => UUIDsEqual(s.RoleID, roleId) && (s.Writable === 1) === writable);
 
-    const writer = forRole(fx.RoleIDs!.Writer);
-    Assert(writer.length === 1 && writer[0].ReadAccess === 'Allow' && writer[0].UpdateAccess === 'Allow' && writer[0].CreateAccess === 'Allow',
-        `read+update+create role must snapshot to uniform Allow/Allow/Allow (got ${JSON.stringify(writer)})`);
-    const reader = forRole(fx.RoleIDs!.Reader);
+    const writerWritable = forRole(fx.RoleIDs!.Writer, true);
+    Assert(writerWritable.length === 1 && writerWritable[0].ReadAccess === 'Allow'
+        && writerWritable[0].UpdateAccess === 'Allow' && writerWritable[0].CreateAccess === 'Allow',
+        `read+update+create role must snapshot WRITABLE fields to Allow/Allow/Allow (got ${JSON.stringify(writerWritable)})`);
+
+    // Read-only fields never receive an inert write grant, whatever the role holds at entity level.
+    for (const roleId of [fx.RoleIDs!.Writer, fx.RoleIDs!.Reader]) {
+        const readOnlyShapes = forRole(roleId, false);
+        Assert(readOnlyShapes.every(s => s.ReadAccess === 'Allow' && s.UpdateAccess === 'No Access' && s.CreateAccess === 'No Access'),
+            `READ-ONLY fields must snapshot to Allow/No Access/No Access — the write verbs decide ` +
+            `nothing there (role ${roleId}, got ${JSON.stringify(readOnlyShapes)})`);
+    }
+
+    const reader = forRole(fx.RoleIDs!.Reader, true);
     Assert(reader.length === 1 && reader[0].ReadAccess === 'Allow' && reader[0].UpdateAccess === 'No Access' && reader[0].CreateAccess === 'No Access',
         `read-only role must snapshot to uniform Allow/No Access/No Access (got ${JSON.stringify(reader)})`);
 
@@ -546,9 +569,16 @@ export async function CheckFls15_UserSearchStringNotRejected(ctx: IntegrationChe
 }
 
 /**
- * FLS16 — a save that MODIFIES an update-denied field is rejected server-side (3.9), with the
- * ambiguous wording, and the stored value is untouched. Multi can read Phone (Allow) but its
- * Denier role carries Update=Deny.
+ * FLS16 — a save that MODIFIES an update-denied field is rejected server-side (3.9) and the
+ * stored value is untouched. Multi can read Phone (Allow) but its Denier role carries
+ * Update=Deny.
+ *
+ * The refusal NAMES the missing permission rather than using the ambiguous "does not exist or
+ * you do not have access" wording. That wording protects two facts — that the column exists, and
+ * that it is restricted for this caller — and Multi already holds both: it can read Phone and see
+ * its value. Telling someone a field they are looking at might not exist is misleading, not
+ * discreet. The ambiguous wording stays where it earns its keep: READ denials, where a caller
+ * probing a predicate must not learn which columns a deployment treats as sensitive.
  */
 export async function CheckFls16_UpdateDeniedFieldRejected(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS16')) return;
@@ -566,8 +596,12 @@ export async function CheckFls16_UpdateDeniedFieldRejected(ctx: IntegrationCheck
         message = e instanceof Error ? e.message : String(e);
     }
     Assert(!saved, 'modifying an update-denied field must be rejected server-side');
-    Assert(message.includes(FieldSecurityDenialMessage(FLS_UPDATE_DENY_FIELD, SEEDED_FLS_ENTITY)),
-        `ambiguous denial wording expected, got '${message}'`);
+    Assert(message.includes(FieldSecurityWriteDenialMessage(FLS_UPDATE_DENY_FIELD, SEEDED_FLS_ENTITY)),
+        `write-denial wording naming the missing permission expected, got '${message}'`);
+    // Pinned explicitly: a regression back to the ambiguous wording would still "reject", so
+    // asserting only the rejection would not catch it.
+    Assert(!message.includes(FieldSecurityDenialMessage(FLS_UPDATE_DENY_FIELD, SEEDED_FLS_ENTITY)),
+        `a READABLE field's write refusal must not hide behind the ambiguous wording, got '${message}'`);
 
     const db = await q<{ Phone: string }>(ctx,
         `SELECT Phone FROM [${schemaOf(ctx)}].Employee WHERE ID = '${fx.FixtureEmployeeID}'`);
