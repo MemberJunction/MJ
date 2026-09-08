@@ -2,7 +2,7 @@
 // Reflect.metadata polyfill at import time.
 import 'reflect-metadata';
 import { describe, it, expect } from 'vitest';
-import type { DatabaseProviderBase, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
+import type { DatabaseProviderBase, IMetadataProvider, RunViewParams, RunViewResult, UserInfo } from '@memberjunction/core';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import type { UserPayload } from '../types.js';
 import type { RunDynamicViewInput, RunViewByNameInput } from '../generic/RunViewResolver.js';
@@ -39,7 +39,9 @@ function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = []):
             {
                 ID: 'E1',
                 Name: ENTITY_NAME,
+                SchemaName: '__mj',
                 BaseView: 'vwUsers',
+                BaseTable: 'User',
                 Fields: [
                     { Name: 'Email', NeedsQuotes: true },
                     { Name: 'Name', NeedsQuotes: true },
@@ -49,8 +51,22 @@ function fakeProvider(captured: Captured, rows: Record<string, unknown>[] = []):
             },
             {
                 Name: 'MJ: User Views',
+                SchemaName: '__mj',
+                BaseView: 'vwUserViews',
                 Fields: [{ Name: 'Name', NeedsQuotes: true }],
             },
+            {
+                Name: 'MJ_BizApps_Tasks: Task Assignments',
+                SchemaName: '__mj_BizAppsTasks',
+                BaseView: 'vwTaskAssignments',
+                BaseTable: 'TaskAssignment',
+                Fields: [{ Name: 'TaskID', NeedsQuotes: true }],
+            },
+            { Name: 'MJ_BizApps_Tasks: Tasks', SchemaName: '__mj_BizAppsTasks', BaseView: 'vwTasks', BaseTable: 'Task', Fields: [] },
+            { Name: 'Committees: Meetings', SchemaName: '__mj_BizAppsCommittees', BaseView: 'vwMeetings', BaseTable: 'Meeting', Fields: [] },
+            { Name: 'Committees: Motions', SchemaName: '__mj_BizAppsCommittees', BaseView: 'vwMotions', BaseTable: 'Motion', Fields: [] },
+            { Name: 'Committees: Memberships', SchemaName: '__mj_BizAppsCommittees', BaseView: 'vwMemberships', BaseTable: 'Membership', Fields: [] },
+            { Name: 'Committees: Terms', SchemaName: '__mj_BizAppsCommittees', BaseView: 'vwTerms', BaseTable: 'Term', Fields: [] },
         ],
         RunView: async (params: RunViewParams): Promise<RunViewResult> => {
             captured.params = params;
@@ -68,8 +84,8 @@ class Probe extends ResolverBase {
         return this.findBy(provider, entity, params, fakeUser());
     }
 
-    public AssertNoClientSubquery(clause: string | undefined | null, label: string) {
-        return this.assertNoClientSubquery(clause, label);
+    public ScreenClause(clause: string | undefined | null, label: string, provider: DatabaseProviderBase) {
+        return this.assertClientClauseUsesEntityBaseViews(clause, label, provider as unknown as IMetadataProvider);
     }
 
     public RunDynamic(input: RunDynamicViewInput, provider: DatabaseProviderBase) {
@@ -137,63 +153,89 @@ describe('ResolverBase.findBy — ExtraFilter escaping', () => {
     });
 });
 
-describe('ResolverBase — GraphQL-boundary subquery screen (assertNoClientSubquery)', () => {
-    // ValidateUserProvidedSQLClause deliberately permits SELECT (server-internal engines pass
-    // richer filters straight into RunView), so a client could previously turn ExtraFilter into
-    // a blind boolean oracle over tables it cannot read. These tests pin the stricter screen
-    // applied only to clauses arriving through the GraphQL resolvers.
+describe('ResolverBase — GraphQL-boundary ExtraFilter AST screen', () => {
+    // Keyword SELECT/EXISTS ban (#4253) broke first-party IN (SELECT … FROM base view).
+    // The replacement parses the fragment and allows only entity BaseViews.
 
-    it('rejects an EXISTS subquery probing a foreign table', () => {
+    const provider = () => fakeProvider({ params: null });
+
+    it('rejects an EXISTS subquery against a base table', () => {
         expect(() =>
-            new Probe().AssertNoClientSubquery(`EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner')`, 'ExtraFilter')
-        ).toThrow(/subqueries are not permitted/);
+            new Probe().ScreenClause(`EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner')`, 'ExtraFilter', provider())
+        ).toThrow(/entity base view/);
     });
 
-    it('rejects a scalar SELECT subquery in ORDER BY', () => {
+    it('rejects a scalar SELECT subquery against a non-view', () => {
         expect(() =>
-            new Probe().AssertNoClientSubquery('(SELECT COUNT(*) FROM __mj.APIKey)', 'OrderBy')
-        ).toThrow(/subqueries are not permitted/);
+            new Probe().ScreenClause('(SELECT COUNT(*) FROM __mj.APIKey)', 'OrderBy', provider())
+        ).toThrow(/entity base view/);
     });
 
-    it('rejects EXISTS regardless of case', () => {
+    it('allows IN (SELECT …) against an entity BaseView', () => {
         expect(() =>
-            new Probe().AssertNoClientSubquery(`eXiStS (SeLeCt 1 FROM __mj.[User])`, 'ExtraFilter')
-        ).toThrow(/subqueries are not permitted/);
+            new Probe().ScreenClause(
+                `ID IN (SELECT TaskID FROM [__mj_BizAppsTasks].[vwTaskAssignments] WHERE AssigneeRecordID = 'x')`,
+                'ExtraFilter',
+                provider(),
+            )
+        ).not.toThrow();
+    });
+
+    it('allows the restored Committees ExtraFilter shapes (Command Center, workspace, tracker)', () => {
+        const p = new Probe();
+        const md = provider();
+        const clauses = [
+            `TaskID IN (SELECT ID FROM [__mj_BizAppsTasks].[vwTasks] WHERE Status IN ('Open', 'InProgress'))`,
+            `ID IN (SELECT TaskID FROM [__mj_BizAppsTasks].[vwTaskAssignments] WHERE AssigneeRecordID = 'x')`,
+            `MeetingID IN (SELECT ID FROM [__mj_BizAppsCommittees].[vwMeetings] WHERE CommitteeID='x')`,
+            `MotionID IN (SELECT ID FROM [__mj_BizAppsCommittees].[vwMotions] WHERE MeetingID = 'x')`,
+            `ID IN (SELECT m.PersonID FROM [__mj_BizAppsCommittees].[vwMemberships] m JOIN [__mj_BizAppsCommittees].[vwTerms] t ON m.TermID = t.ID WHERE t.CommitteeID = 'x' AND m.Status = 'Active')`,
+        ];
+        for (const c of clauses) {
+            expect(() => p.ScreenClause(c, 'ExtraFilter', md)).not.toThrow();
+        }
     });
 
     it('allows an ordinary comparison filter', () => {
         expect(() =>
-            new Probe().AssertNoClientSubquery(`Email = 'a@b.com' AND IsActive = 1`, 'ExtraFilter')
+            new Probe().ScreenClause(`Email = 'a@b.com' AND IsActive = 1`, 'ExtraFilter', provider())
         ).not.toThrow();
     });
 
     it('does not false-positive on SELECT/EXISTS inside string literals', () => {
-        // Literals are stripped before the keyword test, so a value that merely CONTAINS the
-        // words is fine.
         expect(() =>
-            new Probe().AssertNoClientSubquery(`Name LIKE '%select%' OR Name = 'exists'`, 'ExtraFilter')
+            new Probe().ScreenClause(`Name LIKE '%select%' OR Name = 'exists'`, 'ExtraFilter', provider())
         ).not.toThrow();
     });
 
     it('allows empty/undefined clauses', () => {
-        expect(() => new Probe().AssertNoClientSubquery('', 'ExtraFilter')).not.toThrow();
-        expect(() => new Probe().AssertNoClientSubquery(undefined, 'OrderBy')).not.toThrow();
+        expect(() => new Probe().ScreenClause('', 'ExtraFilter', provider())).not.toThrow();
+        expect(() => new Probe().ScreenClause(undefined, 'OrderBy', provider())).not.toThrow();
     });
 
-    it('RunDynamicViewGeneric never reaches RunView when ExtraFilter carries a subquery', async () => {
+    it('RunDynamicViewGeneric never reaches RunView when ExtraFilter hits a base table', async () => {
         const captured: Captured = { params: null };
         const input = {
             EntityName: ENTITY_NAME,
             ExtraFilter: `EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner')`,
         } as RunDynamicViewInput;
 
-        // The screen throws inside RunViewGenericInternal. RunDynamicViewGeneric returns that
-        // promise without awaiting it, so its try/catch does not swallow the rejection — the
-        // caller sees the error directly.
         await expect(new Probe().RunDynamic(input, fakeProvider(captured))).rejects.toThrow(
-            /subqueries are not permitted/
+            /entity base view/
         );
-        expect(captured.params).toBeNull(); // never reached RunView
+        expect(captured.params).toBeNull();
+    });
+
+    it('RunDynamicViewGeneric passes a BaseView subquery through to RunView', async () => {
+        const captured: Captured = { params: null };
+        const input = {
+            EntityName: ENTITY_NAME,
+            ExtraFilter: `ID IN (SELECT ID FROM [__mj].[vwUsers] WHERE Email = 'a@b.com')`,
+        } as RunDynamicViewInput;
+
+        await new Probe().RunDynamic(input, fakeProvider(captured));
+
+        expect(captured.params?.ExtraFilter).toBe(`ID IN (SELECT ID FROM [__mj].[vwUsers] WHERE Email = 'a@b.com')`);
     });
 
     it('RunDynamicViewGeneric passes a benign ExtraFilter through to RunView', async () => {

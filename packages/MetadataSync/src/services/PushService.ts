@@ -14,7 +14,8 @@ import { configManager } from '../lib/config-manager';
 import { SQLLogger } from '../lib/sql-logger';
 import { TransactionManager } from '../lib/transaction-manager';
 import { JsonWriteHelper } from '../lib/json-write-helper';
-import { RecordDependencyAnalyzer, FlattenedRecord } from '../lib/record-dependency-analyzer';
+import { RecordDependencyAnalyzer, FlattenedRecord, groupRecordsByGraphId } from '../lib/record-dependency-analyzer';
+import { GraphProviderPool } from '../lib/graph-provider-pool';
 import { JsonPreprocessor } from '../lib/json-preprocessor';
 import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
@@ -23,9 +24,10 @@ import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
-// Parallelism is safe when each record gets its own provider instance (shared pool,
-// own transaction stack) — the same pattern MJAPI uses per request. Default 10.
-// Do NOT default to 1 to paper over a shared provider.
+// Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
+// Nested relatedEntities share the root's provider so parent+child stay on one TX.
+// Default 10 — never 1. 1 was a wrong workaround for mixed-provider hangs;
+// callers can pass --parallel-batch-size 1 for debugging.
 const PARALLEL_BATCH_SIZE = 10;
 
 export interface PushOptions {
@@ -466,7 +468,9 @@ export class PushService {
         }
       }
 
-      // Begin transaction if not in dry-run mode
+      // Host TX wraps Phase 2 deletions and Phase 2.5 deferred records.
+      // Phase 1 graph writes go to independent instances (or, if those are
+      // unavailable, ALL graphs share this host TX — never a mix).
       if (!options.dryRun) {
         await transactionManager.beginTransaction();
       }
@@ -772,140 +776,127 @@ export class PushService {
         // the context AFTER successful save to maintain consistency.
         const batchContext = new BatchContextIndex();
 
-        // Process records using dependency levels for parallel processing
-        if (analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0) {
-          // Use parallel processing with dependency levels
-          for (let levelIndex = 0; levelIndex < analysisResult.dependencyLevels.length; levelIndex++) {
-            const level = analysisResult.dependencyLevels[levelIndex];
-            
-            if (options.verbose && level.length > 1) {
-              callbacks?.onLog?.(`   Processing dependency level ${levelIndex} with ${level.length} records in parallel...`);
-            }
-            
-            // Process records in this level in parallel batches
+        // One provider per JSON-root graph (Action + nested Action Params share a
+        // connection). Parallelize sibling roots only. Drain a graph when its last
+        // level finishes, or when TransactionDepth is already 0 (Save settled).
+        // Peak live independent instances is then the current batch plus any
+        // leftover-depth graphs still spanning later levels.
+        const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase;
+        const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
+
+        const applyProcessResult = (result: ProcessRecordResult): void => {
+          if (result.batchContextEntry) {
+            batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
+          }
+          if (result.deferredRecord) {
+            this.deferredRecords.push(result.deferredRecord);
+          }
+          if (result.warnings) {
+            this.warnings.push(...result.warnings);
+          }
+          if (result.isDeletedRecord) return;
+          if (result.isDuplicate) {
+            skipped++;
+            return;
+          }
+          if (result.status === 'created') created++;
+          else if (result.status === 'updated') updated++;
+          else if (result.status === 'unchanged') unchanged++;
+          else if (result.status === 'deleted') deleted++;
+          else if (result.status === 'skipped') skipped++;
+          else if (result.status === 'error') {
+            // A non-throwing record error must not commit leftover graph depth —
+            // the previous per-record release rolled that work back.
+            errors++;
+            graphPool.markFailed();
+          }
+          else if (result.status === 'deferred') {
+            created++;
+            deferred++;
+          }
+        };
+
+        // Fail-fast: the first thrown record error aborts the file. That is
+        // intentional and matches the parallel path; it is a change from the
+        // old sequential fallback, which continued after onError.
+        let runError: unknown;
+        try {
+          const levels =
+            analysisResult.dependencyLevels && analysisResult.dependencyLevels.length > 0
+              ? analysisResult.dependencyLevels
+              : [analysisResult.sortedRecords];
+
+          graphPool.noteLevels(levels);
+
+          for (let levelIndex = 0; levelIndex < levels.length; levelIndex++) {
+            const level = levels[levelIndex];
+            const byGraph = groupRecordsByGraphId(level);
+            const graphIds = Array.from(byGraph.keys());
             const batchSize = options.parallelBatchSize || PARALLEL_BATCH_SIZE;
-            for (let i = 0; i < level.length; i += batchSize) {
-              const batch = level.slice(i, Math.min(i + batchSize, level.length));
-              
-              // Process batch in parallel
+
+            if (options.verbose && graphIds.length > 1) {
+              callbacks?.onLog?.(
+                `   Level ${levelIndex}: ${level.length} records in ${graphIds.length} graphs (parallel batch ${batchSize})`
+              );
+            }
+
+            for (let i = 0; i < graphIds.length; i += batchSize) {
+              const batchIds = graphIds.slice(i, i + batchSize);
               const batchResults = await Promise.all(
-                batch.map(async (flattenedRecord) => {
-                  try {
-                    const result = await this.processFlattenedRecordOnIndependentProvider(
-                      flattenedRecord,
-                      entityDir,
-                      options,
-                      batchContext,
-                      callbacks,
-                      entityConfig
-                    );
-                    return { success: true, result };
-                  } catch (error) {
-                    // Return error instead of throwing to handle after Promise.all
-                    return { success: false, error, record: flattenedRecord };
+                batchIds.map(async (graphId) => {
+                  const recs = byGraph.get(graphId)!;
+                  const provider = await graphPool.obtain(graphId);
+                  const results: Array<
+                    | { success: true; result: ProcessRecordResult; record: FlattenedRecord; graphId: string }
+                    | { success: false; error: unknown; record: FlattenedRecord; graphId: string }
+                  > = [];
+                  for (const flattenedRecord of recs) {
+                    try {
+                      const result = await this.processFlattenedRecord(
+                        flattenedRecord,
+                        entityDir,
+                        options,
+                        batchContext,
+                        callbacks,
+                        entityConfig,
+                        true,
+                        provider as unknown as IMetadataProvider
+                      );
+                      results.push({ success: true, result, record: flattenedRecord, graphId });
+                    } catch (error) {
+                      graphPool.markFailed();
+                      results.push({ success: false, error, record: flattenedRecord, graphId });
+                      break;
+                    }
                   }
+                  return results;
                 })
               );
-              
-              // Apply side effects sequentially after Promise.all() resolves.
-              // This eliminates race conditions from concurrent writes to shared state.
-              for (const batchResult of batchResults) {
-                if (!batchResult.success) {
-                  // Fail fast on first error with detailed logging
-                  const err = batchResult.error as Error;
-                  const rec = batchResult.record as FlattenedRecord;
 
-                  // Log concise summary - detailed error was already logged by processFlattenedRecord
-                  callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
-                  callbacks?.onLog?.(`   ${err.message}\n`);
-
-                  // Throw concise error to trigger rollback
-                  throw err;
-                }
-
-                const result = batchResult.result!;
-
-                // Apply side effects from the result
-                if (result.batchContextEntry) {
-                  batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
-                }
-                if (result.deferredRecord) {
-                  this.deferredRecords.push(result.deferredRecord);
-                }
-                if (result.warnings) {
-                  this.warnings.push(...result.warnings);
-                }
-
-                // Update stats for successful results
-                // Don't count deletion records - they're counted in Phase 2
-                if (result.isDeletedRecord) {
-                  continue; // Skip entirely
-                } else if (result.isDuplicate) {
-                  skipped++; // Count duplicates as skipped
-                } else {
-                  if (result.status === 'created') created++;
-                  else if (result.status === 'updated') updated++;
-                  else if (result.status === 'unchanged') unchanged++;
-                  else if (result.status === 'deleted') deleted++;
-                  else if (result.status === 'skipped') skipped++;
-                  else if (result.status === 'error') errors++;
-                  else if (result.status === 'deferred') {
-                    created++; // Deferred records were saved (count as created)
-                    deferred++; // Also track separately for reporting
+              for (const graphResults of batchResults) {
+                for (const batchResult of graphResults) {
+                  if (batchResult.success === false) {
+                    const err = batchResult.error as Error;
+                    const rec = batchResult.record;
+                    callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
+                    callbacks?.onLog?.(`   ${err.message}\n`);
+                    throw err;
                   }
+                  applyProcessResult(batchResult.result);
                 }
               }
+
+              const drainError = await graphPool.drainBatch(batchIds, levelIndex);
+              if (drainError) throw drainError;
             }
           }
-        } else {
-          // Fallback to sequential processing if no dependency levels available
-          for (const flattenedRecord of analysisResult.sortedRecords) {
-            try {
-              const result = await this.processFlattenedRecord(
-                flattenedRecord,
-                entityDir,
-                options,
-                batchContext,
-                callbacks,
-                entityConfig
-              );
-
-              // Apply side effects (already sequential, but consistent with parallel path)
-              if (result.batchContextEntry) {
-                batchContext.set(result.batchContextEntry.key, result.batchContextEntry.entity);
-              }
-              if (result.deferredRecord) {
-                this.deferredRecords.push(result.deferredRecord);
-              }
-              if (result.warnings) {
-                this.warnings.push(...result.warnings);
-              }
-
-              // Update stats
-              // Don't count deletion records - they're counted in Phase 2
-              if (!result.isDeletedRecord) {
-                if (result.isDuplicate) {
-                  skipped++; // Count duplicates as skipped
-                } else {
-                  if (result.status === 'created') created++;
-                  else if (result.status === 'updated') updated++;
-                  else if (result.status === 'unchanged') unchanged++;
-                  else if (result.status === 'deleted') deleted++;
-                  else if (result.status === 'skipped') skipped++;
-                  else if (result.status === 'error') errors++;
-                  else if (result.status === 'deferred') {
-                    created++; // Deferred records were saved (count as created)
-                    deferred++; // Also track separately for reporting
-                  }
-                }
-              }
-            } catch (recordError) {
-              const errorMsg = `Error processing ${flattenedRecord.entityName} record at ${flattenedRecord.path}: ${recordError}`;
-              callbacks?.onError?.(errorMsg);
-              errors++;
-            }
-          }
+        } catch (e) {
+          graphPool.markFailed();
+          runError = e;
         }
+        const settleError = await graphPool.releaseAll();
+        if (runError) throw runError;
+        if (settleError) throw settleError;
         
         // Check if this file has any deletion records (including nested relatedEntities)
         const hasDeletions = this.hasAnyDeletions(records);
@@ -956,36 +947,6 @@ export class PushService {
     }
 
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
-  }
-
-  /**
-   * Run one record on a forked provider (shared pool, own TX stack) so parallel
-   * Saves cannot interleave EntityTransactionScope on the CLI's singleton provider.
-   */
-  private async processFlattenedRecordOnIndependentProvider(
-    flattenedRecord: FlattenedRecord,
-    entityDir: string,
-    options: PushOptions,
-    batchContext: BatchContext,
-    callbacks?: PushCallbacks,
-    entityConfig?: EntityConfig,
-    allowDefer: boolean = true
-  ): Promise<ProcessRecordResult> {
-    const host = Metadata.Provider as unknown as DatabaseProviderBase;
-    let scoped: DatabaseProviderBase | undefined;
-    try {
-      scoped = await host.CreateIndependentInstance();
-    } catch (e) {
-      callbacks?.onLog?.(
-        `⚠️  CreateIndependentInstance unavailable (${(e as Error).message}); this record uses the shared provider`
-      );
-      return this.processFlattenedRecord(flattenedRecord, entityDir, options, batchContext, callbacks, entityConfig, allowDefer);
-    }
-    try {
-      return await this.processFlattenedRecord(flattenedRecord, entityDir, options, batchContext, callbacks, entityConfig, allowDefer, scoped);
-    } finally {
-      await scoped.ReleaseIndependentInstance();
-    }
   }
 
   private async processFlattenedRecord(
@@ -1095,7 +1056,8 @@ export class PushService {
             0,
             batchContext,
             resolutionCollector,
-            pkField
+            pkField,
+            recordProvider
           );
         } catch (pkError: unknown) {
           // Check if this is a deferrable lookup error
@@ -1113,7 +1075,7 @@ export class PushService {
     if (resolvedPrimaryKey && Object.keys(resolvedPrimaryKey).length > 0) {
       // First check if the record exists using the sync engine's loadEntity method
       // This avoids the "Error in BaseEntity.Load" message for missing records
-      const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedPrimaryKey);
+      const existingEntity = await this.syncEngine.loadEntity(entityName, resolvedPrimaryKey, recordProvider);
       
       if (existingEntity) {
         // Record exists, use the loaded entity
@@ -1194,7 +1156,8 @@ export class PushService {
           0,
           batchContext, // Pass batch context for lookups
           resolutionCollector,
-          fieldName
+          fieldName,
+          recordProvider
         );
         const fieldInfo = entity.GetFieldByName(fieldName);
         const fieldType = (fieldInfo?.EntityFieldInfo?.Type || '').trim().toLowerCase();

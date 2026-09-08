@@ -74,7 +74,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       default: false,
     }),
     'parallel-batch-size': Flags.integer({
-      description: 'Number of records to process in parallel (default: 10)',
+      description: 'JSON-root graphs to process in parallel (default: 10, not 1)',
       default: 10,
       min: 1,
       max: 50,
