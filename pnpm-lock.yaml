@@ -1180,6 +1180,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      express-rate-limit:
+        specifier: ^8.2.1
+        version: 8.2.1(express@5.2.1)
       jsonwebtoken:
         specifier: 9.0.3
         version: 9.0.3
@@ -12344,6 +12347,9 @@ importers:
       '@memberjunction/sql-dialect':
         specifier: 6.1.0-edge.5
         version: link:../SQLDialect
+      '@memberjunction/sql-parser':
+        specifier: 6.1.0-edge.5
+        version: link:../SQLParser
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.5
         version: link:../SQLServerDataProvider

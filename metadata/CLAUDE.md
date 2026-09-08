@@ -74,6 +74,13 @@ All agents in MemberJunction currently use the "Loop" agent type, which provides
 - **PromptRole**: "System" for agent system prompts
 - **PromptPosition**: "First" for primary prompts
 
+#### Deprecating an AI Model Vendor
+`Status` values differ per entity — always check the target entity's allowed values, they are not interchangeable.
+- Vendor row (`MJ: AI Model Vendors`): `Status: "Inactive"`.
+- Its paired cost row (`MJ: AI Model Costs`): `Status: "Expired"` plus an `EndedAt` ISO timestamp.
+- `"Inactive"` is **not** a valid cost `Status` — the CHECK constraint allows only `Active`, `Pending`, `Expired`, `Invalid`, and a bad value fails `mj sync push` in CI.
+- Run `mj sync validate --dir=metadata` before opening a PR.
+
 ### 5. Template Variable Conventions
 Agent prompt templates receive these standard variables:
 - `{{ agentName }}`: The agent's name

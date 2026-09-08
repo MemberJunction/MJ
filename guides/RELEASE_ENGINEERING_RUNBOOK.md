@@ -12,7 +12,7 @@ There are four distinct operations. Know which one you're doing before you start
 | Operation | Frequency | Who | Automation today |
 |---|---|---|---|
 | 1. Routine Edge release | on demand | Release engineer | Reviewed PR: `release/*` prep branch → `main` |
-| 2. LTS candidate cut | per cycle (~bimonthly) | Cert owner | Scripted-manual |
+| 2. LTS candidate cut | per cycle (~bimonthly) | Cert owner | Button (`cut-candidate` job) |
 | 3. LTS line patch release | as fixes land on a line | Cert owner | **One button** (`Publish LTS line release` workflow) |
 | 4. Certification flip | once per certification | Cert owner | Scripted-manual |
 
@@ -89,31 +89,60 @@ backported fixes that were already reviewed on `next`.
 
 ## 2. LTS candidate cut (the pre-exit dance)
 
-Trigger: the cert owner declares the stream ready — "current `6.1.0-edge.N` is our candidate."
-The cut happens at the **tip of `next`**. It takes minutes and freezes nothing.
+Trigger: the cert owner declares the stream ready ("current `6.1.0-edge.N` is our candidate").
+The cut happens at the **tip of `next`**. It is one workflow dispatch, takes about as long as
+an Edge release, and freezes nothing: merges after it simply ride the next stream.
 
-Worked example — cutting line 6.1 while `next` streams `6.1.0-edge.12`:
+Actions -> "Build and publish new package versions" -> Run workflow -> leave the ref at
+`next` -> `cut_line: 6.1` -> `confirm_branch: lts/6.1`. That is invocation 4 in
+`publish.yml`; the job is `cut-candidate`, the logic is `ci/candidate-cut.mjs`.
 
-1. **Announce** the cut moment (a courtesy, not a freeze; merges after it simply ride the
-   next stream).
-2. On up-to-date `next`: `npx changeset pre exit` → commit.
-3. `npx changeset version` — accumulated changesets resolve; the repo versions to plain
-   **`6.1.0`**. `pnpm install`, commit `pnpm-lock.yaml`.
-4. Push to `next`; tag the version commit **`v6.1.0`** and push the tag.
-5. **Branch `lts/6.1` from that tag** and push the branch. This is the candidate's home.
-6. **Publish 6.1.0 from the line branch** (operation 3's mechanics) — npm tag **`lts-6.1`**,
-   GitHub Release with `make_latest: false`. It must NOT go through `next → main`; the era
-   gate will (correctly) refuse it there.
-7. Back on `next`, immediately: `npx changeset pre enter edge` + commit, then seed the next
-   stream with a minor changeset ("open the 6.2 stream"). The next routine release is
-   `6.2.0-edge.0`.
-8. Open the certification tracking issue; gates run against 6.1.0 **on `lts/6.1`**.
-9. Cert fixes: land on `next` first → label `backport lts/6.1` → bot cherry-picks → line
-   patch builds (6.1.1, 6.1.2, …). Certification names whichever build passes.
+**Before you press it** (the job checks all three and refuses otherwise):
 
-Pinning an *older* edge build instead of the tip is possible (branch at that exact commit,
-run steps 2–3 on the branch) but leaves `next`'s stream tuple stale — it then needs its own
-exit/version/re-enter dance. Avoid; cut the tip.
+1. `release-lines.json` on `next` carries `lines["6.1"]` as `{ "status": "candidate",
+   "candidateDate": "YYYY-MM-DD" }`. That is a reviewed PR (CODEOWNERS: the cert owner);
+   status fields never arrive by direct push, so the job only appends the mechanical
+   `newest` and `releases` fields afterwards.
+2. The newest Edge build is published. The job cuts the tip regardless and only reports
+   how many commits sit between the last Edge tag and the tip; a large unpublished batch is
+   your call, not its.
+3. Nothing named `lts/6.1`, `v6.1.0` or `@memberjunction/core@6.1.0` exists yet.
+
+Also, once per repo and not something the job can do: an admin creates a ruleset for
+`lts/**` (pull request required, no force-push, no deletion). `lts/5` was found unprotected
+on 2026-09-03; a line born without the ruleset stays that way until someone notices.
+
+**What the job does**, in an order where nothing is pushed until the packages are on npm:
+
+1. Preflight (above), then `changeset pre exit`, `changeset version` (accumulated
+   changesets resolve; every `@memberjunction/*` package versions to plain **`6.1.0`**),
+   `pnpm install` and a lockfile commit, and a frozen install as the proof the lockfile is
+   in sync. All local commits so far.
+2. Build, then `changeset publish --tag lts-6.1`. Verified against the registry:
+   `lts-6.1` points at 6.1.0 and `latest` did not move.
+3. Commit the post-release generated files, tag **`v6.1.0`**.
+4. `changeset pre enter edge` plus the seed changeset (`.changeset/open-6-2-edge-stream.md`,
+   a `minor`), so the next routine release is `6.2.0-edge.0`. Without the seed a patch-only
+   merge would version Edge to `6.1.1-edge.0`, which the line's own first patch owns; this
+   was reproduced on a scratch clone, so the seed is load-bearing, not a courtesy.
+5. Push `next` (merging in anything that landed during the build, bounded retries; only the
+   lockfile may auto-resolve), push the tag, create **`lts/6.1`** at the tag, create the
+   GitHub Release with `--latest=false`, append `lines["6.1"].newest` and
+   `releases["6.1.0"]` to the ledger, dispatch docs and release notes.
+
+**If it fails.** Before the publish step: `next`, npm and GitHub are untouched, re-dispatch.
+After it: the packages are on npm and the run stops red at the first step it could not
+complete. That is "released, not yet recorded", the same posture as every other release path
+here; finish the remaining steps by hand from the run log, do not re-run.
+
+**Afterwards.** Open the certification tracking issue; gates run against 6.1.0 **on
+`lts/6.1`**. Cert fixes land on `next` first -> label `backport lts/6.1` -> bot cherry-picks
+-> line patch builds (6.1.1, 6.1.2, ...) via operation 3. Certification names whichever
+build passes.
+
+Pinning an *older* Edge build instead of the tip is not something the job supports, on
+purpose: it would leave `next`'s stream tuple stale and need its own exit/version/re-enter
+dance. Cut the tip.
 
 ---
 

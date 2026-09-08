@@ -73,9 +73,10 @@ import {
     QueryInfo,
 } from '@memberjunction/core';
 
-import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, NormalizeUUID, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
 import { QueryPagingEngine } from './queryPagingEngine.js';
 // QueryParameterProcessor is now called internally by RenderPipeline
+import { createHash } from 'node:crypto';
 import { v4 as uuidv4 } from 'uuid';
 import { SqlLoggingSessionImpl } from './SqlLogger.js';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
@@ -125,11 +126,25 @@ export interface ExecuteSQLBatchOptions {
  * Platform-specific providers should extend this class instead of DatabaseProviderBase
  * to inherit these shared behaviors.
  */
-/** ExtendedType values that indicate a geo-relevant field */
-const GEO_EXTENDED_TYPES = new Set([
-    'Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince',
-    'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
-]);
+/**
+ * Thrown when a nested savepoint fails because the ambient physical transaction
+ * was already rolled back by the server (mssql ENOTBEGUN/EABORT, pg 25P01).
+ * Opening a second physical TX would commit inner work after the outer writes
+ * were gone. Callers must fail the outer unit — `Save()` returns false.
+ */
+export class DoomedTransactionError extends Error {
+    public readonly code = 'DOOMED_TRANSACTION';
+    constructor(
+        message = 'Ambient transaction was rolled back by the server; outer work is lost',
+        options?: { cause?: unknown },
+    ) {
+        super(message);
+        this.name = 'DoomedTransactionError';
+        if (options?.cause !== undefined) {
+            (this as Error & { cause?: unknown }).cause = options.cause;
+        }
+    }
+}
 
 export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     // Composition engine is now owned by RenderPipeline
@@ -615,16 +630,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
 
-        // Flag geo sync needed in the SaveContext state bag.
-        // Check: entity supports geocoding AND (new record OR any geo field was dirty).
-        // SkipGeoCoding: a sync's writes arrive pre-formed from the source system — the per-write
-        // geocode lookup is suppressed for those saves only; interactive saves still geocode.
-        if (entity.EntityInfo.SupportsGeoCoding && options.SkipGeoCoding !== true) {
-            const needsGeoSync = context.IsNew || context.Fields.some(
-                (f: SaveContextField) => f.WasDirty && f.FieldInfo.ExtendedType != null && GEO_EXTENDED_TYPES.has(f.FieldInfo.ExtendedType)
-            );
-            if (needsGeoSync) {
-                context.State['geoSyncNeeded'] = true;
+        // GeoCodeSyncService is the WRITE path. SupportsGeoCoding also means maps/distance
+        // (read). The service only runs when there is at least one writable Geo* field.
+        // Virtual PrimaryAddress* / __mj_Latitude never invoke the provider.
+        // SkipGeoCoding: per-save (mj-sync push.skipGeoCoding, integration sync).
+        // Native lat/lng already populated (sample data, pasted coords) → do not call the API.
+        if (
+            entity.EntityInfo.SupportsGeoCoding &&
+            options.SkipGeoCoding !== true &&
+            entity.EntityInfo.HasWritableGeoSourceFields
+        ) {
+            const lat = entity.EntityInfo.Fields.find(f => f.IsNativeLatitudeField);
+            const lng = entity.EntityInfo.Fields.find(f => f.IsNativeLongitudeField);
+            const latVal = lat ? entity.Get(lat.Name) : null;
+            const lngVal = lng ? entity.Get(lng.Name) : null;
+            const coordsAlreadySet = latVal != null && latVal !== '' && lngVal != null && lngVal !== '';
+            if (!coordsAlreadySet) {
+                const needsGeoSync = context.IsNew || context.Fields.some(
+                    (f: SaveContextField) => f.WasDirty && f.FieldInfo.IsWritableGeoField
+                );
+                if (needsGeoSync) {
+                    context.State['geoSyncNeeded'] = true;
+                }
             }
         }
     }
@@ -1054,6 +1081,110 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         value: unknown,
         isUpdate: boolean,
     ): SaveCoercedValue;
+
+    /**
+     * Hex characters kept from the sha1 digest in {@link SaveCallVariableHash}. 12 hex = 48 bits:
+     * expected sha1-prefix collisions across 120k distinct save calls (a cheese-scale MetadataSync
+     * capture) fall from ~1.7 at 8 hex to ~3e-5, so `_n` disambiguation is a same-record safety net
+     * rather than something a large capture exercises. SQL Server identifiers allow 128 characters;
+     * `@CodeName_` plus 12 hex fits every generated name.
+     */
+    public static readonly SaveCallVariableHashLength = 12;
+
+    private static readonly uuidShape = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    /**
+     * First {@link SaveCallVariableHashLength} hex of sha1(`${schema}.${table}|${pk values}`).
+     * Dialect-agnostic identity of a save call so sqlLogging recaptures of an unchanged tree
+     * are byte-identical. A random uuidv4 slice (previously only in
+     * SQLServerDataProvider.RenderSaveCallBinding) made every MetadataSync recapture a 250 MB
+     * diff and, inside a batched TransactionGroup, collided under the birthday paradox at
+     * ~120k variables (loom #12 WP3 / F-D).
+     *
+     * sha1 is an identity hash here, not a security primitive: it only has to be stable and
+     * well distributed. Key values are normalized first so the same record hashes the same
+     * wherever its key came from: UUID-shaped strings are lower-cased (SQL Server returns
+     * upper-case, PostgreSQL and hand-authored JSON are usually lower-case), Dates use
+     * ISO-8601, null/undefined are empty. A create with no client-side PK therefore hashes
+     * `schema.table|`, a per-table constant, and inside a group the `_n` ordinal is what
+     * tells those inserts apart.
+     */
+    public static SaveCallVariableHash(schemaName: string, baseTable: string, pkValues: unknown[]): string {
+        const pk = pkValues.map((v) => GenericDatabaseProvider.normalizeSaveCallKeyValue(v)).join('|');
+        return createHash('sha1')
+            .update(`${schemaName}.${baseTable}|${pk}`)
+            .digest('hex')
+            .slice(0, GenericDatabaseProvider.SaveCallVariableHashLength);
+    }
+
+    private static normalizeSaveCallKeyValue(value: unknown): string {
+        if (value === null || value === undefined) {
+            return '';
+        }
+        if (value instanceof Date) {
+            return value.toISOString();
+        }
+        const text = String(value);
+        return GenericDatabaseProvider.uuidShape.test(text.trim()) ? NormalizeUUID(text) : text;
+    }
+
+    /** Per transaction-group counts so the same hash twice in one batch gets `_hash_2`. */
+    private _saveCallSuffixCounts = new WeakMap<object, Map<string, number>>();
+
+    /**
+     * Variable suffix for DECLARE/SET (or any named-local dialect) in a save call.
+     *
+     * Naming contract: `_<12 lowercase hex>` from
+     * `sha1(\`${schema}.${table}|${normalized pk values joined by |}\`)`, plus an optional
+     * `_<n>` with n ≥ 2 when that hash repeats inside one `TransactionGroup`
+     * (`_abc123456789`, `_abc123456789_2`, …). Outside a group there is no ordinal: each
+     * `Save()` is its own batch, or the SQL logger separates redeclarations. `mj sync push`
+     * captures put a batch separator after every statement; threshold-mode sessions (Explorer
+     * logging, `mj sync watch`) concatenate saves into one batch, so `SqlLoggingSessionImpl`
+     * emits the separator before any statement that would redeclare a name already declared in
+     * the current batch. Either way equal suffixes never share a scope.
+     *
+     * Inside a `BatchedSubmit` group the ordinal is load-bearing: two items whose hashes
+     * repeat (same record twice, or PK-less inserts) would otherwise declare the same locals in
+     * one batch. `SQLServerTransactionGroup.scopeItemVariables` also appends `_mjb<i>` per item.
+     *
+     * Ordinals are consumed at RENDER time, not at submit. An item whose SQL is regenerated
+     * (the transaction-variables path re-renders `Use` items in `HandleSubmit`) carries `_n`
+     * for a record rendered once before — deterministic run to run, but "same record → same
+     * suffix" holds only for items rendered exactly once.
+     *
+     * SQL Server's RenderSaveCallBinding consumes this; PostgreSQL positional/json-arg
+     * bindings do not name locals today but share the same GenerateSaveSQL orchestrator.
+     */
+    protected allocateSaveCallSuffixForPk(
+        group: object | null | undefined,
+        schemaName: string,
+        baseTable: string,
+        pkValues: unknown[],
+    ): string {
+        const hash = GenericDatabaseProvider.SaveCallVariableHash(schemaName, baseTable, pkValues);
+        if (!group) {
+            return `_${hash}`;
+        }
+        let counts = this._saveCallSuffixCounts.get(group);
+        if (!counts) {
+            counts = new Map();
+            this._saveCallSuffixCounts.set(group, counts);
+        }
+        const n = (counts.get(hash) ?? 0) + 1;
+        counts.set(hash, n);
+        return n === 1 ? `_${hash}` : `_${hash}_${n}`;
+    }
+
+    protected allocateSaveCallSuffix(entity: BaseEntity): string {
+        const pkValues = entity.PrimaryKey?.KeyValuePairs?.map((p) => p.Value) ?? [];
+        return this.allocateSaveCallSuffixForPk(
+            entity.TransactionGroup,
+            entity.EntityInfo.SchemaName,
+            entity.EntityInfo.BaseTable,
+            pkValues,
+        );
+    }
 
     /**
      * Renders the dialect-specific parameter binding for a save call.
@@ -1714,6 +1845,18 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // 1. View where clause
             if (viewEntity?.WhereClause && viewEntity.WhereClause.length > 0) {
                 const renderedWhere = await this.RenderViewWhereClause(viewEntity, user);
+                // SECURITY: a stored view WhereClause originates from a client save, so pass the
+                // rendered clause through the same screen ExtraFilter gets. The one exemption is
+                // CustomWhereClause views: those are admin-authored (MJUserViewEntityServer's save
+                // gate restricts setting/changing them to Owner-type users) and may legitimately
+                // contain constructs the screen blocks. Auto-generated clauses (FilterState /
+                // SmartFilter / nested {%UserView%} templates) always pass — the screen permits
+                // plain SELECT subqueries and blocks only stacked statements, DML, comments,
+                // UNION and WAITFOR.
+                const isCustomWhereClause = !!viewEntity.CustomWhereClause; // truthy — the DB may hand back true or 1
+                if (!isCustomWhereClause && !this.ValidateUserProvidedSQLClause(renderedWhere)) {
+                    throw new Error(`Invalid view WhereClause for view '${viewEntity.Name ?? viewEntity.ID}': contains one or more forbidden keywords`);
+                }
                 whereSQL = `(${renderedWhere})`;
                 bHasWhere = true;
             }
@@ -5326,5 +5469,367 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             });
         }
         return out;
+    }
+
+    // ─── Nested transactions ─────────────────────────────────────────
+    //
+    // Depth 1 = physical BEGIN. Depth 2+ = a dialect savepoint on that same
+    // transaction. Nested begin with no physical TX is corruption, not a
+    // chance to start a second physical TX (that commits inner work after the
+    // outer transaction was already aborted).
+
+    private _transactionDepth = 0;
+    private _savepointCounter = 0;
+    private _savepointStack: string[] = [];
+    /** Physical handle is gone but outer frames still must settle. Queued nested begins must not become outermost. */
+    private _doomed = false;
+
+    protected override get CurrentTransactionDepth(): number {
+        return this._transactionDepth;
+    }
+
+    /** Copy of the savepoint stack, outermost first. */
+    public get SavepointStack(): string[] {
+        return [...this._savepointStack];
+    }
+
+    /** @deprecated Use {@link SavepointStack}. */
+    public get savepointStack(): string[] {
+        return this.SavepointStack;
+    }
+
+    /** True after the ambient physical TX was abandoned and frames are still settling. */
+    protected get IsDoomed(): boolean {
+        return this._doomed;
+    }
+
+    /**
+     * Throw if a statement would run on the pool while frames are still open
+     * after a server abort. Keyed on `_doomed`, not "depth > 0 with no handle"
+     * — outermost begin has depth 1 before the handle is published, and
+     * concurrent reads on SQL Server legitimately use the pool in that window.
+     */
+    protected AssertAmbientTransactionUsable(): void {
+        if (this._doomed) {
+            throw new DoomedTransactionError(
+                `SQL issued at depth ${this._transactionDepth} while the ambient transaction is doomed would autocommit on the pool`,
+            );
+        }
+    }
+
+    /**
+     * True when the driver has a begun physical transaction object.
+     * Must be truthful: a published-but-unbegun handle is a poison state.
+     */
+    protected abstract get HasPhysicalTransaction(): boolean;
+
+    /**
+     * Outermost BEGIN. Publish the driver object only after it has begun.
+     * Must not call public Begin/Commit/Rollback (the mutex is not reentrant).
+     */
+    protected abstract BeginPhysicalTransaction(): Promise<void>;
+
+    /**
+     * Outermost COMMIT. Release the driver object in `finally` even if commit rejects.
+     * Must not call public Begin/Commit/Rollback.
+     */
+    protected abstract CommitPhysicalTransaction(): Promise<void>;
+
+    /**
+     * Outermost ROLLBACK. Release the driver object in `finally` even if rollback rejects.
+     * Must not call public Begin/Commit/Rollback.
+     */
+    protected abstract RollbackPhysicalTransaction(): Promise<void>;
+
+    /**
+     * Drop a dead physical handle without going through public RollbackTransaction.
+     * Default is RollbackPhysicalTransaction if one is open. Subclasses override
+     * to unpublish even when the driver rollback itself rejects (EABORT).
+     */
+    protected async AbandonPhysicalTransaction(): Promise<void> {
+        if (!this.HasPhysicalTransaction) {
+            return;
+        }
+        try {
+            await this.RollbackPhysicalTransaction();
+        } catch (e) {
+            LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
+        }
+    }
+
+    protected SavepointName(n: number): string {
+        return `SavePoint_${n}`;
+    }
+
+    private _txMutex: Promise<void> = Promise.resolve();
+
+    /** Serialize begin/commit/rollback so depth/stack mutations cannot interleave. */
+    protected async WithTransactionLock<T>(fn: () => Promise<T>): Promise<T> {
+        const previous = this._txMutex;
+        let release!: () => void;
+        this._txMutex = new Promise<void>((resolve) => { release = resolve; });
+        try {
+            await previous;
+            return await fn();
+        } finally {
+            release();
+        }
+    }
+
+    /**
+     * After a successful outermost commit, once depth is 0 and the transaction lock is released.
+     * SQL Server drains deferred tasks here — those saves must be able to BeginTransaction.
+     */
+    protected async AfterPhysicalCommit(): Promise<void> {
+        /* no-op */
+    }
+
+    /** Called when a begin fails and depth is back to 0 — unpublish any leftover driver object. */
+    protected async OnBeginFailedAtDepthZero(): Promise<void> {
+        /* subclasses clear the physical TX handle */
+    }
+
+    /**
+     * Nested savepoint rollback failed. Abandon the physical handle and keep
+     * frames until the outer settle.
+     */
+    protected async HandleFailedSavepointRollback(savepointName: string, error: unknown): Promise<void> {
+        LogError(`Savepoint rollback to ${savepointName} failed`, undefined, error);
+        await this.AbandonPhysicalTransaction();
+        this.markDoomed();
+    }
+
+    protected markDoomed(): void {
+        this._doomed = true;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth/stack. Safe to call when
+     * already at depth 0. Does not go through {@link RollbackTransaction}
+     * (that would re-enter the mutex).
+     */
+    public async ResetTransactionState(): Promise<void> {
+        await this.WithTransactionLock(() => this.abandonDoomedTransaction());
+    }
+
+    public async BeginTransaction(): Promise<void> {
+        return this.WithTransactionLock(() => this.beginTransactionCore());
+    }
+
+    public async CommitTransaction(): Promise<void> {
+        let runAfter = false;
+        await this.WithTransactionLock(async () => {
+            const outermost = this._transactionDepth === 1;
+            await this.commitTransactionCore();
+            runAfter = outermost;
+        });
+        if (runAfter) {
+            await this.AfterPhysicalCommit();
+        }
+    }
+
+    public async RollbackTransaction(): Promise<void> {
+        return this.WithTransactionLock(() => this.rollbackTransactionCore());
+    }
+
+    private async beginTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            throw new DoomedTransactionError();
+        }
+        this._transactionDepth++;
+        try {
+            if (this._transactionDepth === 1) {
+                await this.BeginPhysicalTransaction();
+                return;
+            }
+            if (!this.HasPhysicalTransaction) {
+                throw new Error(
+                    `Transaction state corrupted: nested BeginTransaction at depth ${this._transactionDepth} with no physical transaction`,
+                );
+            }
+            const savepointName = this.SavepointName(++this._savepointCounter);
+            this._savepointStack.push(savepointName);
+            try {
+                await this.createSavepoint(savepointName);
+            } catch (savepointError) {
+                this._savepointStack.pop();
+                this._savepointCounter--;
+                throw savepointError;
+            }
+        } catch (e) {
+            if (this._transactionDepth > 0) {
+                this._transactionDepth--;
+            }
+            if (e instanceof DoomedTransactionError || this._doomed) {
+                throw e;
+            }
+            if (this._transactionDepth === 0 || !this.HasPhysicalTransaction) {
+                this.clearTransactionState();
+                await this.OnBeginFailedAtDepthZero();
+            }
+            LogError(e);
+            throw e;
+        }
+    }
+
+    private async createSavepoint(savepointName: string): Promise<void> {
+        const sql = this.Dialect.CreateSavepointSQL(savepointName);
+        const options: ExecuteSQLOptions = {
+            description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
+            ignoreLogging: true,
+        };
+        try {
+            await this.ExecuteSQL(sql, undefined, options);
+        } catch (savepointError) {
+            if (this.HasPhysicalTransaction && this.isDoomedPhysicalTransactionError(savepointError)) {
+                await this.AbandonPhysicalTransaction();
+                this.markDoomed();
+                throw new DoomedTransactionError(undefined, { cause: savepointError });
+            }
+            throw savepointError;
+        }
+    }
+
+    /**
+     * Driver codes for a server-aborted ambient TX. Walk `cause` because some
+     * wrappers nest the original error. Do not match English message text.
+     */
+    private isDoomedPhysicalTransactionError(error: unknown): boolean {
+        let current: unknown = error;
+        for (let i = 0; i < 5 && current; i++) {
+            if (current && typeof current === 'object' && 'code' in current) {
+                const code = String((current as { code: unknown }).code);
+                if (code === 'ENOTBEGUN' || code === 'EABORT' || code === '25P01') {
+                    return true;
+                }
+            }
+            current =
+                current && typeof current === 'object' && 'cause' in current
+                    ? (current as { cause: unknown }).cause
+                    : undefined;
+        }
+        return false;
+    }
+
+    private async abandonDoomedTransaction(): Promise<void> {
+        await this.AbandonPhysicalTransaction();
+        this.clearTransactionState();
+        await this.OnBeginFailedAtDepthZero();
+    }
+
+    private async commitTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            this.popDoomedFrame();
+            if (this._transactionDepth === 0) {
+                throw new DoomedTransactionError();
+            }
+            return;
+        }
+        if (!this.HasPhysicalTransaction) {
+            throw new Error('No active transaction to commit');
+        }
+        if (this._transactionDepth === 0) {
+            throw new Error('Transaction depth mismatch - no transaction to commit');
+        }
+        if (this._transactionDepth === 1) {
+            try {
+                await this.CommitPhysicalTransaction();
+            } catch (e) {
+                await this.AbandonPhysicalTransaction();
+                this.clearTransactionState();
+                LogError(e);
+                throw e;
+            }
+            this.clearTransactionState();
+            return;
+        }
+        const savepointName = this._savepointStack[this._savepointStack.length - 1];
+        if (!savepointName) {
+            throw new Error(`Savepoint stack mismatch — expected savepoint at depth ${this._transactionDepth}.`);
+        }
+        const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
+        if (releaseSQL) {
+            try {
+                await this.ExecuteSQL(releaseSQL, undefined, {
+                    description: `Releasing savepoint ${savepointName}`,
+                    ignoreLogging: true,
+                });
+            } catch (e) {
+                await this.AbandonPhysicalTransaction();
+                this.markDoomed();
+                this.popDoomedFrame();
+                throw new DoomedTransactionError(undefined, { cause: e });
+            }
+        }
+        this._savepointStack.pop();
+        this._transactionDepth--;
+    }
+
+    private async rollbackTransactionCore(): Promise<void> {
+        if (this._doomed) {
+            this.popDoomedFrame();
+            return;
+        }
+        if (!this.HasPhysicalTransaction) {
+            throw new Error('No active transaction to rollback');
+        }
+        if (this._transactionDepth === 0) {
+            throw new Error('Transaction depth mismatch - no transaction to rollback');
+        }
+        if (this._transactionDepth === 1) {
+            try {
+                await this.RollbackPhysicalTransaction();
+            } finally {
+                this.clearTransactionState();
+            }
+            return;
+        }
+        const savepointName = this._savepointStack[this._savepointStack.length - 1];
+        if (!savepointName) {
+            throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
+        }
+        try {
+            await this.ExecuteSQL(this.Dialect.RollbackToSavepointSQL(savepointName), undefined, {
+                description: `Rolling back to savepoint ${savepointName}`,
+                ignoreLogging: true,
+            });
+            const releaseSQL = this.Dialect.ReleaseSavepointSQL(savepointName);
+            if (releaseSQL) {
+                await this.ExecuteSQL(releaseSQL, undefined, {
+                    description: `Releasing savepoint ${savepointName} after rollback`,
+                    ignoreLogging: true,
+                });
+            }
+            this._savepointStack.pop();
+            this._transactionDepth--;
+        } catch (savepointError) {
+            await this.HandleFailedSavepointRollback(savepointName, savepointError);
+            this.popDoomedFrame();
+            return;
+        }
+    }
+
+    /**
+     * Drop one doomed frame without SQL. Depth 1 clears the flag so the next
+     * begin is a real outermost. Nested commit-while-doomed uses this too.
+     */
+    private popDoomedFrame(): void {
+        if (this._transactionDepth <= 1) {
+            this.clearTransactionState();
+            return;
+        }
+        this._savepointStack.pop();
+        this._transactionDepth--;
+    }
+
+    private clearSavepointState(): void {
+        this._savepointStack = [];
+        this._savepointCounter = 0;
+    }
+
+    private clearTransactionState(): void {
+        this._transactionDepth = 0;
+        this._doomed = false;
+        this.clearSavepointState();
     }
 }

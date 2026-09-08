@@ -177,6 +177,56 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * Public nesting depth. 0 = no ambient TX. Join-TX callers (accounting
+     * CreateJournalEntries) must read this, not `IsInTransaction` (SQL Server
+     * leaves that false). Deprecated camelCase `transactionDepth` alias ships
+     * for one release.
+     */
+    public get TransactionDepth(): number {
+        return this.CurrentTransactionDepth;
+    }
+
+    /**
+     * Independent instance that **shares the connection pool and metadata cache**
+     * but has its own transaction stack. Same pattern MJAPI uses for per-request
+     * providers. Used by `mj sync push` so `--parallel-batch-size` (default 10)
+     * does not interleave `EntityTransactionScope`s on one provider.
+     *
+     * Not SQL Server-specific: each concrete provider implements this against
+     * its own pool. {@link ReleaseIndependentInstance} must NOT close the pool.
+     */
+    public async CreateIndependentInstance(): Promise<DatabaseProviderBase> {
+        throw new Error(`${this.constructor.name} does not implement CreateIndependentInstance`);
+    }
+
+    /**
+     * Drop this instance's transaction handle. Must not close the shared pool.
+     */
+    public async ReleaseIndependentInstance(): Promise<void> {
+        if (this.TransactionDepth > 0) {
+            try {
+                await this.RollbackTransaction();
+            } catch {
+                await this.ResetTransactionState();
+            }
+        }
+    }
+
+    /** @deprecated Use {@link TransactionDepth}. */
+    public get transactionDepth(): number {
+        return this.TransactionDepth;
+    }
+
+    /**
+     * Drop a dead physical handle and reset depth. No-op on providers that
+     * do not track nested transactions. Use after a server-side abort when
+     * {@link RollbackTransaction} itself rejects.
+     */
+    public async ResetTransactionState(): Promise<void> {
+        /* no-op */
+    }
+
+    /**
      * Database providers execute multi-record units of work atomically, in-process.
      *
      * @see ProviderBase.SupportsEntityTransactions for why the base default is `false`.
@@ -2342,4 +2392,9 @@ export interface ExecuteSQLOptions {
   isMutation?: boolean;
   /** Simple SQL fallback for loggers to emit logging of a simpler SQL statement that doesn't have extra functionality that isn't important for migrations or other logging purposes. */
   simpleSQLFallback?: string;
+  /**
+   * Explicit driver handle (pool, client, or transaction). When set, the statement
+   * bypasses the ambient transaction — required for teardown/probes after a doomed TX.
+   */
+  connectionSource?: object;
 }
