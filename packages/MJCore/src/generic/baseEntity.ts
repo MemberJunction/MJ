@@ -1,6 +1,7 @@
 import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
@@ -362,6 +363,36 @@ export class EntityField {
                 const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
             }
+
+            // ExtendedType semantic checks (Image / Color / JSON). Empty values are handled by
+            // the AllowsNull rung above — only non-empty strings are inspected here.
+            if (ef.TSType === EntityFieldTSType.String && this.Value != null && this.Value !== '') {
+                const text = String(this.Value);
+                switch (ef.ExtendedType) {
+                    case 'JSON': {
+                        const parsed = TryParseJsonText(text);
+                        if (parsed.ok === false) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be valid JSON. ${parsed.message}`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Color': {
+                        if (!IsValidCssColor(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be a CSS color (hex, rgb, or hsl)`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Image': {
+                        if (!IsPermittedImageFieldValue(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be an image URL or inline image (data URI / base64)`, this.Value));
+                        }
+                        break;
+                    }
+                }
+            }
         }
 
         return result;
@@ -692,6 +723,57 @@ export class BaseEntityResult {
     }
 
     /**
+     * Renders ONE entry of the {@link Errors} array as human-readable text.
+     *
+     * `Errors` is typed `any[]`, and two shapes land in it from different places:
+     *
+     *  - **`ValidationErrorInfo`** — carries **`Message`** (capital M), plus `Source`, `Value` and
+     *    `Type`. This is what `_InnerSave` puts there when validation refuses a save: it throws the
+     *    `ValidationResult`, and the catch block assigns `newResult.Errors = e.Errors`.
+     *  - **`Error`** (and anything error-like) — carries lowercase **`message`**.
+     *
+     * This used to read `err.message` ONLY, so every `ValidationErrorInfo` fell through to
+     * `JSON.stringify(err)`. That is not a cosmetic difference: `CompleteMessage` is the string the
+     * server hands the client on a failed save — every write-refusal throw in `ResolverBase`
+     * (`CreateRecord`/`UpdateRecord`/`DeleteRecord`) puts it in the `GraphQLError`, and
+     * `SaveEntityGraphOperation` puts it in `ErrorMessage` — so the whole point of writing a careful,
+     * field-named refusal in a subclass's `ValidateAsync()` was defeated at the last step, and the
+     * user saw
+     * `{"Source":"ParentContractID","Message":"…","Value":null,"Type":"Failure"}` in a toast.
+     *
+     * Nothing catches this at compile time because `Errors` is `any[]`; nothing catches it at runtime
+     * because `JSON.stringify` always succeeds. It is only visible by reading the message a user got.
+     *
+     * The parameter is `unknown` rather than `any` — per `.claude/rules/typescript-style.md` — because
+     * not knowing the shape is the whole reason this helper exists, and `unknown` forces the narrowing
+     * that makes each shape's handling explicit. Callers pass `any` (the `Errors` array and the `Error`
+     * property are both legacy `any`), which is assignable, so no call site changes.
+     *
+     * `Message` is preferred over `message` because a `ValidationErrorInfo` has only the former,
+     * while an `Error` has only the latter — so the order matters solely for an object carrying both,
+     * where the MJ-native field is the better answer.
+     *
+     * @param err - One entry from the `Errors` array.
+     * @returns The entry's human-readable text, falling back to JSON for a shape with neither field.
+     */
+    public static ErrorText(err: unknown): string {
+        if (err === null || err === undefined) {
+            return '';
+        }
+        if (typeof err === 'string') {
+            return err;
+        }
+        if (typeof err === 'object') {
+            const shaped = err as { Message?: unknown; message?: unknown };
+            const text = shaped.Message ?? shaped.message;
+            if (typeof text === 'string' && text.trim().length > 0) {
+                return text;
+            }
+        }
+        return JSON.stringify(err);
+    }
+
+    /**
      * Returns a complete message that includes the Message property (if present), the Error property (if present), and any Errors array items (if present).
      */
     public get CompleteMessage(): string {
@@ -702,24 +784,27 @@ export class BaseEntityResult {
             msg = this.Message;
         }   
 
-        // now check the simple Error property
+        // now check the simple Error property. Same shape problem as the Errors array below, so the
+        // same helper answers it: a string, an Error (lowercase `message`), or an MJ
+        // ValidationErrorInfo (capital `Message`) all render as their text rather than as JSON.
         if (this.Error) {
-            msg = (msg ? msg + '\n' : '')
-            if (typeof this.Error === 'string') {
-                msg += this.Error;
-            }
-            else if (this.Error.message) {
-                msg += this.Error.message;
-            }
-            else {
-                msg += JSON.stringify(this.Error);
-            }
+            msg = (msg ? msg + '\n' : '') + BaseEntityResult.ErrorText(this.Error);
         }
-        
-        // now check the Errors array
+
+        // now check the Errors array.
+        //
+        // NOT de-duplicated, deliberately. Some producers set BOTH `Message` and `Errors` and build
+        // the former out of the latter — `_InnerSave`/`_InnerDelete` do on an IS-A parent failure —
+        // so their text does appear twice here. Suppressing a repeat was tried and reverted: any
+        // containment test is lossy in ways a reader cannot detect. Three fields failing with the
+        // same sentence collapse to one line; an entry whose text is a substring of another is kept
+        // or dropped depending on ARRAY ORDER; and a distinct error vanishes when its text happens to
+        // appear inside the summary. Saying something twice is ugly. Silently reporting one problem
+        // when there were three is the failure this whole class of bug is about, so the duplication
+        // stays until a producer-side fix removes it at the source.
         if (this.Errors && this.Errors.length > 0) {
             // append
-            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => err.message || JSON.stringify(err)).join('\n');
+            msg = (msg ? msg + '\n' : '') + this.Errors.map(err => BaseEntityResult.ErrorText(err)).join('\n');
         }
 
         return msg;
@@ -1114,6 +1199,33 @@ export abstract class BaseEntity<T = unknown> {
         EntityInfo.AssertEntityActiveStatus(Entity, 'BaseEntity::constructor');
         this._provider = Provider;
         this.init();
+    }
+
+    /**
+     * The provider actually stored on this instance, or `null` if none was bound.
+     * Unlike {@link ProviderToUse}, this does **not** fall back to the process-wide
+     * {@link BaseEntity.Provider}. Use it to detect a dropped constructor argument:
+     * `GetEntityObject(graphProvider)` must yield `BoundProvider === graphProvider`.
+     */
+    public get BoundProvider(): IEntityDataProvider | null {
+        return this._provider;
+    }
+
+    /**
+     * Bind this instance to a provider after construction.
+     *
+     * **Rule (ORM, not just metadata-sync):** every DB read and write on this
+     * instance — Save, Load, Delete, RunView, GetEntityObject of children/embeds,
+     * lookups, RecordGeoCode — MUST use this provider. Mixing another provider
+     * (especially the process-wide host) into the same record graph is a deadlock:
+     * a child FK waits on an uncommitted parent on another connection.
+     *
+     * {@link ProviderBase.GetEntityObject} always calls this so a subclass that
+     * declares `constructor(Entity: EntityInfo)` and drops the second ClassFactory
+     * argument cannot silently run on the global host.
+     */
+    public BindProvider(provider: IEntityDataProvider | null): void {
+        this._provider = provider;
     }
 
     /**
@@ -1668,6 +1780,8 @@ export abstract class BaseEntity<T = unknown> {
                 `Ensure the entity class is registered.`,
             );
         }
+        // Same rebind as GetEntityObject — 1-arg subclasses drop the ClassFactory provider.
+        instance.BindProvider(provider as unknown as IEntityDataProvider);
         await instance.Config(this.ContextCurrentUser);
         await instance.InitializeParentEntity();
         // Recurse so a *new* peer's own embeds are constructed (required nested
@@ -2586,6 +2700,47 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * True when any of the named fields exists on this entity and its current value
+     * differs from the last loaded or saved value.
+     *
+     * This is the boolean form of `GetFieldByName(name)?.Dirty === true`. Prefer it at
+     * call sites that only care whether a column has been edited — pricing, validation,
+     * and "did the user type this" gates — so they do not repeat the optional-chain and
+     * do not treat a missing field as a distinct third state.
+     *
+     * Semantics:
+     * - **Unknown or blank names return `false`.** They are not dirty; they are absent.
+     *   Callers that must distinguish "no such field" from "field is clean" should use
+     *   {@link GetFieldByName} and inspect the result.
+     * - **Names are case-insensitive and trimmed**, matching {@link GetFieldByName}.
+     * - **Read-only fields are never dirty**, even if their value was overwritten internally.
+     * - **Multiple names are OR'd.** `FieldIsDirty('UnitPrice', 'ProductPriceID')` is true
+     *   if either field has been edited. An empty rest list is a single-field check.
+     *
+     * @param fieldName First field to test. A missing/blank name contributes `false`.
+     * @param more Additional field names, each OR'd with the first.
+     * @returns `true` if at least one named field exists and is dirty; otherwise `false`.
+     *
+     * @example
+     * ```ts
+     * // Single field
+     * if (line.FieldIsDirty('UnitPrice')) { ... }
+     *
+     * // Either money column was edited
+     * if (line.FieldIsDirty('UnitPrice', 'ProductPriceID')) { ... }
+     * ```
+     */
+    public FieldIsDirty(fieldName: string, ...more: string[]): boolean {
+        const names = more.length === 0 ? [fieldName] : [fieldName, ...more];
+        for (const name of names) {
+            if (this.GetFieldByName(name)?.Dirty === true) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Convenience method to access a field by code name. This method is case-insensitive and will return null if the field is not found.
      * @param codeName
      * @returns
@@ -3091,7 +3246,7 @@ export abstract class BaseEntity<T = unknown> {
     public async GetRelatedEntityDataExt(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<{Data: any[], TotalRowCount: number}> {
         // we need to query the database to get related entity info
         const params = EntityInfo.BuildRelationshipViewParams(this, re, filter, maxRecords)
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView(params, this._contextCurrentUser)
         if (result && result.Success) {
             return {
@@ -4639,8 +4794,9 @@ export abstract class BaseEntity<T = unknown> {
             return { HasChildren: false, ChildEntityName: '' };
         }
 
-        // Use RunView to check each child entity for records with our PK
-        const rv = new RunView();
+        // Use RunView on this instance's provider — a host RunView cannot see
+        // uncommitted child rows on a graph-scoped connection.
+        const rv = new RunView(this.RunViewProviderToUse);
         const pkValue = this.PrimaryKey.Values();
 
         for (const childEntity of childEntities) {
@@ -4719,7 +4875,7 @@ export abstract class BaseEntity<T = unknown> {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
 
-        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser);
+        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser, md);
     }
 
     /**
@@ -4729,14 +4885,15 @@ export abstract class BaseEntity<T = unknown> {
     private static async ResolveLeafEntityRecursive(
         entityInfo: EntityInfo,
         primaryKey: CompositeKey,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
         const childEntities = entityInfo.ChildEntities;
         if (childEntities.length === 0) {
             return { LeafEntityName: entityInfo.Name, IsLeaf: true };
         }
 
-        const rv = new RunView();
+        const rv = new RunView((provider ?? BaseEntity.Provider) as unknown as IRunViewProvider);
         const pkValue = primaryKey.Values();
 
         for (const child of childEntities) {
@@ -4753,7 +4910,7 @@ export abstract class BaseEntity<T = unknown> {
 
             if (result?.Success && result.Results?.length > 0) {
                 // Found a child — recurse to see if there's an even more specific leaf
-                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser);
+                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser, provider);
             }
         }
 
@@ -4790,8 +4947,10 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = this.PrimaryKey.Values();
         if (!pkValue) return;
 
-        // Build all sibling queries and execute them in a single batch
-        const rv = new RunView();
+        // Build all sibling queries and execute them in a single batch on
+        // this instance's provider so an uncommitted sibling on the same
+        // graph connection is visible (host RunView would miss it).
+        const rv = new RunView(this.RunViewProviderToUse);
         // first-pk-ok: IS-A siblings share the parent's single key
         const validSiblings = siblingChildEntities.filter(s => s.FirstPrimaryKey);
         if (validSiblings.length === 0) return;
@@ -5144,7 +5303,7 @@ export abstract class BaseEntity<T = unknown> {
             ? `${rootFieldName} = '${rootId}' AND ${depthFieldName} <= ${maxDepth}`
             : `${rootFieldName} = '${rootId}'`;
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: filter,
@@ -5175,7 +5334,7 @@ export abstract class BaseEntity<T = unknown> {
         const rawIds = path.split('/').filter(id => id.length > 0 && id !== currentId);
         if (rawIds.length === 0) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const idList = rawIds.map(id => `'${id}'`).join(',');
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
@@ -5201,7 +5360,7 @@ export abstract class BaseEntity<T = unknown> {
         const currentId = this.Get(pkName);
         if (!currentId) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: `${fkField.Name} = '${currentId}'`,

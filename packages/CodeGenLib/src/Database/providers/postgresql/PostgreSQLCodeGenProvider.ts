@@ -2104,9 +2104,9 @@ $if_view_exists$;
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
     /** @inheritdoc */
-    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
-        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs);
+        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs, excludeSchemas);
     }
 
     /** @inheritdoc */
@@ -2752,12 +2752,16 @@ WHERE p.prokind IN ('f', 'p')
     private buildPendingEntityFieldsQuery(
         schema: string,
         qs: (schema: string, name: string) => string,
-        entityIDs?: string[]
+        entityIDs?: string[],
+        excludeSchemas?: string[]
     ): string {
         // PG uses lowercase UUIDs; entity IDs from the metadata cache are already
         // normalized so direct string interpolation is safe (internal IDs, not user input).
         const scopeFilter = entityIDs && entityIDs.length > 0
             ? `AND sf."EntityID" IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
+        const schemaFilter = excludeSchemas && excludeSchemas.length > 0
+            ? `AND e."SchemaName" NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `
 WITH fk_cache AS (
@@ -2830,6 +2834,7 @@ numbered_rows AS (
    WHERE
       "EntityFieldID" IS NULL
       ${scopeFilter}
+      ${schemaFilter}
 )
 SELECT *
 FROM numbered_rows

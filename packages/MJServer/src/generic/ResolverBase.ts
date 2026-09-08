@@ -32,6 +32,8 @@ import { RunViewGenericParams, UserPayload } from '../types.js';
 import { RunDynamicViewInput, RunViewByIDInput, RunViewByNameInput } from './RunViewResolver.js';
 import { DeleteOptionsInput } from './DeleteOptionsInput.js';
 import { MJEvent, MJEventType, MJGlobal, ENCRYPTED_SENTINEL, EscapeSQLString, IsValueEncrypted, IsOnlyTimezoneShift } from '@memberjunction/global';
+import { SQLParser } from '@memberjunction/sql-parser';
+import { PostgreSQLDialect, SQLServerDialect, type SQLParserDialect } from '@memberjunction/sql-dialect';
 import { EncryptionEngine } from '@memberjunction/encryption';
 import { PUSH_STATUS_UPDATES_TOPIC, publishStatusUpdate } from './PushStatusResolver.js';
 import { CACHE_INVALIDATION_TOPIC } from './CacheInvalidationResolver.js';
@@ -799,6 +801,129 @@ export class ResolverBase {
   }
 
   /**
+   * SECURITY — GraphQL-boundary screen for one client-supplied SQL clause fragment.
+   *
+   * `ValidateUserProvidedSQLClause` still blocks stacked statements, DML, comments, UNION
+   * and WAITFOR, and still permits SELECT (server-internal engines pass richer filters).
+   * A keyword ban on SELECT/EXISTS at this boundary (#4253) broke first-party clients that
+   * use `IN (SELECT … FROM <entity base view>)` — that is a legitimate ExtraFilter.
+   *
+   * This screen uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`):
+   * wrap the fragment as a single SELECT, fail closed if it does not parse as a read, then
+   * allow a FROM only when it is an entity **BaseView**. Base tables (`Meeting`, `__mj.User`)
+   * and catalogs are rejected. Server-internal RunView callers never hit this.
+   *
+   * RLS is applied by RunView as an outer WHERE around the entity being queried, not compiled
+   * into the view. Subqueries against another entity's BaseView therefore do not inherit that
+   * entity's RLS; they are still restricted to the view (not the table).
+   */
+  protected assertClientClauseUsesEntityBaseViews(
+    clause: string | undefined | null,
+    label: string,
+    provider?: IMetadataProvider,
+  ): void {
+    if (!clause?.trim()) return;
+
+    const dialect = this.dialectForProvider(provider);
+    if (SQLParser.HasStackedStatements(clause, dialect)) {
+      throw new Error(`Invalid ${label}: multiple statements are not permitted in client-supplied filters`);
+    }
+
+    const wrapped =
+      label === 'OrderBy'
+        ? `SELECT 1 FROM __mj_clause_screen ORDER BY ${clause}`
+        : `SELECT 1 FROM __mj_clause_screen WHERE (${clause})`;
+    const parser = new SQLParser(wrapped, dialect);
+    if (!parser.IsValid || parser.HasWriteStatement || parser.StatementKind !== 'select') {
+      throw new Error(
+        `Invalid ${label}: not a safe read-only filter fragment — refusing under uncertainty`,
+      );
+    }
+    if (this.astContainsWriteNode(parser.AST)) {
+      throw new Error(`Invalid ${label}: write/DDL nested in a subquery is not permitted`);
+    }
+
+    const allowed = this.entityBaseViewAllowList(provider);
+    const tables = SQLParser.ExtractTableRefs(wrapped, dialect);
+    for (const t of tables) {
+      const table = this.stripSqlIdent(t.TableName);
+      const schema = this.stripSqlIdent(t.SchemaName);
+      if (table.toLowerCase() === '__mj_clause_screen') continue;
+      const qualified = `${schema}.${table}`.toLowerCase();
+      const bare = table.toLowerCase();
+      if (allowed.qualified.has(qualified) || allowed.bare.has(bare)) continue;
+      throw new Error(
+        `Invalid ${label}: subquery must use an entity base view, not '${schema}.${table}'`,
+      );
+    }
+  }
+
+  /**
+   * Applies {@link assertClientClauseUsesEntityBaseViews} to every client-supplied clause
+   * a view request can carry. GraphQL entry points (RunViewByName, RunViewByID,
+   * RunDynamicView, RunViews) funnel through RunViewGenericInternal / RunViewsGenericInternal.
+   */
+  protected screenClientViewClauses(
+    clauses: {
+      extraFilter?: string | null;
+      orderBy?: string | null;
+      userSearchString?: string | null;
+      overrideExcludeFilter?: string | null;
+    },
+    provider?: IMetadataProvider,
+  ): void {
+    this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.userSearchString, 'UserSearchString', provider);
+    this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
+  }
+
+  /** Same write-node walk as EDS `sqlReadOnlyScreen.astContainsWriteNode`. */
+  private astContainsWriteNode(node: unknown): boolean {
+    if (!node || typeof node !== 'object') return false;
+    if (Array.isArray(node)) return node.some((n) => this.astContainsWriteNode(n));
+    const obj = node as Record<string, unknown>;
+    const type = obj.type;
+    if (typeof type === 'string' && ResolverBase.WRITE_NODE_TYPES.has(type.toLowerCase())) {
+      return true;
+    }
+    return Object.values(obj).some((v) => this.astContainsWriteNode(v));
+  }
+
+  private static readonly WRITE_NODE_TYPES = new Set<string>([
+    'insert', 'update', 'delete', 'merge', 'replace', 'drop', 'create', 'alter', 'truncate',
+    'rename', 'call', 'exec', 'execute', 'grant', 'revoke', 'use', 'load', 'copy', 'do',
+  ]);
+
+  private dialectForProvider(provider?: IMetadataProvider): SQLParserDialect {
+    const name = provider?.constructor?.name ?? '';
+    if (/postgres/i.test(name)) return new PostgreSQLDialect();
+    return new SQLServerDialect();
+  }
+
+  private stripSqlIdent(name: string | null | undefined): string {
+    if (!name) return '';
+    return name.replace(/^\[|\]$/g, '').replace(/^"|"$/g, '').replace(/^`|`$/g, '');
+  }
+
+  private entityBaseViewAllowList(provider?: IMetadataProvider): {
+    qualified: Set<string>;
+    bare: Set<string>;
+  } {
+    const qualified = new Set<string>();
+    const bare = new Set<string>();
+    const entities = provider?.Entities ?? [];
+    for (const e of entities) {
+      const view = this.stripSqlIdent(e.BaseView);
+      if (!view) continue;
+      const schema = this.stripSqlIdent(e.SchemaName);
+      bare.add(view.toLowerCase());
+      if (schema) qualified.add(`${schema}.${view}`.toLowerCase());
+    }
+    return { qualified, bare };
+  }
+
+  /**
    * Optimized RunViewGenericInternal implementation with:
    * - Field filtering at source (Fix #7)
    * - Improved error handling (Fix #9)
@@ -828,6 +953,13 @@ export class ResolverBase {
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
+
+      // SECURITY: GraphQL ExtraFilter may contain IN (SELECT … FROM <base view>).
+      // Screen at this boundary: parse, reject writes, allow only entity BaseViews.
+      this.screenClientViewClauses(
+        { extraFilter, orderBy, userSearchString, overrideExcludeFilter },
+        provider as unknown as IMetadataProvider,
+      );
 
       // Check API key scope authorization for view operations
       await this.CheckAPIKeyScopeAuthorization('view:run', viewInfo.Entity, userPayload);
@@ -990,6 +1122,17 @@ export class ResolverBase {
 
       // Transform parameters
       for (const param of params) {
+        // SECURITY: same GraphQL-boundary BaseView screen as RunViewGenericInternal.
+        this.screenClientViewClauses(
+          {
+            extraFilter: param.extraFilter,
+            orderBy: param.orderBy,
+            userSearchString: param.userSearchString,
+            overrideExcludeFilter: param.overrideExcludeFilter,
+          },
+          md,
+        );
+
         if (param.viewInfo) {
           // Validate entity only once per entity type
           const entityName = param.viewInfo.Entity;
@@ -1384,7 +1527,15 @@ export class ResolverBase {
         // MapFieldNamesToCodeNames now handles encryption filtering as well
         return await this.MapFieldNamesToCodeNames(entityName, entityObject.GetAll(), userInfo);
       } else {
-        throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+        // CompleteMessage, not Message. A validation refusal puts its reasons in `Errors` and leaves
+        // `Message` unset, so reading `Message` here fell through to 'Unknown error' and discarded
+        // every field-named explanation the entity had just produced. CreateRecord already read
+        // CompleteMessage; this path did not, which is why the SAME rule on the SAME entity explained
+        // itself on a create and said nothing on an update. CompleteMessage is a strict superset — it
+        // starts from `Message`, then appends `Error` and `Errors` — so nothing previously reported is
+        // lost, and it still yields undefined when there is genuinely nothing to say, leaving the
+        // fallback below to fire rather than showing the user a blank error.
+        throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
           extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
         });
       }
@@ -1614,7 +1765,11 @@ export class ResolverBase {
         // Cache invalidation is now handled globally by the MJGlobal listener in index.ts
         return returnValue;
       } else {
-        throw new GraphQLError(entityObject.LatestResult?.Message ?? 'Unknown error', {
+        // CompleteMessage, for the same reason as the update path above. It matters more going
+        // forward: apps already refuse deletes by overriding Delete() and returning false with the
+        // reason on LatestResult, and #3971 proposes a first-class delete-validation seam. Every one
+        // of those reasons was being replaced by 'Unknown error' at the API boundary.
+        throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
           extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
         });
       }

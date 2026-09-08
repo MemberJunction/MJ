@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PostgreSQLDataProvider } from '../PostgreSQLDataProvider.js';
 import { CompositeKey, EntityInfo, EntityFieldTSType } from '@memberjunction/core';
+import { DoomedTransactionError } from '@memberjunction/generic-database-provider';
 
 /**
  * Helper: build a minimal EntityInfo-like object with the given field names.
@@ -228,6 +229,95 @@ describe('PostgreSQLDataProvider', () => {
             await provider.BeginTransaction();
             await provider.BeginTransaction();      // should be mj_sp_1 again, not mj_sp_2
             expect(client2.queries.at(-1)).toBe('SAVEPOINT mj_sp_1');
+        });
+
+        it('IsInTransaction tracks TransactionDepth through begin/begin/commit/commit (C10)', async () => {
+            installFakeClient(provider);
+            expect(provider.IsInTransaction).toBe(false);
+            expect(provider.TransactionDepth).toBe(0);
+            await provider.BeginTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+            await provider.BeginTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(2);
+            await provider.CommitTransaction();
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+            await provider.CommitTransaction();
+            expect(provider.IsInTransaction).toBe(false);
+            expect(provider.TransactionDepth).toBe(0);
+        });
+
+        it('failed nested ROLLBACK TO abandons the client and resets depth (B3/C8)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('ROLLBACK TO')) {
+                    throw Object.assign(new Error('savepoint "mj_sp_1" does not exist'), { code: '3B001' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(1);
+            expect(client.released).toBe(true);
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(0);
+        });
+
+        it('failed outer COMMIT still releases the client (C6)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql === 'COMMIT') {
+                    throw new Error('commit failed');
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.CommitTransaction()).rejects.toThrow(/commit failed/);
+            expect(provider.TransactionDepth).toBe(0);
+            expect(client.released).toBe(true);
+            expect(client.queries).toContain('ROLLBACK');
+        });
+
+        it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('SAVEPOINT')) {
+                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await expect(provider.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            await expect(provider.ExecuteSQL('UPDATE orders SET status = 1')).rejects.toBeInstanceOf(DoomedTransactionError);
+            const poolQuery = vi.fn(async () => ({ rows: [{ ok: 1 }] }));
+            await provider.ExecuteSQL('SELECT 1', undefined, { connectionSource: { query: poolQuery } });
+            expect(poolQuery).toHaveBeenCalled();
+            await provider.RollbackTransaction();
+        });
+
+        it('RELEASE SAVEPOINT failure dooms and pops the frame (P4/C11)', async () => {
+            const client = installFakeClient(provider);
+            client.query = vi.fn(async (sql: string) => {
+                client.queries.push(sql);
+                if (sql.startsWith('RELEASE')) {
+                    throw Object.assign(new Error('current transaction is aborted'), { code: '25P01' });
+                }
+                return { rows: [] };
+            }) as unknown as typeof client.query;
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            expect(provider.TransactionDepth).toBe(1);
+            expect(client.released).toBe(true);
+            expect(client.queries).toContain('ROLLBACK');
+            await expect(provider.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+            expect(provider.TransactionDepth).toBe(0);
         });
     });
 

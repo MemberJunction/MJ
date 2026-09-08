@@ -314,3 +314,55 @@ describe('GraphQLDataProvider - Config flow', () => {
     expect(config.WSURL).toBe('ws://localhost:4000');
   });
 });
+
+// ─── Metadata refresh after a metadata member entity changes ──────────────
+//
+// Which entities can stale this provider's metadata — and the debounce, burst collapse, and
+// backend matching — live in ProviderBase's dataset-membership mechanism, tested in MJCore
+// (providerBase.metadataMemberRefresh.test.ts) where ProviderBase is real (this file mocks
+// @memberjunction/core away). What is GraphQL-specific, and pinned here, is the refresh
+// POLICY: a browser must not re-pull the full metadata graph on every member write, so the
+// client override runs the staleness check instead of the base class's hard Refresh — and it
+// bypasses the min-check-interval throttle, because the caller holds positive evidence that a
+// member entity was just written.
+
+describe('GraphQLDataProvider - refresh policy after a metadata member change', () => {
+  it('runs the staleness check (RefreshIfNeeded) with the throttle bypassed, not a hard Refresh', async () => {
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    const refreshIfNeeded = vi.fn().mockResolvedValue(true);
+    const hardRefresh = vi.fn().mockResolvedValue(true);
+    (provider as unknown as { RefreshIfNeeded: unknown }).RefreshIfNeeded = refreshIfNeeded;
+    (provider as unknown as { Refresh: unknown }).Refresh = hardRefresh;
+
+    const result = await (provider as unknown as { RefreshAfterMetadataMemberChange(): Promise<boolean> })
+      .RefreshAfterMetadataMemberChange();
+
+    expect(result).toBe(true);
+    expect(refreshIfNeeded).toHaveBeenCalledTimes(1);
+    expect(refreshIfNeeded).toHaveBeenCalledWith(undefined, true);
+    expect(hardRefresh).not.toHaveBeenCalled();
+  });
+
+  it('uses a long randomized coalescing window, not the server debounce', () => {
+    // Every browser receives every write broadcast, and MJ_Metadata's members include
+    // routinely-written entities (dashboards, queries) — the long jittered window is what caps
+    // each browser at one staleness check per window and spreads the fleet's checks apart.
+    const provider = Object.create(GraphQLDataProvider.prototype) as GraphQLDataProvider;
+    const min = GraphQLDataProvider.ClientMemberRefreshWindowMinMs;
+    const jitter = GraphQLDataProvider.ClientMemberRefreshWindowJitterMs;
+    expect(min).toBeGreaterThanOrEqual(10_000); // "tens of seconds", never the 500ms server debounce
+
+    const seen = new Set<number>();
+    for (let i = 0; i < 25; i++) {
+      const delay = (provider as unknown as { MetadataMemberRefreshDelayMs: number }).MetadataMemberRefreshDelayMs;
+      expect(delay).toBeGreaterThanOrEqual(min);
+      expect(delay).toBeLessThanOrEqual(min + jitter);
+      seen.add(delay);
+    }
+    expect(seen.size).toBeGreaterThan(1); // genuinely jittered, not a constant
+
+    // Coalesce, never re-arm: with a window this long, re-arming would let steady org-wide
+    // write activity postpone the refresh forever.
+    expect((provider as unknown as { MetadataMemberRefreshRearmsOnNewEvents: boolean }).MetadataMemberRefreshRearmsOnNewEvents).toBe(false);
+  });
+});

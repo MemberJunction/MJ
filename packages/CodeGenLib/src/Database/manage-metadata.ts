@@ -1473,9 +1473,10 @@ export class ManageMetadataBase {
          const tableSQL = this.dbProvider.generateMaterializedTableSQL(matSchema, tableName, columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(matSchema, viewName, tableName);
          // includeBatchSeparator: each is a single GO-free batch (executed via ds.query), but the
-         // migration file needs a GO between statements for Flyway/sqlcmd.
-         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true);
-         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true);
+         // migration file needs a GO between statements for Flyway/sqlcmd. Pass the provider's
+         // separator, not the 'GO' default: on PostgreSQL it is '' and a literal GO breaks replay.
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for base-view materialization of entity ${entity.Name}`, false, true, this.dbProvider.BatchSeparator);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for base-view materialization of entity ${entity.Name}`, false, true, this.dbProvider.BatchSeparator);
 
          // 4) Upsert the MJ: Materialized Results row, keyed on (SourceType, SourceEntityID).
          const existing = await this.runQueryWithParams(
@@ -1773,8 +1774,8 @@ export class ManageMetadataBase {
          }
          const tableSQL = this.dbProvider.generateMaterializedTableSQL(coreSchema, tableName, analysis.columns);
          const viewSQL = this.dbProvider.generateMaterializedWrapperViewSQL(coreSchema, viewName, tableName);
-         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true);
-         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true);
+         await this.LogSQLAndExecute(pool, tableSQL, `Create materialized table for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
+         await this.LogSQLAndExecute(pool, viewSQL, `Create wrapper view for query "${queryName}"`, false, true, this.dbProvider.BatchSeparator);
 
          // 3) Mint the read-only Virtual Entity over the wrapper view (idempotent by view).
          const existingVE = await this.runQueryWithParams(pool, `SELECT ID FROM ${this.qs(coreSchema, 'vwEntities')} WHERE BaseView = @V AND SchemaName = @S`, { V: viewName, S: coreSchema });
@@ -3223,15 +3224,15 @@ export class ManageMetadataBase {
       // Load VE EntityField rows from DB (we need the ID and auto-update flags)
       const schema = mj_core_schema();
       const fieldsSQL = `
-         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, GeneratedFormSection, DisplayName, ExtendedType, CodeType
+         SELECT ID, Name, Category, AutoUpdateCategory, AutoUpdateDisplayName, AutoUpdateExtendedType, GeneratedFormSection, DisplayName, ExtendedType, CodeType
          FROM ${this.qs(schema, 'EntityField')}
          WHERE EntityID = '${entity.ID}'
       `;
       const fieldsResult = await this.runQuery(pool, fieldsSQL);
       const dbFields = fieldsResult.recordset as Array<{
          ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; 
-         AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, 
-         ExtendedType: string, CodeType: string
+         AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; 
+         ExtendedType: string; CodeType: string
       }>;
 
       if (dbFields.length === 0) return false;
@@ -3399,8 +3400,8 @@ export class ManageMetadataBase {
          const escapedDescription = fd.description.replace(/'/g, "''");
          let setClauses = `Description='${escapedDescription}'`;
 
-         // Apply extended type if provided and valid
-         if (fd.extendedType) {
+         // Apply extended type if provided, valid, and the field is not locked
+         if (fd.extendedType && field.AutoUpdateExtendedType) {
             const validExtendedType = this.validateExtendedType(fd.extendedType);
             if (validExtendedType) {
                setClauses += `, ExtendedType='${validExtendedType}'`;
@@ -3421,12 +3422,9 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Valid values for EntityField.ExtendedType, plus common LLM aliases mapped to valid values.
+    * Valid values for EntityField.ExtendedType. Domain lives on {@link EntityFieldInfo.ExtendedTypes}.
     */
-   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>([
-      'Code', 'Email', 'FaceTime', 'Geo', 'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
-      'GeoCity', 'GeoPostalCode', 'GeoAddress', 'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg'
-   ]);
+   private static readonly VALID_EXTENDED_TYPES = new Set<EntityFieldExtendedType>(EntityFieldInfo.ExtendedTypes);
 
    private static readonly EXTENDED_TYPE_ALIASES: Record<string, EntityFieldExtendedType> = {
       'phone': 'Tel',
@@ -3457,6 +3455,17 @@ export class ManageMetadataBase {
       'zoom': 'ZoomMtg',
       'whatsapp': 'WhatsApp',
       'skype': 'Skype',
+      'image': 'Image',
+      'photo': 'Image',
+      'picture': 'Image',
+      'logo': 'Image',
+      'avatar': 'Image',
+      'thumbnail': 'Image',
+      'color': 'Color',
+      'colour': 'Color',
+      'hex': 'Color',
+      'json': 'JSON',
+      'jsonb': 'JSON',
    };
 
    /**
@@ -4146,7 +4155,7 @@ export class ManageMetadataBase {
       // AN: 14-June-2025 - See note below about the new order of these steps, this must
       // happen before we update existing entity fields from schema.
       const step2StartTime: Date = new Date();
-      if (! await this.createNewEntityFieldsFromSchema(pool, scopedEntityIDs)) { // has its own internal filtering for exclude schema/table so don't pass in
+      if (! await this.createNewEntityFieldsFromSchema(pool, scopedEntityIDs, excludeSchemas)) {
          logError ('Error creating new entity fields from schema')
          bSuccess = false;
       }
@@ -4689,7 +4698,8 @@ export class ManageMetadataBase {
    protected async dropExistingDefaultConstraint(pool: CodeGenConnection, entity: any, fieldName: string) {
       try {
          const sqlDropDefaultConstraint = this.dbProvider.dropDefaultConstraintSQL(entity.SchemaName, entity.BaseTable, fieldName);
-         await this.LogSQLAndExecute(pool, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`);
+         // DECLARE-bearing block: close its batch in the replayable log (see SQLLogging.appendToSQLLogFile).
+         await this.LogSQLAndExecute(pool, sqlDropDefaultConstraint, `SQL text to drop default existing default constraints in entity ${entity.SchemaName}.${entity.BaseTable}`, false, true, this.dbProvider.BatchSeparator);
       }
       catch (e) {
          logError(e as string);
@@ -4818,9 +4828,9 @@ export class ManageMetadataBase {
     *
     * @returns {string} - The SQL statement to retrieve pending entity fields.
     */
-   protected getPendingEntityFieldsSELECTSQL(entityIDs?: string[]): string {
+   protected getPendingEntityFieldsSELECTSQL(entityIDs?: string[], excludeSchemas?: string[]): string {
       const schema = mj_core_schema();
-      return this.dbProvider.getPendingEntityFieldsSQL(schema, entityIDs);
+      return this.dbProvider.getPendingEntityFieldsSQL(schema, entityIDs, excludeSchemas);
    }
 
    /**
@@ -4986,11 +4996,14 @@ export class ManageMetadataBase {
       return this.dbProvider.parseColumnDefaultValue(sqlDefaultValue) as string ?? null!;
    }
 
-   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection, entityIDs?: string[]): Promise<boolean> {
+   protected async createNewEntityFieldsFromSchema(pool: CodeGenConnection, entityIDs?: string[], excludeSchemas?: string[]): Promise<boolean> {
       try   {
          // entityIDs flows down to the provider's WHERE clause so the inline SELECT
-         // narrows to changed entities only when scoped.
-         const sSQL = this.getPendingEntityFieldsSELECTSQL(entityIDs);
+         // narrows to changed entities only when scoped. excludeSchemas is the compiled
+         // includeSchemas scope (out-of-allow-list schemas). Without it, Pass 1 inserts
+         // pending fields for every schema in the database (Forms CodeGen emitted Common
+         // Activity Files EntityField rows).
+         const sSQL = this.getPendingEntityFieldsSELECTSQL(entityIDs, excludeSchemas);
          const newEntityFieldsResult = await this.runQuery(pool, sSQL);
          const newEntityFields = newEntityFieldsResult.recordset;
          if (newEntityFields.length > 0) {
@@ -6807,6 +6820,10 @@ export class ManageMetadataBase {
                ef.AutoUpdateIncludeInUserSearchAPI,
                ef.AutoUpdateCategory,
                ef.AutoUpdateDisplayName,
+               ef.AutoUpdateExtendedType,
+               ef.ExtendedType,
+               ef.CodeType,
+               ef.GeneratedFormSection,
                ef.EntityIDFieldName,
                ef.RelatedEntity,
                ef.IsVirtual,
@@ -7704,7 +7721,7 @@ export class ManageMetadataBase {
    protected async applyFormLayout(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string }>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string; CodeType: string }>,
       result: FormLayoutResult,
       isNewEntity: boolean = false
    ): Promise<void> {
@@ -7845,7 +7862,7 @@ export class ManageMetadataBase {
    protected async applyFieldCategories(
       pool: CodeGenConnection,
       entity: EntityInfo,
-      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean, GeneratedFormSection: string, DisplayName: string, ExtendedType: string, CodeType: string}>,
+      fields: Array<{ ID: string; Name: string; Category: string | null; AutoUpdateCategory: boolean; AutoUpdateDisplayName: boolean; AutoUpdateExtendedType: boolean; GeneratedFormSection: string; DisplayName: string; ExtendedType: string; CodeType: string}>,
       fieldCategories: Array<{
          fieldName: string;
          category: string;
@@ -7893,9 +7910,14 @@ export class ManageMetadataBase {
                setClauses.push(`DisplayName = '${fieldCategory.displayName.replace(/'/g, "''")}'`);
             }
 
-            if (fieldCategory.extendedType !== undefined && field.ExtendedType !== fieldCategory.extendedType) {
-               const extendedType = fieldCategory.extendedType === null ? 'NULL' : `'${String(fieldCategory.extendedType).replace(/'/g, "''")}'`;
-               setClauses.push(`ExtendedType = ${extendedType}`);
+            if (field.AutoUpdateExtendedType && fieldCategory.extendedType !== undefined && field.ExtendedType !== fieldCategory.extendedType) {
+               const valid = fieldCategory.extendedType == null
+                  ? null
+                  : this.validateExtendedType(String(fieldCategory.extendedType));
+               if (fieldCategory.extendedType == null || valid) {
+                  const extendedType = valid == null ? 'NULL' : `'${valid.replace(/'/g, "''")}'`;
+                  setClauses.push(`ExtendedType = ${extendedType}`);
+               }
             }
 
             if (fieldCategory.codeType !== undefined) {

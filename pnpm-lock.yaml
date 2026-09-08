@@ -80,15 +80,6 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.12
         version: 2.29.8(@types/node@24.10.11)
-      '@memberjunction/cli':
-        specifier: workspace:*
-        version: link:packages/MJCLI
-      '@memberjunction/integration-test-suite':
-        specifier: workspace:*
-        version: link:packages/TestingFramework/integration-test-suite
-      '@memberjunction/server-bootstrap-lite':
-        specifier: workspace:*
-        version: link:packages/ServerBootstrapLite
       '@playwright/test':
         specifier: ^1.58.1
         version: 1.58.1
@@ -212,6 +203,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.5
         version: link:../../Encryption
@@ -246,6 +240,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/cli':
+        specifier: 6.1.0-edge.5
+        version: link:../../MJCLI
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -309,6 +306,9 @@ importers:
       '@memberjunction/core-entities-server':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntitiesServer
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../../GenericDatabaseProvider
@@ -1147,6 +1147,9 @@ importers:
       '@memberjunction/credentials':
         specifier: 6.1.0-edge.5
         version: link:../../Credentials/Engine
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.5
         version: link:../../Encryption
@@ -1177,6 +1180,9 @@ importers:
       express:
         specifier: ^5.2.1
         version: 5.2.1
+      express-rate-limit:
+        specifier: ^8.2.1
+        version: 8.2.1(express@5.2.1)
       jsonwebtoken:
         specifier: 9.0.3
         version: 9.0.3
@@ -1193,6 +1199,9 @@ importers:
         specifier: ^3.25.0
         version: 3.25.76
     devDependencies:
+      '@memberjunction/cli':
+        specifier: 6.1.0-edge.5
+        version: link:../../MJCLI
       '@types/express':
         specifier: ^5.0.6
         version: 5.0.6
@@ -9767,6 +9776,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../DynamicPackages
       '@memberjunction/global':
         specifier: 6.1.0-edge.5
         version: link:../MJGlobal
@@ -10210,6 +10222,28 @@ importers:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+
+  packages/DynamicPackages:
+    dependencies:
+      cosmiconfig:
+        specifier: ^9.0.0
+        version: 9.0.0(typescript@5.9.3)
+    devDependencies:
+      '@types/node':
+        specifier: 24.10.11
+        version: 24.10.11
+      tsc-alias:
+        specifier: ^1.8.16
+        version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      vitest:
+        specifier: ^3.1.1
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.4.2)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Encryption:
     dependencies:
@@ -11148,6 +11182,9 @@ importers:
       '@memberjunction/db-auto-doc':
         specifier: 6.1.0-edge.5
         version: link:../DBAutoDoc
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../GenericDatabaseProvider
@@ -11327,6 +11364,9 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
     devDependencies:
+      '@memberjunction/cli':
+        specifier: 6.1.0-edge.5
+        version: link:../MJCLI
       '@types/compression':
         specifier: ^1.8.1
         version: 1.8.1
@@ -12307,6 +12347,9 @@ importers:
       '@memberjunction/sql-dialect':
         specifier: 6.1.0-edge.5
         version: link:../SQLDialect
+      '@memberjunction/sql-parser':
+        specifier: 6.1.0-edge.5
+        version: link:../SQLParser
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.5
         version: link:../SQLServerDataProvider
@@ -13971,6 +14014,9 @@ importers:
       '@memberjunction/doc-utils':
         specifier: 6.1.0-edge.5
         version: link:../DocUtils
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../DynamicPackages
       '@memberjunction/encryption':
         specifier: 6.1.0-edge.5
         version: link:../Encryption
@@ -14469,6 +14515,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../../GenericDatabaseProvider
@@ -14780,6 +14829,9 @@ importers:
       '@memberjunction/core-entities':
         specifier: 6.1.0-edge.5
         version: link:../../MJCoreEntities
+      '@memberjunction/dynamic-packages':
+        specifier: 6.1.0-edge.5
+        version: link:../../DynamicPackages
       '@memberjunction/generic-database-provider':
         specifier: 6.1.0-edge.5
         version: link:../../GenericDatabaseProvider

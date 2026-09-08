@@ -481,7 +481,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
 
         // ListDetail.RecordID is the compact CompositeKey segment: the raw value for a single-column
         // key (whatever the column is called), "F1|v1||F2|v2" for a composite key. FromURLSegment
-        // reads both against this list's entity metadata.
+        // reads both against this list's entity metadata — `FromID` assumed the column was `ID`.
         SharedService.Instance.OpenEntityRecord(this.entityInfo.Name, CompositeKey.FromURLSegment(this.entityInfo, item.detail.RecordID));
     }
 

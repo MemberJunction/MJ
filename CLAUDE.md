@@ -88,8 +88,8 @@ If tests fail because of your change, **update them**. If they fail for other re
 
 **Integration tests** — the deterministic tier must be run headless and pass:
 ```bash
-pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 mj test suite "Integration Tests — Deterministic"
-npx mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
+pnpm run test:integration    # = MJ_INTEGRATION_TEST=1 pnpm mj test suite "Integration Tests — Deterministic"
+pnpm mj test run "IT30 - Conversation Compaction (assembly layer)"   # single bundle while iterating
 ```
 Unit tests passing is necessary but **not sufficient** — the integration tier catches the seams between packages that unit tests mock away. Run it after migrations + CodeGen have been applied. Full details, authoring rules, and the client-first transport doctrine: [`guides/INTEGRATION_TESTING_QUICKSTART.md`](guides/INTEGRATION_TESTING_QUICKSTART.md).
 

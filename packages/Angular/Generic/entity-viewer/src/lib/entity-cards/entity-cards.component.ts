@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView, CoerceImageSrc } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
 import { PillColorUtil } from '../pill/pill.component';
@@ -413,22 +413,14 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    * Returns an array so we can fall back per-record if one is empty
    */
   private findThumbnailFields(fields: EntityFieldInfo[]): string[] {
-    const imageKeywords = ['image', 'photo', 'picture', 'thumbnail', 'avatar', 'logo', 'icon'];
-    const foundFields: string[] = [];
-    const foundFieldNames = new Set<string>();
-
-    for (const keyword of imageKeywords) {
-      const matchingFields = fields.filter(f =>
-        f.Name.toLowerCase().includes(keyword) &&
-        f.TSType === 'string' &&
-        !foundFieldNames.has(f.Name)
-      );
-      for (const field of matchingFields) {
-        foundFields.push(field.Name);
-        foundFieldNames.add(field.Name);
-      }
-    }
-    return foundFields;
+    const images = fields
+      .filter(f => f.ExtendedType === 'Image' && f.TSType === 'string')
+      .map(f => f.Name);
+    const imageSet = new Set(images);
+    const icons = fields
+      .filter(f => f.ExtendedType === 'Icon' && f.TSType === 'string' && !imageSet.has(f.Name))
+      .map(f => f.Name);
+    return [...images, ...icons];
   }
 
   private findBadgeField(fields: EntityFieldInfo[]): string | null {
@@ -702,18 +694,13 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
     if (!fieldInfo) return 'none';
 
     const { fieldName, value } = fieldInfo;
+    const fieldMeta = this.entity?.Fields.find(f => f.Name === fieldName);
 
-    // Check if value is an image URL
+    if (fieldMeta?.ExtendedType === 'Image' && CoerceImageSrc(value)) return 'image';
+    if (fieldMeta?.ExtendedType === 'Icon') return 'icon';
+
     if (this.isImageValue(value)) return 'image';
-
-    // Check if value looks like an icon class
     if (this.isIconClass(value)) return 'icon';
-
-    // If field name suggests it's an icon field, treat non-URL values as icon classes
-    const fieldNameLower = fieldName.toLowerCase();
-    if (fieldNameLower.includes('icon') || fieldNameLower.includes('class')) {
-      return 'icon';
-    }
 
     return 'none';
   }
@@ -723,7 +710,8 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
    */
   getThumbnailUrl(record: Record<string, unknown>): string {
     const fieldInfo = this.getEffectiveThumbnailField(record);
-    return fieldInfo?.value || '';
+    if (!fieldInfo) return '';
+    return CoerceImageSrc(fieldInfo.value) || fieldInfo.value;
   }
 
   /**
@@ -746,11 +734,7 @@ export class EntityCardsComponent extends BaseAngularComponent implements OnChan
   }
 
   private isImageValue(value: string): boolean {
-    if (!value) return false;
-    const trimmed = value.trim();
-    if (trimmed.startsWith('data:image/')) return true;
-    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return true;
-    return false;
+    return CoerceImageSrc(value) != null;
   }
 
   private isIconClass(value: string): boolean {

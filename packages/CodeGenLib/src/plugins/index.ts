@@ -49,6 +49,10 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
     'force-advanced-gen': Flags.boolean({
       description: 'Bypass entity scoping in Pass 2 and force advanced generation to re-run for all entities.',
     }),
+    'sql-output-dir': Flags.string({
+      description:
+        'Directory for CodeGen_Run_*.sql (EntityField INSERTs and other metadata SQL). Open Apps default to ./migrations/codegen. Do not point this at MJ/migrations/v*.',
+    }),
   };
 
   static Usage: PluginUsage = {
@@ -61,6 +65,7 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
       { name: '--skipdb', type: 'boolean', description: 'Regenerate code from existing metadata only (no DB operations)' },
       { name: '--skipfiles', type: 'boolean', description: 'Run DB-side operations only (no code files)' },
       { name: '--force-advanced-gen', type: 'boolean', description: 'Re-run advanced generation for all entities' },
+      { name: '--sql-output-dir', type: 'string', description: 'Directory for CodeGen_Run metadata SQL (Open Apps: ./migrations/codegen)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
     examples: ['mj codegen', 'mj codegen --skipdb', 'mj codegen --format=json'],
@@ -84,6 +89,9 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
     }
 
     initializeConfig(process.cwd());
+
+    const { SQLLogging } = await import('../Misc/sql_logging.js');
+    SQLLogging.sqlOutputDirFlag = flags['sql-output-dir'];
 
     // --force-advanced-gen bypasses Pass 2 scoping by toggling the existing
     // forceRegeneration.enabled config flag (honored by both sql_codegen.ts and
