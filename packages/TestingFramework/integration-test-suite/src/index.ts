@@ -42,6 +42,7 @@ export * from './checks/runquery-cache.checks';
 export * from './checks/scheduled-jobs.checks';
 export * from './checks/server-cache.checks';
 export * from './checks/startup-mode.checks';
+export * from './checks/user-elevation.checks';
 export * from './checks/user-routines.checks';
 export * from './checks/view-execution.checks';
 export * from './checks/runview-matrix.checks';
