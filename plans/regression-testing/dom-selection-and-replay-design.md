@@ -165,17 +165,31 @@ migration.
 **Keeping the type honest.** The script shape exists twice: once as `ComputerUseTrace`
 in `@memberjunction/computer-use`, once as `ITestJSONScript` in the JSONType. It has to,
 because CodeGen emits the JSONType definition verbatim into `@memberjunction/core-entities`,
-which sits below the engine package and can name nothing from it. Duplication kept in
-step by discipline always drifts, so `script-store.ts` — the one package that depends on
-both — asserts assignability in both directions:
+which sits below the engine package and can name nothing from it.
+
+The failure mode is quiet. Add a field to `ComputerUseTrace` and forget the JSONType, and
+everything still compiles and every runtime test still passes: the recorder writes the
+field, the column stores it, and `ConfigurationObject` hands it back as a property
+TypeScript insists does not exist.
+
+This repo has an established answer for that, from `MJ: Entity Fields`'
+related-record-collection work — a `*.test-d.ts` file of vitest `expectTypeOf`
+assertions, checked by tsc through `typecheck` in `vitest.config.ts`. So
+`__tests__/script-store.test-d.ts` asserts the two types field-for-field, in both
+directions:
 
 ```ts
-const _scriptSatisfiesTrace: ComputerUseTrace = {} as MJTestEntity_ITestJSONScript;
-const _traceSatisfiesScript: MJTestEntity_ITestJSONScript = {} as ComputerUseTrace;
+expectTypeOf<MJTestEntity_ITestJSONScript>().toEqualTypeOf<ComputerUseTrace>();
 ```
 
-Rename a field on either side and the build fails. `tsc` keeps them in step so nobody
-has to remember to.
+Two things about that were checked rather than assumed, because both have bitten this
+repo before. The assertions are **not vacuous** — the MJCoreEntities precedent found its
+own typecheck program empty and every assertion passing for free, so this one was
+confirmed to fail on injected drift (a renamed field, a widened type, and a required
+field made optional, each failing three of the six). And required-vs-optional drift is
+caught only because this package sets `strict: true`; the comparable Zod-based check on
+`IRuntimeActionConfiguration` documents that it *cannot* assert type equivalence for
+exactly this reason, its package building without `strictNullChecks`.
 
 ## 6. The fallback pathway
 
@@ -255,7 +269,7 @@ Landed on this branch, with unit tests, against `origin/next`:
 |---|---|
 | DOM selection | `browser/selector-resolution.ts`, `browser/element-extraction.ts`, `browser/page-perception.ts` |
 | Script record/replay | `types/trace.ts`, `engine/trace.ts`, `engine/replay.ts`, `ComputerUseEngine.Replay` |
-| Storage | `metadata/entities/JSONType-interfaces/ITestConfiguration.ts`, `test-driver/script-store.ts` |
+| Storage | `metadata/entities/JSONType-interfaces/ITestConfiguration.ts`, `test-driver/script-store.ts`, `__tests__/script-store.test-d.ts` |
 | Driver | tier dispatch and write-back in `ComputerUseTestDriver` |
 | Reporting | `tier` and `ReplayTelemetry` on the testing-framework result types |
 

@@ -26,29 +26,15 @@ import { MJTestEntity, MJTestEntity_ITestConfiguration, MJTestEntity_ITestJSONSc
 import { ComputerUseTrace } from '@memberjunction/computer-use';
 
 /**
- * `MJTestEntity_ITestJSONScript` (the entity's JSONType, defined in
- * `metadata/entities/JSONType-interfaces/ITestConfiguration.ts`) and
- * `ComputerUseTrace` (the engine's own type) describe the same object in two
- * packages that cannot import each other: the JSONType definition is emitted
- * verbatim into `@memberjunction/core-entities`, which sits below
- * `@memberjunction/computer-use` and can name nothing from it.
- *
- * This package depends on both, so it is the one place the two can be compared.
- * These assertions do that in both directions, making the shapes structurally
- * identical. Add or rename a field on either side and this file fails to compile
- * — which is the point. `tsc` keeps the two in step so nobody has to remember to.
- */
-const _scriptSatisfiesTrace: ComputerUseTrace = {} as MJTestEntity_ITestJSONScript;
-const _traceSatisfiesScript: MJTestEntity_ITestJSONScript = {} as ComputerUseTrace;
-void _scriptSatisfiesTrace;
-void _traceSatisfiesScript;
-
-/**
  * Read this test's replay script. Null when the test has never recorded one, or
  * when what is stored is not a script — either sends the run to the agent tier,
  * the correct default for a test with nothing to replay.
  *
- * No cast is needed: the assertions above make the two types interchangeable.
+ * The return needs no cast because `MJTestEntity_ITestJSONScript` and
+ * `ComputerUseTrace` are the same shape. They are declared separately — CodeGen
+ * emits the JSONType into `@memberjunction/core-entities`, which sits below the
+ * engine package and can name nothing from it — and held identical by the
+ * type-level tests in `__tests__/script-store.test-d.ts`.
  */
 export function loadScript(test: MJTestEntity): ComputerUseTrace | null {
     const script = readConfiguration(test)?.TestJSONScript;

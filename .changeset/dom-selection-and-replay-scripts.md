@@ -43,8 +43,12 @@ only framework-level properties over an index signature, so each driver's own
 configuration passes through untouched and a future framework option is an interface edit
 rather than a migration. The script shape necessarily exists twice — once as
 `ComputerUseTrace`, once as the JSONType, because CodeGen emits the definition into
-`core-entities`, which sits below the engine package — so `script-store.ts` asserts
-assignability in both directions and `tsc` fails the build if either side drifts.
+`core-entities`, which sits below the engine package. `__tests__/script-store.test-d.ts`
+holds the two field-for-field with vitest `expectTypeOf`, checked by tsc through
+`typecheck` in `vitest.config.ts` — the same idiom as the related-record-collection type
+tests in `core-entities`. The assertions were confirmed to fail on injected drift rather
+than assumed to work, since that precedent's own typecheck program was once empty and
+every assertion passing for free.
 
 **Fallback.** A diverged replay falls back to the model within the same attempt and a
 green fallback overwrites the script. The fallback restarts clean rather than inheriting
