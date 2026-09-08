@@ -210,8 +210,11 @@ evaluated **at apply time**, never the number CodeGen wrote:
 from the schema on its next pass (`ef.Sequence = fr.Sequence`), so the numbers themselves are
 throwaway — two independent from-scratch builds land on identical sequences. What must hold is that
 base (non-virtual) fields sort **before** virtual ones, because the providers' positional
-save-capture depends on that alignment. Encoding the ordinal in the emitted value keeps that true
-without depending on statement execution order.
+save-capture depends on that alignment. That holds because each INSERT re-evaluates `MAX` after the
+one before it: the batch is emitted in schema order (the pending-fields SELECT orders by
+`EntityID, Sequence`) and executes sequentially in one round trip, and base columns are discovered
+in pass 1 before pass 2 adds the virtual ones. Two invariants, both pinned by
+`entity-field-sequence-insert.test.ts`: keep the `ORDER BY`, and never parallelize the chunk.
 
 **Why this is not a style preference.** The number CodeGen emits is a *temporary* placeholder —
 `MAX(Sequence) + 100000 + ordinal` — that `spUpdateExistingEntityFieldsFromSchema` rewrites to a

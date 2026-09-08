@@ -34,8 +34,8 @@
  * deliberately: they apply today, and rewriting them would change Flyway checksums on every
  * existing database. `--all` scans every committed migration and is informational.
  *
- * Usage:
- *   node check-migration-entityfield-sequence.mjs                 # BASE_REF (default origin/next)...HEAD
+ * Usage (from any directory inside the repository):
+ *   node check-migration-entityfield-sequence.mjs                 # working tree + untracked vs merge-base(BASE_REF, HEAD)
  *   node check-migration-entityfield-sequence.mjs <base> <head>   # explicit tree-ish pair (CI)
  *   node check-migration-entityfield-sequence.mjs --all           # every committed migration
  *   node check-migration-entityfield-sequence.mjs --self-test     # the detector's own fixtures
@@ -43,6 +43,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync, realpathSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 const RED = '\x1b[0;31m', YELLOW = '\x1b[0;33m', GREEN = '\x1b[0;32m', DIM = '\x1b[2m', NC = '\x1b[0m';
 
@@ -192,9 +193,25 @@ function git(args) {
     return execFileSync('git', args, { encoding: 'utf8' }).trim();
 }
 
-function changedMigrations(base, head) {
-    const out = git(['diff', '--name-only', '--diff-filter=ACM', base, head, '--', 'migrations']);
-    return out.split('\n').filter((f) => f.endsWith('.sql'));
+/** The repository root; every pathspec and file read is anchored here so the gate works from any cwd. */
+function repoRoot() {
+    return git(['rev-parse', '--show-toplevel']);
+}
+
+function gitAt(root, args) {
+    return git(['-C', root, ...args]);
+}
+
+/**
+ * Migration files changed between `base` and `head`, or — when `head` is undefined — between
+ * `base` and the working tree, plus untracked migration files. The working-tree form is what a
+ * developer runs before committing; a freshly generated, not-yet-added capture must be visible.
+ */
+function changedMigrations(root, base, head) {
+    const diffArgs = ['diff', '--name-only', '--diff-filter=ACM', base, ...(head ? [head] : []), '--', 'migrations'];
+    const changed = gitAt(root, diffArgs).split('\n');
+    const untracked = head ? [] : gitAt(root, ['ls-files', '--others', '--exclude-standard', '--', 'migrations']).split('\n');
+    return [...changed, ...untracked].filter((f) => f.endsWith('.sql'));
 }
 
 /**
@@ -203,8 +220,10 @@ function changedMigrations(base, head) {
  * migration someone touched for another reason is not this PR's to fix (and rewriting it would
  * change the Flyway checksum on every existing database).
  */
-export function addedLines(base, head, file) {
-    const diff = git(['diff', '-U0', base, head, '--', file]);
+export function addedLines(root, base, head, file) {
+    // An untracked file has no diff: every line is new.
+    if (!head && gitAt(root, ['ls-files', '--', file]) === '') return null;
+    const diff = gitAt(root, ['diff', '-U0', base, ...(head ? [head] : []), '--', file]);
     const added = new Set();
     for (const m of diff.matchAll(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/gm)) {
         const start = Number(m[1]);
@@ -214,8 +233,9 @@ export function addedLines(base, head, file) {
     return added;
 }
 
-function allMigrations() {
-    return git(['ls-files', '--', 'migrations']).split('\n').filter((f) => f.endsWith('.sql'));
+function allMigrations(root) {
+    return gitAt(root, ['ls-files', '--cached', '--others', '--exclude-standard', '--', 'migrations'])
+        .split('\n').filter((f) => f.endsWith('.sql'));
 }
 
 const SELF_TEST_FIXTURES = [
@@ -338,27 +358,29 @@ function selfTest() {
 function main(argv) {
     if (argv[0] === '--self-test') return selfTest();
 
+    const root = repoRoot();
     let files, base, head;
     if (argv[0] === '--all') {
-        files = allMigrations();
+        files = allMigrations(root);
     } else {
         if (argv.length >= 2) {
             [base, head] = argv;
         } else {
-            base = git(['merge-base', process.env.BASE_REF || 'origin/next', 'HEAD']);
-            head = 'HEAD';
+            // Local form: the working tree (including untracked files) against the merge base.
+            base = gitAt(root, ['merge-base', process.env.BASE_REF || 'origin/next', 'HEAD']);
         }
-        files = changedMigrations(base, head);
+        files = changedMigrations(root, base, head);
     }
     if (files.length === 0) { console.log(`${DIM}no changed migrations to check${NC}`); return 0; }
 
     let violations = 0;
     for (const f of files) {
-        if (!existsSync(f)) continue;
-        let hits = scanContent(readFileSync(f, 'utf8'));
+        const full = join(root, f);
+        if (!existsSync(full)) continue;
+        let hits = scanContent(readFileSync(full, 'utf8'));
         if (base !== undefined) {
-            const added = addedLines(base, head, f);
-            hits = hits.filter((h) => added.has(h.line));
+            const added = addedLines(root, base, head, f);
+            if (added) hits = hits.filter((h) => added.has(h.line));
         }
         if (hits.length === 0) continue;
         violations++;

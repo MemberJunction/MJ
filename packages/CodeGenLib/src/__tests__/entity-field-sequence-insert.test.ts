@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { ManageMetadataBase } from '../Database/manage-metadata';
 import { SQLServerDialect, type SQLDialect } from '@memberjunction/sql-dialect';
+import { SQLServerCodeGenProvider } from '../Database/providers/sqlserver/SQLServerCodeGenProvider';
+import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 import type { CodeGenConnection, CodeGenQueryResult, CodeGenTransaction } from '../Database/codeGenDatabaseProvider';
 
 /**
@@ -139,8 +141,17 @@ describe('EntityField Sequence on insert', () => {
     expect(valueOf(late, 'DefaultInView')).toBe('0');
   });
 
-  it('does not park existing rows: the batch is INSERTs only, one apply-time expression each', async () => {
+  it('the pending-fields SELECT orders by EntityID, Sequence on both platforms (emission order is schema order)', () => {
+    // The apply-time expression is unique by construction; RELATIVE order among a batch of new fields
+    // comes from emitting them in schema order and executing them sequentially. Drop this ORDER BY and
+    // base columns can land after virtual ones until the renumber.
+    expect(new SQLServerCodeGenProvider().getPendingEntityFieldsSQL('__mj')).toMatch(/ORDER BY\s+EntityID,\s*Sequence/i);
+    expect(new PostgreSQLCodeGenProvider().getPendingEntityFieldsSQL('__mj')).toMatch(/ORDER BY\s+"EntityID",\s*"Sequence"/i);
+  });
+
+  it('does not park existing rows: the batch is INSERTs only, one apply-time expression each, in one sequential round trip', async () => {
     const statements: string[] = [];
+    let batchCalls = 0;
     class Capturing extends TestableManageMetadata {
       protected override async runQuery(_pool: CodeGenConnection, _sql: string): Promise<CodeGenQueryResult> {
         return {
@@ -151,6 +162,7 @@ describe('EntityField Sequence on insert', () => {
         };
       }
       protected override async LogSQLBatchAndExecute(_pool: CodeGenConnection, batch: string[]): Promise<unknown> {
+        batchCalls++;
         statements.push(...batch);
         return undefined;
       }
@@ -159,7 +171,12 @@ describe('EntityField Sequence on insert', () => {
       }
     }
     expect(await new Capturing().run()).toBe(true);
+    // One chunk, one round trip, statements in emission order: each INSERT's MAX() sees the one before it.
+    // Executing the chunk with Promise.all would let two INSERTs read the same MAX and collide.
+    expect(batchCalls).toBe(1);
     expect(statements).toHaveLength(2);
+    expect(statements[0]).toContain("'HousingID'");
+    expect(statements[1]).toContain("'Housing'");
     for (const stmt of statements) {
       expect(stmt).toMatch(/INSERT INTO \[__mj\]\.\[EntityField\]/);
       expect(stmt).not.toMatch(/UPDATE\s+\[__mj\]\.\[EntityField\]/i);

@@ -80,6 +80,25 @@ describe('changed-files mode reports only lines the PR adds', () => {
         expect(r.stdout).toContain('V202609080000__v6.1.x__New.sql');
         expect(r.stdout).not.toContain('Legacy.sql');
     });
+
+    it('local form sees an untracked migration and works from a subdirectory', () => {
+        const repo = mkdtempSync(join(tmpdir(), 'mj-seq-gate-wt-'));
+        const run = (args) => spawnSync('git', args, { cwd: repo, encoding: 'utf8' });
+        run(['init', '-q']);
+        run(['config', 'user.email', 't@t']); run(['config', 'user.name', 't']);
+        mkdirSync(join(repo, 'migrations', 'v6'), { recursive: true });
+        mkdirSync(join(repo, 'packages', 'X'), { recursive: true });
+        writeFileSync(join(repo, 'README.md'), 'x');
+        run(['add', '.']); run(['commit', '-q', '-m', 'base']);
+        const base = run(['rev-parse', 'HEAD']).stdout.trim();
+        // Not added, not committed — the state right after `cat CodeGen_Run_*.sql >> migration.sql`.
+        writeFileSync(join(repo, 'migrations', 'v6', 'V202609080000__v6.1.x__Fresh.sql'),
+            `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence]) VALUES ('b', 'e', 16);\n`);
+        const r = spawnSync(process.execPath, [SCRIPT], { cwd: join(repo, 'packages', 'X'), encoding: 'utf8', env: { ...process.env, BASE_REF: base } });
+        rmSync(repo, { recursive: true, force: true });
+        expect(r.status, r.stdout + r.stderr).toBe(1);
+        expect(r.stdout).toContain('Fresh.sql');
+    });
 });
 
 describe('--self-test', () => {

@@ -2435,8 +2435,8 @@ export class ManageMetadataBase {
     * INTEGRITY CHECK — in a well-formed entity every base (non-virtual) field sequences BEFORE the
     * virtual/related fields, so the EntityField order matches the base view's `SELECT [base].*, <joins>`
     * column output. The positional save-capture in the data providers (e.g. SQLServerDataProvider's
-    * @ResultTable) relies on that alignment. CodeGen assigns newly-discovered columns a temporary
-    * `maxSequence + 100000` offset that updateExistingEntityFieldsFromSchema is supposed to renumber; if
+    * @ResultTable) relies on that alignment. CodeGen inserts newly-discovered columns at an apply-time
+    * `MAX(Sequence) + ordinal` placeholder that updateExistingEntityFieldsFromSchema is supposed to renumber; if
     * a base column is left sequenced AFTER a virtual field, the save-capture would mis-route values by
     * position. The providers now compensate (saves stay correct), but the metadata is still wrong — so we
     * scan for it after every metadata pass and log a prominent warning to drive the root cause out over time.
@@ -2480,7 +2480,7 @@ export class ManageMetadataBase {
                    `   Healthy entities sequence ALL base (non-virtual) fields before virtual/related fields, so EntityField\n` +
                    `   order matches the base view ([base].* then joins) that the data-provider save-capture relies on. When a\n` +
                    `   base column sequences after a virtual field, the capture re-orders defensively (saves stay correct), but\n` +
-                   `   the metadata is wrong. Usual cause: a newly-added column's temporary maxSequence+100000 offset was not\n` +
+                   `   the metadata is wrong. Usual cause: a newly-added column's apply-time MAX(Sequence)+ordinal placeholder was not\n` +
                    `   renumbered. Fix the field's Sequence at the source so it sorts with the base columns.\n` +
                    `   Affected (entity: base fields out of order):\n`;
          for (const o of offenders) msg += `      • ${o.entity}: ${o.fields.join(', ')}\n`;
@@ -4174,7 +4174,7 @@ export class ManageMetadataBase {
 
       // AN: 14-June-2025 - we are now running this AFTER we create new entity fields from schema
       // which results in the same pattern of behavior as migrations where we first create new fields
-      // with VERY HIGH sequence numbers (e.g. 100,000 above what they will be approx) and then
+      // at an apply-time MAX(Sequence)+ordinal placeholder (above every existing row) and then
       // we align them properly in sequential order from 1+ via this method below.
       const step3StartTime: Date = new Date();
       if (! await this.updateExistingEntityFieldsFromSchema(pool, excludeSchemas, scopedEntityIDs)) {
