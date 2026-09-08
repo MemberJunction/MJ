@@ -858,9 +858,18 @@ export interface IMetadataProvider {
 
     Refresh(providerToUse?: IMetadataProvider): Promise<boolean>
 
-    RefreshIfNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
+    /**
+     * @param bypassMinCheckInterval - When true, skips the minimum-interval throttle between
+     * staleness checks. Event-driven callers pass true: they hold positive evidence that a
+     * metadata member entity was just written, and the throttle would otherwise answer "fresh"
+     * for any check arriving within the window of the previous one.
+     */
+    RefreshIfNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean>
 
-    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider): Promise<boolean>
+    /**
+     * @param bypassMinCheckInterval - See {@link RefreshIfNeeded}.
+     */
+    CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean>
 
     get LocalStorageProvider(): ILocalStorageProvider
 
