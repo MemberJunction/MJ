@@ -140,12 +140,12 @@ export class SQLLogging {
         return folderPath;
     }
     public static initSQLLogging() {
-        SQLLogging._OmitRecurringScriptsFromLog = configInfo.SQLOutput.omitRecurringScriptsFromLog;
+        const config = configInfo.SQLOutput;
+        if (!config) {
+            throw new Error("SQLOutput config is required to enable metadata logging");
+        }
+        SQLLogging._OmitRecurringScriptsFromLog = config.omitRecurringScriptsFromLog;
         if (!SQLLogging.SQLLoggingFilePath) {
-            const config = configInfo.SQLOutput;
-            if(!config){
-                throw new Error("SQLOutput config is required to enable metadata logging");
-            }
 
             if (!config.enabled)
                 return;
@@ -183,10 +183,41 @@ export class SQLLogging {
         }
      }
 
+    /**
+     * The batch separator for the active platform: `GO` on SQL Server, none on PostgreSQL. Used as the
+     * default for callers that do not pass the provider's separator, so a PostgreSQL capture can never
+     * pick up a literal `GO` from a forgotten argument.
+     */
+    public static defaultBatchSeparator(): string {
+        return dbPlatform() === 'postgresql' ? '' : 'GO';
+    }
+
     /** Test hook — SQLLogging is a process-wide singleton. */
     public static resetForTests(): void {
         SQLLogging._SQLLoggingFilePath = '';
         SQLLogging.sqlOutputDirFlag = undefined;
+    }
+
+    /**
+     * Test hook — turns SQL capture off for the process: disables `SQLOutput` so
+     * {@link LogSQLAndExecute} does not refuse to run against a stub connection with no CodeGen_Run
+     * file open, and closes any capture file already open so nothing is written meanwhile. Returns a
+     * function that restores both; call it from `afterAll`.
+     */
+    public static suppressOutputForTests(): () => void {
+        const output = configInfo.SQLOutput;
+        const previousEnabled = output?.enabled;
+        const previousPath = SQLLogging._SQLLoggingFilePath;
+        if (output) {
+            output.enabled = false;
+        }
+        SQLLogging._SQLLoggingFilePath = '';
+        return () => {
+            if (output && previousEnabled !== undefined) {
+                output.enabled = previousEnabled;
+            }
+            SQLLogging._SQLLoggingFilePath = previousPath;
+        };
     }
 
      public static finishSQLLogging() {
@@ -218,14 +249,15 @@ export class SQLLogging {
     }
 
     /**
-     * Adds the provided SQL to the log file for the run
-     * @param contents - the executable SQL to log
-     * @param description - a description of what is being logged that will be emitted and wrapped in comments
-     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
-     * @returns
-     */
-    /**
-     * Adds the provided SQL to the log file for the run
+     * Adds the provided SQL to the log file for the run.
+     *
+     * Two rules keep the file replayable as a migration. A unit that declares a batch-scoped T-SQL
+     * variable always ends its batch: every unit is executed as its own query, so no later unit can
+     * depend on the variable, but two such units concatenated into one migration batch fail replay
+     * with "The variable name '@x' has already been declared" (see {@link declaresBatchScopedVariable}).
+     * And a unit that already ends in `GO` never receives a second separator. An empty
+     * `batchSeparator` (PostgreSQL) means none. Callers should still pass `includeBatchSeparator`
+     * explicitly: the scan does not see a declaration hidden inside a string or a mid-line statement.
      * @param contents - the executable SQL to log
      * @param description - a description of what is being logged that will be emitted and wrapped in comments
      * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
@@ -233,7 +265,7 @@ export class SQLLogging {
      * @param batchSeparator - the batch separator string to use (e.g., 'GO' for SQL Server). Only used when includeBatchSeparator is true.
      * @returns
      */
-    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<void> {
+    public static async appendToSQLLogFile(contents: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator()): Promise<void> {
         try{
             if (isRecurringScript && SQLLogging.OmitRecurringScriptsFromLog) {
                 return; // is a recurring script and the flag to omit recurring scripts is set
@@ -263,12 +295,20 @@ export class SQLLogging {
             // ending in `GO`. Appending `;` produces `GO;`, which SSMS and sqlcmd reject
             // ("Incorrect syntax near ';'"). Detect and skip the `;` append in that case.
             const trimmed = contents.replace(/[\s;]+$/g, '');
+            let endsWithBatchSeparator = false;
             if (trimmed.length > 0) {
-                const endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
+                endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
                 contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
-            contents = includeBatchSeparator
+            // Emit a separator when the caller asked for one, or when the unit declares a batch-scoped
+            // variable (see the method JSDoc). Never for an empty separator (PostgreSQL), and never
+            // after a unit that already closes its own batch. The declaration scan runs only on
+            // units that could receive a separator, so GO-terminated view and routine bodies — the
+            // largest units logged — are not scanned.
+            const emitSeparator = !!batchSeparator && !endsWithBatchSeparator &&
+                (includeBatchSeparator || SQLLogging.declaresBatchScopedVariable(trimmed));
+            contents = emitSeparator
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;
 
@@ -289,7 +329,7 @@ export class SQLLogging {
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
+    public static async LogSQLAndExecute(ds: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = SQLLogging.defaultBatchSeparator()): Promise<any> {
         if (configInfo.SQLOutput?.enabled && !SQLLogging.SQLLoggingFilePath) {
             throw new Error(
                 'SQLOutput.enabled but no CodeGen_Run log file is open. Refusing to apply metadata SQL with no artifact. ' +
@@ -299,6 +339,35 @@ export class SQLLogging {
         SQLLogging.appendToSQLLogFile(query, description, isRecurringScript, includeBatchSeparator, batchSeparator);
         const result = await ds.query(query);
         return result.recordset;
+    }
+
+    /**
+     * True when the SQL text declares a batch-scoped T-SQL local variable: a `DECLARE @name ...` at the
+     * start of any line with no routine header (`CREATE|ALTER [OR ALTER] PROCEDURE|FUNCTION|TRIGGER`) before
+     * it. T-SQL variables are scoped to the batch wherever they are declared — after `SET NOCOUNT ON`,
+     * inside `IF ... BEGIN ... END` — so the match is not limited to the first statement. A declaration
+     * inside a routine body is routine-scoped and cannot collide across units, so it does not count.
+     */
+    public static declaresBatchScopedVariable(sql: string): boolean {
+        if (!sql) {
+            return false;
+        }
+        // `[ \t]*` rather than `\s*` so the multiline anchors cannot walk across blank lines.
+        const declaration = /^[ \t]*DECLARE\s+@/im;
+        const routineHeader = /^[ \t]*(CREATE\s+(OR\s+ALTER\s+)?|ALTER\s+)(PROC|PROCEDURE|FUNCTION|TRIGGER)\b/im;
+        // A routine body ends at its GO, so judge each batch of the unit on its own: a DECLARE after a
+        // routine's GO is batch-scoped again.
+        for (const batch of sql.split(/^[ \t]*GO[ \t]*$/im)) {
+            const declAt = batch.search(declaration);
+            if (declAt === -1) {
+                continue;
+            }
+            const headerAt = batch.search(routineHeader);
+            if (headerAt === -1 || declAt < headerAt) {
+                return true;
+            }
+        }
+        return false;
     }
 
     protected static getFileLength(filePath: string): number {
