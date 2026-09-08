@@ -1,0 +1,89 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T154 - Tab Management (Global)",
+    "Description": "Exercises global shell tab-management sections in one run (close a tab via its context menu, and reset the workspace layout to a single default tab), verifying each via checkpoints. Consolidates old T377 and T379.",
+    "InputDefinition": {
+      "goal": "You are logged in at http://localhost:4200. Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) close-tab-context-menu — open at least two resources so 2+ tabs show in the tab bar (use the LEFT sidebar 'Search entities...' box to open one entity by clicking its exact match, then open a second entity or a record's full form the same way), then right-click one of the tab headers to open its context menu and choose 'Close Tab'; verify that tab is removed from the tab bar and at least one other tab remains and stays usable; (2) reset-layout — open a couple of extra tabs again so the current app has multiple tabs, then click the user avatar button in the TOP-RIGHT corner to open the user menu and choose the 'Reset Layout' item; verify the workspace resets so the current app shows just its single default tab (the extra tabs are gone) and remains usable. Keep going until both sections have been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        {
+          "name": "close-tab-context-menu",
+          "instruction": "close a tab via its context menu",
+          "visualCriteria": [
+            "With at least two tabs open, right-clicking a tab shows a context menu that includes 'Close Tab', and choosing it removes that specific tab while a remaining tab is still shown and active"
+          ]
+        },
+        {
+          "name": "reset-layout",
+          "instruction": "reset workspace layout to default",
+          "visualCriteria": [
+            "With multiple tabs open, a 'Reset Layout' option in the user menu is clickable, and after reset the current app shows a single default tab (extra tabs removed) and remains functional"
+          ]
+        }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 70,
+      "maxExecutionTime": 840000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "url-match",
+          "weight": 0.3,
+          "config": {
+            "pattern": "^http://localhost:4200"
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "url-match": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,shell"
+  },
+  "primaryKey": {
+    "ID": "7D6581EE-669D-4A53-9C9A-89C9E68A754F"
+  }
+}

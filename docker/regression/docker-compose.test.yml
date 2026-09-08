@@ -48,14 +48,42 @@ services:
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # DR-A1: cap SQL Server *internally*. On Linux it otherwise allocates up
+      # to ~80% of HOST RAM and competes freely with the 8GB-heap API and N
+      # Chromium instances — the substrate of the observed exit-137 OOM. SQL
+      # must be told its budget via env/mssql-conf; the cgroup ceiling alone
+      # would get it OOM-killed instead of made frugal. 3584MB sits under the
+      # 4g mem_limit below, leaving headroom for non-buffer-pool allocations.
+      MSSQL_MEMORY_LIMIT_MB: "${MJ_REGRESSION_SQL_MEM_MB:-3584}"
+      MSSQL_PID: Developer
+    # DR-A1: external ceiling (cgroup). All limits are .env.test-tunable; these
+    # are ceilings, not reservations — safe on smaller hosts.
+    mem_limit: "${MJ_REGRESSION_SQL_MEM_LIMIT:-4g}"
     ports:
       - "11433:1433"
     healthcheck:
-      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
+      # -S 127.0.0.1 (NOT localhost): on hosts where the container resolves
+      # `localhost` to IPv6 `::1` first (e.g. SQL Server 2022 under x86 emulation
+      # on Apple Silicon), the ODBC 18 driver hangs on ::1 until the login timeout
+      # instead of falling back to IPv4 — so every 5s probe times out and the
+      # (healthy, listening) server never goes healthy, aborting the whole stack.
+      # 127.0.0.1 connects in ~100ms and is identical to localhost on native
+      # x86/CI (where localhost already resolved to IPv4). SELECT 1 = readiness.
+      test: /opt/mssql-tools18/bin/sqlcmd -S 127.0.0.1 -U sa -P "$$MSSQL_SA_PASSWORD" -Q "SELECT 1" -C -No
       interval: 10s
       timeout: 5s
       retries: 15
       start_period: 30s
+    # DR-B2: persist the DB on a NAMED volume instead of the container's writable
+    # layer, so a plain `down` (or `stop`) keeps it — the DB survives for
+    # inspection/resume and accidental data loss ends. `mj test regression down`
+    # now keeps this by default (`--volumes` to wipe). The DR-B1 snapshot hash
+    # invalidates it when migrations/codegen change, so a kept volume can't go
+    # stale across schema changes.
+    volumes:
+      - mssql-data:/var/opt/mssql
+      # DR-B1: sqlserver physically writes/reads the schema .bak here.
+      - snapshot-data:/snapshots
 
   db-setup:
     profiles: ["full"]
@@ -69,6 +97,19 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+      # DR-B1: where the schema snapshot .bak + meta live (shared with sqlserver).
+      SNAPSHOT_DIR: /snapshots
+    # DR-A1: bounds the migrate + codegen×2 window (node processes).
+    mem_limit: "${MJ_REGRESSION_SETUP_MEM_LIMIT:-6g}"
+    # DR-B1: bind-mount the entrypoint + scripts (as the runner already does) so
+    # snapshot/entrypoint logic changes take effect without a full image rebuild;
+    # mount the shared snapshot volume so db-setup can hash-check + write the meta
+    # sidecar next to the .bak that sqlserver writes.
+    entrypoint: ["/bin/bash", "/app/db-setup-entrypoint.sh"]
+    volumes:
+      - ./db-setup-entrypoint.sh:/app/db-setup-entrypoint.sh:ro
+      - ./scripts:/app/docker/regression/scripts:ro
+      - snapshot-data:/snapshots
 
   # Form generator — opt-in service (profile: gen-forms) that runs codegen
   # against a temporary DB and writes Angular entity-form components to a
@@ -87,6 +128,8 @@ services:
       <<: *db-env
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    # DR-A1: same codegen workload as db-setup, same bound.
+    mem_limit: "${MJ_REGRESSION_SETUP_MEM_LIMIT:-6g}"
     entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
     volumes:
       - ./form-gen-entrypoint.sh:/app/form-gen-entrypoint.sh:ro
@@ -129,6 +172,8 @@ services:
       NODE_ENV: test
     ports:
       - "14000:4000"
+    # DR-A1: 8GB node heap (see Dockerfile.api CMD) + native/RSS overhead.
+    mem_limit: "${MJ_REGRESSION_API_MEM_LIMIT:-10g}"
     # Auto-restart if MJAPI crashes (e.g. OOM under heavy regression load)
     # so the suite can continue rather than fail every remaining test.
     restart: on-failure:5
@@ -151,7 +196,30 @@ services:
       mjapi:
         condition: service_healthy
     ports:
-      - "4200:4200"
+      # Host-side port is parameterized so the stack can dodge a host port
+      # collision (e.g. the docker/workbench `claude-dev` container also
+      # publishes 4200). Default stays 4200; the container port is always 4200
+      # and the headless test-runner reaches it over the internal network
+      # (mjexplorer:4200 via socat), so this only affects human browser access.
+      - "${MJ_REGRESSION_EXPLORER_PORT:-4200}:4200"
+    # DR-A1: static nginx needs almost nothing.
+    mem_limit: "${MJ_REGRESSION_EXPLORER_MEM_LIMIT:-512m}"
+    # DR-E6: gate the runner on nginx actually SERVING, not just its process
+    # existing. Previously the runner depended on `service_started`, so test #1
+    # was the de-facto smoke test for whether the Explorer bundle was being
+    # served — a cold-start "Loading workspace…" stall came out of that test's
+    # step budget. This healthcheck (mirrored from docker-compose.bacpac-
+    # standalone.yml; nginx:alpine ships curl) lets the runner wait for a real
+    # 2xx. End-to-end readiness (authenticated GraphQL through the proxy) and
+    # MJAPI cache priming are already covered downstream by the DR-E1 preflight
+    # gate's GraphQL-via-nginx probe and the single-login auth bootstrap's
+    # page load, both of which run before test #1.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:4200/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   test-runner:
     # In "full" → Mode A (local MJ stack). In "remote-target" → Modes B/C/D
@@ -169,8 +237,11 @@ services:
       mjapi:
         condition: service_healthy
         required: false
+      # DR-E6: was `service_started` (nginx process exists). Now gate on the
+      # healthcheck above so the runner starts only once the Explorer bundle is
+      # actually served.
       mjexplorer:
-        condition: service_started
+        condition: service_healthy
         required: false
     # Make the host machine reachable from inside the container as
     # `host.docker.internal` on every platform. Auto-set on Docker Desktop
@@ -189,7 +260,27 @@ services:
       AI_VENDOR_API_KEY__AnthropicLLM: "${AI_VENDOR_API_KEY__AnthropicLLM:-}"
       BASE_URL: "http://mjexplorer:4200"
       API_URL: "http://mjapi:4000"
-      MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-4}"
+      MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-3}"
+      # DR-E2: MAX_RETRIES was read by test-runner-entrypoint.sh (RETRIES=
+      # ${MAX_RETRIES:-2}) but was ABSENT from every compose environment block —
+      # the documented retry knob physically could not reach the container, so
+      # full mode was hardcoded to 2. Declaring it here makes `--retries` (CLI)
+      # and MAX_RETRIES (env) actually take effect. Prerequisite for DR-D2's
+      # retry-policy experimentation.
+      MAX_RETRIES: "${MAX_RETRIES:-2}"
+      # Node's own heap cap for the runner process, consumed by
+      # test-runner-entrypoint.sh. Declared HERE and not merely in .env.test
+      # because --env-file only supplies compose *interpolation* values — it does
+      # not inject anything into the container, so without this line the knob
+      # physically cannot reach the entrypoint (the same trap MAX_RETRIES hit
+      # above). Raise together with MJ_REGRESSION_RUNNER_MEM_LIMIT: the heap has
+      # to coexist with Chromium (~8.5g at 3 workers), and a container OOM-kill
+      # is worse than a JS heap OOM because it dies without writing results.json.
+      MJ_REGRESSION_RUNNER_HEAP_MB: "${MJ_REGRESSION_RUNNER_HEAP_MB:-4096}"
+      # Set to 1 to dump a V8 heap snapshot just before the runner would OOM (see
+      # test-runner-entrypoint.sh). Empty = off; costs multi-GB of disk and a long
+      # write pause, so it is a deliberate diagnostic run, not a default.
+      MJ_REGRESSION_HEAP_SNAPSHOT: "${MJ_REGRESSION_HEAP_SNAPSHOT:-}"
       # Optional archive flow — when ARCHIVE_DB_DATABASE is set, the entrypoint
       # generates a transient mj.config.cjs from the ARCHIVE_DB_* vars below,
       # pulls the suite run + children, and pushes them to that destination MJ
@@ -213,6 +304,10 @@ services:
       # profile's "suite" field. Used by the BYO overlay too.
       TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
       EXTRA_METADATA_DIRS: "${EXTRA_METADATA_DIRS:-}"
+      # Console verbosity for the Computer Use per-step stream (DR-G8):
+      # quiet | normal (default) | verbose. Console only — the test-run record,
+      # report, and diagnostics always get every message.
+      CU_LOG_LEVEL: "${CU_LOG_LEVEL:-}"
       # Variable-substitution payload for `{{baseUrl}}`, `{{authUsername}}`,
       # etc. inside test JSONs. Mode A leaves these empty; the entrypoint
       # defaults to localhost. Mode B/C/D populates them from the target
@@ -229,6 +324,35 @@ services:
       TEST_RUNNER_MODE: "${TEST_RUNNER_MODE:-full}"
       TARGET_PROFILE_NAME: "${TARGET_PROFILE_NAME:-}"
       TARGET_PROFILE_KIND: "${TARGET_PROFILE_KIND:-}"
+      # DR-F1: host-minted run identity. The CLI mints `run-<utc>` before compose
+      # so it owns the run's output dir (test-results/<RUN_ID>/) from launch;
+      # the entrypoint falls back to a container-minted id for direct `docker run`.
+      RUN_ID: "${RUN_ID:-}"
+      # RI-A1: composite build identity (git SHA + schema fingerprint), minted
+      # host-side by the CLI. The Computer Use replay tier keys on it — an exact
+      # match unlocks the zero-heal replay fast path; any change demotes to
+      # replay-with-heal. Empty when run outside the CLI (Layer 1 treats "" as the
+      # safe replay-with-heal default).
+      APP_BUILD_HASH: "${APP_BUILD_HASH:-}"
+      # DR-F4: comma-separated test NAMES to restrict the run to (rerun-failures /
+      # ad-hoc selection). Empty = run the whole suite. Passed through to
+      # `mj test suite --tests`.
+      TEST_NAME_FILTER: "${TEST_NAME_FILTER:-}"
+    # DR-A1: sized for the default MAX_PARALLEL_WORKERS=3 as
+    # workers × ~1.5g (Chromium peak, per Browserbase sizing) + 2g (node CLI,
+    # mj sync, report generation). Raise together with the worker count —
+    # DR-A4 (Wave 2) adds the in-container workers-vs-memory clamp.
+    mem_limit: "${MJ_REGRESSION_RUNNER_MEM_LIMIT:-7g}"
+    # DR-A3: Chromium container hygiene, straight from Playwright's Docker
+    # guidance. `init` reaps zombies — hundreds of browser launches per run
+    # plus socat's fork-per-connection otherwise accumulate defunct processes
+    # over a multi-hour run. `ipc: host` shares the (VM) host IPC namespace,
+    # which Playwright recommends because Chromium "can run out of memory and
+    # crash" in a private IPC namespace. Under ipc:host the private /dev/shm
+    # (shm_size) is unused, but the setting stays as defense if ipc is ever
+    # removed.
+    init: true
+    ipc: host
     shm_size: '4gb'
     # Compose interpolates ${TEST_RUNNER_ENTRYPOINT} at parse time using the
     # host env (defaulting to the full-stack script). Both scripts are bind-
@@ -248,5 +372,41 @@ services:
       # Target profile JSONs for Modes B/C/D (read-only — the runner only
       # consumes them, the loader runs on the host).
       - ./targets:/app/docker/regression/targets:ro
-      - ../../metadata:/app/metadata
+      # DR-B5: mounted READ-ONLY. Every runner push uses --no-write-back (DR-B4),
+      # so nothing needs to write here; :ro turns any accidental write-back into a
+      # loud failure instead of silent repo pollution, and makes "what's in the DB"
+      # a pure function of the working tree at run start.
+      - ../../metadata:/app/metadata:ro
+      # The regression suite (380 tests + membership) lives in the opt-in
+      # metadata-optional sibling root; the entrypoint pushes it via
+      # `mj sync push --dir=metadata-optional/regression-test`. Mounted :ro like
+      # metadata (pushes use --no-write-back). WITHOUT this the suite never loads
+      # and the DR-E1 preflight gate aborts the run.
+      - ../../metadata-optional:/app/metadata-optional:ro
       - ./test-metadata:/app/test-metadata:ro
+      # Writable overlay INSIDE the :ro metadata mount, for one reason: the
+      # checked-in metadata/.mj-sync.json sets `sqlLogging.enabled: true` (release
+      # engineering needs it to generate the consolidated migration), and the
+      # logger writes MetadataSync_Push_*.sql next to the metadata it pushed.
+      # Against a :ro mount that write throws EROFS *after* the DB work, and
+      # MetadataSync treats it as a push failure and rolls the whole push back —
+      # so application, prompt, test AND suite metadata all silently reverted and
+      # every run used whatever was already in the DB. tmpfs keeps DR-B5's "the
+      # container cannot mutate the developer's metadata" guarantee while giving
+      # the logger a throwaway destination; the log is a release-time artifact and
+      # is worthless from inside an ephemeral test container.
+      - type: tmpfs
+        target: /app/metadata/sql_logging
+
+# DR-B2: named volume for the SQL Server data dir. Explicitly named so it's
+# easy to find (`docker volume ls`) and inspect, and so its lifecycle is
+# decoupled from the container — `down` keeps it by default now.
+# DR-B1: `snapshot-data` holds the hash-keyed schema backups (.bak + meta). It's
+# mounted at the SAME path (/snapshots) in sqlserver (which physically writes/
+# reads the .bak via BACKUP/RESTORE) and db-setup (which checks the hash + writes
+# the sidecar). `down` keeps it by default (DR-B2), so cold starts stay warm.
+volumes:
+  mssql-data:
+    name: mj-regression-mssql-data
+  snapshot-data:
+    name: mj-regression-snapshot-data

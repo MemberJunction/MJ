@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T148 - Form Builder Center Pane",
+    "Description": "Opens a form in Component Studio's Form Studio once, then walks its center-pane code paths (Preview/Code/Layout mode switch, canvas add-section-and-element mutation), verifying each via checkpoints. Consolidates old T368-T369.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Go to Component Studio -> Form Studio and click an existing form in the left 'Forms' rail to load it into the center pane (prefer a form that is NOT in 'Custom code'/Layout-disabled mode). Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) center-pane-mode-switch - locate the segmented view-mode control (Preview / Code / Layout) and click through the modes, confirming the center pane content changes ('Code' shows a code editor, 'Layout' shows the drag-and-drop canvas of sections/fields, 'Preview' shows the live form render or preview record strip); note the 'Layout' tab may be intentionally disabled with a 'Custom code' chip for hand-authored forms - that is a valid state, not an error; (2) canvas-add-section-element - switch to the 'Layout' view to reveal the canvas, confirm it renders sections, click 'Add Section' and confirm a new section appears, then in a section header click an add-element button (Add static text / Add computed field / Add spacer) and confirm a new element is added to that section (the form becoming dirty / Save enabling is success - do NOT save). Keep going until both sections have been visited. Pages can take 10-30s to load in this resource-constrained environment - wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "center-pane-mode-switch", "instruction": "switch the Preview/Code/Layout mode and see the center pane change", "visualCriteria": ["With a form selected, using the Preview/Code/Layout segmented control changes the center pane content accordingly, with at least two of the three modes rendering distinct content (e.g. Code shows an editor, Layout shows a canvas or is intentionally disabled with a 'Custom code' explanation)"] },
+        { "name": "canvas-add-section-element", "instruction": "add a section and an element on the Layout canvas", "visualCriteria": ["The Layout view shows the form-builder canvas with sections and an 'Add Section' control; clicking 'Add Section' adds a section AND clicking a section's add-element button (static text/computed/spacer) adds an element to that section"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,component-studio"
+  },
+  "primaryKey": { "ID": "17F5625D-9B12-4ACC-955E-75DE636CFF82" }
+}

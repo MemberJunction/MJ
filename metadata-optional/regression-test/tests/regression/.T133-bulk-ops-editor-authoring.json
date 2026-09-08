@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T133 - Bulk Ops Editor Authoring",
+    "Description": "Opens the Bulk Operations authoring editor once, then walks its behaviors (editor mounts, save/preview validation gating, rules-builder gated on entity selection, FieldRules add-rule + source switch, scope-type conditional filter input, and cancel-returns-to-list), verifying each via checkpoints. Consolidates old T332-T336, T339.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher and choose 'Bulk Operations', then in the Operations section click the 'New operation' button (plus icon, top-right of the studio bar). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Then walk these behaviors IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) create-new-op-editor — confirm the view switched to the authoring editor showing numbered sections '1 Basics' (Name / Status / Description), '2 What it acts on' (Entity, Default scope, Work type dropdowns), and a toolbar with 'Save', 'Preview changes', 'Cancel'; (2) save-preview-gating — on the still-blank editor confirm 'Save' and 'Preview changes' are BOTH disabled, then type a Name in Basics and pick an Entity in 'What it acts on' and confirm 'Save' becomes ENABLED while 'Preview changes' stays disabled until a rule exists; (3) scope-conditional-filter — in section '2 What it acts on' set the 'Default scope' dropdown to 'Filter' and confirm a free-text Filter input appears, switch it to 'A view'/'A list' and confirm the Filter input disappears, then switch back to 'Filter' and confirm it reappears; (4) rules-gated-on-entity — confirm that before an entity was chosen the '3 Rules' section showed a 'choose an entity first' hint with no builder, and that after the entity is selected the visual field-rules builder now renders (a 'Field rules' heading with an 'Add rule' button and a 'No rules yet' hint); (5) fieldrules-add-rule — click 'Add rule' so a rule row appears reading 'Set [field] from [source]' with a target-field dropdown and a 'from' source dropdown (options like 'a fixed value', 'another field', 'a formula', 'a lookup', 'an AI prompt'), then change 'from' to 'a formula' (and optionally 'a lookup') and confirm the source input area below re-renders accordingly; (6) editor-cancel-to-list — click the editor toolbar 'Cancel' (or 'Back') and confirm you return cleanly to the Operations list view (search bar + 'New operation' button + operations table or empty state) with no save occurring. Keep going until every behavior has been verified.",
+      "startUrl": "http://localhost:4200/app/bulk-operations",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "create-new-op-editor", "instruction": "New operation opens the authoring editor", "assertions": [ { "kind": "url", "urlPattern": "/app/bulk-operations" } ], "visualCriteria": ["Clicking 'New operation' opens the editor with numbered 'Basics' and 'What it acts on' sections and a Save / Preview changes / Cancel toolbar"] },
+        { "name": "save-preview-gating", "instruction": "Save/Preview disabled until required inputs", "visualCriteria": ["On a blank new operation 'Save' and 'Preview changes' are both disabled, and after entering a Name and selecting an Entity 'Save' becomes enabled while 'Preview changes' stays disabled until a rule exists"] },
+        { "name": "scope-conditional-filter", "instruction": "Scope-type toggles the Filter input", "visualCriteria": ["With 'Filter' scope selected a free-text Filter input is shown; switching to 'A view'/'A list' hides it and switching back to 'Filter' restores it"] },
+        { "name": "rules-gated-on-entity", "instruction": "Rules builder appears only after an entity is chosen", "visualCriteria": ["Before an entity is selected the Rules section shows a 'choose an entity first' style hint with no builder, and after selecting an entity the field-rules builder appears with an 'Add rule' button"] },
+        { "name": "fieldrules-add-rule", "instruction": "Add rule + source-kind switch re-renders inputs", "visualCriteria": ["Clicking 'Add rule' adds a rule row with a target-field dropdown and a 'from' source-kind dropdown, and changing the source kind (e.g. to 'a formula' or 'a lookup') changes the source input area rendered beneath the rule"] },
+        { "name": "editor-cancel-to-list", "instruction": "Cancel returns to the Operations list", "visualCriteria": ["Clicking 'Cancel' (or 'Back') from the editor returns to the Operations list view (search bar + 'New operation' button visible again) with the unsaved draft discarded"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,bulk-ops"
+  },
+  "primaryKey": { "ID": "1CD1A261-55D1-432B-8A29-CEBAD2E08E41" }
+}

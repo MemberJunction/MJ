@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T104 - Knowledge Hub Duplicates",
+    "Description": "Opens the Knowledge Hub Duplicates screen once, then exercises the semantic duplicate-detection run and the record-comparison slide-in panel in one run, verifying each via checkpoints. Consolidates old T257, T258.",
+    "InputDefinition": {
+      "goal": "Switch to the Knowledge Hub app using the application switcher dropdown next to the logo, then click 'Duplicates' in the left nav (fa-clone icon). Then perform these sub-actions IN ORDER, and as you complete each set \"checkpointReached\" to the exact checkpoint name shown: (1) duplicate-detection-run — in the top-right header open the 'Select entity document…' dropdown and pick an entity document, then click the 'Run Detection' button, and confirm detection starts (a progress section with a stage label and percent appears) and afterward the KPI strip (Total Groups / Pending / Approved / Rejected) and a kanban board render (a 'No duplicate detection results' empty state also counts); (2) duplicate-comparison-panel — if a duplicate group card is present in the kanban board, click it to open the comparison slide-in panel and confirm it shows a side-by-side field grid of the source record vs its potential-duplicate matches with a survivor selector and an 'All Fields' / 'Differences Only' toggle, and toggling between All Fields and Differences Only changes the set of field rows shown (a valid no-groups empty state is acceptable if none exist). You do NOT need to approve, merge, or run any operation. Keep going until both sub-actions are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "duplicate-detection-run", "instruction": "select a document, run detection, see progress + KPI/kanban", "visualCriteria": ["The Duplicates screen shows an entity-document selector and a Run Detection button (disabled until a document is chosen); selecting a document and clicking Run Detection shows a detection progress state and/or the KPI strip (Total Groups / Pending / Approved / Rejected) plus a kanban board — a valid empty-results state counts"] },
+        { "name": "duplicate-comparison-panel", "instruction": "open a group card's comparison panel and toggle All Fields / Differences Only", "visualCriteria": ["Clicking a duplicate group card opens a comparison panel with a side-by-side field grid and a survivor selector, and toggling 'All Fields' vs 'Differences Only' changes the visible field rows — a valid no-groups empty state is acceptable if none exist"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,knowledge-hub"
+  },
+  "primaryKey": { "ID": "B3D25DBB-40A3-4E1E-985F-51E71AF671DC" }
+}

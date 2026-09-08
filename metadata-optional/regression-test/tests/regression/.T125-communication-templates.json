@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T125 - Communication Templates Tour",
+    "Description": "Opens the Communication app's Templates section once, then verifies its bespoke card-grid search/category filter and its New Template create-navigation via checkpoints. Consolidates old T305, T306.",
+    "InputDefinition": {
+      "goal": "Using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the Communication app, then open its Templates section. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) templates-search-filter — type a term in 'Search templates...' and/or open the Filter popover and pick a Category, and confirm the template card grid RESPONDS (cards narrow to matches or a valid empty state); then search for a clearly nonsense term (e.g. 'zzzqqq') and confirm the 'No templates found' empty state appears, then clear it to restore the cards; (2) new-template — click the 'New Template' button in the header and confirm a blank Templates (MJ: Templates) record/edit form opens (typically in a new tab) with editable fields such as Name (you do NOT need to fill it in or save). Keep going until both sections are done. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "templates-search-filter", "instruction": "search / category-filter the template cards", "visualCriteria": ["Searching and/or category-filtering narrows the template cards (or shows a valid empty state); a nonsense search term (e.g. 'zzzqqq') produces the 'No templates found' empty state, and clearing it restores the cards"] },
+        { "name": "new-template", "instruction": "New Template opens a blank Templates form", "visualCriteria": ["Clicking 'New Template' opens a blank Templates (MJ: Templates) entity form rendering editable fields such as Name for a new template"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,communication"
+  },
+  "primaryKey": { "ID": "B96D18C5-C3E1-420E-921D-3F0AC89AB3F3" }
+}

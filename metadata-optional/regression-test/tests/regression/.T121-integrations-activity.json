@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T121 - Integrations Activity",
+    "Description": "Opens the Integrations application's Activity section once, then walks the run-detail tabbed panel and the activity filter popover, verifying each via checkpoints. Consolidates old T298, T299.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, find and open the Integrations application, and open its 'Activity' section. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Then walk these surfaces IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) run-detail-tabs — in the run list find a run row and click its detail-panel toggle (the table-columns / split-view icon in the row's actions), confirm a right-hand detail panel opens with the run's integration name, status chip, and a duration bar plus two tabs 'Entity Breakdown' and 'Watermarks', then click 'Watermarks' and confirm the content switches to a watermarks table (or a 'No watermarks recorded' empty state) and click back to 'Entity Breakdown' (a valid 'No runs found' empty state is acceptable if there are no runs); (2) activity-filter-popover — in the toolbar click the Filters button to open the filter popover and confirm a filter panel renders with fields (e.g. status / date / integration), choose a status filter value and apply it, then confirm the run list responds (rows narrow OR a clear 'No runs found for the selected filters' message) and an active-filter count/badge or Clear-All control appears. Keep going until both are done.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "run-detail-tabs", "instruction": "Run detail panel with Entity Breakdown / Watermarks tabs", "visualCriteria": ["Clicking a run's detail toggle opens a right-hand panel with the run's status chip and a duration bar showing 'Entity Breakdown' and 'Watermarks' tabs, and clicking Watermarks switches the panel content (table or empty state) — OR a valid 'no runs' empty state is shown"] },
+        { "name": "activity-filter-popover", "instruction": "Activity filter popover narrows the run list", "visualCriteria": ["The Filters popover opens showing a filter panel with selectable fields, and applying a status filter narrows the run list OR shows a clear no-match message, with an active-filter indicator or Clear-All control appearing when a filter is active"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,integrations"
+  },
+  "primaryKey": { "ID": "A5624820-7FEB-485D-8D4B-B17639C81E2D" }
+}

@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T141 - Archiving Configuration Tab",
+    "Description": "Opens the Archiving app Configuration tab once, then walks its master-detail selection, add-draft, entities sub-grid add/remove, and edit-then-cancel-revert flows via checkpoints. Consolidates old T352–T355.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box) and select 'Archiving'. It opens on the 'Configuration' tab, showing a left-hand list of archive configuration cards and a right-hand detail panel. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) config-master-detail — click a configuration card in the left list and confirm the right detail panel populates with that config's editable fields (Name, a Storage section with a Storage Account dropdown and Root Path, a Defaults section with Retention Days / Batch Size / Archive Mode, and an Entities table) and the clicked card appears selected/highlighted (a clear 'No configurations found' empty state is acceptable if there is no data); (2) add-config-draft — click the '+ Add Configuration' button in the header of the left list and confirm a new draft named 'New Configuration' appears at the top of the list and is selected, with the detail panel rendering editable fields pre-filled with defaults (Retention Days, Batch Size, an Archive Mode dropdown); do NOT save; (3) entities-subgrid — scroll to the 'Entities' section in the detail panel and click 'Add Entity', confirm a new editable row appears with inputs/dropdowns for Entity name, Mode, Retention, Batch, Date Field and an Active checkbox, then click the trash/delete icon on that row and confirm the row is removed; do NOT save; (4) edit-cancel-revert — select an existing configuration card, change the value in the 'Name' text field (type extra characters), then click 'Cancel' in the action bar at the bottom of the detail panel and confirm the Name reverts to its original saved value (edit discarded, nothing persisted); a valid 'No configurations found' empty state is acceptable if there is no data. Keep going until every section has been visited.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "config-master-detail", "instruction": "select a configuration card and load its detail panel", "visualCriteria": ["The Configuration tab shows a list of configuration cards on the left (or a clear 'No configurations found' empty state), and clicking a card loads a right detail panel showing that config's Name plus Storage, Defaults and Entities sections, with the clicked card visually selected"] },
+        { "name": "add-config-draft", "instruction": "add a new configuration draft with default fields", "visualCriteria": ["Clicking '+ Add Configuration' adds a new 'New Configuration' entry to the list and selects it, and the detail panel renders editable fields including Name, Retention Days / Batch Size and an Archive Mode selector populated with default values"] },
+        { "name": "entities-subgrid", "instruction": "add then remove an Entities sub-grid row", "visualCriteria": ["Clicking 'Add Entity' inserts a new editable row into the Entities table with Entity/Mode/Retention/Batch/Date Field/Active controls, and clicking the row's trash/remove icon deletes that row (row count returns to its prior state)"] },
+        { "name": "edit-cancel-revert", "instruction": "edit the Name then Cancel and confirm it reverts", "visualCriteria": ["After editing the Name field and clicking Cancel, the Name reverts to its original value (the edit is discarded), no save-success message appears, and the detail panel remains usable — OR a valid 'No configurations found' empty state is shown when there is no data"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,archiving"
+  },
+  "primaryKey": { "ID": "F023B65A-C0A5-40B0-8C26-0B48D519C6D5" }
+}

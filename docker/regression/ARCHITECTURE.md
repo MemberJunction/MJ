@@ -189,6 +189,59 @@ direction:
 | `mj.config.cjs` | Default config copied from [`docker/MJAPI/docker.config.cjs`](../MJAPI/docker.config.cjs); can be overridden by mount |
 | `/usr/local/bin/agentic-test-runner` | Dispatcher script (entrypoint) — supports `run`, `import-bacpac`, `export`, `exec`, `help` |
 
+### Bake-vs-Mount Policy (DR-C4)
+
+One rule governs what lives inside an image versus what is bind-mounted from the
+host, so there is never confusion about which copy is authoritative:
+
+> **Code is baked. Orchestration is mounted.** Compiled TypeScript (`dist/`) and
+> installed dependencies are baked at image-build time. Everything an operator
+> iterates on between builds — entrypoints, `scripts/`, `metadata/`, `targets/`,
+> `archive/`, `test-metadata/` — is **bind-mounted read-only** (`:ro`) in
+> `docker-compose.test.yml`, so editing it takes effect on the next `up`/`run`
+> with no image rebuild. `:ro` also turns any accidental write-back into a loud
+> failure instead of silent host pollution (see DR-B4/B5).
+
+Current state (compose, `full` + `gen-forms` profiles) — already compliant:
+
+| Path | Baked or mounted | Where |
+|---|---|---|
+| `dist/` of every `@memberjunction/*` package | **baked** | all Dockerfiles (`npm run build:api`) |
+| `db-setup-entrypoint.sh` | mounted `:ro` | db-setup |
+| `test-runner-entrypoint.sh`, `test-runner-remote-entrypoint.sh` | mounted `:ro` | test-runner |
+| `form-gen-entrypoint.sh` | mounted `:ro` | form-generator |
+| `scripts/` | mounted `:ro` | db-setup + test-runner |
+| `metadata/`, `test-metadata/`, `targets/`, `archive/` | mounted `:ro` | test-runner |
+
+**Why `develop.watch` is not used:** the iterated paths above are already
+bind-mounts, so a change is live on the next container start with zero sync
+step — a `docker compose watch` block for the same paths would be redundant.
+
+**Intentional exceptions (documented so they aren't mistaken for drift):**
+
+- **Entrypoints in the published / standalone variants are baked**, not mounted:
+  there is no host checkout to mount from when a user runs
+  `memberjunction/agentic-test-runner` or a standalone compose file. The
+  monorepo compose mounts them for the inner-loop; the published image vendors
+  them (tie to DR-C6).
+- **`mj.config.cjs` is baked, then specialized per role** rather than mounted,
+  because a config must exist before any process (and thus any mount-consuming
+  step) starts, and each role needs a *different* config. Four role-specific
+  mechanisms, all starting from `docker/MJAPI/docker.config.cjs`:
+  - **db-setup** — `sed -i` patches `autoCreateNewUsers: true`
+    (`Dockerfile.db-setup`).
+  - **api** — `node scripts/patch-test-api-config.cjs` patches `userHandling`
+    (auto-create + UI/Integration roles) (`Dockerfile.api`).
+  - **test-runner** — baked verbatim, no patch (`Dockerfile.test-runner`).
+  - **form-generator** — baked, then a runtime `:ro` mount of `form-gen.config.cjs`
+    (which `require()`s the baked config and adds the Angular form outputs)
+    overrides it (`docker-compose.test.yml`).
+
+**Rule for new services / files:** if it is code, bake it; if it is an
+entrypoint, script, metadata, or profile that an operator edits between builds,
+bind-mount it `:ro`. Config that must be role-specialized is baked + patched (or
+mounted-over) — add it to the list above rather than inventing a fifth pattern.
+
 ---
 
 ## 4. Compose Profiles
@@ -349,6 +402,7 @@ Used for Mode A. Big steps:
 7. **Preflight diagnostics:** `scripts/preflight-checks.cjs` probes MJAPI/nginx/socat/Auth0 + memory snapshot → `preflight.json`
 8. **Per-run output dir:** `test-results/run-{TIMESTAMP}/` with `screenshots/`
 9. **Background health monitor:** `scripts/health-monitor.cjs` writes `diagnostics.json` every 10s while the suite runs
+9b. **Single-login auth bootstrap:** `scripts/auth-bootstrap.cjs` logs in to Auth0 **once** as the test user and captures the browser `storageState` (cookies + localStorage) to `MJ_TEST_AUTH_STATE_FILE` (`/tmp/mj-auth-state.json`). The `ComputerUseTestDriver` then seeds **every** browser context from this one file (`HeadlessBrowserEngine` shared seed), so no individual test re-authenticates — one Auth0 login per suite run instead of ~one per test. On bootstrap failure the env var is unset and the suite falls back to the per-worker login path. Skipped in bacpac mode. See [§ Single-login mode](#single-login-mode).
 10. **Run the suite:** `npx mj test suite --name "${TEST_SUITE_NAME:-MJ Explorer Regression Suite}" --parallel --max-parallel ${MAX_PARALLEL_WORKERS:-4}` (with `--oracles-module=…` if `ORACLES_MODULE` is set)
 11. **Stop health monitor**
 12. **Extract screenshots** from `__mj.vwTestRunOutputs` → `screenshots/<test>/step_NN.png`
@@ -356,6 +410,41 @@ Used for Mode A. Big steps:
 14. **Generate HTML report:** `scripts/generate-html-report.cjs` (lightbox gallery)
 15. **Optional archive flow:** if `ARCHIVE_DB_DATABASE` is set, pull the suite run + children to JSON, tag, push to destination MJ
 16. **Update `test-results/latest` symlink**
+
+### Single-login mode
+
+The suite drives MJ Explorer through Auth0's hosted login. Historically **every
+test logged in**: `browserSession: "new"` gives each test a fresh
+`BrowserContext`, and the per-worker `storageState` capture/replay that was meant
+to dedup logins did not hold reliably under parallel load — so a 200-test run
+issued ~200 Auth0 logins and throttled the tenant.
+
+Single-login mode collapses that to **one** Auth0 login per run:
+
+1. **Bootstrap (one login):** `scripts/auth-bootstrap.cjs` runs once before the
+   suite. It performs a deterministic (non-LLM) Playwright login as the test user
+   over the socat-forwarded `http://localhost:4200` and writes the resulting
+   `storageState` (cookies + per-origin localStorage, including the
+   `@@auth0spajs@@` tokens) to `MJ_TEST_AUTH_STATE_FILE`. The captured Auth0
+   session cookie + refresh token let the seeded state **silently renew** for the
+   whole run, so token expiry mid-suite is a non-issue.
+2. **Seed every context:** `ComputerUseTestDriver.resolveBrowserAdapter` reads
+   `MJ_TEST_AUTH_STATE_FILE` (once, memoized) and calls
+   `HeadlessBrowserEngine.SetSharedStorageState`. From then on **every**
+   `GetIsolated` context — across all workers — is seeded from that single state
+   (the shared seed overrides the per-worker capture). The SPA boots already
+   authenticated, so the controller LLM never sees a login form and the test's
+   `FormLogin` binding becomes a harmless no-op.
+3. **No poisoning:** with a shared seed active, `ReleaseIsolated` skips the
+   per-worker capture entirely — a test that logs out or corrupts its own context
+   can never overwrite the pristine seed for the next test.
+
+**Graceful fallback:** if the bootstrap fails (or `MJ_TEST_AUTH_STATE_FILE` is
+unset / unreadable), `EnsureSharedStorageStateFromFile` returns `false` and the
+suite reverts to the original per-worker login path — no hard failure. The
+mechanism is generic (the shared seed lives in `@memberjunction/computer-use`);
+only `auth-bootstrap.cjs` is Auth0-specific, so it's wired into the Mode-A
+entrypoint only.
 
 ### Remote entrypoint — `test-runner-remote-entrypoint.sh`
 

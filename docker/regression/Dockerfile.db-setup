@@ -4,7 +4,26 @@
 #
 # This is a one-shot container: it runs to completion and then stops.
 # MJAPI depends on it via service_completed_successfully in docker-compose.
+#
+# Layer order (DR-C1): package manifests → npm ci (BuildKit-cached) → sources →
+# build → data/config. A source edit no longer invalidates the dependency
+# install; a metadata/migration edit no longer invalidates the compile.
 
+# ─── Manifests-only stage ───────────────────────────────────────────────────
+# Reduces the npm ci cache key to the workspace package.json set: the full
+# packages/ tree comes in (already .dockerignore-slimmed), everything except
+# package.json files is deleted, and the builder COPY --from's the skeleton.
+# BuildKit keys the downstream install layer on the *content* of that skeleton,
+# so source-only edits leave `npm ci` cached. No MJ workspace package has
+# install-time lifecycle scripts (verified), so installing without sources is
+# safe; third-party postinstalls (e.g. isolated-vm) build from registry tarballs.
+FROM node:24-slim AS manifests
+WORKDIR /m
+COPY packages/ ./packages/
+RUN find packages -type f ! -name package.json ! -path '*/bin/*' -delete \
+    && find packages -type d -empty -delete
+
+# ─── Main image ─────────────────────────────────────────────────────────────
 FROM node:24-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -39,16 +58,29 @@ ENV PATH="/opt/mssql-tools18/bin:$PATH"
 
 WORKDIR /app
 
-# Copy package manifests and source
+# Dependencies first: root manifests + the package.json skeleton, then a
+# cache-mounted reproducible install keyed only on manifest content.
 COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
-COPY packages/ ./packages/
-COPY metadata/ ./metadata/
-COPY migrations/ ./migrations/
-COPY Demos/AssociationDB/ ./Demos/AssociationDB/
+COPY --from=manifests /m/packages/ ./packages/
+RUN --mount=type=cache,target=/root/.npm npm ci
 
-RUN npm install
+# Sources after install — overlays onto the manifest skeleton (nested
+# node_modules created by npm ci are preserved; COPY merges, never deletes).
+COPY packages/ ./packages/
+
+# metadata/ BEFORE the compile: @memberjunction/computer-use's build
+# (scripts/generate-prompt-parts.mjs, since commit 3080b58da6) reads
+# metadata/prompts/templates/computer-use/_includes/ at build time to
+# single-source its prompt text, so the templates must exist before build:api.
+# (Dockerfile.test-runner already copies metadata before its build; db-setup +
+# api were missed, breaking every image rebuild on this branch.)
+COPY metadata/ ./metadata/
 
 RUN npm run build:api
+
+# migrations + demo data after the compile (not build inputs).
+COPY migrations/ ./migrations/
+COPY Demos/AssociationDB/ ./Demos/AssociationDB/
 
 # Copy MJ config (same one MJAPI uses)
 COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs

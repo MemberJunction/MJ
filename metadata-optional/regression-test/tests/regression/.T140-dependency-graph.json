@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T140 - Dependency Graph",
+    "Description": "Opens the Version History app's Dependency Graph once, then walks its interactions (entity select with relationship derivation, search + schema-chip filter, relationship-navigation traversal), verifying each via checkpoints. Consolidates old T349, T350, T351.",
+    "InputDefinition": {
+      "goal": "In the Version History app (application switcher dropdown next to the logo), click 'Dependency Graph' in the left nav. Then walk these interactions IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) depgraph-entity-select — confirm stat badges (entities / with dependents / relationships) and a scrollable entity list render, then select an entity from the list (use the filter box to find a common one like 'Users' if needed) and confirm the detail panel populates with 'Referenced By' and 'Depends On' sections listing related entities (one side may show a valid 'no relationships' state); (2) depgraph-search-filter — type into the 'Filter entities...' box and confirm the entity list narrows responsively; if schema filter chips are shown above the list, click one to filter entities to that schema and confirm the list narrows and the chip becomes active, then click it again (or clear the search) to restore the full list; (3) depgraph-relationship-nav — with an entity selected so its detail panel is loaded, click one of the related entities in the 'Referenced By' or 'Depends On' list and confirm the detail panel switches to that newly-clicked entity — its name becomes the detail title, its own Referenced By / Depends On relationships load, and it becomes the active/highlighted selection. Keep going until every interaction has been exercised. This works regardless of stored data. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "depgraph-entity-select", "instruction": "select an entity and view its relationships", "visualCriteria": ["The Dependency Graph shows entity stat badges and a list of entities; selecting an entity populates a detail panel with 'Referenced By' and 'Depends On' sections listing related entities or a valid 'no relationships' empty state"] },
+        { "name": "depgraph-search-filter", "instruction": "search entities and toggle a schema chip", "visualCriteria": ["Typing in the entity filter box responsively narrows the entity list, and clicking a schema filter chip (when present) narrows the list to that schema and toggles its active state, and clearing the search/schema restores the full entity list"] },
+        { "name": "depgraph-relationship-nav", "instruction": "navigate to a related entity from the detail panel", "visualCriteria": ["Clicking a related entity in the Referenced By / Depends On list switches the detail panel to that entity — its name becomes the detail title, its own relationship lists load, and it becomes the active/highlighted selection"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,version-history"
+  },
+  "primaryKey": { "ID": "0743F4C5-D23C-4A57-AA30-8C16D8D0004F" }
+}

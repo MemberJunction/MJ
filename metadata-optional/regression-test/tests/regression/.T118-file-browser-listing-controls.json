@@ -1,0 +1,52 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T118 - File Browser Listing Controls",
+    "Description": "Opens the File Browser once, then walks its listing controls (Finder three-panel layout, local name filter, new-folder dialog, multi-provider search panel, list/grid view toggle), verifying each via checkpoints. Consolidates old T284-T288.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the File Browser application, then open its 'Browse Files' section. This shared setup is done ONCE. Then exercise these controls IN ORDER, and as you finish each set \"checkpointReached\" to the exact checkpoint name shown: (1) finder-layout — confirm the Mac-Finder-style three-panel shell renders: a left storage-accounts sidebar, a folder-tree/breadcrumb panel, and a file listing area (a clear 'No storage accounts configured' empty state is an acceptable pass); (2) name-filter — type a few characters into the 'Search files and folders...' box at the top of the listing panel and confirm the listing responds (items narrow to name matches, or an empty/no-match state) with a clear (x) control appearing; (3) new-folder-dialog — click the 'New Folder' button in the bottom toolbar and confirm a 'Create New Folder' dialog opens with a name input and Create/Cancel buttons, then click Cancel to close it; (4) multi-provider-search — click the 'Search across all storage providers' button (magnifying-glass icon) and confirm a 'Search Across Providers' panel opens with a search-term input, a Search button, and selectable storage-account checkboxes, then close it; (5) view-toggle — click the list/grid view-mode toggle on the right of the listing's bottom toolbar and confirm it responds (active button changes and, when files are present, the layout switches between rows/table and tile/grid). If no storage account is configured, the 'No storage accounts configured' state persisting cleanly is an acceptable pass for any control. Keep going until every control has been exercised. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "finder-layout", "instruction": "three-panel Finder shell renders", "visualCriteria": ["The File Browser opens with a 'File Browser' header and its three-panel Finder layout: a storage-accounts sidebar, a folder/breadcrumb area, and a file listing area — OR a clear 'No storage accounts configured' empty state"] },
+        { "name": "name-filter", "instruction": "local name filter narrows listing", "visualCriteria": ["A 'Search files and folders...' input is present and, after typing, the listing responds (items narrow to matches or an empty/no-match state) with a clear (x) control — OR a clear 'No storage accounts configured' empty state"] },
+        { "name": "new-folder-dialog", "instruction": "New Folder dialog opens and cancels", "visualCriteria": ["Clicking 'New Folder' opens a 'Create New Folder' dialog with a name input and Create + Cancel actions, and clicking Cancel closes it returning to the listing — OR a clear 'No storage accounts configured' empty state"] },
+        { "name": "multi-provider-search", "instruction": "multi-provider search panel opens", "visualCriteria": ["Clicking the multi-provider search button opens a 'Search Across Providers' panel with a search-term input, a Search button, and account-selection checkboxes, which can be closed again — OR a clear 'No storage accounts configured' empty state"] },
+        { "name": "view-toggle", "instruction": "list/grid view toggle responds", "visualCriteria": ["A list/grid view-mode toggle is present and reacts to clicking (active state changes), switching the file display between a rows/table view and a tile/grid view when files are present — OR the empty / 'No storage accounts configured' state persists cleanly"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,files"
+  },
+  "primaryKey": { "ID": "DABE4B5A-608A-4C9B-BA3A-412FF1EDF4F9" }
+}

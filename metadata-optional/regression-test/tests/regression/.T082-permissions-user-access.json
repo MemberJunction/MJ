@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T082 - Permissions User Access",
+    "Description": "Opens the Permissions app User Access tab once, then exercises its bespoke aggregation surface (report loads for current user, switch-user reload, domain accordion expand/collapse) in one run, verifying each via checkpoints. Consolidates old T218-T220.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and choose the 'Permissions' application; it opens on the 'User Access' tab in the left nav. Then perform these sub-actions IN ORDER, and as you complete each set \"checkpointReached\" to the exact checkpoint name shown: (1) access-report-loads — confirm the 'User Access Report' surface renders: a 'User:' picker dropdown at top (pre-selected to a user, since the current user is auto-selected on load) and either a 'N permissions across M domains' summary with collapsible domain accordion panels below, OR a clear empty-state card; (2) access-switch-user — open the 'User:' dropdown and select a DIFFERENT user, and confirm the report responds (a brief 'Loading permissions...' state may appear, then the domain groups / summary count update for the newly selected user, or a valid 'No permissions' empty-state); (3) access-domain-expand — find a collapsible domain accordion panel (domain name + icon + count badge); if the pre-selected user shows no domains, pick a user with permissions (an admin user is a good bet); click a panel header to expand it and confirm it reveals a permissions table with Resource / Type / Actions / Effect (Allow/Deny) columns, then click again to collapse it (a valid 'No permissions' empty-state is an acceptable success if the user genuinely has none). Keep going until all sub-actions are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200/app/permissions",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "access-report-loads", "instruction": "User Access Report renders for the auto-selected user", "assertions": [ { "kind": "url", "urlPattern": "/app/permissions" } ], "visualCriteria": ["The User Access Report renders with a 'User:' selector dropdown at the top, a user pre-selected, and either a '...permissions across ...domains' summary with domain accordion panels OR a clearly labeled empty-state card"] },
+        { "name": "access-switch-user", "instruction": "select a different user and see the report reload", "visualCriteria": ["Selecting a different user in the 'User:' dropdown triggers a reload (loading indicator and/or updated summary/accordion content) and the report content reflects the newly selected user — either updated permission domain groups OR a valid 'No permissions' empty-state"] },
+        { "name": "access-domain-expand", "instruction": "expand/collapse a domain accordion panel to reveal its permissions table", "visualCriteria": ["A domain accordion panel with a name, icon, and count badge is visible, and clicking its header expands it to show a permissions table (Resource / Type / Actions / Effect columns) that can be collapsed again — or a valid 'No permissions' empty-state is shown"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,permissions"
+  },
+  "primaryKey": { "ID": "8C95AD40-DA57-4593-A011-5833D7B3308F" }
+}

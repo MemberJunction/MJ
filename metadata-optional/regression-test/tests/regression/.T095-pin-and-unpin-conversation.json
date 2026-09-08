@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T095 - Pin And Unpin Conversation",
+    "Description": "Exercises togglePin and the conditional Pinned-section render — a distinct state/branch in ConversationListComponent not covered by rename/delete or favorites.",
+    "InputDefinition": {
+      "goal": "Open the Chat application and wait for the workspace. In the sidebar, open a conversation's '...' menu and click 'Pin'. Verify a 'Pinned' section appears at the top of the list containing that conversation. Then open its menu again and click 'Unpin', and verify it returns to the normal (Messages/Ungrouped) section. If no conversations exist, create one first by sending a message. The conversation moving into and out of the Pinned section is success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200/app/chat",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Choosing 'Pin' moves the conversation into a 'Pinned' section at the top of the sidebar",
+        "The menu label toggles to 'Unpin' and choosing it returns the conversation to the normal list section",
+        "The Pinned section renders/removes correctly based on whether any pinned conversations exist",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,chat"
+  },
+  "primaryKey": {
+    "ID": "BFE998DB-2508-4E90-AA17-F60272A3D109"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.032Z",
+    "checksum": "8e6776b56f7a9cac62ad277f210d1e6d6c5067b2a669aa0d6d203eac6a4d26ea"
+  }
+}

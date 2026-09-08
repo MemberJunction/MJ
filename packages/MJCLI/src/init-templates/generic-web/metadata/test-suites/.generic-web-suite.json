@@ -2,7 +2,12 @@
   "fields": {
     "Name": "Generic Web Example Suite",
     "Description": "Mode C reference suite — runs 3 tests against MDN Web Docs to demonstrate variable templating ({{baseUrl}}, {{allowedDomains}}) and a custom IOracle plugged in via `mj test suite --oracles-module=…`. Used by the docker/regression/examples/generic-web/ scaffold.",
-    "Status": "Active"
+    "Status": "Active",
+    "Configuration": {
+      "computerUse": {
+        "elementGrounding": true
+      }
+    }
   },
   "relatedEntities": {
     "MJ: Test Suite Tests": [

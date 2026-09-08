@@ -1,0 +1,54 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T128 - Scheduling Jobs",
+    "Description": "Opens the Scheduling application's Jobs section once, then walks its bespoke card-grid surfaces (search, status/type filter, create-job slideout, required-field validation, edit-job slideout, pause/resume toggle, delete confirmation), verifying each via checkpoints including the state mutations. Consolidates old T312–T318.",
+    "InputDefinition": {
+      "goal": "Do the shared setup ONCE: open the application switcher dropdown next to the logo and switch to the 'Scheduling' application, then open its 'Jobs' left-nav section (scheduled jobs render as CARDS, each with a status chip, Type/Schedule/Last-Run/Next-Run meta and a Success Rate bar). Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) jobs-search — type a query into the 'Search jobs...' box and confirm the card grid narrows to matches OR shows a 'No jobs found' state, then clear the search and confirm the fuller list returns; (2) jobs-status-filter — open the filter popover (funnel/'Filters' control), confirm a 'Status' dropdown (Active, Paused, Disabled, Pending, Expired) and a 'Type' dropdown render, pick a Status value and confirm the card grid narrows to matches OR shows a no-results state with an active-filter indicator/count; (3) create-job-slideout — click 'New Job' (plus icon) and confirm a slide-in editor opens with a General section (Name, Job Type, Status) and a Schedule section with a 'Cron Expression' text field, a Timezone dropdown and a Concurrency dropdown (do NOT create a job); (4) create-job-validation — with the required fields (Name, Job Type, Cron Expression — red asterisks) blank confirm the 'Create' button is DISABLED, then type a Name (and if easy pick a Job Type and enter a cron like '0 0 * * * *') and confirm 'Create' becomes ENABLED (do NOT finish creating); close/cancel the create editor; (5) edit-job-slideout — click an existing job CARD body and confirm a slide-in editor opens pre-populated with that job's values (Name, Job Type, Cron Expression, Timezone, Concurrency) in EDIT mode with a footer showing both 'Save' and 'Delete' (and a Statistics section if the job has runs), OR — if no jobs exist — the 'Create your first scheduled job' empty state; close/cancel; (6) pause-resume-toggle — on a job card footer click the 'Pause' or 'Resume' button and confirm the job's status chip flips (Active<->Paused) and the button relabels accordingly (a real state round-trip), OR the empty state if no jobs exist; (7) delete-confirmation — on a job card footer click the red 'Delete' (trash) button and confirm an inline confirmation overlay ('Delete this scheduled job?') with 'Delete' and 'Cancel' buttons appears, then click 'Cancel' and confirm the overlay dismisses and the card remains (do NOT confirm deletion), OR the empty state if no jobs exist. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/scheduling",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "jobs-search", "instruction": "Jobs card grid responds to search", "assertions": [ { "kind": "url", "urlPattern": "/app/scheduling" } ], "visualCriteria": ["The Jobs section renders scheduled jobs as cards (status chip + Schedule/Success-Rate details) or a valid empty state, and typing in 'Search jobs...' narrows the visible cards to matches OR shows a 'No jobs found' message, with clearing the search restoring the set"] },
+        { "name": "jobs-status-filter", "instruction": "filter popover Status narrows the grid", "visualCriteria": ["The filter popover opens showing Status and Type dropdown fields, and selecting a Status narrows the card grid to matches OR shows a no-results empty state with an active-filter count/indicator appearing"] },
+        { "name": "create-job-slideout", "instruction": "New Job slide-in editor with schedule fields", "visualCriteria": ["Clicking 'New Job' opens a slide-in editor panel showing the Schedule section with a Cron Expression field, a Timezone dropdown, and a Concurrency dropdown (plus Name/Job Type in the General section)"] },
+        { "name": "create-job-validation", "instruction": "Create button gated by required fields", "visualCriteria": ["With required fields (Name, Job Type, Cron Expression, each marked with an asterisk) blank the 'Create' button is disabled, and after filling Name (and Job Type / cron) it becomes enabled"] },
+        { "name": "edit-job-slideout", "instruction": "Edit-mode editor pre-filled with Save+Delete", "visualCriteria": ["Clicking a job card opens the slide-in editor pre-filled with that job's values in edit mode, its footer showing both Save and Delete (and a Statistics section if the job has run history) — OR, if no jobs exist, a valid empty-state is shown"] },
+        { "name": "pause-resume-toggle", "instruction": "Pause/Resume flips job status chip", "visualCriteria": ["Clicking a job card's Pause/Resume button flips that job's status chip (Active<->Paused) and relabels the button accordingly — OR a valid empty-state is shown if no jobs exist"] },
+        { "name": "delete-confirmation", "instruction": "inline delete confirmation gate + Cancel", "visualCriteria": ["Clicking a card's Delete button shows an inline 'Delete this scheduled job?' confirmation with Delete and Cancel options, and clicking Cancel dismisses it with the job card still present (no deletion) — OR a valid empty-state if no jobs exist"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,scheduling"
+  },
+  "primaryKey": { "ID": "F7DBD3CB-6F89-4B12-A594-EB6DE8AD1092" }
+}

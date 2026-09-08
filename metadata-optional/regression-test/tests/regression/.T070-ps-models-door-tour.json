@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T070 - PS Models-Door Tour",
+    "Description": "Opens the Predictive Studio 'Models' door once, then walks its sections (Model Registry lifecycle detail, Models in Production control tower, Operate model dialog), verifying each via checkpoints. Consolidates old T160, T161, T162.",
+    "InputDefinition": {
+      "goal": "Open the Predictive Studio app using the application switcher dropdown next to the logo (scroll if needed), then open the 'Models' door. This shared setup is done ONCE. Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) model-registry — select the 'Model Registry' section and confirm the registry renders: a master list of trained ML models, and on selecting one a detail pane with a lifecycle stepper (Draft → Validated → Published → Archived), a Train-vs-Holdout AUC comparison, feature-importance bars, and a leakage sign-off callout (the 'No trained models yet' empty state is also a pass); (2) models-in-production — select the 'Models in Production' section and confirm the control tower renders: a KPI strip (Published / Scheduled / Bound / Idle), a list of published models with deployment-state badges (Bound / Scheduled / Idle), and on selecting one a Deployment detail card plus a Run history section (the 'No models in production yet' empty state is a pass); (3) operate-dialog — if a published model is present, select it and click its 'Operate' (rocket) button, then confirm the Operate dialog opens with a scope segmented control (Everyone / A saved view / A list), an output segmented control (Run history only / Write back to a column), a live summary line, and Run now / Schedule buttons — toggling a scope or output segment should update the controls/summary (if there are no published models, the production empty state is a pass). You do NOT need to promote, run, or schedule anything. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "model-registry", "instruction": "Model Registry lifecycle detail or empty state", "visualCriteria": ["Either the model master list + a detail pane with a lifecycle stepper, Train-vs-Holdout metrics and feature-importance bars renders, OR the 'No trained models yet' empty state renders; when a model is selected its lifecycle stage and holdout metric are shown"] },
+        { "name": "models-in-production", "instruction": "Production control tower or empty state", "visualCriteria": ["Either a KPI strip + published-model list with deployment-state badges + deployment detail (and a run-history section on select) renders, OR the 'No models in production yet' empty state renders"] },
+        { "name": "operate-dialog", "instruction": "Operate dialog with scope/output segments or production empty state", "visualCriteria": ["Clicking 'Operate' opens a dialog with scope (Everyone / view / list) and output (Run history only / Write back) segmented controls plus Run now / Schedule buttons and a live summary that updates when a segment is toggled — OR the production empty state is shown because there are no models to operate"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,predictive-studio"
+  },
+  "primaryKey": { "ID": "728C5900-3980-4E8B-9F05-91A9B8D2918D" }
+}

@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T075 - Admin App Roles",
+    "Description": "Opens the Admin app's App Roles matrix once, then verifies its bespoke logic — the dirty-state toggle/discard chrome and the in-memory add-role-assignment path — via checkpoints. Consolidates old T184, T185.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin application via the application switcher dropdown next to the logo, open 'Identity & Access', and select the 'App Roles' sub-section. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) app-roles-list — the Application Roles view renders applications as expandable accordion panels with role-assignment rows (or an open-access message); (2) toggle-discard — expand any application group and toggle one of its 'Can Access' or 'Can Admin' checkboxes, confirm an 'Unsaved changes' badge appears in the header along with 'Discard' and 'Save Changes' buttons, then click 'Discard' and confirm the unsaved-state chrome clears (badge and buttons disappear); (3) add-role-assignment — at the bottom of an expanded panel, pick an unassigned role from the 'Select a role to add...' dropdown and click 'Add Role', then confirm a new role row is added (marked with a 'new' badge) and the 'Unsaved changes' state appears. Do NOT click Save. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/admin",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "app-roles-list", "instruction": "open the App Roles matrix", "assertions": [ { "kind": "url", "urlPattern": "/app/admin" } ], "visualCriteria": ["The App Roles view renders applications as expandable accordion panels with role-assignment rows (or a clear open-access message)"] },
+        { "name": "toggle-discard", "instruction": "toggle a role checkbox then discard", "visualCriteria": ["Toggling a Can Access / Can Admin checkbox surfaces an 'Unsaved changes' badge plus Discard and Save Changes buttons, and clicking Discard clears the unsaved-changes indicators"] },
+        { "name": "add-role-assignment", "instruction": "add an unassigned role to an app", "visualCriteria": ["Selecting an unassigned role from the dropdown and clicking 'Add Role' inserts a new role row (with a 'new' indicator) into that application's assignments and an unsaved-changes indicator appears"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,admin"
+  },
+  "primaryKey": { "ID": "8DC79B18-C150-4ED0-A267-71846744DC59" }
+}

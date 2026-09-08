@@ -74,6 +74,42 @@ mj test regression compare
 mj test regression down
 ```
 
+### Iterating on just the failures
+
+Two options, for different jobs:
+
+```bash
+# A. Ephemeral — re-run whatever the PREVIOUS run failed (resolved from the
+#    `latest` symlink, passed through as `mj test suite --tests`). The set shifts
+#    every run, which is what you want while chasing flakiness.
+mj test regression rerun-failures
+
+# B. Stable — a version-controlled subset suite. The membership is fixed until
+#    you regenerate it, so it's the one to use while landing a fix that should
+#    move a specific, reviewable set of tests.
+TEST_SUITE_NAME="MJ Explorer Regression Failures" mj test regression up
+```
+
+`TEST_SUITE_NAME` is honored by both the runner and the DR-E1 preflight gate
+(which resolves `TEST_SUITE_NAME || 'MJ Explorer Regression Suite'`), so the
+subset is membership-checked like any other suite.
+
+Two things to know about the subset suite
+([`.regression-failures-suite.json`](../../metadata-optional/regression-test/test-suites/.regression-failures-suite.json)):
+
+- **Its `Configuration` deliberately mirrors the full suite's** — currently
+  `applicationContext` + `computerUse.elementGrounding: true`. A subset exists to
+  reproduce full-run behavior, so the two must be changed together or not at all;
+  letting them drift means a test can pass here and fail in the full run purely
+  from config difference. (The older `MJ Explorer Regression Failing 50` suite
+  additionally pins `generation.temperature: 0` and is superseded by this one.)
+- **Membership is a point-in-time snapshot.** Regenerate it against a newer run
+  rather than hand-editing. Note that sub-suite members are upserted by
+  `primaryKey` and `clear-baseline-suite-members.cjs` only clears the MAIN
+  suite — so **shrinking** a subset by editing the file in place would leave the
+  dropped members behind in the DB and silently run a larger set. Generate a
+  fresh suite (new `uuidgen` ID) instead.
+
 > **Migration from `npm run regression:*`** — the old npm scripts were removed in Phase 4. Replace
 > them 1:1:
 >
@@ -455,6 +491,27 @@ All variables go in `docker/.env.test` (gitignored). See `.env.test.example` for
 | `AI_VENDOR_API_KEY__AnthropicLLM` | Yes* | Anthropic API key — failover / alternate model |
 
 \* At least one AI vendor key is required. Variable names match the root `.env` convention (`AI_VENDOR_API_KEY__<Vendor>LLM`).
+
+### Console verbosity (`CU_LOG_LEVEL`)
+
+Optional. Controls how much of the Computer Use per-step stream reaches the
+**console** for a run. The test-run record, report, and diagnostics always receive
+every message regardless — this only affects what you read while watching a run.
+
+| Value | Shows |
+|---|---|
+| `quiet` | Milestones only — tier decision, checkpoint progress, judge verdicts, budget/loop/auth terminals, failure class, per-test start/finish — plus all warnings/errors |
+| `normal` *(default)* | Everything except recognized per-step chatter (screenshot captured, settle timings, raw LLM responses, per-test config echo) |
+| `verbose` | Every message, including the full raw LLM response per step (the pre-filter behavior) |
+
+Warnings and errors are **never** filtered, at any level, and an unrecognized
+message is always shown at `normal` — so a novel failure can't be silently hidden.
+Console lines are tagged with the test id (`[T045] …`) because parallel workers
+interleave their output.
+
+For reference, the 155-test run that motivated this emitted a 4.5MB / 63k-line
+console log; `normal` brings that to ~1.4MB with the run's story intact. Use
+`verbose` when debugging one test's LLM behavior (ideally with `--workers 1`).
 
 ### Auth0 Setup Requirements
 

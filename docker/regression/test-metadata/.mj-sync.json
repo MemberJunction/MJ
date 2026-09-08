@@ -5,7 +5,8 @@
   },
   "directoryOrder": [
     "tags",
-    "users"
+    "users",
+    "conversations"
   ],
   "emitSyncNotes": false
 }

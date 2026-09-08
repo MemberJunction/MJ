@@ -1,0 +1,55 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T074 - Admin API Keys Section",
+    "Description": "Opens the Admin app Identity & Access → API Keys section once, then walks its sections (overview KPI drilldown, status filter tabs, column sort, revoke confirmation gate, creation wizard, Applications panel create, Scopes tree + create dialog, Usage time-range filter), verifying each via checkpoints. Consolidates old T176–T183.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box), switch to the Admin application, open 'Identity & Access', and select the 'API Keys' sub-section from the left navigation. Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) overview-drilldown — on the API Keys overview confirm a health-score banner and clickable KPI cards (Total Keys, Active, Expiring Soon, Revoked, Scope Categories); click a KPI card (e.g. 'Active') and confirm it drills into the list view with a 'Back to Overview' control and the matching filter applied; (2) status-filter-tabs — in the list view confirm filter tabs (All / Active / Expiring Soon / Expired / Never Used / Revoked) each with a count; click 'Active' then 'Revoked' and confirm the grid narrows to that category (or a valid empty-state) with the active tab highlighted; (3) column-sort — click a sortable column header (e.g. Owner or Created) and confirm a sort indicator appears and rows reorder, then click again to toggle the direction; (4) revoke-gate — click a key row to open the 'API Key Details' slide-out (Details / Permissions / Usage tabs); on an active key open the Danger Zone Revoke flow and confirm a 'type REVOKE to confirm' input with the confirm button disabled until REVOKE is entered exactly (do NOT actually revoke); (5) creation-wizard — click 'Generate New Key' to open the 'Generate New API Key' slide-out on step 1 (Configure) with a Key Label field and step indicator; type a label and click 'Next: Permissions' and confirm it advances to the scope-category step; (6) applications-create — click the 'Applications' L2 tab to open the API Applications panel (app cards with scope counts); click 'New Application' and confirm the slide-out renders Application Name, Description, and an Active checkbox, and that expanding an app card reveals a 'Scope Ceiling Rules' section; (7) scopes-tree — click the 'Scopes' L2 tab to see a hierarchical scope tree with expand/collapse controls; use 'Expand All' (or expand a node) and confirm the tree responds, then click 'New Scope' and confirm the create dialog renders Scope Name, a Parent Scope dropdown, Category, and a full-path preview (do NOT save); (8) usage-time-range — click the 'Usage' L2 tab to see the usage analytics (KPI grid + Request Volume chart + time-range buttons 24 Hours / 7 Days / 30 Days / All Time); select a different range (e.g. '7 Days' then 'All Time') and confirm that button highlights and the analytics update or a valid 'No usage data' empty-state shows. If any control is legitimately absent due to permissions or empty data, note it and continue. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/admin",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "overview-drilldown", "instruction": "KPI card drills into filtered list", "assertions": [ { "kind": "url", "urlPattern": "/app/admin" } ], "visualCriteria": ["The API Keys overview renders a health-score banner and clickable KPI cards with counts, and clicking a KPI card transitions to the list view (a 'Back to Overview' control is visible) with the matching filter applied"] },
+        { "name": "status-filter-tabs", "instruction": "status filter tabs narrow the grid", "visualCriteria": ["The API key list renders filter tabs (All / Active / Expiring Soon / Expired / Never Used / Revoked) each with a count; selecting a different tab narrows the visible rows to that category or shows a valid empty-state, and the active tab is highlighted"] },
+        { "name": "column-sort", "instruction": "sortable column header reorders", "visualCriteria": ["Clicking a sortable column header (e.g. Owner or Created) shows a sort-direction indicator and reorders the rows, and clicking the same header again toggles the direction, OR a valid empty-state is shown when no keys exist"] },
+        { "name": "revoke-gate", "instruction": "type-REVOKE confirmation gate", "visualCriteria": ["Clicking a key row opens the 'API Key Details' slide-out with Details / Permissions / Usage tabs, and for an active key the Revoke flow shows a 'type REVOKE to confirm' input with the confirm button disabled until REVOKE is entered exactly, OR a valid empty-state is shown when no keys exist"] },
+        { "name": "creation-wizard", "instruction": "wizard advances Configure → Permissions", "visualCriteria": ["The 'Generate New API Key' slide-out opens on step 1 (Configure) with a Key Label field and a step indicator, and after typing a label and clicking 'Next: Permissions' the wizard advances to the scope-selection step"] },
+        { "name": "applications-create", "instruction": "Applications panel + create slide-out", "visualCriteria": ["The 'Applications' tab shows the API Applications panel (app cards with scope counts or a valid empty-state), clicking 'New Application' opens a slide-out with Application Name, Description and an Active checkbox, and expanding an app card reveals a 'Scope Ceiling Rules' section"] },
+        { "name": "scopes-tree", "instruction": "scope tree expand + New Scope dialog", "visualCriteria": ["The 'Scopes' tab shows a hierarchical scope tree with expand/collapse controls that respond to Expand All / a node toggle, and clicking 'New Scope' opens a dialog with Scope Name, a Parent Scope dropdown, and Category fields"] },
+        { "name": "usage-time-range", "instruction": "usage time-range filter recomputes", "visualCriteria": ["The 'Usage' tab renders usage analytics with a KPI grid and time-range buttons (24 Hours / 7 Days / 30 Days / All Time), and selecting a different range highlights that button as active and the analytics/chart update or a valid 'No usage data' empty-state is shown"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,admin"
+  },
+  "primaryKey": { "ID": "D3426E69-F7A3-4091-94F5-14F7E23D1DE3" }
+}

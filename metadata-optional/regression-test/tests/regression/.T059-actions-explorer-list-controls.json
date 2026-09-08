@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T059 - Actions Explorer List Controls",
+    "Description": "Opens the Actions app Explorer once, then exercises its bespoke list controls (view-mode toggle, category tree filter, status/type filter + sort, search + narrowed empty-state) in one run, verifying each via checkpoints. Consolidates old T130-T133.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo, switch to the 'Actions' application, and open the 'Explorer' nav item. Then perform these sub-actions IN ORDER, and as you complete each set \"checkpointReached\" to the exact checkpoint name shown: (1) actions-view-toggle — the toolbar has a view-mode toggle with three options (Card / List / Compact); click through them and confirm the action list re-renders in a visibly different layout for each (the selected option shows an active indicator); an empty list with a clear empty-state is acceptable; (2) actions-category-filter — the LEFT category tree panel; click a category node and confirm the main action list narrows to that category (breadcrumb/selection updates) or a clear empty-state appears, then click back to 'All' and confirm the full list returns; (3) actions-status-sort — open the Filters popover (funnel icon) with Status (Active/Pending/Disabled), Type (AI Generated/Custom), and Sort sections; toggle a Status checkbox and confirm the list narrows (or a no-results state) and the filter count badge updates, then pick a different Sort field and confirm the list re-orders; (4) actions-search-empty — type a term in the 'Search actions...' box and confirm the list narrows to matches, then type a nonsense term like 'zzzznotanaction' and confirm the narrowed empty-state renders with a 'No actions match your filters' message and a 'Reset filters' action, then clear/reset and confirm the list repopulates. Keep going until all sub-actions are done. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200/app/actions",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "actions-view-toggle", "instruction": "reach the Explorer and switch view modes", "assertions": [ { "kind": "url", "urlPattern": "/app/actions" } ], "visualCriteria": ["The Explorer toolbar shows a view-mode toggle with card/list/compact options, switching between at least two modes visibly changes the action list layout (grid vs list rows) or a valid empty-state renders consistently, and the selected option shows an active/selected indicator"] },
+        { "name": "actions-category-filter", "instruction": "filter by category tree then return to All", "visualCriteria": ["A category tree/sidebar is visible on the left, selecting a category narrows the action list to that category (or shows a valid empty-state) with the breadcrumb/selection reflecting it, and returning to 'All' categories restores the broader list"] },
+        { "name": "actions-status-sort", "instruction": "filter by Status/Type and change Sort in the popover", "visualCriteria": ["The Filters popover shows Status, Type, and Sort sections; toggling a Status or Type option narrows the list (or shows a valid no-results state) and an active-filter count indicator appears; choosing a different Sort field visibly changes the ordering (or is accepted without error when empty)"] },
+        { "name": "actions-search-empty", "instruction": "search narrows list, nonsense term shows narrowed empty-state, reset restores", "visualCriteria": ["Typing in the 'Search actions...' box narrows the list to matches, a nonsense term shows a 'no actions match' empty-state with a reset/clear affordance (not a crash or blank area), and clearing the search or clicking Reset restores the list"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions"
+  },
+  "primaryKey": { "ID": "15670E9B-E5BB-4339-90D8-24502B977582" }
+}

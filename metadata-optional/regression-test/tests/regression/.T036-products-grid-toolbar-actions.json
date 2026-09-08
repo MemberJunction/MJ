@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T036 - Products Grid-Toolbar Actions",
+    "Description": "Opens the Products entity grid once, then walks its grid/toolbar actions (row multi-selection, multi-column sort, more-actions menu, export to Excel, bulk add-to-list, recycle-bin restore panel), verifying each via checkpoints. Consolidates old T068, T069, T071, T072, T078, T083.",
+    "InputDefinition": {
+      "goal": "Open the 'Products' entity grid — type 'Products' in the LEFT sidebar 'Search entities...' box and click the exact match (or navigate to http://localhost:4200/app/data-explorer/Data?entity=Products). Wait for the grid to load. Then walk these grid/toolbar actions IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) grid-row-selection — select one or more rows using the row checkboxes at the left (use the header select-all checkbox to select multiple); confirm a selection count appears and/or selection-dependent toolbar actions become enabled (if the grid is empty a valid empty-state is acceptable); (2) grid-multi-column-sort — apply a sort on a column via the 'Sorting' control (up-wide-short icon) or by clicking a column header, and confirm the grid re-orders its rows with a sort indicator on the sorted column; (3) grid-more-actions-menu — click the 'More actions' control (vertical ellipsis / three-dots icon) in the toolbar and confirm an overflow menu opens listing additional actions; (4) grid-export-excel — click the 'Export to Excel' control (Excel-file icon) or 'Export' then Excel, and confirm the export initiates cleanly (a download begins, or an export options dialog / success toast appears) with no error — you do NOT need to open the downloaded file; (5) grid-bulk-add-to-list — with multiple rows selected, click the 'Add to List' toolbar button and confirm a bulk 'Add N Records to List' dialog opens (list search box, a New/Create List option, list selection or a valid empty state); (6) grid-recycle-bin — look for the Recycle Bin chip (trash-can-arrow-up icon) in the toolbar; if present click it and confirm the Recycle Bin slide-in panel opens showing deleted records with Restore buttons OR a valid 'Recycle Bin is empty' state (if the chip is legitimately absent, that is an acceptable outcome). Keep going until every action has been visited. You do NOT need to finalize any action. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/data-explorer/Data?entity=Products",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "grid-row-selection", "instruction": "open Products grid and select rows", "assertions": [ { "kind": "url", "urlPattern": "/app/data-explorer/Data" } ], "visualCriteria": ["The Products grid is loaded and selecting one or more rows via the checkboxes updates the selection state — a selection count appears and/or a selection-dependent toolbar control becomes enabled (or a valid empty-state renders if there are no rows)"] },
+        { "name": "grid-multi-column-sort", "instruction": "apply a column sort", "visualCriteria": ["A sort was applied to a grid column (via the Sorting panel or a column header) — the grid re-ordered its rows and shows a sort indicator on the sorted column"] },
+        { "name": "grid-more-actions-menu", "instruction": "open the More actions overflow menu", "visualCriteria": ["Clicking the grid's 'More actions' (vertical ellipsis) control opened an overflow menu listing additional actions"] },
+        { "name": "grid-export-excel", "instruction": "trigger Export to Excel", "visualCriteria": ["The grid's 'Export to Excel' (or Export→Excel) control was clicked and the export initiated cleanly — a download started, or an export dialog / success toast appeared, with no error"] },
+        { "name": "grid-bulk-add-to-list", "instruction": "open bulk Add-to-List dialog", "visualCriteria": ["With multiple rows selected, clicking 'Add to List' opened a bulk 'Add N Records to List' dialog showing a list search box, a New/Create List option, and list selection or a valid 'No lists yet' empty state"] },
+        { "name": "grid-recycle-bin", "instruction": "open the Recycle Bin restore panel", "visualCriteria": ["The Recycle Bin chip opened a slide-in panel titled 'Recycle Bin' showing deleted-record entries with Restore buttons OR a valid 'Recycle Bin is empty' state — OR the chip is legitimately absent (no deletions / no permission)"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,data-explorer"
+  },
+  "primaryKey": { "ID": "D995F85A-2433-40DD-884C-93B1DE3EB066" }
+}

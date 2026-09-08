@@ -1,0 +1,52 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T073 - Testing Analytics and Explorer Tour",
+    "Description": "Opens the Testing application once, then walks its surfaces (Analytics charts + time-range, Test Explorer suite/type rail filter, Explorer filter popover + search, Create Test slideout validation, Run Test dialog), verifying each via checkpoints. Consolidates old T171-T175.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher next to the logo and choose 'Testing'. Then walk these surfaces IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) testing-analytics — click the 'Analytics' tab and confirm it renders Trend Overview charts (Pass Rate, Run Volume, Score, Cost), an Insights grid, a Score Distribution chart, and a Version Comparison table, then click a different time-range chip (7/30/90 days) and confirm the chip becomes active and the charts re-render; (2) explorer-rail-filter — reach the Test Explorer (a left rail listing 'All Items', 'Standalone Tests', test suites and test types beside a card grid), click a Test Suite or Test Type node and confirm the card grid narrows (or shows a valid empty state), then click 'All Items' to restore; (3) explorer-filter-search — in the Test Explorer type a term into the 'Search tests and suites...' box and confirm the cards narrow with matches highlighted (or a no-results state), then open the 'Filters' popover and change the View/Status/Sort and confirm the grid responds; (4) create-test-validation — click 'New Test' to open the create slideout, confirm the 'Create Test' button is DISABLED with Name blank and no Test Type selected, then type a Name and pick a Test Type and confirm the Create button becomes ENABLED (do NOT save); close the slideout; (5) run-test-dialog — click the 'Runs' tab then the 'Run Test' button (or a Run button on a test card) and confirm a run-configuration slide panel opens with options such as a Verbose checkbox, a Run Tags section, or a test-selection/variables area (do NOT start a run); close it. Keep going until every surface has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200/app/testing",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "testing-analytics", "instruction": "Analytics charts + time-range change", "assertions": [ { "kind": "url", "urlPattern": "/app/testing" } ], "visualCriteria": ["The Analytics tab renders Trend Overview charts, an Insights grid, a Score Distribution chart, and a Version Comparison table (each with data or a valid empty state), and clicking a time-range chip marks it active and re-renders the trend charts"] },
+        { "name": "explorer-rail-filter", "instruction": "Test Explorer suite/type rail filter", "visualCriteria": ["The Test Explorer shows a left rail (All Items / Standalone Tests / Test Suites / Test Types) beside a card grid; selecting a suite or test type narrows the cards and/or updates the count (or a valid empty state), and 'All Items' restores the full set"] },
+        { "name": "explorer-filter-search", "instruction": "Explorer filter popover + search", "visualCriteria": ["Typing in the Test Explorer search narrows the cards (matches highlighted) or shows a no-results state, and opening the Filters popover and changing View/Status/Sort updates the displayed cards"] },
+        { "name": "create-test-validation", "instruction": "Create Test slideout validation gate", "visualCriteria": ["Clicking New Test opens a slideout with a Name field and Test Type selector; with required fields blank the Create Test button is disabled, and filling Name plus selecting a Test Type enables the Create button"] },
+        { "name": "run-test-dialog", "instruction": "Run Test configuration dialog", "visualCriteria": ["Clicking Run Test opens a run-configuration slide panel with controls such as a Verbose option, a Run Tags section, or a test-selection/variables area, and it can be closed without starting a run"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,testing"
+  },
+  "primaryKey": { "ID": "88C270AF-9C9F-436A-8A37-A4F0A8463D80" }
+}

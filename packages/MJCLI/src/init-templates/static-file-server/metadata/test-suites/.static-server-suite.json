@@ -2,7 +2,12 @@
   "fields": {
     "Name": "Static Server Mode D Suite",
     "Description": "Mode D reference suite — drives the regression runner against the static-file-server brought up by docker-compose.app.yml. Used as the minimal end-to-end demo of the overlay pattern.",
-    "Status": "Active"
+    "Status": "Active",
+    "Configuration": {
+      "computerUse": {
+        "elementGrounding": true
+      }
+    }
   },
   "relatedEntities": {
     "MJ: Test Suite Tests": [

@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T113 - List Create Entity Picker Search",
+    "Description": "Exercises the custom fixed-position entity-picker portal (filterEntities/openEntityDropdown) plus the required-field save gating — distinct from a plain HTML select and from the generic record-create form.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, select the Lists application, and on the default 'Lists' (Browse) section click the 'New List' button. In the 'Create New List' dialog, click the 'Entity *' field (placeholder 'Search and select an entity') and type a few letters of an entity name. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Success is that a searchable dropdown appears and narrows to entities matching what you typed, and picking one fills the Entity field. Note that the 'Create' button stays disabled until BOTH a Name and an Entity are provided. Do NOT need to actually create the list — cancel after verifying the picker filters and the Create-button gating.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Typing in the 'Entity *' field opens a dropdown that narrows to matching entities, and selecting one populates the field",
+        "The 'Create' button is disabled until both Name and Entity are set (verifiable by observing it enable only after both are filled)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression,lists"
+  },
+  "primaryKey": {
+    "ID": "75399DC4-5EC8-4051-9212-85A04C55C4A8"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.626Z",
+    "checksum": "6cadb3bd62824b4941466ffc4ad995583293a97257f4e15c9d01b2a5da584007"
+  }
+}

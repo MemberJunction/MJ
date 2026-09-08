@@ -1,0 +1,51 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T136 - Version Labels List Controls",
+    "Description": "Opens the Version History app Labels surface once, then walks its list-control sections (card/list view toggle, search-narrows-with-no-results-reset, scope/status filter popover, list-view column sort), verifying each via checkpoints. Consolidates old T341–T344.",
+    "InputDefinition": {
+      "goal": "Open the Version History app (application switcher dropdown next to the logo → 'Version History') and go to the Labels surface. Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) view-toggle — locate the view toggle (grid vs list icons) in the toolbar, switch to list view and confirm a table layout with column headers (Name, Entity, Status, Items, Created) appears, then switch back to card view and confirm the card layout returns; (2) search-narrows — type an unlikely string like 'zzzqqx' into the 'Search labels...' box and confirm the list narrows to a 'No labels found' no-results state with a Reset action, then trigger Reset (or clear the search) and confirm the labels list (or base empty state) returns; (3) filter-popover — click the Filters button in the toolbar to open the filter popover, confirm it shows a Scope filter and a Status filter, select a value in one and confirm the active-filter indicator updates and the list responds, then clear the filters; (4) column-sort — in list view click a sortable column header such as 'Name' or 'Created', confirm a sort direction indicator appears and (if multiple labels exist) rows reorder, then click the same header again to toggle the direction. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200/app/version-history",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 65,
+      "checkpoints": [
+        { "name": "view-toggle", "instruction": "card/list view toggle", "assertions": [ { "kind": "url", "urlPattern": "/app/version-history" } ], "visualCriteria": ["A card/list view toggle is present in the toolbar; list view shows a header row with columns (Name / Entity / Status / Items / Created) and card view shows a card layout (or a valid empty state either way), and toggling back and forth changes the layout without losing the page"] },
+        { "name": "search-narrows", "instruction": "search narrows to no-results + reset", "visualCriteria": ["Typing in the search box responsively narrows the labels list, a non-matching query produces a 'No labels found' no-results state with a Reset action, and resetting or clearing the search restores the labels list or the base empty state"] },
+        { "name": "filter-popover", "instruction": "Scope/Status filter popover", "visualCriteria": ["The Filters popover opens showing Scope and Status filter controls, selecting a filter value updates the active-filter indicator/badge and the list responds, and clearing the filters restores the list or base empty state"] },
+        { "name": "column-sort", "instruction": "list-view column sort", "visualCriteria": ["In list view the column headers are clickable, clicking a header shows a sort-direction indicator and (if multiple labels exist) reorders rows, and clicking the same header again toggles the sort direction"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 65,
+      "maxExecutionTime": 780000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,version-history"
+  },
+  "primaryKey": { "ID": "B759BB16-8968-4179-A41B-1ECB7C93D2B1" }
+}

@@ -142,14 +142,16 @@ export class RunCommandsBase {
             const elapsedTime = new Date().getTime() - startTime.getTime();
             if (!cp.killed) {
               treeKill(cp.pid!);
-              console.error(`COMMAND: "${command.command}" TIMED OUT after ${elapsedTime / 1000} seconds`);
+              logStatus(`COMMAND: "${command.command}" REACHED ITS TIMEOUT AND WAS KILLED (by design) AFTER ${elapsedTime / 1000} seconds`);
               output += `Process killed after ${timeout} ms`;
             }
 
+            // A timeout is an intended stop for long-lived commands (e.g. `npm start`
+            // with an explicit timeout): the process launched fine, so report success.
             resolve({
               output: output,
               error: null!,
-              success: false,
+              success: true,
               elapsedTime: elapsedTime,
             });
           }, timeout);

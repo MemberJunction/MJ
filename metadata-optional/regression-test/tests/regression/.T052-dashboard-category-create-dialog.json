@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T052 - Dashboard Category Create Dialog",
+    "Description": "Exercises the New-dropdown split (Dashboard vs Category), the create-category dialog, and the onCategoryCreate save path that renders a folder — distinct from creating a dashboard (T105) and from category-tree navigation (T106) which only browses existing categories.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo, open Data Explorer, then the Dashboards section. Click the 'New' button to open its dropdown (it offers 'Dashboard' and 'Category'), then choose 'Category'. A 'Create Category' dialog should appear with a required Name field and an optional Description field, plus Create and Cancel buttons. Enter a category name like 'CU Test Folder' and click Create, then confirm the new category folder appears in the browser. Success is the create-category dialog rendering and the new folder showing up after creating. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "The 'New' button opens a dropdown offering both Dashboard and Category options",
+        "Choosing Category opens a 'Create Category' dialog with a Name field (required) and optional Description, plus Create/Cancel",
+        "After entering a name and clicking Create, a new category/folder appears in the dashboard browser (as a folder card or row)",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,dashboard"
+  },
+  "primaryKey": {
+    "ID": "0E338E6F-5EF5-4E76-A2F5-466EE15CE459"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:05:57.056Z",
+    "checksum": "11e8d903178f8bae03c641876007b8fbb2b127833c489617b829870e8eaf1d87"
+  }
+}

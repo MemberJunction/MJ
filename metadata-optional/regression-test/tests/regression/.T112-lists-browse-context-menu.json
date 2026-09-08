@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T112 - Lists Browse Context Menu",
+    "Description": "Opens the Lists app Browse section once, then verifies the list context-menu Share dialog and the destructive Delete confirmation guard (cancel path) via checkpoints. Consolidates old T271, T273.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box), select the Lists application, and stay on the default 'Lists' (Browse) section. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) list-share-dialog — on any list you own, click its '...' (ellipsis) more-options button to open the context menu, then click 'Share' and confirm the share dialog opens showing sharing controls (permission levels and a way to add a user or role); do NOT actually share — Cancel/close the dialog; (2) list-delete-guard — on any list you own, click its '...' more-options button and choose 'Delete', then confirm a 'Delete List' confirmation dialog appears warning it will also remove all items in the list; click 'Cancel' and confirm the list is NOT deleted (it still appears). Do NOT click the red Delete button. If you own no lists at all, confirming the Browse section renders cleanly with a valid empty-state is acceptable for that checkpoint. Keep going until every section has been visited.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "list-share-dialog", "instruction": "open a list's context menu and the Share dialog", "visualCriteria": ["A list's '...' context menu opens and offers a 'Share' item, and choosing it opens a share dialog exposing sharing controls (permission level selection and/or an add-user/role input); cancelling returns to the lists view without sharing"] },
+        { "name": "list-delete-guard", "instruction": "open the Delete confirmation guard and cancel without deleting", "visualCriteria": ["Choosing 'Delete' from a list's context menu opens a 'Delete List' confirmation dialog warning it will also remove all items in the list, and clicking 'Cancel' dismisses the dialog with the list still present (nothing deleted) — OR no owned lists exist and a valid empty-state renders"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,lists"
+  },
+  "primaryKey": { "ID": "65AA8C1A-6D3C-4E21-A2B2-2549024D8FBC" }
+}

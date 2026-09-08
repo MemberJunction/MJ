@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T109 - Lists Operations Set Operation",
+    "Description": "Exercises the ListSetOperationsService set-math + venn-diagram.component rendering + operand-assembly picker — computation code unique to the Operations surface, not the generic grid.",
+    "InputDefinition": {
+      "goal": "Assume you are already logged in at http://localhost:4200. Open the application switcher dropdown next to the logo and select the Lists application, then open the 'Operations' section in its left nav. In the left 'Selected Operands' panel, use the 'Search lists to add...' box to add a list operand (type a letter, then click a result). Add a second list of the SAME entity type if the picker offers one. Once two operands are present, a 'Quick Operations' group appears — click 'Union All' (or 'Intersection'). Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away. Success is that the operand(s) register on the canvas and, when two are present, the Venn diagram renders and the Results panel shows a record count for the operation — you do NOT need to save anything.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Adding a list from the 'Search lists to add...' picker places it as an operand chip in the Selected Operands panel (or, if the user has no lists, the 'Add Lists or Views to Compare' empty state is shown)",
+        "With two same-entity operands, the Venn diagram area renders overlapping circles AND clicking a Quick Operation (Union/Intersection) produces a result count (e.g. 'N records') in the Results panel",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,lists"
+  },
+  "primaryKey": {
+    "ID": "E5B0D8B0-1FD9-4F2F-98D8-8521D29CC888"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:01.553Z",
+    "checksum": "ab2207280f91ff122fc2df3d515174a2959764717df2d3aa275db86af93e6e12"
+  }
+}

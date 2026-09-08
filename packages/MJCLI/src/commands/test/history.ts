@@ -2,41 +2,32 @@ import { Command, Flags } from '@oclif/core';
 import { TEST_FORMAT_FLAG, TEST_FORMAT_MAP, resolveLegacyFormat } from '../../lib/format-compat.js';
 
 export default class TestHistory extends Command {
-  static description = 'View test execution history';
+  static description = 'View per-test duration and flake history across recent runs';
 
   static examples = [
     '<%= config.bin %> <%= command.id %>',
-    '<%= config.bin %> <%= command.id %> --test=<test-id>',
-    '<%= config.bin %> <%= command.id %> --suite=<suite-id>',
-    '<%= config.bin %> <%= command.id %> --since="2024-01-01"',
-    '<%= config.bin %> <%= command.id %> --limit=50',
+    '<%= config.bin %> <%= command.id %> --test="Active Members Count"',
+    '<%= config.bin %> <%= command.id %> --suite="Nightly Regression"',
+    '<%= config.bin %> <%= command.id %> --limit=100 --format=json',
   ];
 
   static flags = {
     test: Flags.string({
       char: 't',
-      description: 'Filter by test ID',
+      description: 'Filter by test name',
     }),
-    recent: Flags.integer({
-      char: 'r',
-      description: 'Number of recent runs to show',
-    }),
-    from: Flags.string({
-      description: 'Show history from date (YYYY-MM-DD)',
-    }),
-    status: Flags.string({
+    suite: Flags.string({
       char: 's',
-      description: 'Filter by status',
+      description: 'Filter to runs belonging to the named suite',
+    }),
+    limit: Flags.integer({
+      char: 'l',
+      description: 'Max recent test-run records to analyze (default 50)',
     }),
     format: TEST_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
       description: 'Output file path',
-    }),
-    verbose: Flags.boolean({
-      char: 'v',
-      description: 'Show detailed information',
-      default: false,
     }),
   };
 
@@ -46,13 +37,12 @@ export default class TestHistory extends Command {
     const { flags } = await this.parse(TestHistory);
 
     try {
-      // Create HistoryCommand instance and execute
-      // Context user will be fetched internally after MJ provider initialization
+      // Context user is fetched internally after MJ provider initialization
       const historyCommand = new HistoryCommand();
-      await historyCommand.execute(flags.test, {
-        recent: flags.recent,
-        from: flags.from,
-        status: flags.status,
+      await historyCommand.execute({
+        test: flags.test,
+        suite: flags.suite,
+        limit: flags.limit,
         format: resolveLegacyFormat({
           format: flags.format,
           legacy: 'console' as const,
@@ -60,9 +50,7 @@ export default class TestHistory extends Command {
           map: TEST_FORMAT_MAP,
         }),
         output: flags.output,
-        verbose: flags.verbose,
       });
-
     } catch (error) {
       this.error(error as Error);
     }

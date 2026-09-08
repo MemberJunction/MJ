@@ -1,0 +1,55 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T080 - Admin System Diagnostics",
+    "Description": "Opens the Admin System Diagnostics dashboard once, then walks its controls (section tabs, engine registry refresh, engine detail panel, performance sub-tabs, telemetry enable toggle, telemetry source toggle, cache stats + type filter, perfmon chart zoom), verifying each via checkpoints. Consolidates old T202-T209.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and switch to the Admin application, then open the 'Monitoring' section and select System Diagnostics. This shared setup is done ONCE. Then exercise these controls IN ORDER, and as you finish each set \"checkpointReached\" to the exact checkpoint name shown: (1) section-tabs — click through the four section tabs (Engine Registry / Redundant / Performance / Cache) and confirm the panel body swaps to each section's distinct content with the active tab indicated; (2) engine-registry-refresh — on the Engine Registry section (engine cards with Memory/Items stats, or a clear empty-state), click 'Refresh All Engines' and confirm it responds (spinning indicator / brief disable) and the cards remain rendered; (3) engine-detail-panel — click the details arrow on an engine card and confirm a slide-in detail panel opens showing Status/Memory/Items and a 'Data Configs' section, then close it; (4) performance-subtabs — click the 'Performance' section tab, then click through its sub-tabs (Monitor, Overview, Events, Patterns, Insights) and confirm the content below swaps for each (empty-states acceptable); (5) telemetry-enable-toggle — with the source on 'Client', click the telemetry Enabled/Disabled toggle and confirm the label flips and the 'Telemetry is disabled' warning banner appears/disappears accordingly; (6) telemetry-source-toggle — click 'Server' and confirm the header switches to a server status indicator (Enabled/Disabled with a config note), then click 'Client' to restore the client controls; (7) cache-stats-filter — click the 'Cache' section tab and confirm the summary cards render (Total Entries, Total Size, Cache Hits, Cache Misses, Hit Rate as a percentage), and if entries exist use the type filter (All / Datasets / RunViews / RunQueries) to narrow the list; (8) perfmon-chart-zoom — return to the Performance section's Monitor sub-tab and confirm the chart controls row renders (interaction modes, zoom in/out, reset zoom, Compress Gaps toggle), clicking zoom-in then reset producing a visible response. Keep going until every control has been exercised. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "section-tabs", "instruction": "L2 section tabs swap panel content", "visualCriteria": ["The System Diagnostics section tab bar (Engine Registry, Redundant, Performance, Cache) renders, and clicking each tab swaps the panel body to that section's distinct content with the active tab visually indicated"] },
+        { "name": "engine-registry-refresh", "instruction": "Refresh All Engines responds, cards remain", "visualCriteria": ["The Engine Registry shows engine cards with Memory/Items stats (or a valid empty-state), and clicking 'Refresh All Engines' triggers a visible response (spinner / brief disable) after which the engine grid is still rendered intact"] },
+        { "name": "engine-detail-panel", "instruction": "engine detail slide-in panel opens", "visualCriteria": ["Clicking the details arrow on an engine card opens a slide-in detail panel showing a Status/Memory/Items summary plus a 'Data Configs' section, which can be closed via its X button"] },
+        { "name": "performance-subtabs", "instruction": "L3 performance sub-tabs swap content", "visualCriteria": ["The Performance section shows a sub-tab strip (Monitor, Overview, Events, Patterns, Insights), and clicking each sub-tab swaps the content below to that tab's distinct view (or a valid empty-state) with the active sub-tab indicated"] },
+        { "name": "telemetry-enable-toggle", "instruction": "telemetry enable toggle flips label + banner", "visualCriteria": ["The Client-source Performance panel shows a telemetry Enabled/Disabled toggle whose label flips when clicked, and the 'Telemetry is disabled' warning banner appears when disabled and is absent when enabled"] },
+        { "name": "telemetry-source-toggle", "instruction": "Client/Server source toggle swaps header controls", "visualCriteria": ["Selecting 'Server' switches the Performance panel header to a server status indicator (Enabled/Disabled with a config note) instead of the client Enable/Clear buttons, and selecting 'Client' restores the client-mode controls"] },
+        { "name": "cache-stats-filter", "instruction": "cache summary cards + type filter respond", "visualCriteria": ["The Cache section shows summary cards including Total Entries, Total Size, Hits, Misses, and Hit Rate (as a percentage), and when entries exist clicking a type filter (Datasets / RunViews / RunQueries / All) changes which entries are listed"] },
+        { "name": "perfmon-chart-zoom", "instruction": "Monitor chart zoom controls respond", "visualCriteria": ["The Monitor sub-tab shows a chart container with a controls row (interaction modes, zoom in/out, reset zoom, Compress Gaps toggle), and clicking zoom-in then reset produces a visible response without breaking the chart"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,admin"
+  },
+  "primaryKey": { "ID": "DFB9EB3A-A19F-4AED-8CD7-8F61ABDA4D8E" }
+}

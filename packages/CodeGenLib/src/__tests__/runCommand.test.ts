@@ -144,6 +144,22 @@ describe('RunCommandsBase', () => {
             expect(formatCommandFailureDetail(result)).toMatch(/error TS2307/i);
         });
 
+        // Guards a deliberate divergence from next: a timeout is how the default
+        // config launches a long-lived AFTER command (MJAPI `npm start`,
+        // timeout: 30000). Reporting it as a failure would make CodeGen's
+        // recordCommandFailures cry wolf on every run with the shipped config.
+        it('reports success when a long-lived command is killed at its timeout', async () => {
+            const result = await runner.runCommand({
+                command: 'sleep 5',
+                args: [],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 300,
+            });
+            expect(result.success).toBe(true);
+            expect(result.output).toMatch(/Process killed after 300 ms/);
+        });
+
         it('keeps running later commands after a non-zero exit', async () => {
             const results = await runner.runCommands([
                 { command: 'false', args: [], workingDirectory: '/tmp', when: 'test', timeout: 5000 },
@@ -173,6 +189,26 @@ describe('RunCommandsBase', () => {
                 // If it fails (in restricted environments), that's expected
                 expect(error).toBeDefined();
             }
+        });
+
+        it('reports success on exit-0 even when the command prints "error" to stderr', async () => {
+            // Regression guard: a clean exit (code 0) must be reported as success even if
+            // the command writes the word "error" to stderr. Well-behaved tools emit benign
+            // "error" text on stderr (deprecation notices, diagnostic text, stack-trace
+            // headers) — e.g. MJ's ClassFactory "…so this becomes a hard error." fallback
+            // that `mj codegen manifest` prints during MJAPI's `npm run build`. Previously a
+            // substring-"ERROR" stderr scan flipped this to success:false, which made
+            // `mj codegen` exit 1 and broke the Docker db-setup / MJAPI-boot pipelines.
+            const command = {
+                command: 'sh',
+                args: ['-c', "'echo benign-error-text 1>&2; exit 0'"],
+                workingDirectory: '/tmp',
+                when: 'test',
+                timeout: 0
+            };
+            const result = await runner.runCommand(command);
+            expect(result.success).toBe(true);
+            expect(result.output).toContain('benign-error-text');
         });
     });
 });

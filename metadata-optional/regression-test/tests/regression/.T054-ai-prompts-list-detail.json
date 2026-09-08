@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T054 - AI Prompts List and Detail",
+    "Description": "Opens the AI application's Prompts section once, then walks its bespoke prompt-management surfaces (List-view sortable table, detail slide-in panel), verifying each via checkpoints. Consolidates old T120–T121.",
+    "InputDefinition": {
+      "goal": "Do the shared setup ONCE: open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Prompts section. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) prompts-list-sort — switch the view toggle from Grid to List so the prompts appear as a table, then click a sortable column header such as 'Name' or 'Status' once, then click it again; the table should render clickable column headers and clicking a header should change the row ordering (a sort indicator/arrow appears and rows reorder), or show a valid empty state; (2) prompt-detail-panel — on any prompt card (grid) or row (list), click the 'Details' / eye icon action; a slide-in detail panel should open from the side showing that prompt's configuration (Status, Category, Type, Response Format, Selection Strategy, timestamps) with an 'Open Full Record' button (you do NOT need to click Open Full Record). If there are no prompts, a valid empty state counts. Keep going until every section has been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "prompts-list-sort", "instruction": "List view + column sort reorders rows", "visualCriteria": ["The Grid/List toggle switches the prompts into a table with column headers (Name, Category, Type, Status), and clicking a column header applies a sort — a sort indicator appears and/or the row order changes, and clicking again reverses it (or a valid empty state is shown)"] },
+        { "name": "prompt-detail-panel", "instruction": "Detail slide-in panel opens", "visualCriteria": ["Clicking the Details/eye action on a prompt opens a slide-in detail panel (overlay, not a full-page navigation) showing prompt configuration fields (e.g. Status, Category, Type, Response Format) and an 'Open Full Record' action"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,ai"
+  },
+  "primaryKey": { "ID": "4DF79C5D-7528-484F-9718-6DA6AB02DA1C" }
+}

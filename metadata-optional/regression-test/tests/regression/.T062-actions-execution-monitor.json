@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T062 - Actions Execution Monitor",
+    "Description": "Opens the Actions app Execution Monitor once, then verifies its sections (metrics + 7-day trends chart, and execution-list filter with drill-through to an action) via checkpoints. Consolidates old T137–T138.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo (NOT the Ctrl+K search box), switch to the 'Actions' application, and open the 'Monitor' nav item (Execution Monitor). Then walk these sections IN ORDER, and as you arrive at each set \"checkpointReached\" to the exact checkpoint name shown: (1) monitor-metrics — verify the monitor renders its execution metric cards (Total Executions, Success Rate as a percentage, Failed Executions, Avg Duration, Today, Currently Running), a '7-Day Execution Trends' chart section (stacked success/failed bars or a clear empty-state), and a recent-executions list section; (2) monitor-filter-drill — use the 'Search executions...' box or the Filters popover (filter by result/status) and confirm the Recent Executions list RESPONDS (rows narrow to matches or a clear 'No executions found' empty-state with a results-count reflecting the filtered set); if any execution rows exist, click an execution's action-name link and confirm it navigates to / opens that action's record. Keep going until both sections have been visited. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "monitor-metrics", "instruction": "metric cards + 7-day trends chart", "visualCriteria": ["The Execution Monitor shows metric cards including a Success Rate percentage and Failed/Total counts, a '7-Day Execution Trends' chart section renders with bars or a clear 'No execution trends available' empty-state, and a recent-executions list section is present"] },
+        { "name": "monitor-filter-drill", "instruction": "filter executions + drill to action", "visualCriteria": ["Searching or filtering executions narrows the Recent Executions list (results-count reflects the filtered set) OR shows a valid 'No executions found' empty-state; when executions exist, clicking an execution's action name navigates to / opens that action record"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,actions"
+  },
+  "primaryKey": { "ID": "FC6EB0ED-88ED-4493-A8EA-D1476B5011D1" }
+}

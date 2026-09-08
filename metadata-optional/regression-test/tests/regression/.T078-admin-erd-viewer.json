@@ -1,0 +1,53 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T078 - Admin ERD Viewer",
+    "Description": "Opens the Admin ERD viewer once, then walks its interactions (in-canvas search, zoom/fit, layout toggle, entity-details panel, field-type filter, filter-panel toggle) verifying each via checkpoints. Consolidates old T191–T196.",
+    "InputDefinition": {
+      "goal": "Switch to the Admin application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), open the 'Data & Schema' section, and open the ERD (Entity Relationship Diagram) viewer. Wait for the diagram to render — pages can take 10-30s to load in this resource-constrained environment, so wait and do NOT navigate away. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) erd-search — type a partial entity name such as 'User' into the diagram header search box (placeholder 'Search entities, schemas, fields…') and confirm the diagram responds (the visible-count pill updates and cards narrow to matches, or a valid no-results state); (2) erd-zoom — use the header zoom toolbar (zoom-in, zoom-out, fit-to-view, and a zoom-percent readout): click zoom-in once or twice then fit-to-view, confirming the readout changes and the diagram re-scales/re-centers; (3) erd-layout — use the layout-mode toggle group (Schema-grid table-cells icon vs Hierarchical sitemap icon): click the other layout and confirm the entity cards visibly rearrange and the clicked button shows active; (4) erd-entity-details — click any entity card/node and confirm a right-side details panel opens showing the entity's Schema and Table plus accordion sections 'Fields (N)' and 'Related Entities (N)', with the Fields list rendering when expanded; (5) erd-field-filter — inside the expanded Fields section header use the All / Keys / FKs / Regular filter buttons: click Keys (and optionally FKs) then All, confirming the field list narrows and restores accordingly (a valid empty subset also counts); (6) erd-filter-panel — click the page header 'Filters' button (funnel icon) and confirm the left filter panel toggles (hides if shown, shows if hidden), then toggle once more to confirm it flips back. Keep going until every section has been visited.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 90,
+      "checkpoints": [
+        { "name": "erd-search", "instruction": "search narrows the ERD diagram", "visualCriteria": ["The ERD viewer renders a diagram with entity cards and a header search box; after typing, the visible-count pill updates and shown entity cards narrow to matches, OR a valid no-results/empty state is shown"] },
+        { "name": "erd-zoom", "instruction": "zoom-in and fit-to-view controls re-scale the diagram", "visualCriteria": ["The ERD shows a zoom toolbar (zoom in/out/fit) with a zoom-percent readout; clicking zoom controls changes the readout and visibly re-scales the diagram, and fit-to-view re-frames it"] },
+        { "name": "erd-layout", "instruction": "toggle the layout algorithm and confirm relayout", "visualCriteria": ["The layout toggle offers Schema-grid and Hierarchical modes; clicking the alternate layout visibly rearranges the entity-card positions and marks that button active"] },
+        { "name": "erd-entity-details", "instruction": "select an entity node to open its details panel", "visualCriteria": ["Clicking an entity node opens a right-side details panel showing Schema/Table for that entity plus accordion sections for Fields and Related Entities, with the Fields list rendering when expanded"] },
+        { "name": "erd-field-filter", "instruction": "filter the details Fields list by type (All/Keys/FKs/Regular)", "visualCriteria": ["The Fields section exposes All / Keys / FKs / Regular filter buttons; selecting a filter narrows the displayed fields and All restores the full list, or a valid empty subset is shown"] },
+        { "name": "erd-filter-panel", "instruction": "toggle the left filter panel via the header Filters button", "visualCriteria": ["The Entity Admin header shows a 'Filters' toggle button and the ERD layout adjusts (left filter panel appears/disappears) when clicked, and toggling again flips the panel back with the button's active state reflecting visibility"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 90,
+      "maxExecutionTime": 1080000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,admin"
+  },
+  "primaryKey": { "ID": "FA9B363B-9A93-4DE8-8807-654137E4A483" }
+}

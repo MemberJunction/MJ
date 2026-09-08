@@ -1,0 +1,50 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T066 - MCP Tools Display Controls",
+    "Description": "Opens the AI app's MCP Tools tab once, then walks its display controls (card/list view toggle, scale-mode virtual list, favorites filter), verifying each via checkpoints. Consolidates old T143, T144, T145.",
+    "InputDefinition": {
+      "goal": "Open the AI app via the application switcher dropdown next to the logo (NOT Ctrl+K), open the MCP section, then go to the Tools tab. Then walk these display controls IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) mcp-view-toggle — locate the view-mode toggle in the header (Card View / List View), switch between them and confirm the tools presentation responds (card view shows tool cards; list view shows a table with columns like Tool, Description, Params, Status, Last Seen, Actions), the active option reflecting the current selection — if no tools exist, a 'No tools discovered yet' empty state is valid and the toggle should still be present; (2) mcp-scale-mode — click the 'Scale: OFF' button in the header to enable scale mode (it changes to 'Scale: ON') and confirm the view switches to the scalable/virtualized presentation showing a 'Showing X of Y tools' summary above a single scrollable virtual list, then toggle Scale back OFF and confirm it returns to the grouped card/list view; (3) mcp-favorites-filter — if any tools are shown, click a tool's star (favorite) icon and confirm it fills in to indicate the tool is favorited, then open the Filter popover in the toolbar and set the 'Favorites' filter to 'Favorites only' and confirm the tools list responds (narrowing to favorited tools or a clear no-match/empty state) with the applied-filter indicator reflecting the favorites filter — if no tools exist at all, a 'No tools discovered yet' empty state is acceptable. Keep going until every control has been exercised. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "mcp-view-toggle", "instruction": "toggle Card/List view", "visualCriteria": ["A Card/List view toggle is visible in the Tools tab header, and switching it changes the tools layout (card grid vs. table) with the active option reflecting the selection — OR a valid 'No tools discovered yet' empty state is shown consistently"] },
+        { "name": "mcp-scale-mode", "instruction": "toggle scale-mode virtual list", "visualCriteria": ["Enabling the 'Scale: OFF'→'Scale: ON' toggle shows a 'Showing X of Y tools' summary and a single scrollable virtual list distinct from the default grouped view, and toggling it back OFF restores the grouped card/list layout"] },
+        { "name": "mcp-favorites-filter", "instruction": "favorite a tool and filter to favorites only", "visualCriteria": ["Clicking a tool's star icon visibly toggles its favorited state (filled vs. outline), and applying the Filter popover's 'Favorites only' option narrows the tool list or shows a clear no-match/empty state with the applied-filter indicator reflecting the favorites filter — OR no tools exist and a valid empty state is shown"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,mcp"
+  },
+  "primaryKey": { "ID": "EE41BA0C-B6C5-4EA7-8B0C-DF09B7FCDF06" }
+}

@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T053 - AI Agents Browser View and Filter",
+    "Description": "Opens the AI application's Agents section once, then verifies the Category Tree view toggle and the Category tree-dropdown filter via checkpoints. Consolidates old T118, T119.",
+    "InputDefinition": {
+      "goal": "Open the AI application using the application switcher dropdown next to the logo (NOT the Ctrl+K search box), then open the Agents section. Pages can take 10-30s to load in this resource-constrained environment — wait for content rather than navigating away. Then walk these sections IN ORDER, and as you arrive at each one set \"checkpointReached\" to the exact checkpoint name shown: (1) agents-tree-view — in the toolbar there is a Grid / List / Tree view toggle; click the Tree (Category Tree View, folder-tree icon) option and confirm the agents re-render as a hierarchical category tree (agents grouped under expandable category branches) instead of the card grid (a valid empty tree state also counts); (2) agents-category-filter — click the Filter button/icon in the toolbar to open the filter popover, find the Category filter (a tree-style folder-tree dropdown), open it and pick a category value, then confirm the agent list responds (narrows to matches OR shows a clear no-match/empty state). Keep going until every section has been visited.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": ["localhost", "*.auth0.com"],
+      "auth": {
+        "bindings": [
+          {
+            "domains": ["localhost", "*.auth0.com"],
+            "method": { "Type": "Basic", "Username": "{{authUsername}}", "Password": "{{authPassword}}", "Strategy": "FormLogin" }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "^http://localhost:4200",
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "checkpoints": [
+        { "name": "agents-tree-view", "instruction": "toggle the Agents view to the Category Tree", "visualCriteria": ["The Grid/List/Tree view toggle is visible and clicking Tree changes the layout from cards to a hierarchical tree with expandable category branches and agents as leaf nodes, OR a clearly labelled empty tree state"] },
+        { "name": "agents-category-filter", "instruction": "open the filter popover and apply a Category tree-dropdown value", "visualCriteria": ["The filter popover opens and displays filter fields including a Category tree-style dropdown widget; selecting a category value causes the agent list to update (narrow to matches) or show a clear no-results state"] }
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 540000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.7, "config": { "minConfidence": 0.7 } },
+        { "type": "url-match", "weight": 0.3, "config": { "pattern": "^http://localhost:4200" } }
+      ],
+      "scoringWeights": { "goal-completion": 0.7, "url-match": 0.3 }
+    },
+    "Status": "Active",
+    "Tags": "P2,regression,ai"
+  },
+  "primaryKey": { "ID": "4D70A84A-72D0-4D7A-B9B3-B1E478B865F8" }
+}

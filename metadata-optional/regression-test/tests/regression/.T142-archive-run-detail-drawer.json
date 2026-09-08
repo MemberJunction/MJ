@@ -1,0 +1,82 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T142 - Archive Run Detail Drawer",
+    "Description": "Exercises the run-viewer's click-to-open slide-in detail drawer (OpenRunDrawer → async loadRunDetails for per-record rows, CloseDrawer) — a custom drawer + secondary async fetch, distinct from any grid row-open or the config editor.",
+    "InputDefinition": {
+      "goal": "Open the application switcher dropdown next to the logo and select 'Archiving', then click 'Run History' in the app's left navigation. The page shows summary metric cards (Total Runs, Records Archived, Storage Used, Last Run) and a 'Run History' list of run cards. Click one of the run cards. Success is a slide-in drawer opening on the right titled 'Run Details' showing the run's Configuration/Status/Started/Duration, a stats row (Archived / Failed / Skipped), and a 'Per-Record Results' area (a table or a 'No detail records found' message). Confirm the drawer can be closed via its X button or by clicking the backdrop. If there are no runs, seeing the 'No archive runs found' empty state is acceptable success. Pages can take 10-30s to load in this resource-constrained environment — wait, don't navigate away.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "{{authUsername}}",
+              "Password": "{{authPassword}}",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 35,
+      "judgeValidationCriteria": [
+        "Run History renders summary metric cards and a run card list (or a clear 'No archive runs found' empty state)",
+        "Clicking a run card opens a slide-in 'Run Details' drawer with the run summary, an Archived/Failed/Skipped stats row, and a Per-Record Results section",
+        "The drawer closes when its X button or the backdrop is clicked",
+        "No error messages, blank screens, or crash pages"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 35
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,regression,archiving"
+  },
+  "primaryKey": {
+    "ID": "E3E8AFB3-FBD7-4AA2-9748-BB2EF872C9C0"
+  },
+  "sync": {
+    "lastModified": "2026-07-18T16:06:03.606Z",
+    "checksum": "b7cd67e1e47e8cfeaefad927ae044d9072014d7c2aab4ba30b1de98966ecdcf3"
+  }
+}
