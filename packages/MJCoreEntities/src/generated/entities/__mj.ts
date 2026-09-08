@@ -18475,7 +18475,7 @@ export const MJEntityFieldSchema = z.object({
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-        * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, Icon, Image, Color, and JSON. When set to Image, the field holds an image URL or inline image (data URI / base64) and UI surfaces render a thumbnail. Color is a CSS color. JSON is a JSON document, validated on save.`),
+        * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.`),
     CodeType: z.union([z.literal('CSS'), z.literal('HTML'), z.literal('JavaScript'), z.literal('Other'), z.literal('SQL'), z.literal('TypeScript')]).nullable().describe(`
         * * Field Name: CodeType
         * * Display Name: Code Type
@@ -20902,12 +20902,12 @@ export const MJIdentityClaimTypeSchema = z.object({
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
-        * * Default Value: sysutcdatetime()`),
+        * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
-        * * Default Value: sysutcdatetime()`),
+        * * Default Value: getutcdate()`),
 });
 
 export type MJIdentityClaimTypeEntityType = z.infer<typeof MJIdentityClaimTypeSchema>;
@@ -20985,12 +20985,12 @@ export const MJIdentityClaimSchema = z.object({
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
         * * SQL Data Type: datetimeoffset
-        * * Default Value: sysutcdatetime()`),
+        * * Default Value: getutcdate()`),
     __mj_UpdatedAt: z.date().describe(`
         * * Field Name: __mj_UpdatedAt
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
-        * * Default Value: sysutcdatetime()`),
+        * * Default Value: getutcdate()`),
     ClaimType: z.string().describe(`
         * * Field Name: ClaimType
         * * Display Name: Claim Type
@@ -84332,7 +84332,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     *   * URL
     *   * WhatsApp
     *   * ZoomMtg
-    * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, Icon, Image, Color, and JSON. When set to Image, the field holds an image URL or inline image (data URI / base64) and UI surfaces render a thumbnail. Color is a CSS color. JSON is a JSON document, validated on save.
+    * * Description: Defines extended behaviors for a field such as Email, Web URLs, Code, Markdown, HTML, and Icon. When set to 'Icon', the field's values are treated as icon CSS classes (e.g. Font Awesome) for per-row display in the UI.
     */
     get ExtendedType(): 'Code' | 'Color' | 'Email' | 'FaceTime' | 'Geo' | 'GeoAddress' | 'GeoCity' | 'GeoCountry' | 'GeoLatitude' | 'GeoLongitude' | 'GeoPostalCode' | 'GeoStateProvince' | 'HTML' | 'Icon' | 'Image' | 'JSON' | 'MSTeams' | 'Markdown' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null {
         return this.Get('ExtendedType');
@@ -90757,7 +90757,7 @@ export class MJIdentityClaimTypeEntity extends BaseEntity<MJIdentityClaimTypeEnt
     * * Field Name: __mj_CreatedAt
     * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
-    * * Default Value: sysutcdatetime()
+    * * Default Value: getutcdate()
     */
     get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
@@ -90767,7 +90767,7 @@ export class MJIdentityClaimTypeEntity extends BaseEntity<MJIdentityClaimTypeEnt
     * * Field Name: __mj_UpdatedAt
     * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
-    * * Default Value: sysutcdatetime()
+    * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
@@ -90970,7 +90970,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
     * * Field Name: __mj_CreatedAt
     * * Display Name: Created At
     * * SQL Data Type: datetimeoffset
-    * * Default Value: sysutcdatetime()
+    * * Default Value: getutcdate()
     */
     get __mj_CreatedAt(): Date {
         return this.Get('__mj_CreatedAt');
@@ -90980,7 +90980,7 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
     * * Field Name: __mj_UpdatedAt
     * * Display Name: Updated At
     * * SQL Data Type: datetimeoffset
-    * * Default Value: sysutcdatetime()
+    * * Default Value: getutcdate()
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
