@@ -20954,11 +20954,17 @@ export const MJIdentityClaimSchema = z.object({
         * * Display Name: Payload
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional payload JSON containing custom data or parameters consumed by the claim type driver during redemption.`),
-    Status: z.string().describe(`
+    Status: z.union([z.literal('Claimed'), z.literal('Expired'), z.literal('Pending'), z.literal('Revoked')]).describe(`
         * * Field Name: Status
         * * Display Name: Status
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Claimed
+    *   * Expired
+    *   * Pending
+    *   * Revoked
         * * Description: Current lifecycle state of the claim: Pending, Claimed, Expired, or Revoked.`),
     ExpiresAt: z.date().describe(`
         * * Field Name: ExpiresAt
@@ -88697,12 +88703,18 @@ export class MJIdentityClaimEntity extends BaseEntity<MJIdentityClaimEntityType>
     * * Display Name: Status
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Claimed
+    *   * Expired
+    *   * Pending
+    *   * Revoked
     * * Description: Current lifecycle state of the claim: Pending, Claimed, Expired, or Revoked.
     */
-    get Status(): string {
+    get Status(): 'Claimed' | 'Expired' | 'Pending' | 'Revoked' {
         return this.Get('Status');
     }
-    set Status(value: string) {
+    set Status(value: 'Claimed' | 'Expired' | 'Pending' | 'Revoked') {
         this.Set('Status', value);
     }
 

@@ -85,9 +85,14 @@ GO
 -- 2. IdentityClaim.Status value list
 --    CK_IdentityClaim_Status permits N'Pending', N'Claimed', N'Expired',
 --    N'Revoked'. EntityField F925BD99-4B5A-48A4-878A-385E8F2D87E7 is
---    IdentityClaim.Status (seeded by V202608202300). Sequence follows the
---    CHECK constraint's own order; MC3 compares the two sets order-insensitively,
---    but the lifecycle order is what an administrator expects in a dropdown.
+--    IdentityClaim.Status (seeded by V202608202300).
+--
+--    Sequence is ALPHABETICAL, not the CHECK constraint's own order, because
+--    that is what CodeGen produces — verified against AIVendorType.Status,
+--    whose CHECK reads (Active, Inactive, Deprecated, Preview) while its stored
+--    rows and generated union both read Active, Deprecated, Inactive, Preview.
+--    Matching that keeps a future CodeGen run a no-op here. MC3 compares the two
+--    sets order-insensitively, so ordering is about stability, not the check.
 --
 --    Guarded on the EntityField still existing: CodeGen retires EntityField rows
 --    whose column leaves the base view, and a value-list insert against a
@@ -105,21 +110,21 @@ BEGIN
         INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                                ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                             VALUES
-                                               ('a8f64737-c447-4aa7-bd4c-4b1c9783c101', 'F925BD99-4B5A-48A4-878A-385E8F2D87E7', 1, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
+                                               ('a8f64737-c447-4aa7-bd4c-4b1c9783c101', 'F925BD99-4B5A-48A4-878A-385E8F2D87E7', 3, 'Pending', 'Pending', GETUTCDATE(), GETUTCDATE());
 
     /* SQL text to insert entity field value with ID 930b9a8d-47ad-453f-8a33-379eb4048c40 */
     IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityFieldValue] WHERE [EntityFieldID] = 'F925BD99-4B5A-48A4-878A-385E8F2D87E7' AND [Value] = 'Claimed')
         INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                                ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                             VALUES
-                                               ('930b9a8d-47ad-453f-8a33-379eb4048c40', 'F925BD99-4B5A-48A4-878A-385E8F2D87E7', 2, 'Claimed', 'Claimed', GETUTCDATE(), GETUTCDATE());
+                                               ('930b9a8d-47ad-453f-8a33-379eb4048c40', 'F925BD99-4B5A-48A4-878A-385E8F2D87E7', 1, 'Claimed', 'Claimed', GETUTCDATE(), GETUTCDATE());
 
     /* SQL text to insert entity field value with ID 465067c6-772b-4dfb-a05e-204c451ae16e */
     IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityFieldValue] WHERE [EntityFieldID] = 'F925BD99-4B5A-48A4-878A-385E8F2D87E7' AND [Value] = 'Expired')
         INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                                ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                             VALUES
-                                               ('465067c6-772b-4dfb-a05e-204c451ae16e', 'F925BD99-4B5A-48A4-878A-385E8F2D87E7', 3, 'Expired', 'Expired', GETUTCDATE(), GETUTCDATE());
+                                               ('465067c6-772b-4dfb-a05e-204c451ae16e', 'F925BD99-4B5A-48A4-878A-385E8F2D87E7', 2, 'Expired', 'Expired', GETUTCDATE(), GETUTCDATE());
 
     /* SQL text to insert entity field value with ID 3a477609-4f5a-4a82-ac32-e8a99f1238cb */
     IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityFieldValue] WHERE [EntityFieldID] = 'F925BD99-4B5A-48A4-878A-385E8F2D87E7' AND [Value] = 'Revoked')
