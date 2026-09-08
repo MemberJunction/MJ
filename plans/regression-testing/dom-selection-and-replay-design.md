@@ -2,8 +2,6 @@
 
 **Status:** For review · 2026-09-08 · Branch `CB-DOM-selection-and-replay`
 
-The four questions this opened with have been answered; §7 records where each landed.
-
 ---
 
 ## 1. The problem
@@ -258,17 +256,6 @@ then carry them back up. `excludeFields` and `externalizeFields` on the pull con
 shape how much of that lands in the repo. Teaching *push* to preserve a
 database-written key inside a JSON column would be new merge machinery buying back what
 pull already does.
-
-## 7. Resolved questions
-
-The four questions this document opened with, and where they landed:
-
-| # | Question | Resolution |
-|---|---|---|
-| 1 | Is telemetry enough to replace the review gate? | **No.** A UI change must be seen and promoted deliberately — §6.1. Telemetry stays, as the continuous signal; the gate is what decides. |
-| 2 | Is the push reset acceptable? | **Yes** — `mj sync pull` persists scripts when it matters, so push needs no preservation machinery (§6.2). |
-| 3 | One `AllowLLMFallback` flag or two? | **One.** It governs both re-deriving and ratifying, and no case has come up that wants them apart. |
-| 4 | Is `TestJSONScript` the right name? | **No** — renamed `ReplayScript`. Inside a test's configuration, `Test` was redundant and `JSON` was implied. |
 
 ## 8. Status
 
