@@ -64,7 +64,14 @@ export function runProcessCapture(command, args, extraEnv = {}) {
 // ---------------------------------------------------------------------------
 
 async function getDbPool() {
-  const sql = (await import('mssql')).default;
+  let sql;
+  try {
+    sql = (await import('mssql')).default;
+  } catch {
+    const { createRequire } = await import('node:module');
+    const codegenRequire = createRequire(path.resolve('packages/CodeGenLib/package.json'));
+    sql = codegenRequire('mssql');
+  }
   const config = {
     server: process.env.CODEGEN_DB_HOST || process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.CODEGEN_DB_PORT || process.env.DB_PORT || '1433', 10),

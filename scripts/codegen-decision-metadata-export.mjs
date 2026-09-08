@@ -57,7 +57,14 @@ export async function exportDecisionMetadata({
     entitySettings = [...(snapshot.entitySettings || [])];
     applicationEntities = [...(snapshot.applicationEntities || [])];
   } else if (referenceConn) {
-    const sql = (await import('mssql')).default;
+    let sql;
+    try {
+      sql = (await import('mssql')).default;
+    } catch {
+      const { createRequire } = await import('node:module');
+      const codegenRequire = createRequire(path.resolve('packages/CodeGenLib/package.json'));
+      sql = codegenRequire('mssql');
+    }
     const pool = await sql.connect(referenceConn);
 
     try {
