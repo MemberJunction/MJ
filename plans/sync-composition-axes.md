@@ -228,6 +228,10 @@ Unconditional IsA (profile **is** the company):
 | `embeds` | Owner **FK field** (`ShipToAddressID`) | Peer has own PK; owner FK stamped after peer exists |
 | `extension` | Conditional or unconditional IsA / companion | **Shared PK with owner.** JSON does **not** invent a new ID. Two accepted forms — see below |
 
+**Collection membership semantics live in `.mj-sync.json`, not in the record file** — `upsert`
+(default) or `authoritative`, declared per collection. A record file's `collections` value is always a
+**bare array**; there is no per-record mode wrapper. Full rules and riders: §8.1(a).
+
 `extension` accepts **two shapes**, because MJ supports both disjoint and overlapping subtypes and the singular form cannot express the latter:
 
 ```json
@@ -440,19 +444,96 @@ No MJ-only slice, no “Loom later,” no cheese SQL leftover. Implement the ful
 
 **Loom PR** — `composition` on the domain contract, generate/emit/validate per §7, `createDomainConfigFromMJEntities` reads MJ metadata. Emits only the new JSON (no sibling IsA directories, no SQL).
 
-**Cheese PR** — `domain.json` + generated metadata in the new shape; delete `scripts/emit-catalog-completeness.mjs` IsA dumps and any `EventOrderLine` SQL. **This PR is the integration test:** `mj sync push` of cheese generated data, then Explorer: workshop order Event details, Person = ShipTo, confirm still books. If cheese fails, none of the three merge.
+**Cheese PR** — `domain.json` + generated metadata in the new shape; delete `scripts/emit-catalog-completeness.mjs` IsA dumps and any `EventOrderLine` SQL. **This PR is the integration test:** `mj sync push` of cheese generated data, then Explorer: workshop order Event details, Person = ShipTo, confirm still books. If cheese fails, none of the three merge. **Scope per §8.1(b): `collections`/`embeds` on `committee-meetings`, `extension` flat on `order-lines`. Orders are not nested.**
 
 Product **prices** stay a normal entity (`ProductPrice` is not IsA). They can remain `relatedEntities` or become a collection if Orders declares one.
 
 Stack them: **MJ core → MJ sync → Loom → cheese**, with Orders landing any time after MJ core. Reviewed as one change; cheese does not ship until the rest are on the same bits.
 
-### 8.1 Open decisions — a builder must not guess these
+### 8.1 Resolved decisions (rev 3) — the builder has no discretion here
 
-Two calls that are the plan owner's, not the implementer's. Both were raised in review and are deliberately unresolved here rather than silently defaulted.
+Both questions rev 2 left open were the plan owner's to call. They are answered. A builder implements
+these as written; neither is a default to be re-litigated at the keyboard.
 
-**(a) Collection membership semantics.** Nothing above says whether `collections.Lines[]` is **authoritative** (DB rows absent from the file get removed) or **additive** (a partial overlay). Both readings fail silently and in opposite directions: `RelatedRecordCollection` defaults to `OnRemove: 'delete'`, so authoritative means a file listing 2 of 5 lines **deletes 3 rows**; additive without a `Load()` means every re-push **appends duplicates**, and `mj sync push` is idempotent today. Whichever is chosen, it must be **explicit and per-collection** in the JSON or `.mj-sync.json`, e.g. `"Lines": { "mode": "authoritative", "items": [ … ] }`. Three riders: `deleteRecord` inside a collection item must work or be rejected; collection-implied deletes must **not** bypass the Phase-0 deletion audit + confirmation (`PushService.ts:2117`); and `Load: 'never'` collections (a documented write-only staging mode) must **fail loud**, never fall through to append.
+#### (a) Collection membership: `upsert` by default, `authoritative` opt-in, mode declared in `.mj-sync.json`
 
-**(b) Does cheese nest, or only add `extension`?** `extension` on a **flat** `order-lines/` record fixes the reported bug on its own — Event Order Line is an IsA child of Order Line, and nothing about the empty-form defect requires `collections`. Nesting instead turns 15,420 orders (9.5 MB) + 17,075 lines (11 MB) into 15,420 single-root graphs, one provider/TX each, where `order-lines` is today one flat directory pushed in parallel by dependency level (`PushService.ts:835`); folding line bytes into the root checksum then re-pushes a whole order for a one-line edit. Recommendation: **ship the format for all three keys, prove `extension` on cheese's real 17k-row path, and prove `collections`/`embeds` on something small** (an Action + Params, or a few hundred hand-authored orders). Still one phase, still cheese as the gate — it just does not stake the 20 MB regeneration path on the axis with the least-settled semantics.
+**There are two modes, not three.** Rev 2 framed this as authoritative vs additive, but "additive" was
+hiding two different things: additive-*with*-load (match by PK, upsert, leave unlisted rows alone —
+idempotent) and additive-*without*-load (blind append — duplicates on every push). The second is not a
+mode anyone would choose; it is the bug. The real choice is `upsert` vs `authoritative`.
+
+| mode | loads the collection | rows listed in the file | rows in the DB but absent from the file |
+|---|---|---|---|
+| `upsert` (**default**) | yes | inserted or updated | **left alone** |
+| `authoritative` (opt-in) | yes | inserted or updated | **deleted**, via the Phase-0 audit |
+
+**`upsert` is the default for two reasons.** The failure modes are asymmetric: authoritative-wrong is
+silent data loss needing a restore, while upsert-wrong is duplicates — visible in the data and
+recoverable. Default to the recoverable failure. And `upsert` is what `relatedEntities` does today, so a
+file moving from `relatedEntities` to `collections` is behavior-preserving. That matters because §4.5
+already forbids silently re-routing the old key: if the two carried different membership semantics, any
+later migration between them would become a data-loss event.
+
+**The mode is declared per collection in `.mj-sync.json`, never in a record file.** Membership semantics
+are a property of the *relationship*, not of any one record. A per-record mode lets two files describing
+the same collection disagree — which is incoherent — and lets a hand-edit escalate a single file into a
+delete. Record files therefore keep `collections` values as **bare arrays**; there is no per-record
+`{ "mode": …, "items": [ … ] }` wrapper.
+
+```json
+// .mj-sync.json for the orders directory
+{
+  "entity": "MJ_BizApps_Orders: Orders",
+  "collections": {
+    "Lines":    { "mode": "upsert" },
+    "Payments": { "mode": "authoritative" }
+  }
+}
+```
+
+Five riders, all required:
+
+1. **`deleteRecord` inside a collection item works in both modes.** This is the load-bearing piece: if a
+   file can say "delete this one" explicitly, it rarely needs "delete everything I did not mention,"
+   which is what keeps `authoritative` rare rather than routine.
+2. **Authoritative-implied deletes route through the Phase-0 deletion audit + confirmation**
+   (`PushService.ts:2117`), and the confirmation **names the collection and the row count**. An implied
+   delete is more dangerous than an explicit one, so it cannot carry less ceremony.
+3. **Bulk rail.** `authoritative` refuses when the computed delete set exceeds
+   `maxImpliedDeletePercent` (default **20%**) of the loaded collection, unless `--allow-bulk-delete` is
+   passed. A file that is empty or drastically short is nearly always a generator bug, not an intent to
+   delete thousands of rows.
+4. **`Load: 'never'` fails loud under both modes.** No special case is needed: both modes require the
+   loaded set — `upsert` to match PKs, `authoritative` to compute the delete set. It must never fall
+   through to append.
+5. **An unknown `mode` value is a `validate` error**, never a silent fallback to the default.
+
+#### (b) Cheese is the full gate, and the nesting is scoped
+
+Cheese proves **all three keys on real generated data** — no synthetic fixture stands in for any axis.
+It does that without nesting the orders path. Measured from `more-cheese/generated`:
+
+| cluster | roots | children | on disk |
+|---|---|---|---|
+| `orders` → `order-lines` | 15,420 | 17,075 | 20.5 MB |
+| **`committee-meetings`** → agenda-items / attendance / motions / votes | **294** | 4,216 | **1.4 MB** |
+| `form-responses` → `form-answers` | 869 | 2,760 | 1.3 MB |
+| `events` → `event-registrations` | 98 | 16,875 | 5.8 MB |
+
+- **`collections` + `embeds` → `committee-meetings`.** Better than orders on the merits, not merely
+  cheaper: it is a **multi-child** composition — four distinct collections under one root — where orders
+  is a single-child nest, and the ownership is unambiguous. Nobody edits an agenda item independently of
+  its meeting, which is exactly the question `collections` vs `relatedEntities` exists to answer. 294
+  roots against 15,420 is 52× fewer graphs. `form-responses` → `form-answers` is the second case if a
+  single-child shape is wanted alongside it.
+- **`extension` → `order-lines`, flat, at its full 17,075 rows.** That is the axis that fixes the
+  reported bug — Event Order Line is an IsA child of Order Line — and it needs no nesting whatsoever.
+- **Orders are not nested.** Folding line bytes into an order's root checksum makes a one-line edit
+  re-push a whole order, which defeats `--incremental`.
+- **Do not reach for `events` → `event-registrations`.** It looks like the obvious nest and is not: 98
+  roots holding 16,875 registrations is ~172 children per root — semantically a clean composition,
+  pathological in shape. Fan-out decides, not ownership alone.
+
 
 ---
 
@@ -483,6 +564,18 @@ Two calls that are the plan owner's, not the implementer's. Both were raised in 
 - Unknown top-level key (`"colections"`, `"extensions"`) → `validate` error with a did-you-mean, not a green no-op push.
 - Selector resolves a subtype, JSON omits `extension` → **warning**; JSON has `extension`, selector resolves null → **error**.
 - Deletion: item removed from `collections.Lines[]`; `deleteRecord` inside a collection item; collection-implied deletes still hit the Phase-0 audit + confirmation.
+
+**Collection membership (§8.1(a)) — every one of these is a silent-failure guard:**
+
+- `upsert` (default): DB has 5 lines, file lists 2 → both updated, **3 untouched**, **zero** deletes issued.
+- `authoritative`, same file → 3 deleted, and the delete set reaches the Phase-0 audit with the
+  collection name and the count in the confirmation text.
+- `authoritative` with a delete set over `maxImpliedDeletePercent` and no `--allow-bulk-delete` →
+  refuses and changes **nothing** (not a partial apply).
+- `deleteRecord` inside a collection item removes exactly that row — asserted in **both** modes.
+- `Load: 'never'` collection under either mode → hard error naming the collection; never an append.
+- Unknown `mode` value in `.mj-sync.json` → `validate` error, not a fallback to `upsert`.
+- A record file carrying a per-record `{ "mode": … }` wrapper → `validate` error; mode is directory-level only.
 - Discriminator flip on an existing record (Product Event → non-Event with an extension row present) → **reported, never auto-repaired** (§4.3).
 - Mid-graph failure (line 3 of 5 fails validation) → whole root rolls back **and** the file's `sync` block is left untouched, so a retry is clean. A half-saved graph with an updated checksum is unrecoverable by retry.
 - Dry-run builds the graph and resolves `@owner` / the subtype without saving.
@@ -517,3 +610,22 @@ Two calls that are the plan owner's, not the implementer's. Both were raised in 
   - A **fourth PR** (MJ core) is added ahead of MJ sync, and one for Orders to delete its six re-derivations.
   - §10's "no IsA runtime API changes" was **wrong** and is corrected.
   - Two decisions deliberately left open for the owner in **§8.1**: collection membership semantics, and whether cheese nests or only adds `extension`.
+- **2026-09-08 (rev 3, owner decisions):** both questions rev 2 left open in §8.1 are **resolved**; the
+  section is now normative rather than a list of choices.
+  - **(a) Collection membership — `upsert` default, `authoritative` opt-in, mode declared per collection
+    in `.mj-sync.json` and never in a record file.** "Additive" was concealing two behaviors;
+    additive-without-load is a bug, not a mode. `upsert` wins the default on asymmetry of harm — silent
+    data loss versus recoverable duplicates — and because it preserves today's `relatedEntities`
+    semantics, so a file migrating between the two keys does not change meaning (§4.5 already forbids
+    silent re-routing; differing semantics would have made any later migration a data-loss event).
+    Membership is a property of the relationship, so a per-record mode would let two files disagree and
+    let a hand-edit escalate one file into a delete. `deleteRecord` per item works in both modes, which
+    is what keeps `authoritative` rare. Bulk rail, Phase-0 audit, `Load: 'never'` and unknown-mode
+    handling are riders, not options.
+  - **(b) Cheese is the full gate, with the nesting scoped.** `collections`/`embeds` are proven on
+    `committee-meetings` (294 roots, four child collections, 1.4 MB) and `extension` on flat
+    `order-lines` at its full 17,075 rows. Orders are **not** nested — folding line bytes into the root
+    checksum defeats `--incremental`. This supersedes rev 2's "prove `collections` on something small":
+    committee-meetings is real generated cheese data, not a fixture, so every axis is proven on the real
+    corpus. `events` → `event-registrations` is explicitly rejected as a nesting candidate at ~172
+    children per root.
