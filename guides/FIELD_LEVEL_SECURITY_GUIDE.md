@@ -93,7 +93,16 @@ access than its entity-level permissions already give it:
 - a rule that **denies** anything to a role the system user holds is refused;
 - an edit that would turn its **last** `Allow` on a field into `No Access` is refused;
 - a delete that would remove its **last** `Allow` on a field is refused;
-- giving the system user a role that already denies a field is refused.
+- giving the system user a role that already denies a field is refused;
+- **taking a role off** the system user is refused when the roles it keeps would no longer grant a
+  field it can currently use.
+
+The last two are mirror images, and both are needed — without the pair, the forbidden state is
+reachable simply by doing the steps in a different order. Assignment only has to weigh *denying*
+rules, since adding a role can only add rules to the aggregate. Removal is the opposite shape: what
+matters is not what the departing role said but whether an `Allow` survives without it. A removal
+that also costs the account its *entity-level* read is permitted — it is then denied one level up,
+where field rules decide nothing.
 
 Anything that does not reduce its access saves normally — including `Allow` and `No Access` rows
 on those roles, which is the mechanism the server's own access depends on. Rules aimed at any
@@ -175,7 +184,9 @@ denied set on an entity:
 | **Saves (denied-read fields)** | Values a client sends for fields it cannot *read* are **silently ignored** — such a field was stripped from every payload the client ever received, so any value it sends back is fabricated by the transport, not user intent. This is what makes "load a record, edit an unrelated field, save" safe for restricted users. |
 | **Creates** | A value supplied for a field the user may not create is **dropped, and the column takes its default** — the insert is never rejected. Rejecting would name the field, confirming it exists and is restricted; and silently defaulting is exactly what an unrestricted user gets by leaving the field blank, so a restricted user ends up with the same record shape rather than a failure. |
 | **Typed accessors (`Get` / `Set`)** | Reading or writing a denied field **by name** throws, so a restricted field surfaces as a clear failure instead of a silent blank. Framework-internal machinery — validation, save-SQL generation, serialization — reads values directly and is exempt, which is what keeps stored values intact through a restricted user's round trip. |
-| **Entity forms** | Fields the user cannot read are **not rendered at all**. The form checks access before touching a value, so one denied column cannot take out the form it sits in. |
+| **Record names** (FK links, breadcrumbs, pickers) | When an entity's **name field** is denied, the record's display name is withheld and every caller **falls back to the primary key**. This applies to the `GetEntityRecordName` query and to `BaseEntity.GetRecordName()` alike. It is a fallback rather than an error on purpose: `GetRecordName()` runs automatically after every load and save, so throwing would make records on that entity fail to open rather than merely hide a name — and answering "no name" keeps the query from becoming a probe that tells restricted apart from missing. |
+| **Entity forms** | Fields the user cannot read are **not rendered at all**. The form checks access before touching a value, so one denied column cannot take out the form it sits in. A field you can read but not write renders read-only rather than editable — which matters most on **create**, where the server drops the value silently and this is the only signal you get. |
+| **Grids and view configuration** | Denied columns are not rendered, and the view-configuration panel does not offer them as columns. Your **saved column preferences are left intact** — a denial is reversible, so hiding a column never rewrites the preference that mentions it, and the column reappears when access is restored. Saved **sort** settings are dropped, because a denied field in `ORDER BY` is rejected outright rather than degrading. |
 
 ### The denial message — ambiguous for READ, explicit for WRITE
 
@@ -370,6 +381,14 @@ Until it runs, only the API tier reflects the change.
 
 ## 5. Operational notes
 
+- **There is currently no UI for the entity flag.** `Enable Field Level Security` is not exposed on
+  the Entity form in Explorer — the custom form that entity uses does not render it, and the flag is
+  the *only* thing standing between a configured rule and an enforced one. Until that is added
+  ([#4297](https://github.com/MemberJunction/MJ/issues/4297)), turn it on the way the integration
+  tests do: save `EnableFieldLevelSecurity` through the entity layer (`MJ: Entities`), which is also
+  what runs the snapshot. Editing the column with direct SQL is **not** equivalent — it commits the
+  flag without the rows, and on an enabled entity a field with no rows is denied, so it locks every
+  user out of every field on that entity.
 - **Enabling field security on an entity is safe and reversible** (§1.1). It snapshots current
   access, so nothing changes until you tighten a field; switching it off keeps your rules for
   later. You do not maintain the rows by hand — MJ reconciles them as the schema and
