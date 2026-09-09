@@ -1,14 +1,16 @@
 import { BaseEntity, EntityFieldExtendedType, EntityFieldInfo, EntityFieldValueListType, EntityInfo, EntityRelationshipInfo, Metadata, TypeScriptTypeFromSQLType } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
 import ts from 'typescript';
 import { makeDir, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { logError, logStatus, logWarning } from './status_logging';
 import { ValidatorResult, ManageMetadataBase } from '../Database/manage-metadata';
-import { configInfo, mj_core_schema, resolveEntityImportPackage, type ConfigInfo } from '../Config/config';
+import { configInfo, dbPlatform, mj_core_schema, resolveEntityImportPackage, type ConfigInfo } from '../Config/config';
 import { SQLLogging } from './sql_logging';
-import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
+import { CodeGenConnection, resolveCodeGenDatabaseProvider } from '../Database/codeGenDatabaseProvider';
+import { CodeGenReporter } from './codegen-reporter';
+import { v4 as uuidv4 } from 'uuid';
 import { writeFileIfChanged } from './file-write';
 import { EmitStats } from './emit-stats';
 import {
@@ -218,7 +220,7 @@ export class EntitySubClassGeneratorBase {
       }
 
       const grouped = groupEntitiesBySchema(entities);
-      const schemas = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+      const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(directory, 'entities');
       makeDir(schemasDir);
 
@@ -1171,10 +1173,10 @@ ${fields}
     const packages = [...byPackage.keys()].sort((a, b) => {
       if (a === '@memberjunction/core-entities') return -1;
       if (b === '@memberjunction/core-entities') return 1;
-      return a.localeCompare(b);
+      return ordinalCompare(a, b);
     });
     return packages.map((pkg) => {
-      const names = [...byPackage.get(pkg)!].sort((a, b) => a.localeCompare(b));
+      const names = [...byPackage.get(pkg)!].sort((a, b) => ordinalCompare(a, b));
       return `import { ${names.join(', ')} } from '${pkg}';\n`;
     });
   }
@@ -1321,10 +1323,14 @@ ${fields}
 
         let sSQL: string  = '';
         const justGenerated = ret.validators.filter((f) => f.wasGenerated);
+        if (justGenerated.length > 0) {
+          CodeGenReporter.Instance.counter('ai.validatorCalls', justGenerated.length);
+        }
+        const provider = resolveCodeGenDatabaseProvider(dbPlatform());
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
           const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
-          sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
+          sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`;
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
             sSQL += `UPDATE ${generatedCodeTbl} SET
@@ -1335,25 +1341,29 @@ ${fields}
                         ${qi('GeneratedAt')}=${utcNow},
                         ${qi('GeneratedByModelID')}=${lit(v.aiModelID)}
                      WHERE
-                        ${qi('ID')}=${lit(v.generatedCodeId)};`
+                        ${qi('ID')}=${lit(v.generatedCodeId)};\n\n`;
           }
           else {
-            // need to create a row inside the __mj.GeneratedCode table
+            // need to create a row inside the __mj.GeneratedCode table with literal host-stable ID
             const linkedEntityID = f ? entityFieldsEntityID : entitiesEntityID;
             const linkedRecordPK = f ? f.ID : entity.ID;
-            sSQL += `INSERT INTO ${generatedCodeTbl} (${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
-                      VALUES (${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)});
-
-            `
+            const newGeneratedCodeId = uuidv4();
+            v.generatedCodeId = newGeneratedCodeId;
+            const checkQuery = `SELECT 1 FROM ${generatedCodeTbl} WHERE ${qi('CategoryID')} = ${validatorCodeCategoryID} AND ${qi('LinkedEntityID')} = ${lit(linkedEntityID ?? '')} AND ${qi('LinkedRecordPrimaryKey')} = ${lit(linkedRecordPK)}`;
+            const insertSQL = `INSERT INTO ${generatedCodeTbl} (${qi('ID')}, ${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
+VALUES (${lit(newGeneratedCodeId)}, ${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)})`;
+            sSQL += `${provider.conditionalInsertSQL(checkQuery, insertSQL)};\n\n`;
           }
         }
 
         // now Log and Execute the SQL
-        try {
-          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
-        }
-        catch (e) {
-          logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
+        if (sSQL.trim().length > 0) {
+          try {
+            await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
+          }
+          catch (e) {
+            logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);
+          }
         }
       }
 
@@ -1369,18 +1379,18 @@ ${fields}
     const sortedValidators = unsortedValidators.sort((a, b) => {
       // sort by field name, then by function name, then by generatedCodeId as last-resort tiebreaker
       if (a.fieldName && b.fieldName) {
-        const cmp = a.fieldName.localeCompare(b.fieldName) || a.functionName.localeCompare(b.functionName);
+        const cmp = ordinalCompare(a.fieldName, b.fieldName) || ordinalCompare(a.functionName, b.functionName);
         if (cmp !== 0) return cmp;
       } else if (a.fieldName) {
         return -1; // a comes first
       } else if (b.fieldName) {
         return 1; // b comes first
       } else {
-        const cmp = a.functionName.localeCompare(b.functionName); // both are table-level, sort by function name
+        const cmp = ordinalCompare(a.functionName, b.functionName); // both are table-level, sort by function name
         if (cmp !== 0) return cmp;
       }
       // last-resort tiebreaker for absolute determinism
-      return a.generatedCodeId.localeCompare(b.generatedCodeId);
+      return ordinalCompare(a.generatedCodeId, b.generatedCodeId);
     });
 
     // Deduplicate by functionName — duplicate GeneratedCode records can exist if the view JOIN
