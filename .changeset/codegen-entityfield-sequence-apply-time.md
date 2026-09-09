@@ -1,0 +1,10 @@
+---
+"@memberjunction/codegen-lib": patch
+---
+
+CodeGen: every `EntityField` insert carries an apply-time `Sequence`, and the CI gate catches any literal (#4202).
+
+#4048 (v6.1.0-edge.4) changed `getPendingEntityFieldINSERTSQL` to write the catalog ordinal as a literal, preceded by a `+100000` "park" `UPDATE` of the entity's existing rows. That is safe within one CodeGen run, where `spUpdateExistingEntityFieldsFromSchema` renumbers everything moments later, but not across two migrations replayed on a fresh database: Flyway runs every versioned migration before the repeatable renumber, so the second migration's park has nothing reliable to move and its INSERT collides on `UQ_EntityField_EntityID_Sequence`. The failure then reports itself as an unrelated FK error against `EntityFieldValue`. Two further emitters (virtual-entity fields and IS-A parent fields) resolved their `Sequence` at run time and wrote it as a literal too.
+
+- All three emitters use one helper, `applyTimeEntityFieldSequenceSQL`: `(SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [EntityField] WHERE [EntityID] = '…')`. Unique on any database in any order; the renumber makes the value disposable. The park and the run-time `nextAvailableEntityFieldSequence` lookup are gone. `IncludeFirstNFieldsAsDefaultInView` is honored by schema ordinal again (it compared against the placeholder and could never match).
+- `.github/scripts/check-migration-entityfield-sequence.mjs` is a positional parser: it finds the `Sequence` column in the INSERT's column list and flags any bare integer in that position of every `VALUES` tuple, either quoting dialect, comments and string literals masked. It reports only lines a PR adds to Flyway versioned migrations (baselines and `tests/` fixtures are out of scope) and works from any directory, on the working tree and untracked files locally. The previous detector matched only the six-digit `100000` band and was never wired into CI; the "Check migrations" workflow now runs its self-test on every PR and the scan, blocking, on PRs that touch `migrations/`.
