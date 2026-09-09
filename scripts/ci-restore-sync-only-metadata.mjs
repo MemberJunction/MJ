@@ -20,14 +20,18 @@
  * else the push wrote — a minted primaryKey, a changed field — leaves the file dirty and the
  * drift step red, with the offending delta printed so the log says WHY rather than just
  * naming the file.
+ *
+ * Setting `push.writeSyncMetadata: false` is not the alternative it appears to be: it is read
+ * from entityConfig, and that committed config is what the build engineer's release push
+ * uses — which must write sync blocks.
  */
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
-
-const git = (...args) => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 1 << 28 });
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /** Recursively drop every `sync` key, so two trees compare on real content alone. */
-const stripSync = (node) => {
+export const stripSync = (node) => {
   if (Array.isArray(node)) return node.map(stripSync);
   if (node && typeof node === 'object') {
     return Object.fromEntries(
@@ -39,49 +43,66 @@ const stripSync = (node) => {
   return node;
 };
 
-const changed = git('diff', '--name-only', '--', 'metadata/')
-  .split('\n')
-  .map((s) => s.trim())
-  .filter((s) => s.endsWith('.json'));
+/**
+ * True when `currentText` and `headText` describe the same records once `sync` blocks are
+ * ignored. Throws if either side is not parseable — an unreadable file is not a file we may
+ * silently revert.
+ */
+export const isSyncOnlyChange = (currentText, headText) =>
+  JSON.stringify(stripSync(JSON.parse(currentText))) === JSON.stringify(stripSync(JSON.parse(headText)));
 
-if (changed.length === 0) {
-  console.log('No modified metadata/*.json files — nothing to restore.');
-  process.exit(0);
-}
+/**
+ * Restore every modified `metadata/**.json` whose only delta is `sync` blocks.
+ * Returns what it did, so a caller (or a test) can assert on it rather than parse stdout.
+ */
+export function restoreSyncOnlyMetadata({ cwd = process.cwd() } = {}) {
+  const git = (...args) => execFileSync('git', args, { cwd, encoding: 'utf8', maxBuffer: 1 << 28 });
 
-let restored = 0;
-const kept = [];
+  const changed = git('diff', '--name-only', '--', 'metadata/')
+    .split('\n')
+    .map((s) => s.trim())
+    .filter((s) => s.endsWith('.json'));
 
-for (const file of changed) {
-  let now, was;
-  try {
-    now = stripSync(JSON.parse(readFileSync(file, 'utf8')));
-    was = stripSync(JSON.parse(git('show', `HEAD:${file}`)));
-  } catch (err) {
-    // A file we cannot parse is not a file we may silently revert.
-    kept.push(`${file} (could not compare: ${err.message})`);
-    continue;
+  const restored = [];
+  const kept = [];
+
+  for (const file of changed) {
+    try {
+      const current = readFileSync(path.join(cwd, file), 'utf8');
+      const head = git('show', `HEAD:${file}`);
+      if (isSyncOnlyChange(current, head)) {
+        git('checkout', '--', file);
+        restored.push(file);
+      } else {
+        kept.push({ file, reason: 'differs beyond sync blocks' });
+      }
+    } catch (err) {
+      kept.push({ file, reason: `could not compare: ${err.message}` });
+    }
   }
 
-  if (JSON.stringify(now) === JSON.stringify(was)) {
-    git('checkout', '--', file);
-    console.log(`restored (sync blocks only): ${file}`);
-    restored++;
-  } else {
-    kept.push(`${file} (differs beyond sync blocks)`);
+  return { restored, kept, git };
+}
+
+function main() {
+  const { restored, kept, git } = restoreSyncOnlyMetadata();
+
+  for (const f of restored) console.log(`restored (sync blocks only): ${f}`);
+  console.log(`\n${restored.length} file(s) restored, ${kept.length} left dirty for the drift step.`);
+
+  if (kept.length > 0) {
+    console.log('\nThe push wrote more than sync blocks into these files:');
+    for (const k of kept) console.log(`  - ${k.file} (${k.reason})`);
+    console.log(
+      '\nA minted primaryKey here means a new record shipped without the hand-run `uuidgen`\n' +
+        'ID that metadata/CLAUDE.md rule 1 requires. Full delta:\n',
+    );
+    // Printed, not thrown: the drift step is what fails the job, and it must see the tree
+    // exactly as this script left it.
+    console.log(git('diff', '--', 'metadata/'));
   }
 }
 
-console.log(`\n${restored} file(s) restored, ${kept.length} left dirty for the drift step.`);
-
-if (kept.length > 0) {
-  console.log('\nThe push wrote more than sync blocks into these files:');
-  for (const k of kept) console.log(`  - ${k}`);
-  console.log(
-    '\nA minted primaryKey here means a new record shipped without the hand-run `uuidgen`\n' +
-      'ID that metadata/CLAUDE.md rule 1 requires. Full delta:\n',
-  );
-  // Printed, not thrown: the drift step is what fails the job, and it should see the tree
-  // exactly as this script left it.
-  console.log(git('diff', '--', 'metadata/'));
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+  main();
 }
