@@ -238,6 +238,28 @@ should configure their projects.
 > see [`packages/Angular/Bootstrap/CLAUDE.md`](../Angular/Bootstrap/CLAUDE.md) and
 > [`packages/Angular/BootstrapLite/CLAUDE.md`](../Angular/BootstrapLite/CLAUDE.md).
 
+## Idempotency and Churn-Free CodeGen Contract
+
+CodeGen guarantees **100% idempotency relative to database state** and **minimal blast radius** for schema changes:
+
+1. **Idempotency (No-Change Runs)**:
+   - Running CodeGen twice against an unchanged database state produces **0 diffs** across all generated code, schemas, and forms.
+   - Run 2 reports counters: `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`.
+   - Empty SQL capture files (`CodeGen_Run_*.sql`) are automatically removed upon run completion; no empty migration artifacts survive.
+
+2. **Minimal Blast Radius (Single-Column Changes)**:
+   - Adding one column to one table strictly modifies **only** that entity's artifacts (`__mj.ts`, specific entity Zod/schema JSON, `generated.ts` type block, and `mjentity.form.component.*`).
+   - Sibling fields on the entity are untouched: existing `DisplayName`, `Category`, `ExtendedType`, `CodeType`, `GeneratedFormSection`, `DefaultInView`, `IncludeInUserSearchAPI`, and `IsNameField` do not churn.
+   - `generated-forms.module.ts` is not modified by adding a column (only by adding or deleting entire entities).
+
+3. **Field Decision Persistence**:
+   - Field categorization and metadata decisions are persisted to `metadata/entities/decisions/` so clean-room builds match warm builds identically.
+   - Re-runs against an existing schema lock established categories and metadata unless the underlying schema definition materially changes.
+
+4. **Stable Partitioning & Deterministic Ordering**:
+   - Submodule partitioning uses stable hash buckets based on entity names rather than array index-chunking, preventing ripple effects across form submodules.
+   - All sorting (entities, fields, relationships) uses deterministic ordinal comparisons (`OrdinalCompare` / `String_CS_AS`) across SQL Server and PostgreSQL.
+
 ## Related
 
 - **Migration authoring rules** — [`migrations/CLAUDE.md`](../../migrations/CLAUDE.md)

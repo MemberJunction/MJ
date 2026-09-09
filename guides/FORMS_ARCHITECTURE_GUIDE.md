@@ -498,7 +498,13 @@ container.
 #### Left-nav
 
 The rail picks one group; the body shows only that group. Selected content
-has **no accordion chrome** (the rail is the header). Related grids fill the
+has **no accordion chrome** (the rail is the header). **Details** shows every
+field panel under one rail item, so the container renders those panels as
+**one card** (`.mj-chrome-details`, with `-first` / `-last` on the visual
+edges — CSS order, not DOM order): no per-section headers, one surface. The
+field rows would otherwise float on the page background. A related grid pinned
+into Details with `ChromeGroup: 'details'` is not part of that card: it keeps
+the chrome-less grid treatment and sits as its own block. Related grids fill the
 **leftover column height** — the selected panel is `flex: 1 1 auto` in the
 column, not a pinned pixel height. Accordion-persisted heights are not
 applied while the rail is showing the panel.

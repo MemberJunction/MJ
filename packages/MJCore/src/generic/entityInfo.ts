@@ -8,7 +8,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, Code
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -269,7 +269,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
                 sorted.sort((a, b) => {
                     const aSeq = (a.Sequence as number) ?? 999999;
                     const bSeq = (b.Sequence as number) ?? 999999;
-                    return aSeq - bSeq;
+                    return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity as string, b.RelatedEntity as string) || ordinalCompare(a.ID as string, b.ID as string);
                 });
                 for (const item of sorted) {
                     this._RelatedEntities.push(new EntityOrganicKeyRelatedEntityInfo(item));
@@ -3547,7 +3547,7 @@ export class EntityInfo extends BaseInfo {
                     er.sort((a, b) => {
                         const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 999999;
                         const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 999999;
-                        return aSeq - bSeq
+                        return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity, b.RelatedEntity) || ordinalCompare(a.ID, b.ID);
                     }); 
                 }
 
