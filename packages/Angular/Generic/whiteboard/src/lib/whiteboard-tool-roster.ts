@@ -52,16 +52,40 @@ export function VisibleToolbarEntries<T extends { Tool: WhiteboardTool }>(entrie
 }
 
 /**
+ * Do two rosters offer the same tools, in the same order?
+ *
+ * The host compares rosters by CONTENT rather than by identity. Identity alone is tempting —
+ * it is one `===` — but it is wrong in both directions: a consumer binding a freshly-built
+ * array literal produces a new reference every change-detection pass (so identity re-clamps
+ * forever, fighting the user for the active tool), while a consumer that mutates ONE array in
+ * place produces the same reference with different contents (so identity never re-clamps, and
+ * a roster that just dropped the held tool goes unenforced). Eleven elements make the content
+ * compare free.
+ *
+ * `== null` deliberately, not `=== null`: see {@link IsToolAllowed}.
+ */
+export function SameRoster(a: WhiteboardToolRoster, b: WhiteboardToolRoster): boolean {
+  if (a == null || b == null) {
+    return a == null && b == null;
+  }
+  return a.length === b.length && a.every((tool, index) => tool === b[index]);
+}
+
+/**
  * The tool the host should hold when `current` is no longer allowed: `select` when the roster
- * offers it, else the roster's first KNOWN entry, else `current` unchanged.
+ * offers it, else the roster's first KNOWN entry, else `select` as the floor.
  *
  * Why `select` first rather than `roster[0]`: roster order is documented as meaningless for
  * rendering ({@link VisibleToolbarEntries} always uses list order), so it must not quietly
  * become load-bearing here. `select` is the neutral tool; falling back to roster order instead
  * would let a host land the user on the eraser by writing the roster in an innocuous order.
  *
- * An empty or all-typo roster returns `current`, so the board never has "no tool" — narrowing
- * the palette to nothing is not the same as making the board read-only.
+ * An empty or all-typo roster ALSO lands on `select`, rather than leaving `current` alone. The
+ * board never has "no tool", so something has to be held, and holding the tool the roster just
+ * revoked is the one answer that keeps a creating tool live with no toolbar to see it and no
+ * key to change it — an empty roster used to keep placing widgets. `select` is always a real
+ * tool and can create nothing, so it is the safe floor. Narrowing the palette to nothing still
+ * does NOT make the board read-only; that is `ReadOnly`.
  */
 export function ClampToolToRoster(current: WhiteboardTool, roster: WhiteboardToolRoster): WhiteboardTool {
   if (IsToolAllowed(roster, current)) {
@@ -69,7 +93,7 @@ export function ClampToolToRoster(current: WhiteboardTool, roster: WhiteboardToo
   }
   const known = (roster ?? []).filter(IsKnownTool);
   if (known.length === 0) {
-    return current;
+    return 'select';
   }
   return known.includes('select') ? 'select' : known[0];
 }

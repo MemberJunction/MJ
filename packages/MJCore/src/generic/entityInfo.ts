@@ -18,6 +18,7 @@ import {
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
 } from "./entityConfiguration"
+import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
 /**
  * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
@@ -2029,6 +2030,38 @@ export class EntityInfo extends BaseInfo {
      */
     AllowMultipleSubtypes: boolean = false
     /**
+     * Optional JSON configuration specifying declarative prospective subtype resolution on an entity.
+     * Stored in the SubtypeSelector column of Entity (shape = IEntitySubtypeSelectorConfig).
+     */
+    SubtypeSelector: string = null
+
+    private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+
+    /**
+     * Parsed SubtypeSelector configuration, if configured.
+     */
+    get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
+        if (this._subtypeSelectorConfig === undefined) {
+            if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
+                try {
+                    const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
+                    if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
+                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
+                        this._subtypeSelectorConfig = null;
+                    }
+                } catch (err) {
+                    LogError(`EntityInfo '${this.Name}': failed to parse SubtypeSelector JSON '${this.SubtypeSelector}': ${err instanceof Error ? err.message : String(err)}`);
+                    this._subtypeSelectorConfig = null;
+                }
+            } else {
+                this._subtypeSelectorConfig = null;
+            }
+        }
+        return this._subtypeSelectorConfig;
+    }
+    /**
      * Whether to audit when users access records from this entity
      */
     AuditRecordAccess: boolean = null
@@ -2456,7 +2489,7 @@ export class EntityInfo extends BaseInfo {
      * column but the first on a composite key. Build keys with `CompositeKey.FromURLSegment(entityInfo, recordId)`
      * or `CompositeKey.FromEntityRecord(entityInfo, row)`, which honor all of `PrimaryKeys`.
      */
-    get FirstPrimaryKey(): EntityFieldInfo {
+    get FirstPrimaryKey(): EntityFieldInfo { // first-pk-ok: the accessor itself
         if (this._firstPrimaryKeyCache === undefined) {
             this._firstPrimaryKeyCache = this.Fields.find((f) => f.IsPrimaryKey);
         }
@@ -3149,7 +3182,7 @@ export class EntityInfo extends BaseInfo {
         }
         else {
             // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
-            const firstKey = record.FirstPrimaryKey;
+            const firstKey = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
             keyValue = firstKey.Value;
             //When creating a new record, the keyValue is null and the quotes are not needed
             quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
@@ -3199,7 +3232,7 @@ export class EntityInfo extends BaseInfo {
             if (rel) return EntityInfo.BuildRelationshipViewParams(record, rel);
         }
 
-        const firstKey = record.FirstPrimaryKey;
+        const firstKey = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
         const keyValue = firstKey.Value;
         const quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
         const clauses = fields.map((field) => `[${field}] = ${quotes}${keyValue}${quotes}`);
@@ -3250,7 +3283,7 @@ export class EntityInfo extends BaseInfo {
     private static resolveRelationshipKeyValue(record: BaseEntity, relationship?: EntityRelationshipInfo): unknown {
         const explicit = relationship?.EntityKeyField?.trim();
         if (explicit) return record.Get(explicit);
-        const first = record.FirstPrimaryKey;
+        const first = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
         if (first?.Name) return record.Get(first.Name);
         return first?.Value;
     }

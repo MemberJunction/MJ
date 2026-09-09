@@ -64,7 +64,7 @@ export class ExampleNewUserSubClass extends NewUserBase {
         //p.Email = email;
         //p.Status = 'active';
         if (await p.Save()) {
-          personId = p.FirstPrimaryKey.Value; // if we had a strongly typed sub-class above, we could use this code p.ID;
+          personId = p.FirstPrimaryKey.Value; // first-pk-ok: sample code for a hypothetical ID-keyed Persons entity (see row['ID'] above); personId feeds User.LinkedEntityRecordID, a single-value link. With a strongly typed sub-class this would be p.ID
         } else {
           LogError(`Failed to create new person ${firstName} ${lastName} ${email}`);
         }
