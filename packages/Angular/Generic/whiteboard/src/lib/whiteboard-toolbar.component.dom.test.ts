@@ -19,6 +19,21 @@ describe('RealtimeWhiteboardToolbarComponent (DOM)', () => {
     expect(toolButtons(f).length).toBe(f.componentInstance.Tools.length + 2);
   });
 
+  it('narrows the palette to the ToolRoster (plus undo + redo), in Tools order', () => {
+    const f = renderComponentFixture(RealtimeWhiteboardToolbarComponent, { inputs: { ToolRoster: ['eraser', 'select', 'pen'] } });
+    const titles = toolButtons(f).map((b) => b.getAttribute('title'));
+    // 3 roster tools + undo + redo
+    expect(toolButtons(f).length).toBe(5);
+    expect(titles.slice(0, 3)).toEqual(['Select / move', 'Pen', 'Eraser']);
+  });
+
+  it('a roster entry that names no tool is ignored, and a null roster is the full palette', () => {
+    const typo = renderComponentFixture(RealtimeWhiteboardToolbarComponent, { inputs: { ToolRoster: ['pen', 'lasso'] } });
+    expect(toolButtons(typo).length).toBe(1 + 2);
+    const all = renderComponentFixture(RealtimeWhiteboardToolbarComponent, { inputs: { ToolRoster: null } });
+    expect(toolButtons(all).length).toBe(all.componentInstance.Tools.length + 2);
+  });
+
   it('marks the active tool button with the .active class and only that one', () => {
     const f = renderComponentFixture(RealtimeWhiteboardToolbarComponent, { inputs: { ActiveTool: 'pen' } });
     const active = toolButtons(f).filter((b) => b.classList.contains('active'));
