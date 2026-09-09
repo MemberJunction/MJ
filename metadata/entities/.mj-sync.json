@@ -2,9 +2,7 @@
   "entity": "MJ: Entities",
   "filePattern": "**/.*.json",
   "defaults": {},
-  "push": {
-    "writeSyncMetadata": false
-  },
+
   "pull": {
     "createNewFileIfNotFound": true,
     "newFileName": ".entities.json",

@@ -59,8 +59,20 @@ export class RealtimeWhiteboardToolbarComponent {
    * Which tools the palette offers. `null` (default) is all eleven, today's rendering. A host
    * that narrows this also narrows the keyboard shortcuts and the canvas context menu, because
    * the same roster is threaded to all three (see `whiteboard-tool-roster.ts`).
+   *
+   * A setter so {@link VisibleTools} is filtered ONCE per roster change rather than on every
+   * change-detection pass — the template loops over it, so a getter re-filtered the eleven
+   * entries (and allocated a new array, defeating `@for` reuse) on every tick.
    */
-  @Input() ToolRoster: WhiteboardToolRoster = null;
+  @Input()
+  set ToolRoster(value: WhiteboardToolRoster) {
+    this._toolRoster = value ?? null;
+    this.VisibleTools = VisibleToolbarEntries(this.Tools, this._toolRoster);
+  }
+  get ToolRoster(): WhiteboardToolRoster {
+    return this._toolRoster;
+  }
+  private _toolRoster: WhiteboardToolRoster = null;
   /** Selected pen ink color (from {@link WHITEBOARD_PEN_COLORS}). */
   @Input() PenColor: string = WHITEBOARD_PEN_COLORS[0];
   /** Selected pen stroke width. */
@@ -108,10 +120,11 @@ export class RealtimeWhiteboardToolbarComponent {
     { Tool: 'eraser', Icon: 'fa-solid fa-eraser', Title: 'Eraser', Kbd: 'E' }
   ];
 
-  /** `Tools` narrowed by `ToolRoster`, in `Tools` order. The template loops over this. */
-  public get VisibleTools(): ToolbarEntry[] {
-    return VisibleToolbarEntries(this.Tools, this.ToolRoster);
-  }
+  /**
+   * `Tools` narrowed by `ToolRoster`, in `Tools` order. The template loops over this.
+   * Recomputed by the {@link ToolRoster} setter; the default (no roster) is every tool.
+   */
+  public VisibleTools: ToolbarEntry[] = [...this.Tools];
 
   public readonly PenColors = WHITEBOARD_PEN_COLORS;
   public readonly PenWidths = WHITEBOARD_PEN_WIDTHS;
