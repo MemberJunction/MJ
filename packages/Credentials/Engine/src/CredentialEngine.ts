@@ -669,10 +669,17 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      * one promise makes each operation load only after the previous one
      * committed, so a full-row save always writes a current snapshot.
      *
-     * Scope: this closes the race within one process. Two separate processes can
-     * still clobber each other's columns — that is a property of MJ's
-     * write-all-columns spUpdate semantics affecting every entity, tracked by the
-     * sparse-update work in issue #2552.
+     * Scope, precisely: this serializes the writes that go THROUGH THIS ENGINE —
+     * updateCredential and the two timestamp touches. It is not a lock on the row.
+     * Code that loads and saves the `MJ: Credentials` entity directly is outside
+     * the chain and can still interleave with a touch; `IntegrationDiscoveryResolver`
+     * writes `Values` that way in two places today. A new in-process writer of this
+     * entity should call updateCredential rather than saving the entity itself, or
+     * route through enqueueCredentialWrite, so it inherits this ordering.
+     *
+     * And two separate processes can still clobber each other's columns regardless —
+     * that is a property of MJ's write-all-columns spUpdate semantics affecting every
+     * entity, tracked by the sparse-update work in issue #2552.
      *
      * The returned promise settles with the operation's own outcome; a rejected
      * operation does not break the chain for subsequent writers.
