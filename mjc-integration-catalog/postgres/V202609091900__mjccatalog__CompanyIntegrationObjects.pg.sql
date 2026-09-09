@@ -233,7 +233,7 @@ SELECT
     t."LastSeenAt",
     t."LastSampledAt"
 FROM ${mjSchema}."CompanyIntegrationObject" AS t;
-GRANT SELECT ON ${mjSchema}."vwCompanyIntegrationObjects" TO cdp_UI, cdp_Developer, cdp_Integration;
+GRANT SELECT ON ${mjSchema}."vwCompanyIntegrationObjects" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
 DROP VIEW IF EXISTS ${mjSchema}."vwCompanyIntegrationObjectFields" CASCADE;
 CREATE VIEW ${mjSchema}."vwCompanyIntegrationObjectFields"
 AS
@@ -278,7 +278,7 @@ SELECT
 FROM ${mjSchema}."CompanyIntegrationObjectField" AS t
 LEFT OUTER JOIN ${mjSchema}."CompanyIntegrationObject" AS r
     ON t."RelatedCompanyIntegrationObjectID" = r."ID";
-GRANT SELECT ON ${mjSchema}."vwCompanyIntegrationObjectFields" TO cdp_UI, cdp_Developer, cdp_Integration;
+GRANT SELECT ON ${mjSchema}."vwCompanyIntegrationObjectFields" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
 
 -- ==============================================================================================
 -- 6. CRUD procedures
