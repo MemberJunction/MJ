@@ -11,3 +11,5 @@ After the first park, the only rows left below the band are precisely the ones t
 Any entity that gains fields in **both** CodeGen passes reaches that state: the real columns in pass 1, and in pass 2 the denormalized name column that a new foreign key introduces. `AIPromptRun` does exactly that, and a from-scratch `mj migrate` caught it.
 
 The park now runs only when nothing on the entity is parked yet, so a second emission is a no-op. A regression test pins the guard, because the previous condition looked correct in isolation and only failed on the second pass.
+
+**Superseded by #4292**: `parkEntityFieldSequencesSQL` was removed. The park could be made idempotent within one run but not across two migrations replayed on a fresh database; CodeGen now emits an apply-time `MAX(Sequence)` expression instead.

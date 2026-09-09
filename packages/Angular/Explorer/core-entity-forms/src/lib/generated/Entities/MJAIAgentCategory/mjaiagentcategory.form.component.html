@@ -37,7 +37,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="AssignmentStrategy"
-            Type="code"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -76,6 +76,35 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Storage Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="storageConfiguration"
+        SectionName="Storage Configuration"
+        Icon="fa fa-hdd"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="DefaultStorageAccountID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Details Section -->
+    <mj-collapsible-panel
+        SectionKey="details"
+        SectionName="Details"
+        Icon="fa fa-align-left"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -107,25 +136,6 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Storage Configuration Section -->
-    <mj-collapsible-panel
-        SectionKey="storageConfiguration"
-        SectionName="Storage Configuration"
-        Icon="fa fa-hdd"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="false"
-            FieldName="DefaultStorageAccountID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>

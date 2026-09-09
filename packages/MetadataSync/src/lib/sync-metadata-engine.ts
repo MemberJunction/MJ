@@ -73,6 +73,7 @@ import {
   UserInfo
 } from '@memberjunction/core';
 import { IsUuidSQLType } from '@memberjunction/sql-dialect';
+import { ordinalCompare } from '@memberjunction/global';
 import fastGlob from 'fast-glob';
 import fs from 'fs-extra';
 import { JsonPreprocessor } from './json-preprocessor';
@@ -163,6 +164,15 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    */
   private pkIndexes: Map<string, Map<string, BaseEntity>> = new Map();
 
+  /**
+   * Per-entity lookup index keyed on lowercased composite key strings (`field=value|...`).
+   * Provides O(1) resolution for @lookup keys over preloaded entities.
+   */
+  private lookupIndexes: Map<string, Map<string, BaseEntity>> = new Map();
+
+  /** Dynamic entity cache properties populated via BaseEngine / preload */
+  [key: `cached_${string}`]: BaseEntity[] | undefined;
+
   /** Non-fatal warnings collected during preload (malformed shapes, oversized entities). Drained by the caller after `Config()`. */
   private warnings: string[] = [];
 
@@ -186,7 +196,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * arrays for the given entity are stored. `BaseEngine.applyImmediateMutation`
    * reads/writes these slots directly, so we use a deterministic naming scheme.
    */
-  public getPropertyNameForEntity(entityName: string): string {
+  public getPropertyNameForEntity(entityName: string): `cached_${string}` {
     return `${CACHED_ENTITY_PROP_PREFIX}${entityName.replace(/[^a-zA-Z0-9]/g, '_')}`;
   }
 
@@ -227,6 +237,76 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
    * subscription replaces saved instances with clones) — that drift is
    * absorbed by {@link findCachedByPrimaryKey}'s scan-and-repair fallback.
    */
+  /**
+   * Build a deterministic composite key from lookup fields for indexed O(1) lookup.
+   * Matches the normalization used in resolveLookup (trimmed, lowercased, sorted by field name).
+   */
+  public buildLookupCompositeKey(
+    fields: Array<{ fieldName: string; fieldValue: unknown }>
+  ): string {
+    return fields
+      .map(f => ({
+        name: (f.fieldName || '').trim().toLowerCase(),
+        value: (f.fieldValue?.toString() || '').trim().toLowerCase(),
+      }))
+      .sort((a, b) => ordinalCompare(a.name, b.name))
+      .map(f => `${f.name}=${f.value}`)
+      .join('|');
+  }
+
+  /**
+   * Indexes a single entity instance across its single-field and multi-field combinations.
+   */
+  private indexEntityForLookup(
+    entity: BaseEntity,
+    lookupIndex: Map<string, BaseEntity>,
+    entityInfo: EntityInfo
+  ): void {
+    const fields: Array<{ name: string; value: string }> = [];
+    for (const field of entityInfo.Fields) {
+      const raw = entity.Get(field.Name);
+      if (raw !== undefined && raw !== null) {
+        fields.push({
+          name: field.Name.trim().toLowerCase(),
+          value: raw.toString().trim().toLowerCase(),
+        });
+      }
+    }
+
+    // 1. Single-field entries
+    for (const f of fields) {
+      const key = `${f.name}=${f.value}`;
+      if (!lookupIndex.has(key)) {
+        lookupIndex.set(key, entity);
+      }
+    }
+
+    // 2. Pairwise combinations (for 2-field lookups)
+    for (let i = 0; i < fields.length; i++) {
+      for (let j = i + 1; j < fields.length; j++) {
+        const pair = [fields[i], fields[j]].sort((a, b) => ordinalCompare(a.name, b.name));
+        const key = `${pair[0].name}=${pair[0].value}|${pair[1].name}=${pair[1].value}`;
+        if (!lookupIndex.has(key)) {
+          lookupIndex.set(key, entity);
+        }
+      }
+    }
+
+    // 3. Composite of ALL fields (for 3+ field lookups)
+    if (fields.length > 2) {
+      const sorted = [...fields].sort((a, b) => ordinalCompare(a.name, b.name));
+      const allKey = sorted.map(f => `${f.name}=${f.value}`).join('|');
+      if (!lookupIndex.has(allKey)) {
+        lookupIndex.set(allKey, entity);
+      }
+    }
+  }
+
+  /**
+   * Build the per-entity PK → entity Map and lookup index from each populated slot
+   * (self-loaded and delegated alike). Runs once after `Config()` fills
+   * the slots.
+   */
   private buildPKIndexes(entityNames: Iterable<string>): void {
     for (const entityName of entityNames) {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
@@ -235,10 +315,13 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       if (!list) continue;
 
       const index = new Map<string, BaseEntity>();
+      const lookupIndex = new Map<string, BaseEntity>();
+
       for (const entity of list) {
         try {
           const pkStr = this.serializePrimaryKey(entityInfo, entity.GetAll());
           index.set(pkStr, entity);
+          this.indexEntityForLookup(entity, lookupIndex, entityInfo);
         } catch {
           // Defensive: a malformed cached entity shouldn't break index
           // construction for the whole entity. The array scan fallback
@@ -246,7 +329,58 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
         }
       }
       this.pkIndexes.set(entityName, index);
+      this.lookupIndexes.set(entityName, lookupIndex);
     }
+  }
+
+  /**
+   * Rebuilds both the PK indexes and the lookup indexes for the specified entity names
+   * (or all preloaded entity names if omitted). Useful when preloaded data has been updated.
+   */
+  public rebuildIndexes(entityNames?: Iterable<string>): void {
+    this.buildPKIndexes(entityNames ?? this.preloadedEntityNames);
+  }
+
+  /**
+   * O(1) lookup against the preload cache using field/value pairs, with an array-scan
+   * fallback so we tolerate drift or 3+ field subset lookups.
+   *
+   * Returns matching `BaseEntity`, or `null` if not found in cache.
+   */
+  public findCachedByLookup(
+    entityName: string,
+    lookupFields: Array<{ fieldName: string; fieldValue: string }>
+  ): BaseEntity | null {
+    if (!this.isEntityPreloaded(entityName)) return null;
+    if (lookupFields.length === 0) return null;
+
+    const entityIndex = this.lookupIndexes.get(entityName);
+    const key = this.buildLookupCompositeKey(lookupFields);
+    const hit = entityIndex?.get(key);
+    if (hit) return hit;
+
+    // Fallback: array scan over cached entities (and repair the index)
+    const list = this.getCachedEntities(entityName);
+    for (const cachedEntity of list) {
+      let allMatch = true;
+      for (const { fieldName, fieldValue } of lookupFields) {
+        const entityValue = cachedEntity.Get(fieldName);
+        const normalizedEntityValue = (entityValue?.toString() || '').trim().toLowerCase();
+        const normalizedLookupValue = (fieldValue?.toString() || '').trim().toLowerCase();
+        if (normalizedEntityValue !== normalizedLookupValue) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (allMatch) {
+        if (entityIndex) {
+          entityIndex.set(key, cachedEntity);
+        }
+        return cachedEntity;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -350,12 +484,22 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       // Defensive: donor slot vanished — fall through to our own slot.
     }
     const propName = this.getPropertyNameForEntity(entityName);
-    const list = (this as unknown as Record<string, unknown>)[propName];
-    return Array.isArray(list) ? (list as BaseEntity[]) : undefined;
+    const list = this[propName];
+    return Array.isArray(list) ? list : undefined;
   }
 
   public getCachedEntities(entityName: string): BaseEntity[] {
     return this.resolveSlot(entityName) ?? [];
+  }
+
+  /**
+   * Test fixture helper to set preloaded entity array and build indexes.
+   */
+  public setCachedEntitiesForTesting(entityName: string, entities: BaseEntity[]): void {
+    const propName = this.getPropertyNameForEntity(entityName);
+    this[propName] = entities;
+    this.preloadedEntityNames.add(entityName);
+    this.rebuildIndexes([entityName]);
   }
 
   public getCachedFile(filePath: string): CachedFile | undefined {
@@ -383,9 +527,8 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     let list = this.resolveSlot(entityName);
     if (!list) {
       const propName = this.getPropertyNameForEntity(entityName);
-      const slot = (this as unknown as Record<string, unknown>);
-      slot[propName] = [];
-      list = slot[propName] as BaseEntity[];
+      this[propName] = [];
+      list = this[propName]!;
     }
     // `PrimaryKey.Equals` requires the entity to have a populated composite
     // key; if either side is missing one we fall back to reference equality
@@ -404,7 +547,7 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       list.push(entity);
     }
 
-    // Keep the PK index in sync. Skip silently when serializePrimaryKey
+    // Keep the PK and lookup indexes in sync. Skip silently when serializePrimaryKey
     // throws — typically a half-built entity with no PK populated yet.
     try {
       const entityInfo = this.syncEngine.getEntityInfo(entityName);
@@ -416,6 +559,13 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
           this.pkIndexes.set(entityName, index);
         }
         index.set(pkStr, entity);
+
+        let lIndex = this.lookupIndexes.get(entityName);
+        if (!lIndex) {
+          lIndex = new Map<string, BaseEntity>();
+          this.lookupIndexes.set(entityName, lIndex);
+        }
+        this.indexEntityForLookup(entity, lIndex, entityInfo);
       }
     } catch { /* defensive: malformed entity */ }
   }
@@ -437,6 +587,13 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     }
     if (pkStr !== null) {
       this.pkIndexes.get(entityName)?.delete(pkStr);
+      if (entityInfo && list) {
+        const lIndex = new Map<string, BaseEntity>();
+        for (const e of list) {
+          this.indexEntityForLookup(e, lIndex, entityInfo);
+        }
+        this.lookupIndexes.set(entityName, lIndex);
+      }
     }
     this.invalidateLookupsForEntity(entityName);
   }
