@@ -1772,9 +1772,14 @@ END $$;
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
     /** @inheritdoc */
-    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[], discardResult?: boolean): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string {
         const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
-        const paramList = params.join(', ');
+        let paramList: string;
+        if (paramNames && paramNames.length === params.length) {
+            paramList = params.map((p, i) => `p_${paramNames[i]} => ${p}`).join(', ');
+        } else {
+            paramList = params.join(', ');
+        }
         if (discardResult) {
             // `SELECT * FROM routine(...)` is not universally valid on PostgreSQL: a function
             // declared `RETURNS SETOF record` — which spDeleteEntityWithCoreDependencies is — is

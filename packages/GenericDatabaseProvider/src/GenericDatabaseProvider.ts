@@ -126,12 +126,6 @@ export interface ExecuteSQLBatchOptions {
  * Platform-specific providers should extend this class instead of DatabaseProviderBase
  * to inherit these shared behaviors.
  */
-/** ExtendedType values that indicate a geo-relevant field */
-const GEO_EXTENDED_TYPES = new Set([
-    'Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince',
-    'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
-]);
-
 /**
  * Thrown when a nested savepoint fails because the ambient physical transaction
  * was already rolled back by the server (mssql ENOTBEGUN/EABORT, pg 25P01).
@@ -636,16 +630,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
 
-        // Flag geo sync needed in the SaveContext state bag.
-        // Check: entity supports geocoding AND (new record OR any geo field was dirty).
-        // SkipGeoCoding: a sync's writes arrive pre-formed from the source system — the per-write
-        // geocode lookup is suppressed for those saves only; interactive saves still geocode.
-        if (entity.EntityInfo.SupportsGeoCoding && options.SkipGeoCoding !== true) {
-            const needsGeoSync = context.IsNew || context.Fields.some(
-                (f: SaveContextField) => f.WasDirty && f.FieldInfo.ExtendedType != null && GEO_EXTENDED_TYPES.has(f.FieldInfo.ExtendedType)
-            );
-            if (needsGeoSync) {
-                context.State['geoSyncNeeded'] = true;
+        // GeoCodeSyncService is the WRITE path. SupportsGeoCoding also means maps/distance
+        // (read). The service only runs when there is at least one writable Geo* field.
+        // Virtual PrimaryAddress* / __mj_Latitude never invoke the provider.
+        // SkipGeoCoding: per-save (mj-sync push.skipGeoCoding, integration sync).
+        // Native lat/lng already populated (sample data, pasted coords) → do not call the API.
+        if (
+            entity.EntityInfo.SupportsGeoCoding &&
+            options.SkipGeoCoding !== true &&
+            entity.EntityInfo.HasWritableGeoSourceFields
+        ) {
+            const lat = entity.EntityInfo.Fields.find(f => f.IsNativeLatitudeField);
+            const lng = entity.EntityInfo.Fields.find(f => f.IsNativeLongitudeField);
+            const latVal = lat ? entity.Get(lat.Name) : null;
+            const lngVal = lng ? entity.Get(lng.Name) : null;
+            const coordsAlreadySet = latVal != null && latVal !== '' && lngVal != null && lngVal !== '';
+            if (!coordsAlreadySet) {
+                const needsGeoSync = context.IsNew || context.Fields.some(
+                    (f: SaveContextField) => f.WasDirty && f.FieldInfo.IsWritableGeoField
+                );
+                if (needsGeoSync) {
+                    context.State['geoSyncNeeded'] = true;
+                }
             }
         }
     }
@@ -1132,8 +1138,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      * `sha1(\`${schema}.${table}|${normalized pk values joined by |}\`)`, plus an optional
      * `_<n>` with n ≥ 2 when that hash repeats inside one `TransactionGroup`
      * (`_abc123456789`, `_abc123456789_2`, …). Outside a group there is no ordinal: each
-     * `Save()` is its own batch (MetadataSync captures put a batch separator after every
-     * statement), so equal suffixes never share a scope.
+     * `Save()` is its own batch, or the SQL logger separates redeclarations. `mj sync push`
+     * captures put a batch separator after every statement; threshold-mode sessions (Explorer
+     * logging, `mj sync watch`) concatenate saves into one batch, so `SqlLoggingSessionImpl`
+     * emits the separator before any statement that would redeclare a name already declared in
+     * the current batch. Either way equal suffixes never share a scope.
      *
      * Inside a `BatchedSubmit` group the ordinal is load-bearing: two items whose hashes
      * repeat (same record twice, or PK-less inserts) would otherwise declare the same locals in
@@ -5091,8 +5100,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const overallStart = performance.now();
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
         const schema = provider.MJCoreSchemaName;
-        const cache = LocalCacheManager.Instance;
-        const cacheAvailable = cache.IsInitialized && this.TrustLocalCacheCompletely;
 
         // Fetch dataset items metadata (lightweight — just the dataset definition, not entity data)
         const sSQL = `SELECT di.*, ` +
@@ -5118,24 +5125,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             };
         }
 
-        // Phase 1: Try to derive status from cached data for each item
+        // Status ALWAYS comes from SQL — never from cached dataset slots. This method is the
+        // staleness ORACLE: RefreshIfNeeded/CheckToSeeIfRefreshNeeded compare its answer against
+        // locally held metadata to decide whether that metadata is stale, and the client's
+        // smart-cache checks ride it over the wire. Deriving the answer from the very cache whose
+        // freshness is in question closes a loop: a slot the write path failed to maintain
+        // reports itself current forever, and stale permission metadata is then served until
+        // process restart (the FLS over-the-wire leak). The queries are cheap — one batched
+        // MAX/COUNT aggregate per item — and the cache remains fully in play for the DATA reads
+        // in GetDatasetByName.
         const updateDates: DatasetStatusEntityUpdateDateType[] = [];
         let overallLatestDate = new Date(1900, 1, 1);
-        let cacheHitCount = 0;
-        let cacheMissCount = 0;
 
-        // Collect items that need SQL fallback
-        const uncachedItems: Record<string, unknown>[] = [];
-        const uncachedItemMeta: Array<{ entityID: string; entityName: string; datasetMaxUpdatedAt: string }> = [];
-
-        for (const item of items) {
-            const entityID = String(item['EntityID']);
-            const entityName = String(item['Entity']);
+        const itemMeta: Array<{ entityID: string; entityName: string }> = [];
+        const queries = items.map((item) => {
+            const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
+            const entityBaseView = String(item['EntityBaseView']);
             const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
             const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
-            // Build effective filter for fingerprint
+            itemMeta.push({ entityID: String(item['EntityID']), entityName: String(item['Entity']) });
+
+            // The floor for the reported timestamp: an edit to the dataset DEFINITION itself
+            // (item added, filter changed) must read as a change even when no entity row moved.
+            const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
+            const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
+            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
+
+            // Same filter composition as GetDatasetByName's data read — the stored item
+            // WhereClause AND'd with any runtime filter — so status and data describe the same
+            // row set. (Every shipped MJ_Metadata item has a NULL WhereClause, so for metadata
+            // this is identical to an unfiltered aggregate.)
             let effectiveFilter = whereClause;
             if (itemFilters && itemFilters.length > 0) {
                 const filter = itemFilters.find(f => f.ItemCode === code);
@@ -5145,101 +5166,44 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         : filter.Filter;
                 }
             }
+            const filterSQL = effectiveFilter ? ' WHERE ' + effectiveFilter : '';
 
-            const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
-            const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
-            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+            return `SELECT ` +
+                `CASE ` +
+                `WHEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) > '${datasetMaxUpdatedAt}' THEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) ` +
+                `ELSE '${datasetMaxUpdatedAt}' ` +
+                `END AS ${provider.QuoteIdentifier('UpdateDate')}, ` +
+                `COUNT(*) AS ${provider.QuoteIdentifier('TheRowCount')} ` +
+                `FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)}${filterSQL}`;
+        });
 
-            // Try to derive status from cached data
-            if (cacheAvailable) {
-                const fingerprint = cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString,
-                    undefined,
-                    this.datasetCacheSegment(datasetName, code)
-                );
-                const cached = await cache.GetRunViewResult(fingerprint);
-                if (cached) {
-                    cacheHitCount++;
-                    // Derive MAX(dateField) and COUNT(*) directly from cached rows
-                    let maxDateFromRows = new Date(1900, 1, 1);
-                    for (const row of cached.results) {
-                        const record = row as Record<string, unknown>;
-                        if (record[dateFieldToCheck]) {
-                            const d = new Date(String(record[dateFieldToCheck]));
-                            if (d > maxDateFromRows) maxDateFromRows = d;
-                        }
-                    }
-                    const updateDate = maxDateFromRows > datasetMaxUpdatedAt ? maxDateFromRows : datasetMaxUpdatedAt;
-                    updateDates.push({
-                        EntityID: entityID,
-                        EntityName: entityName,
-                        RowCount: cached.results.length,
-                        UpdateDate: updateDate,
-                    });
-                    if (updateDate > overallLatestDate) overallLatestDate = updateDate;
-                    continue; // No SQL needed for this item
-                }
-            }
-
-            // Cache miss — need SQL fallback
-            cacheMissCount++;
-            uncachedItems.push(item);
-            uncachedItemMeta.push({ entityID, entityName, datasetMaxUpdatedAt: datasetMaxUpdatedAt.toISOString() });
+        let batchResults: Record<string, unknown>[][] = [];
+        try {
+            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+        } catch (err) {
+            LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
         }
 
-        // Phase 2: Execute SQL only for cache misses
-        if (uncachedItems.length > 0) {
-            const queries = uncachedItems.map((item, idx) => {
-                const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
-                const entityBaseView = String(item['EntityBaseView']);
-                const code = String(item['Code']);
-                const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-                const meta = uncachedItemMeta[idx];
-
-                let filterSQL = '';
-                if (itemFilters && itemFilters.length > 0) {
-                    const filter = itemFilters.find(f => f.ItemCode === code);
-                    if (filter) filterSQL = ' WHERE ' + filter.Filter;
-                }
-
-                return `SELECT ` +
-                    `CASE ` +
-                    `WHEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) > '${meta.datasetMaxUpdatedAt}' THEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) ` +
-                    `ELSE '${meta.datasetMaxUpdatedAt}' ` +
-                    `END AS ${provider.QuoteIdentifier('UpdateDate')}, ` +
-                    `COUNT(*) AS ${provider.QuoteIdentifier('TheRowCount')} ` +
-                    `FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)}${filterSQL}`;
-            });
-
-            let batchResults: Record<string, unknown>[][] = [];
-            try {
-                batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
-            } catch (err) {
-                LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
-            }
-
-            for (let i = 0; i < uncachedItemMeta.length; i++) {
-                const meta = uncachedItemMeta[i];
-                const statusRows = batchResults[i];
-                if (statusRows && statusRows.length > 0) {
-                    const updateDate = new Date(String(statusRows[0]['UpdateDate']));
-                    updateDates.push({
-                        EntityID: meta.entityID,
-                        EntityName: meta.entityName,
-                        RowCount: Number(statusRows[0]['TheRowCount']),
-                        UpdateDate: updateDate,
-                    });
-                    if (updateDate > overallLatestDate) {
-                        overallLatestDate = updateDate;
-                    }
+        for (let i = 0; i < itemMeta.length; i++) {
+            const meta = itemMeta[i];
+            const statusRows = batchResults[i];
+            if (statusRows && statusRows.length > 0) {
+                const updateDate = new Date(String(statusRows[0]['UpdateDate']));
+                updateDates.push({
+                    EntityID: meta.entityID,
+                    EntityName: meta.entityName,
+                    RowCount: Number(statusRows[0]['TheRowCount']),
+                    UpdateDate: updateDate,
+                });
+                if (updateDate > overallLatestDate) {
+                    overallLatestDate = updateDate;
                 }
             }
         }
 
         const elapsedMs = (performance.now() - overallStart).toFixed(1);
         LogStatusEx({
-            message: `📊 [Dataset Status] GetDatasetStatusByName("${datasetName}"): ${cacheHitCount} cache-derived, ${cacheMissCount} SQL queries — ${elapsedMs}ms`,
+            message: `📊 [Dataset Status] GetDatasetStatusByName("${datasetName}"): ${items.length} SQL status queries — ${elapsedMs}ms`,
             verboseOnly: true
         });
 
