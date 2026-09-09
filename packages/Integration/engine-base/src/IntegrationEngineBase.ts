@@ -321,13 +321,39 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
 
     // ── Integration Object Lookups ──────────────────────────────────
 
-    /** Get all IntegrationObjects for a given Integration ID. */
+    /**
+     * Get all IntegrationObjects for a given Integration ID.
+     *
+     * SCOPE-AWARE. When a connection is in scope AND has a per-connection catalog, this answers
+     * from that catalog; otherwise it answers exactly as it always has. The scoping lives HERE, on
+     * the existing getters, rather than at the call sites — which is the only version that reaches
+     * the connectors in the separate Integrations repository. Two of them call these getters
+     * directly rather than going through the REST base, so a new method name would have left them
+     * reading the shared catalog forever while every other path was per-connection.
+     */
     public GetIntegrationObjectsByIntegrationID(integrationID: string): MJIntegrationObjectEntity[] {
+        const scoped = this.scopedObjects();
+        if (scoped) return scoped;
         return this._integrationObjects.filter(o => UUIDsEqual(o.IntegrationID, integrationID));
     }
 
-    /** Get a specific IntegrationObject by integration ID and object name. */
+    /**
+     * The connection in scope's objects, or undefined when there is no scope or no per-connection
+     * catalog for it. One place, so every getter below scopes identically.
+     */
+    private scopedObjects(): MJIntegrationObjectEntity[] | undefined {
+        const ciID = IntegrationEngineBase.currentScope();
+        if (!ciID || !this.HasCompanyIntegrationCatalog(ciID)) return undefined;
+        return this.GetCompanyIntegrationObjects(ciID);
+    }
+
+    /** Get a specific IntegrationObject by integration ID and object name. SCOPE-AWARE. */
     public GetIntegrationObject(integrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
+        const scoped = this.scopedObjects();
+        // Once a connection HAS a per-connection catalog, a missing name means the object genuinely
+        // is not in this connection's catalog. Falling back to the shared one there would resurrect
+        // an object the connection does not have.
+        if (scoped) return scoped.find(o => o.Name === objectName);
         return this._integrationObjects.find(
             o => UUIDsEqual(o.IntegrationID, integrationID) && o.Name === objectName
         );
@@ -393,10 +419,30 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         return this._fieldsByObjectID.get(objectID.trim().toLowerCase())?.slice() ?? [];
     }
 
-    /** Get active IntegrationObjects for an integration, sorted by Sequence. */
+    /** Get active IntegrationObjects for an integration, sorted by Sequence. SCOPE-AWARE. */
     public GetActiveIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
         return this.GetIntegrationObjectsByIntegrationID(integrationID)
             .filter(o => o.Status === 'Active')
+            .sort((a, b) => a.Sequence - b.Sequence);
+    }
+
+    /**
+     * SHARED objects, ignoring any scope.
+     *
+     * Two callers need this and both would be WRONG with the scoped answer. The declared floor a
+     * discovery overlays onto is by definition the shared, curated definition — reading the
+     * per-connection rows there would make a discovery overlay its own previous output and lose
+     * the link back to the declared row. And the Shared branch of
+     * {@link ResolveCompanyIntegrationCatalog} was explicitly asked not to read per-connection rows.
+     */
+    public GetSharedIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
+        return this._integrationObjects.filter(o => UUIDsEqual(o.IntegrationID, integrationID));
+    }
+
+    /** See {@link GetSharedIntegrationObjects}. Active only, sorted by Sequence. */
+    public GetActiveSharedIntegrationObjects(integrationID: string): MJIntegrationObjectEntity[] {
+        return this._integrationObjects
+            .filter(o => UUIDsEqual(o.IntegrationID, integrationID) && o.Status === 'Active')
             .sort((a, b) => a.Sequence - b.Sequence);
     }
 
@@ -409,6 +455,12 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      * @returns Objects sorted in dependency order (parents before children)
      */
     public GetObjectsInDependencyOrder(integrationID: string): MJIntegrationObjectEntity[] {
+        // SCOPE-AWARE. Two connections of one connector can legitimately disagree about the shape
+        // of this graph, because each edge is a field pointing at an object in the SAME catalog.
+        const ciID = IntegrationEngineBase.currentScope();
+        if (ciID && this.HasCompanyIntegrationCatalog(ciID)) {
+            return this.GetCompanyIntegrationObjectsInDependencyOrder(ciID);
+        }
         const objects = this.GetActiveIntegrationObjects(integrationID);
         const objectMap = new Map(objects.map(o => [o.ID.toUpperCase(), o]));
 
@@ -627,7 +679,7 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
 
         if (!have) {
             const ci = this.GetCompanyIntegrationByID(companyIntegrationID);
-            const objects = ci ? this.GetActiveIntegrationObjects(ci.IntegrationID) : [];
+            const objects = ci ? this.GetActiveSharedIntegrationObjects(ci.IntegrationID) : [];
             for (const o of objects) fieldsByObjectID.set(o.ID, this.GetIntegrationObjectFields(o.ID));
             return {
                 Objects: objects,
@@ -652,50 +704,9 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         return { Objects: objects, FieldsByObjectID: fieldsByObjectID, Source: 'PerConnection', Provenance: provenance };
     }
 
-    /**
-     * Resolve one object by name for the connection currently in scope, falling back to the shared
-     * catalog when there is no scope or no per-connection catalog.
-     *
-     * This is what the connector chokepoints call. A connector passes the integration id it has
-     * always passed and gets a per-connection answer when one exists — the whole reason no
-     * connector in the Integrations repository needs a line changed.
-     */
-    public ResolveScopedObject(integrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
-        const ciID = IntegrationEngineBase.currentScope();
-        if (ciID) {
-            const scoped = this.GetCompanyIntegrationObject(ciID, objectName);
-            if (scoped) return scoped;
-            // Only fall through when this connection has NO per-connection catalog at all. Once it
-            // has one, a missing name means the object genuinely is not in this connection's
-            // catalog, and answering from the shared one would resurrect an object the connection
-            // does not have.
-            if (this.HasCompanyIntegrationCatalog(ciID)) return undefined;
-        }
-        return this.GetIntegrationObject(integrationID, objectName);
-    }
 
-    /** Scoped counterpart of GetActiveIntegrationObjects. See {@link ResolveScopedObject}. */
-    public ResolveScopedActiveObjects(integrationID: string): MJIntegrationObjectEntity[] {
-        const ciID = IntegrationEngineBase.currentScope();
-        if (ciID && this.HasCompanyIntegrationCatalog(ciID)) return this.GetActiveCompanyIntegrationObjects(ciID);
-        return this.GetActiveIntegrationObjects(integrationID);
-    }
 
-    /** Scoped counterpart of GetIntegrationObjectsByIntegrationID. */
-    public ResolveScopedObjects(integrationID: string): MJIntegrationObjectEntity[] {
-        const ciID = IntegrationEngineBase.currentScope();
-        if (ciID && this.HasCompanyIntegrationCatalog(ciID)) return this.GetCompanyIntegrationObjects(ciID);
-        return this.GetIntegrationObjectsByIntegrationID(integrationID);
-    }
 
-    /** Scoped counterpart of GetObjectsInDependencyOrder. */
-    public ResolveScopedObjectsInDependencyOrder(integrationID: string): MJIntegrationObjectEntity[] {
-        const ciID = IntegrationEngineBase.currentScope();
-        if (ciID && this.HasCompanyIntegrationCatalog(ciID)) {
-            return this.GetCompanyIntegrationObjectsInDependencyOrder(ciID);
-        }
-        return this.GetObjectsInDependencyOrder(integrationID);
-    }
 
     // ── Singleton ─────────────────────────────────────────────────────
 
