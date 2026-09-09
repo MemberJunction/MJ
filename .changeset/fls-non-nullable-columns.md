@@ -10,6 +10,14 @@
 
 Field-Level Security: NOT NULL columns can now be restricted.
 
+**BREAKING (GraphQL schema).** Generated object types lose non-nullability on roughly **2,150 of
+4,650 restrictable fields, across all 384 generated object types** — `String!` becomes `String`, and
+likewise for the other scalars. Any external consumer holding GraphQL types generated against the
+previous schema will fail to compile against this one until those types are regenerated; a consumer
+that reads the fields without regenerating sees no runtime change. Input types are **not** affected,
+so no write contract changes. Non-nullability is retained only where field security is structurally
+incapable of stripping a value: primary keys and `__mj_` system columns.
+
 The guide previously said not to restrict a NOT NULL column, because the generated GraphQL object
 types marked those fields non-nullable and an FLS-omitted value then failed response serialization.
 That constraint is gone, and with it the largest gap in what the feature could actually protect —

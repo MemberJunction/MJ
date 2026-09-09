@@ -466,3 +466,29 @@ Until it runs, only the API tier reflects the change.
 - **Test as the restricted user.** The fastest check: run a RunView with the denied field in
   `ExtraFilter` (expect the §2 rejection message), then load a record and confirm the field is
   absent from the payload.
+
+### Accepted residuals
+
+Two things this feature does *not* do. Both are deliberate; neither is a defect to be filed.
+
+- **The shape of your restrictions ships to every authenticated browser.** Enforcement is
+  server-side and complete, but the `EntityFieldPermissions` dataset item is part of the metadata
+  every signed-in client loads — so *which roles are denied which named fields* is readable by any
+  authenticated user, whether or not those rules apply to them. That is what makes client-side
+  selection-set narrowing possible, and narrowing is why a denied field is never requested rather
+  than requested and stripped. The residual is real all the same: for the confidentiality cases this
+  feature exists to serve — compensation, donor records — the *names of the sensitive columns* are
+  themselves informative, and it sits oddly beside the care taken to have `ReadableFields___` list
+  readable rather than denied fields (§2). Values never ship; only the rule shape does. Metadata
+  tiering ([#3485](https://github.com/MemberJunction/MJ/issues/3485)) is the fix, after which
+  restricted users stop receiving rules that do not concern them.
+
+- **Field security on a CORE MJ entity has not been exercised end to end.** Every scenario behind
+  this guide was validated against application entities. Restricting a field on a core `__mj` entity
+  is the highest-risk configuration available — it is the one that can strip the system user, which
+  runs background work and shares one engine cache across all users — and it was deliberately not
+  tested. The mechanism that makes it survivable *is* covered: the system-user access guard, the
+  five configuration guards, and the unrestrictable-field rules are all exercised by the IT91
+  lifecycle checks (§1.4). What has never been run is the whole path on a real core entity. Treat
+  that configuration as unproven, try it on a non-production database first, and expect to need
+  §4.3 (turning it back off) close at hand.
