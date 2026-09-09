@@ -30,13 +30,13 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "peerDependencies": {
-    "@angular/core": "^21.1.3",
-    "@angular/forms": "^21.1.3",
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
     "vitest": "^4.0.18"
   },
   "devDependencies": {
-    "@angular/core": "21.1.3",
-    "@angular/forms": "21.1.3",
+    "@angular/core": "21.2.22",
+    "@angular/forms": "21.2.22",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18",
     "axe-core": "4.11.1"
