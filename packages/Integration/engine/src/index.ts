@@ -174,3 +174,7 @@ export {
 } from './CatalogScope.js';
 export type { CatalogScopeState } from './CatalogScope.js';
 export { CatalogRow, CompanyIntegrationCatalogStore } from './CompanyIntegrationCatalogStore.js';
+export { BuildCatalogWriter, GlobalCatalogSourceOverride, ResolveCatalogSource } from './CatalogSource.js';
+export type { CatalogSource } from './CatalogSource.js';
+export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
+export type { CatalogWriter } from './CatalogWriter.js';
