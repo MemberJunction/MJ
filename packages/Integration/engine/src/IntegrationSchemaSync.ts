@@ -513,12 +513,14 @@ export class IntegrationSchemaSync {
     // The declared floor a discovery overlays is still looked up by CONNECTOR: a per-connection
     // object records which declared row it was matched to, and that link is what makes
     // "whose definition is this" answerable later.
-    const declaredByName = new Map<string, string>();
+    const declaredByName = new Map<string, MJIntegrationObjectEntity>();
     // Explicitly the SHARED rows. That getter is scope-aware now, and inside a per-connection run
     // it would hand back this connection's own rows — so the discovery would overlay its own
     // previous output and the provenance link back to the declared definition would be lost.
     for (const declared of engine.GetSharedIntegrationObjects(IntegrationID)) {
-      if (declared.ID) declaredByName.set(declared.Name.toLowerCase(), declared.ID);
+      // The ROW, not just its id: a refresh rebases the connection's declared-owned columns from
+      // it, so an open-app upgrade reaches connections that already discovered once.
+      if (declared.ID) declaredByName.set(declared.Name.toLowerCase(), declared);
     }
 
     // Phase 1: upsert objects. Object upserts must complete before field upserts
@@ -565,7 +567,7 @@ export class IntegrationSchemaSync {
         // engine cache because the DECLARED catalog is shared and unchanged by this run — only the
         // per-connection copy is being written. Empty for an object with no declared counterpart,
         // which is the ordinary case for something discovery found on its own.
-        const declaredObjectID = declaredByName.get(r.srcObj.ExternalName.toLowerCase());
+        const declaredObjectID = declaredByName.get(r.srcObj.ExternalName.toLowerCase())?.ID;
         const declaredFieldByName = new Map<string, string>();
         if (declaredObjectID) {
           for (const df of engine.GetIntegrationObjectFields(declaredObjectID)) {
@@ -746,7 +748,7 @@ export class IntegrationSchemaSync {
     srcObj: SourceObjectInfo,
     existingObjects: MJIntegrationObjectEntity[],
     /** The declared row this object was matched to, or null when it exists only here. */
-    declaredObjectID: string | null,
+    declaredObject: MJIntegrationObjectEntity | null,
     /** Whether the connector claims its object enumeration is complete. Decides provenance. */
     discoveryIsAuthoritative: boolean,
   ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom' }> {
@@ -762,6 +764,16 @@ export class IntegrationSchemaSync {
       // never overwritten; the spec inverts that precedence.)
       let dirty = false;
       const changes: string[] = [];
+      // plan.md: a refresh uses the DECLARATION as the source of truth and replaces what is in the
+      // per-connection row, rather than overlaying discovery onto that row's own previous output.
+      // Otherwise an open-app upgrade that changes a declared APIPath, page size or CRUD path never
+      // reaches a connection that has already discovered once. No-op for the shared catalog, where
+      // the row IS the declaration.
+      const rebased = writer.RebaseFromDeclared(existing, declaredObject, 'object');
+      if (rebased.length > 0) {
+        dirty = true;
+        changes.push(`rebased:${rebased.join('/')}`);
+      }
       const descOverlay = decideSemanticOverlay(existing.Description, srcObj.Description);
       if (descOverlay.changed) {
         existing.Description = descOverlay.value ?? null;
@@ -848,8 +860,8 @@ export class IntegrationSchemaSync {
       // curated definition matched it, 'Endpoint' when the connector's own enumeration claimed to
       // be complete, and 'Sampled' otherwise. The per-attribute truth lives in the merge log, not
       // in this single column.
-      writer.StampNewObject(obj, declaredObjectID,
-        declaredObjectID ? 'Declared' : (discoveryIsAuthoritative ? 'Endpoint' : 'Sampled'));
+      writer.StampNewObject(obj, declaredObject?.ID ?? null,
+        declaredObject ? 'Declared' : (discoveryIsAuthoritative ? 'Endpoint' : 'Sampled'));
       obj.Name = srcObj.ExternalName;
       // APIPath is NOT NULL with no DB default. Declared objects get it from the metadata file;
       // a runtime-DISCOVERED object has no source APIPath (ExternalObjectSchema carries none),
