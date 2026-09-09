@@ -14,8 +14,6 @@ import {
   AfterViewInit,
 } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import DOMPurify from 'dompurify';
-import { escapeHtmlAsText } from '../utils/escape-html';
 import { MarkdownService } from '../services/markdown.service';
 import { MarkdownConfig, DEFAULT_MARKDOWN_CONFIG, MarkdownRenderEvent, HeadingInfo } from '@memberjunction/markdown-core';
 // Collapsible section toggle is handled inline in setupCollapsibleListeners
@@ -288,11 +286,9 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
       html = sanitized || '';
     }
 
-    // Strip JavaScript unless explicitly enabled
-    // This removes <script> tags and on* event handlers while keeping layout HTML
-    if (bypassAngularSanitizer && !this.enableJavaScript) {
-      html = this.stripJavaScript(html);
-    }
+    // When Angular's sanitizer is bypassed, the HTML has already been sanitized by
+    // MarkdownService.parse() (DOMPurify, HTML + SVG profiles) unless enableJavaScript
+    // opted out. Nothing further to do here.
 
     // Trust the HTML for display
     this.renderedContent = this.sanitizer.bypassSecurityTrustHtml(html);
@@ -614,27 +610,5 @@ export class MarkdownComponent implements OnChanges, AfterViewInit, OnDestroy {
     if (heading) {
       heading.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
-  }
-
-  /**
-   * Sanitize HTML that bypasses Angular's sanitizer (SVG renderer or HTML passthrough
-   * enabled) while preserving layout HTML.
-   *
-   * DOMPurify with the HTML + SVG profiles keeps structural markup, inline styles, data
-   * attributes and inline vector graphics, and removes the script vectors: `<script>`,
-   * `on*` handlers, `javascript:` / `vbscript:` / `data:` URLs on navigation and script
-   * sinks (data: image URLs on `<img>` and `<image>` are kept), `<iframe>`, `<object>`,
-   * `<embed>`, `<base>`, `<foreignObject>`, `srcdoc`, and friends. It replaces a
-   * hand-written deny-list, which is the class of sanitizer static analysis rightly flags
-   * for incomplete tag and attribute matching.
-   *
-   * Without a DOM (no `window`) there is nothing safe to sanitize with, so the markup is
-   * rendered as visible text rather than trusted.
-   */
-  private stripJavaScript(html: string): string {
-    if (typeof window === 'undefined' || typeof DOMParser === 'undefined') {
-      return escapeHtmlAsText(html);
-    }
-    return DOMPurify.sanitize(html, { USE_PROFILES: { html: true, svg: true, svgFilters: true } });
   }
 }

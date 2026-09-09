@@ -64,8 +64,12 @@ export function sanitizeSvgContent(container: HTMLElement): void {
   });
 
   container.querySelectorAll('use').forEach((use) => {
-    const href = (use.getAttribute('href') || use.getAttribute('xlink:href') || '').trim();
-    if (/^(https?:)?\/\//i.test(href)) {
+    // Same-document references only; anything that is not a fragment can load an external
+    // document. Normalised the same way isScriptUrl normalises, so obfuscation does not help.
+    const href = (use.getAttribute('href') || use.getAttribute('xlink:href') || '')
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0020\u007f]/g, '');
+    if (href !== '' && !href.startsWith('#')) {
       use.remove();
     }
   });
