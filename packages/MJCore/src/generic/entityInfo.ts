@@ -18,6 +18,7 @@ import {
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
 } from "./entityConfiguration"
+import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
 /**
  * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
@@ -2028,6 +2029,31 @@ export class EntityInfo extends BaseInfo {
      * This flag is set on the **parent** entity and controls whether its children are exclusive.
      */
     AllowMultipleSubtypes: boolean = false
+    /**
+     * Optional JSON configuration specifying declarative prospective subtype resolution on an entity.
+     * Stored in the SubtypeSelector column of Entity (shape = IEntitySubtypeSelectorConfig).
+     */
+    SubtypeSelector: string = null
+
+    private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+
+    /**
+     * Parsed SubtypeSelector configuration, if configured.
+     */
+    get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
+        if (this._subtypeSelectorConfig === undefined) {
+            if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
+                try {
+                    this._subtypeSelectorConfig = JSON.parse(this.SubtypeSelector) as IEntitySubtypeSelectorConfig;
+                } catch {
+                    this._subtypeSelectorConfig = null;
+                }
+            } else {
+                this._subtypeSelectorConfig = null;
+            }
+        }
+        return this._subtypeSelectorConfig;
+    }
     /**
      * Whether to audit when users access records from this entity
      */
