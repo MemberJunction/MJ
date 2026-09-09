@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, RegisterForStartup } from '@memberjunction/core';
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntity, IMetadataProvider, UserInfo, RegisterForStartup } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import type {
     MJIntegrationEntity,
@@ -10,6 +10,33 @@ import type {
     MJIntegrationObjectEntity,
     MJIntegrationObjectFieldEntity,
 } from '@memberjunction/core-entities';
+import {
+    CATALOG_FIELD_COLUMNS,
+    CATALOG_OBJECT_COLUMNS,
+    CompanyIntegrationObjectFieldRow,
+    CompanyIntegrationObjectRow,
+    ENTITY_COMPANY_INTEGRATION_OBJECTS,
+    ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
+    asReadOnlyField,
+    asReadOnlyObject,
+    projectCatalogFields,
+    projectCatalogObjects,
+} from './CompanyIntegrationCatalog.js';
+
+/**
+ * How a catalog read was answered. Returned alongside the rows so a caller — and a support
+ * transcript — can tell a per-connection answer from the shared fallback without inferring it.
+ */
+export type CatalogSource = 'PerConnection' | 'Shared';
+
+/** The resolved catalog for one connection. */
+export interface ResolvedCompanyIntegrationCatalog {
+    Objects: MJIntegrationObjectEntity[];
+    FieldsByObjectID: Map<string, MJIntegrationObjectFieldEntity[]>;
+    Source: CatalogSource;
+    /** Count of per-connection objects by provenance. Empty when `Source` is `Shared`. */
+    Provenance: { Declared: number; Endpoint: number; Sampled: number };
+}
 
 /**
  * IntegrationEngineBase provides cached metadata for the MJ integration subsystem.
@@ -40,6 +67,31 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      */
     private _fieldsByObjectID: Map<string, MJIntegrationObjectFieldEntity[]> = new Map();
     private _fieldsByObjectIDSource: MJIntegrationObjectFieldEntity[] | null = null;
+    /**
+     * Second invalidation source for the field index. The index spans both field arrays, so
+     * keying it on the shared array alone would leave it stale whenever only the per-connection
+     * array reloaded — which is precisely what a discovery does.
+     */
+    private _fieldsByObjectIDScopedSource: CompanyIntegrationObjectFieldRow[] | null = null;
+
+    /**
+     * Per-connection catalog rows, loaded as plain `BaseEntity` because no generated subclass
+     * exists for these entities — see CompanyIntegrationCatalog.ts. They are projected on first
+     * read and the projections are what every read site receives.
+     */
+    private _companyIntegrationObjects: BaseEntity[] = [];
+    private _companyIntegrationObjectFields: BaseEntity[] = [];
+
+    /**
+     * Lazily-built projections, invalidated exactly the way the field index is: by the identity of
+     * the array they were built from. Every load path replaces these arrays rather than mutating
+     * them, so a new array is a new projection with no invalidation hook to forget — which matters
+     * because `RefreshCatalog` bypasses `AdditionalLoading` and would otherwise leave them stale.
+     */
+    private _cioProjected: CompanyIntegrationObjectRow[] | null = null;
+    private _cioProjectedSource: BaseEntity[] | null = null;
+    private _ciofProjected: CompanyIntegrationObjectFieldRow[] | null = null;
+    private _ciofProjectedSource: BaseEntity[] | null = null;
 
     // ── BaseEngine Config ─────────────────────────────────────────────
 
@@ -85,6 +137,16 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
                 EntityName: 'MJ: Integration Object Fields',
                 CacheLocal: true,
             },
+            {
+                PropertyName: '_companyIntegrationObjects',
+                EntityName: ENTITY_COMPANY_INTEGRATION_OBJECTS,
+                CacheLocal: true,
+            },
+            {
+                PropertyName: '_companyIntegrationObjectFields',
+                EntityName: ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
+                CacheLocal: true,
+            },
         ];
 
         return await this.Load(params, provider, forceRefresh, contextUser);
@@ -100,7 +162,16 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
      * ARRAY IDENTITY, so they rebuild lazily on first read after the swap.
      */
     public async RefreshCatalog(contextUser?: UserInfo): Promise<void> {
-        for (const prop of ['_integrationObjects', '_integrationObjectFields']) {
+        // All FOUR arrays, not just the shared pair. The two-pass discovery heal re-reads the
+        // catalog mid-run and overlays what the first pass persisted; if the per-connection arrays
+        // were left stale the second pass would overlay against rows that no longer exist and the
+        // heal would silently regress for every per-connection row.
+        for (const prop of [
+            '_integrationObjects',
+            '_integrationObjectFields',
+            '_companyIntegrationObjects',
+            '_companyIntegrationObjectFields',
+        ]) {
             const cfg = this.Configs.find(c => c.PropertyName === prop);
             if (cfg) await this.LoadSingleConfig(cfg, (contextUser ?? this.ContextUser) as UserInfo, /*bypassCache*/ true);
         }
@@ -290,20 +361,33 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
             return this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID));
         }
 
-        if (this._fieldsByObjectIDSource !== this._integrationObjectFields) {
+        // The index spans BOTH field arrays, so this one method answers for a shared object id and
+        // a per-connection one alike. That is what lets the field side need no scope at all: object
+        // ids are UUIDs from disjoint tables and cannot collide, so the id itself says which
+        // catalog the caller meant. Every read site that resolves fields from an object it already
+        // holds therefore needs no change.
+        const projectedFields = this.CompanyIntegrationObjectFields;
+        if (
+            this._fieldsByObjectIDSource !== this._integrationObjectFields ||
+            this._fieldsByObjectIDScopedSource !== projectedFields
+        ) {
             const index = new Map<string, MJIntegrationObjectFieldEntity[]>();
-            for (const field of this._integrationObjectFields) {
-                const id = field.IntegrationObjectID;
-                if (id == null) continue;
+            const add = (key: string | null | undefined, field: MJIntegrationObjectFieldEntity) => {
+                if (key == null) return;
                 // Normalised the same way UUIDsEqual compares, so SQL Server's uppercase and
                 // PostgreSQL's lowercase land on the same bucket.
-                const key = id.trim().toLowerCase();
-                const bucket = index.get(key);
+                const k = key.trim().toLowerCase();
+                const bucket = index.get(k);
                 if (bucket) bucket.push(field);
-                else index.set(key, [field]);
-            }
+                else index.set(k, [field]);
+            };
+            for (const field of this._integrationObjectFields) add(field.IntegrationObjectID, field);
+            // The per-connection view aliases CompanyIntegrationObjectID as IntegrationObjectID, so
+            // both arrays key on the same property name and the loop body is identical.
+            for (const field of projectedFields) add(field.IntegrationObjectID, asReadOnlyField(field));
             this._fieldsByObjectID = index;
             this._fieldsByObjectIDSource = this._integrationObjectFields;
+            this._fieldsByObjectIDScopedSource = projectedFields;
         }
 
         return this._fieldsByObjectID.get(objectID.trim().toLowerCase())?.slice() ?? [];
@@ -396,6 +480,221 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         }
 
         return sorted;
+    }
+
+    // ── Per-connection catalog ──────────────────────────────────────
+
+    /**
+     * Resolves the connection whose catalog a read belongs to, when one is in scope.
+     *
+     * Dependency inversion, deliberately: the scope itself is `AsyncLocalStorage`, which is a Node
+     * built-in this package must not import — it is loaded into the Angular client too. So the
+     * server package installs a resolver here at module load and the client never sets one, leaving
+     * every read on the shared catalog exactly as before.
+     *
+     * Same shape as the custom-column promoter registration the server already installs.
+     */
+    public static CatalogScopeResolver: (() => string | undefined) | undefined = undefined;
+
+    private static currentScope(): string | undefined {
+        try {
+            return IntegrationEngineBase.CatalogScopeResolver?.();
+        } catch {
+            // A scope lookup must never be able to fail a read. Falling back to the shared catalog
+            // is the pre-existing behaviour, and it is the safe direction: a shared answer where a
+            // per-connection one was wanted is over-broad, never wrong about what exists.
+            return undefined;
+        }
+    }
+
+    /** Per-connection objects, projected for reading. See CompanyIntegrationCatalog.ts. */
+    private get CompanyIntegrationObjects(): CompanyIntegrationObjectRow[] {
+        if (this._cioProjectedSource !== this._companyIntegrationObjects || this._cioProjected === null) {
+            this._cioProjected = projectCatalogObjects(this._companyIntegrationObjects);
+            this._cioProjectedSource = this._companyIntegrationObjects;
+        }
+        return this._cioProjected;
+    }
+
+    /** Per-connection fields, projected for reading. */
+    private get CompanyIntegrationObjectFields(): CompanyIntegrationObjectFieldRow[] {
+        if (this._ciofProjectedSource !== this._companyIntegrationObjectFields || this._ciofProjected === null) {
+            this._ciofProjected = projectCatalogFields(this._companyIntegrationObjectFields);
+            this._ciofProjectedSource = this._companyIntegrationObjectFields;
+        }
+        return this._ciofProjected;
+    }
+
+    /** Does this connection have a per-connection catalog at all? */
+    public HasCompanyIntegrationCatalog(companyIntegrationID: string): boolean {
+        return this.CompanyIntegrationObjects.some(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID));
+    }
+
+    /** All per-connection objects for a connection. */
+    public GetCompanyIntegrationObjects(companyIntegrationID: string): MJIntegrationObjectEntity[] {
+        return this.CompanyIntegrationObjects
+            .filter(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID))
+            .map(asReadOnlyObject);
+    }
+
+    /**
+     * One per-connection object by name.
+     *
+     * Matches rows of EVERY status, `Disabled` included, because the overlay reactivates a
+     * previously-absent object rather than inserting a second one — the unique constraint on
+     * (connection, name) is what makes that necessary and what makes a name-match on active rows
+     * only a constraint violation waiting to happen.
+     */
+    public GetCompanyIntegrationObject(companyIntegrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
+        const row = this.CompanyIntegrationObjects.find(
+            o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID) && o.Name === objectName
+        );
+        return row ? asReadOnlyObject(row) : undefined;
+    }
+
+    /** One per-connection object by its own id. */
+    public GetCompanyIntegrationObjectByID(objectID: string): MJIntegrationObjectEntity | undefined {
+        const row = this.CompanyIntegrationObjects.find(o => UUIDsEqual(o.ID, objectID));
+        return row ? asReadOnlyObject(row) : undefined;
+    }
+
+    /** Active per-connection objects, sorted by Sequence. Mirrors GetActiveIntegrationObjects. */
+    public GetActiveCompanyIntegrationObjects(companyIntegrationID: string): MJIntegrationObjectEntity[] {
+        return this.CompanyIntegrationObjects
+            .filter(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID) && o.Status === 'Active')
+            .sort((a, b) => a.Sequence - b.Sequence)
+            .map(asReadOnlyObject);
+    }
+
+    /**
+     * Per-connection dependency order. Same Kahn sort and same Sequence-order fallback on a cycle
+     * as the shared version, over this connection's own edges: a field's
+     * RelatedCompanyIntegrationObjectID points at an object belonging to the same connection, so
+     * two connections of one connector can legitimately disagree about the shape of the graph.
+     */
+    public GetCompanyIntegrationObjectsInDependencyOrder(companyIntegrationID: string): MJIntegrationObjectEntity[] {
+        const objects = this.GetActiveCompanyIntegrationObjects(companyIntegrationID);
+        const objectMap = new Map(objects.map(o => [o.ID.toUpperCase(), o]));
+
+        const deps = new Map<string, Set<string>>();
+        for (const obj of objects) deps.set(obj.ID.toUpperCase(), new Set());
+
+        for (const field of this.CompanyIntegrationObjectFields) {
+            if (!field.RelatedCompanyIntegrationObjectID) continue;
+            const parentKey = field.CompanyIntegrationObjectID.toUpperCase();
+            const depKey = field.RelatedCompanyIntegrationObjectID.toUpperCase();
+            if (deps.has(parentKey) && objectMap.has(depKey) && parentKey !== depKey) {
+                deps.get(parentKey)!.add(depKey);
+            }
+        }
+
+        return this.topologicalSort(objects, deps);
+    }
+
+    /**
+     * THE CUTOVER SEAM. Every read that wants "this connection's catalog" comes through here, and
+     * this is the one place that decides whether that means the per-connection tables or the shared
+     * ones.
+     *
+     * With `preferPerConnection` false — the default at deploy — the answer is byte-for-byte what
+     * the shared catalog returns today, so the tables can exist, be backfilled and be verified
+     * against production traffic before anything reads them.
+     *
+     * @param opts.preferPerConnection  Read per-connection rows when they exist.
+     * @param opts.requirePerConnection Refuse rather than fall back. Set it wherever a silent
+     *   shared answer would be indistinguishable from success — a shared answer carries objects
+     *   this connection never discovered and omits the ones only it has, and a sync would run on it
+     *   reporting no error at all.
+     */
+    public ResolveCompanyIntegrationCatalog(
+        companyIntegrationID: string,
+        opts?: { preferPerConnection?: boolean; requirePerConnection?: boolean }
+    ): ResolvedCompanyIntegrationCatalog {
+        const wantPerConnection = opts?.preferPerConnection === true || opts?.requirePerConnection === true;
+        const have = wantPerConnection && this.HasCompanyIntegrationCatalog(companyIntegrationID);
+
+        if (opts?.requirePerConnection === true && !have) {
+            throw new Error(
+                `PER_CONNECTION_CATALOG_MISSING: connection ${companyIntegrationID} is configured for the `
+                + `per-connection catalog but has no rows in ${ENTITY_COMPANY_INTEGRATION_OBJECTS}. `
+                + `Run the catalog backfill for this connection, or set its catalog source back to shared. `
+                + `Refusing rather than reading the shared catalog, which would silently sync a different `
+                + `set of objects and report success.`
+            );
+        }
+
+        const fieldsByObjectID = new Map<string, MJIntegrationObjectFieldEntity[]>();
+
+        if (!have) {
+            const ci = this.GetCompanyIntegrationByID(companyIntegrationID);
+            const objects = ci ? this.GetActiveIntegrationObjects(ci.IntegrationID) : [];
+            for (const o of objects) fieldsByObjectID.set(o.ID, this.GetIntegrationObjectFields(o.ID));
+            return {
+                Objects: objects,
+                FieldsByObjectID: fieldsByObjectID,
+                Source: 'Shared',
+                Provenance: { Declared: 0, Endpoint: 0, Sampled: 0 },
+            };
+        }
+
+        const rows = this.CompanyIntegrationObjects
+            .filter(o => UUIDsEqual(o.CompanyIntegrationID, companyIntegrationID) && o.Status === 'Active')
+            .sort((a, b) => a.Sequence - b.Sequence);
+        const provenance = { Declared: 0, Endpoint: 0, Sampled: 0 };
+        for (const r of rows) {
+            if (r.Provenance === 'Declared' || r.Provenance === 'Endpoint' || r.Provenance === 'Sampled') {
+                provenance[r.Provenance]++;
+            }
+        }
+        const objects = rows.map(asReadOnlyObject);
+        for (const o of objects) fieldsByObjectID.set(o.ID, this.GetIntegrationObjectFields(o.ID));
+
+        return { Objects: objects, FieldsByObjectID: fieldsByObjectID, Source: 'PerConnection', Provenance: provenance };
+    }
+
+    /**
+     * Resolve one object by name for the connection currently in scope, falling back to the shared
+     * catalog when there is no scope or no per-connection catalog.
+     *
+     * This is what the connector chokepoints call. A connector passes the integration id it has
+     * always passed and gets a per-connection answer when one exists — the whole reason no
+     * connector in the Integrations repository needs a line changed.
+     */
+    public ResolveScopedObject(integrationID: string, objectName: string): MJIntegrationObjectEntity | undefined {
+        const ciID = IntegrationEngineBase.currentScope();
+        if (ciID) {
+            const scoped = this.GetCompanyIntegrationObject(ciID, objectName);
+            if (scoped) return scoped;
+            // Only fall through when this connection has NO per-connection catalog at all. Once it
+            // has one, a missing name means the object genuinely is not in this connection's
+            // catalog, and answering from the shared one would resurrect an object the connection
+            // does not have.
+            if (this.HasCompanyIntegrationCatalog(ciID)) return undefined;
+        }
+        return this.GetIntegrationObject(integrationID, objectName);
+    }
+
+    /** Scoped counterpart of GetActiveIntegrationObjects. See {@link ResolveScopedObject}. */
+    public ResolveScopedActiveObjects(integrationID: string): MJIntegrationObjectEntity[] {
+        const ciID = IntegrationEngineBase.currentScope();
+        if (ciID && this.HasCompanyIntegrationCatalog(ciID)) return this.GetActiveCompanyIntegrationObjects(ciID);
+        return this.GetActiveIntegrationObjects(integrationID);
+    }
+
+    /** Scoped counterpart of GetIntegrationObjectsByIntegrationID. */
+    public ResolveScopedObjects(integrationID: string): MJIntegrationObjectEntity[] {
+        const ciID = IntegrationEngineBase.currentScope();
+        if (ciID && this.HasCompanyIntegrationCatalog(ciID)) return this.GetCompanyIntegrationObjects(ciID);
+        return this.GetIntegrationObjectsByIntegrationID(integrationID);
+    }
+
+    /** Scoped counterpart of GetObjectsInDependencyOrder. */
+    public ResolveScopedObjectsInDependencyOrder(integrationID: string): MJIntegrationObjectEntity[] {
+        const ciID = IntegrationEngineBase.currentScope();
+        if (ciID && this.HasCompanyIntegrationCatalog(ciID)) {
+            return this.GetCompanyIntegrationObjectsInDependencyOrder(ciID);
+        }
+        return this.GetObjectsInDependencyOrder(integrationID);
     }
 
     // ── Singleton ─────────────────────────────────────────────────────
