@@ -44,12 +44,13 @@ export const CATALOG_OBJECT_COLUMNS = [
 ] as const;
 
 /**
- * Columns the field projection reads. `IntegrationObjectID` and `RelatedIntegrationObjectID` are
- * NOT stored columns on the per-connection field table — the view exposes them as aliases of
- * `CompanyIntegrationObjectID` and `RelatedCompanyIntegrationObjectID`, registered as virtual
- * fields. That alias is what lets a connector resolving a dependency edge
- * (`f.RelatedIntegrationObjectID` matched against its sibling objects) get a per-connection answer
- * with no change to its code.
+ * Columns the field projection reads. These are all REAL columns on the per-connection field
+ * table — the legacy names `IntegrationObjectID` / `RelatedIntegrationObjectID` are NOT here and
+ * must not be: they are derived in `projectCatalogFields` (see FIELD_READ_ALIASES).
+ *
+ * They are derived in TypeScript rather than aliased in the base view because the view is
+ * CodeGen-generated: a hand-added alias column would be silently dropped the next time CodeGen
+ * regenerates it, and the loss would only surface as a schema-mismatch throw much later.
  */
 export const CATALOG_FIELD_COLUMNS = [
     'ID', 'Name', 'DisplayName', 'Description', 'Category', 'Type', 'Length', 'Precision', 'Scale',
@@ -58,8 +59,18 @@ export const CATALOG_FIELD_COLUMNS = [
     'MetadataSource', 'CompanyIntegrationObjectID', 'RelatedCompanyIntegrationObjectID',
     'IntegrationObjectFieldID', 'Provenance', 'ProvenanceDetail', 'IsSelected', 'SelectedAt',
     'FirstSeenAt', 'LastSeenAt', 'LastSampledAt', 'ObservedMaxLength',
-    // view aliases — virtual, never written
-    'IntegrationObjectID', 'RelatedIntegrationObjectID',
+] as const;
+
+/**
+ * Legacy read names mapped onto their per-connection columns.
+ *
+ * A connector resolving a dependency edge reads `f.RelatedIntegrationObjectID` and matches it
+ * against its sibling objects (e.g. Rhythm, PathLMS). Deriving these keeps that code working
+ * unchanged while the value it gets is the per-connection id.
+ */
+const FIELD_READ_ALIASES: ReadonlyArray<readonly [alias: string, source: string]> = [
+    ['IntegrationObjectID', 'CompanyIntegrationObjectID'],
+    ['RelatedIntegrationObjectID', 'RelatedCompanyIntegrationObjectID'],
 ] as const;
 
 /** Where a per-connection row's shape came from. */
@@ -187,7 +198,11 @@ export function projectCatalogFields(rows: BaseEntity[]): CompanyIntegrationObje
     if (rows.length > 0) {
         assertCatalogColumns(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, rows[0], CATALOG_FIELD_COLUMNS);
     }
-    return rows.map(r => project<CompanyIntegrationObjectFieldRow>(r, CATALOG_FIELD_COLUMNS));
+    return rows.map(r => {
+        const projected = project<Record<string, unknown>>(r, CATALOG_FIELD_COLUMNS);
+        for (const [alias, source] of FIELD_READ_ALIASES) projected[alias] = projected[source];
+        return projected as unknown as CompanyIntegrationObjectFieldRow;
+    });
 }
 
 /**
