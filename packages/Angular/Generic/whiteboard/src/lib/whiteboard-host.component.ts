@@ -228,6 +228,14 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * A DISALLOWED request is ignored rather than clamped: pressing Escape under `['pen','eraser']`
    * should leave you on pen, not bounce you to the roster's fallback. The clamp is only for the
    * case where the tool you are already holding stopped being allowed.
+   *
+   * ONE EXCEPTION to "always one the roster allows": a roster that allows nothing at all — empty,
+   * or naming no real tool. The board must hold some tool, so {@link ClampToolToRoster} floors it
+   * at `select`, which is then held even though the roster does not list it. That is deliberate
+   * and is the safe answer precisely because `select` can create nothing; the alternative —
+   * keeping the tool the roster just revoked — left a creating tool live with no toolbar to see
+   * it and no key to change it. See {@link ClampToolToRoster} for why the floor is `select`
+   * rather than the roster's first entry.
    */
   public get Tool(): WhiteboardTool {
     return this._tool;
