@@ -89,6 +89,25 @@ jobs:
           # "Path Validation Error: Path(s) specified in the action for caching do(es) not
           # exist" — after every real validation step has already passed.
 
+      - name: Self-test EntityField Sequence literal detector
+        # Same rationale as the ID-determinism self-test above: the positional parser is load-bearing for a bug
+        # that only appears on fresh installs (MJ#3670, MJ#4202), so its fixtures run on every PR.
+        # Runs after Set up node: the detector is a Node script.
+        run: node .github/scripts/check-migration-entityfield-sequence.mjs --self-test
+
+      - name: Check changed migrations for a literal EntityField Sequence
+        # BLOCKING, unlike the advisory ID-determinism check further down: a literal Sequence in a CodeGen
+        # EntityField INSERT collides on UQ_EntityField_EntityID_Sequence on any database built
+        # only from migrations (Flyway runs every versioned migration before the repeatable
+        # renumber), and the failure surfaces as an unrelated FK error. It cannot fail on a dev
+        # database, so CI is the only place it is caught before a release. Reports only lines
+        # this PR adds to migration files it adds or modifies. See migrations/CLAUDE.md, MJ#3670, MJ#4202.
+        if: steps.check_migrations.outputs.has_migrations == 'true'
+        run: |
+          node .github/scripts/check-migration-entityfield-sequence.mjs \
+            '${{ steps.base.outputs.sha }}' \
+            '${{ github.sha }}'
+
       - name: Check CodeGen tail matches committed migrations (#3737)
         # Lives in THIS job rather than a workflow of its own, and is NOT gated on
         # has_migrations. Both are deliberate:
