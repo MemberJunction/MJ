@@ -1,0 +1,266 @@
+[
+  {
+    "fields": {
+      "Name": "Biscuit",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Beagle",
+      "MicrochipNumber": "985141004512779",
+      "IntakeDate": "2026-07-19",
+      "IntakeReason": "Stray",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2024-03-22",
+      "WeightKg": 11.4,
+      "Status": "Intake",
+      "Description": "Sweet, food-motivated beagle. Underweight at intake, gaining steadily. Good with other dogs; not yet cat-tested.",
+      "HousingID": "@lookup:MJ: Housings.Name=Kennel A-3"
+    },
+    "primaryKey": {
+      "ID": "A909B43B-B4F6-4C9C-9E2F-DDEA84C97C85"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Willa",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Border Collie",
+      "MicrochipNumber": "985141004512780",
+      "IntakeDate": "2026-08-27",
+      "IntakeReason": "Surrender",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2022-07-31",
+      "WeightKg": 18.2,
+      "Status": "Intake",
+      "Description": "Bright and busy. Needs a job and a yard. Knows sit and down; pulls hard on lead.",
+      "HousingID": "@lookup:MJ: Housings.Name=Kennel A-3"
+    },
+    "primaryKey": {
+      "ID": "514441F9-0477-41A2-9FA0-4080F77F11F5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sable",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=German Shepherd",
+      "MicrochipNumber": "985141004512781",
+      "IntakeDate": "2026-07-02",
+      "IntakeReason": "Transfer",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2020-12-08",
+      "WeightKg": 34,
+      "Status": "Intake",
+      "Description": "Adopted by a repeat adopter in July. Confident, crate-trained, good with older children."
+    },
+    "primaryKey": {
+      "ID": "301319A9-495D-4A7A-93EE-0A1EBFA6AFCF"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Otis",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Great Dane",
+      "MicrochipNumber": "985141004512782",
+      "IntakeDate": "2026-08-23",
+      "IntakeReason": "Returned",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2023-05-27",
+      "WeightKg": 52.5,
+      "Status": "Intake",
+      "Description": "Returned after a failed placement — leash reactivity toward other dogs. In behaviour programme, progressing well.",
+      "HousingID": "@lookup:MJ: Housings.Name=Kennel A-1"
+    },
+    "primaryKey": {
+      "ID": "72AB6F74-4747-4286-B489-EDCDB4D6CB36"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marlowe",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Beagle",
+      "MicrochipNumber": "985141004512783",
+      "IntakeDate": "2026-08-04",
+      "IntakeReason": "Stray",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2023-10-24",
+      "WeightKg": 12.8,
+      "Status": "Intake",
+      "Description": "Bilateral ear infection at intake, on drops. Vocal but friendly. Loves a tennis ball.",
+      "HousingID": "@lookup:MJ: Housings.Name=Kennel B-1"
+    },
+    "primaryKey": {
+      "ID": "1876649F-0C45-4ED3-A087-D11D9AECA6C5"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rufus",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Border Collie",
+      "MicrochipNumber": "985141004512784",
+      "IntakeDate": "2026-09-06",
+      "IntakeReason": "Stray",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2024-06-30",
+      "WeightKg": 16.1,
+      "Status": "Intake",
+      "Description": "Found on Harbor Street. No collar, no chip on arrival — chipped here. Awaiting stray hold expiry.",
+      "HousingID": "@lookup:MJ: Housings.Name=Kennel A-1"
+    },
+    "primaryKey": {
+      "ID": "3E0CD605-7D4C-415B-BF2B-0D8AC0002B1E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Poppy",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=German Shepherd",
+      "MicrochipNumber": "985141004512785",
+      "IntakeDate": "2026-08-15",
+      "IntakeReason": "Surrender",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2022-01-12",
+      "WeightKg": 29.7,
+      "Status": "Intake",
+      "Description": "Surrendered due to a house move. House-trained, quiet in a crate, walks nicely.",
+      "HousingID": "@lookup:MJ: Housings.Name=Kennel B-1"
+    },
+    "primaryKey": {
+      "ID": "ADBCF59A-4ABC-4A26-B450-6B2122991E83"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Gus",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Great Dane",
+      "MicrochipNumber": "985141004512786",
+      "IntakeDate": "2026-07-26",
+      "IntakeReason": "Transfer",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2022-11-08",
+      "WeightKg": 48.9,
+      "Status": "Intake",
+      "Description": "Transferred to a breed-specific rescue with more space for a giant breed."
+    },
+    "primaryKey": {
+      "ID": "C7D441B5-7F77-4FF8-BBAE-F1B729D2CEB6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Juniper",
+      "Species": "Cat",
+      "BreedID": "@lookup:MJ: Breeds.Name=Domestic Shorthair",
+      "MicrochipNumber": "985141004512787",
+      "IntakeDate": "2026-08-16",
+      "IntakeReason": "Stray",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2025-08-04",
+      "WeightKg": 3.6,
+      "Status": "Intake",
+      "Description": "Spayed here; recovering in isolation. Shy but not fearful — will come out for wet food.",
+      "HousingID": "@lookup:MJ: Housings.Name=Isolation M-1"
+    },
+    "primaryKey": {
+      "ID": "E3023EAB-6B3A-45FC-B9F4-5A6E3FECB56B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pepper",
+      "Species": "Cat",
+      "BreedID": "@lookup:MJ: Breeds.Name=Domestic Shorthair",
+      "MicrochipNumber": "985141004512788",
+      "IntakeDate": "2026-08-09",
+      "IntakeReason": "Surrender",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2023-09-04",
+      "WeightKg": 4.1,
+      "Status": "Intake",
+      "Description": "Confident lap cat. Fine with other cats, unbothered by dogs behind glass.",
+      "HousingID": "@lookup:MJ: Housings.Name=Cattery C-4"
+    },
+    "primaryKey": {
+      "ID": "8F2D6944-6CE7-4F73-98D6-EA85C47E1526"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nutmeg",
+      "Species": "Cat",
+      "BreedID": "@lookup:MJ: Breeds.Name=Maine Coon",
+      "MicrochipNumber": "985141004512789",
+      "IntakeDate": "2026-07-14",
+      "IntakeReason": "Transfer",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2021-06-26",
+      "WeightKg": 6.8,
+      "Status": "Intake",
+      "Description": "Long coat needs weekly grooming. Placid, tolerates handling, good with children.",
+      "HousingID": "@lookup:MJ: Housings.Name=Cattery C-1"
+    },
+    "primaryKey": {
+      "ID": "99B8ACCD-BE8E-45AA-A377-531A0971DFD1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clementine",
+      "Species": "Cat",
+      "BreedID": "@lookup:MJ: Breeds.Name=Maine Coon",
+      "MicrochipNumber": "985141004512790",
+      "IntakeDate": "2026-09-04",
+      "IntakeReason": "Other",
+      "Sex": "Unknown",
+      "EstimatedBirthDate": "2025-11-12",
+      "WeightKg": 2.9,
+      "Status": "Intake",
+      "Description": "Brought in by a member of the public; circumstances unclear. Intake exam pending, sex not yet confirmed.",
+      "HousingID": "@lookup:MJ: Housings.Name=Cattery C-1"
+    },
+    "primaryKey": {
+      "ID": "4CB4B059-94AD-47BD-84CA-5B18C2A86AC7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Domino",
+      "Species": "Cat",
+      "BreedID": "@lookup:MJ: Breeds.Name=Domestic Shorthair",
+      "MicrochipNumber": "985141004512791",
+      "IntakeDate": "2026-08-30",
+      "IntakeReason": "Returned",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2024-02-01",
+      "WeightKg": 4.7,
+      "Status": "Intake",
+      "Description": "Returned after a household allergy. No behaviour concerns; known quantity, easy placement.",
+      "HousingID": "@lookup:MJ: Housings.Name=Cattery C-4"
+    },
+    "primaryKey": {
+      "ID": "FC5393C3-410B-41F3-A9DC-186DEDE8E278"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mabel",
+      "Species": "Cat",
+      "BreedID": "@lookup:MJ: Breeds.Name=Maine Coon",
+      "MicrochipNumber": "985141004512792",
+      "IntakeDate": "2026-09-01",
+      "IntakeReason": "Stray",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2023-02-16",
+      "WeightKg": 5.2,
+      "Status": "Intake",
+      "Description": "Upper respiratory infection — isolated and on antibiotics. Appetite good, prognosis good.",
+      "HousingID": "@lookup:MJ: Housings.Name=Isolation M-1"
+    },
+    "primaryKey": {
+      "ID": "B1409D28-82C2-42CA-A171-E650B746C1E7"
+    }
+  }
+]

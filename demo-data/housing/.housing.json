@@ -1,0 +1,93 @@
+[
+  {
+    "fields": {
+      "Name": "Kennel A-1",
+      "Building": "A",
+      "Species": "Dog",
+      "Capacity": 3,
+      "IsQuarantine": false,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "E4CFB3A4-DBCD-4DB0-BC37-1F5A3748374C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kennel A-3",
+      "Building": "A",
+      "Species": "Dog",
+      "Capacity": 3,
+      "IsQuarantine": false,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "FE725CBF-07E3-4BF9-A784-79BC8C5E5FAA"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kennel B-1",
+      "Building": "B",
+      "Species": "Dog",
+      "Capacity": 2,
+      "IsQuarantine": false,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "8F5EF4B5-E2C6-4820-9DDC-AD2FC4DF1233"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cattery C-1",
+      "Building": "C",
+      "Species": "Cat",
+      "Capacity": 4,
+      "IsQuarantine": false,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "81B53413-72F6-466C-BFD2-B9FD7FB1CAB9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cattery C-4",
+      "Building": "C",
+      "Species": "Cat",
+      "Capacity": 4,
+      "IsQuarantine": false,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "94B37F85-6AA7-4356-BC3E-CD0A0654E67D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Isolation M-1",
+      "Building": "M",
+      "Species": "Any",
+      "Capacity": 2,
+      "IsQuarantine": true,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "5B99C76C-3EBC-447D-867A-F5FB88D9623A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kennel D-9",
+      "Building": "D",
+      "Species": "Dog",
+      "Capacity": 2,
+      "IsQuarantine": false,
+      "IsActive": false
+    },
+    "primaryKey": {
+      "ID": "DAA7165E-82EE-4D90-B24A-65CDE94211CC"
+    }
+  }
+]

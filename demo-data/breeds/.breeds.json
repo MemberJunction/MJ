@@ -1,0 +1,86 @@
+[
+  {
+    "fields": {
+      "Name": "Beagle",
+      "Species": "Dog",
+      "SizeCategory": "Small",
+      "TypicalLifespanYears": 14,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "53C95589-31F8-4F4F-862C-5330680D0F50"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Border Collie",
+      "Species": "Dog",
+      "SizeCategory": "Medium",
+      "TypicalLifespanYears": 13,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "12F31A3A-827B-456F-A251-7ECF211E24D1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "German Shepherd",
+      "Species": "Dog",
+      "SizeCategory": "Large",
+      "TypicalLifespanYears": 11,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "F385C96B-BB2E-4426-9F06-BEDFDA28BC27"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Great Dane",
+      "Species": "Dog",
+      "SizeCategory": "Giant",
+      "TypicalLifespanYears": 8,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "44DE1004-751D-4844-89FA-BFF1D95BB8FE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Retired Mix Listing",
+      "Species": "Dog",
+      "SizeCategory": "Medium",
+      "TypicalLifespanYears": 12,
+      "IsActive": false
+    },
+    "primaryKey": {
+      "ID": "1B6951C4-5B31-4AD2-8A6A-9480F8A3516D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Domestic Shorthair",
+      "Species": "Cat",
+      "SizeCategory": "Small",
+      "TypicalLifespanYears": 15,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "343908DC-2899-406B-AECD-6DDCD3B92AF9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Maine Coon",
+      "Species": "Cat",
+      "SizeCategory": "Large",
+      "TypicalLifespanYears": 12,
+      "IsActive": true
+    },
+    "primaryKey": {
+      "ID": "E299D29C-81E9-4D7E-ACBF-BA981E2914E2"
+    }
+  }
+]

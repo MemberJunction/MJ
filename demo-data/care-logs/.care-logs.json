@@ -1,0 +1,332 @@
+[
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Biscuit",
+      "CareDate": "2026-07-19",
+      "CareType": "Exam",
+      "Description": "Intake exam. Underweight, coat poor, no obvious injury.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": "2026-08-07",
+      "Notes": "Start weight-gain diet; recheck in three weeks."
+    },
+    "primaryKey": {
+      "ID": "C9E77C06-A5A0-48E9-BF4E-1ACED64B27D6"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Biscuit",
+      "CareDate": "2026-08-07",
+      "CareType": "Exam",
+      "Description": "Weight recheck — up 1.8kg. Cleared for vaccination.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Good progress. Proceed to DHPP."
+    },
+    "primaryKey": {
+      "ID": "56C50149-8DC3-47CA-864A-40F0BAF2F86C"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Biscuit",
+      "CareDate": "2026-09-05",
+      "CareType": "Vaccination",
+      "Description": "DHPP, first of two.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-07",
+      "Notes": "Second dose due — OVERDUE, book this week."
+    },
+    "primaryKey": {
+      "ID": "577B7BBC-5014-4446-B121-72A194681FFD"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Marlowe",
+      "CareDate": "2026-08-04",
+      "CareType": "Exam",
+      "Description": "Intake exam. Bilateral ear infection noted.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": "2026-08-18",
+      "Notes": "Otic drops twice daily for 14 days."
+    },
+    "primaryKey": {
+      "ID": "583A36AD-A8E0-4709-97A6-1D719A504737"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Marlowe",
+      "CareDate": "2026-08-18",
+      "CareType": "Treatment",
+      "Description": "Ear drops course completed.",
+      "PerformedBy": "R. Okonkwo",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-04",
+      "Notes": "Recheck to confirm resolution — OVERDUE."
+    },
+    "primaryKey": {
+      "ID": "C412F2DE-4084-4C8A-9269-0F00AD30A082"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Juniper",
+      "CareDate": "2026-08-30",
+      "CareType": "Surgery",
+      "Description": "Spay. Routine, no complications.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-06",
+      "Notes": "Post-op check and suture removal — OVERDUE."
+    },
+    "primaryKey": {
+      "ID": "03512C6C-5070-42B3-9577-C0544E738D87"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Otis",
+      "CareDate": "2026-08-25",
+      "CareType": "Behavioral",
+      "Description": "Leash reactivity assessment. Reactive to dogs within 5m.",
+      "PerformedBy": "M. Vance",
+      "IsComplete": true,
+      "FollowUpDate": "2026-09-01",
+      "Notes": "Begin counter-conditioning, three sessions weekly."
+    },
+    "primaryKey": {
+      "ID": "DE54EDE7-4288-4E0A-92DA-4215F082FBDB"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Otis",
+      "CareDate": "2026-09-03",
+      "CareType": "Behavioral",
+      "Description": "Session 3. Threshold improved to roughly 2m.",
+      "PerformedBy": "M. Vance",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-07",
+      "Notes": "Re-assessment due — OVERDUE."
+    },
+    "primaryKey": {
+      "ID": "ABF33E46-19E0-42D8-AA45-85661EC6A111"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Pepper",
+      "CareDate": "2026-08-11",
+      "CareType": "Vaccination",
+      "Description": "FVRCP and rabies.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-05",
+      "Notes": "Rabies booster due — OVERDUE."
+    },
+    "primaryKey": {
+      "ID": "C6D78DF7-203C-4AE9-AFE0-86BDFD0388B4"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Pepper",
+      "CareDate": "2026-09-02",
+      "CareType": "Grooming",
+      "Description": "Nail trim and brush-out.",
+      "PerformedBy": "R. Okonkwo",
+      "IsComplete": true,
+      "FollowUpDate": "2026-10-02",
+      "Notes": "Monthly is enough for this coat."
+    },
+    "primaryKey": {
+      "ID": "85BD4A93-6DF5-4244-B7A2-54CE640FCE90"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Nutmeg",
+      "CareDate": "2026-07-20",
+      "CareType": "Vaccination",
+      "Description": "FVRCP, rabies, and FeLV test (negative).",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Fully vaccinated on arrival paperwork; confirmed here."
+    },
+    "primaryKey": {
+      "ID": "78442AEE-C876-4B5E-9C20-B88F326FB779"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Nutmeg",
+      "CareDate": "2026-09-04",
+      "CareType": "Grooming",
+      "Description": "Full groom — mats behind both ears cleared.",
+      "PerformedBy": "R. Okonkwo",
+      "IsComplete": true,
+      "FollowUpDate": "2026-09-18",
+      "Notes": "Weekly brushing needed; note for adopter."
+    },
+    "primaryKey": {
+      "ID": "AB6B9A56-0129-4250-B5EB-FD1D195CC9D7"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Willa",
+      "CareDate": "2026-08-28",
+      "CareType": "Vaccination",
+      "Description": "DHPP and rabies.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Complete for her age."
+    },
+    "primaryKey": {
+      "ID": "6889D441-F340-44C5-B5C7-4DDA1D26FF99"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Willa",
+      "CareDate": "2026-08-27",
+      "CareType": "Exam",
+      "Description": "Intake exam. Healthy, good body condition.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "No concerns."
+    },
+    "primaryKey": {
+      "ID": "E942683D-442F-48AF-BD7A-0D5116BB6CCD"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Poppy",
+      "CareDate": "2026-08-16",
+      "CareType": "Vaccination",
+      "Description": "DHPP and rabies, records confirmed from surrendering owner.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Owner records verified."
+    },
+    "primaryKey": {
+      "ID": "A0BE5078-D20F-4A1E-AFCB-99A596C9A2ED"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Domino",
+      "CareDate": "2026-08-31",
+      "CareType": "Vaccination",
+      "Description": "FVRCP booster.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Previously vaccinated here before first adoption."
+    },
+    "primaryKey": {
+      "ID": "979B75D2-F370-4384-B721-C0C3E619A313"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Mabel",
+      "CareDate": "2026-09-02",
+      "CareType": "Treatment",
+      "Description": "Upper respiratory infection — antibiotics started.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-11",
+      "Notes": "Recheck in three days; still within window."
+    },
+    "primaryKey": {
+      "ID": "DC5F9411-50E8-4332-8C0B-02F7B73D72A2"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Rufus",
+      "CareDate": "2026-09-06",
+      "CareType": "Exam",
+      "Description": "Intake exam. Sound, slightly thin, no chip on arrival.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-13",
+      "Notes": "Vaccinate once stray hold expires."
+    },
+    "primaryKey": {
+      "ID": "9147735D-3B56-4FCB-AF03-1441D066A26B"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Clementine",
+      "CareDate": "2026-09-04",
+      "CareType": "Other",
+      "Description": "Intake weigh-in and photograph only; full exam deferred.",
+      "PerformedBy": "R. Okonkwo",
+      "IsComplete": false,
+      "FollowUpDate": "2026-09-10",
+      "Notes": "Very young — exam booked, sex to be confirmed then."
+    },
+    "primaryKey": {
+      "ID": "9EE54088-C19D-4774-B5C5-ED411D1790B0"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Sable",
+      "CareDate": "2026-07-10",
+      "CareType": "Exam",
+      "Description": "Pre-adoption health check. Cleared.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Signed off for adoption."
+    },
+    "primaryKey": {
+      "ID": "97D0FD64-1AA0-4EF7-9B75-137756EF7DA0"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Gus",
+      "CareDate": "2026-07-30",
+      "CareType": "Exam",
+      "Description": "Pre-transfer health certificate issued.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Paperwork travelled with him."
+    },
+    "primaryKey": {
+      "ID": "4ECE937E-135F-4EC8-80FD-2DE1EB82149C"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "@lookup:MJ: Animals.Name=Pepper",
+      "CareDate": "2026-08-10",
+      "CareType": "Vaccination",
+      "Description": "FVRCP primary course, completed.",
+      "PerformedBy": "Dr. Halloran",
+      "IsComplete": true,
+      "FollowUpDate": null,
+      "Notes": "Primary course complete; booster scheduled."
+    },
+    "primaryKey": {
+      "ID": "7E44F94B-B7D8-4B60-9843-0A5804DFB8AF"
+    }
+  }
+]

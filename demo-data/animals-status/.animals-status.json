@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "Status": "Hold"
+    },
+    "primaryKey": {
+      "ID": "A909B43B-B4F6-4C9C-9E2F-DDEA84C97C85"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Available"
+    },
+    "primaryKey": {
+      "ID": "514441F9-0477-41A2-9FA0-4080F77F11F5"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Adopted"
+    },
+    "primaryKey": {
+      "ID": "301319A9-495D-4A7A-93EE-0A1EBFA6AFCF"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Hold"
+    },
+    "primaryKey": {
+      "ID": "72AB6F74-4747-4286-B489-EDCDB4D6CB36"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Hold"
+    },
+    "primaryKey": {
+      "ID": "1876649F-0C45-4ED3-A087-D11D9AECA6C5"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Available"
+    },
+    "primaryKey": {
+      "ID": "ADBCF59A-4ABC-4A26-B450-6B2122991E83"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Transferred"
+    },
+    "primaryKey": {
+      "ID": "C7D441B5-7F77-4FF8-BBAE-F1B729D2CEB6"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Hold"
+    },
+    "primaryKey": {
+      "ID": "E3023EAB-6B3A-45FC-B9F4-5A6E3FECB56B"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Available"
+    },
+    "primaryKey": {
+      "ID": "8F2D6944-6CE7-4F73-98D6-EA85C47E1526"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Available"
+    },
+    "primaryKey": {
+      "ID": "99B8ACCD-BE8E-45AA-A377-531A0971DFD1"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Available"
+    },
+    "primaryKey": {
+      "ID": "FC5393C3-410B-41F3-A9DC-186DEDE8E278"
+    }
+  },
+  {
+    "fields": {
+      "Status": "Hold"
+    },
+    "primaryKey": {
+      "ID": "B1409D28-82C2-42CA-A171-E650B746C1E7"
+    }
+  }
+]
