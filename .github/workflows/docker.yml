@@ -74,6 +74,10 @@ jobs:
         run: |
           # Use MJServer package since core and global are pinned at 2.100.3
           VERSION=$(jq -r .version packages/MJServer/package.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = null ]; then
+            echo "::error::packages/MJServer/package.json has no version; refusing to tag an image as :vnull"
+            exit 1
+          fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       # A prerelease suffix (`-edge.N`, `-rc.N`, …) means uncertified bits.
