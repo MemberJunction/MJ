@@ -1,4 +1,4 @@
-import { BaseEntity, RunView, UserInfo, EntityInfo, Metadata } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ordinalCompare } from '@memberjunction/global';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { EntityConfig } from '../config';
@@ -780,10 +780,12 @@ export class RecordProcessor {
     }
 
     try {
+      // The lookup target is any entity — build the predicate from its real key column(s).
+      const md = new Metadata(); // global-provider-ok: MetadataSync is a single-provider CLI process
       const rv = new RunView();
       const result = await rv.RunView({
         EntityName: lookupConfig.entity,
-        ExtraFilter: `ID = '${guidValue}'`,
+        ExtraFilter: CompositeKey.FromURLSegment(md.EntityByName(lookupConfig.entity), guidValue).ToWhereClause(),
         ResultType: 'entity_object'
       }, this.contextUser);
 

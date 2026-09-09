@@ -1739,7 +1739,7 @@ export abstract class BaseEntity<T = unknown> {
         if (cachedMatches && cachedMatches.length > 0) {
             for (const match of cachedMatches) {
                 const found = match.records.find(r => {
-                    const firstPK = r.FirstPrimaryKey;
+                    const firstPK = r.FirstPrimaryKey; // first-pk-ok: FK target — pkValue is one SubtypeSelector FK column's value
                     if (firstPK) {
                         return String(firstPK.Value).trim().toLowerCase() === String(pkValue).trim().toLowerCase();
                     }
@@ -1771,7 +1771,7 @@ export abstract class BaseEntity<T = unknown> {
                 key = pkValue;
             } else {
                 key = new CompositeKey();
-                const pkName = targetObj.FirstPrimaryKey?.Name ?? 'ID';
+                const pkName = targetObj.FirstPrimaryKey.Name; // first-pk-ok: FK target — pkValue is one SubtypeSelector FK column's value
                 key.KeyValuePairs.push(new KeyValuePair(pkName, pkValue));
             }
 
@@ -2332,7 +2332,7 @@ export abstract class BaseEntity<T = unknown> {
         // One `RunViews` for all remaining collections — N declared collections cost one round trip,
         // not N. Params are built per collection so each keeps its own filter and ordering. The key
         // is escaped exactly as RelatedRecordCollection.Load() and the batch loader escape it.
-        const parentKeyLiteral = String(this.FirstPrimaryKey?.Value).replace(/'/g, "''");
+        const parentKeyLiteral = String(this.FirstPrimaryKey?.Value).replace(/'/g, "''"); // first-pk-ok: RelatedEntityJoinField is one FK column, so the parent key it holds is single-column by design
         const rv = new RunView(this.ProviderToUse as unknown as IRunViewProvider);
         const results = await rv.RunViews(
             needsDatabase.map(c => ({
@@ -2369,7 +2369,7 @@ export abstract class BaseEntity<T = unknown> {
     private seedEmbedLoadVisited(): Set<string> {
         const seeded = new Set<string>();
         const name = this.EntityInfo?.Name;
-        const pk = this.FirstPrimaryKey?.Value;
+        const pk = this.FirstPrimaryKey?.Value; // first-pk-ok: must equal EmbeddedRecord.LoadEager's `entity:fk` cycle token, and an FK holds one column
         if (name && pk !== null && pk !== undefined && pk !== '') {
             seeded.add(`${name}:${String(pk)}`);
         }
@@ -3157,8 +3157,8 @@ export abstract class BaseEntity<T = unknown> {
     /**
      * Helper method to return just the first Primary Key
      */
-    get FirstPrimaryKey(): EntityField {
-        return this.PrimaryKeys[0];
+    get FirstPrimaryKey(): EntityField { // first-pk-ok: the accessor itself
+        return this.PrimaryKeys[0]; // first-pk-ok: the accessor itself
     }
 
     /**
@@ -3752,7 +3752,7 @@ export abstract class BaseEntity<T = unknown> {
             // Root of an IS-A chain, or a standalone (non-IS-A) entity: generate
             // a single GUID/UUID PK here (SQL Server `uniqueidentifier` /
             // PostgreSQL `uuid`).
-            const pk = this.EntityInfo.PrimaryKeys[0];
+            const pk = this.EntityInfo.FirstPrimaryKey; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
             if (!pk.AutoIncrement &&
                 pk.IsUniqueIdentifier &&
                 !this.Get(pk.Name)) {
@@ -5146,7 +5146,7 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = this.PrimaryKey.Values();
 
         for (const childEntity of childEntities) {
-            const pkField = childEntity.PrimaryKeys[0];
+            const pkField = childEntity.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             if (!pkField) continue;
 
             const result = await rv.RunView({
@@ -5243,7 +5243,7 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = primaryKey.Values();
 
         for (const child of childEntities) {
-            const childPK = child.PrimaryKeys[0];
+            const childPK = child.FirstPrimaryKey; // first-pk-ok: IS-A children share the parent's single key
             if (!childPK) continue;
 
             const result = await rv.RunView({
@@ -5297,14 +5297,15 @@ export abstract class BaseEntity<T = unknown> {
         // this instance's provider so an uncommitted sibling on the same
         // graph connection is visible (host RunView would miss it).
         const rv = new RunView(this.RunViewProviderToUse);
-        const validSiblings = siblingChildEntities.filter(s => s.PrimaryKeys[0]);
+        // first-pk-ok: IS-A siblings share the parent's single key
+        const validSiblings = siblingChildEntities.filter(s => s.FirstPrimaryKey); // first-pk-ok: IS-A siblings share the parent's single key
         if (validSiblings.length === 0) return;
 
         const viewParams = validSiblings.map(sibling => ({
             EntityName: sibling.Name,
-            ExtraFilter: `${sibling.PrimaryKeys[0].Name} = '${pkValue}'`,
+            ExtraFilter: `${sibling.FirstPrimaryKey.Name} = '${pkValue}'`, // first-pk-ok: IS-A shared key
             ResultType: 'simple' as const,
-            Fields: [sibling.PrimaryKeys[0].Name],
+            Fields: [sibling.FirstPrimaryKey.Name], // first-pk-ok: IS-A shared key
             MaxRows: 1
         }));
 
@@ -5638,7 +5639,7 @@ export abstract class BaseEntity<T = unknown> {
             LogError(`BaseEntity.GetDescendants(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
-        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
         const rootId = this.Get(pkName);
         if (!rootId) return [];
 
@@ -5669,7 +5670,7 @@ export abstract class BaseEntity<T = unknown> {
             LogError(`BaseEntity.GetAncestors(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
-        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
         const currentId = this.Get(pkName);
         const pathFieldName = `${fkField.Name}Path`;
         const depthFieldName = `${fkField.Name}Depth`;
@@ -5701,7 +5702,7 @@ export abstract class BaseEntity<T = unknown> {
             LogError(`BaseEntity.GetChildren(): No recursive foreign key field found on entity ${this.EntityInfo?.Name}`);
             return [];
         }
-        const pkName = this.FirstPrimaryKey?.Name ?? 'ID';
+        const pkName = this.FirstPrimaryKey.Name; // first-pk-ok: getRecursiveForeignKeyField already gates hierarchy traversal to single-column keys
         const currentId = this.Get(pkName);
         if (!currentId) return [];
 
