@@ -29,7 +29,7 @@ export class IntegrationProgressReader {
             if (!snap) continue;
             if (filter.runKind && snap.manifest.runKind !== filter.runKind) continue;
             if (filter.integrationID && snap.manifest.integrationID !== filter.integrationID) continue;
-            if (filter.companyIntegrationID && snap.manifest.companyIntegrationID !== filter.companyIntegrationID) continue;
+            if (filter.companyIntegrationID && !IntegrationProgressReader.RunCoversCompanyIntegration(snap.manifest, filter.companyIntegrationID)) continue;
             if (filter.sinceTs && snap.manifest.startedAt < filter.sinceTs) continue;
             if (filter.inFlightOnly && !snap.isInFlight) continue;
             const mtime = await this.runMtime(runID);
@@ -37,6 +37,29 @@ export class IntegrationProgressReader {
         }
         snapshots.sort((a, b) => b.mtimeMs - a.mtimeMs);
         return snapshots.slice(0, limit).map(s => s.snap);
+    }
+
+    /**
+     * The complete set of connections a run touched, normalised across the two manifest shapes.
+     *
+     * Single-connection runs (every sync, every discovery) carry only `companyIntegrationID`;
+     * runs that can span a batch (RSU) carry the full set in `companyIntegrationIDs` and set the
+     * singular field only when the set has exactly one member. Callers that make a per-connection
+     * decision — listing, and above all AUTHORIZATION — must read the set, not the singular field,
+     * or a batch run silently looks connection-less.
+     *
+     * Returns an empty array for a run with no connection identity at all.
+     */
+    public static CompanyIntegrationIDsFor(manifest: IntegrationRunManifest): string[] {
+        if (manifest.companyIntegrationIDs && manifest.companyIntegrationIDs.length > 0) {
+            return manifest.companyIntegrationIDs;
+        }
+        return manifest.companyIntegrationID ? [manifest.companyIntegrationID] : [];
+    }
+
+    /** Whether the given connection is one of the connections a run touched. */
+    public static RunCoversCompanyIntegration(manifest: IntegrationRunManifest, companyIntegrationID: string): boolean {
+        return IntegrationProgressReader.CompanyIntegrationIDsFor(manifest).includes(companyIntegrationID);
     }
 
     /** Read snapshot of a single run. Returns undefined if runID not found. */
