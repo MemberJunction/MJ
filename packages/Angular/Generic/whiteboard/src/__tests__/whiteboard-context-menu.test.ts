@@ -60,9 +60,18 @@ describe('BuildWhiteboardContextMenu — model per target', () => {
     expect(only[0].SeparatorBefore).toBe(false);
   });
 
-  it('a roster never touches an ITEM menu (edit / restyle / delete are authoring, not tool selection)', () => {
+  it('a roster removes only Restyle from an item menu, and only when text is off it', () => {
     const sticky = makeItem(state, 'sticky');
-    expect(BuildWhiteboardContextMenu(sticky, []).map((a) => a.ID)).toEqual(ids(sticky));
+    const under = (roster: WhiteboardTool[]) => BuildWhiteboardContextMenu(sticky, roster).map((a) => a.ID);
+
+    // Restyle opens the TEXT tool's style flyout, so it follows the text tool …
+    expect(under(['select', 'text'])).toContain('restyle');
+    expect(under(['select', 'pen'])).not.toContain('restyle');
+    expect(under([])).not.toContain('restyle');
+
+    // … and nothing else in the item menu moves: authoring on what already exists is not
+    // tool selection, so Edit / Duplicate / z-order / Delete stay under every roster.
+    expect(under([])).toEqual(ids(sticky).filter((id) => id !== 'restyle'));
   });
 
   it('highlight → Delete only (transient pointing chrome)', () => {

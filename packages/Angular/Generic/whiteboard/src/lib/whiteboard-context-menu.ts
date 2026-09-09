@@ -58,8 +58,9 @@ const NON_DUPLICABLE_KINDS: ReadonlySet<WhiteboardItem['Kind']> = new Set(['conn
  *    plus "New page" (the same path as the strip's "+" button);
  *  - highlight → Delete only (highlights are transient "pointing" chrome);
  *  - any other item → Edit (same path as dblclick; editable kinds only), Restyle…
- *    (text/sticky), Duplicate (not connectors/highlights), Bring to front / Send to
- *    back, and Delete.
+ *    (text/sticky, and only while the roster offers the `text` tool that renders its
+ *    flyout), Duplicate (not connectors/highlights), Bring to front / Send to back,
+ *    and Delete.
  */
 export function BuildWhiteboardContextMenu(item: WhiteboardItem | null, roster: WhiteboardToolRoster = null): WhiteboardContextMenuAction[] {
   if (item === null) {
@@ -81,7 +82,12 @@ export function BuildWhiteboardContextMenu(item: WhiteboardItem | null, roster: 
   if (EDITABLE_KINDS.has(item.Kind)) {
     actions.push({ ID: 'edit', Label: 'Edit', Icon: 'fa-solid fa-pen' });
   }
-  if (RESTYLABLE_KINDS.has(item.Kind)) {
+  // Restyle is the ONE item action that is also a door to a tool: it opens the toolbar's text
+  // style flyout, which is rendered by the text tool's button. Under a roster without `text`
+  // that button does not exist, so the entry would be visibly present and do nothing. Gate it
+  // on the same predicate everything else reads. (The rest of the item menu stays roster-blind:
+  // Edit / Duplicate / z-order / Delete are authoring on what already exists, not tool selection.)
+  if (RESTYLABLE_KINDS.has(item.Kind) && IsToolAllowed(roster, 'text')) {
     actions.push({ ID: 'restyle', Label: 'Restyle…', Icon: 'fa-solid fa-palette' });
   }
   if (!NON_DUPLICABLE_KINDS.has(item.Kind)) {
