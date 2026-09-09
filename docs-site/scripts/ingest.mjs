@@ -251,11 +251,11 @@ function writePackagesIndex(packageEntries) {
 }
 
 function mdCell(text) {
-  // Backslashes first, so a description ending in a backslash cannot neutralise the
-  // escaped pipe that follows it.
+  // One pass over both characters that break a GFM table cell, so there is no
+  // escape ordering to get wrong (a trailing backslash must not neutralise the
+  // escaped pipe after it).
   return (text ?? '')
-    .replace(/\\/g, '\\\\')
-    .replace(/\|/g, '\\|')
+    .replace(/[\\|]/g, '\\$&')
     .replace(/\s+/g, ' ')
     .trim();
 }

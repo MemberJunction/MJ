@@ -14,20 +14,14 @@
  * The array is legitimately empty here because `--exclude-packages @memberjunction` excludes every
  * package in this repo, so a real run emits the same shape. A later real run overwrites it.
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const target = resolve(here, '../src/generated/class-registrations-manifest.ts');
 
-mkdirSync(dirname(target), { recursive: true });
-try {
-    // 'wx' creates the file only if it does not exist, in one operation: no window between
-    // an existence check and the write in which a real generator run could be clobbered.
-    writeFileSync(
-        target,
-    `/**
+const EMPTY_MANIFEST = `/**
  * AUTO-GENERATED FILE - DO NOT EDIT
  * Written by scripts/ensure-manifest.mjs because 'mj codegen manifest' could not run
  * (no built workspace dists — a fresh checkout, or a filtered CI build that skipped them).
@@ -52,13 +46,22 @@ export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
 export const CLASS_REGISTRATIONS_COUNT = 0;
-`,
-        { encoding: 'utf8', flag: 'wx' }
-    );
+`;
+
+mkdirSync(dirname(target), { recursive: true });
+try {
+    // 'wx' creates the file only if it does not exist, in one operation: no window between
+    // an existence check and the write in which a real generator run could be clobbered.
+    writeFileSync(target, EMPTY_MANIFEST, { encoding: 'utf8', flag: 'wx' });
+    console.log('[ensure-manifest] wrote the empty class-registrations manifest (generator unavailable).');
 } catch (error) {
-    if (error && error.code === 'EEXIST') {
-        process.exit(0);
+    if (error?.code !== 'EEXIST') throw error;
+    // Something already occupies the target. A regular file is the normal case (a real
+    // generator run, or an earlier bootstrap) and nothing is done. An exclusive create also
+    // reports EEXIST for a dangling symlink; existsSync follows links, so false here means
+    // dangling, and the manifest is written through the link as the pre-'wx' script did.
+    if (!existsSync(target)) {
+        writeFileSync(target, EMPTY_MANIFEST, 'utf8');
+        console.log('[ensure-manifest] wrote the empty class-registrations manifest through an existing symlink.');
     }
-    throw error;
 }
-console.log('[ensure-manifest] wrote the empty class-registrations manifest (generator unavailable).');

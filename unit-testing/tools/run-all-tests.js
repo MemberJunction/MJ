@@ -78,11 +78,16 @@ function runPackageTests(pkg, runDir) {
   try {
     // Run vitest with JSON reporter
     // Argument array, not a shell string: the results path is built from the package name
-    // and must never be interpreted by a shell.
-    execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test', '--', '--reporter=json', `--outputFile=${resultsFile}`], {
+    // and must never be interpreted by a shell. Windows is the exception: Node refuses to
+    // spawn npm.cmd without a shell (EINVAL since the CVE-2024-27980 fix), so a shell is
+    // used there and the one path argument is quoted for cmd.exe.
+    const isWindows = process.platform === 'win32';
+    const outputFileArg = `--outputFile=${isWindows ? JSON.stringify(resultsFile) : resultsFile}`;
+    execFileSync('npm', ['test', '--', '--reporter=json', outputFileArg], {
       cwd: pkg.path,
       stdio: 'pipe',
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      shell: isWindows
     });
 
     console.log(`   ✅ Passed`);

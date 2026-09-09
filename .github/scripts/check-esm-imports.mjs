@@ -44,6 +44,19 @@ const IMPORT_TIMEOUT_MS = 60000;
 /** Marker prefix the child process uses to hand structured failure data to the parent. */
 const FAILURE_MARKER = '__ESM_GUARD_FAILURE__';
 
+// The child process's script. The entry URL and the marker reach it as process
+// arguments, never as text spliced into the source: generated source is how a path
+// with a quote or a line separator turns into code (CodeQL js/bad-code-sanitization).
+// A module-level constant cannot see any per-call value, so that property is
+// structural rather than a discipline.
+const CHILD_IMPORT_SCRIPT = [
+    'const [url, marker] = process.argv.slice(1);',
+    'import(url).then(',
+    '  () => process.exit(0),',
+    '  (e) => { console.error(marker + JSON.stringify({ code: e.code ?? null, message: String(e.message ?? e) })); process.exit(1); }',
+    ');',
+].join('\n');
+
 /**
  * Resolve a package's published ESM entry point from its package.json.
  * Precedence: the root `exports` condition set (subpath-map "." OR a bare
@@ -237,22 +250,10 @@ function walkFiles(dir, out = []) {
  */
 function importInFreshProcess(entryPath, timeoutMs = IMPORT_TIMEOUT_MS) {
     const url = pathToFileURL(entryPath).href;
-    // The entry URL and the marker reach the child as process arguments, never as text
-    // spliced into the script: generated source is how a path with a quote or a line
-    // separator turns into code (CodeQL js/bad-code-sanitization). The script itself is a
-    // constant.
-    const childScript = [
-        'const [url, marker] = process.argv.slice(1);',
-        'import(url).then(',
-        '  () => process.exit(0),',
-        '  (e) => { console.error(marker + JSON.stringify({ code: e.code ?? null, message: String(e.message ?? e) })); process.exit(1); }',
-        ');',
-    ].join('\n');
-
     return new Promise((resolveResult) => {
         execFile(
             process.execPath,
-            ['--input-type=module', '-e', childScript, url, FAILURE_MARKER],
+            ['--input-type=module', '-e', CHILD_IMPORT_SCRIPT, url, FAILURE_MARKER],
             { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 10 * 1024 * 1024 },
             (error, _stdout, stderr) => {
                 if (!error) {

@@ -40,20 +40,22 @@ const PER_TASK_OVERHEAD_SECONDS = 3;
  * planning must never be the reason CI cannot start.
  */
 export function loadWeights(weightsPath = DEFAULT_WEIGHTS_PATH) {
-    if (!existsSync(weightsPath)) {
-        console.warn(`plan-test-shards: no weight table at ${weightsPath} — falling back to uniform weights.`);
-        return { packages: {}, defaultSeconds: PER_TASK_OVERHEAD_SECONDS };
-    }
+    const uniform = { packages: {}, defaultSeconds: PER_TASK_OVERHEAD_SECONDS };
+    let parsed;
     try {
-        const parsed = JSON.parse(readFileSync(weightsPath, 'utf8'));
-        return {
-            packages: parsed.packages ?? {},
-            defaultSeconds: typeof parsed._defaultSeconds === 'number' ? parsed._defaultSeconds : PER_TASK_OVERHEAD_SECONDS,
-        };
+        parsed = readJsonIfPresent(weightsPath);
     } catch (e) {
         console.warn(`plan-test-shards: unreadable weight table ${weightsPath} (${e.message}) — falling back to uniform weights.`);
-        return { packages: {}, defaultSeconds: PER_TASK_OVERHEAD_SECONDS };
+        return uniform;
     }
+    if (parsed === null) {
+        console.warn(`plan-test-shards: no weight table at ${weightsPath} — falling back to uniform weights.`);
+        return uniform;
+    }
+    return {
+        packages: parsed.packages ?? {},
+        defaultSeconds: typeof parsed._defaultSeconds === 'number' ? parsed._defaultSeconds : PER_TASK_OVERHEAD_SECONDS,
+    };
 }
 
 /**
@@ -231,7 +233,7 @@ export function extractDurationsFromLog(logText) {
  */
 export function recordWeights(logText, { weightsPath = DEFAULT_WEIGHTS_PATH, source = 'a job log' } = {}) {
     const measured = extractDurationsFromLog(logText);
-    const previous = readJsonIfPresent(weightsPath);
+    const previous = readJsonIfPresent(weightsPath) ?? {};
     const merged = { ...(previous.packages ?? {}), ...measured };
 
     const out = {
@@ -252,7 +254,7 @@ function readJsonIfPresent(filePath) {
     try {
         return JSON.parse(readFileSync(filePath, 'utf8'));
     } catch (error) {
-        if (error && error.code === 'ENOENT') return {};
+        if (error?.code === 'ENOENT') return null;
         throw error;
     }
 }
