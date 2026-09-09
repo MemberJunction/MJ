@@ -639,26 +639,14 @@ export class SyncEngine {
       }
     }
 
-    // Scan preloaded entities in-memory if preloaded
+    // Scan preloaded entities in-memory if preloaded (indexed O(1) resolution)
     if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
-      const cachedEntities = this.syncMetadataEngine.getCachedEntities(entityName);
-      for (const cachedEntity of cachedEntities) {
-        let allMatch = true;
-        for (const {fieldName, fieldValue} of lookupFields) {
-          const entityValue = cachedEntity.Get(fieldName);
-          const normalizedEntityValue = (entityValue?.toString() || '').toLowerCase().trim();
-          const normalizedLookupValue = (fieldValue?.toString() || '').toLowerCase().trim();
-          if (normalizedEntityValue !== normalizedLookupValue) {
-            allMatch = false;
-            break;
-          }
-        }
-        if (allMatch) {
-          const pkeyField = entityInfo.PrimaryKeys[0].Name;
-          const id = cachedEntity.Get(pkeyField);
-          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
-          return id;
-        }
+      const cachedEntity = this.syncMetadataEngine.findCachedByLookup(entityName, lookupFields);
+      if (cachedEntity) {
+        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const id = cachedEntity.Get(pkeyField);
+        this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
+        return id;
       }
     }
 

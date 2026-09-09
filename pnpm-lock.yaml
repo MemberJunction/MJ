@@ -143,6 +143,9 @@ importers:
       knip:
         specifier: ^5.71.0
         version: 5.83.0(@types/node@24.10.11)(typescript@5.9.3)
+      mssql:
+        specifier: ^12.2.0
+        version: 12.7.0
       prettier:
         specifier: ^3.3.1
         version: 3.8.1
@@ -18803,12 +18806,15 @@ packages:
 
   '@microsoft/mgt-element@4.6.0':
     resolution: {integrity: sha512-h9fQqfqf4kzxjsa7zCPI9Lz7MUtBoTaHZyalwl2Q8wVqkEoMUim9OK/Y6uElsefegbtVAK0ucPkVL5y1zzqHJQ==}
+    deprecated: 'Microsoft Graph Toolkit was retired on 2026-08-28 and is no longer maintained. You are welcome to fork the repository to maintain your own version: https://github.com/microsoftgraph/microsoft-graph-toolkit'
 
   '@microsoft/mgt-msal2-provider@4.6.0':
     resolution: {integrity: sha512-Xl0qRje2jnZKIY4LKUInPgaFbpbtN4nkYShoh9n7Wy9AbTnprcaxK8VzxlxPZtpISe3pxQ78tXH0Mvc/xoeI9Q==}
+    deprecated: 'Microsoft Graph Toolkit was retired on 2026-08-28 and is no longer maintained. You are welcome to fork the repository to maintain your own version: https://github.com/microsoftgraph/microsoft-graph-toolkit'
 
   '@microsoft/mgt-sharepoint-provider@4.6.0':
     resolution: {integrity: sha512-gWGlwZPY2xU7UnIcurhshAeElLMJSHDVTNohiuVE4u1uBECanBmQ4uXGr9xTLeD/d2LRZtyCbDdeiuskNICzDg==}
+    deprecated: 'Microsoft Graph Toolkit was retired on 2026-08-28 and is no longer maintained. You are welcome to fork the repository to maintain your own version: https://github.com/microsoftgraph/microsoft-graph-toolkit'
 
   '@microsoft/microsoft-graph-client@3.0.2':
     resolution: {integrity: sha512-eYDiApYmiGsm1s1jfAa/rhB2xQCsX4pWt0vCTd1LZmiApMQfT/c0hXj2hvpuGz5GrcLdugbu05xB79rIV57Pjw==}
