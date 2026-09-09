@@ -5469,7 +5469,6 @@ export class ManageMetadataBase {
          const allEntityFields = allEntityFieldsResult.recordset;
 
          const generationPromises = [];
-         const ag = new AdvancedGeneration();
 
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
@@ -5505,24 +5504,28 @@ export class ManageMetadataBase {
                   }
                }
                else {
-                  // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
-                  // attempt to use an LLM to do things fancier now
-                  if (ag.featureEnabled('ParseCheckConstraints')) {
-                     // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
-                     // run this in parallel
-                     generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
-                  }
+                  // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse, so a
+                  // Validate() function is the only way to express it.
+                  //
+                  // Do NOT gate this call on ag.featureEnabled('ParseCheckConstraints'). That gate belongs INSIDE
+                  // generateValidatorFunctionFromCheckConstraint (paired with generateNewCode), where it guards only the LLM call.
+                  // Gating out here also skips that function's no-AI early return -- the path that returns the ALREADY-SAVED validator
+                  // when the stored CHECK constraint still matches the live one. With the gate here, `--no-ai` (or simply having the
+                  // feature switched off) means nothing is pushed to _generatedValidators, no Validate() override is emitted, and the
+                  // next rewrite of the entity subclasses silently DELETES every committed validator.
+                  // Always call; the inner function decides whether to load stored code, generate new code, or do nothing.
+                  // run this in parallel
+                  generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
                }
             }
          }
 
-         // now for the table level constraints run the process for advanced generation
+         // now for the table level constraints, build a Validate function for each constraint.
+         // As above: no featureEnabled() gate here. Loading previously-generated code is not an AI operation, and the
+         // ParseCheckConstraints gate that does guard the LLM call lives inside generateValidatorFunctionFromCheckConstraint.
          for (const r of tableLevelResults) {
-            if (ag.featureEnabled('ParseCheckConstraints')) {
-               // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
-               // run this in parallel
-               generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
-            }
+            // run this in parallel
+            generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
          }
 
          // await the completion of all generation promises here
