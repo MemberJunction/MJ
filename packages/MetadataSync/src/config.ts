@@ -232,6 +232,19 @@ export interface EntityConfig {
    * Examples: ["output", "examples", "temp"]
    */
   ignoreDirectories?: string[];
+  /**
+   * Declarative collection configuration for composition axes.
+   * Key is collection property name (e.g. "Lines", "Payments").
+   */
+  collections?: Record<string, {
+    /** Membership mode: 'upsert' (default) or 'authoritative' (opt-in) */
+    mode?: 'upsert' | 'authoritative';
+    /**
+     * Maximum percentage of loaded collection rows that can be implied-deleted
+     * under authoritative mode before push refuses (default: 20%).
+     */
+    maxImpliedDeletePercent?: number;
+  }>;
   /** Pull command specific configuration */
   pull?: {
     /** Glob pattern for finding existing files to update (defaults to filePattern) */

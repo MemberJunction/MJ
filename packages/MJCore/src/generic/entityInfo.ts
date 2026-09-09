@@ -18,6 +18,7 @@ import {
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
 } from "./entityConfiguration"
+import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
 /**
  * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
@@ -2028,6 +2029,38 @@ export class EntityInfo extends BaseInfo {
      * This flag is set on the **parent** entity and controls whether its children are exclusive.
      */
     AllowMultipleSubtypes: boolean = false
+    /**
+     * Optional JSON configuration specifying declarative prospective subtype resolution on an entity.
+     * Stored in the SubtypeSelector column of Entity (shape = IEntitySubtypeSelectorConfig).
+     */
+    SubtypeSelector: string = null
+
+    private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+
+    /**
+     * Parsed SubtypeSelector configuration, if configured.
+     */
+    get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
+        if (this._subtypeSelectorConfig === undefined) {
+            if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
+                try {
+                    const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
+                    if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
+                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
+                        this._subtypeSelectorConfig = null;
+                    }
+                } catch (err) {
+                    LogError(`EntityInfo '${this.Name}': failed to parse SubtypeSelector JSON '${this.SubtypeSelector}': ${err instanceof Error ? err.message : String(err)}`);
+                    this._subtypeSelectorConfig = null;
+                }
+            } else {
+                this._subtypeSelectorConfig = null;
+            }
+        }
+        return this._subtypeSelectorConfig;
+    }
     /**
      * Whether to audit when users access records from this entity
      */
