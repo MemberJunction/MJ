@@ -293,7 +293,9 @@ export function decideFieldMapReconcile(
     activeFieldNames: readonly string[],
     existing: readonly ExistingFieldMapRead[],
     mapEnabled: boolean,
-    autoEnableNewColumns = true,
+    // Defaults to the CONTRACT (everything.txt): a refresh's new columns arrive disabled and
+    // the user turns them on. An omitted argument must not silently adopt.
+    autoEnableNewColumns = false,
 ): FieldMapReconcilePlan {
     const plan: FieldMapReconcilePlan = { Create: [], Enable: [], Disable: [] };
     const existingByLower = new Map(
