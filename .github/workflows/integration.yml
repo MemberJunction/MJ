@@ -682,6 +682,15 @@ jobs:
         run: |
           node packages/MJCLI/bin/run.js migrate
           node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          # `sync push` writes a `sync` block (lastModified + checksum) back into every record it
+          # pushes. That is its documented job (metadata/CLAUDE.md rule 1), while rule 1b forbids a
+          # PR from committing those blocks — the build engineer regenerates them at release. So a
+          # PR that ADDS a metadata record leaves metadata/ dirty here through no fault of its own,
+          # and the drift step below fails it. This push is the gate's SETUP, not its
+          # system-under-test, so discard its write-back now. Drift CodeGen itself introduces under
+          # metadata/ is still caught: this restores tracked files only, so anything CodeGen newly
+          # writes there still surfaces as untracked in the drift status.
+          git checkout -- metadata/
 
       - name: Run CodeGen against the migrated DB
         id: codegen
@@ -803,6 +812,9 @@ jobs:
         run: |
           node packages/MJCLI/bin/run.js migrate
           node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          # Setup push, not the system-under-test — discard its documented `sync` write-back so a
+          # metadata-adding PR is not failed for it. Same reasoning as the PR-gate lane above.
+          git checkout -- metadata/
 
       - name: Run CodeGen (AI enabled)
         id: codegen
