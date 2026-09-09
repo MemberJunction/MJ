@@ -549,7 +549,7 @@ export class RecordDependencyAnalyzer {
     entityInfo: EntityInfo
   ): string | null {
     // Get primary key field name
-    const primaryKeyField = entityInfo.PrimaryKeys[0]?.Name;
+    const primaryKeyField = entityInfo.FirstPrimaryKey?.Name; // first-pk-ok: matches a direct FK value against the referenced entity's key; FK targets are single-column by design
     if (!primaryKeyField) return null;
 
     for (const candidate of this.flattenedRecords) {

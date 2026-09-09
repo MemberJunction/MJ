@@ -45,7 +45,7 @@ export async function RecordAppInstallation(
   // Check for existing record (e.g. previously removed app being reinstalled)
   const existing = await FindInstalledApp(contextUser, manifest.name, provider);
   if (existing) {
-    const key = new CompositeKey([{ FieldName: 'ID', Value: existing.ID }]);
+    const key = CompositeKey.FromID(existing.ID);
     await entity.InnerLoad(key);
   } else {
     entity.NewRecord();

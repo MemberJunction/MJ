@@ -898,7 +898,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         try {
             const md = this.ProviderToUse;
             const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-            await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.TaxSelectedNode.ID }]));
+            await tag.InnerLoad(CompositeKey.FromID(this.TaxSelectedNode.ID));
             tag.Name = this.TaxEditName;
             tag.Description = this.TaxEditDescription;
             const saved = await tag.Save();
@@ -923,7 +923,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         try {
             const md = this.ProviderToUse;
             const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-            await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+            await tag.InnerLoad(CompositeKey.FromID(node.ID));
             tag.ParentID = newParentId;
             const saved = await tag.Save();
             if (saved) {
@@ -945,7 +945,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                 try {
                     const md = this.ProviderToUse;
                     const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-                    await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
+                    await tag.InnerLoad(CompositeKey.FromID(node.ID));
                     const deleted = await tag.Delete();
                     if (deleted) {
                         this.addTaxAuditEntry('deleted', node.Name);
@@ -1099,7 +1099,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         for (const tagID of validIDs) {
             try {
                 const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-                await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                await tag.InnerLoad(CompositeKey.FromID(tagID));
                 tag.ParentID = targetNode.ID;
                 const saved = await tag.Save();
                 if (saved) movedCount++;
@@ -1139,7 +1139,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         for (const tagID of dragIDs) {
             try {
                 const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-                await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: tagID }]));
+                await tag.InnerLoad(CompositeKey.FromID(tagID));
                 if (tag.ParentID != null) {
                     tag.ParentID = null;
                     const saved = await tag.Save();
@@ -1172,7 +1172,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
             const md = this.ProviderToUse;
             for (const ti of itemsToMove) {
                 const taggedItem = await md.GetEntityObject<MJTaggedItemEntity>('MJ: Tagged Items', md.CurrentUser);
-                await taggedItem.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: ti['ID'] as string }]));
+                await taggedItem.InnerLoad(CompositeKey.FromID(ti['ID'] as string));
                 taggedItem.TagID = targetTagId;
                 if (!await taggedItem.Save()) {
                     MJNotificationService.Instance.CreateSimpleNotification(
@@ -1186,7 +1186,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
             const childTags = this.tagsRaw.filter(t => (t['ParentID'] as string) === sourceTagId);
             for (const child of childTags) {
                 const childTag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-                await childTag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: child['ID'] as string }]));
+                await childTag.InnerLoad(CompositeKey.FromID(child['ID'] as string));
                 childTag.ParentID = targetTagId;
                 if (!await childTag.Save()) {
                     MJNotificationService.Instance.CreateSimpleNotification(
@@ -1201,7 +1201,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
 
             // Delete source tag (original behavior — hard delete)
             const sourceEntity = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-            await sourceEntity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceTagId }]));
+            await sourceEntity.InnerLoad(CompositeKey.FromID(sourceTagId));
             if (!await sourceEntity.Delete()) {
                 MJNotificationService.Instance.CreateSimpleNotification(
                     `Merge failed: ${sourceEntity.LatestResult?.CompleteMessage ?? 'unknown error'}`, 'error', 4000
@@ -1225,7 +1225,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
         try {
             const md = this.ProviderToUse;
             const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-            await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: childTagId }]));
+            await tag.InnerLoad(CompositeKey.FromID(childTagId));
             tag.ParentID = parentTagId;
             const saved = await tag.Save();
             if (saved) {
@@ -1500,7 +1500,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                     await this.cleanupTagReferences(orphan.ID);
                     const md = this.ProviderToUse;
                     const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-                    await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                    await tag.InnerLoad(CompositeKey.FromID(orphan.ID));
                     const deleted = await tag.Delete();
                     if (deleted) {
                         this.addTaxAuditEntry('deleted', orphan.Name);
@@ -1531,7 +1531,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                     try {
                         await this.cleanupTagReferences(orphan.ID);
                         const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-                        await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        await tag.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await tag.Delete()) {
                             deletedCount++;
                             this.addTaxAuditEntry('deleted', orphan.Name);
@@ -1562,7 +1562,7 @@ export class ClassifyTaxonomyTabComponent extends BaseAngularComponent implement
                 for (const orphan of this.TaxOrphans) {
                     try {
                         const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
-                        await tag.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
+                        await tag.InnerLoad(CompositeKey.FromID(orphan.ID));
                         if (await tag.Delete()) {
                             deletedCount++;
                             this.addTaxAuditEntry('deleted', orphan.Name);
