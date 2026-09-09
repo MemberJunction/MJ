@@ -9,7 +9,7 @@ import {
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
-import { RegisterClass } from '@memberjunction/global';
+import { ordinalCompare, RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { configInfo, dbDatabase, mj_core_schema } from '../../../Config/config';
 import { MSSQLConnection, getSqlConfig } from '../../../Config/db-connection';
@@ -1123,7 +1123,7 @@ GO
             }
         }
         let sOutput = '';
-        for (const [sqlName, columns] of [...deniedColumnsByRole.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+        for (const [sqlName, columns] of [...deniedColumnsByRole.entries()].sort(([a], [b]) => ordinalCompare(a, b))) {
             sOutput += `\nDENY SELECT (${columns.map(c => `[${c}]`).join(', ')}) ON [${entity.SchemaName}].[${entity.BaseView}] TO [${sqlName}]`;
         }
         return sOutput;

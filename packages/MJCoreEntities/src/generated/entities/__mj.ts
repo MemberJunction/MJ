@@ -18221,12 +18221,12 @@ export const MJEntityFieldPermissionSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityFieldID: z.string().describe(`
         * * Field Name: EntityFieldID
-        * * Display Name: Entity Field
+        * * Display Name: Entity Field ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)`),
     RoleID: z.string().describe(`
         * * Field Name: RoleID
-        * * Display Name: Role
+        * * Display Name: Role ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
     ReadAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
@@ -18274,11 +18274,11 @@ export const MJEntityFieldPermissionSchema = z.object({
         * * Default Value: getutcdate()`),
     EntityField: z.string().describe(`
         * * Field Name: EntityField
-        * * Display Name: Entity Field Name
+        * * Display Name: Entity Field
         * * SQL Data Type: nvarchar(255)`),
     Role: z.string().describe(`
         * * Field Name: Role
-        * * Display Name: Role Name
+        * * Display Name: Role
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -83710,7 +83710,7 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
 
     /**
     * Validate() method override for MJ: Entity Field Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
-    * * Table-Level: Users cannot be granted Create or Update access unless they are also granted Read access, ensuring logical permission hierarchy.
+    * * Table-Level: To grant Create or Update access, Read access must also be set to 'Allow'. This prevents users from having permission to modify or create data they cannot view.
     * @public
     * @method
     * @override
@@ -83724,30 +83724,24 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
     }
 
     /**
-    * Users cannot be granted Create or Update access unless they are also granted Read access, ensuring logical permission hierarchy.
+    * To grant Create or Update access, Read access must also be set to 'Allow'. This prevents users from having permission to modify or create data they cannot view.
     * @param result - the ValidationResult object to add any errors or warnings to
     * @public
     * @method
     */
     public ValidateReadAccessRequiredForCreateOrUpdate(result: ValidationResult) {
-    	if (this.ReadAccess !== "Allow") {
-    		if (this.UpdateAccess === "Allow") {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"UpdateAccess",
-    				"Update access cannot be set to 'Allow' unless Read access is also set to 'Allow'.",
-    				this.UpdateAccess,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    		if (this.CreateAccess === "Allow") {
-    			result.Errors.push(new ValidationErrorInfo(
-    				"CreateAccess",
-    				"Create access cannot be set to 'Allow' unless Read access is also set to 'Allow'.",
-    				this.CreateAccess,
-    				ValidationErrorType.Failure
-    			));
-    		}
-    	}
+        const hasUpdate = this.UpdateAccess === "Allow";
+        const hasCreate = this.CreateAccess === "Allow";
+        const hasRead = this.ReadAccess === "Allow";
+    
+        if ((hasUpdate || hasCreate) && !hasRead) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ReadAccess",
+                "Read access must be set to 'Allow' if either Create or Update access is allowed.",
+                this.ReadAccess,
+                ValidationErrorType.Failure
+            ));
+        }
     }
 
     /**
@@ -83765,7 +83759,7 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
 
     /**
     * * Field Name: EntityFieldID
-    * * Display Name: Entity Field
+    * * Display Name: Entity Field ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
     */
@@ -83778,7 +83772,7 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
 
     /**
     * * Field Name: RoleID
-    * * Display Name: Role
+    * * Display Name: Role ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
     */
@@ -83868,7 +83862,7 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
 
     /**
     * * Field Name: EntityField
-    * * Display Name: Entity Field Name
+    * * Display Name: Entity Field
     * * SQL Data Type: nvarchar(255)
     */
     get EntityField(): string {
@@ -83877,7 +83871,7 @@ export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermi
 
     /**
     * * Field Name: Role
-    * * Display Name: Role Name
+    * * Display Name: Role
     * * SQL Data Type: nvarchar(50)
     */
     get Role(): string {

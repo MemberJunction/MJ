@@ -365,6 +365,8 @@ GO
 
 /* SQL generated to create new entity MJ: Entity Field Permissions */
 
+/* SQL generated to create new entity MJ: Entity Field Permissions */
+
       INSERT INTO [${flyway:defaultSchema}].[Entity] (
          [ID],
          [Name],
@@ -389,7 +391,7 @@ GO
          , [__mj_UpdatedAt]
       )
       VALUES (
-         '3cac32da-08e0-4517-81e4-c94d87fd55b9',
+         'f60ea8ef-c552-4dd6-a8e3-65ffac57a88d',
          'MJ: Entity Field Permissions',
          'Entity Field Permissions',
          'Role-based field-level (column-level) security. One row per (entity field, role), carrying three independent trinary verbs — ReadAccess, UpdateAccess and CreateAccess — each Allow, Deny or No Access. Rows are only consulted when the parent entity has EnableFieldLevelSecurity = 1. Across the roles a user holds, a verb resolves to (any Allow) AND NOT (any Deny); No Access is neutral and grants nothing while blocking nothing. Read is required for Update and Create, enforced per row by a CHECK constraint and again after aggregation. Primary keys and MemberJunction system audit columns are never restrictable.',
@@ -415,22 +417,22 @@ GO
 /* SQL generated to add new entity MJ: Entity Field Permissions to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
 INSERT INTO [${flyway:defaultSchema}].[ApplicationEntity]
                                        ([ApplicationID], [EntityID], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '3cac32da-08e0-4517-81e4-c94d87fd55b9', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
+                                       ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'f60ea8ef-c552-4dd6-a8e3-65ffac57a88d', (SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[ApplicationEntity] WHERE [ApplicationID] = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Entity Field Permissions for role UI */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3cac32da-08e0-4517-81e4-c94d87fd55b9', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
+                                                   ('f60ea8ef-c552-4dd6-a8e3-65ffac57a88d', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Entity Field Permissions for role Developer */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3cac32da-08e0-4517-81e4-c94d87fd55b9', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('f60ea8ef-c552-4dd6-a8e3-65ffac57a88d', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL generated to add new permission for entity MJ: Entity Field Permissions for role Integration */
 INSERT INTO [${flyway:defaultSchema}].[EntityPermission]
                                                    ([EntityID], [RoleID], [CanRead], [CanCreate], [CanUpdate], [CanDelete], [__mj_CreatedAt], [__mj_UpdatedAt]) VALUES
-                                                   ('3cac32da-08e0-4517-81e4-c94d87fd55b9', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
+                                                   ('f60ea8ef-c552-4dd6-a8e3-65ffac57a88d', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, GETUTCDATE(), GETUTCDATE());
 
 /* SQL text to add special date field __mj_CreatedAt to entity ${flyway:defaultSchema}.EntityFieldPermission */
 ALTER TABLE [${flyway:defaultSchema}].[EntityFieldPermission] ADD [__mj_CreatedAt] DATETIMEOFFSET NULL;
@@ -464,18 +466,9 @@ GO
 ALTER TABLE [${flyway:defaultSchema}].[EntityFieldPermission] ADD CONSTRAINT [DF___mj_EntityFieldPermission___mj_UpdatedAt] DEFAULT GETUTCDATE() FOR [__mj_UpdatedAt];
 GO
 
-/* SQL text to insert 11 new entity field(s) */
-UPDATE [${flyway:defaultSchema}].[EntityField]
-         SET [Sequence] = [Sequence] + 100000
-       WHERE [EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6'
-         AND [Sequence] < 100000
-         AND NOT EXISTS (
-             SELECT 1 FROM [${flyway:defaultSchema}].[EntityField]
-              WHERE [EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6'
-                AND [Sequence] >= 100000
-         );
+/* SQL text to insert 9 new entity field(s) */
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '947136f8-b701-4b23-bc86-262f35c32cd5' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EnableFieldLevelSecurity')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0ca35a65-cf53-4b82-b4ad-e1f7fce6fdec' OR (EntityID = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND Name = 'EnableFieldLevelSecurity')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -508,9 +501,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '947136f8-b701-4b23-bc86-262f35c32cd5',
+            '0ca35a65-cf53-4b82-b4ad-e1f7fce6fdec',
             'E0238F34-2837-EF11-86D4-6045BDEE16E6', -- Entity: MJ: Entities
-            73,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6'),
             'EnableFieldLevelSecurity',
             'Enable Field Level Security',
             'When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity''s current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.',
@@ -537,17 +530,8 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
             GETUTCDATE()
          )
       END;
-UPDATE [${flyway:defaultSchema}].[EntityField]
-         SET [Sequence] = [Sequence] + 100000
-       WHERE [EntityID] = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9'
-         AND [Sequence] < 100000
-         AND NOT EXISTS (
-             SELECT 1 FROM [${flyway:defaultSchema}].[EntityField]
-              WHERE [EntityID] = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9'
-                AND [Sequence] >= 100000
-         );
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '287b4632-ca5a-403b-92f3-56d870de4dd9' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'ID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '779281d5-eba2-488e-95e9-e0436e3541b1' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'ID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -580,9 +564,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '287b4632-ca5a-403b-92f3-56d870de4dd9',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            1,
+            '779281d5-eba2-488e-95e9-e0436e3541b1',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'ID',
             'ID',
             NULL,
@@ -599,7 +583,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
             NULL,
             NULL,
             0,
-            1,
+            0,
             0,
             0,
             1,
@@ -610,7 +594,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '8ea8ea52-34e1-4856-b482-8f47dca8f57f' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'EntityFieldID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '818235f5-b2c5-464a-b000-0f75f01c907e' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'EntityFieldID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -643,9 +627,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '8ea8ea52-34e1-4856-b482-8f47dca8f57f',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            2,
+            '818235f5-b2c5-464a-b000-0f75f01c907e',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'EntityFieldID',
             'Entity Field ID',
             NULL,
@@ -673,7 +657,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'f155e0f3-9953-4f02-b666-27536c5135e7' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'RoleID')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '17661b68-b560-4d65-bdc1-c7ac33761134' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'RoleID')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -706,9 +690,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            'f155e0f3-9953-4f02-b666-27536c5135e7',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            3,
+            '17661b68-b560-4d65-bdc1-c7ac33761134',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'RoleID',
             'Role ID',
             NULL,
@@ -736,7 +720,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'a21a62c2-8751-4867-9292-2fcf88ae80c7' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'ReadAccess')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'b6f951ef-9149-4f64-af7d-fc7751672b63' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'ReadAccess')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -769,9 +753,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            'a21a62c2-8751-4867-9292-2fcf88ae80c7',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            4,
+            'b6f951ef-9149-4f64-af7d-fc7751672b63',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'ReadAccess',
             'Read Access',
             'Whether this role may read the field''s values. Allow grants it; Deny blocks it and beats every Allow from the user''s other roles; No Access is neutral (the default) and leaves the outcome to the user''s other roles. Enforced at the API output boundary (result projection and GraphQL field mapping), by predicate validation which rejects an ExtraFilter/OrderBy/Aggregate referencing an unreadable field, and by the strongly-typed accessor path which throws.',
@@ -790,7 +774,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
             0,
             0,
             0,
-            0,
+            1,
             0,
             0,
             'Search',
@@ -799,7 +783,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '41dbc253-c138-4641-a87d-34fe77cf4bdb' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'UpdateAccess')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'fbccadbc-512c-4e0f-a1ae-2fc2a88f17c4' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'UpdateAccess')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -832,9 +816,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '41dbc253-c138-4641-a87d-34fe77cf4bdb',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            5,
+            'fbccadbc-512c-4e0f-a1ae-2fc2a88f17c4',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'UpdateAccess',
             'Update Access',
             'Whether this role may modify the field''s value on an EXISTING record. Allow grants it; Deny blocks it and beats every Allow from the user''s other roles; No Access is neutral (the default). Requires ReadAccess = Allow — a field a user cannot see is one they cannot change. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.',
@@ -853,7 +837,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
             0,
             0,
             0,
-            0,
+            1,
             0,
             0,
             'Search',
@@ -862,7 +846,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '88586749-12ee-4372-a488-f65a6d52c61b' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'CreateAccess')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4beb776e-3a02-488d-979e-8a3e4fac8dff' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'CreateAccess')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -895,9 +879,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '88586749-12ee-4372-a488-f65a6d52c61b',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            6,
+            '4beb776e-3a02-488d-979e-8a3e4fac8dff',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'CreateAccess',
             'Create Access',
             'Whether this role may supply the field''s value when INSERTING a record. Allow grants it; Deny blocks it and beats every Allow from the user''s other roles; No Access is neutral (the default). Requires ReadAccess = Allow. When a user may not create a field, any value they supply is dropped and the column takes its default — the insert is not rejected, matching the read path where a denied field is simply absent rather than an error. A NOT NULL column with no default that a user cannot create makes records uncreatable for that user; restricted fields should be nullable or defaulted.',
@@ -925,7 +909,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'deab32a0-5dd6-4db4-995f-aab83bd0c9e8' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = '__mj_CreatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = 'bcf2e6b9-b15f-4998-bd92-2b9afeb68f90' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = '__mj_CreatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -958,9 +942,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            'deab32a0-5dd6-4db4-995f-aab83bd0c9e8',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            7,
+            'bcf2e6b9-b15f-4998-bd92-2b9afeb68f90',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -988,7 +972,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '0cdcaa74-a526-431f-b5cf-f3dd4f9e2896' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = '__mj_UpdatedAt')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '03805990-2c81-4b08-b0bb-b27dbdce07cd' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = '__mj_UpdatedAt')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -1021,9 +1005,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '0cdcaa74-a526-431f-b5cf-f3dd4f9e2896',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            8,
+            '03805990-2c81-4b08-b0bb-b27dbdce07cd',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -1051,87 +1035,87 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-/* SQL text to insert entity field value with ID b6283966-5571-42fc-93ea-5691a33d8f97 */
+/* SQL text to insert entity field value with ID 27e52fa7-254f-407f-85c9-cf9c75d5602c */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('b6283966-5571-42fc-93ea-5691a33d8f97', 'A21A62C2-8751-4867-9292-2FCF88AE80C7', 1, 'Allow', 'Allow', GETUTCDATE(), GETUTCDATE());
+                                       ('27e52fa7-254f-407f-85c9-cf9c75d5602c', 'B6F951EF-9149-4F64-AF7D-FC7751672B63', 1, 'Allow', 'Allow', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 56b109d7-9de4-4054-a524-6a3318c77a19 */
+/* SQL text to insert entity field value with ID 486d7890-3a72-4bd0-bcbd-8d7b3291e661 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('56b109d7-9de4-4054-a524-6a3318c77a19', 'A21A62C2-8751-4867-9292-2FCF88AE80C7', 2, 'Deny', 'Deny', GETUTCDATE(), GETUTCDATE());
+                                       ('486d7890-3a72-4bd0-bcbd-8d7b3291e661', 'B6F951EF-9149-4F64-AF7D-FC7751672B63', 2, 'Deny', 'Deny', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID d7fc9e85-f000-481a-afbc-60b7d466c790 */
+/* SQL text to insert entity field value with ID ca202e15-f98b-4854-a685-be2fbafee36e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('d7fc9e85-f000-481a-afbc-60b7d466c790', 'A21A62C2-8751-4867-9292-2FCF88AE80C7', 3, 'No Access', 'No Access', GETUTCDATE(), GETUTCDATE());
+                                       ('ca202e15-f98b-4854-a685-be2fbafee36e', 'B6F951EF-9149-4F64-AF7D-FC7751672B63', 3, 'No Access', 'No Access', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID A21A62C2-8751-4867-9292-2FCF88AE80C7 */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='A21A62C2-8751-4867-9292-2FCF88AE80C7';
+/* SQL text to update ValueListType for entity field ID B6F951EF-9149-4F64-AF7D-FC7751672B63 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='B6F951EF-9149-4F64-AF7D-FC7751672B63';
 
-/* SQL text to insert entity field value with ID 61238344-c7db-44f2-a396-6786deec7306 */
+/* SQL text to insert entity field value with ID d87500fa-4a93-4815-adf4-1f9ba7cf3889 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('61238344-c7db-44f2-a396-6786deec7306', '41DBC253-C138-4641-A87D-34FE77CF4BDB', 1, 'Allow', 'Allow', GETUTCDATE(), GETUTCDATE());
+                                       ('d87500fa-4a93-4815-adf4-1f9ba7cf3889', 'FBCCADBC-512C-4E0F-A1AE-2FC2A88F17C4', 1, 'Allow', 'Allow', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 938b6f77-903b-43ac-a84c-a27ad91ccc36 */
+/* SQL text to insert entity field value with ID 60f5b886-aaae-459f-ae5a-0b608ed86789 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('938b6f77-903b-43ac-a84c-a27ad91ccc36', '41DBC253-C138-4641-A87D-34FE77CF4BDB', 2, 'Deny', 'Deny', GETUTCDATE(), GETUTCDATE());
+                                       ('60f5b886-aaae-459f-ae5a-0b608ed86789', 'FBCCADBC-512C-4E0F-A1AE-2FC2A88F17C4', 2, 'Deny', 'Deny', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 87a40f09-03fc-4034-82a2-de931fb81559 */
+/* SQL text to insert entity field value with ID 80b76002-cb37-4a33-8b10-2ba76ba78994 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('87a40f09-03fc-4034-82a2-de931fb81559', '41DBC253-C138-4641-A87D-34FE77CF4BDB', 3, 'No Access', 'No Access', GETUTCDATE(), GETUTCDATE());
+                                       ('80b76002-cb37-4a33-8b10-2ba76ba78994', 'FBCCADBC-512C-4E0F-A1AE-2FC2A88F17C4', 3, 'No Access', 'No Access', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 41DBC253-C138-4641-A87D-34FE77CF4BDB */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='41DBC253-C138-4641-A87D-34FE77CF4BDB';
+/* SQL text to update ValueListType for entity field ID FBCCADBC-512C-4E0F-A1AE-2FC2A88F17C4 */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='FBCCADBC-512C-4E0F-A1AE-2FC2A88F17C4';
 
-/* SQL text to insert entity field value with ID 133488e0-a83e-4f54-bf15-acde933a05e6 */
+/* SQL text to insert entity field value with ID d2249514-be65-4c07-b728-cbf7c0ad115e */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('133488e0-a83e-4f54-bf15-acde933a05e6', '88586749-12EE-4372-A488-F65A6D52C61B', 1, 'Allow', 'Allow', GETUTCDATE(), GETUTCDATE());
+                                       ('d2249514-be65-4c07-b728-cbf7c0ad115e', '4BEB776E-3A02-488D-979E-8A3E4FAC8DFF', 1, 'Allow', 'Allow', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 442678b4-807a-41b7-9c53-52c523322575 */
+/* SQL text to insert entity field value with ID ac22de3b-3e5c-4e88-8f9f-1165886e2b14 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('442678b4-807a-41b7-9c53-52c523322575', '88586749-12EE-4372-A488-F65A6D52C61B', 2, 'Deny', 'Deny', GETUTCDATE(), GETUTCDATE());
+                                       ('ac22de3b-3e5c-4e88-8f9f-1165886e2b14', '4BEB776E-3A02-488D-979E-8A3E4FAC8DFF', 2, 'Deny', 'Deny', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to insert entity field value with ID 76c9a2a4-aa41-4a07-8323-1f1a78f94d47 */
+/* SQL text to insert entity field value with ID db45d04a-9f17-4517-a5eb-2f12375d6645 */
 INSERT INTO [${flyway:defaultSchema}].[EntityFieldValue]
                                        ([ID], [EntityFieldID], [Sequence], [Value], [Code], [__mj_CreatedAt], [__mj_UpdatedAt])
                                     VALUES
-                                       ('76c9a2a4-aa41-4a07-8323-1f1a78f94d47', '88586749-12EE-4372-A488-F65A6D52C61B', 3, 'No Access', 'No Access', GETUTCDATE(), GETUTCDATE());
+                                       ('db45d04a-9f17-4517-a5eb-2f12375d6645', '4BEB776E-3A02-488D-979E-8A3E4FAC8DFF', 3, 'No Access', 'No Access', GETUTCDATE(), GETUTCDATE());
 
-/* SQL text to update ValueListType for entity field ID 88586749-12EE-4372-A488-F65A6D52C61B */
-UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='88586749-12EE-4372-A488-F65A6D52C61B';
+/* SQL text to update ValueListType for entity field ID 4BEB776E-3A02-488D-979E-8A3E4FAC8DFF */
+UPDATE [${flyway:defaultSchema}].[EntityField] SET ValueListType='List' WHERE ID='4BEB776E-3A02-488D-979E-8A3E4FAC8DFF';
 
 
 /* Create Entity Relationship: MJ: Roles -> MJ: Entity Field Permissions (One To Many via RoleID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '23e31821-b39d-480d-97ce-f0f5d9268320'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = 'ec7bce48-dcea-44db-945e-87a840b2baef'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('23e31821-b39d-480d-97ce-f0f5d9268320', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', 'RoleID', 'One To Many', 1, 1, 17, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('ec7bce48-dcea-44db-945e-87a840b2baef', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', 'RoleID', 'One To Many', 1, 1, 17, GETUTCDATE(), GETUTCDATE())
    END;
 
 
 /* Create Entity Relationship: MJ: Entity Fields -> MJ: Entity Field Permissions (One To Many via EntityFieldID) */
    IF NOT EXISTS (
-      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '0c9aba67-1dad-4685-8bed-02f97b2ec226'
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntityRelationship] WHERE [ID] = '5699601b-e629-4400-a4ac-6824b44cd5d6'
    )
    BEGIN
       INSERT INTO [${flyway:defaultSchema}].[EntityRelationship] ([ID], [EntityID], [RelatedEntityID], [RelatedEntityJoinField], [Type], [BundleInAPI], [DisplayInForm], [Sequence], [__mj_CreatedAt], [__mj_UpdatedAt])
-                    VALUES ('0c9aba67-1dad-4685-8bed-02f97b2ec226', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', 'EntityFieldID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
+                    VALUES ('5699601b-e629-4400-a4ac-6824b44cd5d6', 'DF238F34-2837-EF11-86D4-6045BDEE16E6', 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', 'EntityFieldID', 'One To Many', 1, 1, 2, GETUTCDATE(), GETUTCDATE())
    END;
 
 
@@ -1288,6 +1272,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateEntity]
     @AllowDirectSQLDelete bit = NULL,
     @Configuration_Clear bit = 0,
     @Configuration nvarchar(MAX) = NULL,
+    @SubtypeSelector_Clear bit = 0,
+    @SubtypeSelector nvarchar(MAX) = NULL,
     @EnableFieldLevelSecurity bit = NULL
 AS
 BEGIN
@@ -1367,6 +1353,7 @@ BEGIN
                 [AllowDirectSQLUpdate],
                 [AllowDirectSQLDelete],
                 [Configuration],
+                [SubtypeSelector],
                 [EnableFieldLevelSecurity]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -1440,6 +1427,7 @@ BEGIN
                 ISNULL(@AllowDirectSQLUpdate, 0),
                 ISNULL(@AllowDirectSQLDelete, 0),
                 CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
+                CASE WHEN @SubtypeSelector_Clear = 1 THEN NULL ELSE ISNULL(@SubtypeSelector, NULL) END,
                 ISNULL(@EnableFieldLevelSecurity, 0)
             )
     END
@@ -1515,6 +1503,7 @@ BEGIN
                 [AllowDirectSQLUpdate],
                 [AllowDirectSQLDelete],
                 [Configuration],
+                [SubtypeSelector],
                 [EnableFieldLevelSecurity]
             )
         OUTPUT INSERTED.[ID] INTO @InsertedRow
@@ -1587,6 +1576,7 @@ BEGIN
                 ISNULL(@AllowDirectSQLUpdate, 0),
                 ISNULL(@AllowDirectSQLDelete, 0),
                 CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, NULL) END,
+                CASE WHEN @SubtypeSelector_Clear = 1 THEN NULL ELSE ISNULL(@SubtypeSelector, NULL) END,
                 ISNULL(@EnableFieldLevelSecurity, 0)
             )
     END
@@ -1715,6 +1705,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateEntity]
     @AllowDirectSQLDelete bit = NULL,
     @Configuration_Clear bit = 0,
     @Configuration nvarchar(MAX) = NULL,
+    @SubtypeSelector_Clear bit = 0,
+    @SubtypeSelector nvarchar(MAX) = NULL,
     @EnableFieldLevelSecurity bit = NULL
 AS
 BEGIN
@@ -1789,6 +1781,7 @@ BEGIN
         [AllowDirectSQLUpdate] = ISNULL(@AllowDirectSQLUpdate, [AllowDirectSQLUpdate]),
         [AllowDirectSQLDelete] = ISNULL(@AllowDirectSQLDelete, [AllowDirectSQLDelete]),
         [Configuration] = CASE WHEN @Configuration_Clear = 1 THEN NULL ELSE ISNULL(@Configuration, [Configuration]) END,
+        [SubtypeSelector] = CASE WHEN @SubtypeSelector_Clear = 1 THEN NULL ELSE ISNULL(@SubtypeSelector, [SubtypeSelector]) END,
         [EnableFieldLevelSecurity] = ISNULL(@EnableFieldLevelSecurity, [EnableFieldLevelSecurity])
     WHERE
         [ID] = @ID
@@ -1917,11 +1910,11 @@ IF NOT EXISTS (
 )
 CREATE INDEX IDX_AUTO_MJ_FKEY_EntityFieldPermission_RoleID ON [${flyway:defaultSchema}].[EntityFieldPermission] ([RoleID]);
 
-/* SQL text to update entity field related entity name field map for entity field ID 8EA8EA52-34E1-4856-B482-8F47DCA8F57F */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='8EA8EA52-34E1-4856-B482-8F47DCA8F57F', @RelatedEntityNameFieldMap='EntityField';
+/* SQL text to update entity field related entity name field map for entity field ID 818235F5-B2C5-464A-B000-0F75F01C907E */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='818235F5-B2C5-464A-B000-0F75F01C907E', @RelatedEntityNameFieldMap='EntityField';
 
-/* SQL text to update entity field related entity name field map for entity field ID F155E0F3-9953-4F02-B666-27536C5135E7 */
-EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='F155E0F3-9953-4F02-B666-27536C5135E7', @RelatedEntityNameFieldMap='Role';
+/* SQL text to update entity field related entity name field map for entity field ID 17661B68-B560-4D65-BDC1-C7AC33761134 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='17661B68-B560-4D65-BDC1-C7AC33761134', @RelatedEntityNameFieldMap='Role';
 
 /* Base View SQL for MJ: Entity Field Permissions */
 -----------------------------------------------------------------
@@ -2184,18 +2177,18 @@ GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityFieldPermission] TO [c
 
 GRANT EXECUTE ON [${flyway:defaultSchema}].[spDeleteEntityFieldPermission] TO [cdp_Developer], [cdp_Integration];
 
-/* SQL text to insert 3 new entity field(s) */
-UPDATE [${flyway:defaultSchema}].[EntityField]
-         SET [Sequence] = [Sequence] + 100000
-       WHERE [EntityID] = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9'
-         AND [Sequence] < 100000
-         AND NOT EXISTS (
-             SELECT 1 FROM [${flyway:defaultSchema}].[EntityField]
-              WHERE [EntityID] = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9'
-                AND [Sequence] >= 100000
-         );
+/* SQL text to update entity field related entity name field map for entity field ID 505DF1FB-2C77-40CD-80D6-6AFDAF64840F */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='505DF1FB-2C77-40CD-80D6-6AFDAF64840F', @RelatedEntityNameFieldMap='ClaimType';
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '3e8357c6-1051-4972-871f-cafd0819e015' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'EntityField')) BEGIN
+/* SQL text to update entity field related entity name field map for entity field ID 23CE09B7-480A-4A7B-8167-C6883F5657C3 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='23CE09B7-480A-4A7B-8167-C6883F5657C3', @RelatedEntityNameFieldMap='Entity';
+
+/* SQL text to update entity field related entity name field map for entity field ID FF9B7A6A-B843-4738-BD9C-4A4375C419D5 */
+EXEC [${flyway:defaultSchema}].[spUpdateEntityFieldRelatedEntityNameFieldMap] @EntityFieldID='FF9B7A6A-B843-4738-BD9C-4A4375C419D5', @RelatedEntityNameFieldMap='ClaimedByUser';
+
+/* SQL text to insert 2 new entity field(s) */
+
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4e3164a4-65d9-445f-9513-db52b42566de' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'EntityField')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2228,9 +2221,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '3e8357c6-1051-4972-871f-cafd0819e015',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            9,
+            '4e3164a4-65d9-445f-9513-db52b42566de',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'EntityField',
             'Entity Field',
             NULL,
@@ -2258,7 +2251,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
       END;
 
-      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '33d16ab5-090c-4997-8532-0464558cce5a' OR (EntityID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9' AND Name = 'Role')) BEGIN
+      IF NOT EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE ID = '4960ed2a-0205-45bb-bd9b-1a13425afd4e' OR (EntityID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND Name = 'Role')) BEGIN
          INSERT INTO [${flyway:defaultSchema}].[EntityField]
          (
             [ID],
@@ -2291,9 +2284,9 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          )
          VALUES
          (
-            '33d16ab5-090c-4997-8532-0464558cce5a',
-            '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', -- Entity: MJ: Entity Field Permissions
-            10,
+            '4960ed2a-0205-45bb-bd9b-1a13425afd4e',
+            'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', -- Entity: MJ: Entity Field Permissions
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'),
             'Role',
             'Role',
             NULL,
@@ -2325,33 +2318,33 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = 'A21A62C2-8751-4867-9292-2FCF88AE80C7'
+               WHERE ID = '4BEB776E-3A02-488D-979E-8A3E4FAC8DFF'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '41DBC253-C138-4641-A87D-34FE77CF4BDB'
+               WHERE ID = '4E3164A4-65D9-445F-9513-DB52B42566DE'
                AND AutoUpdateDefaultInView = 1;
 
                UPDATE [${flyway:defaultSchema}].[EntityField]
                SET DefaultInView = 1
-               WHERE ID = '88586749-12EE-4372-A488-F65A6D52C61B'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '3E8357C6-1051-4972-871F-CAFD0819E015'
-               AND AutoUpdateDefaultInView = 1;
-
-               UPDATE [${flyway:defaultSchema}].[EntityField]
-               SET DefaultInView = 1
-               WHERE ID = '33D16AB5-090C-4997-8532-0464558CCE5A'
+               WHERE ID = '4960ED2A-0205-45BB-BD9B-1A13425AFD4E'
                AND AutoUpdateDefaultInView = 1;
 
             UPDATE [${flyway:defaultSchema}].[Entity]
             SET AllowUserSearchAPI = 0
-            WHERE ID = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9'
+            WHERE ID = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'
             AND AutoUpdateAllowUserSearchAPI = 1;
+
+/* Set categories for 1 fields */
+
+-- UPDATE Entity Field Category Info MJ: Entities.EnableFieldLevelSecurity 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'API & Search Settings',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '0CA35A65-CF53-4B82-B4AD-E1F7FCE6FDEC';
 
 /* Set categories for 10 fields */
 
@@ -2359,161 +2352,151 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '287B4632-CA5A-403B-92F3-56D870DE4DD9' AND AutoUpdateCategory = 1;
+   ID = '779281D5-EBA2-488E-95E9-E0436E3541B1';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.EntityFieldID 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Entity Field',
-   ExtendedType = NULL,
-   CodeType = NULL
+   Category = 'Permission Scope',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '8EA8EA52-34E1-4856-B482-8F47DCA8F57F' AND AutoUpdateCategory = 1;
-
--- UPDATE Entity Field Category Info MJ: Entity Field Permissions.RoleID 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'Configuration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Role',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = 'F155E0F3-9953-4F02-B666-27536C5135E7' AND AutoUpdateCategory = 1;
+   ID = '818235F5-B2C5-464A-B000-0F75F01C907E';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.EntityField 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Entity Field Name',
-   ExtendedType = NULL,
-   CodeType = NULL
+   Category = 'Permission Scope',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '3E8357C6-1051-4972-871F-CAFD0819E015' AND AutoUpdateCategory = 1;
+   ID = '4E3164A4-65D9-445F-9513-DB52B42566DE';
+
+-- UPDATE Entity Field Category Info MJ: Entity Field Permissions.RoleID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'Permission Scope',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = '17661B68-B560-4D65-BDC1-C7AC33761134';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.Role 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Configuration',
-   GeneratedFormSection = 'Category',
-   DisplayName = 'Role Name',
-   ExtendedType = NULL,
-   CodeType = NULL
+   Category = 'Permission Scope',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '33D16AB5-090C-4997-8532-0464558CCE5A' AND AutoUpdateCategory = 1;
+   ID = '4960ED2A-0205-45BB-BD9B-1A13425AFD4E';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.ReadAccess 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Access Control',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   Category = 'Access Controls',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'A21A62C2-8751-4867-9292-2FCF88AE80C7' AND AutoUpdateCategory = 1;
+   ID = 'B6F951EF-9149-4F64-AF7D-FC7751672B63';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.UpdateAccess 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Access Control',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   Category = 'Access Controls',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '41DBC253-C138-4641-A87D-34FE77CF4BDB' AND AutoUpdateCategory = 1;
+   ID = 'FBCCADBC-512C-4E0F-A1AE-2FC2A88F17C4';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.CreateAccess 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
-   Category = 'Access Control',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   Category = 'Access Controls',
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '88586749-12EE-4372-A488-F65A6D52C61B' AND AutoUpdateCategory = 1;
+   ID = '4BEB776E-3A02-488D-979E-8A3E4FAC8DFF';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.__mj_CreatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = 'DEAB32A0-5DD6-4DB4-995F-AAB83BD0C9E8' AND AutoUpdateCategory = 1;
+   ID = 'BCF2E6B9-B15F-4998-BD92-2B9AFEB68F90';
 
 -- UPDATE Entity Field Category Info MJ: Entity Field Permissions.__mj_UpdatedAt 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'System Metadata',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
+   GeneratedFormSection = 'Category'
 WHERE 
-   ID = '0CDCAA74-A526-431F-B5CF-F3DD4F9E2896' AND AutoUpdateCategory = 1;
+   ID = '03805990-2C81-4B08-B0BB-B27DBDCE07CD';
 
 /* Set entity icon to fa fa-shield-alt */
 
                UPDATE [${flyway:defaultSchema}].[Entity]
                SET [Icon] = 'fa fa-shield-alt', [__mj_UpdatedAt] = GETUTCDATE()
-               WHERE [ID] = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9';
+               WHERE [ID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D';
 
 /* Insert FieldCategoryInfo setting for entity */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('c50b9805-1bc6-4ab6-912c-6746db60f622', '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', 'FieldCategoryInfo', '{"Configuration":{"icon":"fa fa-cog","description":"Links the security rules to specific fields and roles"},"Access Control":{"icon":"fa fa-lock","description":"Defines the trinary permission levels for reading, updating, and creating data"},"System Metadata":{"icon":"fa fa-database","description":"System-managed audit and tracking fields"}}', GETUTCDATE(), GETUTCDATE());
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND [Name] = 'FieldCategoryInfo'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('bcf841d1-21ee-5067-a132-647c58ed5010', 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', 'FieldCategoryInfo', '{
+  "Access Controls": {
+    "description": "Security settings defining Read, Update, and Create permissions",
+    "icon": "fa fa-lock"
+  },
+  "Permission Scope": {
+    "description": "Defines the target entity field and the role to which these permissions apply",
+    "icon": "fa fa-crosshairs"
+  },
+  "System Metadata": {
+    "description": "System-managed audit and tracking fields",
+    "icon": "fa fa-cog"
+  }
+}', GETUTCDATE(), GETUTCDATE())
+   END;
 
 /* Insert FieldCategoryIcons setting (legacy) */
-
-               INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
-               VALUES ('2e13de49-bd04-4490-9331-14b0ee376ce6', '3CAC32DA-08E0-4517-81E4-C94D87FD55B9', 'FieldCategoryIcons', '{"Configuration":"fa fa-cog","Access Control":"fa fa-lock","System Metadata":"fa fa-database"}', GETUTCDATE(), GETUTCDATE());
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[EntitySetting] WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D' AND [Name] = 'FieldCategoryIcons'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[EntitySetting] ([ID], [EntityID], [Name], [Value], [__mj_CreatedAt], [__mj_UpdatedAt])
+               VALUES ('ac6b3853-57c8-5a33-9c18-fe4fdbb7dd8e', 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D', 'FieldCategoryIcons', '{
+  "Access Controls": "fa fa-lock",
+  "Permission Scope": "fa fa-crosshairs",
+  "System Metadata": "fa fa-cog"
+}', GETUTCDATE(), GETUTCDATE())
+   END;
 
 /* Set DefaultForNewUser=false for NEW entity (category: system, confidence: high) */
 
          UPDATE [${flyway:defaultSchema}].[ApplicationEntity]
          SET [DefaultForNewUser] = 0, [__mj_UpdatedAt] = GETUTCDATE()
-         WHERE [EntityID] = '3CAC32DA-08E0-4517-81E4-C94D87FD55B9';
+         WHERE [EntityID] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D';
 
--- UPDATE Entity Field Category Info MJ: Entities.EnableFieldLevelSecurity 
-UPDATE [${flyway:defaultSchema}].[EntityField]
-SET 
-   Category = 'API & Search Settings',
-   GeneratedFormSection = 'Category',
-   ExtendedType = NULL,
-   CodeType = NULL
-WHERE 
-   ID = '947136F8-B701-4B23-BC86-262F35C32CD5' AND AutoUpdateCategory = 1;
 /* Refresh custom base views for modified entities so schema changes are picked up */
 EXEC sp_refreshview '${flyway:defaultSchema}.vwEntities';
 
 /* Generated Validation Functions for MJ: Entity Field Permissions */
 -- CHECK constraint for MJ: Entity Field Permissions @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
-INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
-                      VALUES ((SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '(NOT ([ReadAccess]<>N''Allow'' AND [UpdateAccess]=N''Allow'') AND NOT ([ReadAccess]<>N''Allow'' AND [CreateAccess]=N''Allow''))', 'public ValidateReadAccessRequiredForCreateOrUpdate(result: ValidationResult) {
-	if (this.ReadAccess !== "Allow") {
-		if (this.UpdateAccess === "Allow") {
-			result.Errors.push(new ValidationErrorInfo(
-				"UpdateAccess",
-				"Update access cannot be set to ''Allow'' unless Read access is also set to ''Allow''.",
-				this.UpdateAccess,
-				ValidationErrorType.Failure
-			));
-		}
-		if (this.CreateAccess === "Allow") {
-			result.Errors.push(new ValidationErrorInfo(
-				"CreateAccess",
-				"Create access cannot be set to ''Allow'' unless Read access is also set to ''Allow''.",
-				this.CreateAccess,
-				ValidationErrorType.Failure
-			));
-		}
-	}
-}', 'Users cannot be granted Create or Update access unless they are also granted Read access, ensuring logical permission hierarchy.', 'ValidateReadAccessRequiredForCreateOrUpdate', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '3CAC32DA-08E0-4517-81E4-C94D87FD55B9');
+IF NOT EXISTS (
+      SELECT 1 FROM [${flyway:defaultSchema}].[GeneratedCode] WHERE [CategoryID] = (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators') AND [LinkedEntityID] = 'E0238F34-2837-EF11-86D4-6045BDEE16E6' AND [LinkedRecordPrimaryKey] = 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D'
+   )
+   BEGIN
+      INSERT INTO [${flyway:defaultSchema}].[GeneratedCode] ([ID], [CategoryID], [GeneratedByModelID], [GeneratedAt], [Language], [Status], [Source], [Code], [Description], [Name], [LinkedEntityID], [LinkedRecordPrimaryKey])
+VALUES ('4fe51a1d-cde4-4d27-a096-415f5ffc65d8', (SELECT [ID] FROM [${flyway:defaultSchema}].[vwGeneratedCodeCategories] WHERE [Name]='CodeGen: Validators'), 'C43229F6-4CC8-4838-9D04-03419A2DA191', GETUTCDATE(), 'TypeScript', 'Approved', '(NOT ([ReadAccess]<>N''Allow'' AND [UpdateAccess]=N''Allow'') AND NOT ([ReadAccess]<>N''Allow'' AND [CreateAccess]=N''Allow''))', 'public ValidateReadAccessRequiredForCreateOrUpdate(result: ValidationResult) {
+    const hasUpdate = this.UpdateAccess === "Allow";
+    const hasCreate = this.CreateAccess === "Allow";
+    const hasRead = this.ReadAccess === "Allow";
 
+    if ((hasUpdate || hasCreate) && !hasRead) {
+        result.Errors.push(new ValidationErrorInfo(
+            "ReadAccess",
+            "Read access must be set to ''Allow'' if either Create or Update access is allowed.",
+            this.ReadAccess,
+            ValidationErrorType.Failure
+        ));
+    }
+}', 'To grant Create or Update access, Read access must also be set to ''Allow''. This prevents users from having permission to modify or create data they cannot view.', 'ValidateReadAccessRequiredForCreateOrUpdate', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'F60EA8EF-C552-4DD6-A8E3-65FFAC57A88D')
+   END;

@@ -15,8 +15,8 @@ export class MJEntityFieldPermissionFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: true },
-            { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: true },
+            { sectionKey: 'permissionScope', sectionName: 'Permission Scope', isExpanded: true },
+            { sectionKey: 'accessControls', sectionName: 'Access Controls', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

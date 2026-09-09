@@ -10,11 +10,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Configuration Section -->
+    <!-- Permission Scope Section -->
     <mj-collapsible-panel
-        SectionKey="configuration"
-        SectionName="Configuration"
-        Icon="fa fa-cog"
+        SectionKey="permissionScope"
+        SectionName="Permission Scope"
+        Icon="fa fa-crosshairs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -38,10 +38,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Access Control Section -->
+    <!-- Access Controls Section -->
     <mj-collapsible-panel
-        SectionKey="accessControl"
-        SectionName="Access Control"
+        SectionKey="accessControls"
+        SectionName="Access Controls"
         Icon="fa fa-lock"
         [Form]="this"
         [FormContext]="formContext">
@@ -76,7 +76,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
