@@ -70,12 +70,13 @@ describe('ClampToolToRoster', () => {
     expect(ClampToolToRoster('select', ['lasso', 'pen'])).toBe('pen');
   });
 
-  it('an all-typo roster leaves the current tool alone', () => {
-    expect(ClampToolToRoster('pen', ['lasso', 'wand'])).toBe('pen');
-  });
-
-  it('an empty roster leaves the current tool alone (the board never has no tool)', () => {
-    expect(ClampToolToRoster('pen', [])).toBe('pen');
+  it('an empty or all-typo roster falls back to select', () => {
+    // The board never has "no tool", so something must be held — but holding the tool the
+    // roster just revoked kept a CREATING tool live with no toolbar to see it and no key to
+    // change it (an empty roster went on placing widgets). `select` creates nothing.
+    expect(ClampToolToRoster('pen', [])).toBe('select');
+    expect(ClampToolToRoster('html', [])).toBe('select');
+    expect(ClampToolToRoster('pen', ['lasso', 'wand'])).toBe('select');
   });
 });
 

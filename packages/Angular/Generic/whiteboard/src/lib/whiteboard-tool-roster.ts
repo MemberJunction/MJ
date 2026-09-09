@@ -53,15 +53,19 @@ export function VisibleToolbarEntries<T extends { Tool: WhiteboardTool }>(entrie
 
 /**
  * The tool the host should hold when `current` is no longer allowed: `select` when the roster
- * offers it, else the roster's first KNOWN entry, else `current` unchanged.
+ * offers it, else the roster's first KNOWN entry, else `select` as the floor.
  *
  * Why `select` first rather than `roster[0]`: roster order is documented as meaningless for
  * rendering ({@link VisibleToolbarEntries} always uses list order), so it must not quietly
  * become load-bearing here. `select` is the neutral tool; falling back to roster order instead
  * would let a host land the user on the eraser by writing the roster in an innocuous order.
  *
- * An empty or all-typo roster returns `current`, so the board never has "no tool" — narrowing
- * the palette to nothing is not the same as making the board read-only.
+ * An empty or all-typo roster ALSO lands on `select`, rather than leaving `current` alone. The
+ * board never has "no tool", so something has to be held, and holding the tool the roster just
+ * revoked is the one answer that keeps a creating tool live with no toolbar to see it and no
+ * key to change it — an empty roster used to keep placing widgets. `select` is always a real
+ * tool and can create nothing, so it is the safe floor. Narrowing the palette to nothing still
+ * does NOT make the board read-only; that is `ReadOnly`.
  */
 export function ClampToolToRoster(current: WhiteboardTool, roster: WhiteboardToolRoster): WhiteboardTool {
   if (IsToolAllowed(roster, current)) {
@@ -69,7 +73,7 @@ export function ClampToolToRoster(current: WhiteboardTool, roster: WhiteboardToo
   }
   const known = (roster ?? []).filter(IsKnownTool);
   if (known.length === 0) {
-    return current;
+    return 'select';
   }
   return known.includes('select') ? 'select' : known[0];
 }

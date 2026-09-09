@@ -41,6 +41,14 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
     f.detectChanges();
   };
 
+  /** A primary-button pointerdown on the canvas — the board's item-PLACEMENT path. */
+  const canvasClick = (f: Fix): void => {
+    const canvas = f.nativeElement.querySelector('.board-canvas');
+    if (!canvas) throw new Error('canvasClick(): no .board-canvas');
+    canvas.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, button: 0, clientX: 120, clientY: 90 }));
+    f.detectChanges();
+  };
+
   const rightClick = (f: Fix, selector: string): void => {
     const el = f.nativeElement.querySelector(selector);
     if (!el) throw new Error(`rightClick(): no element matched "${selector}"`);
@@ -168,6 +176,24 @@ describe('RealtimeWhiteboardHostComponent (DOM)', () => {
       },
     });
     expect(f.componentInstance.Tool).toBe('pan');
+  });
+
+  it('falls back to select when a roster arrives that leaves no known tool at all', () => {
+    // The regression: `w` then an empty roster left `html` held, so the board kept placing
+    // widgets with no toolbar to see the tool and no key able to change it.
+    const state = new WhiteboardState();
+    const f = renderComponentFixture(RealtimeWhiteboardHostComponent, { inputs: { State: state } });
+    (f.nativeElement as HTMLElement).focus();
+    pressKey(f, 'w');
+    expect(f.componentInstance.Tool).toBe('html');
+
+    f.componentRef.setInput('ToolRoster', []);
+    f.detectChanges();
+
+    expect(f.componentInstance.Tool).toBe('select');
+    // and `select` really is inert: a canvas click starts a marquee, it does not place
+    canvasClick(f);
+    expect(state.ElementCount).toBe(0);
   });
 
   it('does not re-clamp when the same roster value is set again', () => {

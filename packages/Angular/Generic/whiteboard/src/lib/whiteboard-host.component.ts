@@ -102,9 +102,12 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    * The roster governs which tools are AVAILABLE, closing every door to a tool it leaves out:
    * the toolbar button, the single-letter shortcut, and the canvas "add … here" action. It is
    * deliberately not a content policy — it does not restrict what already exists on the board,
-   * what the agent places, or authoring on existing items (Restyle, Duplicate, paste). An empty
-   * roster narrows the palette to nothing; it does NOT make the board read-only, which is a
-   * separate input.
+   * what the agent places, or authoring on existing items (Duplicate, z-order, Delete, paste).
+   * The one exception is Restyle…, which is hidden when the roster omits `text`, because it
+   * opens the TEXT tool's style flyout and would otherwise be a menu entry that does nothing.
+   *
+   * An empty roster (or one naming no real tool) narrows the palette to nothing and clamps the
+   * active tool to `select`. It does NOT make the board read-only — that is {@link ReadOnly}.
    *
    * A setter rather than `ngOnChanges` (packages/Angular/CLAUDE.md): a realtime channel's
    * `BindSurface` assigns this property directly on a dynamically-created component, and
