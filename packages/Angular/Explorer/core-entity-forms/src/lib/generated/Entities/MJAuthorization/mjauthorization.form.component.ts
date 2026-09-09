@@ -18,6 +18,7 @@ export class MJAuthorizationFormComponent extends BaseFormComponent {
         this.initSections([
             { sectionKey: 'authorizationHierarchy', sectionName: 'Authorization Hierarchy', isExpanded: true },
             { sectionKey: 'authorizationCore', sectionName: 'Authorization Core', isExpanded: true },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJActionAuthorizations', sectionName: 'Action Authorizations', isExpanded: false },
             { sectionKey: 'mJAuditLogTypes', sectionName: 'Audit Log Types', isExpanded: false },

@@ -237,7 +237,7 @@ The untested majority (~30 of ~40 server subclasses). Mostly DET (pure validator
 | MT1 | MetadataSync pull→push round-trip is a no-op (checksums unchanged) | MUT | P3 | sync-engine.ts |
 | MT2 | Sync push partial-failure rolls back ALL rows (atomic) | MUT | P3 | transaction-manager.ts:102 |
 | MT3 | @lookup case-insensitive incl. PG uuid `LOWER()` bypass | DET | P3 | sync-engine.ts:646-668 |
-| MT4 | CodeGen idempotent: 2nd run against unchanged DB → zero metadata writes | MUT | P2 | nextAvailableEntityFieldSequence:359 |
+| MT4 | CodeGen idempotent: 2nd run against unchanged DB → zero metadata writes | MUT | P2 | applyTimeEntityFieldSequenceSQL |
 | MT5 | CodeGen output byte-identical across runs (git-clean assert) | MUT | P3 | (#3117) |
 | MT6 | Manifest generation deterministic + topo-correct (subclass before dependent) | DET | P2 | GenerateClassRegistrationsManifest:799 |
 | MT7 | OpenApp reinstall idempotency full graph (install→remove→reinstall, same GUIDs) | MUT | P3 | install-orchestrator.ts:276 |

@@ -198,6 +198,11 @@ export class SQLLogging {
         SQLLogging.sqlOutputDirFlag = undefined;
     }
 
+    /** Test hook — sets the active capture file path for testing. */
+    public static setFilePathForTesting(filePath: string): void {
+        SQLLogging._SQLLoggingFilePath = filePath;
+    }
+
     /**
      * Test hook — turns SQL capture off for the process: disables `SQLOutput` so
      * {@link LogSQLAndExecute} does not refuse to run against a stub connection with no CodeGen_Run

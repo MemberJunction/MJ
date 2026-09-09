@@ -32,7 +32,7 @@ import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload
 import { EmbeddedRecord } from './embeddedRecord';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
-import type { EntitySaveOptions, IMetadataProvider, IRunViewProvider } from './interfaces';
+import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunViewProvider } from './interfaces';
 import { LogError } from './logging';
 
 /**
@@ -1338,5 +1338,18 @@ export class RelatedRecordCollection<T extends BaseEntity = BaseEntity> extends 
                 );
             }
         });
+    }
+
+    public override BindProvider(provider: IEntityDataProvider | null): void {
+        for (const item of this.items) {
+            if (item.BoundProvider !== provider) {
+                item.BindProvider(provider);
+            }
+        }
+        for (const item of this.removed) {
+            if (item.BoundProvider !== provider) {
+                item.BindProvider(provider);
+            }
+        }
     }
 }

@@ -24,16 +24,16 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "devDependencies": {
-    "@angular/compiler": "21.1.3",
-    "@angular/compiler-cli": "21.1.3",
+    "@angular/compiler": "21.2.22",
+    "@angular/compiler-cli": "21.2.22",
     "rimraf": "^5.0.0",
     "vitest": "^4.0.18",
     "@memberjunction/ng-test-utils": "6.1.0-edge.5"
   },
   "peerDependencies": {
-    "@angular/common": "^21.1.3",
-    "@angular/core": "^21.1.3",
-    "@angular/forms": "^21.1.3",
+    "@angular/common": "^21.2.22",
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22",
     "rxjs": "^7.8.2"
   },
   "dependencies": {

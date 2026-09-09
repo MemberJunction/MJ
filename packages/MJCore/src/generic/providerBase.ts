@@ -7,7 +7,7 @@ import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache, EscapeSQLString } from "@memberjunction/global";
+import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -165,6 +165,7 @@ export type EntityFieldMetadataRow = BaseMetadataRow & {
     ID: string;
     EntityID: string;
     Sequence: number;
+    Name?: string;
     EntityFieldValues?: unknown[];
 };
 export type EntityFieldValueMetadataRow = BaseMetadataRow & { EntityFieldID: string };
@@ -4625,7 +4626,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Sort entities alphabetically by name to ensure deterministic ordering
         // This prevents non-deterministic output in CodeGen and other metadata consumers
-        const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
+        const sortedEntities = entities.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
 
         if (fieldValues && fieldValues.length > 0) {
             const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
@@ -4654,7 +4655,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entityIdKey = NormalizeUUID(e.ID);
 
             const entityFields = fieldsByEntityId.get(entityIdKey) || [];
-            e.EntityFields = entityFields.sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityFields = entityFields.sort((a, b) => (a.Sequence - b.Sequence) || ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
             e.EntityPermissions = permissionsByEntityId.get(entityIdKey) || [];
             e.EntityRelationships = relationshipsByEntityId.get(entityIdKey) || [];
             e.EntitySettings = settingsByEntityId.get(entityIdKey) || [];

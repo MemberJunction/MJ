@@ -1814,11 +1814,9 @@ NumberedRows AS (
    SELECT
       sf.EntityID,
       ISNULL(ms.MaxSequence, 0) + 100000 + sf.Sequence AS Sequence,
-      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
-      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
-      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
-      -- (Sequence above stays as-is: it is what this query ORDERs BY, and what the renumber pass
-      -- later overwrites from the schema.)
+      -- The RAW schema ordinal. The INSERT emitter uses it for DefaultInView only; the emitted
+      -- Sequence is an apply-time MAX()+1 subquery. (Sequence above is only this query's ORDER BY
+      -- key — never inserted — and the renumber pass overwrites every row from the schema.)
       sf.Sequence AS SourceOrdinal,
       sf.FieldName,
       sf.Description,

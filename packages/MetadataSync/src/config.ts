@@ -232,6 +232,19 @@ export interface EntityConfig {
    * Examples: ["output", "examples", "temp"]
    */
   ignoreDirectories?: string[];
+  /**
+   * Declarative collection configuration for composition axes.
+   * Key is collection property name (e.g. "Lines", "Payments").
+   */
+  collections?: Record<string, {
+    /** Membership mode: 'upsert' (default) or 'authoritative' (opt-in) */
+    mode?: 'upsert' | 'authoritative';
+    /**
+     * Maximum percentage of loaded collection rows that can be implied-deleted
+     * under authoritative mode before push refuses (default: 20%).
+     */
+    maxImpliedDeletePercent?: number;
+  }>;
   /** Pull command specific configuration */
   pull?: {
     /** Glob pattern for finding existing files to update (defaults to filePattern) */
@@ -303,6 +316,12 @@ export interface EntityConfig {
      * Per-entity, not a global CLI kill switch.
      */
     skipGeoCoding?: boolean;
+    /**
+     * When false, skips creating or updating sync metadata blocks (`record.sync`)
+     * on records pushed from this directory. Used by decision metadata directories
+     * so decision files never carry sync blocks. Defaults to true.
+     */
+    writeSyncMetadata?: boolean;
   };
   /**
    * Whether to emit __mj_sync_notes in record files during push operations.
