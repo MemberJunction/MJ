@@ -1,5 +1,5 @@
 import { Component, Input, OnInit, OnDestroy, ViewChild, ChangeDetectorRef, HostListener, ElementRef } from '@angular/core';
-import { BaseEntity, CompositeKey, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityInfo, LogError, LogErrorEx, LogStatus, Metadata, RunView, RunViewResult } from '@memberjunction/core';
 import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
@@ -552,7 +552,6 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     try {
       const md = this.ProviderToUse;
       const entityInfo = md.EntityByID(this.listRecord.EntityID)!;
-      const pk = entityInfo.FirstPrimaryKey.Name;
 
       // Cheap emptiness check before doing any row work
       const rv = RunView.FromMetadataProvider(md);
@@ -570,16 +569,13 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       }
 
       // Pull underlying entity rows restricted to the chosen fields, with
-      // membership filtered SERVER-SIDE via a subquery (same pattern the
-      // member grid uses). This avoids round-tripping every member ID to
-      // the client and building an IN(...) clause that breaks on large
-      // lists. Always include the PK so the projection round-trips cleanly.
-      const listDetailInfo = md.EntityByName('MJ: List Details');
-      const listDetailsView = `${listDetailInfo?.SchemaName ?? '__mj'}.${listDetailInfo?.BaseView ?? 'vwListDetails'}`;
-      const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));
+      // membership filtered by buildListMemberFilter (server-side subquery
+      // for a single-column key). Always include the key column(s) so the
+      // projection round-trips cleanly.
+      const fieldsForQuery = Array.from(new Set([...entityInfo.PrimaryKeys.map((pk) => pk.Name), ...selectedFields]));
       const rowResult = await rv.RunView<Record<string, unknown>>({
         EntityName: entityInfo.Name,
-        ExtraFilter: `${pk} IN (SELECT RecordID FROM ${listDetailsView} WHERE ListID='${this.listRecord.ID}')`,
+        ExtraFilter: await this.buildListMemberFilter(entityInfo, this.listRecord.ID, rv),
         Fields: fieldsForQuery,
         ResultType: 'simple',
       });
@@ -636,6 +632,30 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   }
 
   // ==========================================
+  /**
+   * Predicate selecting the underlying entity rows that are members of a list. For a
+   * single-column key membership is filtered SERVER-SIDE via a subquery on the List Details
+   * view (RecordID holds the raw key value), so no member id round-trips to the client and no
+   * IN(...) clause breaks on a large list. A composite key stores RecordID as "F1|v1||F2|v2",
+   * which no single column can be compared to, so the member ids are fetched and each expanded
+   * to its full key predicate.
+   */
+  private async buildListMemberFilter(entityInfo: EntityInfo, listId: string, rv: RunView): Promise<string> {
+    if (entityInfo.PrimaryKeys.length === 1) {
+      const listDetailInfo = this.ProviderToUse.EntityByName('MJ: List Details');
+      const listDetailsView = `${listDetailInfo?.SchemaName ?? '__mj'}.${listDetailInfo?.BaseView ?? 'vwListDetails'}`;
+      return `${entityInfo.FirstPrimaryKey.Name} IN (SELECT RecordID FROM ${listDetailsView} WHERE ListID='${listId}')`; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+    }
+    const members = await rv.RunView<{ RecordID: string }>({
+      EntityName: 'MJ: List Details',
+      ExtraFilter: `ListID='${listId}'`,
+      Fields: ['RecordID'],
+      ResultType: 'simple',
+    });
+    const clauses = (members.Results ?? []).map((m) => `(${CompositeKey.FromURLSegment(entityInfo, m.RecordID).ToWhereClause()})`);
+    return clauses.length > 0 ? clauses.join(' OR ') : '1=0';
+  }
+
   /**
    * Apply the chosen status to all selected list-detail rows. Re-uses
    * the existing extract-record-id-from-composite-key logic to map
@@ -1193,7 +1213,6 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     // (first non-PK/non-FK/non-system field). Text-typed fields also
     // drive the LIKE search so name-less entities remain searchable.
     const displayField = GetRecordDisplayField(sourceEntityInfo);
-    const pkField = sourceEntityInfo.FirstPrimaryKey?.Name || 'ID';
 
     let filter: string | undefined;
     if (displayField.Field && IsTextSearchableField(displayField.Field)) {
@@ -1210,7 +1229,8 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
 
     if (result.Success) {
       this.addableRecords = result.Results.map((record: Record<string, unknown>) => {
-        const recordId = String(record[pkField]);
+        // Compact key segment (raw value, or "F1|v1||F2|v2" for a composite key) — the form ListDetail.RecordID stores
+        const recordId = CompositeKey.FromEntityRecord(sourceEntityInfo, record).ToCompactURLSegment();
         return {
           ID: recordId,
           Name: displayField.Field

@@ -1763,7 +1763,7 @@ export class TagsResourceComponent extends BaseResourceComponent implements Afte
     /** Convert a string ID to a CompositeKey for tree-dropdown binding */
     public ToCompositeKey(id: string | null | undefined): CompositeKey | null {
         if (!id) return null;
-        return CompositeKey.FromID(id);
+        return CompositeKey.FromID(id); // first-pk-ok: tree-dropdown binding over the AI Models / AI Vendors trees — core entities keyed by ID
     }
 
     /** Extract the ID string from a CompositeKey (from tree-dropdown ValueChange) */

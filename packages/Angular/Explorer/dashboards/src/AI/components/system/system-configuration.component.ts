@@ -318,8 +318,7 @@ export class SystemConfigurationComponent extends BaseResourceComponent implemen
   }
 
   public onOpenConfiguration(config: ConfigurationWithParams): void {
-    const compositeKey = CompositeKey.FromID(config.ID);
-    this.navigationService.OpenEntityRecord('MJ: AI Configurations', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Configurations', CompositeKey.FromID(config.ID));
   }
 
   public onOpenPrompt(promptId: string): void {

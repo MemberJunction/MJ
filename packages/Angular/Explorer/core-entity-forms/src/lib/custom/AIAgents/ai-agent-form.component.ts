@@ -845,7 +845,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         // Initialize category selection from the record's CategoryID
         const categoryId = this.record?.CategoryID;
         if (categoryId) {
-            this.SelectedCategoryKey = CompositeKey.FromID(categoryId);
+            this.SelectedCategoryKey = CompositeKey.FromID(categoryId); // first-pk-ok: FK target — AI Agent CategoryID references the single-column ID key of AI Agent Categories
         }
 
         // Load context compression prompt if one is set

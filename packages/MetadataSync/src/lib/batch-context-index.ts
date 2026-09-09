@@ -278,7 +278,7 @@ export class BatchContextIndex {
       if (!entityInfo || entityInfo.PrimaryKeys.length === 0) {
         return undefined;
       }
-      pkField = entityInfo.FirstPrimaryKey.Name;
+      pkField = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: @lookup resolves to ONE value substituted into an FK field; FK targets are single-column by design
       this.pkFieldCache.set(entityName, pkField);
     }
     return entity.Get(pkField);

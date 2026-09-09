@@ -117,7 +117,7 @@ export class PromptVersionControlComponent extends BaseAngularComponent implemen
       this.loadingMessage = 'Loading version history...';
       
       const md = this.ProviderToUse;
-      const primaryKey = CompositeKey.FromID(this.prompt.ID);
+      const primaryKey = CompositeKey.FromID(this.prompt.ID); // first-pk-ok: this.prompt is a typed MJAIPromptEntityExtended — AI Prompts is a core entity keyed by ID
       
       // Get record changes using the new method (GetRecordChanges is on Metadata, not IMetadataProvider)
       const mdForChanges = md as unknown as Metadata;

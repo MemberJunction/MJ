@@ -1019,7 +1019,6 @@ ${fields}
     }
 
     const methods: string[] = [];
-    const pkName = entity.FirstPrimaryKey?.Name ?? 'ID';
 
     for (const field of recursiveFKs) {
       const fieldName = field.Name;

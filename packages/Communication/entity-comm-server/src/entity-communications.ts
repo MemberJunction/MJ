@@ -112,7 +112,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         if (hasTemplates) {
             this.ValidateTemplateContextParamAlignment(message);
         }
-        const relatedData = await this.GetRelatedData(message, records, entityInfo.FirstPrimaryKey.Name, entityInfo.FirstPrimaryKey.NeedsQuotes);
+        const relatedData = await this.GetRelatedData(message, records, entityInfo.FirstPrimaryKey.Name, entityInfo.FirstPrimaryKey.NeedsQuotes); // first-pk-ok: the recipient key is the FK target of each Entity-param's LinkedParameterField; FK targets are single-column by design
         // assume that the template(s) if there are multiple, ALL use the same parameters for their contexts, that is validated above
         const templates: MJTemplateEntityExtended[] = [];
         if (message.BodyTemplate) {
@@ -139,7 +139,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
             const ToValue = !recordLevelPref ? r[entityLevelPrefField.FieldName] : r[r[entityInfo.PreferredCommunicationField]];
             // we have mapped the ToValue based on preferences, next up, we need to populate the context data, if there are any templates
             // if there are no templates, we skip this step to save time
-            const pkey = r[entityInfo.FirstPrimaryKey.Name];
+            const pkey = r[entityInfo.FirstPrimaryKey.Name]; // first-pk-ok: compared against LinkedParameterField, an FK back to the recipient entity — single-column by design
             const retVal = {
                 To: ToValue,
                 ContextData: {}

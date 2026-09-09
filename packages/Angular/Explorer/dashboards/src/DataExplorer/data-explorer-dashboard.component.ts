@@ -1848,9 +1848,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // Try to find the record by primary key or concatenated string
       const entity = this.selectedEntity;
       const record = event.records.find(r => {
-        const pkString = buildPkString(r, entity);
-        const pkValue = entity.FirstPrimaryKey ? String(r[entity.FirstPrimaryKey.Name] ?? '') : '';
-        return pkString === recordId || pkValue === recordId;
+        // Match either the concatenated "F|v" form or the compact segment (raw value for a single-column key)
+        const key = buildCompositeKey(r, entity);
+        return key.ToConcatenatedString() === recordId || key.ToCompactURLSegment() === recordId;
       });
 
       if (record) {
@@ -2340,9 +2340,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
             // Entity is the same - find record from already-loaded data
             const entity = this.selectedEntity;
             const record = this.loadedRecords.find(r => {
-              const pkString = buildPkString(r, entity);
-              const pkValue = entity.FirstPrimaryKey ? String(r[entity.FirstPrimaryKey.Name] ?? '') : '';
-              return pkString === urlState.record || pkValue === urlState.record;
+              const key = buildCompositeKey(r, entity);
+              return key.ToConcatenatedString() === urlState.record || key.ToCompactURLSegment() === urlState.record;
             });
 
             if (record) {

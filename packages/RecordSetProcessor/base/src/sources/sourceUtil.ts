@@ -28,10 +28,10 @@ export function serializeRecordId(entity: EntityInfo, row: Record<string, unknow
 
 /** Returns true when the entity has a single, orderable primary key suitable for keyset pagination. */
 export function canUseKeyset(entity: EntityInfo): boolean {
-    if (!entity.FirstPrimaryKey || entity.PrimaryKeys.length !== 1) {
+    if (!entity.FirstPrimaryKey || entity.PrimaryKeys.length !== 1) { // first-pk-ok: this is the single-column guard for keyset eligibility
         return false;
     }
-    const normalizedType = (entity.FirstPrimaryKey.Type || '')
+    const normalizedType = (entity.FirstPrimaryKey.Type || '') // first-pk-ok: guarded above — PrimaryKeys.length === 1
         .replace(/\s*\([^)]*\)\s*$/, '') // strip parameterization like "nvarchar(255)"
         .trim()
         .toLowerCase();
@@ -53,7 +53,7 @@ export async function pageEntityByFilter(opts: {
     preferKeyset: boolean;
 }): Promise<RecordBatch> {
     const { entity, filter, cursor, batchSize, contextUser, preferKeyset } = opts;
-    const pkName = entity.FirstPrimaryKey?.Name;
+    const pkName = entity.FirstPrimaryKey?.Name; // first-pk-ok: keyset seek column — used only when canUseKeyset(entity) (single-column) holds; composite keys take the offset path
     const useKeyset = preferKeyset && canUseKeyset(entity) && !!pkName;
 
     const rv = new RunView();

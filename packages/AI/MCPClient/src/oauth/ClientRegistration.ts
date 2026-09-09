@@ -398,7 +398,7 @@ export class ClientRegistration {
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
 
             if (existing.Success && existing.Results && existing.Results.length > 0) {
-                const compositeKey = CompositeKey.FromID(existing.Results[0].ID);
+                const compositeKey = CompositeKey.FromID(existing.Results[0].ID); // first-pk-ok: ENTITY_OAUTH_CLIENT_REGISTRATIONS is the ID-keyed MJ core entity MJ: O Auth Client Registrations
                 await entity.InnerLoad(compositeKey);
             } else {
                 entity.NewRecord();
@@ -437,7 +437,7 @@ export class ClientRegistration {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
-            const compositeKey = CompositeKey.FromID(registrationId);
+            const compositeKey = CompositeKey.FromID(registrationId); // first-pk-ok: ENTITY_OAUTH_CLIENT_REGISTRATIONS is the ID-keyed MJ core entity MJ: O Auth Client Registrations
             const loaded = await entity.InnerLoad(compositeKey);
             if (loaded) {
                 await entity.Delete();
@@ -459,7 +459,7 @@ export class ClientRegistration {
         try {
             const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
-            const compositeKey = CompositeKey.FromID(registrationId);
+            const compositeKey = CompositeKey.FromID(registrationId); // first-pk-ok: ENTITY_OAUTH_CLIENT_REGISTRATIONS is the ID-keyed MJ core entity MJ: O Auth Client Registrations
             const loaded = await entity.InnerLoad(compositeKey);
             if (loaded) {
                 entity.Set('Status', status);

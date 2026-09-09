@@ -839,7 +839,7 @@ export class PullService {
     }
 
     // Extract all parent primary key values using the entity's actual PK field name
-    const pkFieldName = entityInfo.FirstPrimaryKey.Name;
+    const pkFieldName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: parent ids feed the related entity's foreignKey IN (...) filter; FK targets are single-column by design
     const allParentIds: string[] = [];
     for (const record of records) {
       const id = record.Get(pkFieldName);

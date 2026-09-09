@@ -405,8 +405,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     }
 
     public openCredential(credentialId: string): void {
-        const key = CompositeKey.FromID(credentialId);
-        this.navigationService.OpenEntityRecord('MJ: Credentials', key);
+        this.navigationService.OpenEntityRecord('MJ: Credentials', CompositeKey.FromID(credentialId));
     }
 
     public onCategoryClick(category: CategoryStat): void {

@@ -134,7 +134,7 @@ export class TokenManager {
 
                 // Update OAuthToken metadata
                 const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_TOKENS, contextUser);
-                const compositeKey = CompositeKey.FromID(existingRecord.ID);
+                const compositeKey = CompositeKey.FromID(existingRecord.ID); // first-pk-ok: ENTITY_OAUTH_TOKENS is the ID-keyed MJ core entity MJ: O Auth Tokens
                 await entity.InnerLoad(compositeKey);
 
                 entity.Set('CredentialID', credentialId);
@@ -582,7 +582,7 @@ export class TokenManager {
 
                 // Delete the OAuthToken record first
                 const tokenEntity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_TOKENS, contextUser);
-                const tokenKey = CompositeKey.FromID(record.ID);
+                const tokenKey = CompositeKey.FromID(record.ID); // first-pk-ok: ENTITY_OAUTH_TOKENS is the ID-keyed MJ core entity MJ: O Auth Tokens
                 const tokenLoaded = await tokenEntity.InnerLoad(tokenKey);
                 if (tokenLoaded) {
                     await tokenEntity.Delete();

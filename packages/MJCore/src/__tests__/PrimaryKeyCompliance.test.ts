@@ -10,7 +10,7 @@
  * first column. Issue #4179 (search result click-through) was one instance; the sweep that
  * followed found the same shape in ~60 files.
  *
- * Modelled on `MultiProviderCompliance.test.ts` / `UUIDCompliance.test.ts` in MJGlobal.
+ * Modelled on `MultiProviderCompliance.test.ts` / `UUIDCompliance.test.ts` in MJGlobal. All four gates are strict.
  * See `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID".
  *
  * ## Gates
@@ -21,15 +21,22 @@
  *    `CompositeKey.FromURLSegment(entityInfo, recordId)`. Marker: `// pk-literal-ok: <reason>`.
  *
  * 2. **Index access — strict.** `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
- *    Fix: `FirstPrimaryKey` — same semantics, but a named accessor gate 3 can ratchet.
+ *    Fix: `FirstPrimaryKey` — same semantics, but a named accessor gate 3 can see.
  *
- * 3. **Single-key assumption — ratchet.** `FirstPrimaryKey` and `CompositeKey.FromID(` are
- *    legitimate where MJ is single-column *by design* (foreign-key targets, keyset `ORDER BY`,
- *    IS-A shared keys, the bare-value URL shorthand) and wrong when used to build a load key for
- *    an arbitrary entity. They cannot be banned outright, so `primary-key-baseline.json` records
- *    the per-package count and the test fails if any package grows. Annotate legitimate uses
- *    with `// first-pk-ok: <reason>` (exempt from the count) and lower the baseline as you go;
- *    the endgame is a strict gate with every remaining use annotated.
+ * 3. **Single-key assumption — strict, annotated.** `FirstPrimaryKey` and `CompositeKey.FromID(`
+ *    assume one key column (and, for `FromID`, that it is called `ID`). They are legitimate where MJ
+ *    is single-column *by design* — foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared
+ *    keys, the bare-value URL shorthand, and literal MJ core entities — and wrong when used to build
+ *    a load key or filter for an arbitrary entity (a composite key is silently truncated to its
+ *    first column). Every remaining use must therefore either be self-evidently on a core entity or
+ *    say why it is single-column:
+ *      - `CompositeKey.FromID(x)` is exempt when a `'MJ: …'` entity literal appears on the same line
+ *        or within the FROM_ID_LITERAL_WINDOW lines above it (the `GetEntityObject('MJ: …')` /
+ *        `OpenEntityRecord('MJ: …', …)` that names the core entity).
+ *      - Anything else carries `// first-pk-ok: <reason>` on the same line. The reason is required.
+ *    Fix for the defect case: `CompositeKey.FromURLSegment(entityInfo, id)`,
+ *    `CompositeKey.FromEntityRecord(entityInfo, row)`, `key.ToWhereClause()`, or iterate
+ *    `entity.PrimaryKeys`; guard genuinely single-column code with `PrimaryKeys.length === 1`.
  *
  * 4. **Hardcoded `ID` predicate on a variable entity — strict.** An `ExtraFilter` of
  *    `ID = ...` / `ID IN (...)`, or `Fields: ['ID']`, within ±8 lines of an `EntityName:` whose
@@ -46,7 +53,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const SCAN_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
-const BASELINE_FILE = path.resolve(__dirname, 'primary-key-baseline.json');
 
 /** Gate 1 — a key constructed with a literal `ID` field name. */
 const LITERAL_ID_KEY_PATTERNS = [
@@ -62,12 +68,14 @@ const INDEX_ACCESS_PATTERNS = [
     /\bPrimaryKeys\.at\(\s*0\s*\)/,
 ];
 
-/** Gate 3 — single-key assumptions, ratcheted per package. */
-const SINGLE_KEY_PATTERNS = [
-    /\bFirstPrimaryKey\b/,
-    /\bCompositeKey\.FromID\(/,
-];
-const SINGLE_KEY_MARKER = /\/\/\s*first-pk-ok\b/i;
+/** Gate 3 — single-key assumptions: `FirstPrimaryKey` anywhere, `CompositeKey.FromID(` off a core-entity literal. */
+const FIRST_PK_PATTERN = /\bFirstPrimaryKey\b/;
+const FROM_ID_PATTERN = /\bCompositeKey\.FromID\(/;
+/** `// first-pk-ok: <reason>` — the reason is mandatory. Also exempts the `FirstPrimaryKey` accessor's own `PrimaryKeys[0]` (gate 2). */
+const SINGLE_KEY_MARKER = /\/\/\s*first-pk-ok:\s*\S/i;
+/** A `'MJ: …'` entity-name literal; `FromID` on the same line or within the window above it is on a core entity by construction. */
+const CORE_ENTITY_LITERAL = /['"`]MJ: [^'"`]+['"`]/;
+const FROM_ID_LITERAL_WINDOW = 8;
 
 /** Gate 4 — a hardcoded `ID` predicate or field list ... */
 const ID_PREDICATE_PATTERNS = [
@@ -168,14 +176,27 @@ function scanFile(filePath: string): ScanResult {
         if (!SINGLE_KEY_MARKER.test(line) && INDEX_ACCESS_PATTERNS.some(p => p.test(line))) {
             out.indexAccess.push(violation(i)); // marker exempts the FirstPrimaryKey accessor's own body
         }
-        if (!SINGLE_KEY_MARKER.test(line) && SINGLE_KEY_PATTERNS.some(p => p.test(line))) {
-            out.singleKey.push(violation(i));
+        if (!SINGLE_KEY_MARKER.test(line)) {
+            if (FIRST_PK_PATTERN.test(line)) {
+                out.singleKey.push(violation(i));
+            } else if (FROM_ID_PATTERN.test(line) && !hasCoreEntityLiteralNearby(lines, i)) {
+                out.singleKey.push(violation(i));
+            }
         }
         if (!ID_PREDICATE_MARKER.test(line) && ID_PREDICATE_PATTERNS.some(p => p.test(line)) && hasVariableEntityNameNearby(lines, i)) {
             out.idPredicates.push(violation(i));
         }
     }
     return out;
+}
+
+/** True when a `'MJ: …'` entity literal is on this line or within FROM_ID_LITERAL_WINDOW lines above it. */
+function hasCoreEntityLiteralNearby(lines: string[], index: number): boolean {
+    const from = Math.max(0, index - FROM_ID_LITERAL_WINDOW);
+    for (let j = index; j >= from; j--) {
+        if (CORE_ENTITY_LITERAL.test(lines[j])) return true;
+    }
+    return false;
 }
 
 /** True when an `EntityName:` within the window names a variable (not a literal or an ALL_CAPS constant). */
@@ -197,12 +218,6 @@ function report(violations: Violation[], max = 60): string {
     const shown = violations.slice(0, max).map(v => `  ${v.file}:${v.line}: ${v.content}`).join('\n');
     const more = violations.length > max ? `\n  ... and ${violations.length - max} more` : '';
     return shown + more;
-}
-
-function aggregateByPackage(violations: Violation[]): Record<string, number> {
-    const counts: Record<string, number> = {};
-    for (const v of violations) counts[v.packageKey] = (counts[v.packageKey] ?? 0) + 1;
-    return Object.fromEntries(Object.entries(counts).sort((a, b) => a[0].localeCompare(b[0])));
 }
 
 function scanAll(): ScanResult {
@@ -243,52 +258,26 @@ describe('Primary Key Compliance', () => {
         expect.fail(
             `Found ${v.length} PrimaryKeys[0] access(es):\n${report(v)}\n\n` +
             `Replace with entity.FirstPrimaryKey (identical semantics, null-safe with ?., and a named\n` +
-            `accessor gate 3 can track). If the code must handle composite keys, iterate PrimaryKeys or\n` +
+            `accessor gate 3 can see). If the code must handle composite keys, iterate PrimaryKeys or\n` +
             `use CompositeKey.FromEntityRecord / FromURLSegment instead.`
         );
     });
 
-    it('gate 3: single-key assumptions (FirstPrimaryKey / CompositeKey.FromID) do not grow per package', () => {
-        const current = aggregateByPackage(RESULTS.singleKey);
-
-        if (!fs.existsSync(BASELINE_FILE)) {
-            fs.writeFileSync(BASELINE_FILE, JSON.stringify(current, null, 2) + '\n');
-            console.log(`[primary-key-compliance] Baseline generated at ${BASELINE_FILE}. Re-run to verify.`);
-            return;
-        }
-
-        const baseline: Record<string, number> = JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf-8'));
-        const regressions: string[] = [];
-        for (const pkg of Object.keys(current)) {
-            const count = current[pkg];
-            const allowed = baseline[pkg];
-            if (allowed === undefined) {
-                regressions.push(`  ${pkg}: ${count} (no baseline entry)`);
-            } else if (count > allowed) {
-                regressions.push(`  ${pkg}: ${count} (baseline ${allowed}, +${count - allowed})`);
-            }
-        }
-        const reductions = Object.keys(baseline)
-            .filter(pkg => (current[pkg] ?? 0) < baseline[pkg])
-            .map(pkg => `  ${pkg}: ${current[pkg] ?? 0} (baseline ${baseline[pkg]})`);
-        if (reductions.length > 0) {
-            console.log(`[primary-key-compliance] Counts dropped below baseline — lower ${path.basename(BASELINE_FILE)} to lock it in:\n${reductions.join('\n')}`);
-        }
-
-        if (regressions.length === 0) return;
-        const sample = RESULTS.singleKey.filter(v => regressions.some(r => r.startsWith(`  ${v.packageKey}:`)));
+    it('gate 3: every single-key assumption (FirstPrimaryKey / CompositeKey.FromID) is on a core entity or annotated', () => {
+        const v = RESULTS.singleKey;
+        if (v.length === 0) return;
         expect.fail(
-            `Single-key assumptions grew in ${regressions.length} package(s):\n${regressions.join('\n')}\n\n` +
-            `Offending lines:\n${report(sample, 30)}\n\n` +
-            `FirstPrimaryKey and CompositeKey.FromID assume one key column, usually named ID. They are\n` +
-            `correct only where MJ is single-column BY DESIGN: foreign-key targets, keyset ORDER BY, IS-A\n` +
-            `shared keys, the bare-value URL shorthand, and literal MJ core entities.\n\n` +
+            `Found ${v.length} unexplained single-key assumption(s):\n${report(v)}\n\n` +
+            `FirstPrimaryKey and CompositeKey.FromID assume one key column (FromID: one column named ID).\n` +
+            `They are correct only where MJ is single-column BY DESIGN: foreign-key targets, keyset ORDER BY /\n` +
+            `AfterKey, IS-A shared keys, the bare-value URL shorthand, and MJ core entities.\n\n` +
             `How to fix:\n` +
-            `  1. Building a key for an arbitrary entity: CompositeKey.FromURLSegment(entityInfo, id) or\n` +
-            `     CompositeKey.FromEntityRecord(entityInfo, row); iterate entity.PrimaryKeys for SQL.\n` +
-            `  2. Legitimately single-column: append  // first-pk-ok: <reason>  on the line.\n` +
-            `  3. Only then, if the count is still higher, raise the package's entry in the baseline in the\n` +
-            `     same PR and explain why in the description.`
+            `  1. Building a key or filter for an ARBITRARY entity: CompositeKey.FromURLSegment(entityInfo, id),\n` +
+            `     CompositeKey.FromEntityRecord(entityInfo, row), key.ToWhereClause(), or iterate entity.PrimaryKeys.\n` +
+            `     Guard code that is genuinely single-column with entity.PrimaryKeys.length === 1.\n` +
+            `  2. FromID on a core entity: keep the 'MJ: …' literal on the same line or within ${FROM_ID_LITERAL_WINDOW}\n` +
+            `     lines above (the GetEntityObject / OpenEntityRecord call) and no annotation is needed.\n` +
+            `  3. Legitimately single-column: append  // first-pk-ok: <reason>  on the line. The reason is required.`
         );
     });
 

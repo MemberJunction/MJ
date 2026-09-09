@@ -634,8 +634,7 @@ export class ActionExecutionMonitoringComponent extends BaseResourceComponent im
   }
 
   public openExecution(execution: MJActionExecutionLogEntity): void {
-    const key = CompositeKey.FromID(execution.ID);
-    this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', key);
+    this.navigationService.OpenEntityRecord('MJ: Action Execution Logs', CompositeKey.FromID(execution.ID));
   }
 
   public openAction(actionId: string): void {

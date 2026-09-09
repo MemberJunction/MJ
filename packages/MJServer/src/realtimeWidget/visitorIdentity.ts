@@ -24,7 +24,7 @@
  * @module @memberjunction/server/widget
  */
 
-import { RunView, UserInfo, LogError, LogStatus, type IMetadataProvider } from '@memberjunction/core';
+import { CompositeKey, RunView, UserInfo, LogError, LogStatus, type IMetadataProvider } from '@memberjunction/core';
 import type { MJConversationEntity, MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 
 const CONVERSATIONS_ENTITY = 'MJ: Conversations';
@@ -66,14 +66,18 @@ export async function resolveIdentityByEmail(
       return undefined;
     }
     const entityId = entityInfo.ID;
-    // The identity entity is configurable, so its key column can have any name.
-    const pkName = entityInfo.FirstPrimaryKey.Name;
+    // The identity entity is configurable, so its key column(s) can have any name — and may be
+    // composite. Select every key column and carry the record id in the compact record-id form
+    // (the bare value for a single-column key, "F1|v1||F2|v2" for a composite one) that
+    // CompositeKey.FromURLSegment reads back, so LinkedRecordID / PrimaryScopeRecordID round-trip
+    // for any key shape instead of being truncated to the first column.
+    const pkNames = entityInfo.PrimaryKeys.map(pk => pk.Name);
     const rv = new RunView();
     const result = await rv.RunView<Record<string, unknown>>(
       {
         EntityName: entityName,
         ExtraFilter: `${emailField} = '${trimmed.replace(/'/g, "''")}'`,
-        Fields: [pkName],
+        Fields: pkNames,
         MaxRows: 1,
         ResultType: 'simple',
       },
@@ -83,8 +87,15 @@ export async function resolveIdentityByEmail(
       LogError(`[VisitorIdentity] identity lookup failed for '${entityName}.${emailField}': ${result.ErrorMessage}`);
       return undefined;
     }
-    const rawId = result.Results?.[0]?.[pkName];
-    const recordId = rawId == null ? undefined : String(rawId);
+    const row = result.Results?.[0];
+    if (!row) {
+      return undefined;
+    }
+    const key = CompositeKey.FromEntityRecord(entityInfo, row);
+    if (key.KeyValuePairs.length === 0 || key.KeyValuePairs.some(kv => kv.Value == null)) {
+      return undefined;
+    }
+    const recordId = key.ToCompactURLSegment();
     return recordId ? { entityId, recordId } : undefined;
   } catch (e) {
     LogError(`[VisitorIdentity] resolveIdentityByEmail failed: ${e instanceof Error ? e.message : String(e)}`);

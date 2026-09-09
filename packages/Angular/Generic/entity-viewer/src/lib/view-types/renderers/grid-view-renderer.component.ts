@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, inject } from '@angular/core';
-import { EntityInfo, RunViewParams, LogError } from '@memberjunction/core';
+import { EntityInfo, RunViewParams, LogError, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -528,20 +528,17 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   }
 
   /**
-   * Build the list of RAW primary-key values (not concatenated composite-key strings) used by list
-   * membership matching. Mirrors the legacy host, which deliberately extracts the first PK field's
-   * raw value so it matches how List Details store records.
+   * Build the record-id strings used by list membership matching, in the compact form `MJ: List Details`
+   * stores in `RecordID`: the bare value for a single-column primary key (whatever the column is called),
+   * or the full `Field1|Value1||Field2|Value2` segment for a composite key. The entity is arbitrary, so the
+   * key is built from all of its primary-key columns rather than assuming a single `ID`.
    */
   private buildRawRecordIds(records: Record<string, unknown>[], entity: EntityInfo): string[] {
-    const pkFieldName = entity.FirstPrimaryKey?.Name;
-    if (!pkFieldName) {
+    if (entity.PrimaryKeys.length === 0) {
       return [];
     }
     return records
-      .map((record) => {
-        const value = record[pkFieldName];
-        return value == null ? '' : String(value);
-      })
+      .map((record) => CompositeKey.FromEntityRecord(entity, record).ToCompactURLSegment())
       .filter((id) => id !== '');
   }
 

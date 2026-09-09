@@ -121,7 +121,9 @@ export async function applyOutputMapping(opts: {
             if (!saved) {
                 throw new Error(`applyOutputMapping: failed creating '${outputMapping.childRecord.entity}' child: ${child.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
-            out.createdChildID = child.FirstPrimaryKey?.Value != null ? String(child.FirstPrimaryKey.Value) : undefined;
+            // The child entity is configured — serialize its whole key (bare value for one column, 'F1|v1||F2|v2' for composite).
+            const childKey = child.PrimaryKey.ToCompactURLSegment();
+            out.createdChildID = childKey.length > 0 ? childKey : undefined;
         }
     }
 

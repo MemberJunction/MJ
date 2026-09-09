@@ -386,12 +386,10 @@ export class DuplicateRecordDetector extends VectorBase {
         matchesSoFar: number,
         contextUser: UserInfo
     ): Promise<{ Results: PotentialDuplicateResult[]; MatchesFound: number }> {
-        // 6a: Load full record data for this batch (needed for template rendering)
-        const compositeKeys = batchIDs.map(id => {
-            const ck = new CompositeKey();
-            ck.KeyValuePairs.push({ FieldName: entityInfo.FirstPrimaryKey.Name, Value: id });
-            return ck;
-        });
+        // 6a: Load full record data for this batch (needed for template rendering). Each id is a
+        //     compact key segment (see LoadRecordIDsToCheck), so this rebuilds the entity's real
+        //     key — a single column of any name, or a composite key — rather than assuming one column.
+        const compositeKeys = batchIDs.map(id => CompositeKey.FromURLSegment(entityInfo, id));
         const records = await this.LoadRecordsByKeys(compositeKeys, entityInfo);
         if (records.length === 0) {
             return { Results: [], MatchesFound: 0 };
@@ -447,6 +445,12 @@ export class DuplicateRecordDetector extends VectorBase {
      * Load the IDs of records to check, using the appropriate strategy based on the request.
      * Returns an array of primary key value strings.
      */
+    /**
+     * Resolve the ids to check. Every id is a compact CompositeKey URL segment — the bare value for
+     * a single-column key (whatever the column is called), `F1|v1||F2|v2` for a composite key —
+     * which is the form `MJ: List Details.RecordID` already holds; `CompositeKey.FromURLSegment`
+     * rebuilds the real key from it for any entity.
+     */
     protected async LoadRecordIDsToCheck(params: PotentialDuplicateRequest, entityInfo: EntityInfo): Promise<string[]> {
         if (params.ListID) {
             return this.LoadRecordIDsFromList(params.ListID);
@@ -480,7 +484,6 @@ export class DuplicateRecordDetector extends VectorBase {
      * Load record IDs by running a saved view.
      */
     protected async LoadRecordIDsFromView(viewID: string, entityInfo: EntityInfo): Promise<string[]> {
-        const pkField = entityInfo.FirstPrimaryKey.Name;
         const sanitizedViewID = viewID.replace(/'/g, "''");
 
         // Load the view definition to get its filter
@@ -491,36 +494,35 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`View not found: ${viewID}`);
         }
 
-        // Run the entity with the view's filter to get IDs
-        const viewResults = await this.RunView.RunView<Record<string, string>>({
+        // Run the entity with the view's filter to get the key column(s) of every row
+        const viewResults = await this.RunView.RunView<Record<string, unknown>>({
             ViewID: viewID,
-            Fields: [pkField],
+            Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
             throw new Error(`Failed to run view ${viewID}: ${viewResults.ErrorMessage}`);
         }
-        return viewResults.Results.map(r => r[pkField]);
+        return viewResults.Results.map(r => CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment());
     }
 
     /**
      * Load record IDs directly from the entity, optionally filtered.
-     * Uses Fields: ['ID'] and ResultType: 'simple' for efficiency.
+     * Selects only the primary key column(s) with ResultType: 'simple' for efficiency.
      */
     protected async LoadRecordIDsFromEntity(entityInfo: EntityInfo, extraFilter?: string): Promise<string[]> {
-        const pkField = entityInfo.FirstPrimaryKey.Name;
-        const viewResults = await this.RunView.RunView<Record<string, string>>({
+        const viewResults = await this.RunView.RunView<Record<string, unknown>>({
             EntityName: entityInfo.Name,
             ExtraFilter: extraFilter,
-            Fields: [pkField],
+            Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
             ResultType: 'simple',
         }, this.CurrentUser);
 
         if (!viewResults.Success) {
             throw new Error(`Failed to load record IDs from ${entityInfo.Name}: ${viewResults.ErrorMessage}`);
         }
-        return viewResults.Results.map(r => r[pkField]);
+        return viewResults.Results.map(r => CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment());
     }
 
     // ─────────────────────────────────────────────
@@ -755,12 +757,19 @@ export class DuplicateRecordDetector extends VectorBase {
             throw new Error(`Entity not found for ID ${entityID}`);
         }
 
+        if (entityInfo.PrimaryKeys.length !== 1) {
+            // Composite key: vwListDetails.RecordID holds the full `F1|v1||F2|v2` segment, which no
+            // single column can be compared against — rebuild each key and load by key instead.
+            const recordIDs = await this.LoadRecordIDsFromList(listID);
+            return this.LoadRecordsByKeys(recordIDs.map(id => CompositeKey.FromURLSegment(entityInfo, id)), entityInfo);
+        }
+
         const sanitizedListID = listID.replace(/'/g, "''");
-        // The entity is arbitrary — its key column can have any name (every other lookup in this
-        // file already uses FirstPrimaryKey). List Details store a single-column key's raw value.
+        // The entity is arbitrary — its single key column can have any name. List Details store
+        // that column's raw value, so compare the entity's real key column against it.
         const rvResult = await this.RunView.RunView<BaseEntity>({
             EntityName: entityInfo.Name,
-            ExtraFilter: `${entityInfo.FirstPrimaryKey.Name} IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = '${sanitizedListID}')`,
+            ExtraFilter: `${entityInfo.FirstPrimaryKey.Name} IN (SELECT RecordID FROM __mj.vwListDetails WHERE ListID = '${sanitizedListID}')`, // first-pk-ok: guarded by PrimaryKeys.length === 1 above
             ResultType: 'entity_object',
         }, this.CurrentUser);
 
@@ -1040,8 +1049,9 @@ export class DuplicateRecordDetector extends VectorBase {
             .sort((a, b) => (a.Sequence ?? 9999) - (b.Sequence ?? 9999));
 
         for (const record of records) {
-            const pk = record.PrimaryKey;
-            const id = pk.KeyValuePairs.length === 1 ? String(pk.KeyValuePairs[0].Value) : pk.Values();
+            // Keyed by the same compact segment the batch ids use, so CreateRunDetailRecords can
+            // look the metadata up by record id for single-column and composite keys alike.
+            const id = record.PrimaryKey.ToCompactURLSegment();
             const meta: Record<string, string> = {
                 Entity: entityInfo.Name,
             };
@@ -1100,19 +1110,18 @@ export class DuplicateRecordDetector extends VectorBase {
      * per-record self-match filter can't catch these because the ghost carries the OLD id.
      *
      * We verify every distinct match key for the batch against the live table in a single
-     * batched query and drop any that don't resolve. Single-column primary keys only — the
-     * same assumption the rest of this engine makes.
+     * batched query and drop any that don't resolve. Keys are compared in compact URL-segment
+     * form, so this works for a single-column key of any name and for composite keys.
      *
      * Mutates `queryResults` in place.
      */
     protected async FilterNonExistentMatches(queryResults: RecordQueryResult[], entityInfo: EntityInfo): Promise<void> {
-        const pkField = entityInfo.FirstPrimaryKey.Name;
-
-        // Collect every distinct match key value across the batch.
+        // Collect every distinct match key across the batch, in the same compact segment form
+        // LoadExistingRecordIDs reads back off the live rows.
         const matchIds = new Set<string>();
         for (const qr of queryResults) {
             for (const dupe of qr.Duplicates.Duplicates) {
-                const id = dupe.Values();
+                const id = dupe.ToCompactURLSegment();
                 if (id) {
                     matchIds.add(id);
                 }
@@ -1122,13 +1131,13 @@ export class DuplicateRecordDetector extends VectorBase {
             return;
         }
 
-        const existing = await this.LoadExistingRecordIDs(entityInfo, pkField, [...matchIds]);
+        const existing = await this.LoadExistingRecordIDs(entityInfo, entityInfo.FirstPrimaryKey.Name, [...matchIds]); // first-pk-ok: LoadExistingRecordIDs reads pkField only when PrimaryKeys.length === 1; composite keys are rebuilt from the segment
 
         // Drop ghost (non-existent) matches in place.
         for (const qr of queryResults) {
             const before = qr.Duplicates.Duplicates.length;
             qr.Duplicates.Duplicates = qr.Duplicates.Duplicates.filter(
-                (d) => existing.has(NormalizeUUID(d.Values()))
+                (d) => existing.has(NormalizeUUID(d.ToCompactURLSegment()))
             );
             const removed = before - qr.Duplicates.Duplicates.length;
             if (removed > 0) {
@@ -1138,24 +1147,32 @@ export class DuplicateRecordDetector extends VectorBase {
     }
 
     /**
-     * Return the set of primary key values (normalized for case-insensitive UUID
-     * comparison) that actually exist in the entity, for the given candidate IDs.
-     * Batches the IN-list to stay within reasonable query sizes.
+     * Return the set of record keys (compact URL segments, normalized for case-insensitive UUID
+     * comparison) that actually exist in the entity, for the given candidate ids — themselves
+     * compact segments. A single-column key uses one `IN (...)` per chunk; a composite key needs
+     * one `(F1=.. AND F2=..)` term per record. Batched to stay within reasonable query sizes.
+     *
+     * @param pkField the single key column — read only when the entity has exactly one primary
+     * key; a composite key's columns come from `entityInfo.PrimaryKeys`.
      */
     protected async LoadExistingRecordIDs(entityInfo: EntityInfo, pkField: string, ids: string[]): Promise<Set<string>> {
         const existing = new Set<string>();
+        const singleColumn = entityInfo.PrimaryKeys.length === 1;
+        const keyFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
         for (const chunk of chunkArray(ids, DEFAULT_BATCH_SIZE)) {
-            const inList = chunk.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
-            const rv = await this.RunView.RunView<Record<string, string>>({
+            const filter = singleColumn
+                ? `${pkField} IN (${chunk.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`
+                : chunk.map((id) => `(${CompositeKey.FromURLSegment(entityInfo, id).ToWhereClause()})`).join(' OR ');
+            const rv = await this.RunView.RunView<Record<string, unknown>>({
                 EntityName: entityInfo.Name,
-                ExtraFilter: `${pkField} IN (${inList})`,
-                Fields: [pkField],
+                ExtraFilter: filter,
+                Fields: keyFields,
                 ResultType: 'simple',
             }, this.CurrentUser);
 
             if (rv.Success) {
                 for (const r of rv.Results) {
-                    existing.add(NormalizeUUID(String(r[pkField])));
+                    existing.add(NormalizeUUID(CompositeKey.FromEntityRecord(entityInfo, r).ToCompactURLSegment()));
                 }
             } else {
                 // Fail open: if we can't verify existence, don't silently delete every match.
@@ -1182,7 +1199,6 @@ export class DuplicateRecordDetector extends VectorBase {
         metadataMap?: Map<string, string>
     ): Promise<MJDuplicateRunDetailEntity[]> {
         const results: MJDuplicateRunDetailEntity[] = [];
-        const pkFieldName = entityInfo.FirstPrimaryKey.Name;
 
         for (const batch of chunkArray(recordIDs, SAVE_BATCH_SIZE)) {
             const batchResults = await Promise.all(
@@ -1190,8 +1206,11 @@ export class DuplicateRecordDetector extends VectorBase {
                     const runDetail = await this.Metadata.GetEntityObject<MJDuplicateRunDetailEntity>('MJ: Duplicate Run Details', this.CurrentUser);
                     runDetail.NewRecord();
                     runDetail.DuplicateRunID = duplicateRunID;
-                    // Store RecordID in standard MJ URL segment format (e.g., "ID|uuid")
-                    runDetail.RecordID = `${pkFieldName}|${recordID}`;
+                    // Store RecordID in the full MJ URL-segment form ("ID|<uuid>", or
+                    // "F1|v1||F2|v2" for a composite key) — persistDetailMatches parses it back
+                    // with LoadFromConcatenatedString. `recordID` is a compact segment, so the key
+                    // is rebuilt from the entity's real column(s) rather than an assumed one.
+                    runDetail.RecordID = CompositeKey.FromURLSegment(entityInfo, recordID).ToURLSegment();
                     runDetail.MatchStatus = 'Pending';
                     runDetail.MergeStatus = 'Pending';
                     runDetail.RecordMetadata = metadataMap?.get(recordID) ?? null;

@@ -390,8 +390,9 @@ function buildOfflineChanges(
         if (values[d.key] === load.values[d.key]) continue;
         changedFields[d.key] = toQueueScalar(entityValueFromForm(values[d.key], d.kind));
     }
-    const pkField = load.entity.FirstPrimaryKey;
-    const primaryKey = pkField ? String(load.record.Get(pkField.Name)) : null;
+    // The entity is arbitrary (any key column name, possibly composite), so serialize the record's full
+    // primary key in the compact form offline-sync reads back with CompositeKey.FromURLSegment.
+    const primaryKey = load.entity.PrimaryKeys.length > 0 ? load.record.PrimaryKey.ToCompactURLSegment() : null;
     return { changedFields, primaryKey };
 }
 

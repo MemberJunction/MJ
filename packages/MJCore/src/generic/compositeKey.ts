@@ -302,7 +302,7 @@ export class FieldValueCollection {
     LoadFromURLSegment(entity: EntityInfo, urlSegment: string): void {
         if (!urlSegment.includes('|')) {
           // If not, return a single element array with a default field name
-          this.KeyValuePairs = [{ FieldName: entity.FirstPrimaryKey.Name, Value: urlSegment }];
+          this.KeyValuePairs = [{ FieldName: entity.FirstPrimaryKey.Name, Value: urlSegment }]; // first-pk-ok: the bare-value URL shorthand means "the single key column, whatever its name"
         }
         else {
             this.SimpleLoadFromURLSegment(urlSegment);
@@ -529,7 +529,7 @@ export class CompositeKey extends FieldValueCollection {
      */
     public static FromURLSegment(entity: EntityInfo | null | undefined, segment: string): CompositeKey {
         const compositeKey = new CompositeKey();
-        if (entity?.FirstPrimaryKey) {
+        if (entity?.FirstPrimaryKey) { // first-pk-ok: presence check only; LoadFromURLSegment reads bare and delimited segments
             compositeKey.LoadFromURLSegment(entity, segment);
         } else if (segment.includes(CompositeKey.DefaultValueDelimiter)) {
             compositeKey.SimpleLoadFromURLSegment(segment);

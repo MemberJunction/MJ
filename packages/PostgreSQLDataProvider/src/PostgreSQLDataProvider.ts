@@ -138,7 +138,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             .map(child => {
                 const schema = child.SchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
-                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
                 return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
             });
@@ -153,7 +153,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
             if (!entityInfo || !relatedEntityInfo) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pkParts: string[] = [];
             for (const pk of entityInfo.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -175,7 +175,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
         let sSQL = '';
         this.Entities.forEach(entity => {
-            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a soft-link column stores one bare key value; matched against the first key value below by design
             const pkParts: string[] = [];
             for (const pk of entity.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -979,7 +979,7 @@ SELECT * FROM delete_result`;
         // Single PK: accept either the PK-named column (current codegen) or `_result_id`
         // (legacy baseline sproc). A null value in either means the sproc reported zero
         // rows affected — record was already gone.
-        const pk = entity.FirstPrimaryKey;
+        const pk = entity.FirstPrimaryKey; // first-pk-ok: the PrimaryKeys.length > 1 branch above already returned; this is the single-key path
         const pkValue = deletedRecord[pk.Name];
         const legacyValue = deletedRecord['_result_id'];
         if (pkValue === pk.Value || legacyValue === pk.Value) {
@@ -1284,7 +1284,7 @@ SELECT * FROM delete_result`;
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
-        const pkName = entityInfo.FirstPrimaryKey?.Name ?? 'ID';
+        const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: IS-A sibling shares the parent's single-column key; safePKValue is that one value
         const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
         const recordID = entityInfo.PrimaryKeys

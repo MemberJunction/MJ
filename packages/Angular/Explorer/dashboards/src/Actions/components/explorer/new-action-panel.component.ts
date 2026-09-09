@@ -162,8 +162,7 @@ export class NewActionPanelComponent extends BaseAngularComponent implements OnI
         this.StateService.closeNewActionPanel();
 
         // Open the full action record for editing
-        const key = CompositeKey.FromID(action.ID);
-        this.navigationService.OpenEntityRecord('MJ: Actions', key);
+        this.navigationService.OpenEntityRecord('MJ: Actions', CompositeKey.FromID(action.ID));
       } else {
         this.Errors['general'] = 'Failed to save action. Please try again.';
       }

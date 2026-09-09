@@ -426,7 +426,7 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
     }
 
     private stampOwnerKey(): void {
-        const key = this.instance?.FirstPrimaryKey?.Value;
+        const key = this.instance?.FirstPrimaryKey?.Value; // first-pk-ok: ForeignKeyField is one FK column, so it holds a single-column key by design
         if (key === null || key === undefined || key === '') {
             return;
         }

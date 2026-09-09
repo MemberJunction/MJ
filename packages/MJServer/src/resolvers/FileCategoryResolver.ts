@@ -14,7 +14,7 @@ export class FileCategoryResolver extends FileCategoryResolverBase {
     @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput,
     @Ctx() { providers, userPayload }: AppContext
   ) {
-    const key = CompositeKey.FromID(ID);
+    const key = CompositeKey.FromID(ID); // first-pk-ok: this mutation deletes from MJ: File Categories (core entity keyed by ID) — see the GetEntityObject below
     const p = GetReadWriteProvider(providers);
 
     if (!(await this.BeforeDelete(p, key))) {

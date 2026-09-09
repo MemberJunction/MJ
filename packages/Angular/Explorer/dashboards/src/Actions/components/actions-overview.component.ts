@@ -488,8 +488,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   public openAction(action: MJActionEntity): void {
     this.selectedAction = action;
     this.publishAgentContext();
-    const key = CompositeKey.FromID(action.ID);
-    this.navigationService.OpenEntityRecord('MJ: Actions', key);
+    this.navigationService.OpenEntityRecord('MJ: Actions', CompositeKey.FromID(action.ID));
   }
 
   /** Sort the visible recent-actions list in place (agent tool — view-only). */
@@ -516,8 +515,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
   }
 
   public openCategory(categoryId: string): void {
-    const key = CompositeKey.FromID(categoryId);
-    this.navigationService.OpenEntityRecord('MJ: Action Categories', key);
+    this.navigationService.OpenEntityRecord('MJ: Action Categories', CompositeKey.FromID(categoryId));
   }
 
   public openExecution(execution: MJActionExecutionLogEntity): void {

@@ -559,7 +559,7 @@ export class HierarchyTreeComponent extends BaseAngularComponent implements OnIn
         const pk = this.entityInfo && this.entityInfo.PrimaryKeys.length > 0
             ? new CompositeKey(this.entityInfo.PrimaryKeys.map(k => new KeyValuePair(k.Name, this.getItemValue(item, k.Name))))
             // No entity metadata: the tree's default item shape is keyed by ID/id.
-            : CompositeKey.FromID(this.getItemValue(item, 'ID') ?? this.getItemValue(item, 'id') ?? '');
+            : CompositeKey.FromID(this.getItemValue(item, 'ID') ?? this.getItemValue(item, 'id') ?? ''); // first-pk-ok: reached only when no entity metadata is available; the metadata branch above uses every PrimaryKeys column
         return { pk, id: pk.ToCompactURLSegment() };
     }
 

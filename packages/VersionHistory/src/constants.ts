@@ -104,7 +104,7 @@ export function buildPrimaryKeyForLoad(
  * where we control the schema and know the PK is always 'ID'.
  */
 export function buildIdKey(id: string): CompositeKey {
-    return CompositeKey.FromID(id);
+    return CompositeKey.FromID(id); // first-pk-ok: documented for MJ system entities only (Version Labels / Label Items / Restores / Record Changes), whose key is ID
 }
 
 // ---------------------------------------------------------------------------

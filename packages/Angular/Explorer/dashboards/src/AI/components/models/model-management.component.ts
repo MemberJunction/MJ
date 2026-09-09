@@ -556,8 +556,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
   }
 
   public openModel(modelId: string): void {
-    const compositeKey = CompositeKey.FromID(modelId);
-    this.navigationService.OpenEntityRecord('MJ: AI Models', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Models', CompositeKey.FromID(modelId));
   }
 
   /**

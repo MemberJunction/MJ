@@ -1020,7 +1020,7 @@ export class DashboardResource extends BaseResourceComponent {
             // Try to load dashboard metadata if we have the record ID
             if (data.ResourceRecordID && data.ResourceRecordID.length > 0) {
                 const md = this.ProviderToUse;
-                const compositeKey = CompositeKey.FromID(data.ResourceRecordID);
+                const compositeKey = CompositeKey.FromID(data.ResourceRecordID); // first-pk-ok: ResourceRecordID of a Dashboards resource — core entity keyed by ID
                 const name = await md.GetEntityRecordName('Dashboards', compositeKey);
                 if (name) {
                     return name;

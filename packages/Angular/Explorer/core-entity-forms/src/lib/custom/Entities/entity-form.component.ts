@@ -685,8 +685,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      * Navigate to the Entity admin form for a given entity ID.
      */
     public NavigateToEntityByID(entityID: string): void {
-        const pkey = CompositeKey.FromID(entityID);
-        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+        this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(entityID));
     }
 
     /** Total organic key connection count (outgoing targets + incoming sources) */
@@ -1023,8 +1022,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     /** Navigate to an entity record in the Entity Explorer */
     public NavigateToEntity(entityInfo: EntityInfo): void {
-        const pkey = CompositeKey.FromID(entityInfo.ID);
-        this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+        this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(entityInfo.ID));
     }
 
     /**
@@ -1172,8 +1170,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     public navigateToRelatedEntity(field: EntityFieldInfo): void {
         const related = this.getRelatedEntity(field);
         if (related) {
-            const pkey = CompositeKey.FromID(related.ID);
-            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(related.ID));
         }
     }
 
@@ -1182,8 +1179,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
      */
     public openRelatedEntityFromField(entityId: string): void {
         if (entityId) {
-            const pkey = CompositeKey.FromID(entityId);
-            this.sharedService.OpenEntityRecord('MJ: Entities', pkey);
+            this.sharedService.OpenEntityRecord('MJ: Entities', CompositeKey.FromID(entityId));
         }
     }
 

@@ -67,7 +67,7 @@ export class SharingCenterDialogHostComponent {
             case 'Access Control Rules':
                 if (row.ResourceType) {
                     // Resource types are MJ core entities (Dashboards, Reports, Queries, ...), all keyed by ID.
-                    const key = CompositeKey.FromID(row.ResourceID!);
+                    const key = CompositeKey.FromID(row.ResourceID!); // first-pk-ok: ResourceType is one of the core resource entities (Dashboards, Reports, Queries, ...), all keyed by ID
                     // Transient dialog: default origin capture (the page
                     // behind it) is the right "back" target once it closes.
                     this.navigationService.OpenEntityRecord(row.ResourceType, key);

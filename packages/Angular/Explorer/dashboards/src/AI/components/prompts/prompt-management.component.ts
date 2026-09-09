@@ -522,8 +522,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   }
 
   public openPrompt(promptId: string): void {
-    const compositeKey = CompositeKey.FromID(promptId);
-    this.navigationService.OpenEntityRecord('MJ: AI Prompts', compositeKey);
+    this.navigationService.OpenEntityRecord('MJ: AI Prompts', CompositeKey.FromID(promptId));
   }
 
   /**

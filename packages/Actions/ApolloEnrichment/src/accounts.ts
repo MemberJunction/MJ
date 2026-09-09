@@ -479,7 +479,8 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
-            const accountEntity = await md.GetEntityObject<BaseEntity>('Accounts', CompositeKey.FromID(record.ID), currentUser);
+            // The account entity is configured, not fixed — build the key from its real primary key column(s), as updateAccountWithOrganizationData does.
+            const accountEntity = await md.GetEntityObject<BaseEntity>(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
             accountEntity.Set(params.AccountEntity.EnrichedAtField, new Date());
             
             const saveResult = await accountEntity.Save();
