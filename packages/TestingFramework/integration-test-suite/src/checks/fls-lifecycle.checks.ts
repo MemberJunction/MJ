@@ -37,16 +37,22 @@ import {
     UserCache, SystemUserFieldAccessCheck, FindSystemUserFieldAccessViolations
 } from '@memberjunction/generic-database-provider';
 import { MJEntityEntity, MJEntityFieldPermissionEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
+import { ordinalCompare } from '@memberjunction/global';
 import {
     q, schemaOf, flsEntity, fieldOf, restrictableFields, rolesWithRead, skipIfUnusable, loadEfpRow
 } from './fls-enforcement.checks';
 
 // Captured in Setup so Teardown can restore role membership even after a mid-check failure.
+interface CapturedUserRole {
+    RoleID: string;
+    /** The UserRole row's own primary key, so a restore reinstates the identity the fixture pinned. */
+    UserRoleID: string;
+}
 interface CapturedRoles {
     SystemUserID: string;
-    SystemRoleIDs: string[];
+    SystemRoles: CapturedUserRole[];
     MultiUserID: string;
-    MultiRoleIDs: string[];
+    MultiRoles: CapturedUserRole[];
 }
 let captured: CapturedRoles | null = null;
 
@@ -122,11 +128,24 @@ async function loadUserRole(ctx: IntegrationCheckContext, userId: string, roleId
     return ur;
 }
 
-/** Re-insert a UserRole row by SQL (restoring state the checks removed) and refresh caches. */
-async function restoreUserRole(ctx: IntegrationCheckContext, userId: string, roleId: string): Promise<void> {
+/**
+ * Re-insert a UserRole row by SQL (restoring state the checks removed) and refresh caches.
+ *
+ * The row is restored under its ORIGINAL ID, captured in Setup. Letting the column default mint a
+ * fresh one instead looks harmless — the (UserID, RoleID) pair is what every check reads — but it
+ * orphans the identity the seed fixture pinned in
+ * `metadata-optional/integration-test/users/.integration-test-fls-users.json`. The next
+ * `mj sync push` then cannot find its pinned primary key, creates the row a second time, and the
+ * pair is duplicated; LC8's `loadUserRole` asserts exactly one row and fails on the run after that.
+ * That is invisible on a from-scratch CI database and only bites a persistent dev database, which
+ * is exactly the kind of failure that wastes an afternoon.
+ */
+async function restoreUserRole(
+    ctx: IntegrationCheckContext, userId: string, roleId: string, userRoleId: string
+): Promise<void> {
     await q(ctx,
         `IF NOT EXISTS (SELECT 1 FROM [${schemaOf(ctx)}].UserRole WHERE UserID='${userId}' AND RoleID='${roleId}') ` +
-        `INSERT INTO [${schemaOf(ctx)}].UserRole (UserID, RoleID) VALUES ('${userId}', '${roleId}')`);
+        `INSERT INTO [${schemaOf(ctx)}].UserRole (ID, UserID, RoleID) VALUES ('${userRoleId}', '${userId}', '${roleId}')`);
     await refreshUsers(ctx);
     await ctx.Provider.Refresh();
 }
@@ -167,9 +186,9 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-lifecycle', {
         fx.RoleIDs = { Reader: reader, Writer: writer, Denier: denier, Neutral: neutral };
         captured = {
             SystemUserID: sysUser.ID,
-            SystemRoleIDs: sysUser.UserRoles.map(r => r.RoleID),
+            SystemRoles: sysUser.UserRoles.map(r => ({ RoleID: r.RoleID, UserRoleID: String(r.ID) })),
             MultiUserID: users.Multi.ID,
-            MultiRoleIDs: users.Multi.UserRoles.map(r => r.RoleID),
+            MultiRoles: users.Multi.UserRoles.map(r => ({ RoleID: r.RoleID, UserRoleID: String(r.ID) })),
         };
         fx.Usable = true;
     },
@@ -180,11 +199,11 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-lifecycle', {
         }
         // Restore role membership first (a failed check may have left a removal un-restored).
         if (captured) {
-            for (const roleId of captured.SystemRoleIDs) {
-                await restoreUserRole(ctx, captured.SystemUserID, roleId).catch(() => undefined);
+            for (const r of captured.SystemRoles) {
+                await restoreUserRole(ctx, captured.SystemUserID, r.RoleID, r.UserRoleID).catch(() => undefined);
             }
-            for (const roleId of captured.MultiRoleIDs) {
-                await restoreUserRole(ctx, captured.MultiUserID, roleId).catch(() => undefined);
+            for (const r of captured.MultiRoles) {
+                await restoreUserRole(ctx, captured.MultiUserID, r.RoleID, r.UserRoleID).catch(() => undefined);
             }
         }
         await resetFls(ctx).catch(() => undefined);
@@ -357,14 +376,20 @@ export async function CheckLc7_SystemRoleRemovalGuard(ctx: IntegrationCheckConte
     if (!skipIfUnusable(ctx.FlsFixture, 'fls-lifecycle.LC7')) return;
     await enableFresh(ctx);
     const sysUser = systemUser();
-    const roles = sysUser.UserRoles.map(r => r.RoleID);
+    // Sort before choosing the pair. `UserRoles` arrives in row order, and steps 1 and 3 below
+    // delete-and-reinsert two of these rows — which stamps a fresh __mj_CreatedAt and moves them
+    // within that order. An unsorted pick therefore selects a DIFFERENT (keeper, spare) on the next
+    // run against the same database, and step 3's premise — that `spare` contributes no Allow after
+    // step 2 narrowed everything except `keeper` — quietly stops holding. Sorting makes the choice
+    // a function of the role set alone, so the check is repeat-safe on a persistent dev database.
+    const roles = [...sysUser.UserRoles.map(r => r.RoleID)].sort(ordinalCompare);
     Assert(roles.length >= 2, `the system user must hold at least two roles for this check (holds ${roles.length})`);
     const [keeper, spare] = roles;
 
     // 1) every role still duplicates the others' Allows → removal permitted.
     const first = await loadUserRole(ctx, sysUser.ID, keeper);
     Assert(await first.Delete(), `removing a redundant system-user role must be permitted: ${first.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, keeper);
+    await restoreUserRole(ctx, sysUser.ID, keeper, first.ID);
 
     // 2) narrow every OTHER role to No Access by direct SQL, so `keeper` carries the only Allows.
     const entity = flsEntity(ctx);
@@ -382,7 +407,7 @@ export async function CheckLc7_SystemRoleRemovalGuard(ctx: IntegrationCheckConte
     // 3) a role contributing no Allow can still be removed.
     const redundant = await loadUserRole(ctx, sysUser.ID, spare);
     Assert(await redundant.Delete(), `removing a no-Allow system-user role must still be permitted: ${redundant.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, sysUser.ID, spare);
+    await restoreUserRole(ctx, sysUser.ID, spare, redundant.ID);
 }
 
 /** LC8 — ordinary users are untouched by the role-removal guard. */
@@ -393,7 +418,7 @@ export async function CheckLc8_OrdinaryUserRoleRemovalUnaffected(ctx: Integratio
     const roleId = fx.RoleIDs!.Neutral; // one of multi's three roles
     const ur = await loadUserRole(ctx, fx.Multi!.ID, roleId);
     Assert(await ur.Delete(), `removing a role from an ordinary user must be permitted: ${ur.LatestResult?.CompleteMessage ?? ''}`);
-    await restoreUserRole(ctx, fx.Multi!.ID, roleId);
+    await restoreUserRole(ctx, fx.Multi!.ID, roleId, ur.ID);
 }
 
 /**
