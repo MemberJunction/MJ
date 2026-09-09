@@ -32,9 +32,11 @@ import { JoinGridComponent } from './join-grid.component';
  * tracked for a follow-up.
  */
 
-/** Minimal EntityInfo stub: Refresh() only reads `.FirstPrimaryKey.{Name,NeedsQuotes}`. */
-const fakeEntityInfo = (name: string): EntityInfo =>
-  ({ Name: name, FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } }) as unknown as EntityInfo;
+/** Minimal EntityInfo stub: Refresh() reads `.PrimaryKeys.length` (single-column guard) and `.FirstPrimaryKey.{Name,NeedsQuotes}`. */
+const fakeEntityInfo = (name: string): EntityInfo => {
+  const idKey = { Name: 'ID', NeedsQuotes: true };
+  return { Name: name, PrimaryKeys: [idKey], FirstPrimaryKey: idKey } as unknown as EntityInfo;
+};
 
 /** Provider for the `[Provider]` input: resolves any entity name to the stub above. */
 const inputProvider = (): IMetadataProvider =>

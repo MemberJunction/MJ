@@ -2627,11 +2627,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) return null;
 
-      const pkField = entityInfo.FirstPrimaryKey;
-      if (!pkField) return null;
-
-      const compositeKey = new CompositeKey();
-      compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+      // recordId is the tab's compact key segment (bare value, or "F1|v1||F2|v2" for a composite key)
+      const compositeKey = CompositeKey.FromURLSegment(entityInfo, recordId);
+      if (compositeKey.KeyValuePairs.length === 0) return null;
 
       const results = await md.GetEntityRecordNames([{ EntityName: entityName, CompositeKey: compositeKey }]);
       if (results.length > 0 && results[0].Success && results[0].RecordName) {
