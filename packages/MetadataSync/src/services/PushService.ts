@@ -781,7 +781,7 @@ export class PushService {
         // level finishes, or when TransactionDepth is already 0 (Save settled).
         // Peak live independent instances is then the current batch plus any
         // leftover-depth graphs still spanning later levels.
-        const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase;
+        const hostProvider = Metadata.Provider as unknown as DatabaseProviderBase; // global-provider-ok: host provider template for GraphProviderPool cloning
         const graphPool = new GraphProviderPool(hostProvider, (msg) => callbacks?.onLog?.(msg));
 
         const applyProcessResult = (result: ProcessRecordResult): void => {
@@ -949,7 +949,7 @@ export class PushService {
     return { created, updated, unchanged, deleted, skipped, deferred, errors };
   }
 
-  private async processFlattenedRecord(
+  protected async processFlattenedRecord(
     flattenedRecord: FlattenedRecord,
     entityDir: string,
     options: PushOptions,
@@ -1551,11 +1551,24 @@ export class PushService {
       }
     }
     
-    // Only update sync metadata if the record was actually dirty (changed)
-    if (isNew || isDirty) {
+    // Sync metadata handling:
+    // When push.writeSyncMetadata is explicitly false, do not create or update sync metadata blocks.
+    const shouldWriteSync = entityConfig?.push?.writeSyncMetadata !== false;
+    if (!shouldWriteSync) {
+      delete record.sync;
+    } else if (isNew || isDirty) {
+      const checksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
+      const existingChecksum = record.sync?.checksum;
+      const existingTimestamp = record.sync?.lastModified;
+
+      // Preserve existing lastModified if checksum has not changed (prevents hydration churn)
+      const lastModified = (existingChecksum && existingChecksum === checksum && existingTimestamp)
+        ? existingTimestamp
+        : new Date().toISOString();
+
       record.sync = {
-        lastModified: new Date().toISOString(),
-        checksum: await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir)
+        lastModified,
+        checksum
       };
       if (options.verbose) {
         callbacks?.onLog?.(`   ✓ Updated sync metadata (record was ${isNew ? 'new' : 'changed'})`);
