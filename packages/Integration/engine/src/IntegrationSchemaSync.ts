@@ -664,33 +664,44 @@ export class IntegrationSchemaSync {
         ObjectIDByName: objectIDByName,
       });
       let deactivated = 0;
+      let removed = 0;
       for (const id of decision.ObjectIDsToDeactivate) {
         const obj = await writer.LoadObject(id);
         if (obj) {
-          obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
-          if (await obj.Save()) { deactivated++; result.ObjectsDeactivated.push(obj.Name); }
-          else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom object ${id}: ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
+          // The WRITER decides disable-vs-delete: shared rows are the declared floor other
+          // connections read and are only disabled; a per-connection row is deleted outright,
+          // per plan.md ("Removed tables ... they just dont exist, its likely a cascade delete").
+          const name = obj.Name;
+          const outcome = await writer.RetireObject(obj);
+          if (outcome.ok) {
+            if (outcome.deleted) removed++; else deactivated++;
+            result.ObjectsDeactivated.push(name);
+          } else {
+            LogError(`[IntegrationSchemaSync] Failed to retire phantom object ${id}: ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
+          }
         }
       }
       let fieldsDeactivated = 0;
       for (const id of decision.FieldIDsToDeactivate) {
         const f = await writer.LoadField(id);
         if (f) {
-          f.Status = 'Disabled'; // deactivate, never delete
-          if (await f.Save()) {
+          const owner0 = f.IntegrationObjectID;
+          const fname = f.Name;
+          const outcome = await writer.RetireField(f);
+          if (outcome.ok) {
             fieldsDeactivated++;
             // Name the owner from the rows this run already read. The engine cache would answer
             // for the SHARED catalog only, so on a per-connection run it would silently miss and
             // the log line would carry a bare id.
-            const owner = existingObjects.find((o) => o.ID === f.IntegrationObjectID)?.Name ?? f.IntegrationObjectID;
-            result.FieldsDeactivated.push(`${owner}.${f.Name}`);
+            const owner = existingObjects.find((o) => o.ID === owner0)?.Name ?? owner0;
+            result.FieldsDeactivated.push(`${owner}.${fname}`);
           }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom field ${id}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`);
         }
       }
-      if (deactivated > 0 || fieldsDeactivated > 0)
+      if (deactivated > 0 || removed > 0 || fieldsDeactivated > 0)
         console.log(
-          `[IntegrationSchemaSync] Deactivated ${deactivated} object(s) + ${fieldsDeactivated} field(s) absent from authoritative discovery for ${IntegrationID} (not materialized, not deleted).`,
+          `[IntegrationSchemaSync] Retired ${deactivated} disabled + ${removed} deleted object(s) and ${fieldsDeactivated} field(s) absent from authoritative discovery for ${IntegrationID}. Mirror tables and their data are untouched either way.`,
         );
     }
 
