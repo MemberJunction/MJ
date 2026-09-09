@@ -1018,7 +1018,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (46 classes)
+// @memberjunction/core-entities-server (47 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1055,6 +1055,7 @@ import {
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2037,6 +2038,7 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2054,11 +2056,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AddDocumentContentAction,
     AddRecordsToListAction,
     AddViewResultsToListAction,
-    AggregateDataAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AggregateDataAction,
     AssignUserRolesAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
@@ -2221,7 +2223,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 947;
+export const CLASS_REGISTRATIONS_COUNT = 948;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

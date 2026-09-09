@@ -1234,7 +1234,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (46 classes)
+// @memberjunction/core-entities-server (47 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1271,6 +1271,7 @@ import {
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2361,6 +2362,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
@@ -2506,11 +2508,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SummarizeContentAction,
     SyncMCPToolsAction,
     TavilySearchAction,
-    TeamsWebhookAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
@@ -2558,7 +2560,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1031;
+export const CLASS_REGISTRATIONS_COUNT = 1032;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -1135,7 +1135,7 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
-            "TestID": "@lookup:MJ: Tests.Name=IT89 - FLS Over-The-Wire (client transport)",
+            "TestID": "@lookup:MJ: Tests.Name=IT92 - FLS Over-The-Wire (client transport)",
             "Sequence": 69,
             "Status": "Active"
           },
@@ -1145,6 +1145,17 @@
           "sync": {
             "lastModified": "2026-09-09T11:23:37.706Z",
             "checksum": "4b7ffc9b2d205e81c72c4dfb9bde49ffa484a97fe3b30faba1cc36c7f446a736"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT89 - Role Privilege Elevation Guard",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5345610B-4E73-497C-8994-099492F48C3B"
           }
         }
       ]

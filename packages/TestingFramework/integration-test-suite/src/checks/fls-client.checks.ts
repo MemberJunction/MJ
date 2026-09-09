@@ -347,15 +347,15 @@ IntegrationCheckRegistry.Instance.RegisterLifecycle('fls-enforcement-client', {
         try {
             await enableOverWire(ctx, entity.ID);
             fx.ReaderEfpRowID = await tightenReaderEmail(ctx);
-            const readerKey = await mintKey(ctx, fx, readerId, 'IT89 FLS reader (mj-integration-test)');
-            const writerKey = await mintKey(ctx, fx, writerId, 'IT89 FLS writer (mj-integration-test)');
+            const readerKey = await mintKey(ctx, fx, readerId, 'IT92 FLS reader (mj-integration-test)');
+            const writerKey = await mintKey(ctx, fx, writerId, 'IT92 FLS writer (mj-integration-test)');
             fx.ReaderProvider = await buildUserKeyProviderWithRetry(readerKey);
             fx.WriterProvider = await buildUserKeyProviderWithRetry(writerKey);
             if (multiId) {
                 // Readable, but neither updatable nor creatable — the write-denial shape.
                 fx.DenierEfpRowID = await setFieldRuleOverWire(
                     ctx, FLS_UPDATE_DENY_FIELD, FLS_DENIER_ROLE, { Read: 'Allow', Update: 'Deny', Create: 'Deny' });
-                const multiKey = await mintKey(ctx, fx, multiId, 'IT89 FLS multi (mj-integration-test)');
+                const multiKey = await mintKey(ctx, fx, multiId, 'IT92 FLS multi (mj-integration-test)');
                 fx.MultiProvider = await buildUserKeyProviderWithRetry(multiKey);
             }
 
