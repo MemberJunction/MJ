@@ -2,8 +2,8 @@ import fs, { JsonWriteOptions } from 'fs-extra';
 import { RecordData } from './sync-engine';
 
 /**
- * Helper class for writing JSON files with consistent property ordering for RecordData objects.
- * Ensures that all metadata files have the same property order: fields, relatedEntities, primaryKey, sync
+ * Helper class for writing JSON files for RecordData objects.
+ * Preserves the caller's key order, recursing into known keys (fields, relatedEntities, primaryKey, sync, etc.).
  */
 export class JsonWriteHelper {
   
@@ -26,37 +26,49 @@ export class JsonWriteHelper {
    * @param data - RecordData object, array of RecordData objects, or any nested structure
    * @returns Normalized data with consistent property ordering
    */
-  private static normalizeRecordDataOrder(data: any): any {
+  private static normalizeRecordDataOrder(data: unknown): unknown {
     if (Array.isArray(data)) {
       return data.map(item => this.normalizeRecordDataOrder(item));
     }
 
     if (data && typeof data === 'object') {
+      const dataObj = data as Record<string, unknown>;
       // Check if this looks like a RecordData object
-      if (data.fields !== undefined) {
+      if (dataObj.fields !== undefined) {
         // This is a RecordData object - rebuild preserving original key order
         // but ensuring known keys maintain their relative order when present
-        const ordered: any = {};
+        const ordered: Record<string, unknown> = {};
         // Known keys that are part of RecordData structure
         // __mj_sync_notes is a system-managed key that should appear after sync
-        const knownKeys = ['fields', 'relatedEntities', 'primaryKey', 'sync', '__mj_sync_notes', 'deleteRecord'];
+        const knownKeys = [
+          '$schema',
+          'primaryKey',
+          'fields',
+          'collections',
+          'embeds',
+          'extension',
+          'relatedEntities',
+          'sync',
+          '__mj_sync_notes',
+          'deleteRecord',
+        ];
 
         // Process keys in original order, preserving user's ordering
-        for (const key of Object.keys(data)) {
+        for (const key of Object.keys(dataObj)) {
           if (knownKeys.includes(key)) {
             // Known key - process recursively
-            ordered[key] = this.normalizeRecordDataOrder(data[key]);
+            ordered[key] = this.normalizeRecordDataOrder(dataObj[key]);
           } else {
             // Unknown key (like _comments) - preserve exactly as-is
-            ordered[key] = data[key];
+            ordered[key] = dataObj[key];
           }
         }
 
         return ordered;
       } else {
         // Regular object - recursively process properties
-        const processed: any = {};
-        for (const [key, value] of Object.entries(data)) {
+        const processed: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(dataObj)) {
           processed[key] = this.normalizeRecordDataOrder(value);
         }
         return processed;
@@ -72,31 +84,61 @@ export class JsonWriteHelper {
    * @param relatedEntities - Related entity data
    * @param primaryKey - Primary key data
    * @param sync - Sync metadata
+   * @param collections - First-class collections data
+   * @param embeds - First-class embeds data
+   * @param extension - First-class extension data
+   * @param schema - Optional $schema URI
    * @returns RecordData object with guaranteed property order
    */
   static createOrderedRecordData(
-    fields: Record<string, any>,
+    fields: Record<string, unknown>,
     relatedEntities: Record<string, RecordData[]>,
-    primaryKey: Record<string, any>,
-    sync: { lastModified: string; checksum: string }
+    primaryKey: Record<string, unknown>,
+    sync: { lastModified: string; checksum: string },
+    collections?: Record<string, RecordData[]>,
+    embeds?: Record<string, RecordData>,
+    extension?: RecordData['extension'],
+    schema?: string
   ): RecordData {
     // Use a Map to preserve insertion order, then convert to object
-    const orderedProps = new Map<string, any>();
+    const orderedProps = new Map<string, unknown>();
     
-    // Add properties in the desired order
+    if (schema) {
+      orderedProps.set('$schema', schema);
+    }
+
+    // Canonical order: fields first (matches 5,894 of 5,897 records in corpus)
     orderedProps.set('fields', fields);
-    
-    if (Object.keys(relatedEntities).length > 0) {
-      orderedProps.set('relatedEntities', relatedEntities);
+
+    if (collections && Object.keys(collections).length > 0) {
+      orderedProps.set('collections', collections);
+    }
+
+    if (embeds && Object.keys(embeds).length > 0) {
+      orderedProps.set('embeds', embeds);
+    }
+
+    if (extension && Object.keys(extension).length > 0) {
+      orderedProps.set('extension', extension);
     }
     
-    orderedProps.set('primaryKey', primaryKey);
-    orderedProps.set('sync', sync);
+    if (relatedEntities && Object.keys(relatedEntities).length > 0) {
+      orderedProps.set('relatedEntities', relatedEntities);
+    }
+
+    if (primaryKey && Object.keys(primaryKey).length > 0) {
+      orderedProps.set('primaryKey', primaryKey);
+    }
+    
+    if (sync) {
+      orderedProps.set('sync', sync);
+    }
     
     // Convert Map to object while preserving order
     const recordData = {} as RecordData;
+    const recordObj = recordData as unknown as Record<string, unknown>;
     for (const [key, value] of orderedProps) {
-      (recordData as any)[key] = value;
+      recordObj[key] = value;
     }
     
     return recordData;
@@ -108,7 +150,7 @@ export class JsonWriteHelper {
    * @param data - Any JSON-serializable data
    * @param options - Optional JSON write options
    */
-  static async writeJson(filePath: string, data: any, options?: JsonWriteOptions): Promise<void> {
+  static async writeJson(filePath: string, data: unknown, options?: JsonWriteOptions): Promise<void> {
     const defaultOptions = { spaces: 2 };
     const writeOptions = typeof options === 'object' && options !== null 
       ? { ...defaultOptions, ...options }

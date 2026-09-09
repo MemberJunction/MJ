@@ -18,7 +18,7 @@ import { CompositeKey, KeyValuePair } from './compositeKey';
 import { EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import type { EntitySavePlan } from './entitySavePlan';
 import { ValidationErrorInfo, ValidationErrorType, ValidationResult } from './entityInfo';
-import type { EntitySaveOptions, IMetadataProvider } from './interfaces';
+import type { EntitySaveOptions, IEntityDataProvider, IMetadataProvider } from './interfaces';
 
 /** What clearing the relationship does to the embedded row. */
 export type EmbeddedRecordClearMode = 'delete' | 'orphan' | 'refuse';
@@ -450,5 +450,11 @@ export class EmbeddedRecord<T extends BaseEntity = BaseEntity> extends EntityCom
             err.Value,
             err.Type ?? ValidationErrorType.Failure,
         );
+    }
+
+    public override BindProvider(provider: IEntityDataProvider | null): void {
+        if (this.instance && this.instance.BoundProvider !== provider) {
+            this.instance.BindProvider(provider);
+        }
     }
 }

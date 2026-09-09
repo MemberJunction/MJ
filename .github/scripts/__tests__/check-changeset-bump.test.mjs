@@ -521,6 +521,25 @@ describe('check-changeset-bump', () => {
         });
     });
 
+    describe('release-note prose', () => {
+        // A changeset IS the release note — changesets are concatenated into the published
+        // changelog verbatim. A body that narrates its own drafting history ("this paragraph
+        // originally warned…") ships that editorial trail to customers, who cannot see the
+        // earlier draft and do not care about it. Caught by review on PR #4275.
+        it('rejects a changeset whose body describes its own earlier wording', () => {
+            const { code, output } = runOnBranch('self-narrating', () => {
+                write('packages/Foo/a.ts', 'export const a = 1;\n');
+                write('.changeset/a.md',
+                    `---\n"@memberjunction/foo": patch\n---\n\n` +
+                    `Some real change.\n\n` +
+                    `What is *no longer* true: this paragraph originally warned that the old ` +
+                    `behaviour re-opened the path. It does not, as of this release.\n`);
+            });
+            expect(code).toBe(1);
+            expect(output).toContain('describes its own earlier wording');
+        });
+    });
+
     it('fails loudly on an unresolvable base ref', () => {
         let code = 0;
         try {

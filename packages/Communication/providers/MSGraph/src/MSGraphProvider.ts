@@ -117,13 +117,22 @@ export interface MSGraphCredentials extends ProviderCredentialsBase {
 }
 
 /**
- * Resolved MS Graph credentials with all required fields populated.
+ * Resolved MS Graph credentials.
+ *
+ * `accountEmail` is OPTIONAL, and deliberately so. The three authentication fields are what a
+ * service principal is, and they are what the `Azure Service Principal` credential type declares. A
+ * mailbox is not part of a principal — the same credential legitimately drives Azure OpenAI and Blob
+ * Storage, where a mailbox means nothing — so requiring one here made every stored credential of
+ * that type unusable, since there was no fourth field for an operator to fill in.
+ *
+ * It is therefore a DEFAULT, resolved per operation by {@link MSGraphProvider.resolveMailbox}, and
+ * demanded only where an operation genuinely needs a mailbox and nothing else supplied one.
  */
 interface ResolvedMSGraphCredentials {
     tenantId: string;
     clientId: string;
     clientSecret: string;
-    accountEmail: string;
+    accountEmail?: string;
 }
 
 /**
@@ -224,9 +233,14 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const clientSecret = resolveCredentialValue(credentials?.clientSecret, Config.AZURE_CLIENT_SECRET, disableFallback);
         const accountEmail = resolveCredentialValue(credentials?.accountEmail, Config.AZURE_ACCOUNT_EMAIL, disableFallback);
 
+        // The THREE authentication fields, which is exactly what a service principal is and exactly
+        // what the `Azure Service Principal` credential type declares. `accountEmail` used to be
+        // required here, which made every stored credential of that type unusable: there was no
+        // fourth field for an operator to fill in, so every operation failed before doing anything.
+        // A mailbox is resolved per operation instead — see `resolveMailbox`.
         validateRequiredCredentials(
-            { tenantId, clientId, clientSecret, accountEmail },
-            ['tenantId', 'clientId', 'clientSecret', 'accountEmail'],
+            { tenantId, clientId, clientSecret },
+            ['tenantId', 'clientId', 'clientSecret'],
             'Microsoft Graph'
         );
 
@@ -236,6 +250,27 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             clientSecret: clientSecret!,
             accountEmail: accountEmail!
         };
+    }
+
+    /**
+     * The mailbox an operation will act on, or a refusal that says how to supply one.
+     *
+     * WHY THIS THROWS. Every caller interpolates the result into a Graph path. Returning `undefined`
+     * would put the literal string "undefined" in the URL and come back as a 404 that reads like
+     * "message not found" — a wrong answer that looks like a real one. This package does not enable
+     * `strictNullChecks`, so the compiler would not have caught that either.
+     *
+     * `credentials.accountEmail` is the LAST candidate on purpose: it is a default for the deployment,
+     * and anything the caller named for this specific request outranks it.
+     */
+    private resolveMailbox(operation: string, creds: ResolvedMSGraphCredentials, ...preferred: (string | undefined)[]): string {
+        for (const candidate of [...preferred, creds.accountEmail]) {
+            if (candidate && candidate.trim() !== '') return candidate.trim();
+        }
+        throw new Error(
+            `Microsoft Graph: ${operation} needs a mailbox and none was supplied. Pass one on the ` +
+                `request, or set accountEmail on the credential (or AZURE_ACCOUNT_EMAIL) as a default.`
+        );
     }
 
     /**
@@ -306,12 +341,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
 
             // Smart selection: use message.From if provided and different from resolved accountEmail
-            let senderEmail = creds.accountEmail;
-            if (message.From &&
-                message.From.trim() !== '' &&
-                message.From !== creds.accountEmail) {
-                senderEmail = message.From;
-            }
+            // Whatever the caller named outranks the credential default; a request that names
+            // neither is refused here rather than sending from "undefined".
+            const senderEmail = this.resolveMailbox('SendSingleMessage', creds, message.From);
 
             if (!message) {
                 return {
@@ -428,7 +460,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             };
 
             // Use email address directly in API path
-            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(creds.accountEmail)}/messages/${params.MessageID}/reply`;
+            const mailbox = this.resolveMailbox('ReplyToMessage', creds);
+            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/messages/${params.MessageID}/reply`;
             const result = await client.api(sendMessagePath).post(reply);
 
             return {
@@ -440,7 +473,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             LogError(ex);
             return {
                 Success: false,
-                ErrorMessage: 'Error sending message'
+                ErrorMessage: `Error sending message: ${ex instanceof Error ? ex.message : String(ex)}`
             };
         }
     }
@@ -458,7 +491,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const client = this.getGraphClient(creds);
 
         const contextData = params.ContextData;
-        const emailToUse = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
+        const emailToUse = this.resolveMailbox('GetMessages', creds, params.Identifier, (contextData?.Email as string));
 
         const top: number = params.NumMessages;
         const applied: AppliedMessageFilters = { ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false };
@@ -598,7 +631,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             };
 
             // Use email address directly in API path
-            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(creds.accountEmail)}/messages/${params.MessageID}/forward`;
+            const mailbox = this.resolveMailbox('ForwardMessage', creds);
+            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/messages/${params.MessageID}/forward`;
             const forwardResult = await client.api(sendMessagePath).post(forward);
 
             return {
@@ -609,7 +643,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         catch (ex) {
             LogError(ex);
             return {
-                ErrorMessage: 'An Error occurred while forwarding the message',
+                ErrorMessage: `An Error occurred while forwarding the message: ${ex instanceof Error ? ex.message : String(ex)}`,
                 Success: false
             };
         }
@@ -790,12 +824,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
 
             // Smart selection: use message.From if provided and different from resolved accountEmail
-            let senderEmail = creds.accountEmail;
-            if (params.Message.From &&
-                params.Message.From.trim() !== '' &&
-                params.Message.From !== creds.accountEmail) {
-                senderEmail = params.Message.From;
-            }
+            // Whatever the caller named outranks the credential default; a request that names
+            // neither is refused here rather than sending from "undefined".
+            const senderEmail = this.resolveMailbox('CreateDraft', creds, params.Message.From);
 
             // Build message object (similar to SendSingleMessage but saved as draft)
             const draftMessage: Record<string, unknown> = {
@@ -839,7 +870,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             LogError('Error creating draft via MS Graph', undefined, ex);
             return {
                 Success: false,
-                ErrorMessage: 'Error creating draft'
+                ErrorMessage: `Error creating draft: ${ex instanceof Error ? ex.message : String(ex)}`
             };
         }
     }
@@ -1107,7 +1138,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const mailboxId = params.Identifier || creds.accountEmail;
+            const mailboxId = this.resolveMailbox('CreateSubscription', creds, params.Identifier);
             const context = params.ContextData as MSGraphSubscriptionContext | undefined;
 
             const folderSegment = await this.resolveSubscriptionFolderSegment(client, mailboxId, context);
@@ -1330,7 +1361,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('GetSingleMessage', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const messagePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}`;
@@ -1387,7 +1418,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('DeleteMessage', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const messagePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}`;
@@ -1431,7 +1462,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('MoveMessage', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const movePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/move`;
@@ -1466,7 +1497,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('ListFolders', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             let foldersPath: string;
@@ -1521,7 +1552,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('MarkAsRead', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path - update each message
             const updatePromises = params.MessageIDs.map(async (messageId) => {
@@ -1554,7 +1585,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('ArchiveMessage', creds, (params.ContextData?.Email as string));
 
             // Find or create the Archive folder - use email address directly
             let archiveFolderId = await this.findSystemFolder(client, emailToUse, 'archive');
@@ -1599,7 +1630,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('SearchMessages', creds, (params.ContextData?.Email as string));
 
             // Build search path - use email address directly in API path
             let messagesPath: string;
@@ -1684,7 +1715,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('ListAttachments', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const attachmentsPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/attachments`;
@@ -1732,7 +1763,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('DownloadAttachment', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const attachmentPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/attachments/${params.AttachmentID}`;

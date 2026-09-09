@@ -33,6 +33,9 @@ on:
       # entry a PR editing only the gate script runs neither the gate nor its own
       # vitest suite — the one change that most needs both.
       - '.github/scripts/check-dynamic-replace.mjs'
+      # Same again for the EntityField Sequence gate: its vitest suite lives in __tests__, but an
+      # edit to the gate script alone must run it too.
+      - '.github/scripts/check-migration-entityfield-sequence.mjs'
       # The browser-manifest server-leakage gate runs in this workflow (see that step).
       # The two guarded manifests are listed too: a PR that edits ONLY a generated manifest
       # is exactly the shape that can introduce a leak, and neither path is under packages/**

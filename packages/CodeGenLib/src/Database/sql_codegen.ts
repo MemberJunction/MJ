@@ -2062,7 +2062,7 @@ export class SQLCodeGenBase {
     protected generateEmbeddedGeoSelect(entity: EntityInfo, classNameFirstChar: string): { select: string; joins: string } {
         const specs = ListEmbeddedGeoSpecs(entity.Fields);
         if (specs.length === 0) return { select: '', joins: '' };
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: CodeGen is CLI tool
         const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
         const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
         const selects: string[] = [];

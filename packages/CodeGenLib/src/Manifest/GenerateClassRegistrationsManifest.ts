@@ -18,6 +18,7 @@ import ts from 'typescript';
 import * as fs from 'fs';
 import * as path from 'path';
 import { glob } from 'glob';
+import { ordinalCompare } from '@memberjunction/global';
 
 // ============================================================================
 // Public Types
@@ -1778,11 +1779,11 @@ function groupClassesIntoChunks(
         chunk.entries.sort((a, b) => {
             const compoundA = `${a.baseClassName}::${a.key}`;
             const compoundB = `${b.baseClassName}::${b.key}`;
-            return compoundA.localeCompare(compoundB);
+            return ordinalCompare(compoundA, compoundB);
         });
     }
 
-    const sorted = Array.from(chunks.values()).sort((a, b) => a.importPath.localeCompare(b.importPath));
+    const sorted = Array.from(chunks.values()).sort((a, b) => ordinalCompare(a.importPath, b.importPath));
     uniquifyChunkVarNames(sorted);
     return sorted;
 }
