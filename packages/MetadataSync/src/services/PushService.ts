@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IMetadataProvider } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
@@ -22,6 +22,7 @@ import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { resolveCollectionRelationship } from '../lib/collection-resolver';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
@@ -40,6 +41,7 @@ export interface PushOptions {
   exclude?: string[]; // Skip these directories (blacklist, supports patterns)
   deleteDbOnly?: boolean; // Delete database-only records that reference records being deleted
   incremental?: boolean;  // Skip files whose checksum hasn't changed since last push
+  allowBulkDelete?: boolean; // Allow authoritative collection to exceed maxImpliedDeletePercent
 }
 
 /**
@@ -164,6 +166,7 @@ export class PushService {
   private deferredRecords: DeferredRecord[] = [];
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
+  private confirmedCollections: Set<string> = new Set<string>();
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
@@ -596,8 +599,12 @@ export class PushService {
         // Rollback transaction on error.
         if (!options.dryRun) {
           callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
-          await transactionManager.rollbackTransaction();
-          callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
+          const rolledBack = await transactionManager.rollbackTransaction();
+          if (rolledBack) {
+            callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
+          } else {
+            callbacks?.onLog?.('❌ Database transaction rollback failed\n');
+          }
         }
         throw error;
       }
@@ -880,6 +887,9 @@ export class PushService {
                     const rec = batchResult.record;
                     callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
                     callbacks?.onLog?.(`   ${err.message}\n`);
+                    if (err.stack) {
+                      callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
+                    }
                     throw err;
                   }
                   applyProcessResult(batchResult.result);
@@ -1002,8 +1012,9 @@ export class PushService {
     if (options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
       // Use calculateChecksumWithFileContent so @file: reference changes are detected.
       // This reads local files (fast) rather than hitting the DB (slow). The stored
-      // checksum was also computed with file content, so the comparison is apples-to-apples.
-      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(record.fields, entityDir);
+      // checksum was also computed with file content and composition payloads, so the comparison is apples-to-apples.
+      const checksumPayload = this.buildRecordChecksumPayload(record);
+      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
       if (currentChecksum === record.sync.checksum) {
         // Lightweight stub — just enough for @parent:ID and @lookup resolution.
         // No DB call, no entity framework overhead.
@@ -1080,6 +1091,9 @@ export class PushService {
       if (existingEntity) {
         // Record exists, use the loaded entity
         entity = existingEntity;
+        if (recordProvider) {
+          entity.BindProvider(recordProvider as unknown as IEntityDataProvider);
+        }
         exists = true;
       } else {
         // Record doesn't exist in database
@@ -1277,6 +1291,20 @@ export class PushService {
     // The deferred fields are not set, but other fields are. We'll queue for
     // re-processing after save succeeds.
 
+    // Apply first-class composition axes (embeds, collections, extension) onto entity before Save (§5)
+    await this.applyCompositionAxes(
+      entity,
+      record,
+      entityName,
+      entityDir,
+      batchContext,
+      resolutionCollector,
+      options,
+      callbacks,
+      entityConfig,
+      recordProvider
+    );
+
     // Check if the record is actually dirty before considering it changed
     let isDirty = entity.Dirty;
     
@@ -1286,9 +1314,10 @@ export class PushService {
       isDirty = true;
     }
     
-    // Also check if file content has changed (for @file references)
+    // Also check if file content or composition payload has changed
     if (!isDirty && !isNew && record.sync) {
-      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
+      const checksumPayload = this.buildRecordChecksumPayload(record, originalFields);
+      const currentChecksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
       if (currentChecksum !== record.sync.checksum) {
         isDirty = true;
         if (options.verbose) {
@@ -1353,6 +1382,17 @@ export class PushService {
           }
         }
       }
+    }
+
+    if (!isNew && !isDirty && !hasDeferrableLookupError) {
+      // Record already exists and nothing changed — skip save to avoid unnecessary DB writes and side-effects
+      const batchContextEntry = { key: lookupKey, entity };
+      return {
+        isDuplicate: false,
+        batchContextEntry,
+        warnings: localWarnings.length > 0 ? localWarnings : undefined,
+        status: 'unchanged',
+      };
     }
     
     // Save the record with detailed error logging
@@ -1557,7 +1597,8 @@ export class PushService {
     if (!shouldWriteSync) {
       delete record.sync;
     } else if (isNew || isDirty) {
-      const checksum = await this.syncEngine.calculateChecksumWithFileContent(originalFields, entityDir);
+      const checksumPayload = this.buildRecordChecksumPayload(record, originalFields);
+      const checksum = await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, entityDir);
       const existingChecksum = record.sync?.checksum;
       const existingTimestamp = record.sync?.lastModified;
 
@@ -1883,6 +1924,16 @@ export class PushService {
       const entityConfig = await loadEntityConfig(entityDir);
       if (!entityConfig) {
         continue;
+      }
+
+      // Check if any collection has authoritative mode (§8.1(a))
+      if (entityConfig.collections) {
+        for (const col of Object.values(entityConfig.collections)) {
+          if (col.mode === 'authoritative') {
+            hasAnyDeletions = true;
+            break;
+          }
+        }
       }
 
       const pattern = entityConfig.filePattern || '*.json';
@@ -2372,5 +2423,427 @@ export class PushService {
     }
 
     return keyParts.join('|');
+  }
+
+  /**
+   * Builds the payload used for calculating record checksums, including composition axes (§5, §6)
+   */
+  private buildRecordChecksumPayload(
+    record: RecordData,
+    fieldsOverride?: Record<string, unknown>
+  ): Record<string, unknown> {
+    const fields = fieldsOverride ?? record.fields;
+    if (!record.collections && !record.embeds && !record.extension) {
+      return fields as Record<string, unknown>;
+    }
+    const payload: Record<string, unknown> = { fields };
+    if (record.collections) payload.collections = record.collections;
+    if (record.embeds) payload.embeds = record.embeds;
+    if (record.extension) payload.extension = record.extension;
+    return payload;
+  }
+
+  /**
+   * Applies first-class composition axes onto the entity before Save (§5):
+   * 1. embeds (peer first via {fkField}_EnsureObject() or companion.Ensure())
+   * 2. collections (owner.Collection.Create() or match by PK, apply fields, recursive composition)
+   * 3. extension (owner.EnsureISAChild(name?), set leaf fields, recursive composition)
+   */
+  protected async applyCompositionAxes(
+    entity: BaseEntity,
+    record: RecordData,
+    entityName: string,
+    entityDir: string,
+    batchContext: BatchContext,
+    resolutionCollector: SyncResolutionCollector,
+    options: PushOptions,
+    callbacks?: PushCallbacks,
+    entityConfig?: EntityConfig,
+    recordProvider?: IMetadataProvider,
+    depth: number = 0
+  ): Promise<void> {
+    // Static JSON parsed from disk is an acyclic finite tree, but a defensive depth guard
+    // (MAX_COMPOSITION_DEPTH = 10) prevents runaway recursion from accidental deep nesting or malformed fixtures.
+    const MAX_COMPOSITION_DEPTH = 10;
+    if (depth > MAX_COMPOSITION_DEPTH) {
+      throw new Error(
+        `Composition nesting depth exceeded maximum of ${MAX_COMPOSITION_DEPTH} on '${entityName}'. Check for accidental deep nesting or recursive composition structures.`
+      );
+    }
+    // 1. Embeds (peer first): for each embeds[fkField], {fkField}_EnsureObject(), recurse apply, do not Save the peer yet
+    if (record.embeds && typeof record.embeds === 'object') {
+      for (const [fkField, embedRecord] of Object.entries(record.embeds)) {
+        if (!embedRecord || typeof embedRecord !== 'object') continue;
+        let embeddedEntity: BaseEntity | null = null;
+        const ensureMethodName = `${fkField}_EnsureObject`;
+        const entityRecord = entity as unknown as Record<string, unknown>;
+
+        if (typeof entityRecord[ensureMethodName] === 'function') {
+          embeddedEntity = await (entityRecord[ensureMethodName] as () => Promise<BaseEntity>)();
+        } else if (typeof entity.GetCompanion === 'function') {
+          const companion = entity.GetCompanion(fkField);
+          if (companion && typeof (companion as unknown as { Ensure?: () => Promise<BaseEntity> }).Ensure === 'function') {
+            embeddedEntity = await (companion as unknown as { Ensure: () => Promise<BaseEntity> }).Ensure();
+          } else {
+            const altKey = fkField.endsWith('ID') ? fkField.substring(0, fkField.length - 2) : `${fkField}ID`;
+            const altEnsureName = `${altKey}_EnsureObject`;
+            if (typeof entityRecord[altEnsureName] === 'function') {
+              embeddedEntity = await (entityRecord[altEnsureName] as () => Promise<BaseEntity>)();
+            } else {
+              const altCompanion = entity.GetCompanion(altKey);
+              if (altCompanion && typeof (altCompanion as unknown as { Ensure: () => BaseEntity }).Ensure === 'function') {
+                embeddedEntity = (altCompanion as unknown as { Ensure: () => BaseEntity }).Ensure();
+              }
+            }
+          }
+        }
+
+        if (!embeddedEntity) {
+          throw new Error(
+            `Failed to resolve embedded companion for '${fkField}' on entity '${entityName}'. Ensure that DeclareEmbeddedRecord is called for '${fkField}'.`
+          );
+        }
+
+        // Apply embed fields, passing ownerRecord = entity for @owner: resolution
+        if (embedRecord.fields && typeof embedRecord.fields === 'object') {
+          for (const [fName, fVal] of Object.entries(embedRecord.fields)) {
+            const processedValue = await this.syncEngine.processFieldValue(
+              fVal,
+              entityDir,
+              null,
+              null,
+              0,
+              batchContext,
+              resolutionCollector,
+              fName,
+              recordProvider,
+              entity // ownerRecord
+            );
+            embeddedEntity.Set(fName, processedValue);
+          }
+        }
+
+        // Recursively apply nested composition on the embedded record
+        await this.applyCompositionAxes(
+          embeddedEntity,
+          embedRecord,
+          embeddedEntity.EntityInfo.Name,
+          entityDir,
+          batchContext,
+          resolutionCollector,
+          options,
+          callbacks,
+          entityConfig,
+          recordProvider,
+          depth + 1
+        );
+      }
+    }
+
+    // 2. Collections: owner.Lines.Create() (or load existing by PK into the collection), recurse apply on child entity
+    if (record.collections && typeof record.collections === 'object') {
+      for (const [colName, colItems] of Object.entries(record.collections)) {
+        if (!Array.isArray(colItems)) {
+          throw new Error(
+            `Collection "${colName}" in ${entityName} must be an array of records. ` +
+            `Per-record mode wrappers (e.g. {"mode": "authoritative", "items": [...]}) are forbidden; mode is directory-level only.`
+          );
+        }
+
+        // Get collection companion
+        let collectionCompanion = typeof entity.GetCompanion === 'function' ? entity.GetCompanion(colName) : undefined;
+        if (!collectionCompanion && typeof entity.GetCompanion === 'function') {
+          // Try case-insensitive lookup across companions
+          const companions = (entity as unknown as { Companions?: Array<{ Name: string }> }).Companions;
+          if (companions) {
+            const found = companions.find((c) => c.Name.toLowerCase() === colName.toLowerCase());
+            if (found) {
+              collectionCompanion = entity.GetCompanion(found.Name);
+            }
+          }
+        }
+
+        // Also check if property exists on entity directly
+        if (!collectionCompanion) {
+          const propVal = (entity as unknown as Record<string, unknown>)[colName];
+          if (propVal && typeof (propVal as unknown as { Create?: () => Promise<BaseEntity> }).Create === 'function') {
+            collectionCompanion = propVal as unknown as typeof collectionCompanion;
+          }
+        }
+
+        // Dynamically register collection companion if entity supports DeclareRelatedRecords
+        if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
+          const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
+          const resolved = resolveCollectionRelationship(entityInfo, colName);
+          if (resolved) {
+            const colOpts: {
+              Name: string;
+              RelatedEntity: string;
+              RelatedEntityJoinField: string;
+              Load?: string;
+              OnRemove?: string;
+              OrderBy?: string;
+            } = {
+              Name: resolved.collectionName,
+              RelatedEntity: resolved.relatedEntity,
+              RelatedEntityJoinField: resolved.joinField,
+              Load: resolved.load,
+              OnRemove: resolved.onRemove,
+              ...(resolved.orderBy ? { OrderBy: resolved.orderBy } : {}),
+            };
+            const declareFn = (entity as unknown as { DeclareRelatedRecords: (options: unknown) => unknown }).DeclareRelatedRecords.bind(entity);
+            collectionCompanion = declareFn(colOpts) as typeof collectionCompanion;
+          }
+        }
+
+        if (!collectionCompanion) {
+          throw new Error(
+            `Collection '${colName}' not found on entity '${entityName}'. Ensure DeclareRelatedRecords is registered for '${colName}'.`
+          );
+        }
+
+        const col = collectionCompanion as unknown as {
+          Name: string;
+          LoadMode: string;
+          IsLoaded: boolean;
+          Items: BaseEntity[];
+          Load: () => Promise<void>;
+          Create: () => Promise<BaseEntity>;
+          Remove: (item: BaseEntity | number) => void;
+        };
+
+        // Rider 4: Load: 'never' fails loud under both modes
+        if (col.LoadMode === 'never') {
+          throw new Error(
+            `RelatedRecordCollection '${colName}' on '${entityName}' is declared Load: 'never'. Collections synced via metadata sync cannot have Load: 'never' because both upsert and authoritative modes require loading existing records.`
+          );
+        }
+
+        // Load collection if not loaded and entity is not new
+        if (!entity.IsSaved && !col.IsLoaded) {
+          // new record, nothing in DB yet
+        } else if (!col.IsLoaded) {
+          await col.Load();
+        }
+
+        const loadedItems = col.Items ?? [];
+        const matchedItemSet = new Set<BaseEntity>();
+        const colConfig = entityConfig?.collections?.[colName];
+        const mode = colConfig?.mode ?? 'upsert';
+
+        for (const itemData of colItems) {
+          if (!itemData || typeof itemData !== 'object') continue;
+
+          let targetChild: BaseEntity | null = null;
+
+          // Match by primaryKey if available
+          if (itemData.primaryKey && Object.keys(itemData.primaryKey).length > 0 && loadedItems.length > 0) {
+            targetChild = loadedItems.find((child) => {
+              for (const [pkK, pkV] of Object.entries(itemData.primaryKey!)) {
+                if (String(child.Get(pkK)) !== String(pkV)) {
+                  return false;
+                }
+              }
+              return true;
+            }) ?? null;
+          }
+
+          if (itemData.deleteRecord?.delete === true) {
+            // Explicit delete in both modes (§8.1(a) rider 1)
+            if (targetChild) {
+              col.Remove(targetChild);
+              matchedItemSet.add(targetChild);
+            }
+            continue;
+          }
+
+          if (!targetChild) {
+            targetChild = await col.Create();
+            if (itemData.primaryKey) {
+              for (const [pkK, pkV] of Object.entries(itemData.primaryKey)) {
+                targetChild.Set(pkK, pkV);
+              }
+            }
+          } else {
+            matchedItemSet.add(targetChild);
+          }
+
+          // Apply fields with ownerRecord = entity for @owner:Field resolution
+          if (itemData.fields && typeof itemData.fields === 'object') {
+            for (const [fName, fVal] of Object.entries(itemData.fields)) {
+              const processedValue = await this.syncEngine.processFieldValue(
+                fVal,
+                entityDir,
+                null,
+                null,
+                0,
+                batchContext,
+                resolutionCollector,
+                fName,
+                recordProvider,
+                entity // ownerRecord
+              );
+              targetChild.Set(fName, processedValue);
+            }
+          }
+
+          // Recursively apply nested composition on the collection item
+          await this.applyCompositionAxes(
+            targetChild,
+            itemData,
+            targetChild.EntityInfo.Name,
+            entityDir,
+            batchContext,
+            resolutionCollector,
+            options,
+            callbacks,
+            entityConfig,
+            recordProvider,
+            depth + 1
+          );
+        }
+
+        // Handle authoritative mode deletions (§8.1(a))
+        if (mode === 'authoritative' && loadedItems.length > 0) {
+          const unmentionedItems = loadedItems.filter((item) => !matchedItemSet.has(item));
+          if (unmentionedItems.length > 0) {
+            const deletePercent = (unmentionedItems.length / loadedItems.length) * 100;
+            const maxAllowed = colConfig?.maxImpliedDeletePercent ?? 20;
+
+            // Bulk rail (§8.1(a) rider 3)
+            if (deletePercent > maxAllowed && !options.allowBulkDelete) {
+              throw new Error(
+                `Authoritative sync for collection '${colName}' on '${entityName}' would delete ${unmentionedItems.length}/${loadedItems.length} (${deletePercent.toFixed(1)}%) records, exceeding the threshold of ${maxAllowed}%. Pass --allow-bulk-delete to override.`
+              );
+            }
+
+            // Rider 2: Authoritative-implied deletes route through confirmation
+            // Confirmation prompt names the collection and the row count
+            if (!options.dryRun && callbacks?.onConfirm) {
+              const confirmKey = `${entityName}.${colName}`;
+              if (!this.confirmedCollections.has(confirmKey)) {
+                const confirmMsg = `Authoritative collection '${colName}' on '${entityName}' will delete unmentioned records (initial batch: ${unmentionedItems.length} record${unmentionedItems.length > 1 ? 's' : ''}). Authorize authoritative deletions for collection '${colName}' on '${entityName}'? (yes/no)`;
+                const confirmed = await callbacks.onConfirm(confirmMsg);
+                if (!confirmed) {
+                  throw new Error(
+                    `Authoritative delete of ${unmentionedItems.length} record(s) in collection '${colName}' on '${entityName}' cancelled by user.`
+                  );
+                }
+                this.confirmedCollections.add(confirmKey);
+              }
+            }
+
+            if (options.dryRun) {
+              callbacks?.onLog?.(
+                `🗑️  [DRY RUN] Authoritative collection '${colName}' on '${entityName}': would delete ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}`
+              );
+            } else {
+              callbacks?.onLog?.(
+                `🗑️  Authoritative collection '${colName}' on '${entityName}': deleting ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}`
+              );
+
+              for (const itemToDelete of unmentionedItems) {
+                col.Remove(itemToDelete);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Extension: const child = await owner.EnsureISAChild(name?), then Set leaf fields on child.
+    if (record.extension && typeof record.extension === 'object') {
+      const extObj = record.extension as Record<string, unknown>;
+
+      if ('fields' in extObj && typeof extObj.fields === 'object' && extObj.fields !== null) {
+        // Shorthand form: { entity?: string, fields: { ... } }
+        const subName = typeof extObj.entity === 'string' ? extObj.entity : undefined;
+        const child = await entity.EnsureISAChild(subName);
+        if (!child) {
+          throw new Error(
+            `EnsureISAChild returned null for extension on '${entityName}'${subName ? ` (${subName})` : ''}. ` +
+            `Ensure that an EntitySubtypeResolver or Entity.SubtypeSelector is configured, or specify 'entity' in extension.`
+          );
+        }
+
+        for (const [fName, fVal] of Object.entries(extObj.fields as Record<string, unknown>)) {
+          const processedValue = await this.syncEngine.processFieldValue(
+            fVal,
+            entityDir,
+            null,
+            null,
+            0,
+            batchContext,
+            resolutionCollector,
+            fName,
+            recordProvider,
+            entity // ownerRecord
+          );
+          child.Set(fName, processedValue);
+        }
+
+        // Recursively apply nested composition on the child extension
+        await this.applyCompositionAxes(
+          child,
+          extObj as unknown as RecordData,
+          child.EntityInfo.Name,
+          entityDir,
+          batchContext,
+          resolutionCollector,
+          options,
+          callbacks,
+          entityConfig,
+          recordProvider,
+          depth + 1
+        );
+      } else {
+        // Map form: { [SubtypeName]: { fields: { ... } } }
+        for (const [subKey, subVal] of Object.entries(extObj)) {
+          if (subKey === '$schema' || subKey === 'sync' || subKey === '__mj_sync_notes') continue;
+          if (!subVal || typeof subVal !== 'object') continue;
+
+          const child = await entity.EnsureISAChild(subKey);
+          if (!child) {
+            throw new Error(
+              `EnsureISAChild returned null for extension subtype '${subKey}' on '${entityName}'.`
+            );
+          }
+
+          const subRecord = subVal as Record<string, unknown>;
+          if (subRecord.fields && typeof subRecord.fields === 'object') {
+            for (const [fName, fVal] of Object.entries(subRecord.fields as Record<string, unknown>)) {
+              const processedValue = await this.syncEngine.processFieldValue(
+                fVal,
+                entityDir,
+                null,
+                null,
+                0,
+                batchContext,
+                resolutionCollector,
+                fName,
+                recordProvider,
+                entity // ownerRecord
+              );
+              child.Set(fName, processedValue);
+            }
+          }
+
+          // Recursively apply nested composition on the child extension
+          await this.applyCompositionAxes(
+            child,
+            subRecord as unknown as RecordData,
+            child.EntityInfo.Name,
+            entityDir,
+            batchContext,
+            resolutionCollector,
+            options,
+            callbacks,
+            entityConfig,
+            recordProvider,
+            depth + 1
+          );
+        }
+      }
+    }
   }
 }

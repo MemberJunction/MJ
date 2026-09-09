@@ -271,6 +271,10 @@ async function executeSQLCore(
  * await provider.Config();
  * ```
  */
+interface InternalMSSQLTransaction extends sql.Transaction {
+  _activeRequest?: sql.Request | null;
+}
+
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
   implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
@@ -2339,11 +2343,33 @@ IF ${varName} IS NOT NULL
     this._transactionState$.next(true);
   }
 
+  /**
+   * Internal mssql transaction interface to safely inspect `_activeRequest` without `any`.
+   */
+  private async waitForActiveRequest(timeoutMs = 2000): Promise<void> {
+    if (!this._transaction) {
+      return;
+    }
+    const tx = this._transaction as InternalMSSQLTransaction;
+    if (!tx._activeRequest) {
+      return;
+    }
+    const start = Date.now();
+    while (tx._activeRequest) {
+      if (Date.now() - start > timeoutMs) {
+        LogError(`waitForActiveRequest: timed out after ${timeoutMs}ms waiting for active request on transaction`);
+        break;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
   protected override async CommitPhysicalTransaction(): Promise<void> {
     if (!this._transaction) {
       throw new Error('No active transaction to commit');
     }
     try {
+      await this.waitForActiveRequest();
       await this._transaction.commit();
     } finally {
       this._transaction = null;
@@ -2381,6 +2407,7 @@ IF ${varName} IS NOT NULL
       throw new Error('No active transaction to rollback');
     }
     try {
+      await this.waitForActiveRequest();
       await this._transaction.rollback();
     } finally {
       this._transaction = null;
