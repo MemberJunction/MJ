@@ -702,7 +702,10 @@ jobs:
           # CodeGen writes a run file on EVERY run, empty when it has nothing to emit.
           # It is scratch output, not committed state — the line above only ever removed
           # the log, so this file made the gate unpassable even with zero real drift.
-          rm -f migrations/*/CodeGen_Run_*.sql
+          # UNTRACKED ones only: committed CodeGen_Run migrations exist under migrations/v2
+          # and carry a V<timestamp>__ prefix, so they must never be swept up here.
+          git ls-files --others --exclude-standard -- migrations/ \
+            | grep -E '/CodeGen_Run_[^/]*\.sql$' | xargs -r rm -f || true
           git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
           if [ -s /tmp/drift.txt ]; then
             echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
@@ -820,7 +823,10 @@ jobs:
           # CodeGen writes a run file on EVERY run, empty when it has nothing to emit.
           # It is scratch output, not committed state — the line above only ever removed
           # the log, so this file made the gate unpassable even with zero real drift.
-          rm -f migrations/*/CodeGen_Run_*.sql
+          # UNTRACKED ones only: committed CodeGen_Run migrations exist under migrations/v2
+          # and carry a V<timestamp>__ prefix, so they must never be swept up here.
+          git ls-files --others --exclude-standard -- migrations/ \
+            | grep -E '/CodeGen_Run_[^/]*\.sql$' | xargs -r rm -f || true
           git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
           if [ -s /tmp/drift.txt ]; then
             echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
