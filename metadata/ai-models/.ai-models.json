@@ -10363,7 +10363,7 @@
             "OutputPricePerUnit": 75,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Claude Opus 4.1 pricing on Anthropic as of August 2025. EXPIRED 2026-08-05: Anthropic retired `claude-opus-4-1-20250805` on the Claude API on August 5, 2026 (deprecation announced June 5, 2026; recommended replacement `claude-opus-4-8`). Requests to the retired model now fail on Anthropic direct. The model remains available on Amazon Bedrock and Google Cloud, which set their own retirement schedules, so those vendor and cost rows are left Active. Row preserved for historical pricing lookups. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
+            "Comments": "Claude Opus 4.1 pricing on Anthropic as of August 2025. EXPIRED 2026-08-05: Anthropic retired `claude-opus-4-1-20250805` on the Claude API on August 5, 2026 (deprecation announced June 5, 2026; recommended replacement `claude-opus-4-8`). Requests to the retired model now fail on Anthropic direct. The model remains available on Amazon Bedrock and OpenRouter, which set their own retirement schedules, so their vendor rows -- and the Amazon Bedrock cost row -- are left Active. Row preserved for historical pricing lookups. Source: https://platform.claude.com/docs/en/about-claude/model-deprecations",
             "CacheReadPricePerUnit": 1.5,
             "CacheWritePricePerUnit": 18.75,
             "EndedAt": "2026-08-05T00:00:00.000Z"
