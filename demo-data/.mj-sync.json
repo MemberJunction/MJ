@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "push": {
+    "autoCreateMissingRecords": true
+  },
+  "directoryOrder": [
+    "breeds",
+    "housing",
+    "animals",
+    "care-logs"
+  ]
+}
