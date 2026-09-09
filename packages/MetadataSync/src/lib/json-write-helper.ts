@@ -14,7 +14,7 @@ export class JsonWriteHelper {
    */
   static async writeOrderedRecordData(filePath: string, data: RecordData | RecordData[]): Promise<void> {
     // Pre-process the data to ensure correct ordering before JSON.stringify
-    const normalizedData = this.normalizeRecordDataOrder(data);
+    const normalizedData = this.preserveAndRecurseRecordData(data);
     
     // Use JSON.stringify with proper spacing
     const jsonString = JSON.stringify(normalizedData, null, 2);
@@ -22,13 +22,13 @@ export class JsonWriteHelper {
   }
 
   /**
-   * Recursively normalize RecordData objects to ensure correct property ordering
+   * Recursively processes RecordData objects preserving key order while recursing into nested structures
    * @param data - RecordData object, array of RecordData objects, or any nested structure
-   * @returns Normalized data with consistent property ordering
+   * @returns Processed data with preserved property ordering
    */
-  private static normalizeRecordDataOrder(data: unknown): unknown {
+  private static preserveAndRecurseRecordData(data: unknown): unknown {
     if (Array.isArray(data)) {
-      return data.map(item => this.normalizeRecordDataOrder(item));
+      return data.map(item => this.preserveAndRecurseRecordData(item));
     }
 
     if (data && typeof data === 'object') {
@@ -36,11 +36,8 @@ export class JsonWriteHelper {
       // Check if this looks like a RecordData object
       if (dataObj.fields !== undefined) {
         // This is a RecordData object - rebuild preserving original key order
-        // but ensuring known keys maintain their relative order when present
         const ordered: Record<string, unknown> = {};
-        // Known keys that are part of RecordData structure
-        // __mj_sync_notes is a system-managed key that should appear after sync
-        const knownKeys = [
+        const knownKeys = new Set([
           '$schema',
           'primaryKey',
           'fields',
@@ -51,13 +48,13 @@ export class JsonWriteHelper {
           'sync',
           '__mj_sync_notes',
           'deleteRecord',
-        ];
+        ]);
 
         // Process keys in original order, preserving user's ordering
         for (const key of Object.keys(dataObj)) {
-          if (knownKeys.includes(key)) {
+          if (knownKeys.has(key)) {
             // Known key - process recursively
-            ordered[key] = this.normalizeRecordDataOrder(dataObj[key]);
+            ordered[key] = this.preserveAndRecurseRecordData(dataObj[key]);
           } else {
             // Unknown key (like _comments) - preserve exactly as-is
             ordered[key] = dataObj[key];
@@ -69,7 +66,7 @@ export class JsonWriteHelper {
         // Regular object - recursively process properties
         const processed: Record<string, unknown> = {};
         for (const [key, value] of Object.entries(dataObj)) {
-          processed[key] = this.normalizeRecordDataOrder(value);
+          processed[key] = this.preserveAndRecurseRecordData(value);
         }
         return processed;
       }
