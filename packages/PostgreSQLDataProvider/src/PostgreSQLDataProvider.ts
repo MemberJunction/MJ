@@ -138,7 +138,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             .map(child => {
                 const schema = child.SchemaName || '__mj';
                 const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
-                const pkRef = pgDialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+                const pkRef = pgDialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
                 const nameLit = pgDialect.QuoteStringLiteral(child.Name);
                 return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
             });
@@ -153,7 +153,7 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
             const relatedEntityInfo = this.Entities.find(e => e.Name.trim().toLowerCase() === dep.RelatedEntityName?.trim().toLowerCase());
             if (!entityInfo || !relatedEntityInfo) continue;
 
-            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+            const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
             const pkParts: string[] = [];
             for (const pk of entityInfo.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -165,7 +165,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + "'" + dep.EntityName + '\' AS "EntityName", '
                 + "'" + dep.RelatedEntityName + '\' AS "RelatedEntityName", '
                 + primaryKeySelectString + ' AS "PrimaryKeyValue", '
-                + "'" + dep.FieldName + '\' AS "FieldName" '
+                + "'" + dep.FieldName + '\' AS "FieldName", '
+                + 'false AS "IsSoftLink", '
+                + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
                 + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
         }
@@ -173,9 +175,18 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+        // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+        // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+        // link, which is a different thing entirely.
+        const targetEntity = this.EntityByName(entityName);
+        if (!targetEntity) {
+            throw new Error(`Entity ${entityName} not found in metadata`);
+        }
+        // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+        const targetRecordID = compositeKey.ToRecordID().replace(/'/g, "''");
+
         let sSQL = '';
         this.Entities.forEach(entity => {
-            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             const pkParts: string[] = [];
             for (const pk of entity.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -184,14 +195,19 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
             entity.Fields.filter(f => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach(f => {
                 if (sSQL.length > 0) sSQL += ' UNION ALL ';
+                // Both literals are always quoted regardless of any primary key type: the discriminator
+                // column is a uuid FK to __mj.Entity and the payload column is text. Deriving quoting from
+                // the holder's primary key type emitted unquoted literals for an integer-keyed holder.
                 sSQL += 'SELECT '
                     + "'" + entityName + '\' AS "EntityName", '
                     + "'" + entity.Name + '\' AS "RelatedEntityName", '
                     + primaryKeySelectString + ' AS "PrimaryKeyValue", '
-                    + "'" + f.Name + '\' AS "FieldName" '
+                    + "'" + f.Name + '\' AS "FieldName", '
+                    + 'true AS "IsSoftLink", '
+                    + "'" + f.EntityIDFieldName + '\' AS "EntityIDFieldName" '
                     + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, entity.BaseView) + ' '
-                    + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + ' = ' + quotes + entity.ID + quotes
-                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                    + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + " = '" + targetEntity.ID + "'"
+                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + " = '" + targetRecordID + "'";
             });
         });
         return sSQL;
@@ -235,6 +251,28 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
     get MJCoreSchemaName(): string {
         return this._schemaName;
+    }
+
+    /**
+     * Share this instance's pool + metadata; own transaction stack.
+     * Used by mj sync push parallelism (MJAPI per-request pattern).
+     */
+    public override async CreateIndependentInstance(): Promise<PostgreSQLDataProvider> {
+        const child = new PostgreSQLDataProvider();
+        const parent = this._configData;
+        if (!parent) {
+            throw new Error('PostgreSQLDataProvider.CreateIndependentInstance: provider is not configured');
+        }
+        const cfg = new PostgreSQLProviderConfigData(
+            parent.ConnectionConfig,
+            this.MJCoreSchemaName,
+            0,
+            parent.IncludeSchemas,
+            parent.ExcludeSchemas,
+            false,
+        );
+        await child.ConfigWithSharedPool(cfg, this.DatabaseConnection);
+        return child;
     }
 
     protected get Metadata(): IMetadataProvider {
@@ -957,7 +995,7 @@ SELECT * FROM delete_result`;
         // Single PK: accept either the PK-named column (current codegen) or `_result_id`
         // (legacy baseline sproc). A null value in either means the sproc reported zero
         // rows affected — record was already gone.
-        const pk = entity.PrimaryKeys[0];
+        const pk = entity.FirstPrimaryKey; // first-pk-ok: the PrimaryKeys.length > 1 branch above already returned; this is the single-key path
         const pkValue = deletedRecord[pk.Name];
         const legacyValue = deletedRecord['_result_id'];
         if (pkValue === pk.Value || legacyValue === pk.Value) {
@@ -1262,7 +1300,7 @@ SELECT * FROM delete_result`;
     ): string {
         const schema = entityInfo.SchemaName || '__mj';
         const view = entityInfo.BaseView;
-        const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+        const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: IS-A sibling shares the parent's single-column key; safePKValue is that one value
         const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
         const recordID = entityInfo.PrimaryKeys

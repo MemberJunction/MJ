@@ -340,17 +340,12 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     private buildDeleteItem(entity: EntityInfo, row: Record<string, unknown>): ChangeDetectionItem {
         const item = new ChangeDetectionItem();
         item.Entity = entity;
-        const ck = new CompositeKey();
         const recordID = row.RecordID as string;
-
-        // Legacy data may have a bare value instead of Field|Value format
+        // Reads both the Field|Value form and legacy bare values (mapped onto the entity's first key).
+        const ck = CompositeKey.FromURLSegment(entity, recordID);
         if (recordID.indexOf(CompositeKey.DefaultValueDelimiter) === -1) {
-            ck.LoadFromSingleKeyValuePair(entity.PrimaryKeys[0].Name, recordID);
             item.LegacyKey = true;
             item.LegacyKeyValue = recordID;
-        }
-        else {
-            ck.LoadFromConcatenatedString(recordID);
         }
 
         item.PrimaryKey = ck;

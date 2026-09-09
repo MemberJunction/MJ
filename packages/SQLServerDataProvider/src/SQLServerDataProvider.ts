@@ -271,6 +271,10 @@ async function executeSQLCore(
  * await provider.Config();
  * ```
  */
+interface InternalMSSQLTransaction extends sql.Transaction {
+  _activeRequest?: sql.Request | null;
+}
+
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
   implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
@@ -427,6 +431,25 @@ export class SQLServerDataProvider
    */
   public get ConfigData(): SQLServerProviderConfigData {
     return <SQLServerProviderConfigData>super.ConfigData;
+  }
+
+  /**
+   * Share this instance's pool + metadata; own transaction stack.
+   * Used by mj sync push parallelism (MJAPI per-request pattern).
+   */
+  public override async CreateIndependentInstance(): Promise<SQLServerDataProvider> {
+    const child = new SQLServerDataProvider();
+    const parent = this.ConfigData;
+    const cfg = new SQLServerProviderConfigData(
+      this._pool,
+      parent.MJCoreSchemaName,
+      0,
+      parent.IncludeSchemas,
+      parent.ExcludeSchemas,
+      false,
+    );
+    await child.Config(cfg, this);
+    return child;
   }
 
   /**
@@ -792,14 +815,20 @@ export class SQLServerDataProvider
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
     // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
     // and the entity's live base view otherwise.
+    //
+    // UserViewRunDetail.RecordID is a single NVARCHAR(255) holding ONE bare key value per row, and the
+    // read-back below is `<pk> IN (SELECT RecordID ...)` — a one-column predicate. A composite key has
+    // no single column to log or match on, so refuse rather than record (and re-read) a truncated key.
+    this.assertSingleColumnPrimaryKey(entityInfo, 'SaveViewResults (user view run logging)');
+    const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded above — view-run RecordID holds one bare key value, PrimaryKeys.length === 1 enforced
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
+    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -826,12 +855,23 @@ export class SQLServerDataProvider
   protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
+    //
+    // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+    // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+    // link (e.g. `MJ: Task Links`), which is a different thing entirely.
+    const targetEntity = this.EntityByName(entityName);
+    if (!targetEntity) {
+      throw new Error(`Entity ${entityName} not found in metadata`);
+    }
+    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+    // A RecordID column holds this, not the bare primary key value.
+    const targetRecordID = compositeKey.ToRecordID();
+
     let sSQL = '';
     this.Entities.forEach((entity) => {
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
       const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
@@ -842,26 +882,41 @@ export class SQLServerDataProvider
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
         // based on that.
+        //
+        // Both literals are always quoted regardless of any primary key type: the discriminator column
+        // is a uniqueidentifier FK to __mj.Entity, and the payload column is nvarchar. Deriving quoting
+        // from the holder's primary key type emitted unquoted literals for an integer-keyed holder.
         sSQL += `SELECT
                             '${entityName}' AS EntityName,
                             '${entity.Name}' AS RelatedEntityName,
                             ${primaryKeySelectString} AS PrimaryKeyValue,
-                            '${f.Name}' AS FieldName
+                            '${f.Name}' AS FieldName,
+                            1 AS IsSoftLink,
+                            '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
                             [${entity.SchemaName}].[${entity.BaseView}]
                         WHERE
-                            [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND
-                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}`; // we only use the first primary key value, this is because we don't yet support composite primary keys
+                            [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
+                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
       });
     });
     return sSQL;
+  }
+
+  /**
+   * Escapes a value for interpolation into a single-quoted T-SQL string literal. The soft-link and
+   * hard-link dependency queries are assembled as SQL text rather than parameterized, so a value
+   * carrying an apostrophe has to be doubled or it terminates the literal.
+   */
+  protected escapeSQLLiteral(value: string): string {
+    return value.replace(/'/g, "''");
   }
 
   protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
       const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
@@ -870,7 +925,9 @@ export class SQLServerDataProvider
                         '${entityDependency.EntityName}' AS EntityName,
                         '${entityDependency.RelatedEntityName}' AS RelatedEntityName,
                         ${primaryKeySelectString} AS PrimaryKeyValue,
-                        '${entityDependency.FieldName}' AS FieldName
+                        '${entityDependency.FieldName}' AS FieldName,
+                        0 AS IsSoftLink,
+                        NULL AS EntityIDFieldName
                     FROM
                         [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
                     WHERE
@@ -881,7 +938,7 @@ export class SQLServerDataProvider
 
   protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
     const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
-    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     if (!f) {
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
@@ -890,11 +947,28 @@ export class SQLServerDataProvider
       // simple link to first primary key, most common scenario for linkages
       return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes}`;
     } else {
-      // linking to something else, so we need to use that field in a sub-query
-      // NOTICE - we are only using the FIRST primary key in our current implementation, this is because we don't yet support composite foreign keys
-      // if we do start to support composite foreign keys, we'll need to update this code to handle that
-      return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.FirstPrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`;
+      // The FK points at a non-key column of `entity`, so resolve that column for THE record being
+      // checked. The record is identified by its full key — every PK column, not just the first —
+      // otherwise a composite-key entity would match every row sharing the first column's value and
+      // the scalar sub-query would fail (or silently pick the wrong row).
+      return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${this.BuildFullPrimaryKeyPredicate(entity, CompositeKey)})`;
     }
+  }
+
+  /**
+   * `pk1=v1 AND pk2=v2 ...` for every primary key column of `entity`, each value taken from the
+   * matching key/value pair (by field name, falling back to position) and quoted per that column's
+   * type. Single-column keys render exactly `ID='v'` — the same shape the pre-composite code emitted.
+   */
+  protected BuildFullPrimaryKeyPredicate(entity: EntityInfo, compositeKey: CompositeKey): string {
+    return entity.PrimaryKeys
+      .map((pk, index) => {
+        const q = pk.NeedsQuotes ? "'" : '';
+        const byName = compositeKey.KeyValuePairs.find((kv) => kv.FieldName?.trim().toLowerCase() === pk.Name.trim().toLowerCase());
+        const value = byName ? byName.Value : compositeKey.GetValueByIndex(index);
+        return `${pk.Name}=${q}${value}${q}`;
+      })
+      .join(' AND ');
   }
 
   /**
@@ -2232,7 +2306,7 @@ export class SQLServerDataProvider
       .map(child => {
         const schema = child.SchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
-        const pkRef = dialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+        const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
         const nameLit = dialect.QuoteStringLiteral(child.Name);
         return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
       });
@@ -2278,7 +2352,7 @@ export class SQLServerDataProvider
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
-    const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+    const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: IS-A sibling shares the parent's single-column key; safePKValue is that one value
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
     const recordID = entityInfo.PrimaryKeys
@@ -2320,11 +2394,33 @@ IF ${varName} IS NOT NULL
     this._transactionState$.next(true);
   }
 
+  /**
+   * Internal mssql transaction interface to safely inspect `_activeRequest` without `any`.
+   */
+  private async waitForActiveRequest(timeoutMs = 2000): Promise<void> {
+    if (!this._transaction) {
+      return;
+    }
+    const tx = this._transaction as InternalMSSQLTransaction;
+    if (!tx._activeRequest) {
+      return;
+    }
+    const start = Date.now();
+    while (tx._activeRequest) {
+      if (Date.now() - start > timeoutMs) {
+        LogError(`waitForActiveRequest: timed out after ${timeoutMs}ms waiting for active request on transaction`);
+        break;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
   protected override async CommitPhysicalTransaction(): Promise<void> {
     if (!this._transaction) {
       throw new Error('No active transaction to commit');
     }
     try {
+      await this.waitForActiveRequest();
       await this._transaction.commit();
     } finally {
       this._transaction = null;
@@ -2362,6 +2458,7 @@ IF ${varName} IS NOT NULL
       throw new Error('No active transaction to rollback');
     }
     try {
+      await this.waitForActiveRequest();
       await this._transaction.rollback();
     } finally {
       this._transaction = null;

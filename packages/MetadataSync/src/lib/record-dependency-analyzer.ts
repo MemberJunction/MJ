@@ -18,6 +18,12 @@ export interface FlattenedRecord {
   dependencies: Set<string>; // Set of record IDs this record depends on
   id: string; // Unique identifier for this record in the flattened list
   originalIndex: number; // Original index in the source array
+  /**
+   * JSON-root graph this row belongs to. Nested relatedEntities share the
+   * root's graphId so mj sync push can run them on one provider/TX.
+   * Independent sibling roots get distinct graphIds and may run in parallel.
+   */
+  graphId: string;
 }
 
 /**
@@ -45,6 +51,18 @@ export interface DependencyAnalysisResult {
 /**
  * Analyzes and sorts records based on their dependencies
  */
+/** Group flattened rows by JSON-root graph for provider affinity. */
+export function groupRecordsByGraphId(records: FlattenedRecord[]): Map<string, FlattenedRecord[]> {
+  const map = new Map<string, FlattenedRecord[]>();
+  for (const rec of records) {
+    const gid = rec.graphId;
+    const list = map.get(gid);
+    if (list) list.push(rec);
+    else map.set(gid, [rec]);
+  }
+  return map;
+}
+
 export class RecordDependencyAnalyzer {
   private metadata: Metadata;
   private flattenedRecords: FlattenedRecord[] = [];
@@ -195,12 +213,14 @@ export class RecordDependencyAnalyzer {
     parentContext?: FlattenedRecord['parentContext'],
     depth: number = 0,
     pathPrefix: string = '',
-    parentRecordId?: string
+    parentRecordId?: string,
+    graphId?: string
   ): void {
     for (let i = 0; i < records.length; i++) {
       const record = records[i];
       const recordId = `${entityName}_${this.recordCounter++}`;
       const path = pathPrefix ? `${pathPrefix}/${entityName}[${i}]` : `${entityName}[${i}]`;
+      const recordGraphId = graphId ?? recordId;
 
       // Validate that the record has a 'fields' property (required). Delete tombstones
       // are exempt — they remove a record by primaryKey alone and legitimately carry no
@@ -222,7 +242,8 @@ export class RecordDependencyAnalyzer {
         path,
         dependencies: new Set(),
         id: recordId,
-        originalIndex: i
+        originalIndex: i,
+        graphId: recordGraphId,
       };
 
       // If this has a parent, add dependency on the parent
@@ -246,7 +267,8 @@ export class RecordDependencyAnalyzer {
             },
             depth + 1,
             path,
-            recordId  // Pass current record ID as parent for children
+            recordId,  // Pass current record ID as parent for children
+            recordGraphId
           );
         }
       }
@@ -527,7 +549,7 @@ export class RecordDependencyAnalyzer {
     entityInfo: EntityInfo
   ): string | null {
     // Get primary key field name
-    const primaryKeyField = entityInfo.PrimaryKeys[0]?.Name;
+    const primaryKeyField = entityInfo.FirstPrimaryKey?.Name; // first-pk-ok: matches a direct FK value against the referenced entity's key; FK targets are single-column by design
     if (!primaryKeyField) return null;
 
     for (const candidate of this.flattenedRecords) {

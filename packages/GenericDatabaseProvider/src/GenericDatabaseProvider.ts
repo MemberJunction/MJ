@@ -126,12 +126,6 @@ export interface ExecuteSQLBatchOptions {
  * Platform-specific providers should extend this class instead of DatabaseProviderBase
  * to inherit these shared behaviors.
  */
-/** ExtendedType values that indicate a geo-relevant field */
-const GEO_EXTENDED_TYPES = new Set([
-    'Geo', 'GeoAddress', 'GeoCity', 'GeoStateProvince',
-    'GeoCountry', 'GeoPostalCode', 'GeoLatitude', 'GeoLongitude'
-]);
-
 /**
  * Thrown when a nested savepoint fails because the ambient physical transaction
  * was already rolled back by the server (mssql ENOTBEGUN/EABORT, pg 25P01).
@@ -636,16 +630,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (options.SkipEntityAIActions !== true)
             await this.HandleEntityAIActions(entity, 'save', true, user);
 
-        // Flag geo sync needed in the SaveContext state bag.
-        // Check: entity supports geocoding AND (new record OR any geo field was dirty).
-        // SkipGeoCoding: a sync's writes arrive pre-formed from the source system — the per-write
-        // geocode lookup is suppressed for those saves only; interactive saves still geocode.
-        if (entity.EntityInfo.SupportsGeoCoding && options.SkipGeoCoding !== true) {
-            const needsGeoSync = context.IsNew || context.Fields.some(
-                (f: SaveContextField) => f.WasDirty && f.FieldInfo.ExtendedType != null && GEO_EXTENDED_TYPES.has(f.FieldInfo.ExtendedType)
-            );
-            if (needsGeoSync) {
-                context.State['geoSyncNeeded'] = true;
+        // GeoCodeSyncService is the WRITE path. SupportsGeoCoding also means maps/distance
+        // (read). The service only runs when there is at least one writable Geo* field.
+        // Virtual PrimaryAddress* / __mj_Latitude never invoke the provider.
+        // SkipGeoCoding: per-save (mj-sync push.skipGeoCoding, integration sync).
+        // Native lat/lng already populated (sample data, pasted coords) → do not call the API.
+        if (
+            entity.EntityInfo.SupportsGeoCoding &&
+            options.SkipGeoCoding !== true &&
+            entity.EntityInfo.HasWritableGeoSourceFields
+        ) {
+            const lat = entity.EntityInfo.Fields.find(f => f.IsNativeLatitudeField);
+            const lng = entity.EntityInfo.Fields.find(f => f.IsNativeLongitudeField);
+            const latVal = lat ? entity.Get(lat.Name) : null;
+            const lngVal = lng ? entity.Get(lng.Name) : null;
+            const coordsAlreadySet = latVal != null && latVal !== '' && lngVal != null && lngVal !== '';
+            if (!coordsAlreadySet) {
+                const needsGeoSync = context.IsNew || context.Fields.some(
+                    (f: SaveContextField) => f.WasDirty && f.FieldInfo.IsWritableGeoField
+                );
+                if (needsGeoSync) {
+                    context.State['geoSyncNeeded'] = true;
+                }
             }
         }
     }
@@ -1876,7 +1882,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             // 4. Exclude UserViewRunID
             if ((excludeUserViewRunID.length > 0) || params.ExcludeDataFromAllPriorViewRuns === true) {
-                let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey?.Name ?? 'ID')} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`;
+                // vwUserViewRunDetails.RecordID holds ONE bare primary-key value per row (see
+                // executeSQLForUserViewRunLogging, which fills it from a single-column SELECT), so the
+                // `<pk> NOT IN (SELECT RecordID ...)` exclusion is only meaningful for a single-column key.
+                // For a composite key a one-column NOT IN would silently drop every row that shares the
+                // first column's value with a prior run — refuse rather than return the wrong rows.
+                this.assertSingleColumnPrimaryKey(entityInfo, 'ExcludeUserViewRunID / ExcludeDataFromAllPriorViewRuns');
+                let sExcludeSQL = `${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)} NOT IN (SELECT RecordID FROM ${this.QuoteSchemaAndView(this.MJCoreSchemaName, 'vwUserViewRunDetails')} WHERE EntityID='${viewEntity?.EntityID}' AND`; // first-pk-ok: guarded above — view-run RecordID is a single bare key value, PrimaryKeys.length === 1 enforced
                 if (params.ExcludeDataFromAllPriorViewRuns === true)
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
                 else {
@@ -1930,7 +1942,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 rawOrderBy = `${keysetPkColumnName} ${keysetDirection}`;
             } else {
                 rawOrderBy = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
-                if (rawOrderBy.trim().length === 0 && maxRowsForQuery > 0 && entityInfo.FirstPrimaryKey) {
+                if (rawOrderBy.trim().length === 0 && maxRowsForQuery > 0 && entityInfo.PrimaryKeys.length > 0) {
                     // ── DETERMINISM FALLBACK ──
                     // A row-LIMITED query with no ORDER BY returns an ARBITRARY subset: `TOP N` /
                     // `LIMIT N` without an ordering is undefined by definition, and the engine is
@@ -1946,7 +1958,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     // OFFSET pagination already had exactly this fallback (see the pagination block
                     // below); it was simply never applied to the TOP/LIMIT path. Same PK, so a
                     // keyset walk's page 1 now agrees with every later page.
-                    rawOrderBy = this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name);
+                    //
+                    // Every PK column is listed: for a composite key, ordering by the first column
+                    // alone leaves rows that share that value in undefined order — the same
+                    // arbitrary-subset problem this fallback exists to remove. Single-column keys
+                    // produce exactly `ORDER BY <pk>` as before.
+                    rawOrderBy = this.buildPrimaryKeyOrderBy(entityInfo);
                     orderByIsPkFallback = true;
                 }
             }
@@ -1976,13 +1993,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // ── Pagination / Non-paginated limit ──
-            if (usingPagination && entityInfo.FirstPrimaryKey) {
+            if (usingPagination && entityInfo.PrimaryKeys.length > 0) {
                 // Belt-and-braces: the determinism fallback above already supplies ORDER BY <PK>
                 // for every row-limited query (pagination included), so `orderBy` is normally
                 // non-empty here. Kept because OFFSET/FETCH is a hard SYNTAX error without an
                 // ORDER BY — if the fallback above is ever narrowed, this must still hold.
                 if (!orderBy) {
-                    viewSQL += ` ORDER BY ${this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name)}`;
+                    viewSQL += ` ORDER BY ${this.buildPrimaryKeyOrderBy(entityInfo)}`;
                 }
                 viewSQL += ' ' + this.BuildPaginationSQL(params.MaxRows!, params.StartRow!);
             } else if (!topSQL && maxRowsForQuery > 0) {
@@ -2215,7 +2232,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     u = u.replace(/ /g, ' AND ');
                 }
             }
-            const pkName = this.QuoteIdentifier(entityInfo.FirstPrimaryKey?.Name ?? 'ID');
+            // A full-text index is keyed on a single-column unique index (an engine requirement), and
+            // the generated search function returns that one key column — single-column by design.
+            const pkName = this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name); // first-pk-ok: full-text search functions key on the single-column unique index the engine requires
             sUserSearchSQL = `${pkName} IN (SELECT ${pkName} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.FullTextSearchFunction ?? '')}('${u}'))`;
         } else {
             const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
@@ -2229,6 +2248,28 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
         }
         return sUserSearchSQL;
+    }
+
+    /**
+     * ORDER BY column list covering EVERY primary key column of the entity, quoted for the dialect
+     * — `[ID]` for a single-column key, `[OrderID], [LineNo]` for a composite one. Used as the
+     * determinism fallback for row-limited queries with no caller ORDER BY: a composite key ordered
+     * by its first column alone leaves rows sharing that value in undefined order.
+     */
+    protected buildPrimaryKeyOrderBy(entityInfo: EntityInfo): string {
+        return entityInfo.PrimaryKeys.map(pk => this.QuoteIdentifier(pk.Name)).join(', ');
+    }
+
+    /**
+     * Throws unless `entityInfo` has exactly one primary key column. For the few view features that
+     * store or compare ONE bare key value per row (user view run logging / exclusion, the
+     * `{%UserView%}` template's `IN (subquery)`), a composite key has no single column to use and
+     * silently truncating it to the first column would return the wrong rows — so refuse loudly.
+     */
+    protected assertSingleColumnPrimaryKey(entityInfo: EntityInfo, feature: string): void {
+        if (entityInfo.PrimaryKeys.length === 1) return;
+        const columns = entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ');
+        throw new Error(`${feature} requires a single-column primary key. Entity "${entityInfo.Name}" has ${entityInfo.PrimaryKeys.length} primary key columns (${columns}).`);
     }
 
     /**
@@ -2330,7 +2371,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                             const innerViewEntity = variableValue ? await ViewInfo.GetViewEntity(variableValue, user) : null;
                             if (innerViewEntity) {
                                 const innerWhere = await this.RenderViewWhereClause(innerViewEntity, user, stack);
-                                const innerSQL = `SELECT ${this.QuoteIdentifier(innerViewEntity.ViewEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerViewEntity.ViewEntityInfo.SchemaName, innerViewEntity.ViewEntityInfo.BaseView)} WHERE (${innerWhere})`;
+                                // The template is substituted into a `<column> IN ({%UserView "x"%})` predicate, which
+                                // takes a one-column subquery — an entity with a composite key has no single column to return.
+                                const innerEntityInfo = innerViewEntity.ViewEntityInfo;
+                                this.assertSingleColumnPrimaryKey(innerEntityInfo, `The {%UserView%} template variable ${match}`);
+                                const innerSQL = `SELECT ${this.QuoteIdentifier(innerEntityInfo.FirstPrimaryKey.Name)} FROM ${this.QuoteSchemaAndView(innerEntityInfo.SchemaName, innerEntityInfo.BaseView)} WHERE (${innerWhere})`; // first-pk-ok: guarded above — IN (subquery) takes one column, PrimaryKeys.length === 1 enforced
                                 // Function replacement — `innerSQL` is generated SQL that can
                                 // legitimately contain `$`. See issue #3171.
                                 sWhere = sWhere.replace(match, () => innerSQL);
@@ -4573,8 +4618,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         continue;
                     }
 
-                    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-                    const pkValue = ret[entity.FirstPrimaryKey.Name];
+                    // An EntityRelationship joins on ONE column (RelatedEntityJoinField / JoinEntityJoinField)
+                    // that references this entity's key — a single-column foreign-key target by metadata design.
+                    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: relationship join field is a single-column FK target
+                    const pkValue = ret[entity.FirstPrimaryKey.Name]; // first-pk-ok: relationship join field is a single-column FK target
                     let relSql: string;
 
                     if (relInfo.Type.trim().toLowerCase() === 'one to many') {
@@ -5094,8 +5141,6 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         const overallStart = performance.now();
         const provider = (providerToUse ?? this) as GenericDatabaseProvider;
         const schema = provider.MJCoreSchemaName;
-        const cache = LocalCacheManager.Instance;
-        const cacheAvailable = cache.IsInitialized && this.TrustLocalCacheCompletely;
 
         // Fetch dataset items metadata (lightweight — just the dataset definition, not entity data)
         const sSQL = `SELECT di.*, ` +
@@ -5121,24 +5166,38 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             };
         }
 
-        // Phase 1: Try to derive status from cached data for each item
+        // Status ALWAYS comes from SQL — never from cached dataset slots. This method is the
+        // staleness ORACLE: RefreshIfNeeded/CheckToSeeIfRefreshNeeded compare its answer against
+        // locally held metadata to decide whether that metadata is stale, and the client's
+        // smart-cache checks ride it over the wire. Deriving the answer from the very cache whose
+        // freshness is in question closes a loop: a slot the write path failed to maintain
+        // reports itself current forever, and stale permission metadata is then served until
+        // process restart (the FLS over-the-wire leak). The queries are cheap — one batched
+        // MAX/COUNT aggregate per item — and the cache remains fully in play for the DATA reads
+        // in GetDatasetByName.
         const updateDates: DatasetStatusEntityUpdateDateType[] = [];
         let overallLatestDate = new Date(1900, 1, 1);
-        let cacheHitCount = 0;
-        let cacheMissCount = 0;
 
-        // Collect items that need SQL fallback
-        const uncachedItems: Record<string, unknown>[] = [];
-        const uncachedItemMeta: Array<{ entityID: string; entityName: string; datasetMaxUpdatedAt: string }> = [];
-
-        for (const item of items) {
-            const entityID = String(item['EntityID']);
-            const entityName = String(item['Entity']);
+        const itemMeta: Array<{ entityID: string; entityName: string }> = [];
+        const queries = items.map((item) => {
+            const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
+            const entityBaseView = String(item['EntityBaseView']);
             const code = String(item['Code']);
             const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
             const whereClause = item['WhereClause'] ? String(item['WhereClause']) : '';
 
-            // Build effective filter for fingerprint
+            itemMeta.push({ entityID: String(item['EntityID']), entityName: String(item['Entity']) });
+
+            // The floor for the reported timestamp: an edit to the dataset DEFINITION itself
+            // (item added, filter changed) must read as a change even when no entity row moved.
+            const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
+            const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
+            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime())).toISOString();
+
+            // Same filter composition as GetDatasetByName's data read — the stored item
+            // WhereClause AND'd with any runtime filter — so status and data describe the same
+            // row set. (Every shipped MJ_Metadata item has a NULL WhereClause, so for metadata
+            // this is identical to an unfiltered aggregate.)
             let effectiveFilter = whereClause;
             if (itemFilters && itemFilters.length > 0) {
                 const filter = itemFilters.find(f => f.ItemCode === code);
@@ -5148,101 +5207,44 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         : filter.Filter;
                 }
             }
+            const filterSQL = effectiveFilter ? ' WHERE ' + effectiveFilter : '';
 
-            const itemUpdatedAt = new Date(String(item['DatasetItemUpdatedAt']));
-            const datasetUpdatedAt = new Date(String(item['DatasetUpdatedAt']));
-            const datasetMaxUpdatedAt = new Date(Math.max(itemUpdatedAt.getTime(), datasetUpdatedAt.getTime()));
+            return `SELECT ` +
+                `CASE ` +
+                `WHEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) > '${datasetMaxUpdatedAt}' THEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) ` +
+                `ELSE '${datasetMaxUpdatedAt}' ` +
+                `END AS ${provider.QuoteIdentifier('UpdateDate')}, ` +
+                `COUNT(*) AS ${provider.QuoteIdentifier('TheRowCount')} ` +
+                `FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)}${filterSQL}`;
+        });
 
-            // Try to derive status from cached data
-            if (cacheAvailable) {
-                const fingerprint = cache.GenerateRunViewFingerprint(
-                    { EntityName: entityName, ExtraFilter: effectiveFilter } as RunViewParams,
-                    this.InstanceConnectionString,
-                    undefined,
-                    this.datasetCacheSegment(datasetName, code)
-                );
-                const cached = await cache.GetRunViewResult(fingerprint);
-                if (cached) {
-                    cacheHitCount++;
-                    // Derive MAX(dateField) and COUNT(*) directly from cached rows
-                    let maxDateFromRows = new Date(1900, 1, 1);
-                    for (const row of cached.results) {
-                        const record = row as Record<string, unknown>;
-                        if (record[dateFieldToCheck]) {
-                            const d = new Date(String(record[dateFieldToCheck]));
-                            if (d > maxDateFromRows) maxDateFromRows = d;
-                        }
-                    }
-                    const updateDate = maxDateFromRows > datasetMaxUpdatedAt ? maxDateFromRows : datasetMaxUpdatedAt;
-                    updateDates.push({
-                        EntityID: entityID,
-                        EntityName: entityName,
-                        RowCount: cached.results.length,
-                        UpdateDate: updateDate,
-                    });
-                    if (updateDate > overallLatestDate) overallLatestDate = updateDate;
-                    continue; // No SQL needed for this item
-                }
-            }
-
-            // Cache miss — need SQL fallback
-            cacheMissCount++;
-            uncachedItems.push(item);
-            uncachedItemMeta.push({ entityID, entityName, datasetMaxUpdatedAt: datasetMaxUpdatedAt.toISOString() });
+        let batchResults: Record<string, unknown>[][] = [];
+        try {
+            batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
+        } catch (err) {
+            LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
         }
 
-        // Phase 2: Execute SQL only for cache misses
-        if (uncachedItems.length > 0) {
-            const queries = uncachedItems.map((item, idx) => {
-                const entitySchemaName = String(item['EntitySchemaName'] ?? schema);
-                const entityBaseView = String(item['EntityBaseView']);
-                const code = String(item['Code']);
-                const dateFieldToCheck = String(item['DateFieldToCheck'] ?? '__mj_UpdatedAt');
-                const meta = uncachedItemMeta[idx];
-
-                let filterSQL = '';
-                if (itemFilters && itemFilters.length > 0) {
-                    const filter = itemFilters.find(f => f.ItemCode === code);
-                    if (filter) filterSQL = ' WHERE ' + filter.Filter;
-                }
-
-                return `SELECT ` +
-                    `CASE ` +
-                    `WHEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) > '${meta.datasetMaxUpdatedAt}' THEN MAX(${provider.QuoteIdentifier(dateFieldToCheck)}) ` +
-                    `ELSE '${meta.datasetMaxUpdatedAt}' ` +
-                    `END AS ${provider.QuoteIdentifier('UpdateDate')}, ` +
-                    `COUNT(*) AS ${provider.QuoteIdentifier('TheRowCount')} ` +
-                    `FROM ${provider.QuoteSchemaAndView(entitySchemaName, entityBaseView)}${filterSQL}`;
-            });
-
-            let batchResults: Record<string, unknown>[][] = [];
-            try {
-                batchResults = await provider.ExecuteSQLBatch(queries, undefined, undefined, contextUser);
-            } catch (err) {
-                LogError(`GetDatasetStatusByName: Batch execution failed: ${err instanceof Error ? err.message : String(err)}`);
-            }
-
-            for (let i = 0; i < uncachedItemMeta.length; i++) {
-                const meta = uncachedItemMeta[i];
-                const statusRows = batchResults[i];
-                if (statusRows && statusRows.length > 0) {
-                    const updateDate = new Date(String(statusRows[0]['UpdateDate']));
-                    updateDates.push({
-                        EntityID: meta.entityID,
-                        EntityName: meta.entityName,
-                        RowCount: Number(statusRows[0]['TheRowCount']),
-                        UpdateDate: updateDate,
-                    });
-                    if (updateDate > overallLatestDate) {
-                        overallLatestDate = updateDate;
-                    }
+        for (let i = 0; i < itemMeta.length; i++) {
+            const meta = itemMeta[i];
+            const statusRows = batchResults[i];
+            if (statusRows && statusRows.length > 0) {
+                const updateDate = new Date(String(statusRows[0]['UpdateDate']));
+                updateDates.push({
+                    EntityID: meta.entityID,
+                    EntityName: meta.entityName,
+                    RowCount: Number(statusRows[0]['TheRowCount']),
+                    UpdateDate: updateDate,
+                });
+                if (updateDate > overallLatestDate) {
+                    overallLatestDate = updateDate;
                 }
             }
         }
 
         const elapsedMs = (performance.now() - overallStart).toFixed(1);
         LogStatusEx({
-            message: `📊 [Dataset Status] GetDatasetStatusByName("${datasetName}"): ${cacheHitCount} cache-derived, ${cacheMissCount} SQL queries — ${elapsedMs}ms`,
+            message: `📊 [Dataset Status] GetDatasetStatusByName("${datasetName}"): ${items.length} SQL status queries — ${elapsedMs}ms`,
             verboseOnly: true
         });
 

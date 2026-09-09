@@ -493,6 +493,17 @@ const newEntityRelationshipDefaultsSchema = z.object({
   CreateOneToManyRelationships: z.boolean().default(true),
 });
 
+export const decisionMetadataConfigSchema = z.object({
+  /**
+   * Controls decision metadata persistence:
+   * - 'auto' (default): enabled if <metadataDirectory>/entities/.mj-sync.json exists
+   * - true: explicitly enabled
+   * - false: explicitly disabled
+   */
+  enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
+}).default({ enabled: 'auto' });
+export type DecisionMetadataConfig = z.infer<typeof decisionMetadataConfigSchema>;
+
 /**
  * Default settings applied when creating new entities
  */
@@ -572,11 +583,11 @@ const configInfoSchema = z.object({
   }),
   output: outputInfoSchema.array().default([
     { type: 'SQL', directory: '../../SQL Scripts/generated', appendOutputCode: true },
-    { type: 'Angular', directory: '../MJExplorer/src/app/generated', options: [{ name: 'maxComponentsPerModule', value: 20 }] },
+    { type: 'Angular', directory: '../MJExplorer/src/app/generated', options: [{ name: 'maxComponentsPerModule', value: 20 }, { name: 'submoduleCount', value: 32 }] },
     {
       type: 'AngularCoreEntities',
       directory: '../Angular/Explorer/core-entity-forms/src/lib/generated',
-      options: [{ name: 'maxComponentsPerModule', value: 100 }],
+      options: [{ name: 'maxComponentsPerModule', value: 100 }, { name: 'submoduleCount', value: 32 }],
     },
     { type: 'GraphQLServer', directory: '../MJAPI/src/generated' },
     { type: 'GraphQLCoreEntityResolvers', directory: '../MJServer/src/generated' },
@@ -621,6 +632,10 @@ const configInfoSchema = z.object({
   newEntityRelationshipDefaults: newEntityRelationshipDefaultsSchema,
   SQLOutput: sqlOutputConfigSchema,
   forceRegeneration: forceRegenerationConfigSchema,
+  /** Root directory containing metadata files for sync (e.g. './metadata') */
+  metadataDirectory: z.string().optional(),
+  /** Decision metadata persistence settings */
+  decisionMetadata: decisionMetadataConfigSchema,
 
   /** Database platform: 'sqlserver' or 'postgresql'. */
   dbPlatform: z.enum(['sqlserver', 'postgresql']).default('sqlserver'),
@@ -900,6 +915,8 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   mjCoreSchema: '__mj',
   graphqlPort: 4000,
   verboseOutput: false,
+  metadataDirectory: './metadata',
+  decisionMetadata: { enabled: 'auto' },
 
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
@@ -1008,7 +1025,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
       },
       {
         name: 'FormLayoutGeneration',
-        description: 'Use AI to generate semantic field categories for better form organization. This includes using AI to determine the way to layout fields on each entity form by assigning them to domain-specific categories. Since generated forms are regenerated every time you run this tool, it will be done every time you run the tool, including for existing entities and fields.',
+        description: 'Use AI to generate semantic field categories and layout for new entities, newly added fields, and fields whose upstream schema changes re-opened them for review.',
         enabled: true,
       },
       {
@@ -1121,6 +1138,14 @@ export function initializeConfig(cwd: string): ConfigInfo {
   // directory, not the stale one from initial module load.
   Object.assign(configInfo, config);
 
+  if (process.env.MJ_CODEGEN_NO_AI === '1' || process.env.MJ_CODEGEN_NO_AI === 'true') {
+    if (!configInfo.advancedGeneration) {
+      (configInfo as { advancedGeneration: { enableAdvancedGeneration: boolean } }).advancedGeneration = { enableAdvancedGeneration: false };
+    } else {
+      configInfo.advancedGeneration.enableAdvancedGeneration = false;
+    }
+  }
+
   return config;
 }
 
@@ -1182,6 +1207,9 @@ export function outputOptionValue(type: string, optionName: string, defaultValue
  * @returns Array of commands to execute
  */
 export function commands(when: string): CommandInfo[] {
+  if (process.env.MJ_CODEGEN_SKIP_COMMANDS === '1' || process.env.MJ_CODEGEN_SKIP_COMMANDS === 'true') {
+    return [];
+  }
   return configInfo.commands.filter((c) => c.when.trim().toUpperCase() === when.trim().toUpperCase());
 }
 /**

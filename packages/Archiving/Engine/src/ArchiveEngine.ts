@@ -126,7 +126,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     private async LoadConfiguration(configId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
         const md = this.Provider;
         const config = await md.GetEntityObject('MJ: Archive Configurations', contextUser);
-        const loaded = await config.InnerLoad(CompositeKey.FromKeyValuePair('ID', configId));
+        const loaded = await config.InnerLoad(CompositeKey.FromID(configId));
         return loaded ? config : null;
     }
 

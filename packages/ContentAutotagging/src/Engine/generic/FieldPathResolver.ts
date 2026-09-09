@@ -87,9 +87,13 @@ export class FieldPathResolver {
         return result;
     }
 
-    /** The result-map key for a root record: its (first) primary-key value, normalized. */
+    /**
+     * The result-map key for a root record: its primary key as a compact URL segment, normalized —
+     * the bare value for a single-column key (so callers keyed by `NormalizeUUID(item.ID)` keep
+     * working) and `F1|v1||F2|v2` for a composite key, so two records sharing a first column never collide.
+     */
     private recordKey(item: BaseEntity): string {
-        return NormalizeUUID(String(item.FirstPrimaryKey.Value));
+        return NormalizeUUID(item.PrimaryKey.ToCompactURLSegment());
     }
 
     /**
@@ -138,7 +142,7 @@ export class FieldPathResolver {
         }
 
         const merged = new Map<string, Record<string, unknown>>();
-        const pkName = targetEntity.FirstPrimaryKey.Name;
+        const pkName = targetEntity.FirstPrimaryKey.Name; // first-pk-ok: FK target — reached through a single-valued FK column, so its key is one column by design
         for (const row of baseRows) {
             const pk = this.readField(row, pkName);
             if (pk != null) merged.set(this.cacheKey(String(pk)), { ...row });
@@ -150,7 +154,7 @@ export class FieldPathResolver {
         for (const child of targetEntity.ChildEntities) {
             const childRows = await this.loadRowsByPK(child, toLoad);
             if (childRows === null) continue; // child load failure degrades to parent fields only
-            const childPKName = child.FirstPrimaryKey.Name;
+            const childPKName = child.FirstPrimaryKey.Name; // first-pk-ok: IS-A child shares the FK-target parent's single-column key
             for (const row of childRows) {
                 const pk = this.readField(row, childPKName);
                 if (pk == null) continue;
@@ -176,7 +180,7 @@ export class FieldPathResolver {
         const cached = this.readRowsFromRegistryCache(entity, pkValues);
         if (cached !== null) return cached;
 
-        const pkName = entity.FirstPrimaryKey.Name;
+        const pkName = entity.FirstPrimaryKey.Name; // first-pk-ok: entity is an FK target or its IS-A child (see loadRelatedRecords) — single-column key by design
         const idList = pkValues.map(v => `'${v.replace(/'/g, "''")}'`).join(',');
         const rv = this.provider as unknown as IRunViewProvider;
         const result = await rv.RunView<Record<string, unknown>>({
@@ -203,7 +207,7 @@ export class FieldPathResolver {
 
         const wanted = new Set(pkValues.map(v => this.cacheKey(v)));
         return rows
-            .filter(r => wanted.has(this.cacheKey(String(r.FirstPrimaryKey.Value))))
+            .filter(r => wanted.has(this.cacheKey(String(r.FirstPrimaryKey.Value)))) // first-pk-ok: cached rows of an FK-target entity — single-column key by design
             .map(r => r.GetAll() as Record<string, unknown>);
     }
 
