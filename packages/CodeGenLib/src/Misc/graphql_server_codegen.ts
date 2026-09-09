@@ -10,6 +10,7 @@ import {
 } from '@memberjunction/sql-dialect';
 import fs from 'fs';
 import path from 'path';
+import { ordinalCompare } from '@memberjunction/global';
 import { logError, logStatus } from './status_logging';
 import { configInfo, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt } from './util';
@@ -54,7 +55,7 @@ export class GraphQLServerGeneratorBase {
       }
 
       const grouped = groupEntitiesBySchema(entities);
-      const schemas = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+      const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(outputDirectory, 'graphql-schemas');
       makeDir(schemasDir);
 

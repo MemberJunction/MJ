@@ -16,7 +16,7 @@ name: Integration Tier
 #     committed CodeGen_Run_*.sql migrations AND the repeatable R__RefreshMetadata, which
 #     together provision every core view / proc / EntityField row — so no live `mj codegen`
 #     pass is needed. (Running one here would also mask the exact metadata-vs-migration drift
-#     that the separate "Test metadata sync push" gate exists to catch.)
+#     that the `mj sync push` step below surfaces.)
 #   * AssociationDB is only required by the Predictive Studio tier, which is gated OFF here.
 #   * `mj sync push --dir=metadata` pushes the default metadata dir — which includes the inert
 #     "Integration Test" TestType (metadata/test-types/). A SECOND push then applies the sibling
@@ -39,8 +39,10 @@ name: Integration Tier
 #     NIGHTLY schedule lane (RUN_MUTATION_TESTS=1 below) but skip on PR/push; the Live Model
 #     suite runs in the WEEKLY lane (separate job below).
 #
-# The migrate/sync CORRECTNESS gate is a SEPARATE workflow ("Test metadata sync push"): here
-# migrate + sync are the aggregator's SETUP, not its system-under-test.
+# There is no separate metadata-correctness workflow: the `mj sync push --dir=metadata` step in
+# this job IS where invalid committed metadata is caught. It is the aggregator's SETUP rather
+# than its system-under-test, but it fails the job, which is why `metadata/**` is in the paths
+# filter above — otherwise a metadata-only PR merges unchecked and reds the push backstop on next.
 #
 # This host-based lane is the sole CI home for the integration tier. The earlier container-based
 # lane (a reusable that provisioned via the Docker regression stack's db-setup) was removed along
@@ -53,6 +55,8 @@ on:
       - 'pnpm-lock.yaml'
       - 'packages/**'
       - 'migrations/**'
+      # The job runs `mj sync push --dir=metadata`, so a metadata-only PR must run this gate.
+      - 'metadata/**'
       # All integration test/suite/type metadata AND the RLS fixtures now live under this one
       # optional sibling root (kept out of the default-pushed metadata/ tree — R2).
       - 'metadata-optional/**'
@@ -90,11 +94,42 @@ on:
 # EXCEPTION 2: schedule events get a per-cron group so the Sunday weekly cron (30 6 * * 0) does
 # not cancel the in-flight nightly (0 6 * * *) — both fire on refs/heads/next and would otherwise
 # share a group, killing the nightly mutation/rig/drift lanes ~30 min in every Sunday.
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}${{ github.event_name == 'push' && format('-{0}', github.sha) || '' }}${{ github.event_name == 'schedule' && format('-{0}', github.event.schedule) || '' }}
   cancel-in-progress: ${{ github.event_name != 'push' }}
 
 jobs:
+  changes:
+    name: Detect PR changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      codegen: ${{ steps.filter.outputs.codegen }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check changed paths
+        id: filter
+        env:
+          PR_BASE_REF: ${{ github.base_ref }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            git fetch --no-tags origin "$PR_BASE_REF"
+            CHANGED="$(git diff --name-only "origin/$PR_BASE_REF...HEAD")"
+            if echo "$CHANGED" | grep -qE '^(packages/CodeGenLib/|packages/MJCore/src/generic/(providerBase|entityInfo)\.ts|packages/MJGlobal/src/util\.ts|migrations/|metadata/|.*generated/|\.github/workflows/integration\.yml)'; then
+              echo "codegen=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "codegen=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "codegen=true" >> "$GITHUB_OUTPUT"
+          fi
+
   integration-sqlserver:
     name: Integration (SQL Server, deterministic)
     # Runs on PRs, merges, dispatch, and the NIGHTLY cron (with the mutation tier armed).
@@ -154,7 +189,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -365,7 +400,7 @@ jobs:
 
       - name: Set up pnpm
         if: steps.prereq.outputs.READY == 'true'
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         if: steps.prereq.outputs.READY == 'true'
@@ -500,7 +535,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -571,9 +606,12 @@ jobs:
   # REPORT-FIRST (continue-on-error): the first runs establish whether the committed
   # artifacts are currently in sync; flip to blocking once green.
   codegen-drift:
-    name: CodeGen drift gate (nightly)
-    # workflow_dispatch also runs it so drift can be checked on demand without waiting for the cron.
-    if: (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') || github.event_name == 'workflow_dispatch'
+    name: CodeGen drift gate
+    needs: [changes]
+    if: |
+      (github.event_name == 'schedule' && github.event.schedule == '0 6 * * *') ||
+      github.event_name == 'workflow_dispatch' ||
+      needs.changes.outputs.codegen == 'true'
     timeout-minutes: 60
     runs-on: ubuntu-latest
     env:
@@ -584,6 +622,10 @@ jobs:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
       DB_TRUST_SERVER_CERTIFICATE: 'true'
+      # Explicitly disable AI in non-AI drift gate to prevent reliance on LLM keys or network.
+      MJ_CODEGEN_NO_AI: '1'
+      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
       # Turbo remote cache — opt-in, and inert while TURBO_TOKEN is unset. Fork PRs never
       # receive it, so they degrade to a cold local cache rather than failing. Rationale and
       # setup instructions live once, on the build job in test.yml.
@@ -617,7 +659,7 @@ jobs:
           exit 1
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Create SQL database
         run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
@@ -641,38 +683,40 @@ jobs:
           node packages/MJCLI/bin/run.js migrate
           node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
 
-      # CI-FIRST-RUN: `mj codegen` here runs the repo-root mj.config.cjs configuration.
-      # AI-assisted features (advancedGeneration.ParseCheckConstraints) have no API key in
-      # CI — if that hard-fails the run rather than degrading, this step's log is the
-      # evidence for what to disable via env in this lane.
       - name: Run CodeGen against the migrated DB
         id: codegen
-        continue-on-error: true
-        run: node packages/MJCLI/bin/run.js codegen
+        run: node packages/MJCLI/bin/run.js codegen --no-ai --skip-commands
+
+      - name: Verify CodeGen idempotency (warm-twice and single-column)
+        id: idempotency
+        run: |
+          node scripts/codegen-idempotency-check.mjs --stage warm-twice --no-ai --skip-first-run
+          node scripts/codegen-idempotency-check.mjs --stage single-column --no-ai
 
       - name: Diff committed generated artifacts
         id: drift
-        if: steps.codegen.outcome == 'success'
         continue-on-error: true
         run: |
           # Ignore run logs and the SQL output scratch dir; everything else that moved is drift.
           git checkout -- pnpm-lock.yaml 2>/dev/null || true
           rm -f codegen.output.log
-          git status --porcelain -- packages/ metadata/ > /tmp/drift.txt || true
+          git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
           if [ -s /tmp/drift.txt ]; then
-            echo "::warning::CodeGen output DIFFERS from committed artifacts (drift). Files:"
+            echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
             cat /tmp/drift.txt
             exit 1
           fi
           echo "No drift — committed generated artifacts match a clean-DB CodeGen run."
 
       - name: Publish drift verdict
+        if: always()
         run: |
           {
-            echo "## CodeGen drift gate (report-first)"
+            echo "## CodeGen drift gate"
             echo "| Step | Outcome |"
             echo "|---|---|"
             echo "| mj codegen | ${{ steps.codegen.outcome }} |"
+            echo "| idempotency checks | ${{ steps.idempotency.outcome }} |"
             echo "| drift diff | ${{ steps.drift.outcome }} |"
             if [ -s /tmp/drift.txt ]; then
               echo ''
@@ -681,6 +725,117 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.codegen.outcome }}" != "success" ] || [ "${{ steps.drift.outcome }}" != "success" ]; then
-            echo "::warning::CodeGen drift gate is NOT green — see summary. Flip continue-on-error to false once the artifacts are reconciled."
+
+  # ── WEEKLY AI CodeGen drift gate ───────────────────────────────────────────────────────
+  # Runs the CodeGen idempotency and drift suite with live AI models enabled.
+  codegen-drift-ai:
+    name: CodeGen drift gate (weekly AI-assisted)
+    if: (github.event_name == 'schedule' && github.event.schedule == '30 6 * * 0') || (github.event_name == 'workflow_dispatch' && inputs.run_live_model)
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+      DB_DATABASE: test
+      DB_USERNAME: sa
+      DB_PASSWORD: VeryStr0ngP@ssw0rd
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: VeryStr0ngP@ssw0rd
+      DB_TRUST_SERVER_CERTIFICATE: 'true'
+      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+      TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+      TURBO_API: ${{ vars.TURBO_API }}
+      TURBO_REMOTE_CACHE_SIGNATURE_KEY: ${{ secrets.TURBO_REMOTE_CACHE_SIGNATURE_KEY }}
+      INTEGRATION_LIVE_MODEL_KEYS: ${{ secrets.INTEGRATION_LIVE_MODEL_KEYS }}
+      # Skip BEFORE/AFTER commands in mj.config — drift gate only checks generated file output
+      MJ_CODEGEN_SKIP_COMMANDS: '1'
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Create docker network
+        run: docker network create -d bridge local-net
+
+      - name: Create SQL Server container
+        run: docker run --rm -d --network local-net --name sql -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=VeryStr0ngP@ssw0rd" -p 1433:1433 mcr.microsoft.com/mssql/server:2022-latest
+
+      - name: Wait for SQL Server to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network local-net mcr.microsoft.com/mssql-tools \
+                 /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "SELECT 1" >/dev/null 2>&1; then
+              echo "SQL Server is ready (attempt $i)."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "SQL Server did not become ready within the timeout." >&2
+          exit 1
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - name: Create SQL database
+        run: docker run --rm --network local-net mcr.microsoft.com/mssql-tools /opt/mssql-tools/bin/sqlcmd -S sql -U SA -P 'VeryStr0ngP@ssw0rd' -Q "CREATE DATABASE [test];"
+
+      - name: Set up node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI + CodeGen graph
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/codegen-lib
+
+      - name: Migrate + sync push
+        env:
+          MJ_MIGRATION_REQUEST_TIMEOUT: '120000'
+        run: |
+          node packages/MJCLI/bin/run.js migrate
+          node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+
+      - name: Run CodeGen (AI enabled)
+        id: codegen
+        run: node packages/MJCLI/bin/run.js codegen --skip-commands
+
+      - name: Verify CodeGen idempotency (warm-twice and single-column with AI)
+        id: idempotency
+        run: |
+          node scripts/codegen-idempotency-check.mjs --stage warm-twice --skip-first-run
+          node scripts/codegen-idempotency-check.mjs --stage single-column
+
+      - name: Diff committed generated artifacts
+        id: drift
+        continue-on-error: true
+        run: |
+          git checkout -- pnpm-lock.yaml 2>/dev/null || true
+          rm -f codegen.output.log
+          git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
+          if [ -s /tmp/drift.txt ]; then
+            echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
+            cat /tmp/drift.txt
+            exit 1
           fi
+          echo "No drift — committed generated artifacts match a clean-DB CodeGen run."
+
+      - name: Publish drift verdict
+        if: always()
+        run: |
+          {
+            echo "## CodeGen drift gate (AI-assisted)"
+            echo "| Step | Outcome |"
+            echo "|---|---|"
+            echo "| mj codegen | ${{ steps.codegen.outcome }} |"
+            echo "| idempotency checks | ${{ steps.idempotency.outcome }} |"
+            echo "| drift diff | ${{ steps.drift.outcome }} |"
+            if [ -s /tmp/drift.txt ]; then
+              echo ''
+              echo '```'
+              cat /tmp/drift.txt
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

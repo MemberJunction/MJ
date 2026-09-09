@@ -1,4 +1,6 @@
 import { WhiteboardItem, WhiteboardPageInfo } from './whiteboard-state';
+import type { WhiteboardTool } from './whiteboard-tool-roster';
+import { WhiteboardToolRoster, IsToolAllowed } from './whiteboard-tool-roster';
 
 /**
  * LIVE WHITEBOARD — right-click CONTEXT MENU model (pure, Angular-free).
@@ -59,15 +61,18 @@ const NON_DUPLICABLE_KINDS: ReadonlySet<WhiteboardItem['Kind']> = new Set(['conn
  *    (text/sticky), Duplicate (not connectors/highlights), Bring to front / Send to
  *    back, and Delete.
  */
-export function BuildWhiteboardContextMenu(item: WhiteboardItem | null): WhiteboardContextMenuAction[] {
+export function BuildWhiteboardContextMenu(item: WhiteboardItem | null, roster: WhiteboardToolRoster = null): WhiteboardContextMenuAction[] {
   if (item === null) {
-    return [
-      { ID: 'add-sticky', Label: 'Add sticky note here', Icon: 'fa-regular fa-note-sticky' },
-      { ID: 'add-text', Label: 'Add text here', Icon: 'fa-solid fa-font' },
-      { ID: 'add-markdown', Label: 'Add markdown panel here', Icon: 'fa-brands fa-markdown' },
-      { ID: 'add-html', Label: 'Add widget here', Icon: 'fa-solid fa-code' },
-      { ID: 'add-page', Label: 'New page', Icon: 'fa-regular fa-file', SeparatorBefore: true }
+    // Each "add … here" action is the context-menu door to a TOOL, so it follows the roster the
+    // toolbar and the keyboard follow. "New page" is not a tool and is always offered.
+    const canvas: Array<{ Tool: WhiteboardTool; Action: WhiteboardContextMenuAction }> = [
+      { Tool: 'sticky', Action: { ID: 'add-sticky', Label: 'Add sticky note here', Icon: 'fa-regular fa-note-sticky' } },
+      { Tool: 'text', Action: { ID: 'add-text', Label: 'Add text here', Icon: 'fa-solid fa-font' } },
+      { Tool: 'markdown', Action: { ID: 'add-markdown', Label: 'Add markdown panel here', Icon: 'fa-brands fa-markdown' } },
+      { Tool: 'html', Action: { ID: 'add-html', Label: 'Add widget here', Icon: 'fa-solid fa-code' } }
     ];
+    const adds = canvas.filter((c) => IsToolAllowed(roster, c.Tool)).map((c) => c.Action);
+    return [...adds, { ID: 'add-page', Label: 'New page', Icon: 'fa-regular fa-file', SeparatorBefore: adds.length > 0 }];
   }
   if (item.Kind === 'highlight') {
     return [{ ID: 'delete', Label: 'Delete', Icon: 'fa-solid fa-trash-can', Danger: true }];

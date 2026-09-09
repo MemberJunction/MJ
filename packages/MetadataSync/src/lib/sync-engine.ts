@@ -12,7 +12,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
 import { HttpGet } from '@memberjunction/network-utils';
-import { EntityInfo, IMetadataProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, IRunViewProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
@@ -253,7 +253,8 @@ export class SyncEngine {
     depth: number = 0,
     batchContext?: BatchContext,
     resolutionCollector?: SyncResolutionCollector,
-    fieldName?: string
+    fieldName?: string,
+    recordProvider?: IMetadataProvider
   ): Promise<any> {
     // Check recursion depth limit
     const MAX_RECURSION_DEPTH = 50;
@@ -266,7 +267,7 @@ export class SyncEngine {
       // Check if it's an array or a plain object (not a Date, etc.)
       if (Array.isArray(value) || value.constructor === Object) {
         // First recursively process any @lookup, @file, @parent references inside the object
-        const processedValue = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+        const processedValue = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider);
         // Then convert to pretty-printed JSON string for inline metadata objects
         // Objects from @file references will be handled by BaseEntity during save
         return JSON.stringify(processedValue, null, 2);
@@ -341,7 +342,7 @@ export class SyncEngine {
             
             // Now recursively process any @file references within the JSON
             const fileDir = path.dirname(fullPath);
-            processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext);
+            processedJson = await this.processJsonFieldValues(processedJson, fileDir, parentRecord, rootRecord, depth + 1, batchContext, recordProvider);
             
             // Return the processed JSON object directly without stringifying
             // Let BaseEntity handle serialization when saving to database
@@ -428,7 +429,8 @@ export class SyncEngine {
           depth + 1,
           batchContext,
           nestedCollector,
-          lookupFieldName // Pass field name for tracking
+          lookupFieldName, // Pass field name for tracking
+          recordProvider
         );
 
         // If the raw value was a lookup expression that got resolved, track it as nested
@@ -466,13 +468,16 @@ export class SyncEngine {
               parentRecord,
               rootRecord,
               depth + 1,
-              batchContext
+              batchContext,
+              undefined,
+              undefined,
+              recordProvider
             );
           }
         }
       }
 
-      const resolvedValue = await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value);
+      const resolvedValue = await this.resolveLookup(entityName, lookupFields, hasCreate, createFields, batchContext, allowDefer, value, recordProvider);
 
       // Track the resolution if collector is provided
       if (resolutionCollector && fieldName) {
@@ -571,7 +576,8 @@ export class SyncEngine {
     createFields: Record<string, any> = {},
     batchContext?: BatchContext,
     allowDefer: boolean = false,
-    originalValue?: string
+    originalValue?: string,
+    recordProvider?: IMetadataProvider
   ): Promise<string> {
     const lookupCacheKey = this.buildLookupCacheKey(entityName, lookupFields);
     if (this.syncMetadataEngine) {
@@ -633,31 +639,22 @@ export class SyncEngine {
       }
     }
 
-    // Scan preloaded entities in-memory if preloaded
+    // Scan preloaded entities in-memory if preloaded (indexed O(1) resolution)
     if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
-      const cachedEntities = this.syncMetadataEngine.getCachedEntities(entityName);
-      for (const cachedEntity of cachedEntities) {
-        let allMatch = true;
-        for (const {fieldName, fieldValue} of lookupFields) {
-          const entityValue = cachedEntity.Get(fieldName);
-          const normalizedEntityValue = (entityValue?.toString() || '').toLowerCase().trim();
-          const normalizedLookupValue = (fieldValue?.toString() || '').toLowerCase().trim();
-          if (normalizedEntityValue !== normalizedLookupValue) {
-            allMatch = false;
-            break;
-          }
-        }
-        if (allMatch) {
-          const pkeyField = entityInfo.PrimaryKeys[0].Name;
-          const id = cachedEntity.Get(pkeyField);
-          this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
-          return id;
-        }
+      const cachedEntity = this.syncMetadataEngine.findCachedByLookup(entityName, lookupFields);
+      if (cachedEntity) {
+        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const id = cachedEntity.Get(pkeyField);
+        this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
+        return id;
       }
     }
 
-    // Not found in batch context, check database
-    const rv = new RunView();
+    // Not found in batch context, check database on the same provider as the
+    // graph save — a host RunView cannot see an uncommitted parent on a graph instance.
+    const rv = recordProvider
+      ? new RunView(recordProvider as unknown as IRunViewProvider)
+      : new RunView();
     
     // Build compound filter for all lookup fields
     const filterParts: string[] = [];
@@ -744,7 +741,9 @@ export class SyncEngine {
         this.warn(subclassWarning);
       }
 
-      const newEntity = await this.metadata.GetEntityObject(entityName, this.contextUser);
+      const newEntity = recordProvider
+        ? await recordProvider.GetEntityObject(entityName, this.contextUser)
+        : await this.metadata.GetEntityObject(entityName, this.contextUser);
       if (!newEntity) {
         throw new Error(`Failed to create entity object for: ${entityName}`);
       }
@@ -1069,8 +1068,10 @@ export class SyncEngine {
    * await entity.Save();
    * ```
    */
-  async createEntityObject(entityName: string): Promise<BaseEntity> {
-    const entity = await this.metadata.GetEntityObject(entityName, this.contextUser);
+  async createEntityObject(entityName: string, recordProvider?: IMetadataProvider): Promise<BaseEntity> {
+    const entity = recordProvider
+      ? await recordProvider.GetEntityObject(entityName, this.contextUser)
+      : await this.metadata.GetEntityObject(entityName, this.contextUser);
     if (!entity) {
       throw new Error(`Failed to create entity object for: ${entityName}`);
     }
@@ -1100,7 +1101,7 @@ export class SyncEngine {
    * });
    * ```
    */
-  async loadEntity(entityName: string, primaryKey: Record<string, any>): Promise<BaseEntity | null> {
+  async loadEntity(entityName: string, primaryKey: Record<string, any>, recordProvider?: IMetadataProvider): Promise<BaseEntity | null> {
     const entityInfo = this.getEntityInfo(entityName);
     
     if (!entityInfo) {
@@ -1116,8 +1117,12 @@ export class SyncEngine {
     }
     
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages
-    // when records don't exist (which is a normal scenario during sync operations)
-    const rv = new RunView();
+    // when records don't exist (which is a normal scenario during sync operations).
+    // Use the graph provider when one is passed so an update does not replace a
+    // graph-scoped entity with a globally-loaded one.
+    const rv = recordProvider
+      ? new RunView(recordProvider as unknown as IRunViewProvider)
+      : new RunView();
     
     // Build filter for primary key(s)
     const filters: string[] = [];
@@ -1146,7 +1151,7 @@ export class SyncEngine {
     }
     
     // Record exists, now load it properly through the entity
-    const entity = await this.createEntityObject(entityName);
+    const entity = await this.createEntityObject(entityName, recordProvider);
     const compositeKey = new CompositeKey();
     compositeKey.LoadFromSimpleObject(primaryKey);
     const loaded = await entity.InnerLoad(compositeKey);
@@ -1265,7 +1270,8 @@ export class SyncEngine {
     parentRecord?: BaseEntity | BatchContextStub | null,
     rootRecord?: BaseEntity | BatchContextStub | null,
     depth: number = 0,
-    batchContext?: BatchContext
+    batchContext?: BatchContext,
+    recordProvider?: IMetadataProvider
   ): Promise<any> {
     // Handle null and undefined
     if (obj === null || obj === undefined) {
@@ -1275,7 +1281,7 @@ export class SyncEngine {
     // Handle top-level strings (important for array elements that are strings with @ syntax)
     if (typeof obj === 'string') {
       if (isMetadataKeyword(obj)) {
-        return this.processFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext);
+        return this.processFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider);
       }
       return obj;
     }
@@ -1284,7 +1290,7 @@ export class SyncEngine {
     if (Array.isArray(obj)) {
       return Promise.all(
         obj.map(item => 
-          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext)
+          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider)
         )
       );
     }
@@ -1298,13 +1304,13 @@ export class SyncEngine {
           // Check if this looks like a reference that needs processing
           // Only process known reference types, ignore other @ strings (like npm packages)
           if (isMetadataKeyword(value)) {
-            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider);
           } else {
             result[key] = value;
           }
         } else if (typeof value === 'object') {
           // Recursively process nested objects
-          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext);
+          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider);
         } else {
           // Keep primitive values as-is
           result[key] = value;
