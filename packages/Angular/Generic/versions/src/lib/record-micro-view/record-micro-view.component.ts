@@ -209,7 +209,10 @@ export class MjRecordMicroViewComponent extends BaseAngularComponent implements 
         const result = await rv.RunView<RecordChangeSimple>({
             EntityName: 'MJ: Record Changes',
             ExtraFilter: `ID = '${changeId}'`,
-            Fields: ['FullRecordJSON'],
+            // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+            // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot
+            // be resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+            Fields: ['EntityID', 'FullRecordJSON'],
             ResultType: 'simple'
         });
 

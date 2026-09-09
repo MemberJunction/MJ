@@ -15,6 +15,8 @@ import {
   LogStatus,
   Metadata,
   ReadableFieldsTransportKey,
+  RecordChangeFieldSecurityProjector,
+  RecordChangePayloadFields,
   RunView,
   RunViewParams,
   RunViewResult,
@@ -86,7 +88,8 @@ export class ResolverBase {
     dataObject: any,
     contextUser?: UserInfo,
     provider?: IMetadataProvider,
-    deniedReadFields?: Set<string>
+    deniedReadFields?: Set<string>,
+    recordChangeProjector?: RecordChangeFieldSecurityProjector
   ): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
@@ -151,6 +154,21 @@ export class ResolverBase {
       const readableFields = this.BuildReadableFieldsTransportValue(entityInfo, denied);
       if (readableFields) {
         dataObject[ReadableFieldsTransportKey] = readableFields;
+      }
+
+      // Field security, third part — the audit trail. A 'MJ: Record Changes' row carries the old
+      // and new values of ANOTHER entity's fields, and its own EnableFieldLevelSecurity flag is
+      // off, so everything above is a no-op for it and the payload would flow out untouched. The
+      // projector recomputes the denied set against the entity each row is about; see
+      // RecordChangeFieldSecurityProjector for what each payload column gets.
+      //
+      // Same "a missing argument must never mean missing security" rule as the denied set above:
+      // the projector is normally built ONCE per request by the array caller and passed in, and
+      // we build one here when it wasn't — the single-record resolvers, where once-per-row and
+      // once-per-request are the same thing.
+      if (contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)) {
+        const projector = recordChangeProjector ?? new RecordChangeFieldSecurityProjector(md, contextUser);
+        dataObject = projector.ProjectRow(dataObject);
       }
 
       // Handle encrypted fields - data from raw SQL queries is still encrypted
@@ -262,9 +280,16 @@ export class ResolverBase {
     const deniedReadFields = entityInfo?.EnableFieldLevelSecurity && contextUser
       ? entityInfo.GetDeniedReadFields(contextUser)
       : undefined;
+    // Record Changes payload security is resolved per DISTINCT target entity, and one array can
+    // span many — so the projector, which owns that memo, must outlive the row loop. Built once
+    // here for the same reason the denied set above is: GetDeniedReadFields walks every field on
+    // an entity and must never be called per row.
+    const recordChangeProjector = contextUser && RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)
+      ? new RecordChangeFieldSecurityProjector(md, contextUser)
+      : undefined;
     const mapped: any[] = [];
     for (const element of dataObjectArray) {
-      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider, deniedReadFields));
+      mapped.push(await this.MapFieldNamesToCodeNames(entityName, element, contextUser, provider, deniedReadFields, recordChangeProjector));
     }
     return mapped;
   }
@@ -1555,8 +1580,12 @@ export class ResolverBase {
       // are equally fabricated, so hydrating from them (the no-DB-load path) would write
       // fabricated state into the denied columns on save.
       const hasDeniedReadFields = this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
+      // The audit-trail equivalent. Its `true` matters most on THIS entity: 'MJ: Record Changes'
+      // has TrackRecordChanges off, so without it a client sending OldValues takes the branch below
+      // that hydrates from those values — never loading what the database actually holds.
+      const hasNarrowedAuditPayload = this.StripRecordChangePayloadFromClientInput(entityInfo, userInfo, input, clientNewValues);
 
-      if (entityInfo.TrackRecordChanges || !input.OldValues___ || hasDeniedReadFields) {
+      if (entityInfo.TrackRecordChanges || !input.OldValues___ || hasDeniedReadFields || hasNarrowedAuditPayload) {
         // We get here because the entity tracks record changes, OR the client did not provide OldValues,
         // OR field-level security denies this user read on some field — in every case we need the true old values from the DB
         const cKey = new CompositeKey(
@@ -1691,6 +1720,70 @@ export class ResolverBase {
           `stripped client-sent value(s) for denied-read field(s) ${stripped.join(', ')}`
       );
     }
+    return true;
+  }
+
+  /**
+   * Refuses a client-sent `MJ: Record Changes` payload column from a caller who carries field
+   * denials, and forces the update onto the load-truth-from-DB branch.
+   *
+   * This is the write half of the audit-trail projection, and without it that projection would
+   * itself destroy audit history. A restricted caller is served a NARROWED `ChangesJSON` /
+   * `FullRecordJSON` and no `ChangesDescription`. Those values hydrate a client-side entity as
+   * ordinary loaded values, and `GenerateSaveSQL` writes EVERY `IsSPParameter` field rather than
+   * only dirty ones — so a user who edits `Comments` on that record and saves would silently
+   * overwrite the stored payload with the narrowed one they were shown. The row would keep looking
+   * like a complete audit entry while the pruned fields were gone for everyone, permanently.
+   *
+   * The rule is the one field security already applies elsewhere: **a value a client could not
+   * have seen in full is not user intent, it is a transport artifact, and it is ignored.** Here
+   * that is widened from "fields the caller cannot read" to "the audit payload of a caller who
+   * carries any denial", because the column is readable — it is its CONTENTS that were narrowed,
+   * and which row's target entity did the narrowing is not knowable from the input alone.
+   *
+   * Returning true routes the caller through `InnerLoad`, so the stored values are restored from
+   * the database before the save. Legitimate payload writes are unaffected: they happen
+   * server-side (`SnapshotBuilder`, replay) and never through this resolver.
+   */
+  protected StripRecordChangePayloadFromClientInput(
+    entityInfo: EntityInfo,
+    userInfo: UserInfo,
+    input: { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>,
+    clientNewValues: Record<string, unknown>,
+    provider?: IMetadataProvider
+  ): boolean {
+    if (!userInfo || !RecordChangeFieldSecurityProjector.IsRecordChangesEntity(entityInfo)) {
+      return false;
+    }
+    const md = provider ?? new Metadata();
+    if (!new RecordChangeFieldSecurityProjector(md, userInfo).CallerCarriesAnyDenial()) {
+      return false; // this caller was served the payload whole, so what they send back is theirs
+    }
+
+    const payloadKeys = new Set(RecordChangePayloadFields.map((f) => f.toLowerCase()));
+    const stripped: string[] = [];
+    for (const key of Object.keys(clientNewValues)) {
+      if (payloadKeys.has(key.trim().toLowerCase())) {
+        delete clientNewValues[key];
+        delete input[key];
+        stripped.push(key);
+      }
+    }
+    // OldValues too: a narrowed payload in the client's old values is not what the database holds,
+    // so leaving it would read as a concurrent-edit conflict on a field nobody edited.
+    if (Array.isArray(input.OldValues___)) {
+      input.OldValues___ = input.OldValues___.filter((item) => !payloadKeys.has(String(item.Key).trim().toLowerCase()));
+    }
+    if (stripped.length > 0) {
+      LogDebug(
+        `[FieldSecurity] UpdateRecord on '${entityInfo.Name}' for user ${userInfo.Email}: ` +
+          `ignored client-sent audit payload column(s) ${stripped.join(', ')} — the caller carries field ` +
+          `denials, so the value they hold may be a narrowed projection rather than the stored one`
+      );
+    }
+    // True even when nothing was stripped: the DB truth-load is what guarantees the payload the
+    // save writes is the stored one, and a client that sent no payload key at all would otherwise
+    // fall through to the OldValues branch and write whatever it did send.
     return true;
   }
 

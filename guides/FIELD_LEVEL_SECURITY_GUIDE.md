@@ -197,6 +197,7 @@ denied set on an entity:
 | **Saves (denied-read fields)** | Values a client sends for fields it cannot *read* are **silently ignored** — such a field was stripped from every payload the client ever received, so any value it sends back is fabricated by the transport, not user intent. This is what makes "load a record, edit an unrelated field, save" safe for restricted users. |
 | **Creates** | A value supplied for a field the user may not create is **dropped, and the column takes its default** — the insert is never rejected. Rejecting would name the field, confirming it exists and is restricted; and silently defaulting is exactly what an unrestricted user gets by leaving the field blank, so a restricted user ends up with the same record shape rather than a failure. |
 | **Typed accessors (`Get` / `Set`)** | Reading or writing a denied field **by name** throws, so a restricted field surfaces as a clear failure instead of a silent blank. Framework-internal machinery — validation, save-SQL generation, serialization — reads values directly and is exempt, which is what keeps stored values intact through a restricted user's round trip. |
+| **`MJ: Record Changes` payload** | The audit trail is projected against **the entity each row is about**, not against Record Changes. Denied field keys are dropped from `ChangesJSON` and `FullRecordJSON`; `ChangesDescription` is **withheld entirely**. See §3.2. |
 | **Record names** (FK links, breadcrumbs, pickers) | When an entity's **name field** is denied, the record's display name is withheld and every caller **falls back to the primary key**. This applies to the `GetEntityRecordName` query and to `BaseEntity.GetRecordName()` alike. It is a fallback rather than an error on purpose: `GetRecordName()` runs automatically after every load and save, so throwing would make records on that entity fail to open rather than merely hide a name — and answering "no name" keeps the query from becoming a probe that tells restricted apart from missing. |
 | **Entity forms** | Fields the user cannot read are **not rendered at all**. The form checks access before touching a value, so one denied column cannot take out the form it sits in. A field you can read but not write renders read-only rather than editable — which matters most on **create**, where the server drops the value silently and this is the only signal you get. |
 | **Grids and view configuration** | Denied columns are not rendered, and the view-configuration panel does not offer them as columns. Your **saved column preferences are left intact** — a denial is reversible, so hiding a column never rewrites the preference that mentions it, and the column reappears when access is restored. Saved **sort** settings are dropped, because a denied field in `ORDER BY` is rejected outright rather than degrading. |
@@ -291,17 +292,61 @@ Clients request it only on entities with field security enabled, so a client sti
 server whose schema predates it — except on a field-security-enabled entity, where the two must
 match versions.
 
-### 3.2 Record Changes is a trust boundary
+### 3.2 Record Changes is projected against the entity each row is about
 
-`MJ: Record Changes` rows carry full old/new field payloads for tracked entities. A user who
-can read Record Changes can read a denied field's values out of the audit trail.
+`MJ: Record Changes` rows carry full old/new field payloads for tracked entities, and the audit
+entity's own field security is switched **off** — it is not the entity being secured. Every other
+enforcement point therefore short-circuits on it. Without a dedicated control, anyone with
+entity-level read on the audit trail could read a denied field's values straight out of it, in the
+default configuration. **That control now exists**; you do not have to configure around it.
 
-**Do not grant entity-level read on `MJ: Record Changes` to roles that carry FLS denials on
-any entity — or to roles that should not read a tracked entity's data generally.** If a
-deployment needs broader Record Changes access, the blunt per-deployment tool is to
-FLS-restrict Record Changes' own payload columns (`ChangesJSON`, `ChangesDescription`,
-`FullRecordJSON`) for the roles in question. Payload-level redaction keyed to the target
-entity's own FLS is a future record-change-auditing overhaul, not a current feature.
+Each row names its subject in its own `EntityID` column, and the denied set is computed against
+*that* entity, per row, for the reading user:
+
+| Column | Treatment |
+|---|---|
+| `ChangesJSON` | Projected — denied field keys dropped, everything else kept |
+| `FullRecordJSON` | Projected the same way; it is a whole-row snapshot |
+| `ChangesDescription` | **Withheld entirely**, whenever the caller is denied any field on the target entity |
+
+`ChangesDescription` is human prose ("Salary changed from 100000 to 120000"). Redacting prose on
+the fly leaks on the first value that appears in an unexpected form, so it is dropped rather than
+edited. Callers degrade to a generic label — the record-changes UI shows "Changes made".
+
+**Rows are never hidden.** This narrows payloads; it does not suppress audit entries. A user denied
+one field still sees that a record changed, when, and by whom, and still sees the fields they are
+entitled to. Row-level suppression was considered and rejected: it would destroy the entire audit
+history of an FLS-enabled entity for anyone denied a single column.
+
+Three things worth knowing:
+
+- **A caller who is denied nothing sees the payload byte-for-byte unchanged.** The projection is a
+  no-op for unrestricted users, and for deployments where no entity has field security enabled.
+- **It fails closed when the subject entity cannot be determined** — an `EntityID` that no longer
+  resolves to a known entity, or a query narrowed with `Fields` such that the rows carry no
+  `EntityID` at all. Both drop all three payload columns. The second case is why: field narrowing
+  runs before the projection, so failing open there would make `Fields: ['ChangesJSON']` a
+  one-parameter bypass.
+- **Server-internal code still sees full values**, exactly as in §3.4. The projection is applied to
+  API output — RunView results on both cache paths, and single-record GraphQL responses — not to
+  `entity_object` results, whose fields round-trip through save-SQL generation and would be written
+  back narrowed.
+
+**A narrowed payload can never be written back.** This is the write half, and without it the
+projection would destroy the history it protects. A narrowed `ChangesJSON` hydrates a client-side
+entity as an ordinary loaded value, and save-SQL generation writes *every* field rather than only
+dirty ones — so a restricted user who edited `Comments` on a Record Change and saved would silently
+replace the stored payload with the narrowed one they were shown, and the row would go on looking
+complete. So when a caller who carries **any** field denial updates a Record Change, the server
+ignores every payload column they send and reloads the stored values from the database first. It is
+the same rule field security already applies to denied-read fields on writes — a value the client
+could not have seen in full is a transport artifact, not user intent — widened here because the
+column itself is readable and it is the *contents* that were narrowed. Nothing is manufactured at
+any point: what a reader receives is either the stored value or a strict subset of it, and only the
+stored value is ever persisted.
+
+Payload columns outside this set are not projected. `Comments` is user-authored, and `ErrorLog`
+belongs to replay machinery; neither is derived from the target entity's field values.
 
 ### 3.3 Saved queries are NOT FLS-filtered
 
@@ -311,6 +356,12 @@ artifact: **run access to the query is the grant.** An admin who writes
 that role, regardless of FLS rows on `Salary` — column stripping could not catch aggregates
 and derived columns anyway, and pretending otherwise would be false assurance. Review a
 query's SQL against your FLS posture *when granting run access*.
+
+This is unchanged by §3.2. A saved query that reads `MJ: Record Changes` directly is **not**
+payload-projected — the projection lives on the RunView and single-record read paths, which is
+where the platform, not an admin, decides what a caller receives. If your deployment restricts
+fields and exposes the audit trail through saved queries, review those queries the same way you
+review any other.
 
 ### 3.4 Server-internal code sees full values
 

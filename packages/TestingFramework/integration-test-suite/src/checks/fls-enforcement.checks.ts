@@ -53,6 +53,9 @@ import { MJEntityEntity, MJEntityFieldPermissionEntity, MJEmployeeEntity } from 
 
 // ─────────────────────────────────────────────────────────────────── helpers
 
+/** The audit entity the payload-projection checks (FLS22/FLS23) read. */
+const RECORD_CHANGES_ENTITY = 'MJ: Record Changes';
+
 /** Always-true, column-agnostic, unique-per-tag predicate (same technique as the RLS bundle). */
 function coldFilter(tag: string): string {
     return `'${tag}' <> 'zzz-cache-test-marker'`;
@@ -662,6 +665,185 @@ export async function CheckFls18_CreateSuppression(ctx: IntegrationCheckContext)
     Assert(db[0].Phone === null, `the create-denied ${FLS_UPDATE_DENY_FIELD} must take its default (NULL), got '${db[0].Phone}'`);
 }
 
+// ───────────────────────────────────────────── Record Changes payload security
+
+/** A Record Change row as the wire returns it — only the columns these checks assert on. */
+type RecordChangeRow = {
+    ID: string;
+    EntityID: string;
+    RecordID: string;
+    Type: string;
+    ChangesJSON?: string;
+    ChangesDescription?: string;
+    FullRecordJSON?: string;
+};
+
+/**
+ * Reads the audit rows for the fixture employee as a given user, through the ordinary RunView
+ * path. `tag` makes the filter unique so the caller controls whether the read is a fresh query or
+ * lands on a slot warmed by an earlier call in the same check.
+ */
+async function readFixtureRecordChanges(
+    ctx: IntegrationCheckContext, user: UserInfo, employeeID: string, tag: string
+): Promise<RecordChangeRow[]> {
+    const employeesEntityID = flsEntity(ctx).ID;
+    const res = await new RunView().RunView<RecordChangeRow>({
+        EntityName: RECORD_CHANGES_ENTITY,
+        ExtraFilter: `EntityID = '${employeesEntityID}' AND RecordID LIKE '%${employeeID}%' AND ${coldFilter(tag)}`,
+        OrderBy: 'ChangedAt DESC',
+        ResultType: 'simple',
+    }, user);
+    Assert(res.Success, `RunView on ${RECORD_CHANGES_ENTITY} failed for ${user.Email}: ${res.ErrorMessage}`);
+    return res.Results;
+}
+
+/**
+ * Skip-as-pass gate for the Record Changes checks specifically. Two preconditions the rest of the
+ * bundle does not need: the audit entity must be readable by the seeded principals (a permission
+ * the metadata-optional seed grants — an older seed will not have it), and the FLS entity must
+ * actually be tracked, or no audit row exists to project.
+ */
+function recordChangeChecksUsable(ctx: IntegrationCheckContext, fx: FlsFixture, checkId: string): boolean {
+    if (!flsEntity(ctx).TrackRecordChanges) {
+        console.warn(`  ⚠ ${checkId} SKIPPED — '${SEEDED_FLS_ENTITY}' has TrackRecordChanges off, so no audit row exists to project.`);
+        return false;
+    }
+    const rcEntity = ctx.Provider.EntityByName(RECORD_CHANGES_ENTITY);
+    if (!rcEntity) {
+        console.warn(`  ⚠ ${checkId} SKIPPED — '${RECORD_CHANGES_ENTITY}' not found in metadata.`);
+        return false;
+    }
+    for (const user of [fx.Reader!, fx.Writer!]) {
+        if (!(rcEntity.GetUserPermisions(user)?.CanRead ?? false)) {
+            console.warn(
+                `  ⚠ ${checkId} SKIPPED — ${user.Email} lacks entity read on '${RECORD_CHANGES_ENTITY}', which is the ` +
+                `precondition the leak needs. Re-seed with \`${SEED_FIXTURES_COMMAND}\`.`
+            );
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * Writes one audit row whose payload provably carries the reader-denied column, runs `assertions`
+ * against it, then restores the field. The marker value is what the assertions search for: an
+ * absent `Email` key proves the key was dropped, and an absent marker proves nothing carried the
+ * value under some other name.
+ */
+async function withAuditedDeniedFieldChange(
+    ctx: IntegrationCheckContext, fx: FlsFixture, marker: string,
+    assertions: () => Promise<void>
+): Promise<void> {
+    const emp = await ctx.Provider.GetEntityObject<MJEmployeeEntity>(SEEDED_FLS_ENTITY, fx.Writer!);
+    Assert(await emp.Load(fx.FixtureEmployeeID!), 'the writer must be able to load the fixture employee');
+    const originalEmail = emp.Email;
+    emp.Email = marker;
+    Assert(await emp.Save(), `the writer's edit of ${FLS_READER_DENIED_FIELD} must save: ${emp.LatestResult?.CompleteMessage ?? ''}`);
+    try {
+        await assertions();
+    } finally {
+        emp.Email = originalEmail;
+        await emp.Save();
+    }
+}
+
+/** Every payload column of a row must be free of the denied field, by key AND by value. */
+function assertPayloadIsClean(row: RecordChangeRow, marker: string, context: string): void {
+    Assert(!('ChangesDescription' in row),
+        `${context}: ChangesDescription must be WITHHELD entirely — it is prose and cannot be safely redacted`);
+    for (const column of ['ChangesJSON', 'FullRecordJSON'] as const) {
+        const raw = row[column];
+        if (raw === undefined) {
+            continue; // withheld outright (fail-closed) — also acceptable
+        }
+        Assert(!raw.includes(marker),
+            `LEAK: ${context}: the denied ${FLS_READER_DENIED_FIELD} value reached the reader through ${column}`);
+        if (raw.trim().length > 0) {
+            const parsed = JSON.parse(raw) as Record<string, unknown>;
+            Assert(!(FLS_READER_DENIED_FIELD in parsed),
+                `LEAK: ${context}: ${column} still carries a '${FLS_READER_DENIED_FIELD}' key`);
+        }
+    }
+}
+
+/**
+ * FLS22 — the audit trail is FLS-projected against the entity each row is ABOUT.
+ *
+ * This is the leak the guide previously documented as a trust boundary administrators had to
+ * configure around: `MJ: Record Changes` has field security switched OFF (it is not the entity
+ * being secured), so every other enforcement point short-circuits and the row's payload carries
+ * the old and new values of a denied column in plain text. Anyone with entity read on the audit
+ * trail could read a denied `Email` straight out of it.
+ *
+ * The reader is denied `Email` on `MJ: Employees` (FLS3), and holds entity read on Record Changes
+ * (seeded). The writer is denied nothing, and is the control: the same rows must reach it whole,
+ * so this proves projection rather than blanket suppression.
+ */
+export async function CheckFls22_RecordChangePayloadProjected(ctx: IntegrationCheckContext): Promise<void> {
+    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS22')) return;
+    const fx = ctx.FlsFixture!;
+    if (!recordChangeChecksUsable(ctx, fx, 'fls-enforcement.FLS22')) return;
+
+    const marker = `it-fls-rc-${Date.now()}@integration.test`;
+    await withAuditedDeniedFieldChange(ctx, fx, marker, async () => {
+        const readerRows = await readFixtureRecordChanges(ctx, fx.Reader!, fx.FixtureEmployeeID!, `fls22-reader-${Date.now()}`);
+        Assert(readerRows.length > 0, 'the reader must still SEE the audit rows — this narrows payloads, it does not hide rows');
+        for (const row of readerRows) {
+            assertPayloadIsClean(row, marker, `reader row ${row.ID}`);
+        }
+        // The projection must be surgical, not a blanket wipe: an allowed field's change survives.
+        const withAllowedChange = readerRows.find(r => (r.FullRecordJSON ?? '').includes('FirstName'));
+        Assert(withAllowedChange != null,
+            'allowed columns must survive in FullRecordJSON — the payload is narrowed, not emptied');
+
+        const writerRows = await readFixtureRecordChanges(ctx, fx.Writer!, fx.FixtureEmployeeID!, `fls22-writer-${Date.now()}`);
+        const markerRow = writerRows.find(r => (r.ChangesJSON ?? '').includes(marker));
+        Assert(markerRow != null,
+            `the unrestricted writer must still receive the full payload — no ${FLS_READER_DENIED_FIELD} change found`);
+        Assert(typeof markerRow!.ChangesDescription === 'string' && markerRow!.ChangesDescription.length > 0,
+            'ChangesDescription must reach a caller who is denied nothing on the target entity');
+    });
+}
+
+/**
+ * FLS23 — the audit projection holds on the SHARED cache slot, the same mechanism-level proof
+ * FLS11 gives for ordinary reads.
+ *
+ * The server's RunView slots are full-width and shared across users; per-request narrowing runs at
+ * read time on every hit and every miss. So the writer's cold query warms a slot carrying the
+ * denied value, the reader's identical query is served from that same slot WITHOUT a new cache
+ * write, and the payload must still come back narrowed. This is the exact path the original
+ * cross-user leak ran through.
+ */
+export async function CheckFls23_RecordChangeCacheSlotStillProjects(ctx: IntegrationCheckContext): Promise<void> {
+    if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS23')) return;
+    const fx = ctx.FlsFixture!;
+    if (!recordChangeChecksUsable(ctx, fx, 'fls-enforcement.FLS23')) return;
+
+    const marker = `it-fls-rc-cache-${Date.now()}@integration.test`;
+    await withAuditedDeniedFieldChange(ctx, fx, marker, async () => {
+        const tag = `fls23-${Date.now()}`;
+
+        ctx.Storage.ResetCounts();
+        const warm = await readFixtureRecordChanges(ctx, fx.Writer!, fx.FixtureEmployeeID!, tag);
+        Assert(warm.some(r => (r.ChangesJSON ?? '').includes(marker)),
+            'the writer warm-up must see the denied value — otherwise the slot under test is not full-width');
+
+        const wroteSlot = ctx.Storage.SetCount('RunViewCache') > 0;
+        ctx.Storage.ResetCounts();
+        const read = await readFixtureRecordChanges(ctx, fx.Reader!, fx.FixtureEmployeeID!, tag);
+        if (wroteSlot) {
+            AssertEqual(ctx.Storage.SetCount('RunViewCache'), 0,
+                'the reader must be served from the SHARED slot (no new cache write) — the leak surface under test');
+        }
+        Assert(read.length > 0, 'the reader must still see the audit rows on the cache path');
+        for (const row of read) {
+            assertPayloadIsClean(row, marker, `reader cache-path row ${row.ID}`);
+        }
+    });
+}
+
 /** FLS19 — rows targeting unrestrictable fields (primary keys) are rejected at save time (4.6). */
 export async function CheckFls19_UnrestrictableTargetRejected(ctx: IntegrationCheckContext): Promise<void> {
     if (!skipIfUnusable(ctx.FlsFixture, 'fls-enforcement.FLS19')) return;
@@ -760,6 +942,8 @@ export const FlsEnforcementChecks: NamedCheck[] = [
     { Id: 'fls-enforcement.FLS18', Name: 'FLS18: create suppression — a supplied create-denied value is dropped and the column takes its default; the insert succeeds', Fn: CheckFls18_CreateSuppression },
     { Id: 'fls-enforcement.FLS19', Name: 'FLS19: a permission row targeting a primary key is rejected at save time', Fn: CheckFls19_UnrestrictableTargetRejected },
     { Id: 'fls-enforcement.FLS20', Name: 'FLS20: the typed-accessor gate throws the ambiguous message on a read-denied field', Fn: CheckFls20_AccessorGateThrows },
+    { Id: 'fls-enforcement.FLS22', Name: 'FLS22: the Record Changes payload is projected against the entity each row is ABOUT — denied keys dropped from ChangesJSON/FullRecordJSON, ChangesDescription withheld, and an unrestricted caller still gets everything', Fn: CheckFls22_RecordChangePayloadProjected },
+    { Id: 'fls-enforcement.FLS23', Name: 'FLS23: the Record Changes projection holds on the SHARED cache slot — the reader is served from the writer-warmed slot and still gets a narrowed payload', Fn: CheckFls23_RecordChangeCacheSlotStillProjects },
     { Id: 'fls-enforcement.FLS21', Name: 'FLS21: full-metadata-refresh cost is measured and recorded (the per-debounced-burst price of a permission change)', Fn: CheckFls21_RefreshCostVisibility }
 ];
 

@@ -4,9 +4,13 @@
 "@memberjunction/generic-database-provider": minor
 "@memberjunction/graphql-dataprovider": minor
 "@memberjunction/codegen-lib": minor
+"@memberjunction/core-entities": minor
 "@memberjunction/core-entities-server": minor
 "@memberjunction/ng-base-forms": minor
+"@memberjunction/ng-dashboards": minor
+"@memberjunction/ng-versions": minor
 "@memberjunction/sql-dialect": minor
+"@memberjunction/version-history": minor
 ---
 
 Field-Level Security: per-field Read/Update/Create control by role.
@@ -51,6 +55,25 @@ Enforcement (server-side and authoritative):
 
 - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
   paths, and from single-record GraphQL responses.
+- **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+  audit entity's own field security is off — so without a dedicated control, anyone with entity read
+  on it could read a denied field straight out of the payload, in the default configuration. Each
+  row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+  denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+  withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+  appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+  generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+  when, by whom, and which of the fields they may read. It fails closed when the subject entity
+  cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+  projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+  in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+  not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+  Change from a caller carrying any denial ignores every payload column the client sends and
+  reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+  save-SQL generation writes every field, so without this a restricted user editing `Comments`
+  would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+  manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+  only the stored value is ever persisted.
 - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
   expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
   values back without the column ever appearing in a result. `UserSearchString` is not rejected;
@@ -104,6 +127,4 @@ Also in this release:
   say engine caches cannot be narrowed by a restricted caller.
 
 New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
-restricting anything — in particular, do not grant `MJ: Record Changes` read to roles that carry
-field denials, since the audit trail holds the old and new values. Saved queries are not
-field-filtered; run access to a query is the grant.
+restricting anything. Saved queries are not field-filtered; run access to a query is the grant.

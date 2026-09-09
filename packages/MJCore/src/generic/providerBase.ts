@@ -1,6 +1,7 @@
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityFieldTSType, EntityInfo, EntityPermissionType, FieldSecurityDenialMessage, FieldSecurityError, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IEntityDataProvider, IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem, SearchEntityParams, SearchEntitiesOptions, EntitySearchResult, IRemoteOperationProvider, RemoteOpInvokeOptions, RemoteOpResult } from "./interfaces";
+import { RecordChangeFieldSecurityProjector } from "./recordChangeFieldSecurity";
 import { ComputeRRF, ScoredCandidate } from "./scoring/ReciprocalRankFusion";
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
@@ -2785,6 +2786,66 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         });
     }
 
+    /**
+     * Strips or narrows the `MJ: Record Changes` payload columns a user may not read, using the
+     * denied set of the entity each row is ABOUT rather than of Record Changes itself.
+     *
+     * A sibling of {@link ApplyFieldSecurityProjection} rather than part of it, because that
+     * method short-circuits on `EnableFieldLevelSecurity` for the entity named in the RunView
+     * params — which here is `MJ: Record Changes`, whose flag is off in every default deployment.
+     * Everything about the per-row denied set, the payload treatment, and the fail-closed decision
+     * lives in {@link RecordChangeFieldSecurityProjector}; this is only the RunView wiring.
+     *
+     * Runs at all four RunView projection points, matching the main projection: both cache-hit
+     * paths and both cache-miss paths. The cache-hit path is not optional — it is the exact path
+     * the original cross-user leak runs through, an unrestricted user warming a full-width slot
+     * that a restricted user then hits.
+     *
+     * NEVER applied to `entity_object` results, for the reason the main projection is exempt plus
+     * one specific to this one. The main reason transfers directly: an entity object's fields
+     * round-trip through `GenerateSaveSQL`, which reads EVERY `IsSPParameter` field's value rather
+     * than only dirty ones, so a withheld `ChangesDescription` would be written back as a real
+     * NULL and a narrowed `ChangesJSON` as the narrowed payload — destroying audit history instead
+     * of merely hiding it. Record Changes rows genuinely are saved through the entity layer
+     * (replay writes `Status`/`ErrorLog`, users write `Comments`), so this is not hypothetical.
+     * The additional reason is that the exemption cannot become a hole: the GraphQL RunView
+     * resolver coerces `entity_object` to `simple` on the wire, so an `entity_object` Record
+     * Changes result is by construction server-internal — and server-internal code holding full
+     * values in memory is the documented trust boundary (FLS guide §3.4), exactly as for
+     * encrypted fields.
+     */
+    protected ApplyRecordChangeFieldSecurityProjection<T>(rows: T[], params: RunViewParams, contextUser?: UserInfo): T[] {
+        if (!rows?.length || !contextUser || params.ResultType === 'entity_object') {
+            return rows;
+        }
+        if (!RecordChangeFieldSecurityProjector.IsRecordChangesEntity(this.ResolveRunViewEntitySync(params))) {
+            return rows;
+        }
+        return new RecordChangeFieldSecurityProjector(this, contextUser).ProjectRows(rows);
+    }
+
+    /**
+     * The entity a RunView targets, resolved with NO I/O — for gates that run on the result path,
+     * where an async `RunView.GetEntityNameFromRunViewParams` (which issues a User Views query for
+     * a bare `ViewID`) would be a query per result set.
+     *
+     * Covers the two shapes every caller in this repository uses: an explicit `EntityName`, and a
+     * loaded `ViewEntity`. A request carrying only `ViewID`/`ViewName` with neither is not
+     * resolvable here and returns undefined — the same shape `RunView`'s own row normalization
+     * already declines to handle for the same reason, and the same one
+     * {@link cacheDeniedForViewOnlyRequest} exists to fail closed for on the cache path.
+     */
+    protected ResolveRunViewEntitySync(params: RunViewParams): EntityInfo | undefined {
+        if (params.EntityName) {
+            return this.EntityByName(params.EntityName);
+        }
+        // Weak typing on ViewEntity is deliberate and pre-existing: this is MJCore, so it cannot
+        // import the UserView subclass from core-entities without a circular dependency. Same
+        // idiom as cacheDeniedForViewOnlyRequest and RunView.GetEntityNameFromRunViewParams.
+        const viewEntityID = params.ViewEntity?.Get('EntityID');
+        return typeof viewEntityID === 'string' ? this.EntityByID(viewEntityID) : undefined;
+    }
+
     protected async PreRunView(params: RunViewParams, contextUser?: UserInfo): Promise<typeof this._preRunViewResultType> {
         const preViewStart = performance.now();
 
@@ -2906,6 +2967,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 // column-agnostic by design (one entry serves every field subset), so the
                 // caller's Fields list is unrelated to security and cannot be relied on.
                 results = this.ApplyFieldSecurityProjection(results, params, contextUser);
+
+                // Record Changes payload security, on the same cache-hit path and for the same
+                // reason: the slot is shared and full-width, so whoever warmed it decides nothing
+                // about who may read what out of it.
+                results = this.ApplyRecordChangeFieldSecurityProjection(results, params, contextUser);
 
                 // Reconstruct RunViewResult from cached data
                 cachedResult = {
@@ -3087,6 +3153,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     // single-view path in PreRunView: this result is returned without
                     // PostRunViews projecting it, and the cached superset is column-agnostic.
                     results = this.ApplyFieldSecurityProjection(results, param, contextUser);
+                    results = this.ApplyRecordChangeFieldSecurityProjection(results, param, contextUser);
 
                     const cachedViewResult: RunViewResult = {
                         Success: true,
@@ -3621,6 +3688,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // read-time projection rather than something baked into the cached rows.
         if (result.Success) {
             result.Results = this.ApplyFieldSecurityProjection(result.Results, params, contextUser);
+            result.Results = this.ApplyRecordChangeFieldSecurityProjection(result.Results, params, contextUser);
         }
 
         // Transform the result set into BaseEntity-derived objects, if needed
@@ -3759,6 +3827,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 continue;
             }
             results[i].Results = this.ApplyFieldSecurityProjection(results[i].Results, params[i], contextUser);
+            results[i].Results = this.ApplyRecordChangeFieldSecurityProjection(results[i].Results, params[i], contextUser);
         }
 
         // Transform results to entity objects AFTER caching plain objects.

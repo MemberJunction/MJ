@@ -134,5 +134,39 @@
       "lastModified": "2026-09-04T15:26:48.570Z",
       "checksum": "ae8ced4b258207105c2920d463fecbe6e36994ade97a9dc428a47a93c9dbd395"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Record Changes",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Reader",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "9D25B6D1-DC4C-452A-9A69-30CE3D961945"
+    },
+    "sync": {
+      "lastModified": "2026-09-09T03:44:03.098Z",
+      "checksum": "dcf5d113a1b85e69902b6d7eefef1e45cd6131f39765c610b4a6dcf012904c4f"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: Record Changes",
+      "RoleID": "@lookup:MJ: Roles.Name=Integration Test: FLS Writer",
+      "CanRead": true,
+      "CanCreate": false,
+      "CanUpdate": false,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "F23790F5-A832-4B88-88C9-D667C0E3F29B"
+    },
+    "sync": {
+      "lastModified": "2026-09-09T03:44:03.100Z",
+      "checksum": "1202ef9733fc6e89c9b1236ebc28774ba565f99063ff681dcfc773b68b5ac226"
+    }
   }
 ]

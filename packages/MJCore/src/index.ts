@@ -24,6 +24,7 @@ export * from "./generic/BaseEntitySaveQueue";
 export * from "./generic/EntityFieldRules";
 export * from "./generic/applicationInfo";
 export * from "./generic/providerBase";
+export * from "./generic/recordChangeFieldSecurity";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
