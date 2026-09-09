@@ -443,7 +443,7 @@ export async function checkSingleColumn({ noAI = false, skipWarm = false, keepCo
         }
         log('Running CodeGen to restore pristine working tree...');
         const restoreStartTime = Date.now();
-        runProcess('node', ['packages/MJCLI/bin/run.js', 'codegen', ...(noAI ? ['--no-ai'] : [])], {
+        runProcess('node', ['packages/MJCLI/bin/run.js', 'codegen', '--skipdb', ...(noAI ? ['--no-ai'] : [])], {
           MJ_CODEGEN_REPORT: '1',
           ...(noAI ? { MJ_CODEGEN_NO_AI: '1' } : {}),
         });
