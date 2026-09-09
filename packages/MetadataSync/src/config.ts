@@ -303,6 +303,12 @@ export interface EntityConfig {
      * Per-entity, not a global CLI kill switch.
      */
     skipGeoCoding?: boolean;
+    /**
+     * When false, skips creating or updating sync metadata blocks (`record.sync`)
+     * on records pushed from this directory. Used by decision metadata directories
+     * so decision files never carry sync blocks. Defaults to true.
+     */
+    writeSyncMetadata?: boolean;
   };
   /**
    * Whether to emit __mj_sync_notes in record files during push operations.
