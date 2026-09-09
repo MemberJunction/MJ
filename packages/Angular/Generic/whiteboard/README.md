@@ -111,9 +111,9 @@ The serialized shape is **version 2 (paged)**:
 
 The host renders the complete experience: header (title, saved chip, ownership legend, "What [Agent] sees" popover, Focus toggle, export menu), the canvas with floating toolbar, page strip + zoom cluster, the agent-action toast with Undo, and the status footer.
 
-**Narrowing the tools.** Pass `[ToolRoster]="['select','pan','pen','sticky','text','eraser']"` to offer a subset; `null` (the default) is all eleven. The roster governs **which tools are available**, and it closes every door to a tool it leaves out: the toolbar button, the single-letter keyboard shortcut, and the canvas right-click "add … here" action. Gating only the toolbar would be the CSS hack with a nicer API — the keyboard and the context menu were exactly how a hidden tool stayed reachable. If the active tool leaves the roster the host moves to `select`, or to the roster's first entry when `select` is not on it, and a request to switch to a tool that is not on the roster is ignored rather than redirected. An empty roster narrows the palette to nothing but does **not** make the board read-only, which is a separate input.
+**Narrowing the tools.** Pass `[ToolRoster]="['select','pan','pen','sticky','text','eraser']"` to offer a subset; `null` (the default) is all eleven. The roster governs **which tools are available**, and it closes every door to a tool it leaves out: the toolbar button, the single-letter keyboard shortcut, and the canvas right-click "add … here" action. Gating only the toolbar would be the CSS hack with a nicer API — the keyboard and the context menu were exactly how a hidden tool stayed reachable. If the active tool leaves the roster the host moves to `select`, or to the roster's first entry when `select` is not on it, and a request to switch to a tool that is not on the roster is ignored rather than redirected. An empty roster (or one naming no real tool) narrows the palette to nothing and lands the active tool on `select` — the board always holds a tool, and `select` is the one that can create nothing. It still does **not** make the board read-only; that is `[ReadOnly]="true"`, a separate input on the same host.
 
-What the roster does **not** do: it is not a content policy. It does not restrict what already exists on the board or what an agent places, and it does not gate authoring actions on existing items — Restyle, Duplicate, and pasting an image all keep working regardless of the roster. Use `ReadOnly` for that axis.
+What the roster does **not** do: it is not a content policy. It does not restrict what already exists on the board or what an agent places, and it does not gate authoring on existing items — Duplicate, z-order, Delete and pasting an image all keep working regardless of the roster. The one exception is **Restyle…**, which is hidden when the roster omits `text`: Restyle opens the text tool's style flyout, so without that tool the entry would be present and do nothing. That is the other axis: `[ReadOnly]="true"` renders the board with no toolbar and no keyboard, guards every mutation, and hides the agent toast's Undo — pan and zoom stay live, because reading a board you cannot change still means moving around it. The roster narrows *which tools*; ReadOnly decides *whether anything mutates*.
 
 The zoom cluster supports **hold-to-zoom**: a plain click on + / − steps through the usual presets, while holding the button down zooms continuously in small smooth increments (~3.5% every 50 ms) until release — same 25%–200% clamp.
 
@@ -130,6 +130,7 @@ import { RealtimeWhiteboardHostComponent, WhiteboardState } from '@memberjunctio
       [AgentName]="'Sage'"
       [BoardTitle]="'Planning board'"
       [ToolRoster]="['select', 'pan', 'pen', 'sticky', 'text', 'eraser']"
+      [ReadOnly]="false"
       (SceneDelta)="onSceneDelta($event)"
       (WidgetSubmitted)="onWidgetInput($event)"
       (SaveToArtifactsRequested)="saveBoard()" />

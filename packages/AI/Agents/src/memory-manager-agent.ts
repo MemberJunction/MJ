@@ -2949,7 +2949,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const queryMapping: Array<'users' | 'companies' | 'conversations'> = [];
         const push = (entityName: string, ids: Set<string>, kind: 'users' | 'companies' | 'conversations') => {
             if (ids.size === 0) return;
-            lookupQueries.push({ EntityName: entityName, ExtraFilter: `ID IN (${Array.from(ids).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] });
+            lookupQueries.push({ EntityName: entityName, ExtraFilter: `ID IN (${Array.from(ids).map(id => `'${id}'`).join(',')})`, Fields: ['ID'] }); // pk-filter-ok: callers pass MJ core entities only (Users, Companies, Conversations)
             queryMapping.push(kind);
         };
         push('MJ: Users', referencedUserIds, 'users');

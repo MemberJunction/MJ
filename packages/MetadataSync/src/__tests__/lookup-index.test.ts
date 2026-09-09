@@ -18,11 +18,12 @@ interface CapturedRunViewParams {
 const runViewCalls: CapturedRunViewParams[] = [];
 let mockRunViewResults: Array<Record<string, unknown>> = [];
 
+const idField = { Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true } as unknown as EntityFieldInfo;
 const entityInfoFixture: EntityInfo = {
   Name: 'MJ: Entity Fields',
-  PrimaryKeys: [
-    { Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true } as unknown as EntityFieldInfo,
-  ],
+  PrimaryKeys: [idField],
+  // Real EntityInfo exposes the first key through this accessor; the engine reads it, not PrimaryKeys[0].
+  FirstPrimaryKey: idField,
   Fields: [
     { Name: 'ID', Type: 'uniqueidentifier', NeedsQuotes: true } as unknown as EntityFieldInfo,
     { Name: 'EntityID', Type: 'uniqueidentifier', NeedsQuotes: true } as unknown as EntityFieldInfo,

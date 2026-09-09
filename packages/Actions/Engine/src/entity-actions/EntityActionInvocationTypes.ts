@@ -497,7 +497,7 @@ export class EntityActionInvocationMultipleRecords extends EntityActionInvocatio
             return [];
         }
 
-        const pk = entity.FirstPrimaryKey;
+        const pk = entity.FirstPrimaryKey; // first-pk-ok: guarded above — List invocation throws for composite keys (PrimaryKeys.length !== 1), so this column is the whole key
         const numericKey = this.isNumericFieldType(pk.Type);
         const inList = recordIDs
             .map(id => numericKey ? id.replace(/[^0-9.\-]/g, '') : `'${id.replace(/'/g, "''")}'`)
