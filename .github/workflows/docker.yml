@@ -37,8 +37,13 @@ jobs:
       publish: ${{ steps.decide.outputs.PUBLISH }}
     steps:
       - name: Error out if the trigger did not succeed
+        # Workflow expressions are passed to the shell through env, never interpolated into
+        # the script text: an interpolated value becomes shell source (CodeQL
+        # actions/code-injection). The same rule applies to every run: block in this file.
+        env:
+          TRIGGER_CONCLUSION: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || 'success' }}
         run: |
-          if [ "${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion || 'success' }}" != "success" ]; then
+          if [ "$TRIGGER_CONCLUSION" != "success" ]; then
             echo "::error::The triggering workflow did not succeed"
             exit 1
           fi
@@ -69,6 +74,10 @@ jobs:
         run: |
           # Use MJServer package since core and global are pinned at 2.100.3
           VERSION=$(jq -r .version packages/MJServer/package.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = null ]; then
+            echo "::error::packages/MJServer/package.json has no version; refusing to tag an image as :vnull"
+            exit 1
+          fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
       # A prerelease suffix (`-edge.N`, `-rc.N`, …) means uncertified bits.
@@ -206,8 +215,10 @@ jobs:
           password: ${{ secrets.ASKSKIP_AZ_SP_CLIENT_SECRET }}
 
       - name: Push image to AskSkip Azure Container Registry
+        env:
+          VERSION: ${{ needs.channel.outputs.version }}
         run: |
           docker buildx imagetools create \
             --tag askskip.azurecr.io/memberjunction/api:latest \
-            --tag askskip.azurecr.io/memberjunction/api:v${{ needs.channel.outputs.version }} \
+            --tag "askskip.azurecr.io/memberjunction/api:v${VERSION}" \
             memberjunction/api:latest
