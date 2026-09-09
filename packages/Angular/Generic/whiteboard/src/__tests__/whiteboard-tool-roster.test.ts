@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ClampToolToRoster, IsKnownTool, IsToolAllowed, VisibleToolbarEntries, WHITEBOARD_TOOLS, WhiteboardToolRoster } from '../lib/whiteboard-tool-roster';
+import { ClampToolToRoster, IsKnownTool, IsToolAllowed, SameRoster, VisibleToolbarEntries, WHITEBOARD_TOOLS, WhiteboardToolRoster } from '../lib/whiteboard-tool-roster';
 import type { WhiteboardTool } from '../lib/whiteboard-tool-roster';
 
 /**
@@ -70,12 +70,43 @@ describe('ClampToolToRoster', () => {
     expect(ClampToolToRoster('select', ['lasso', 'pen'])).toBe('pen');
   });
 
-  it('an all-typo roster leaves the current tool alone', () => {
-    expect(ClampToolToRoster('pen', ['lasso', 'wand'])).toBe('pen');
+  it('an empty or all-typo roster falls back to select', () => {
+    // The board never has "no tool", so something must be held — but holding the tool the
+    // roster just revoked kept a CREATING tool live with no toolbar to see it and no key to
+    // change it (an empty roster went on placing widgets). `select` creates nothing.
+    expect(ClampToolToRoster('pen', [])).toBe('select');
+    expect(ClampToolToRoster('html', [])).toBe('select');
+    expect(ClampToolToRoster('pen', ['lasso', 'wand'])).toBe('select');
+  });
+});
+
+describe('SameRoster', () => {
+  it('equal CONTENT is the same roster, whatever the reference', () => {
+    // The case identity got wrong in one direction: a bound array literal is a new reference
+    // every change-detection pass, and treating that as a change re-clamps forever.
+    expect(SameRoster(['pan', 'pen'], ['pan', 'pen'])).toBe(true);
+    const shared: WhiteboardTool[] = ['pan', 'pen'];
+    expect(SameRoster(shared, shared)).toBe(true);
   });
 
-  it('an empty roster leaves the current tool alone (the board never has no tool)', () => {
-    expect(ClampToolToRoster('pen', [])).toBe('pen');
+  it('different content is a different roster, even at the same reference', () => {
+    // And the other direction: an array mutated in place keeps its reference, and treating
+    // that as unchanged leaves a revoked tool held.
+    expect(SameRoster(['pan', 'pen'], ['pan'])).toBe(false);
+    expect(SameRoster(['pan', 'pen'], ['pan', 'eraser'])).toBe(false);
+  });
+
+  it('order counts — the roster is compared as written, not as a set', () => {
+    expect(SameRoster(['pan', 'pen'], ['pen', 'pan'])).toBe(false);
+  });
+
+  it('null is the same roster only as another null (and undefined reads as null)', () => {
+    const missing: WhiteboardToolRoster = undefined;
+    expect(SameRoster(null, null)).toBe(true);
+    expect(SameRoster(missing, null)).toBe(true);
+    expect(SameRoster(null, [])).toBe(false); // "all tools" is not "no tools"
+    expect(SameRoster([], null)).toBe(false);
+    expect(SameRoster([], [])).toBe(true);
   });
 });
 
