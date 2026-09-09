@@ -39,7 +39,7 @@ export class JsonWriteHelper {
         const ordered: any = {};
         // Known keys that are part of RecordData structure
         // __mj_sync_notes is a system-managed key that should appear after sync
-        const knownKeys = ['fields', 'relatedEntities', 'primaryKey', 'sync', '__mj_sync_notes', 'deleteRecord'];
+        const knownKeys = ['$schema', 'primaryKey', 'fields', 'collections', 'embeds', 'extension', 'relatedEntities', 'sync', '__mj_sync_notes', 'deleteRecord'];
 
         // Process keys in original order, preserving user's ordering
         for (const key of Object.keys(data)) {
@@ -72,26 +72,55 @@ export class JsonWriteHelper {
    * @param relatedEntities - Related entity data
    * @param primaryKey - Primary key data
    * @param sync - Sync metadata
+   * @param collections - First-class collections data
+   * @param embeds - First-class embeds data
+   * @param extension - First-class extension data
+   * @param schema - Optional $schema URI
    * @returns RecordData object with guaranteed property order
    */
   static createOrderedRecordData(
     fields: Record<string, any>,
     relatedEntities: Record<string, RecordData[]>,
     primaryKey: Record<string, any>,
-    sync: { lastModified: string; checksum: string }
+    sync: { lastModified: string; checksum: string },
+    collections?: Record<string, RecordData[]>,
+    embeds?: Record<string, RecordData>,
+    extension?: RecordData['extension'],
+    schema?: string
   ): RecordData {
     // Use a Map to preserve insertion order, then convert to object
     const orderedProps = new Map<string, any>();
     
+    if (schema) {
+      orderedProps.set('$schema', schema);
+    }
+
+    if (primaryKey && Object.keys(primaryKey).length > 0) {
+      orderedProps.set('primaryKey', primaryKey);
+    }
+
     // Add properties in the desired order
     orderedProps.set('fields', fields);
+
+    if (collections && Object.keys(collections).length > 0) {
+      orderedProps.set('collections', collections);
+    }
+
+    if (embeds && Object.keys(embeds).length > 0) {
+      orderedProps.set('embeds', embeds);
+    }
+
+    if (extension && Object.keys(extension).length > 0) {
+      orderedProps.set('extension', extension);
+    }
     
-    if (Object.keys(relatedEntities).length > 0) {
+    if (relatedEntities && Object.keys(relatedEntities).length > 0) {
       orderedProps.set('relatedEntities', relatedEntities);
     }
     
-    orderedProps.set('primaryKey', primaryKey);
-    orderedProps.set('sync', sync);
+    if (sync) {
+      orderedProps.set('sync', sync);
+    }
     
     // Convert Map to object while preserving order
     const recordData = {} as RecordData;

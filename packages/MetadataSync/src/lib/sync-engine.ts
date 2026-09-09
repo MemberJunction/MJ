@@ -109,6 +109,16 @@ export interface RecordData {
   primaryKey?: Record<string, any>;
   /** Entity field names and their values */
   fields: Record<string, any>;
+  /** First-class collections organized by collection property name (e.g. Lines) */
+  collections?: Record<string, RecordData[]>;
+  /** First-class 1:1 peer embeds organized by FK field name (e.g. ShipToAddressID) */
+  embeds?: Record<string, RecordData>;
+  /**
+   * First-class 1:1 IsA type extension.
+   * Shorthand form: { entity?: string; fields: Record<string, unknown> }
+   * Map form (for overlapping subtypes): { [EntityName]: { fields: Record<string, unknown> } }
+   */
+  extension?: { entity?: string; fields: Record<string, unknown> } | Record<string, { fields: Record<string, unknown> }>;
   /** Related entities organized by entity name */
   relatedEntities?: Record<string, RecordData[]>;
   /** Synchronization metadata for change tracking */
@@ -254,7 +264,8 @@ export class SyncEngine {
     batchContext?: BatchContext,
     resolutionCollector?: SyncResolutionCollector,
     fieldName?: string,
-    recordProvider?: IMetadataProvider
+    recordProvider?: IMetadataProvider,
+    ownerRecord?: BaseEntity | BatchContextStub | null
   ): Promise<any> {
     // Check recursion depth limit
     const MAX_RECURSION_DEPTH = 50;
@@ -267,7 +278,7 @@ export class SyncEngine {
       // Check if it's an array or a plain object (not a Date, etc.)
       if (Array.isArray(value) || value.constructor === Object) {
         // First recursively process any @lookup, @file, @parent references inside the object
-        const processedValue = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider);
+        const processedValue = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord);
         // Then convert to pretty-printed JSON string for inline metadata objects
         // Objects from @file references will be handled by BaseEntity during save
         return JSON.stringify(processedValue, null, 2);
@@ -283,6 +294,32 @@ export class SyncEngine {
     // This handles cases like npm package names (@mui/material, @angular/core, etc.)
     if (isNonKeywordAtSymbol(value)) {
       return value; // Not a MetadataSync reference, just a string that happens to start with @
+    }
+
+    // Check for @owner: reference
+    if (value.startsWith(METADATA_KEYWORDS.OWNER)) {
+      if (!ownerRecord) {
+        throw new Error(`@owner reference used but no owner record available: ${value}`);
+      }
+      const ownerFieldName = extractKeywordValue(value) || '';
+      const resolvedValue = ownerRecord.Get(ownerFieldName);
+
+      if (resolvedValue === undefined) {
+        const ownerName = (ownerRecord as { EntityInfo?: { Name?: string } }).EntityInfo?.Name || 'unknown';
+        throw new Error(`@owner:${ownerFieldName} resolved to undefined on owner ${ownerName}. Field does not exist or has undefined value.`);
+      }
+
+      // Track the resolution if collector is provided
+      if (resolutionCollector && fieldName) {
+        resolutionCollector.notes.push({
+          type: 'parent',
+          field: `${resolutionCollector.fieldPrefix}.${fieldName}`,
+          expression: value,
+          resolved: String(resolvedValue)
+        });
+      }
+
+      return resolvedValue;
     }
     
     // Check for @parent: reference
@@ -1271,7 +1308,8 @@ export class SyncEngine {
     rootRecord?: BaseEntity | BatchContextStub | null,
     depth: number = 0,
     batchContext?: BatchContext,
-    recordProvider?: IMetadataProvider
+    recordProvider?: IMetadataProvider,
+    ownerRecord?: BaseEntity | BatchContextStub | null
   ): Promise<any> {
     // Handle null and undefined
     if (obj === null || obj === undefined) {
@@ -1281,7 +1319,7 @@ export class SyncEngine {
     // Handle top-level strings (important for array elements that are strings with @ syntax)
     if (typeof obj === 'string') {
       if (isMetadataKeyword(obj)) {
-        return this.processFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider);
+        return this.processFieldValue(obj, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider, ownerRecord);
       }
       return obj;
     }
@@ -1290,7 +1328,7 @@ export class SyncEngine {
     if (Array.isArray(obj)) {
       return Promise.all(
         obj.map(item => 
-          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider)
+          this.processJsonFieldValues(item, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord)
         )
       );
     }
@@ -1304,13 +1342,13 @@ export class SyncEngine {
           // Check if this looks like a reference that needs processing
           // Only process known reference types, ignore other @ strings (like npm packages)
           if (isMetadataKeyword(value)) {
-            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider);
+            result[key] = await this.processFieldValue(value, baseDir, parentRecord, rootRecord, depth, batchContext, undefined, undefined, recordProvider, ownerRecord);
           } else {
             result[key] = value;
           }
         } else if (typeof value === 'object') {
           // Recursively process nested objects
-          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider);
+          result[key] = await this.processJsonFieldValues(value, baseDir, parentRecord, rootRecord, depth, batchContext, recordProvider, ownerRecord);
         } else {
           // Keep primitive values as-is
           result[key] = value;
