@@ -123,7 +123,7 @@ export class RoutinesSectionComponent extends BaseAngularComponent implements On
 
     /** Bridges the slide-in's HistoryRecordOpened to the standard openEntityRecord chain. */
     public OnHistoryRecordOpened(args: HistoryRecordOpenedEventArgs): void {
-        this.openEntityRecord.emit({ entityName: args.EntityName, compositeKey: CompositeKey.FromID(args.RecordID) });
+        this.openEntityRecord.emit({ entityName: args.EntityName, compositeKey: CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(args.EntityName), args.RecordID) });
     }
 
     public OnSlideInClosed(): void {
