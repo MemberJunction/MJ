@@ -10,6 +10,7 @@ import {
 } from '@memberjunction/sql-dialect';
 import fs from 'fs';
 import path from 'path';
+import { ordinalCompare } from '@memberjunction/global';
 import { logError, logStatus } from './status_logging';
 import { configInfo, mjCoreSchema, resolveEntityPackageName } from '../Config/config';
 import { makeDir, sortBySequenceAndCreatedAt } from './util';
@@ -54,7 +55,7 @@ export class GraphQLServerGeneratorBase {
       }
 
       const grouped = groupEntitiesBySchema(entities);
-      const schemas = [...grouped.keys()].sort((a, b) => a.localeCompare(b));
+      const schemas = [...grouped.keys()].sort((a, b) => ordinalCompare(a, b));
       const schemasDir = path.join(outputDirectory, 'graphql-schemas');
       makeDir(schemasDir);
 
@@ -368,11 +369,6 @@ export class ${serverGraphQLTypeName} {`;
     // we only generate resolvers for entities that have a primary key field
     if (entity.PrimaryKeys.length > 0) {
       // first add in the base resolver query to lookup by ID for all entities
-      const auditAccessCode: string = entity.AuditRecordAccess
-        ? `
-        this.createRecordAccessAuditLogRecord(provider, userPayload, '${entity.Name}', ${entity.FirstPrimaryKey.Name})`
-        : '';
-
       sRet = `
 //****************************************************************************
 // RESOLVER for ${entity.Name}
@@ -446,6 +442,17 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
       // key MUST use pk.Name — not pk.CodeName, which diverges for PKs whose DB name needs sanitizing
       // (spaces, leading digit, reserved word). The bound value still comes from the CodeName arg variable.
       const pkCompositeKeyPairs = entity.PrimaryKeys.map((pk) => `{ FieldName: '${pk.Name}', Value: ${pk.CodeName} }`).join(', ');
+
+      // Record-access audit: the RecordID written to the audit log. A single-column key passes the
+      // bare argument variable (declared above under pk.CodeName); a composite key serializes every
+      // column with ToConcatenatedString(), the same round-trippable form Record Changes use.
+      const auditRecordIdExpression = entity.PrimaryKeys.length === 1
+        ? entity.FirstPrimaryKey.CodeName // first-pk-ok: guarded by PrimaryKeys.length === 1
+        : `new CompositeKey([${pkCompositeKeyPairs}]).ToConcatenatedString()`;
+      const auditAccessCode: string = entity.AuditRecordAccess
+        ? `
+        this.createRecordAccessAuditLogRecord(provider, userPayload, '${entity.Name}', ${auditRecordIdExpression})`
+        : '';
 
       if (entity.ExternalDataSourceID) {
         // External-data-source entities have no MJ base view to query — proxy the single-record

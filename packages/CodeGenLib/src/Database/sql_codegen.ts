@@ -2062,7 +2062,7 @@ export class SQLCodeGenBase {
     protected generateEmbeddedGeoSelect(entity: EntityInfo, classNameFirstChar: string): { select: string; joins: string } {
         const specs = ListEmbeddedGeoSpecs(entity.Fields);
         if (specs.length === 0) return { select: '', joins: '' };
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: CodeGen is CLI tool
         const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
         const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
         const selects: string[] = [];
@@ -2077,7 +2077,7 @@ export class SQLCodeGenBase {
             const schema = spec.relatedSchemaName || related.SchemaName;
             const table = spec.relatedBaseTable || related.BaseTable;
             const joinKind = spec.allowsNull ? 'LEFT OUTER' : 'INNER';
-            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`);
+            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`); // first-pk-ok: FK target — a single FK column joins to the related entity's single key
             selects.push(`    ${alias}.${qi(latF.Name)} AS ${qi(spec.lat)},\n    ${alias}.${qi(lngF.Name)} AS ${qi(spec.lng)}`);
         }
         return { select: selects.join(',\n'), joins: joins.join('\n') };

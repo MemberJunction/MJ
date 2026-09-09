@@ -7,7 +7,7 @@ import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
-import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache, EscapeSQLString } from "@memberjunction/global";
+import { MJGlobal, MJEvent, MJEventType, NormalizeUUID, SafeJSONParse, UUIDsEqual, MJLruCache, EscapeSQLString, ordinalCompare } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
 import { LogError, LogStatus, LogStatusEx } from "./logging";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -165,6 +165,7 @@ export type EntityFieldMetadataRow = BaseMetadataRow & {
     ID: string;
     EntityID: string;
     Sequence: number;
+    Name?: string;
     EntityFieldValues?: unknown[];
 };
 export type EntityFieldValueMetadataRow = BaseMetadataRow & { EntityFieldID: string };
@@ -1438,7 +1439,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const textField = entity.Fields.find(f =>
             f.Type.toLowerCase().includes('varchar') || f.Type.toLowerCase().includes('text')
         );
-        return textField?.Name ?? entity.FirstPrimaryKey?.Name ?? 'ID';
+        return textField?.Name ?? entity.FirstPrimaryKey.Name; // first-pk-ok: display-column fallback for FTS results, not a key construction
     }
 
     private async RunViewsUncoalesced<T = any>(params: RunViewParams[], contextUser?: UserInfo): Promise<RunViewResult<T>[]> {
@@ -2023,7 +2024,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // (F1=.. AND F2=..) term per record. Hardcoding `ID` here returned nothing for every entity
         // whose key isn't named ID, so SearchEntity silently produced zero results for them.
         const filter = entity.PrimaryKeys.length === 1
-            ? `${entity.FirstPrimaryKey.Name} IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})`
+            ? `${entity.FirstPrimaryKey.Name} IN (${ids.map(id => `'${EscapeSQLString(id)}'`).join(',')})` // first-pk-ok: guarded by PrimaryKeys.length === 1
             : ids.map(id => `(${CompositeKey.FromURLSegment(entity, id).ToWhereClause()})`).join(' OR ');
         const r = await this.RunView<Record<string, unknown>>({
             EntityName: entity.Name,
@@ -3106,19 +3107,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Cache is stale but we have differential data - merge with cached data
             const fingerprint = this.clientCacheFingerprint(param);
 
-            // Get entity info for primary key field name
+            // Every primary key column, in order. The server's `deletedRecordIDs` are the full
+            // RecordChanges.RecordID segments (`F1|v1||F2|v2` for a composite key), and the merge
+            // keys cached and updated rows the same way — so keying on the first column alone made
+            // composite-key deletes never match and collapsed rows sharing that column. An entity the
+            // server described but this provider cannot resolve is not merged: fall through to the
+            // full refetch below rather than inventing an `ID` key.
             const entity = this.EntityByName(param.EntityName);
-            const primaryKeyFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
+            const primaryKeyFieldNames = entity?.PrimaryKeys.map(pk => pk.Name) ?? [];
+            if (primaryKeyFieldNames.length === 0) {
+                LogError(`ProviderBase: server returned differential data for '${param.EntityName}' but the entity is not in this provider's metadata — refetching in full.`);
+            }
 
             // Apply differential update to cache (runViewCacheEligible, not raw CacheLocal — see the
             // cacheable-gate note in prepareSmartCacheCheckParams; keeps Materialized/count_only/etc. out).
-            if (this.runViewCacheEligibleForWrite(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
+            if (primaryKeyFieldNames.length > 0 && this.runViewCacheEligibleForWrite(param) && checkResult.differentialData && LocalCacheManager.Instance.IsInitialized) {
                 const merged = await LocalCacheManager.Instance.ApplyDifferentialUpdate(
                     fingerprint,
                     param,
                     checkResult.differentialData.updatedRows,
                     checkResult.differentialData.deletedRecordIDs,
-                    primaryKeyFieldName,
+                    primaryKeyFieldNames,
                     checkResult.maxUpdatedAt || new Date().toISOString(),
                     checkResult.rowCount || 0,
                     checkResult.aggregateResults, // Pass fresh aggregate results (can't be differentially computed)
@@ -4617,7 +4626,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // Sort entities alphabetically by name to ensure deterministic ordering
         // This prevents non-deterministic output in CodeGen and other metadata consumers
-        const sortedEntities = entities.sort((a, b) => a.Name.localeCompare(b.Name));
+        const sortedEntities = entities.sort((a, b) => ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
 
         if (fieldValues && fieldValues.length > 0) {
             const fieldValuesByFieldId = this.groupByNormalizedUUID(fieldValues, fv => fv.EntityFieldID);
@@ -4646,7 +4655,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const entityIdKey = NormalizeUUID(e.ID);
 
             const entityFields = fieldsByEntityId.get(entityIdKey) || [];
-            e.EntityFields = entityFields.sort((a, b) => a.Sequence - b.Sequence);
+            e.EntityFields = entityFields.sort((a, b) => (a.Sequence - b.Sequence) || ordinalCompare(a.Name, b.Name) || ordinalCompare(a.ID, b.ID));
             e.EntityPermissions = permissionsByEntityId.get(entityIdKey) || [];
             e.EntityRelationships = relationshipsByEntityId.get(entityIdKey) || [];
             e.EntitySettings = settingsByEntityId.get(entityIdKey) || [];

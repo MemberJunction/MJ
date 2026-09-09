@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { IMetadataProvider, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJRecordProcessEntity } from '@memberjunction/core-entities';
 import {
     ArraySource,
@@ -177,18 +177,18 @@ class FakeEntity {
     public sets: Record<string, unknown> = {};
     public saved = false;
     public readonly LatestResult = { CompleteMessage: '' };
-    public readonly FirstPrimaryKey = { Value: 'child-1' };
+    constructor(public readonly PrimaryKey: CompositeKey = CompositeKey.FromKeyValuePair('ID', 'child-1')) {}
     public async InnerLoad(): Promise<boolean> { return true; }
     public NewRecord(): boolean { return true; }
     public Set(field: string, value: unknown): void { this.sets[field] = value; }
     public async Save(): Promise<boolean> { this.saved = true; return true; }
 }
 
-function fakeProvider(): { provider: IMetadataProvider; created: FakeEntity[] } {
+function fakeProvider(childKey?: CompositeKey): { provider: IMetadataProvider; created: FakeEntity[] } {
     const created: FakeEntity[] = [];
     const provider = {
         EntityByID: () => ({ Name: 'Customer', PrimaryKeys: [{ Name: 'ID' }], FirstPrimaryKey: { Name: 'ID' } }),
-        GetEntityObject: async () => { const e = new FakeEntity(); created.push(e); return e; },
+        GetEntityObject: async () => { const e = new FakeEntity(childKey); created.push(e); return e; },
     } as unknown as IMetadataProvider;
     return { provider, created };
 }
@@ -221,6 +221,22 @@ describe('applyOutputMapping', () => {
         });
         expect(out.createdChildID).toBe('child-1');
         expect(created[0].sets).toEqual({ CustomerID: 'c1', Summary: 'great' });
+    });
+
+    it('reports a composite-keyed child by its whole key, not just the first column', async () => {
+        const compositeKey = CompositeKey.FromKeyValuePairs([
+            { FieldName: 'OrderID', Value: '11055' },
+            { FieldName: 'LineNo', Value: 3 },
+        ]);
+        const { provider } = fakeProvider(compositeKey);
+        const out = await applyOutputMapping({
+            outputMapping: { childRecord: { entity: 'Order Line Notes', parentField: 'OrderID', map: { Note: '$.note' } } },
+            result: { note: 'n' },
+            record,
+            contextUser: USER,
+            provider,
+        });
+        expect(out.createdChildID).toBe('OrderID|11055||LineNo|3');
     });
 
     it('dry-run resolves field values into previewFields but saves NOTHING', async () => {

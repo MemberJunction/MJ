@@ -544,7 +544,7 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
 
         // Update value - convert node IDs to CompositeKeys
         if (this.SelectionMode === 'single') {
-            this._value = nodes.length > 0 ? CompositeKey.FromID(nodes[0].ID) : null;
+            this._value = nodes.length > 0 ? this.nodeToKey(nodes[0]) : null;
             this.ValueChange.emit(this._value);
             this.SelectionChange.emit(nodes.length > 0 ? nodes[0] : null);
 
@@ -556,12 +556,36 @@ export class TreeDropdownComponent extends BaseAngularComponent implements OnIni
                 this.Close('selection');
             }
         } else {
-            this._value = nodes.map(n => CompositeKey.FromID(n.ID));
+            this._value = nodes.map(n => this.nodeToKey(n));
             this.ValueChange.emit(this._value);
             this.SelectionChange.emit(nodes.length > 0 ? nodes : null);
         }
 
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Build the CompositeKey for a selected node. A node's `ID` is the value of its config's `IDField`
+     * (leaf or branch), so the key is named after that field rather than a hardcoded `ID`. When no
+     * `IDField` is configured, the field is the entity's primary key — the tree identifies a node by
+     * exactly one string, so a single-column key is the only shape this control can represent.
+     */
+    private nodeToKey(node: TreeNode): CompositeKey {
+        const config = node.Type === 'leaf' && this.LeafConfig ? this.LeafConfig : this.BranchConfig;
+        const idField = config?.IDField ?? this.resolvePrimaryKeyFieldName(config?.EntityName);
+        return CompositeKey.FromKeyValuePair(idField, node.ID);
+    }
+
+    /** The single primary-key column of the configured entity, used when a config has no explicit `IDField`. */
+    private resolvePrimaryKeyFieldName(entityName: string | undefined): string {
+        const entityInfo = entityName ? this.ProviderToUse.EntityByName(entityName) : null;
+        if (!entityInfo) {
+            throw new Error(`TreeDropdown: cannot resolve the ID field — entity '${entityName ?? ''}' was not found in metadata and no IDField is configured.`);
+        }
+        if (entityInfo.PrimaryKeys.length !== 1) {
+            throw new Error(`TreeDropdown: entity '${entityName}' has a composite primary key; set IDField on the tree config to name the node identity column.`);
+        }
+        return entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded by PrimaryKeys.length === 1 above — a tree node carries exactly one ID string
     }
 
     /**

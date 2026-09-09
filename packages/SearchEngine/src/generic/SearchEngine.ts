@@ -2050,7 +2050,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         contextUser: UserInfo,
         permitted: SearchResultItem[]
     ): Promise<void> {
-        const pkField = entity.FirstPrimaryKey;
+        const pkField = entity.FirstPrimaryKey; // first-pk-ok: presence check; Name is only used under the PrimaryKeys.length === 1 branch
         if (!pkField) {
             // Cannot verify without a primary key — exclude results
             LogError(`SearchEngine: Entity "${entity.Name}" has no primary key, cannot verify result ownership`);

@@ -133,6 +133,9 @@
                 <i class="fa-solid fa-angles-left"></i>
               </button>
             </div>
+          <!-- Rail items scroll on their own when they outgrow the viewport;
+               the pin / collapse toolbar above stays put. -->
+          <div class="mj-forms-chrome-rail-items">
           @for (group of ChromeFirstClassGroups; track group.Key) {
             <div class="mj-forms-chrome-rail-item"
                  role="button"
@@ -221,6 +224,7 @@
               </div>
             }
           }
+          </div>
           }
         </nav>
       }
