@@ -165,7 +165,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
                 + "'" + dep.EntityName + '\' AS "EntityName", '
                 + "'" + dep.RelatedEntityName + '\' AS "RelatedEntityName", '
                 + primaryKeySelectString + ' AS "PrimaryKeyValue", '
-                + "'" + dep.FieldName + '\' AS "FieldName" '
+                + "'" + dep.FieldName + '\' AS "FieldName", '
+                + 'false AS "IsSoftLink", '
+                + 'NULL AS "EntityIDFieldName" '
                 + 'FROM ' + pgDialect.QuoteSchema(relatedEntityInfo.SchemaName, relatedEntityInfo.BaseView) + ' '
                 + 'WHERE ' + pgDialect.QuoteIdentifier(dep.FieldName) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
         }
@@ -173,9 +175,18 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
     }
 
     protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
+        // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+        // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+        // link, which is a different thing entirely.
+        const targetEntity = this.EntityByName(entityName);
+        if (!targetEntity) {
+            throw new Error(`Entity ${entityName} not found in metadata`);
+        }
+        // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+        const targetRecordID = compositeKey.ToRecordID().replace(/'/g, "''");
+
         let sSQL = '';
         this.Entities.forEach(entity => {
-            const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
             const pkParts: string[] = [];
             for (const pk of entity.PrimaryKeys) {
                 pkParts.push("'" + pk.Name + "' || '|' || CAST(" + pgDialect.QuoteIdentifier(pk.Name) + " AS TEXT)");
@@ -184,14 +195,19 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider implements I
 
             entity.Fields.filter(f => f.EntityIDFieldName && f.EntityIDFieldName.length > 0).forEach(f => {
                 if (sSQL.length > 0) sSQL += ' UNION ALL ';
+                // Both literals are always quoted regardless of any primary key type: the discriminator
+                // column is a uuid FK to __mj.Entity and the payload column is text. Deriving quoting from
+                // the holder's primary key type emitted unquoted literals for an integer-keyed holder.
                 sSQL += 'SELECT '
                     + "'" + entityName + '\' AS "EntityName", '
                     + "'" + entity.Name + '\' AS "RelatedEntityName", '
                     + primaryKeySelectString + ' AS "PrimaryKeyValue", '
-                    + "'" + f.Name + '\' AS "FieldName" '
+                    + "'" + f.Name + '\' AS "FieldName", '
+                    + 'true AS "IsSoftLink", '
+                    + "'" + f.EntityIDFieldName + '\' AS "EntityIDFieldName" '
                     + 'FROM ' + pgDialect.QuoteSchema(entity.SchemaName, entity.BaseView) + ' '
-                    + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + ' = ' + quotes + entity.ID + quotes
-                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + ' = ' + quotes + compositeKey.GetValueByIndex(0) + quotes;
+                    + 'WHERE ' + pgDialect.QuoteIdentifier(f.EntityIDFieldName) + " = '" + targetEntity.ID + "'"
+                    + ' AND ' + pgDialect.QuoteIdentifier(f.Name) + " = '" + targetRecordID + "'";
             });
         });
         return sSQL;

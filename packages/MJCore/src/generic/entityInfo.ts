@@ -3684,6 +3684,26 @@ export class RecordDependency {
      * The value of the primary key field in the parent record. MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
      */
     PrimaryKey: CompositeKey
+    /**
+     * True when this dependency is a **polymorphic (soft) link** rather than a hard foreign key -
+     * that is, when `FieldName` is the `RecordID`-shaped payload column of an `EntityID`/`RecordID`
+     * pair declared via {@link EntityFieldInfo.EntityIDFieldName}.
+     *
+     * The distinction matters because the two kinds of link store the target differently: a hard
+     * foreign key holds the bare primary key value, while a polymorphic link holds the canonical
+     * `CompositeKey.ToRecordID()` encoding (`ID|<guid>`). Anything that *rewrites* the link - record
+     * merge, most importantly - has to write the right one, so this flag is what tells it which.
+     *
+     * Optional, and absent/false means "hard foreign key", so callers written before polymorphic
+     * links were detected keep their existing behavior.
+     */
+    IsSoftLink?: boolean
+    /**
+     * For a soft link ({@link IsSoftLink}), the name of the sibling discriminator column that says
+     * which entity `FieldName` points at - the value of `EntityIDFieldName` on the payload field.
+     * Undefined for hard foreign keys.
+     */
+    EntityIDFieldName?: string
 }
 
 /**

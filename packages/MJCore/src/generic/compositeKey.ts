@@ -552,6 +552,175 @@ export class CompositeKey extends FieldValueCollection {
     }
 
     /**
+     * The canonical serialization of this key for storage in a polymorphic `RecordID` column — the
+     * payload half of an `EntityID`/`RecordID` pair. Always the fully-prefixed
+     * `Field1|Value1||Field2|Value2` form, so the string carries its own field names and round-trips
+     * without the reader needing to know the entity.
+     *
+     * This is the one encoding MJ writes going forward. It matches what
+     * `SQLServerDataProvider` already writes to `RecordChange.RecordID` and what
+     * `Metadata.GetRecordChanges` reads back; the bare `RecordGeoCode` form is the outlier and is
+     * read through {@link FromLegacyRecordID} until it migrates.
+     *
+     * Unlike {@link ToConcatenatedString}, this **throws** rather than emitting a string that cannot
+     * be parsed back: a value containing the value delimiter (`|`) would re-split into the wrong
+     * field/value boundary on the way in. Silently writing such a value is how a `RecordID` column
+     * ends up holding a key nothing can resolve.
+     *
+     * @example "ID|38CB433E-F36B-1410-8DA0-00021F8B792E"   // single-column key
+     * @example "OrderID|11055||LineNo|3"                    // composite key
+     * @throws if the key holds no pairs, or any value contains the value delimiter
+     */
+    public ToRecordID(): string {
+        if (this.KeyValuePairs.length === 0) {
+            throw new Error('Cannot build a RecordID from an empty CompositeKey - no key value pairs are set.');
+        }
+        const valueDelimiter = CompositeKey.DefaultValueDelimiter;
+        for (const kvPair of this.KeyValuePairs) {
+            if (kvPair.Value === null || kvPair.Value === undefined) {
+                // ToConcatenatedString would render this as the literal text "null"/"undefined",
+                // producing a pointer that resolves to nothing. A key component of a real record is
+                // never null, so this is a caller bug worth surfacing.
+                throw new Error(
+                    `Cannot build a RecordID: primary key field '${kvPair.FieldName}' has no value. ` +
+                    `A polymorphic RecordID must identify an existing record.`,
+                );
+            }
+            const text = String(kvPair.Value);
+            if (text.includes(valueDelimiter)) {
+                throw new Error(
+                    `Cannot build a RecordID for ${kvPair.FieldName}: the value contains the '${valueDelimiter}' delimiter ` +
+                    `and would not round-trip. Values stored in a polymorphic RecordID column cannot contain '${valueDelimiter}'.`,
+                );
+            }
+        }
+        return this.ToConcatenatedString();
+    }
+
+    /**
+     * Reads a canonical `RecordID` string (see {@link ToRecordID}) back into a key, **validated
+     * against the entity it is supposed to belong to**.
+     *
+     * This is deliberately not a rename of {@link LoadFromConcatenatedString}, which cannot signal
+     * failure: given a string with no delimiter it leaves `KeyValuePairs` empty and returns
+     * normally, so every caller has to sniff the string itself to find out whether the parse
+     * happened. That is the defect behind the two hand-rolled sniffers in shared Angular code, and
+     * it is why a legacy bare composite (`val1||val2`) silently parses into phantom pairs with
+     * garbage field names instead of being rejected.
+     *
+     * The field-name check is what makes that safe: `val1||val2` parses cleanly as a shape, but
+     * produces field names the entity does not have, so it is caught here rather than reaching the
+     * database as a key that matches nothing. A string with no delimiter at all is accepted only for
+     * a single-column primary key, where it is unambiguous, and takes its field name from
+     * `FirstPrimaryKey` — the same fallback {@link LoadFromURLSegment} already uses.
+     *
+     * @param entity the entity the record id belongs to; its `PrimaryKeys` define the expected shape
+     * @param recordID the stored `RecordID` value
+     * @throws if `recordID` is empty, or its field names/arity do not match `entity.PrimaryKeys`
+     */
+    public static FromRecordID(entity: EntityInfo, recordID: string): CompositeKey {
+        if (!entity) {
+            throw new Error('FromRecordID requires an EntityInfo - the parsed field names are validated against its primary keys.');
+        }
+        if (recordID === null || recordID === undefined || recordID.length === 0) {
+            throw new Error(`Cannot parse an empty RecordID for entity ${entity.Name}.`);
+        }
+
+        const fieldDelimiter = CompositeKey.DefaultFieldDelimiter;
+        const valueDelimiter = CompositeKey.DefaultValueDelimiter;
+        const primaryKeys = entity.PrimaryKeys;
+
+        if (!recordID.includes(valueDelimiter)) {
+            // No delimiter at all. Unambiguous only for a single-column key, where the field name is
+            // implied by the entity rather than carried in the string.
+            if (primaryKeys.length !== 1) {
+                throw new Error(
+                    `RecordID '${recordID}' for entity ${entity.Name} carries no field names, but that entity has a ` +
+                    `${primaryKeys.length}-column primary key (${primaryKeys.map((pk) => pk.Name).join(', ')}). ` +
+                    `A composite key must be stored in the '${fieldDelimiter}'-delimited form produced by ToRecordID().`,
+                );
+            }
+            return CompositeKey.FromKeyValuePair(primaryKeys[0].Name, recordID);
+        }
+
+        const parsed = new CompositeKey();
+        parsed.LoadFromConcatenatedString(recordID, fieldDelimiter, valueDelimiter);
+        CompositeKey.ValidateAgainstPrimaryKeys(entity, parsed, recordID);
+        return parsed;
+    }
+
+    /**
+     * Reads the **transitional** bare-value `RecordID` form: a single primary key value with no field
+     * name (`38CB433E-…`), or a composite written as values only (`val1||val2`).
+     *
+     * Only `RecordGeoCode` writes this, via `GeoCodeSyncService` and the matching T-SQL in the
+     * base-view generator. It exists so the two hand-rolled sniffers (`recent-access.service.ts`,
+     * `record-tags.component.ts`) can be replaced by one named function whose name says it is
+     * temporary — and it is deliberately separate from {@link FromRecordID} so that "I am reading a
+     * legacy encoding" is a decision at the call site rather than a guess inside the parser. Delete
+     * it once `RecordGeoCode` is re-encoded.
+     *
+     * Field names come from `entity.PrimaryKeys` **positionally**, because the stored string does not
+     * carry them. That is exactly why the format is being retired: position is not a contract, so a
+     * primary key column reorder silently remaps the key.
+     *
+     * @throws if the number of values does not match `entity.PrimaryKeys`
+     */
+    public static FromLegacyRecordID(entity: EntityInfo, recordID: string): CompositeKey {
+        if (!entity) {
+            throw new Error('FromLegacyRecordID requires an EntityInfo - field names are taken positionally from its primary keys.');
+        }
+        if (recordID === null || recordID === undefined || recordID.length === 0) {
+            throw new Error(`Cannot parse an empty legacy RecordID for entity ${entity.Name}.`);
+        }
+
+        const values = recordID.split(CompositeKey.DefaultFieldDelimiter);
+        const primaryKeys = entity.PrimaryKeys;
+        if (values.length !== primaryKeys.length) {
+            throw new Error(
+                `Legacy RecordID '${recordID}' for entity ${entity.Name} has ${values.length} value(s) but that entity has a ` +
+                `${primaryKeys.length}-column primary key (${primaryKeys.map((pk) => pk.Name).join(', ')}).`,
+            );
+        }
+
+        return CompositeKey.FromKeyValuePairs(values.map((value, i) => new KeyValuePair(primaryKeys[i].Name, value)));
+    }
+
+    /**
+     * Shared check behind {@link FromRecordID}: the parsed pairs must name exactly the entity's
+     * primary key columns, once each. Order is not required - a stored key written before a column
+     * reorder is still valid, since the field names travel with the value.
+     */
+    private static ValidateAgainstPrimaryKeys(entity: EntityInfo, parsed: CompositeKey, recordID: string): void {
+        const primaryKeys = entity.PrimaryKeys;
+        const expected = primaryKeys.map((pk) => pk.Name);
+
+        if (parsed.KeyValuePairs.length !== primaryKeys.length) {
+            throw new Error(
+                `RecordID '${recordID}' parsed to ${parsed.KeyValuePairs.length} field(s) but entity ${entity.Name} has a ` +
+                `${primaryKeys.length}-column primary key (${expected.join(', ')}). ` +
+                `A bare composite value list (the legacy RecordGeoCode encoding) must be read with FromLegacyRecordID().`,
+            );
+        }
+
+        const seen = new Set<string>();
+        for (const kvPair of parsed.KeyValuePairs) {
+            const match = expected.find((name) => name.trim().toLowerCase() === (kvPair.FieldName ?? '').trim().toLowerCase());
+            if (!match) {
+                throw new Error(
+                    `RecordID '${recordID}' names field '${kvPair.FieldName}', which is not a primary key of entity ` +
+                    `${entity.Name} (expected one of: ${expected.join(', ')}). ` +
+                    `A bare composite value list (the legacy RecordGeoCode encoding) must be read with FromLegacyRecordID().`,
+                );
+            }
+            if (seen.has(match)) {
+                throw new Error(`RecordID '${recordID}' names primary key field '${match}' more than once for entity ${entity.Name}.`);
+            }
+            seen.add(match);
+        }
+    }
+
+    /**
      * Creates a CompositeKey from a simple object where the keys are the field names and the values are the values.
      * @param obj 
      * @returns 

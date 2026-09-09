@@ -845,12 +845,23 @@ export class SQLServerDataProvider
   protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
+    //
+    // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+    // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+    // link (e.g. `MJ: Task Links`), which is a different thing entirely.
+    const targetEntity = this.EntityByName(entityName);
+    if (!targetEntity) {
+      throw new Error(`Entity ${entityName} not found in metadata`);
+    }
+    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+    // A RecordID column holds this, not the bare primary key value.
+    const targetRecordID = compositeKey.ToRecordID();
+
     let sSQL = '';
     this.Entities.forEach((entity) => {
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
       const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
@@ -861,19 +872,34 @@ export class SQLServerDataProvider
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
         // based on that.
+        //
+        // Both literals are always quoted regardless of any primary key type: the discriminator column
+        // is a uniqueidentifier FK to __mj.Entity, and the payload column is nvarchar. Deriving quoting
+        // from the holder's primary key type emitted unquoted literals for an integer-keyed holder.
         sSQL += `SELECT
                             '${entityName}' AS EntityName,
                             '${entity.Name}' AS RelatedEntityName,
                             ${primaryKeySelectString} AS PrimaryKeyValue,
-                            '${f.Name}' AS FieldName
+                            '${f.Name}' AS FieldName,
+                            1 AS IsSoftLink,
+                            '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
                             [${entity.SchemaName}].[${entity.BaseView}]
                         WHERE
-                            [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND
-                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}`; // we only use the first primary key value, this is because we don't yet support composite primary keys
+                            [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
+                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
       });
     });
     return sSQL;
+  }
+
+  /**
+   * Escapes a value for interpolation into a single-quoted T-SQL string literal. The soft-link and
+   * hard-link dependency queries are assembled as SQL text rather than parameterized, so a value
+   * carrying an apostrophe has to be doubled or it terminates the literal.
+   */
+  protected escapeSQLLiteral(value: string): string {
+    return value.replace(/'/g, "''");
   }
 
   protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
@@ -889,7 +915,9 @@ export class SQLServerDataProvider
                         '${entityDependency.EntityName}' AS EntityName,
                         '${entityDependency.RelatedEntityName}' AS RelatedEntityName,
                         ${primaryKeySelectString} AS PrimaryKeyValue,
-                        '${entityDependency.FieldName}' AS FieldName
+                        '${entityDependency.FieldName}' AS FieldName,
+                        0 AS IsSoftLink,
+                        NULL AS EntityIDFieldName
                     FROM
                         [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
                     WHERE
