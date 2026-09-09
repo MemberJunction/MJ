@@ -1,4 +1,5 @@
 import { BaseEntity, RunView, UserInfo, EntityInfo, Metadata } from '@memberjunction/core';
+import { ordinalCompare } from '@memberjunction/global';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { EntityConfig } from '../config';
 import { JsonWriteHelper } from './json-write-helper';
@@ -650,7 +651,7 @@ export class RecordProcessor {
           for (const pk of childEntityInfo.PrimaryKeys) {
             const aVal = String(a.Get(pk.Name) ?? '');
             const bVal = String(b.Get(pk.Name) ?? '');
-            const cmp = aVal.localeCompare(bVal);
+            const cmp = ordinalCompare(aVal, bVal);
             if (cmp !== 0) return cmp;
           }
           return 0;

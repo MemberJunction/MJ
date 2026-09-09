@@ -610,7 +610,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
 
       expect(onConfirm).toHaveBeenCalledTimes(1);
       expect(onConfirm).toHaveBeenCalledWith(
-        expect.stringContaining("Authoritative collection 'OrderLines' on 'Orders' will delete 1 unmentioned record")
+        expect.stringContaining("Authoritative collection 'OrderLines' on 'Orders' will delete unmentioned records (initial batch: 1 record")
       );
       expect(existingItems.length).toBe(9);
       expect(existingItems.map((i) => i.Get('ID'))).toEqual([
@@ -823,6 +823,58 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       // Unknown collection name fails resolution
       const tUnknown = resolveCollectionRelationship(mockEntityInfo, 'NonExistentCollection');
       expect(tUnknown).toBeNull();
+    });
+
+    it('throws explicit error on ambiguity within winning tier in collection-resolver', async () => {
+      const { resolveCollectionRelationship } = await import('../lib/collection-resolver');
+
+      const ambiguousEntityInfo = {
+        Name: 'Orders',
+        RelatedEntities: [
+          {
+            RelatedEntity: 'OrderLines1',
+            RelatedEntityJoinField: 'OrderID',
+            DisplayName: 'Lines',
+            RelatedRecordCollection: null,
+          },
+          {
+            RelatedEntity: 'OrderLines2',
+            RelatedEntityJoinField: 'OrderID',
+            DisplayName: 'Lines',
+            RelatedRecordCollection: null,
+          },
+        ],
+      } as unknown as EntityInfo;
+
+      expect(() => resolveCollectionRelationship(ambiguousEntityInfo, 'Lines')).toThrow(
+        /Ambiguous collection resolution for 'Lines' on entity 'Orders'/
+      );
+    });
+
+    it('warns on malformed RelatedRecordCollection JSON and continues evaluation', async () => {
+      const { resolveCollectionRelationship } = await import('../lib/collection-resolver');
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const malformedEntityInfo = {
+        Name: 'Orders',
+        RelatedEntities: [
+          {
+            RelatedEntity: 'OrderLines',
+            RelatedEntityJoinField: 'OrderID',
+            DisplayName: 'OrderLines',
+            RelatedRecordCollection: '{ invalid json ...',
+          },
+        ],
+      } as unknown as EntityInfo;
+
+      // Tier 1 fails with warning, falls back to Tier 2 (DisplayName)
+      const res = resolveCollectionRelationship(malformedEntityInfo, 'OrderLines');
+      expect(res).not.toBeNull();
+      expect(res?.relatedEntity).toBe('OrderLines');
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("malformed RelatedRecordCollection JSON on entity 'Orders'")
+      );
+      warnSpy.mockRestore();
     });
   });
 

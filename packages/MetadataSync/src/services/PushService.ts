@@ -2709,7 +2709,7 @@ export class PushService {
             if (!options.dryRun && callbacks?.onConfirm) {
               const confirmKey = `${entityName}.${colName}`;
               if (!this.confirmedCollections.has(confirmKey)) {
-                const confirmMsg = `Authoritative collection '${colName}' on '${entityName}' will delete ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}. Do you want to proceed? (yes/no)`;
+                const confirmMsg = `Authoritative collection '${colName}' on '${entityName}' will delete unmentioned records (initial batch: ${unmentionedItems.length} record${unmentionedItems.length > 1 ? 's' : ''}). Authorize authoritative deletions for collection '${colName}' on '${entityName}'? (yes/no)`;
                 const confirmed = await callbacks.onConfirm(confirmMsg);
                 if (!confirmed) {
                   throw new Error(

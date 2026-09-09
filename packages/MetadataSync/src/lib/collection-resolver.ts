@@ -35,6 +35,7 @@ export function resolveCollectionRelationship(
   let parsedConfig: Record<string, unknown> | null = null;
 
   // Tier 1: Explicit Name in RelatedRecordCollection JSON
+  const tier1Matches: Array<{ rel: EntityRelationshipInfo; config: Record<string, unknown> }> = [];
   for (const rel of rels) {
     if (rel.RelatedRecordCollection) {
       try {
@@ -42,47 +43,77 @@ export function resolveCollectionRelationship(
           ? (JSON.parse(rel.RelatedRecordCollection) as Record<string, unknown>)
           : (rel.RelatedRecordCollection as Record<string, unknown>);
         if (parsed && typeof parsed["Name"] === "string" && parsed["Name"].trim().toLowerCase() === target) {
-          matchedRel = rel;
-          parsedConfig = parsed;
-          break;
+          tier1Matches.push({ rel, config: parsed });
         }
-      } catch {
-        // malformed JSON skipped at this tier
+      } catch (err) {
+        console.warn(
+          `collection-resolver: malformed RelatedRecordCollection JSON on entity '${entityInfo.Name}' relationship to '${rel.RelatedEntity}': ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
   }
 
+  if (tier1Matches.length > 1) {
+    throw new Error(
+      `Ambiguous collection resolution for '${colName}' on entity '${entityInfo.Name}': matches multiple relationships (${tier1Matches.map((m) => m.rel.RelatedEntity).join(', ')}) at Tier 1 (explicit Name).`
+    );
+  } else if (tier1Matches.length === 1 && tier1Matches[0]) {
+    matchedRel = tier1Matches[0].rel;
+    parsedConfig = tier1Matches[0].config;
+  }
+
   // Tier 2: DisplayName
   if (!matchedRel) {
+    const tier2Matches: EntityRelationshipInfo[] = [];
     for (const rel of rels) {
       if (rel.DisplayName && rel.DisplayName.trim().toLowerCase() === target) {
-        matchedRel = rel;
-        break;
+        tier2Matches.push(rel);
       }
+    }
+    if (tier2Matches.length > 1) {
+      throw new Error(
+        `Ambiguous collection resolution for '${colName}' on entity '${entityInfo.Name}': matches multiple relationships (${tier2Matches.map((m) => m.RelatedEntity).join(', ')}) at Tier 2 (DisplayName).`
+      );
+    } else if (tier2Matches.length === 1 && tier2Matches[0]) {
+      matchedRel = tier2Matches[0];
     }
   }
 
   // Tier 3: Full RelatedEntity Name
   if (!matchedRel) {
+    const tier3Matches: EntityRelationshipInfo[] = [];
     for (const rel of rels) {
       if (rel.RelatedEntity && rel.RelatedEntity.trim().toLowerCase() === target) {
-        matchedRel = rel;
-        break;
+        tier3Matches.push(rel);
       }
+    }
+    if (tier3Matches.length > 1) {
+      throw new Error(
+        `Ambiguous collection resolution for '${colName}' on entity '${entityInfo.Name}': matches multiple relationships (${tier3Matches.map((m) => m.RelatedEntity).join(', ')}) at Tier 3 (Full RelatedEntity Name).`
+      );
+    } else if (tier3Matches.length === 1 && tier3Matches[0]) {
+      matchedRel = tier3Matches[0];
     }
   }
 
   // Tier 4: Stripped RelatedEntity Name (with plural/singular tolerance)
   if (!matchedRel) {
+    const tier4Matches: EntityRelationshipInfo[] = [];
     for (const rel of rels) {
       const stripped = rel.RelatedEntity?.replace(/^.*:\s*/, "").replace(/\s+/g, "");
       if (stripped) {
         const s = stripped.toLowerCase();
         if (s === target || s + "s" === target || target + "s" === s) {
-          matchedRel = rel;
-          break;
+          tier4Matches.push(rel);
         }
       }
+    }
+    if (tier4Matches.length > 1) {
+      throw new Error(
+        `Ambiguous collection resolution for '${colName}' on entity '${entityInfo.Name}': matches multiple relationships (${tier4Matches.map((m) => m.RelatedEntity).join(', ')}) at Tier 4 (Stripped Name).`
+      );
+    } else if (tier4Matches.length === 1 && tier4Matches[0]) {
+      matchedRel = tier4Matches[0];
     }
   }
 
