@@ -153,6 +153,23 @@ export interface IntegrationRunManifest {
     runKind: IntegrationRunKind;
     integrationID?: string;
     companyIntegrationID?: string;
+    /**
+     * The COMPLETE set of connections this run touched, for runs that can legitimately span more
+     * than one (an RSU batch takes N pipeline inputs, each from a potentially different connector).
+     *
+     * This is an AUTHORIZATION input, not decoration. A run artifact is a single, undivided event
+     * stream — one run's descriptions, affected table names and error messages interleave every
+     * connection in the batch, and there is no way to serve a caller a partial view of it. So the
+     * read rule is AND, not OR: a caller may read the run only if they are authorized for EVERY id
+     * listed here. Authorizing on "any one of them" would hand connection A's schema-change
+     * descriptions to someone who only holds rights on connection B.
+     *
+     * `companyIntegrationID` (singular) is populated only when this array has exactly one member,
+     * so a single-connection run keeps reporting one unambiguous connection everywhere it is
+     * summarised. Absent/empty here means the run is not tenant-scoped, which stays unreadable
+     * through the per-company endpoints.
+     */
+    companyIntegrationIDs?: string[];
     objectName?: string;
     triggerType?: 'Manual' | 'Scheduled' | 'Webhook' | 'Pipeline' | 'Restart';
     startedAt: string;
