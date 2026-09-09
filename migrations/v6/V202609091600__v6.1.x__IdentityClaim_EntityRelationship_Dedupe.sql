@@ -44,3 +44,35 @@ DECLARE @IdentityClaimsEntityID UNIQUEIDENTIFIER = '58C8C895-E3AA-48C2-BA68-8083
 )
 DELETE FROM [${flyway:defaultSchema}].[EntityRelationship]
 WHERE [ID] IN (SELECT [ID] FROM ranked WHERE rn > 1);
+
+
+/* ----------------------------------------------------------------------------
+   Same defect, second table: V202609091200 also guards its four EntityFieldValue
+   inserts (the IdentityClaim.Status value list) on PRIMARY KEY.
+
+   This is NOT hypothetical or developer-only. It reproduces on a clean CI
+   database whenever those rows already exist under any other ids — which is
+   exactly what #3367 does, since its own healing migration supplies the same
+   four values under different ids and sorts earlier. The observable result is a
+   generated Zod union with every value twice:
+
+       Status: z.union([z.literal('Claimed'), z.literal('Claimed'),
+                        z.literal('Expired'), z.literal('Expired'), ...])
+
+   Keyed on the natural key (EntityFieldID + Value), keeping the earliest row.
+   ---------------------------------------------------------------------------- */
+
+DECLARE @StatusFieldID UNIQUEIDENTIFIER = 'F925BD99-4B5A-48A4-878A-385E8F2D87E7';
+
+;WITH rankedValues AS (
+    SELECT
+        [ID],
+        ROW_NUMBER() OVER (
+            PARTITION BY [EntityFieldID], [Value]
+            ORDER BY [__mj_CreatedAt] ASC, [ID] ASC
+        ) AS rn
+    FROM [${flyway:defaultSchema}].[EntityFieldValue]
+    WHERE [EntityFieldID] = @StatusFieldID
+)
+DELETE FROM [${flyway:defaultSchema}].[EntityFieldValue]
+WHERE [ID] IN (SELECT [ID] FROM rankedValues WHERE rn > 1);
