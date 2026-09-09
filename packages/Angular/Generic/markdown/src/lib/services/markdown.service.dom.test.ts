@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import type { Mermaid } from 'mermaid';
 import { MarkdownService } from './markdown.service';
 
@@ -174,6 +174,48 @@ describe('MarkdownService (DOM)', () => {
 
       expect(result).toBe(false);
       expect(loads).toBe(0);
+    });
+  });
+
+  describe('parse sanitizes unless scripts are explicitly enabled', () => {
+    it('strips handlers and script from passthrough HTML', () => {
+      const out = service.parse('<div><img src="x" onerror="alert(1)"><script>alert(2)</script></div>', { enableHtml: true });
+      expect(out).not.toContain('onerror');
+      expect(out).not.toContain('<script');
+      expect(out).toContain('<img');
+    });
+
+    it('leaves script in place when enableJavaScript is true (the opt-out)', () => {
+      const out = service.parse('<div>x</div><script>alert(1)</script>', { enableHtml: true, enableJavaScript: true });
+      expect(out).toContain('<script>');
+    });
+
+    it('sanitizeHtml is exposed for consumers that bind parse() output themselves', () => {
+      expect(service.sanitizeHtml('<a href="javascript:alert(1)" onclick="x()">x</a>')).toBe('<a>x</a>');
+    });
+  });
+
+  describe('unwrapMiscodedHtml is inert and keeps leading style', () => {
+    afterEach(() => vi.restoreAllMocks());
+    const miscoded = '<pre><code>&lt;style&gt;.card{color:red}&lt;/style&gt;&lt;div class="card"&gt;&lt;img src="x" onerror="alert(1)"&gt;&lt;p&gt;hi&lt;/p&gt;&lt;/div&gt;</code></pre>';
+
+    it('never creates elements on the live document while unwrapping', () => {
+      // Building the replacement on the live document would run image error handlers at
+      // parse time, before parse() sanitizes the returned string.
+      const createElement = vi.spyOn(document, 'createElement');
+      unwrap(miscoded);
+      expect(createElement).not.toHaveBeenCalled();
+    });
+
+    it('unwraps the structural HTML and keeps a leading <style>', () => {
+      const out = unwrap(miscoded);
+      expect(out).not.toContain('<pre>');
+      expect(out).toContain('<style>.card{color:red}</style>');
+      expect(out).toContain('<div class="card">');
+    });
+
+    it('returns markup for parse() to sanitize rather than executing it', () => {
+      expect(unwrap(miscoded)).toContain('onerror="alert(1)"');
     });
   });
 });

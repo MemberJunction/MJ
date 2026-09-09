@@ -1,4 +1,4 @@
-import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError, IMetadataProvider, BaseEnginePropertyConfig } from '@memberjunction/core';
+import { BaseEngine, Metadata, UserInfo, LogStatus, RunView, EntityInfo, LogError, IMetadataProvider, BaseEnginePropertyConfig, CompositeKey } from '@memberjunction/core';
 import { MJListDetailEntityType, MJListEntity, MJListEntityType, MJRecommendationEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { RecommendationProviderBase } from './ProviderBase';
@@ -162,7 +162,6 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
 
     const entityID: string = list.EntityID;
     const entity: EntityInfo = md.Entities.find((e) => UUIDsEqual(e.ID, entityID));
-    const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes? "'" : '';
 
     const listDetailsResult = rvListDetailsResult[1];
     if(!listDetailsResult.Success) {
@@ -174,10 +173,10 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
       return [];
     }
 
-    const recordIDs: string = listDetailsResult.Results.map((ld: MJListDetailEntityType) => `${needsQuotes}${ld.RecordID}${needsQuotes}`).join(',');
-    const rvEntityResult = await rv.RunView({
+    const recordIDs: string[] = listDetailsResult.Results.map((ld: MJListDetailEntityType) => ld.RecordID);
+    const rvEntityResult = await rv.RunView<Record<string, unknown>>({
       EntityName: entityName,
-      ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDs})`,
+      ExtraFilter: this.BuildPrimaryKeyFilter(entity, recordIDs),
       IgnoreMaxRows: true,
     }, currentUser);
 
@@ -186,11 +185,11 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
 
     let recommendations: MJRecommendationEntity[] = [];
-    for(const entity of rvEntityResult.Results) {
+    for(const row of rvEntityResult.Results) {
       const recommendationEntity: MJRecommendationEntity = await md.GetEntityObject<MJRecommendationEntity>('MJ: Recommendations', currentUser);
       recommendationEntity.NewRecord();
       recommendationEntity.SourceEntityID = entityID;
-      recommendationEntity.SourceEntityRecordID = entity.ID;
+      recommendationEntity.SourceEntityRecordID = CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
       recommendations.push(recommendationEntity);
     }
 
@@ -207,11 +206,13 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
 
     LogStatus(`Getting recommendations for entity: ${entityName}`);
-    const needsQuotes: string = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
-    const recordIDsFilter: string = recordIDs.map((id) => `${needsQuotes}${id}${needsQuotes}`).join(',');
-    const rvEntityResult = await rv.RunView({
+    if(recordIDs.length === 0) {
+      return [];
+    }
+
+    const rvEntityResult = await rv.RunView<Record<string, unknown>>({
       EntityName: entityName,
-      ExtraFilter: `${entity.FirstPrimaryKey.Name} IN (${recordIDsFilter})`,
+      ExtraFilter: this.BuildPrimaryKeyFilter(entity, recordIDs),
       IgnoreMaxRows: true,
     }, currentUser);
 
@@ -220,14 +221,32 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     }
 
     let recommendations: MJRecommendationEntity[] = [];
-    for(const entity of rvEntityResult.Results) {
+    for(const row of rvEntityResult.Results) {
       const recommendationEntity: MJRecommendationEntity = await md.GetEntityObject<MJRecommendationEntity>('MJ: Recommendations', currentUser);
       recommendationEntity.NewRecord();
       recommendationEntity.SourceEntityID = entity.ID;
+      recommendationEntity.SourceEntityRecordID = CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment();
       recommendations.push(recommendationEntity);
     }
 
     return recommendations;
+  }
+
+  /**
+   * Builds the filter that selects exactly the given records of `entity`. Each id is a compact
+   * CompositeKey URL segment — what `MJ: List Details.RecordID` holds and what callers pass to
+   * {@link GetRecommendationsByRecordIDs}: the bare value for a single-column key (whatever the
+   * column is called), `F1|v1||F2|v2` for a composite key. A single-column key uses one `IN (...)`;
+   * a composite key needs one `(F1=.. AND F2=..)` term per record, since no single column can be
+   * compared against a multi-column value.
+   */
+  protected BuildPrimaryKeyFilter(entity: EntityInfo, recordIDs: Array<string | number>): string {
+    if (entity.PrimaryKeys.length === 1) {
+      const quote: string = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+      const values: string = recordIDs.map((id) => `${quote}${String(id).replace(/'/g, "''")}${quote}`).join(',');
+      return `${entity.FirstPrimaryKey.Name} IN (${values})`; // first-pk-ok: guarded by PrimaryKeys.length === 1 above
+    }
+    return recordIDs.map((id) => `(${CompositeKey.FromURLSegment(entity, String(id)).ToWhereClause()})`).join(' OR ');
   }
 
   private async CreateRecommendationErrorList(recommendationRunID: string, entityID: string, currentUser?: UserInfo): Promise<MJListEntity | null> {

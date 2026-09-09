@@ -65,6 +65,7 @@
     [AgentName]="AgentName"
     [Tool]="Tool"
     [ToolRoster]="ToolRoster"
+    [ReadOnly]="ReadOnly"
     [PenColor]="PenColor"
     [PenWidth]="PenWidth"
     [ShapeKind]="ShapeKind"
@@ -80,6 +81,9 @@
     (ContentApplying)="ContentApplying.emit($event)"
     (ContentApplied)="ContentApplied.emit($event)"/>
 
+  <!-- the toolbar is authoring chrome: a read-only board renders none, matching
+       WhiteboardSnapshotComponent. Zoom stays — navigation is not mutation. -->
+  @if (!ReadOnly) {
   <mj-realtime-whiteboard-toolbar
     [ActiveTool]="Tool"
     [ToolRoster]="ToolRoster"
@@ -104,6 +108,7 @@
     (StyleSelection)="board.ApplyTextStyleToSelection($event)"
     (Undo)="State.Undo()"
     (Redo)="State.Redo()"/>
+  }
 
   <mj-realtime-whiteboard-zoom
     [ZoomPercent]="board.ZoomPercent"
@@ -119,7 +124,9 @@
     <div class="board-toast">
       <i class="fa-solid fa-feather"></i>
       <span class="board-toast__text">{{ ToastText }}</span>
-      <span class="undo" (click)="OnToastUndo($event)"><i class="fa-solid fa-rotate-left"></i> Undo</span>
+      @if (!ReadOnly) {
+        <span class="undo" (click)="OnToastUndo($event)"><i class="fa-solid fa-rotate-left"></i> Undo</span>
+      }
     </div>
   }
 </div>

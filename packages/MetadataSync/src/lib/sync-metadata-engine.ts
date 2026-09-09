@@ -282,8 +282,21 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
     }
 
     // 2. Pairwise combinations (for 2-field lookups)
+    // Only index all pairs if entity has a small number of fields (<= 5).
+    // For wide tables (30-60 fields), generating all F*(F-1)/2 pairs across tens of thousands
+    // of rows causes massive memory bloat (tens of millions of strings) and OOMs Node.
+    // Real-world 2-field lookups invariably involve standard identifying keys.
+    // Any other composite lookup falls through to findCachedByLookup's on-demand repair.
+    const isSmallFieldCount = fields.length <= 5;
+    const LOOKUP_CANDIDATE_FIELDS = new Set([
+      'id', 'name', 'code', 'entityid', 'sku', 'slug', 'accountnumber',
+      'type', 'displayname', 'parentid', 'categoryid', 'companyid', 'status'
+    ]);
+
     for (let i = 0; i < fields.length; i++) {
+      if (!isSmallFieldCount && !LOOKUP_CANDIDATE_FIELDS.has(fields[i].name)) continue;
       for (let j = i + 1; j < fields.length; j++) {
+        if (!isSmallFieldCount && !LOOKUP_CANDIDATE_FIELDS.has(fields[j].name)) continue;
         const pair = [fields[i], fields[j]].sort((a, b) => ordinalCompare(a.name, b.name));
         const key = `${pair[0].name}=${pair[0].value}|${pair[1].name}=${pair[1].value}`;
         if (!lookupIndex.has(key)) {
@@ -292,8 +305,8 @@ export class SyncMetadataEngine extends BaseEngine<SyncMetadataEngine> {
       }
     }
 
-    // 3. Composite of ALL fields (for 3+ field lookups)
-    if (fields.length > 2) {
+    // 3. Composite of ALL fields (for 3-5 field lookups)
+    if (fields.length > 2 && fields.length <= 5) {
       const sorted = [...fields].sort((a, b) => ordinalCompare(a.name, b.name));
       const allKey = sorted.map(f => `${f.name}=${f.value}`).join('|');
       if (!lookupIndex.has(allKey)) {

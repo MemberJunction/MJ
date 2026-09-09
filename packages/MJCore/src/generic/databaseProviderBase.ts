@@ -830,7 +830,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const ufEntity: BaseEntity = await this.GetEntityObject('MJ: User Favorites', contextUser || this.CurrentUser);
             if (currentFavoriteId !== null) {
                 // delete the record since we are setting isFavorite to FALSE
-                await ufEntity.InnerLoad(CompositeKey.FromKeyValuePair('ID', currentFavoriteId));
+                await ufEntity.InnerLoad(CompositeKey.FromID(currentFavoriteId));
                 if (await ufEntity.Delete()) return;
                 else throw new Error(`Error deleting user favorite`);
             } else {
@@ -869,10 +869,19 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         try {
             const recordDependencies: RecordDependency[] = [];
 
-            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
-            if (entityDependencies.length === 0) return recordDependencies;
+            // Validate up front. Reporting "no dependencies" for an entity we cannot resolve would be
+            // indistinguishable, to a caller about to delete a record, from "this record is safe to
+            // delete" - the same failure mode as skipping the soft-link query altogether.
+            if (!this.EntityByName(entityName)) {
+                throw new Error(`Entity ${entityName} not found in metadata`);
+            }
 
-            const hardSQL = this.BuildHardLinkDependencySQL(entityDependencies, compositeKey);
+            const entityDependencies: EntityDependency[] = await this.GetEntityDependencies(entityName);
+
+            // Deliberately NO early return when there are no hard (foreign key) dependents. An entity
+            // whose only dependents are polymorphic EntityID/RecordID links is precisely the case the
+            // soft-link query exists to serve, and returning here skipped building it entirely.
+            const hardSQL = entityDependencies.length > 0 ? this.BuildHardLinkDependencySQL(entityDependencies, compositeKey) : '';
             const softSQL = this.BuildSoftLinkDependencySQL(entityName, compositeKey);
             const sSQL = [hardSQL, softSQL].filter(s => s.length > 0).join(' UNION ALL ');
 
@@ -889,14 +898,35 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     }
 
     /**
+     * The value to write into a dependent record's link column so it points at the surviving record
+     * of a merge.
+     *
+     * The two kinds of link store their target differently, and writing the wrong one is silent: a
+     * hard foreign key holds the bare primary key value, while a polymorphic `RecordID` column holds
+     * the canonical `ID|<guid>` encoding produced by {@link CompositeKey.ToRecordID}. Writing a bare
+     * value into a `RecordID` column leaves a pointer that resolves to nothing *and* re-introduces
+     * the second encoding this work exists to eliminate - so it would corrupt exactly the rows the
+     * merge was supposed to preserve.
+     *
+     * Separated from `MergeRecords` so the choice is directly testable, since nothing about the
+     * resulting row makes the mistake visible after the fact.
+     */
+    protected ResolveMergeLinkValue(dependency: RecordDependency, survivingRecordKey: CompositeKey): unknown {
+        return dependency.IsSoftLink ? survivingRecordKey.ToRecordID() : survivingRecordKey.GetValueByIndex(0);
+    }
+
+    /**
      * Parses raw SQL results from dependency queries into RecordDependency objects.
      */
     private parseRecordDependencyResults(result: Record<string, unknown>[]): RecordDependency[] {
         const recordDependencies: RecordDependency[] = [];
         for (const r of result) {
-            const entityInfo = this.EntityByName(r.EntityName as string);
-            if (!entityInfo) {
-                throw new Error(`Entity ${r.EntityName} not found in metadata`);
+            // PrimaryKeyValue is the key of the *dependent* record - the row that holds the link - so it
+            // is the RelatedEntity's key, and that is the entity whose primary key columns it must be
+            // mapped onto. Consumers use it that way too (record merge loads it as RelatedEntityName).
+            const relatedEntityInfo = this.EntityByName(r.RelatedEntityName as string);
+            if (!relatedEntityInfo) {
+                throw new Error(`Entity ${r.RelatedEntityName} not found in metadata`);
             }
 
             const depCompositeKey: CompositeKey = new CompositeKey();
@@ -904,15 +934,21 @@ export abstract class DatabaseProviderBase extends ProviderBase {
             const keyValues = (r.PrimaryKeyValue as string).split(CompositeKey.DefaultFieldDelimiter);
             keyValues.forEach((kv) => {
                 const parts = kv.split(CompositeKey.DefaultValueDelimiter);
-                pkeys[parts[0]] = parts[1];
+                // Everything after the first delimiter is the value, so a key value containing the
+                // delimiter survives instead of being truncated.
+                pkeys[parts[0]] = parts.slice(1).join(CompositeKey.DefaultValueDelimiter);
             });
-            depCompositeKey.LoadFromEntityInfoAndRecord(entityInfo, pkeys);
+            depCompositeKey.LoadFromEntityInfoAndRecord(relatedEntityInfo, pkeys);
 
             recordDependencies.push({
                 EntityName: r.EntityName as string,
                 RelatedEntityName: r.RelatedEntityName as string,
                 FieldName: r.FieldName as string,
                 PrimaryKey: depCompositeKey,
+                // Both dialects emit this literal on every row of the union: 1/true for the polymorphic
+                // branch, 0/false for the foreign key branch.
+                IsSoftLink: r.IsSoftLink === true || r.IsSoftLink === 1,
+                EntityIDFieldName: (r.EntityIDFieldName as string) ?? undefined,
             });
         }
         return recordDependencies;
@@ -2200,7 +2236,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
         }
 
         const listEntity: BaseEntity = await this.GetEntityObject('MJ: Lists', contextUser);
-        await listEntity.InnerLoad(CompositeKey.FromKeyValuePair('ID', params.ListID));
+        await listEntity.InnerLoad(CompositeKey.FromID(params.ListID));
 
         const duplicateRun: BaseEntity = await this.GetEntityObject('MJ: Duplicate Runs', contextUser);
         duplicateRun.NewRecord();
@@ -2276,7 +2312,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 for (const dependency of dependencies) {
                     const relatedEntity: BaseEntity = await this.GetEntityObject(dependency.RelatedEntityName, contextUser);
                     await relatedEntity.InnerLoad(dependency.PrimaryKey);
-                    relatedEntity.Set(dependency.FieldName, request.SurvivingRecordCompositeKey.GetValueByIndex(0));
+                    relatedEntity.Set(dependency.FieldName, this.ResolveMergeLinkValue(dependency, request.SurvivingRecordCompositeKey));
                     if (!(await relatedEntity.Save())) {
                         newRecStatus.Success = false;
                         newRecStatus.Message = `Error updating dependency record ${dependency.PrimaryKey.ToString()} for entity ${dependency.RelatedEntityName} to point to surviving record ${request.SurvivingRecordCompositeKey.ToString()}`;
