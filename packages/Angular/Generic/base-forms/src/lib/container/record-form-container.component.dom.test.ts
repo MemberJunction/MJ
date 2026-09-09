@@ -1,9 +1,15 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { By } from '@angular/platform-browser';
 import type { BaseEntity } from '@memberjunction/core';
 import { renderComponentFixture, query, capture } from '@memberjunction/ng-test-utils';
 import { MjRecordFormContainerComponent } from './record-form-container.component';
+import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
+import { DETAILS_SECTION_KEY } from '../chrome/form-chrome';
+import type { FormChromeSpec } from '../chrome/form-chrome';
+import type { BaseFormComponent } from '../base-form-component';
+import { UserInfoEngine } from '@memberjunction/core-entities';
+import { Subject } from 'rxjs';
 
 /**
  * DOM coverage for <mj-record-form-container> — the form host CodeGen wraps every entity form in
@@ -58,8 +64,10 @@ class RecordTagsStub { @Input() Record: unknown; @Input() WidthPx = 0; }
 class RecordAttachmentsStub { @Input() Record: unknown; @Input() Visible = false; }
 @Component({ standalone: true, selector: 'mj-list-management-dialog', template: '' })
 class ListMgmtStub { @Input() visible = false; @Input() config: unknown; }
+@Component({ standalone: true, selector: 'mj-form-contributions', template: '' })
+class FormContributionsStub { @Input() Record: unknown; @Input() FormComponent: unknown; @Input() FormContext: unknown; @Input() BakedSectionKeys: unknown; @Input() ShowRelatedEntities = true; }
 
-const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordAttachmentsStub, ListMgmtStub];
+const CHILD_STUBS = [ToolbarStub, SectionManagerStub, PanelSlotStub, EmptyStateStub, IsaPanelStub, RecordChangesStub, RecordTagsStub, RecordAttachmentsStub, ListMgmtStub, FormContributionsStub];
 
 const RECORD = { EntityInfo: { Name: 'Accounts' } } as unknown as BaseEntity;
 
@@ -140,4 +148,110 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
   // NOTE: the <mj-form-panel-slot> host renders only when the form has resolved sections/panels
   // (data wiring beyond this container's own contract); its own coverage lives in
   // form-panel-slot.component.dom.test.ts. PanelSlotStub is imported only so the template compiles.
+});
+
+/**
+ * Left-nav chrome classes on the panels in the live DOM (`applyChromeDomVisibility`). The container
+ * reaches panels by tag + data attributes precisely so slot-mounted panels (never ContentChildren)
+ * get the same hide/show, so plain <mj-collapsible-panel> elements appended to the panels column are
+ * the honest fixture here — no projection needed.
+ */
+describe('MjRecordFormContainerComponent (DOM) — left-nav Details card classes', () => {
+  const railSpec = (): FormChromeSpec => ({
+    Layout: 'left-nav',
+    Groups: [
+      { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card', SectionKeys: ['identity', 'history', 'physical', 'pinnedGrid'], IsMore: false },
+      { Key: 'careLogs', Title: 'Care Logs', Icon: 'fa fa-notes-medical', SectionKeys: ['careLogs'], IsMore: false },
+    ],
+    RelatedRoles: new Map(),
+    MoreSectionKeys: [],
+  });
+
+  function setUp(order: Record<string, number>) {
+    // Persisting the active group goes through UserInfoEngine; keep it out of the DOM test.
+    vi.spyOn(UserInfoEngine.Instance, 'SetSettingDebounced').mockImplementation(() => undefined);
+    const form = {
+      getSectionDisplayOrder: (key: string) => order[key] ?? 0,
+      formContext: {},
+      RecordReady: new Subject<void>(),
+      RecordRefreshed: new Subject<void>(),
+    } as unknown as BaseFormComponent;
+    const f = render({ FormComponent: form });
+    const column = query(f, '.mj-forms-all-panels') as HTMLElement;
+    const add = (key: string, variant: 'default' | 'related-entity') => {
+      const el = document.createElement('mj-collapsible-panel');
+      el.setAttribute('data-section-key', key);
+      el.setAttribute('data-variant', variant);
+      column.appendChild(el);
+      return el;
+    };
+    const el = {
+      identity: add('identity', 'default'),
+      history: add('history', 'default'),
+      physical: add('physical', 'default'),
+      pinnedGrid: add('pinnedGrid', 'related-entity'),
+      careLogs: add('careLogs', 'related-entity'),
+    };
+    f.debugElement.injector.get(FormChromeCoordinator).Apply(railSpec());
+    return { f, el };
+  }
+  const classes = (e: HTMLElement) => Array.from(e.classList).filter((c) => c.startsWith('mj-chrome') || c.startsWith('mj-form-role')).sort();
+
+  it('marks Details field panels as one card with first/last on the visual edges (display order, not DOM order)', () => {
+    const { f, el } = setUp({ identity: 2, history: 0, physical: 1 });
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(classes(el.history)).toEqual(['mj-chrome-details', 'mj-chrome-details-first', 'mj-chrome-show']);
+    expect(classes(el.physical)).toEqual(['mj-chrome-details', 'mj-chrome-show']);
+    expect(classes(el.identity)).toEqual(['mj-chrome-details', 'mj-chrome-details-last', 'mj-chrome-show']);
+    // The other rail item is hidden and carries none of the card classes.
+    expect(classes(el.careLogs)).toEqual(['mj-chrome-hidden']);
+  });
+
+  it('keeps a related grid pinned into Details outside the card (shown, chrome-less, never an edge)', () => {
+    const { f, el } = setUp({});
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(classes(el.pinnedGrid)).toEqual(['mj-chrome-show']);
+    // DOM order wins on tied display order, and the grid is skipped when picking the edges.
+    expect(el.identity.classList.contains('mj-chrome-details-first')).toBe(true);
+    expect(el.physical.classList.contains('mj-chrome-details-last')).toBe(true);
+  });
+
+  it('never gives a card edge to a panel that hid itself (section filter / no renderable content)', () => {
+    const { f, el } = setUp({ identity: 0, history: 1, physical: 2 });
+    // The panel's own host class when IsVisible is false — display: none via the panel CSS.
+    el.identity.classList.add('mj-search-hidden');
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(el.identity.classList.contains('mj-chrome-details-first')).toBe(false);
+    expect(el.identity.classList.contains('mj-chrome-details-last')).toBe(false);
+    // The first VISIBLE segment closes the top of the card instead.
+    expect(classes(el.history)).toEqual(['mj-chrome-details', 'mj-chrome-details-first', 'mj-chrome-show']);
+    expect(classes(el.physical)).toEqual(['mj-chrome-details', 'mj-chrome-details-last', 'mj-chrome-show']);
+
+    // It comes back when the panel shows again.
+    el.identity.classList.remove('mj-search-hidden');
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(el.identity.classList.contains('mj-chrome-details-first')).toBe(true);
+    expect(el.history.classList.contains('mj-chrome-details-first')).toBe(false);
+  });
+
+  it('moves the card edges when the display order changes, and clears them when Details is not active', () => {
+    const order: Record<string, number> = { identity: 0, history: 1, physical: 2 };
+    const { f, el } = setUp(order);
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(el.identity.classList.contains('mj-chrome-details-first')).toBe(true);
+    expect(el.physical.classList.contains('mj-chrome-details-last')).toBe(true);
+
+    // Reorder: physical now sorts first, identity last.
+    order.physical = -1; order.identity = 5;
+    f.componentInstance.OnChromeGroupActivate(DETAILS_SECTION_KEY);
+    expect(classes(el.physical)).toEqual(['mj-chrome-details', 'mj-chrome-details-first', 'mj-chrome-show']);
+    expect(classes(el.identity)).toEqual(['mj-chrome-details', 'mj-chrome-details-last', 'mj-chrome-show']);
+    expect(classes(el.history)).toEqual(['mj-chrome-details', 'mj-chrome-show']);
+
+    // Switch to the grid's rail item: Details panels hide and drop every card class.
+    f.componentInstance.OnChromeGroupActivate('careLogs');
+    expect(classes(el.identity)).toEqual(['mj-chrome-hidden']);
+    expect(classes(el.physical)).toEqual(['mj-chrome-hidden']);
+    expect(classes(el.careLogs)).toEqual(['mj-chrome-show']);
+  });
 });

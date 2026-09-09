@@ -2,8 +2,8 @@ import fs, { JsonWriteOptions } from 'fs-extra';
 import { RecordData } from './sync-engine';
 
 /**
- * Helper class for writing JSON files with consistent property ordering for RecordData objects.
- * Ensures that all metadata files have the same property order: fields, relatedEntities, primaryKey, sync
+ * Helper class for writing JSON files for RecordData objects.
+ * Preserves the caller's key order, recursing into known keys (fields, relatedEntities, primaryKey, sync, etc.).
  */
 export class JsonWriteHelper {
   
