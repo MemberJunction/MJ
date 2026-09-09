@@ -11,6 +11,8 @@ import {
   HeadingInfo,
   HighlightFunction
 } from '@memberjunction/markdown-core';
+import DOMPurify from 'dompurify';
+import { escapeHtml } from '@memberjunction/markdown-core';
 
 // Import common Prism language components
 // Additional languages can be imported by the consuming application
@@ -39,6 +41,65 @@ import 'prismjs/components/prism-graphql';
  * concerns here — Mermaid rendering, copy buttons, and the DOM-based fixup of
  * HTML that marked miscoded as a code block.
  */
+/**
+ * The DOMPurify instance used for rendered HTML, created once per window and configured
+ * once. A private instance rather than the shared default so the hooks below cannot leak
+ * into other packages' DOMPurify usage, and so the configuration is parsed once instead
+ * of on every render.
+ *
+ * Profile: HTML + SVG + SVG filters, which keeps structural markup, inline styles, data
+ * attributes and inline vector graphics and removes the script vectors. Deviations from
+ * DOMPurify's defaults, each deliberate:
+ * - FORCE_BODY: a document that starts with `<style>` keeps it (otherwise the parser hoists
+ *   a leading style element into <head> and it is dropped); agent-authored mockups start
+ *   that way.
+ * - SANITIZE_DOM off: DOMPurify would strip any id or name that collides with a document
+ *   or form property (`title`, `name`, `location`, ...), which are exactly the slugs
+ *   heading ids produce. This app does not read globals off `window` by element id, so
+ *   DOM clobbering has no effect here, and heading anchors matter.
+ * - `target` on links is kept, with `rel="noopener noreferrer"` enforced when it is set.
+ * - `<use>` is allowed only with a same-document reference (`#id`); external references
+ *   are removed. SMIL `<animate>`/`<set>` stay disallowed: they can rewrite `href`.
+ */
+let purifier: ReturnType<typeof DOMPurify> | null = null;
+
+function getPurifier(): ReturnType<typeof DOMPurify> | null {
+  if (purifier) return purifier;
+  if (typeof window === 'undefined') return null;
+  const instance = DOMPurify(window);
+  if (!instance.isSupported) return null;
+  instance.setConfig({
+    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    ADD_TAGS: ['use'],
+    ADD_ATTR: ['target'],
+    FORCE_BODY: true,
+    SANITIZE_DOM: false,
+  });
+  instance.addHook('uponSanitizeAttribute', (node, data) => {
+    const name = data.attrName.toLowerCase();
+    if (node.nodeName.toLowerCase() === 'use' && (name === 'href' || name === 'xlink:href')) {
+      // Same-document sprite references only. Anything else can load an external document.
+      data.keepAttr = data.attrValue.trim().startsWith('#');
+    }
+  });
+  instance.addHook('afterSanitizeAttributes', (node) => {
+    const tag = node.nodeName.toLowerCase();
+    if (tag === 'a' && node.hasAttribute('target')) {
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+    if (tag === 'use') {
+      // The attribute hook above has already dropped any non-fragment reference; a <use>
+      // with nothing left to reference is removed rather than left as an empty element.
+      const ref = node.getAttribute('href') ?? node.getAttribute('xlink:href');
+      if (!ref || !ref.trim().startsWith('#')) {
+        node.parentNode?.removeChild(node);
+      }
+    }
+  });
+  purifier = instance;
+  return purifier;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -103,7 +164,28 @@ export class MarkdownService {
       html = this.unwrapMiscodedHtml(html);
     }
 
+    // The service is the one place every consumer passes through (the component, the chat
+    // widget, anything binding parse() output to innerHTML), so the sanitizer runs here.
+    // enableJavaScript is the explicit opt-out.
+    if (!this.currentConfig.enableJavaScript) {
+      html = this.sanitizeHtml(html);
+    }
+
     return html;
+  }
+
+  /**
+   * Sanitize rendered HTML for binding to innerHTML while preserving layout HTML, inline
+   * styles and inline SVG. See the DOMPurify configuration at the top of this file for
+   * what is kept and removed. Where no DOM is available to sanitize with, the markup is
+   * escaped and rendered as text rather than trusted.
+   */
+  public sanitizeHtml(html: string): string {
+    const instance = getPurifier();
+    if (!instance) {
+      return escapeHtml(html);
+    }
+    return instance.sanitize(html);
   }
 
   /**
@@ -426,16 +508,15 @@ export class MarkdownService {
                                testDoc.body.innerHTML.includes('<'));
 
           if (hasStructure) {
-            // Replace the <pre> with the actual HTML content. Build the nodes inside the
-            // inert DOMParser documents, never the live `document`: setting innerHTML on a
-            // live element fires image error handlers and similar at parse time, before any
-            // downstream sanitizer has seen the markup (the component sanitizes the string
-            // this method returns, not the nodes it builds).
-            const fragment = doc.createDocumentFragment();
-            for (const child of Array.from(testDoc.body.childNodes)) {
-              fragment.appendChild(doc.importNode(child, true));
-            }
-            pre.parentNode?.replaceChild(fragment, pre);
+            // Replace the <pre> with the actual HTML content. The nodes are built inside a
+            // <template> of the inert DOMParser document, never on the live `document`:
+            // setting innerHTML on a live element fires image error handlers at parse time,
+            // before the sanitizer in parse() has seen the markup. A <template> also parses
+            // in body context, so a mockup that starts with <style> keeps it (a full-document
+            // parse would hoist it into <head> and drop it).
+            const template = doc.createElement('template');
+            template.innerHTML = content;
+            pre.replaceWith(template.content);
             modified = true;
           }
         }
