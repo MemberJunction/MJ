@@ -22152,6 +22152,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "8BB6B7E5-5DFC-475B-89E8-E421D288A2E8"
           }
         },
         {
@@ -22194,6 +22197,9 @@
             "Comments": "GLM-5.3 rate card on Z.AI direct, effective August 19, 2026: $1.40/1M input, $4.40/1M output, $0.26/1M cached input - identical to the GLM-5.2 rate card. Cached-input storage is listed by Z.AI as free for a limited time. Resolves the 'pricing TBD' note left when GLM-5.3 was added on 2026-08-24. Z.AI serves the model as `glm-5.3` at https://api.z.ai/api/paas/v4/chat/completions; 1M context / 128K max output. Z.AI also sells a separate GLM Coding Plan subscription that bundles GLM-5.3 - that is not a per-token rate and is not modelled. Sources: https://docs.z.ai/guides/llm/glm-5.3 ; https://www.requesty.ai/models/zai/glm-5.3 ; https://venturebeat.com/technology/glm-5-3-hits-the-api-at-1-4-4-4-per-million-tokens",
             "CacheReadPricePerUnit": 0.26,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "8B753340-01F8-44F8-A2DB-E5C04DD680FC"
           }
         }
       ]
@@ -22554,6 +22560,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "58B66BCD-2B8E-4276-B0C2-6D67DEEFA28B"
           }
         },
         {
@@ -22570,6 +22579,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "AFE5C960-9585-4BB0-95AF-6CD42A775DCE"
           }
         },
         {
@@ -22586,6 +22598,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "88223ADC-55B1-44E8-B151-7B06FE41A68F"
           }
         },
         {
@@ -22602,6 +22617,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "267A591F-F434-4FB9-8B89-F2347978C560"
           }
         }
       ],
@@ -22621,6 +22639,9 @@
             "Comments": "Claude Fable 5.1 pricing on Anthropic direct as of the September 1, 2026 launch: $10/$50 per 1M in/out, unchanged from Fable 5. Cache hits and refreshes $0.25/1M (0.025x base input - a 75% cut from Fable 5's $1/1M). CacheWritePricePerUnit records the 5-minute cache write at $12.50/1M; the 1-hour write is $20/1M and is not representable in this schema. Batch API is half rate ($5/$25). Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://www.anthropic.com/claude-fable-and-mythos-5-1",
             "CacheReadPricePerUnit": 0.25,
             "CacheWritePricePerUnit": 12.5
+          },
+          "primaryKey": {
+            "ID": "4A2F1F93-ED8F-491B-8F59-4FA8727190B8"
           }
         },
         {
@@ -22638,6 +22659,9 @@
             "Comments": "Claude Fable 5.1 pricing on Amazon Bedrock at vendor parity with Anthropic direct ($10/$50 per 1M). Bedrock model ID anthropic.claude-fable-5-1. Regional and multi-region endpoints carry a 10% premium over global endpoints; Bedrock sets its own retirement schedule independently of the Claude API. Sources: https://platform.claude.com/docs/en/about-claude/pricing ; https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-fable-5-1.html",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "AC766DB5-E4C0-4974-9C28-0861B8215DC1"
           }
         },
         {
@@ -22655,9 +22679,15 @@
             "Comments": "Claude Fable 5.1 on OpenRouter (passthrough pricing), live September 1, 2026. $10/$50 per 1M with $0.25/1M cache reads. A separate half-price batch route exists at anthropic/claude-fable-5.1:batch ($5/$25) and is not modelled here. Source: https://openrouter.ai/anthropic/claude-fable-5.1",
             "CacheReadPricePerUnit": 0.25,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "E4B4E468-04E7-4703-BD95-11C9E887E38E"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "E36C093C-7A76-4096-954E-1284394FAEF0"
     }
   },
   {
@@ -22684,6 +22714,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C9B364B2-D9CE-45CA-A407-3D653481D67C"
           }
         },
         {
@@ -22700,6 +22733,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "FD069713-E6F0-490A-BAF6-7EDFBDA2FB08"
           }
         },
         {
@@ -22716,6 +22752,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "CD6F2B29-31B2-4D43-B660-4FB79DE63AF2"
           }
         }
       ],
@@ -22735,6 +22774,9 @@
             "Comments": "GPT-6 Astra pricing on OpenAI direct as of the September 3, 2026 launch, Standard tier, SHORT CONTEXT (<=272,000 input tokens): $10/1M input, $1/1M cached input, $12.50/1M cache write, $50/1M output. LONG CONTEXT (>272,000 input tokens) rebills the whole request at $20 input / $2 cached input / $25 cache write / $75 output per 1M - a reviewer should add a second cost row if long-context traffic is material. Fast mode is offered at 2x the Standard rate and is not modelled here. Note that unlike earlier GPT models, Astra bills cache writes. Sources: https://developers.openai.com/api/docs/models/gpt-6-astra ; https://aicybr.com/blog/gpt-6-astra-api-pricing-rollout",
             "CacheReadPricePerUnit": 1,
             "CacheWritePricePerUnit": 12.5
+          },
+          "primaryKey": {
+            "ID": "20D0B5D9-0736-4722-ABD7-45E57EFBB117"
           }
         },
         {
@@ -22752,9 +22794,15 @@
             "Comments": "GPT-6 Astra pricing in Microsoft Foundry / Azure OpenAI, Global Standard deployment, listed September 3, 2026 at parity with OpenAI direct ($10/$50 per 1M). ACCESS IS GATED: Foundry serves Astra through the Limited Access Program in two deployment flavours (Global and US Data Zone); there is no EU Data Zone at launch. Sources: https://www.unite.ai/microsoft-brings-openais-gpt-6-astra-to-foundry-with-limited-access/ ; https://technspire.com/en/blog/gpt-6-astra-foundry-price-gate-eu-gap",
             "CacheReadPricePerUnit": null,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "C62FCA67-798D-44CE-8E07-CE47AD16869C"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "1E417ABC-C002-4F1E-9B6C-2784DB8BFF70"
     }
   },
   {
@@ -22781,6 +22829,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "3833DEA9-AE78-4EFD-BC68-308BFB576BB8"
           }
         },
         {
@@ -22797,6 +22848,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "82FB1346-EA2B-420C-8D1F-FEAB31504CD3"
           }
         },
         {
@@ -22809,6 +22863,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "25566512-704D-48B6-AF8D-DBA4F698DA36"
           }
         },
         {
@@ -22825,6 +22882,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "56996A73-4A9F-4228-90A0-542B1942B1C0"
           }
         },
         {
@@ -22841,6 +22901,9 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F3AC187B-BD75-43C5-8781-67A0E37E517D"
           }
         }
       ],
@@ -22860,6 +22923,9 @@
             "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Google direct as of the September 2, 2026 GA launch: $0.75/1M input, $3.75/1M output, $0.075/1M cached input. INTRO WINDOW: through December 31, 2026. STANDARD PRICING FROM JANUARY 1, 2027: $1.50/1M input, $7.50/1M output, with cached input doubling to $0.15/1M. A reviewer should expire this row and add a standard-rate row before the intro window closes. Google does not charge for cache writes, so CacheWritePricePerUnit is null. Sources: https://ai.google.dev/gemini-api/docs/latest-model ; https://deepmind.google/models/model-cards/gemini-3-8-flash/",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "1F158FCE-B47B-4DA4-8200-4DD783211897"
           }
         },
         {
@@ -22877,9 +22943,15 @@
             "Comments": "Gemini 3.8 Flash INTRODUCTORY pricing on Vertex AI (Gemini Enterprise Agent Platform) as of September 2, 2026 GA. Matches Google direct: $0.75/$3.75 per 1M with $0.075/1M cache read and no cache-write charge. Intro window runs through 2026-12-31; standard $1.50/$7.50 applies from 2027-01-01. Cross-region inference may add a Vertex-side surcharge on top of these figures. Sources: https://cloud.google.com/vertex-ai/generative-ai/pricing ; https://ai.google.dev/gemini-api/docs/latest-model",
             "CacheReadPricePerUnit": 0.075,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "36A14BC3-B7F0-4A7E-B58F-6B3218A37CFF"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "4B500A24-0259-4EFF-9E34-24E9F5EC9DAB"
     }
   },
   {
@@ -22905,6 +22977,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "F13C1DAD-7E14-4B21-8062-36442DF106A9"
           }
         },
         {
@@ -22920,6 +22995,9 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "DFD7F86A-4846-425A-B8E6-5100DDFD2B23"
           }
         }
       ],
@@ -22939,9 +23017,15 @@
             "Comments": "Muse Spark 1.3 Standard-tier pricing on OpenRouter (passthrough of Meta's own rate card) as of the September 2, 2026 launch: $1.25/1M input, $4.25/1M output, $0.15/1M cached input. The cheaper Contributor tier (meta/muse-spark-1.3-contributor, $0.10/$0.20 per 1M) is deliberately not recorded - it permits Meta to train on submitted data. Sources: https://openrouter.ai/meta/muse-spark-1.3 ; https://research.meta.ai/blog/introducing-muse-spark-1-3 ; https://www.mindstudio.ai/blog/muse-spark-1-3-pricing",
             "CacheReadPricePerUnit": 0.15,
             "CacheWritePricePerUnit": null
+          },
+          "primaryKey": {
+            "ID": "4C2A8D59-E734-47B1-9E8B-9672F56C165F"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "A0165E9F-3DE6-4D55-A884-B692F4A351B8"
     }
   }
 ]

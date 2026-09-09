@@ -420,6 +420,9 @@
       "Name": "Meta",
       "Description": "Meta Platforms - developer of the open-weight Llama family and, since 2026, the proprietary Muse Spark line of multimodal agentic reasoning models. Meta's first-party model API authenticates with an API key; MJ currently reaches Muse Spark models through OpenRouter rather than Meta direct, because no Meta driver class exists yet.",
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "A0FAB3E7-FCC3-4818-907D-695AB6ACA2AC"
     }
   }
 ]
