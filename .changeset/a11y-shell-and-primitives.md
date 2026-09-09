@@ -17,7 +17,7 @@ Fixes eight WCAG 2.1 A/AA findings raised against the Explorer shell and shared 
 
 **Focus-ring tokens (`ng-shared-generic`)**
 
-- New `--mj-focus-ring-color` companion to `--mj-focus-ring`. `--mj-focus-ring` is a two-part box-shadow value: `outline: 2px solid var(--mj-focus-ring)` looks correct, parses, and renders nothing. Use `--mj-focus-ring` in `box-shadow` and `--mj-focus-ring-color` in `outline`. A new `check:focus-ring` gate fails on the broken form.
+- New `--mj-focus-ring-color` companion to `--mj-focus-ring`. `--mj-focus-ring` is a two-part box-shadow value: `outline: 2px solid var(--mj-focus-ring)` looks correct, parses, and renders nothing. Use `--mj-focus-ring` in `box-shadow` and `--mj-focus-ring-color` in `outline`. A new `check:focus-ring` gate fails on the broken form, wired into the `ci-ui-tokens` workflow for this line.
 
 **Whiteboard (`ng-whiteboard`)**
 
