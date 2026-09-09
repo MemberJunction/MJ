@@ -453,8 +453,9 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
 
     /** Open a record in the explorer via NavigationService. */
     public OnOpenRecord(item: DiffItemView): void {
-        const rawId = this.extractRawRecordId(item.RecordID);
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+        // RecordID is a CompositeKey segment ("ID|<uuid>", or composite) — parse it against the
+        // entity's real key column(s) rather than stripping the prefix and assuming `ID`.
+        const pkey = CompositeKey.FromURLSegment(this.metadata.EntityByName(item.EntityName), item.RecordID);
         this.navigationService.OpenEntityRecord(item.EntityName, pkey);
     }
 
@@ -468,11 +469,11 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         this.cdr.markForCheck();
 
         try {
+            const groupEntity = this.metadata.EntityByName(group.EntityName);
             const inputs: EntityRecordNameInput[] = group.Items.map(item => {
-                const rawId = this.extractRawRecordId(item.RecordID);
                 const input = new EntityRecordNameInput();
                 input.EntityName = group.EntityName;
-                input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+                input.CompositeKey = CompositeKey.FromURLSegment(groupEntity, item.RecordID);
                 return input;
             });
 

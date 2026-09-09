@@ -444,7 +444,7 @@ export class MJAIAgentSessionFormComponentExtended extends MJAIAgentSessionFormC
 
     public OpenEntityRecord(entityName: string, recordId: string | null): void {
         if (recordId) {
-            SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+            SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
         }
     }
 

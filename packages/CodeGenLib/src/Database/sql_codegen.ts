@@ -2185,7 +2185,7 @@ export class SQLCodeGenBase {
             const schema = spec.relatedSchemaName || related.SchemaName;
             const table = spec.relatedBaseTable || related.BaseTable;
             const joinKind = spec.allowsNull ? 'LEFT OUTER' : 'INNER';
-            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`);
+            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`); // first-pk-ok: FK target — a single FK column joins to the related entity's single key
             selects.push(`    ${alias}.${qi(latF.Name)} AS ${qi(spec.lat)},\n    ${alias}.${qi(lngF.Name)} AS ${qi(spec.lng)}`);
         }
         return { select: selects.join(',\n'), joins: joins.join('\n') };
