@@ -5,6 +5,7 @@ import {
 import {
   BuildWhiteboardContextMenu, BuildWhiteboardPageContextMenu, WhiteboardContextMenuActionID
 } from '../lib/whiteboard-context-menu';
+import type { WhiteboardTool } from '../lib/whiteboard-tool-roster';
 
 /**
  * RIGHT-CLICK CONTEXT MENU — the pure menu-model builder (action set per item kind /
@@ -43,6 +44,25 @@ describe('BuildWhiteboardContextMenu — model per target', () => {
     const addPage = BuildWhiteboardContextMenu(null).find((a) => a.ID === 'add-page')!;
     expect(addPage.SeparatorBefore).toBe(true);
     expect(addPage.Danger).toBeUndefined();
+  });
+
+  it('empty canvas under a roster → only the "add … here" actions whose tool is in the roster', () => {
+    const under = (roster: WhiteboardTool[]) => BuildWhiteboardContextMenu(null, roster).map((a) => a.ID);
+    // the consumer case: sticky + text kept, markdown + html hidden everywhere
+    expect(under(['select', 'pan', 'pen', 'sticky', 'text', 'eraser'])).toEqual(['add-sticky', 'add-text', 'add-page']);
+    // order follows the menu, never the roster
+    expect(under(['html', 'sticky'])).toEqual(['add-sticky', 'add-html', 'add-page']);
+  });
+
+  it('empty canvas under an empty roster → "New page" alone, with no leading separator', () => {
+    const only = BuildWhiteboardContextMenu(null, []);
+    expect(only.map((a) => a.ID)).toEqual(['add-page']);
+    expect(only[0].SeparatorBefore).toBe(false);
+  });
+
+  it('a roster never touches an ITEM menu (edit / restyle / delete are authoring, not tool selection)', () => {
+    const sticky = makeItem(state, 'sticky');
+    expect(BuildWhiteboardContextMenu(sticky, []).map((a) => a.ID)).toEqual(ids(sticky));
   });
 
   it('highlight → Delete only (transient pointing chrome)', () => {
