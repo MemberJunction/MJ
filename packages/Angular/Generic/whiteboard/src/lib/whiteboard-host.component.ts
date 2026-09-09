@@ -9,6 +9,7 @@ import {
   WhiteboardItemRemovedEventArgs, WhiteboardItemRemovingEventArgs,
   WhiteboardItemUpdatedEventArgs, WhiteboardItemUpdatingEventArgs, WhiteboardState
 } from './whiteboard-state';
+import { WhiteboardTool, WhiteboardToolRoster, ClampToolToRoster, IsToolAllowed } from './whiteboard-tool-roster';
 import {
   BuildWhiteboardExportHtml, BuildWhiteboardExportHtmlAllPages, BuildWhiteboardExportSvg,
   BuildWhiteboardExportSvgPages
@@ -21,7 +22,7 @@ import {
 import {
   WhiteboardWidgetInteractionEvent, WhiteboardWidgetSubmitEvent, WhiteboardWidgetSubmittingEventArgs
 } from './whiteboard-widget-bridge';
-import { RealtimeWhiteboardToolbarComponent, WhiteboardTool, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
+import { RealtimeWhiteboardToolbarComponent, WHITEBOARD_PEN_COLORS } from './whiteboard-toolbar.component';
 import { RealtimeWhiteboardZoomComponent } from './whiteboard-zoom.component';
 import { RealtimeWhiteboardAgentSeesPopoverComponent } from './whiteboard-agent-sees-popover.component';
 
@@ -77,6 +78,39 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @Input() BoardTitle = 'Whiteboard';
   /** Persistence chip text (e.g. "Saved to session · v14"). */
   @Input() SavedLabel = 'Saved to session';
+
+  /**
+   * Which tools this surface offers. `null` (default) is all eleven: today's rendering.
+   *
+   * The roster governs which tools are AVAILABLE, closing every door to a tool it leaves out:
+   * the toolbar button, the single-letter shortcut, and the canvas "add … here" action. It is
+   * deliberately not a content policy — it does not restrict what already exists on the board,
+   * what the agent places, or authoring on existing items (Restyle, Duplicate, paste). An empty
+   * roster narrows the palette to nothing; it does NOT make the board read-only, which is a
+   * separate input.
+   *
+   * A setter rather than `ngOnChanges` (packages/Angular/CLAUDE.md): a realtime channel's
+   * `BindSurface` assigns this property directly on a dynamically-created component, and
+   * Angular fires no `ngOnChanges` for a plain assignment, so a clamp implemented there would
+   * silently never run on the path real consumers use.
+   */
+  @Input()
+  set ToolRoster(value: WhiteboardToolRoster) {
+    const next = value ?? null;
+    // Identity compare, per the Angular rule: a consumer binding a freshly-built array literal
+    // re-fires this setter every change-detection pass, and re-running the clamp on every pass
+    // would fight the user for the active tool.
+    if (next === this._toolRoster) {
+      return;
+    }
+    this._toolRoster = next;
+    // Re-validate the CURRENT tool through the same chokepoint every other write uses.
+    this.Tool = this._tool;
+  }
+  get ToolRoster(): WhiteboardToolRoster {
+    return this._toolRoster;
+  }
+  private _toolRoster: WhiteboardToolRoster = null;
 
   /** Debounced (750 ms), coalesced scene-delta JSON — the live perception feed. */
   @Output() SceneDelta = new EventEmitter<string>();
@@ -136,7 +170,29 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
   @ViewChild(RealtimeWhiteboardBoardComponent) public Board?: RealtimeWhiteboardBoardComponent;
 
   // tool state (host-owned; toolbar + keyboard drive it, board consumes it)
-  public Tool: WhiteboardTool = 'select';
+  /**
+   * The active tool, and the ONE place the roster invariant is enforced on a write.
+   *
+   * "The active tool is always one the roster allows" is a property of every write, not of the
+   * handful of call sites that exist today (the roster setter, Escape, the key map, and the two
+   * template `Tool = $event` bindings). Guarding each of those would leave the next writer —
+   * a new shortcut, a gesture, a host API — to remember the rule. Guarding here closes them all
+   * by construction, and makes assignment order irrelevant: setting `ToolRoster` and `Tool` in
+   * either order still lands on an allowed tool.
+   *
+   * A DISALLOWED request is ignored rather than clamped: pressing Escape under `['pen','eraser']`
+   * should leave you on pen, not bounce you to the roster's fallback. The clamp is only for the
+   * case where the tool you are already holding stopped being allowed.
+   */
+  public get Tool(): WhiteboardTool {
+    return this._tool;
+  }
+  public set Tool(value: WhiteboardTool) {
+    this._tool = IsToolAllowed(this._toolRoster, value)
+      ? value
+      : ClampToolToRoster(this._tool, this._toolRoster);
+  }
+  private _tool: WhiteboardTool = 'select';
   public PenColor: string = WHITEBOARD_PEN_COLORS[0];
   public PenWidth = 4;
   public ShapeKind: 'rect' | 'ellipse' | 'diamond' = 'rect';
@@ -420,6 +476,8 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
         break;
       default: {
         const tool = RealtimeWhiteboardHostComponent.toolForKey(event.key);
+        // No roster check here: the Tool setter ignores a disallowed write, so a key for a
+        // hidden tool is a no-op by construction rather than by a remembered guard.
         if (tool) {
           this.Tool = tool;
         }
