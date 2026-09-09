@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import chalk from 'chalk';
-import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IMetadataProvider } from '@memberjunction/core';
+import { BaseEntity, Metadata, UserInfo, EntitySaveOptions, IsVerboseLoggingEnabled, DatabaseProviderBase, IEntityDataProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
@@ -597,8 +597,12 @@ export class PushService {
         // Rollback transaction on error.
         if (!options.dryRun) {
           callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
-          await transactionManager.rollbackTransaction();
-          callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
+          const rolledBack = await transactionManager.rollbackTransaction();
+          if (rolledBack) {
+            callbacks?.onLog?.('✓ Database transaction rolled back successfully\n');
+          } else {
+            callbacks?.onLog?.('❌ Database transaction rollback failed\n');
+          }
         }
         throw error;
       }
@@ -1082,6 +1086,9 @@ export class PushService {
       if (existingEntity) {
         // Record exists, use the loaded entity
         entity = existingEntity;
+        if (recordProvider) {
+          entity.BindProvider(recordProvider as unknown as IEntityDataProvider);
+        }
         exists = true;
       } else {
         // Record doesn't exist in database
@@ -2508,7 +2515,12 @@ export class PushService {
     // 2. Collections: owner.Lines.Create() (or load existing by PK into the collection), recurse apply on child entity
     if (record.collections && typeof record.collections === 'object') {
       for (const [colName, colItems] of Object.entries(record.collections)) {
-        if (!Array.isArray(colItems)) continue;
+        if (!Array.isArray(colItems)) {
+          throw new Error(
+            `Collection "${colName}" in ${entityName} must be an array of records. ` +
+            `Per-record mode wrappers (e.g. {"mode": "authoritative", "items": [...]}) are forbidden; mode is directory-level only.`
+          );
+        }
 
         // Get collection companion
         let collectionCompanion = typeof entity.GetCompanion === 'function' ? entity.GetCompanion(colName) : undefined;
@@ -2528,6 +2540,64 @@ export class PushService {
           const propVal = (entity as unknown as Record<string, unknown>)[colName];
           if (propVal && typeof (propVal as unknown as { Create?: () => Promise<BaseEntity> }).Create === 'function') {
             collectionCompanion = propVal as unknown as typeof collectionCompanion;
+          }
+        }
+
+        // Dynamically register collection companion if entity supports DeclareRelatedRecords
+        if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
+          const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
+          const rel = entityInfo?.RelatedEntities?.find((r) => {
+            if (r.RelatedRecordCollection) {
+              try {
+                const parsed = typeof r.RelatedRecordCollection === 'string'
+                  ? (JSON.parse(r.RelatedRecordCollection) as Record<string, unknown>)
+                  : (r.RelatedRecordCollection as Record<string, unknown>);
+                if (typeof parsed['Name'] === 'string' && parsed['Name'].toLowerCase() === colName.toLowerCase()) {
+                  return true;
+                }
+              } catch {}
+            }
+            if (r.DisplayName && r.DisplayName.toLowerCase() === colName.toLowerCase()) return true;
+            if (r.RelatedEntity && r.RelatedEntity.toLowerCase() === colName.toLowerCase()) return true;
+            const stripped = r.RelatedEntity?.replace(/^.*:\s*/, '').replace(/\s+/g, '');
+            if (stripped && (stripped.toLowerCase() === colName.toLowerCase() || stripped.toLowerCase() + 's' === colName.toLowerCase() || colName.toLowerCase() + 's' === stripped.toLowerCase())) {
+              return true;
+            }
+            return false;
+          });
+
+          if (rel && rel.RelatedEntity && rel.RelatedEntityJoinField) {
+            let colOpts: {
+              Name: string;
+              RelatedEntity: string;
+              RelatedEntityJoinField: string;
+              Load?: string;
+              OnRemove?: string;
+              OrderBy?: string;
+            } = {
+              Name: colName,
+              RelatedEntity: rel.RelatedEntity,
+              RelatedEntityJoinField: rel.RelatedEntityJoinField,
+              Load: 'explicit',
+              OnRemove: 'delete',
+            };
+            if (rel.RelatedRecordCollection) {
+              try {
+                const parsed = typeof rel.RelatedRecordCollection === 'string'
+                  ? (JSON.parse(rel.RelatedRecordCollection) as Record<string, unknown>)
+                  : (rel.RelatedRecordCollection as Record<string, unknown>);
+                if (parsed) {
+                  colOpts = {
+                    ...colOpts,
+                    ...(typeof parsed['Load'] === 'string' ? { Load: parsed['Load'] } : {}),
+                    ...(typeof parsed['OnRemove'] === 'string' ? { OnRemove: parsed['OnRemove'] } : {}),
+                    ...(typeof parsed['OrderBy'] === 'string' ? { OrderBy: parsed['OrderBy'] } : {}),
+                  };
+                }
+              } catch {}
+            }
+            const declareFn = (entity as unknown as { DeclareRelatedRecords: (options: unknown) => unknown }).DeclareRelatedRecords.bind(entity);
+            collectionCompanion = declareFn(colOpts) as typeof collectionCompanion;
           }
         }
 
@@ -2651,12 +2721,30 @@ export class PushService {
               );
             }
 
-            callbacks?.onLog?.(
-              `🗑️  Authoritative collection '${colName}' on '${entityName}': queuing delete of ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}`
-            );
+            // Rider 2: Authoritative-implied deletes route through confirmation
+            // Confirmation prompt names the collection and the row count
+            if (callbacks?.onConfirm) {
+              const confirmMsg = `Authoritative collection '${colName}' on '${entityName}' will delete ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}. Do you want to proceed? (yes/no)`;
+              const confirmed = await callbacks.onConfirm(confirmMsg);
+              if (!confirmed) {
+                throw new Error(
+                  `Authoritative delete of ${unmentionedItems.length} record(s) in collection '${colName}' on '${entityName}' cancelled by user.`
+                );
+              }
+            }
 
-            for (const itemToDelete of unmentionedItems) {
-              col.Remove(itemToDelete);
+            if (options.dryRun) {
+              callbacks?.onLog?.(
+                `🗑️  [DRY RUN] Authoritative collection '${colName}' on '${entityName}': would delete ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}`
+              );
+            } else {
+              callbacks?.onLog?.(
+                `🗑️  Authoritative collection '${colName}' on '${entityName}': deleting ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}`
+              );
+
+              for (const itemToDelete of unmentionedItems) {
+                col.Remove(itemToDelete);
+              }
             }
           }
         }

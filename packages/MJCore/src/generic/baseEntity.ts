@@ -1228,6 +1228,17 @@ export abstract class BaseEntity<T = unknown> {
      */
     public BindProvider(provider: IEntityDataProvider | null): void {
         this._provider = provider;
+        if (this._parentEntity && this._parentEntity.BoundProvider !== provider) {
+            this._parentEntity.BindProvider(provider);
+        }
+        if (this._childEntity && this._childEntity.BoundProvider !== provider) {
+            this._childEntity.BindProvider(provider);
+        }
+        if (this._companions) {
+            for (const companion of this._companions.values()) {
+                companion.BindProvider(provider);
+            }
+        }
     }
 
     /**
@@ -1494,26 +1505,29 @@ export abstract class BaseEntity<T = unknown> {
         }
 
         // 1. Registered resolver override
-        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<EntitySubtypeResolver>(
-            EntitySubtypeResolver,
-            this.EntityInfo.Name
-        );
-        if (resolution.Resolved && resolution.Instance) {
-            const raw = resolution.Instance.Resolve(this);
-            const candidate = raw instanceof Promise ? await raw : raw;
-            if (candidate != null && candidate.trim() !== '') {
-                const trimmed = candidate.trim();
-                const match = this.EntityInfo.ChildEntities.find(
-                    c => c.Name.trim().toLowerCase() === trimmed.toLowerCase()
-                );
-                if (!match) {
-                    throw new Error(
-                        `EntitySubtypeResolver for '${this.EntityInfo.Name}' returned '${candidate}', which is not a declared IsA child entity of '${this.EntityInfo.Name}'.`
+        const reg = MJGlobal.Instance.ClassFactory.GetRegistration(EntitySubtypeResolver, this.EntityInfo.Name);
+        if (reg) {
+            const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<EntitySubtypeResolver>(
+                EntitySubtypeResolver,
+                this.EntityInfo.Name
+            );
+            if (resolution.Resolved && resolution.Instance) {
+                const raw = resolution.Instance.Resolve(this);
+                const candidate = raw instanceof Promise ? await raw : raw;
+                if (candidate != null && candidate.trim() !== '') {
+                    const trimmed = candidate.trim();
+                    const match = this.EntityInfo.ChildEntities.find(
+                        c => c.Name.trim().toLowerCase() === trimmed.toLowerCase()
                     );
+                    if (!match) {
+                        throw new Error(
+                            `EntitySubtypeResolver for '${this.EntityInfo.Name}' returned '${candidate}', which is not a declared IsA child entity of '${this.EntityInfo.Name}'.`
+                        );
+                    }
+                    return match.Name;
                 }
-                return match.Name;
+                return null;
             }
-            return null;
         }
 
         // 2. Entity.SubtypeSelector declarative path

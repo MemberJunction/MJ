@@ -45,6 +45,10 @@ class MockEntity {
     return this.data[fieldName];
   }
 
+  GetCompanion(companionName: string): unknown {
+    return this.collections[companionName] || this.embeddedObjects[companionName] || null;
+  }
+
   Set(fieldName: string, value: unknown): boolean {
     if (this.data[fieldName] !== value) {
       this.data[fieldName] = value;
@@ -226,6 +230,35 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       expect(quantityError?.suggestion).toContain('Move "Quantity" to the root record fields object');
     });
 
+    it('rejects a record file carrying a per-record mode wrapper in collections (§9)', async () => {
+      const entityInfo: EntityInfo = {
+        ID: 'order-id',
+        Name: 'Orders',
+        Fields: [{ Name: 'ID' }],
+        PrimaryKeys: [{ Name: 'ID' }],
+      } as unknown as EntityInfo;
+
+      const record: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { ID: 'ord-1' },
+        collections: {
+          Lines: {
+            mode: 'authoritative',
+            items: [{ fields: { Item: 'Widget' } }],
+          } as unknown as RecordData[],
+        },
+      };
+
+      await (service as unknown as {
+        validateEntityData: (d: unknown, info: EntityInfo, file: string, cfg: EntitySyncConfig) => Promise<void>;
+      }).validateEntityData(record, entityInfo, '/orders.json', { entity: 'Orders', filePattern: '*.json' });
+
+      const errors = getErrors();
+      const wrapperError = errors.find((e) => e.message.includes('Per-record mode wrappers'));
+      expect(wrapperError).toBeDefined();
+      expect(wrapperError?.message).toContain('mode is directory-level only');
+    });
+
     it('validates @owner:Field references — succeeds when field exists on owner entity', async () => {
       const parentEntity: EntityInfo = {
         ID: 'order-line-id',
@@ -388,7 +421,8 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       entity: MockEntity,
       recData: RecordData,
       options: PushOptions = {},
-      entityConfig?: EntityConfig
+      entityConfig?: EntityConfig,
+      callbacks?: unknown
     ) => {
       return (pushService as unknown as {
         applyCompositionAxes: (
@@ -410,7 +444,7 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         new Map(),
         { resolutions: [] },
         options,
-        undefined,
+        callbacks,
         entityConfig
       );
     };
@@ -514,6 +548,114 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       await expect(
         callApplyAxes(mockOwnerEntity, recordData, { allowBulkDelete: true }, entityConfig)
       ).resolves.not.toThrow();
+    });
+
+    it('throws error when a record carries a per-record mode wrapper in collections (§9)', async () => {
+      const recordData: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { ID: 'ord-1' },
+        collections: {
+          Lines: {
+            mode: 'authoritative',
+            items: [],
+          } as unknown as RecordData[],
+        },
+      };
+
+      await expect(
+        callApplyAxes(mockOwnerEntity, recordData)
+      ).rejects.toThrow(/Collection "Lines" in Orders must be an array of records\. Per-record mode wrappers/);
+    });
+
+    it('routes authoritative collection deletes through onConfirm confirmation (Rider 2)', async () => {
+      const existingItems: MockEntity[] = [];
+      for (let i = 1; i <= 10; i++) {
+        existingItems.push(new MockEntity('OrderLines', { ID: `line-${i}`, Name: `Line ${i}` }));
+      }
+
+      mockOwnerEntity.collections['OrderLines'] = {
+        Items: existingItems,
+        IsLoaded: true,
+        Create: () => new MockEntity('OrderLines'),
+        Remove: (item: MockEntity) => {
+          const idx = existingItems.indexOf(item);
+          if (idx !== -1) existingItems.splice(idx, 1);
+        },
+      };
+
+      // 9 mentioned items, 1 unmentioned item (10% delete, under 20% bulk limit)
+      const recordData: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { ID: 'ord-1' },
+        collections: {
+          OrderLines: existingItems.slice(0, 9).map((item) => ({
+            primaryKey: { ID: item.Get('ID') },
+            fields: { Name: item.Get('Name') },
+          })),
+        },
+      };
+
+      const entityConfig: EntityConfig = {
+        entity: 'Orders',
+        filePattern: '*.json',
+        collections: {
+          OrderLines: {
+            mode: 'authoritative',
+          },
+        },
+      };
+
+      const onConfirm = vi.fn().mockResolvedValue(true);
+      await callApplyAxes(mockOwnerEntity, recordData, {}, entityConfig, { onConfirm });
+
+      expect(onConfirm).toHaveBeenCalledTimes(1);
+      expect(onConfirm).toHaveBeenCalledWith(
+        expect.stringContaining("Authoritative collection 'OrderLines' on 'Orders' will delete 1 unmentioned record")
+      );
+      expect(existingItems.length).toBe(9);
+    });
+
+    it('aborts authoritative collection deletes when user declines confirmation', async () => {
+      const existingItems: MockEntity[] = [];
+      for (let i = 1; i <= 10; i++) {
+        existingItems.push(new MockEntity('OrderLines', { ID: `line-${i}`, Name: `Line ${i}` }));
+      }
+
+      mockOwnerEntity.collections['OrderLines'] = {
+        Items: existingItems,
+        IsLoaded: true,
+        Create: () => new MockEntity('OrderLines'),
+        Remove: (item: MockEntity) => {
+          const idx = existingItems.indexOf(item);
+          if (idx !== -1) existingItems.splice(idx, 1);
+        },
+      };
+
+      const recordData: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { ID: 'ord-1' },
+        collections: {
+          OrderLines: existingItems.slice(0, 9).map((item) => ({
+            primaryKey: { ID: item.Get('ID') },
+            fields: { Name: item.Get('Name') },
+          })),
+        },
+      };
+
+      const entityConfig: EntityConfig = {
+        entity: 'Orders',
+        filePattern: '*.json',
+        collections: {
+          OrderLines: {
+            mode: 'authoritative',
+          },
+        },
+      };
+
+      const onConfirm = vi.fn().mockResolvedValue(false);
+      await expect(
+        callApplyAxes(mockOwnerEntity, recordData, {}, entityConfig, { onConfirm })
+      ).rejects.toThrow(/Authoritative delete of 1 record\(s\) in collection 'OrderLines' on 'Orders' cancelled by user/);
     });
   });
 

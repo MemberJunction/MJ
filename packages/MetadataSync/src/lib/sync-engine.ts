@@ -12,7 +12,7 @@ import path from 'path';
 import fs from 'fs-extra';
 import crypto from 'crypto';
 import { HttpGet } from '@memberjunction/network-utils';
-import { EntityInfo, IMetadataProvider, IRunViewProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IEntityDataProvider, IMetadataProvider, IRunViewProvider, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
@@ -1150,7 +1150,14 @@ export class SyncEngine {
       // + per-entity serializePrimaryKey(GetAll()) was O(N×K) overall and
       // dominated runtime for entities with large DB-side populations
       // (Integration Object Fields: 38min → seconds).
-      return this.syncMetadataEngine.findCachedByPrimaryKey(entityName, primaryKey);
+      const cached = this.syncMetadataEngine.findCachedByPrimaryKey(entityName, primaryKey);
+      if (cached) {
+        if (recordProvider) {
+          cached.BindProvider(recordProvider as unknown as IEntityDataProvider);
+        }
+        return cached;
+      }
+      return null;
     }
     
     // First, check if the record exists using RunView to avoid "Error in BaseEntity.Load" messages

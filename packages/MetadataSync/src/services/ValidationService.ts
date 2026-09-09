@@ -1886,7 +1886,7 @@ export class ValidationService {
           severity: 'error',
           entity: entityInfo.Name,
           file: filePath,
-          message: `Collection "${colName}" must be an array of records`,
+          message: `Collection "${colName}" must be an array of records. Per-record mode wrappers (e.g. {"mode": "authoritative", "items": [...]}) are forbidden; mode is directory-level only.`,
         });
         continue;
       }
@@ -1903,7 +1903,16 @@ export class ValidationService {
               }
             } catch {}
           }
+          if (rel.DisplayName && rel.DisplayName.toLowerCase() === colName.toLowerCase()) {
+            relatedEntityName = rel.RelatedEntity;
+            break;
+          }
           if (rel.RelatedEntity && rel.RelatedEntity.toLowerCase() === colName.toLowerCase()) {
+            relatedEntityName = rel.RelatedEntity;
+            break;
+          }
+          const stripped = rel.RelatedEntity?.replace(/^.*:\s*/, '').replace(/\s+/g, '');
+          if (stripped && (stripped.toLowerCase() === colName.toLowerCase() || stripped.toLowerCase() + 's' === colName.toLowerCase() || colName.toLowerCase() + 's' === stripped.toLowerCase())) {
             relatedEntityName = rel.RelatedEntity;
             break;
           }
