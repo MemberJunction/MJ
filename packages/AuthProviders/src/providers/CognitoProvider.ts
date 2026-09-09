@@ -16,7 +16,10 @@ export class CognitoProvider extends BaseAuthProvider {
   /**
    * Configures Amazon Cognito from COGNITO_USER_POOL_ID + COGNITO_CLIENT_ID + AWS_REGION.
    *
-   * Mapping preserved byte-for-byte from the env block that previously lived in MJServer's config.
+   * Mapping preserved byte-for-byte from the env block that previously lived in MJServer's config,
+   * plus the optional COGNITO_DOMAIN — the hosted-UI domain, which is the only place Cognito serves
+   * /oauth2/authorize and /oauth2/token. Token validation doesn't need it; anything that *initiates*
+   * a Cognito login does. Same env var name and host-only form MJExplorer already uses.
    */
   static ConfigFromEnvironment(env: NodeJS.ProcessEnv): AuthProviderConfig | null {
     if (!env.COGNITO_USER_POOL_ID || !env.COGNITO_CLIENT_ID || !env.AWS_REGION) {
@@ -29,6 +32,7 @@ export class CognitoProvider extends BaseAuthProvider {
       audience: env.COGNITO_CLIENT_ID,
       jwksUri: `https://cognito-idp.${env.AWS_REGION}.amazonaws.com/${env.COGNITO_USER_POOL_ID}/.well-known/jwks.json`,
       clientId: env.COGNITO_CLIENT_ID,
+      domain: env.COGNITO_DOMAIN,
       region: env.AWS_REGION,
       userPoolId: env.COGNITO_USER_POOL_ID
     };

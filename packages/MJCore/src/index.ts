@@ -26,6 +26,8 @@ export * from "./generic/providerBase";
 export * from "./generic/baseRemotableOperation";
 export * from "./generic/remoteOperationDispatch";
 export * from "./generic/entityInfo";
+export * from "./generic/geoFields";
+export * from "./generic/extendedTypeValue";
 export * from "./generic/entityConfiguration";
 export * from "./generic/externalDataSourceTypes";
 export * from "./generic/externalDataSourceReadRouter";
@@ -64,7 +66,9 @@ export * from "./generic/column-descriptors";
 export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
 export * from "./generic/permissionInterfaces";
+export * from "./generic/entitySubtypeResolver";
 export * from "./generic/JSONType-interfaces/IFileStorageProviderConfiguration";
+export * from "./generic/JSONType-interfaces/IEntitySubtypeSelectorConfig";
 
 export function SetProvider(provider) {
     Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter

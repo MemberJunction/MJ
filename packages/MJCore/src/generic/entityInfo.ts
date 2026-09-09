@@ -8,7 +8,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, Code
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -18,17 +18,28 @@ import {
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
 } from "./entityConfiguration"
+import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
 /**
- * Valid values for EntityField.ExtendedType.
- * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
+ * truth; {@link EntityFieldExtendedType} is derived from it. CodeGen validates LLM suggestions
+ * against {@link EntityFieldInfo.ExtendedTypes} rather than duplicating the list.
+ *
+ * `Image` — the value is an image URL, a `data:image/...` URI, or raw image base64. UI surfaces
+ * render a thumbnail and (in edit mode) allow replacing it with an upload capped at the field's
+ * MaxLength.
+ * `Color` — the value is a CSS color (hex / rgb / hsl).
+ * `JSON` — the value is a JSON document; validated on save and pretty-printed in forms.
  */
-export type EntityFieldExtendedType =
-    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
-    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
-    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
-    | 'HTML' | 'Icon' | 'Markdown'
-    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+export const EntityFieldExtendedTypes = [
+    'Code', 'Color', 'Email', 'FaceTime', 'Geo',
+    'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+    'GeoCity', 'GeoPostalCode', 'GeoAddress',
+    'HTML', 'Icon', 'Image', 'JSON', 'Markdown',
+    'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg',
+] as const;
+
+export type EntityFieldExtendedType = typeof EntityFieldExtendedTypes[number];
 
 /**
  * The possible status values for a record change
@@ -259,7 +270,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
                 sorted.sort((a, b) => {
                     const aSeq = (a.Sequence as number) ?? 999999;
                     const bSeq = (b.Sequence as number) ?? 999999;
-                    return aSeq - bSeq;
+                    return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity as string, b.RelatedEntity as string) || ordinalCompare(a.ID as string, b.ID as string);
                 });
                 for (const item of sorted) {
                     this._RelatedEntities.push(new EntityOrganicKeyRelatedEntityInfo(item));
@@ -623,6 +634,10 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
+    /**
+     * Runtime domain for {@link ExtendedType}. Same array as {@link EntityFieldExtendedTypes}.
+     */
+    static readonly ExtendedTypes: readonly EntityFieldExtendedType[] = EntityFieldExtendedTypes
     ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
@@ -1485,6 +1500,42 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * True when {@link ExtendedType} is any Geo* tag (`Geo`, `GeoLatitude`, `GeoAddress`, …).
+     * Used by maps, distance, and GeoCodeSyncService. Display-only virtuals still count.
+     */
+    get IsGeoExtendedType(): boolean {
+        const t = this.ExtendedType;
+        return typeof t === 'string' && t.startsWith('Geo');
+    }
+
+    /**
+     * A Geo* field that can be written on Save. GeoCodeSyncService only runs when the
+     * entity has at least one of these. Virtual / AllowUpdateAPI=0 fields (PrimaryAddress*,
+     * `__mj_Latitude`, embedded `__mj_Latitude_{FK}`) are display-only — maps still use them.
+     */
+    get IsWritableGeoField(): boolean {
+        return this.IsGeoExtendedType && !this.IsVirtual && !!this.AllowUpdateAPI;
+    }
+
+    /**
+     * Native (table) latitude column — `ExtendedType=GeoLatitude`, or legacy `Geo` named Latitude.
+     */
+    get IsNativeLatitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLatitude') return true;
+        return this.ExtendedType === 'Geo' && /^lat(itude)?$/i.test(this.Name);
+    }
+
+    /**
+     * Native (table) longitude column — `ExtendedType=GeoLongitude`, or legacy `Geo` named Long*.
+     */
+    get IsNativeLongitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLongitude') return true;
+        return this.ExtendedType === 'Geo' && /^(lng|lon|long|longitude)$/i.test(this.Name);
+    }
+
+    /**
      * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps as well as the DeletedAt timestamp used for entities that
      * have DeleteType=Soft. This is only used when the entity has TrackRecordChanges=1 or for entities where DeleteType=Soft
      */
@@ -1979,6 +2030,38 @@ export class EntityInfo extends BaseInfo {
      */
     AllowMultipleSubtypes: boolean = false
     /**
+     * Optional JSON configuration specifying declarative prospective subtype resolution on an entity.
+     * Stored in the SubtypeSelector column of Entity (shape = IEntitySubtypeSelectorConfig).
+     */
+    SubtypeSelector: string = null
+
+    private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+
+    /**
+     * Parsed SubtypeSelector configuration, if configured.
+     */
+    get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
+        if (this._subtypeSelectorConfig === undefined) {
+            if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
+                try {
+                    const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
+                    if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
+                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
+                        this._subtypeSelectorConfig = null;
+                    }
+                } catch (err) {
+                    LogError(`EntityInfo '${this.Name}': failed to parse SubtypeSelector JSON '${this.SubtypeSelector}': ${err instanceof Error ? err.message : String(err)}`);
+                    this._subtypeSelectorConfig = null;
+                }
+            } else {
+                this._subtypeSelectorConfig = null;
+            }
+        }
+        return this._subtypeSelectorConfig;
+    }
+    /**
      * Whether to audit when users access records from this entity
      */
     AuditRecordAccess: boolean = null
@@ -2112,11 +2195,19 @@ export class EntityInfo extends BaseInfo {
      */
     FullTextSearchFunctionGenerated: boolean = true
     /**
-     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
-     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
-     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     * When true, this entity participates in geo **read** features: map view, distance
+     * calculations, and similar. That is independent of whether GeoCodeSyncService runs
+     * on Save — the service only fires when {@link HasWritableGeoSourceFields} is true.
+     * Auto-set by CodeGen when LLM detects geo-capable fields.
      */
     SupportsGeoCoding: boolean = false
+    /**
+     * True when at least one field is a writable Geo* source (street and/or native lat/lng).
+     * Person/Org PrimaryAddress* are virtual display fields and do **not** count.
+     */
+    get HasWritableGeoSourceFields(): boolean {
+        return (this.Fields ?? []).some(f => f.IsWritableGeoField);
+    }
     /**
      * When true (default), CodeGen can automatically set SupportsGeoCoding based on
      * LLM analysis of entity fields. Set to false to lock the value.
@@ -3489,7 +3580,7 @@ export class EntityInfo extends BaseInfo {
                     er.sort((a, b) => {
                         const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 999999;
                         const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 999999;
-                        return aSeq - bSeq
+                        return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity, b.RelatedEntity) || ordinalCompare(a.ID, b.ID);
                     }); 
                 }
 

@@ -1772,9 +1772,14 @@ END $$;
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
     /** @inheritdoc */
-    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[], discardResult?: boolean): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string {
         const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
-        const paramList = params.join(', ');
+        let paramList: string;
+        if (paramNames && paramNames.length === params.length) {
+            paramList = params.map((p, i) => `p_${paramNames[i]} => ${p}`).join(', ');
+        } else {
+            paramList = params.join(', ');
+        }
         if (discardResult) {
             // `SELECT * FROM routine(...)` is not universally valid on PostgreSQL: a function
             // declared `RETURNS SETOF record` — which spDeleteEntityWithCoreDependencies is — is
@@ -2104,9 +2109,9 @@ $if_view_exists$;
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
     /** @inheritdoc */
-    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
-        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs);
+        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs, excludeSchemas);
     }
 
     /** @inheritdoc */
@@ -2752,12 +2757,16 @@ WHERE p.prokind IN ('f', 'p')
     private buildPendingEntityFieldsQuery(
         schema: string,
         qs: (schema: string, name: string) => string,
-        entityIDs?: string[]
+        entityIDs?: string[],
+        excludeSchemas?: string[]
     ): string {
         // PG uses lowercase UUIDs; entity IDs from the metadata cache are already
         // normalized so direct string interpolation is safe (internal IDs, not user input).
         const scopeFilter = entityIDs && entityIDs.length > 0
             ? `AND sf."EntityID" IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
+        const schemaFilter = excludeSchemas && excludeSchemas.length > 0
+            ? `AND e."SchemaName" NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `
 WITH fk_cache AS (
@@ -2785,9 +2794,9 @@ numbered_rows AS (
    SELECT
       sf."EntityID",
       COALESCE(ms."MaxSequence", 0) + 100000 + sf."Sequence" AS "Sequence",
-      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
-      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
-      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
+      -- The RAW schema ordinal. The INSERT emitter uses it for DefaultInView only; the emitted
+      -- Sequence is an apply-time MAX()+1 subquery. (Sequence above is only this query's ORDER BY
+      -- key — never inserted — and the renumber pass overwrites every row from the schema.)
       sf."Sequence" AS "SourceOrdinal",
       sf."FieldName",
       sf."Description",
@@ -2830,6 +2839,7 @@ numbered_rows AS (
    WHERE
       "EntityFieldID" IS NULL
       ${scopeFilter}
+      ${schemaFilter}
 )
 SELECT *
 FROM numbered_rows

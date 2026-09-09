@@ -1,13 +1,16 @@
-import { IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { ClassFactory, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
+import { EntitySubtypeResolver } from './entitySubtypeResolver';
+import { BaseEngineRegistry } from './baseEngineRegistry';
+import { IsPermittedImageFieldValue, IsValidCssColor, TryParseJsonText } from './extendedTypeValue';
 import { EntityDeleteOptions, EntitySaveOptions, IEntityDataProvider, IMetadataProvider, IRunQueryProvider, IRunViewProvider, ProviderType, SimpleEmbeddingResult } from './interfaces';
 import { Metadata } from './metadata';
 import { RunView } from '../views/runView';
 import { UserInfo } from './securityInfo';
 import { TransactionGroupBase } from './transactionGroup';
 import { LogDebug, LogError, LogStatus } from './logging';
-import { CompositeKey, FieldValueCollection } from './compositeKey';
+import { CompositeKey, FieldValueCollection, KeyValuePair } from './compositeKey';
 import { RelatedRecordCollection, RelatedRecordCollectionOptions } from './relatedRecordCollection';
 import { COMPANION_PAYLOAD_KEY, EntityCompanion, EntityCompanionDeserializeMode, EntityCompanionPayload } from './entityCompanion';
 import { EmbeddedRecord, type EmbeddedRecordOptions } from './embeddedRecord';
@@ -361,6 +364,36 @@ export class EntityField {
                 result.Success = false;
                 const nullNote: string = ef.AllowsNull ? ' (or null)' : '';
                 result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be one of: ${ef.ValueListValuesForDisplay}${nullNote}. Current value is '${this.Value}'`, this.Value));
+            }
+
+            // ExtendedType semantic checks (Image / Color / JSON). Empty values are handled by
+            // the AllowsNull rung above — only non-empty strings are inspected here.
+            if (ef.TSType === EntityFieldTSType.String && this.Value != null && this.Value !== '') {
+                const text = String(this.Value);
+                switch (ef.ExtendedType) {
+                    case 'JSON': {
+                        const parsed = TryParseJsonText(text);
+                        if (parsed.ok === false) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be valid JSON. ${parsed.message}`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Color': {
+                        if (!IsValidCssColor(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be a CSS color (hex, rgb, or hsl)`, this.Value));
+                        }
+                        break;
+                    }
+                    case 'Image': {
+                        if (!IsPermittedImageFieldValue(text)) {
+                            result.Success = false;
+                            result.Errors.push(new ValidationErrorInfo(ef.Name, `${ef.DisplayNameOrName} must be an image URL or inline image (data URI / base64)`, this.Value));
+                        }
+                        break;
+                    }
+                }
             }
         }
 
@@ -1171,6 +1204,44 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * The provider actually stored on this instance, or `null` if none was bound.
+     * Unlike {@link ProviderToUse}, this does **not** fall back to the process-wide
+     * {@link BaseEntity.Provider}. Use it to detect a dropped constructor argument:
+     * `GetEntityObject(graphProvider)` must yield `BoundProvider === graphProvider`.
+     */
+    public get BoundProvider(): IEntityDataProvider | null {
+        return this._provider;
+    }
+
+    /**
+     * Bind this instance to a provider after construction.
+     *
+     * **Rule (ORM, not just metadata-sync):** every DB read and write on this
+     * instance — Save, Load, Delete, RunView, GetEntityObject of children/embeds,
+     * lookups, RecordGeoCode — MUST use this provider. Mixing another provider
+     * (especially the process-wide host) into the same record graph is a deadlock:
+     * a child FK waits on an uncommitted parent on another connection.
+     *
+     * {@link ProviderBase.GetEntityObject} always calls this so a subclass that
+     * declares `constructor(Entity: EntityInfo)` and drops the second ClassFactory
+     * argument cannot silently run on the global host.
+     */
+    public BindProvider(provider: IEntityDataProvider | null): void {
+        this._provider = provider;
+        if (this._parentEntity && this._parentEntity.BoundProvider !== provider) {
+            this._parentEntity.BindProvider(provider);
+        }
+        if (this._childEntity && this._childEntity.BoundProvider !== provider) {
+            this._childEntity.BindProvider(provider);
+        }
+        if (this._companions) {
+            for (const companion of this._companions.values()) {
+                companion.BindProvider(provider);
+            }
+        }
+    }
+
+    /**
      * Initializes the IS-A parent entity composition chain. For child type entities,
      * this creates the parent entity instance (and recursively its parent, etc.) and
      * caches the parent field name set for routing.
@@ -1409,6 +1480,314 @@ export abstract class BaseEntity<T = unknown> {
         await childEntity.InitializeChildEntity();
     }
 
+    private static _subtypeLookupCache = new Map<string, BaseEntity | null>();
+
+    /**
+     * Clears the static memoization cache used by SubtypeSelector path evaluation.
+     */
+    public static ClearSubtypeLookupCache(): void {
+        BaseEntity._subtypeLookupCache.clear();
+    }
+
+    /**
+     * Prospective counterpart to FindISAChildEntity.
+     * Evaluates which IsA child subtype entity this record should have based on:
+     * 1. Registered EntitySubtypeResolver (ClassFactory key = entity name)
+     * 2. Entity.SubtypeSelector declarative FK traversal path
+     * 3. Unconditional single-child IsA fallback (ChildEntities.length === 1)
+     * 4. Otherwise null (no subtype)
+     *
+     * @see plans/sync-composition-axes.md
+     */
+    public async ResolveSubtypeEntityName(): Promise<string | null> {
+        if (!this.EntityInfo.IsParentType || !this.EntityInfo.ChildEntities || this.EntityInfo.ChildEntities.length === 0) {
+            return null;
+        }
+
+        // 1. Registered resolver override
+        const reg = MJGlobal.Instance.ClassFactory.GetRegistration(EntitySubtypeResolver, this.EntityInfo.Name);
+        if (reg) {
+            const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<EntitySubtypeResolver>(
+                EntitySubtypeResolver,
+                this.EntityInfo.Name
+            );
+            if (resolution.Resolved && resolution.Instance) {
+                const raw = resolution.Instance.Resolve(this);
+                const candidate = raw instanceof Promise ? await raw : raw;
+                if (candidate != null && candidate.trim() !== '') {
+                    const trimmed = candidate.trim();
+                    const match = this.EntityInfo.ChildEntities.find(
+                        c => c.Name.trim().toLowerCase() === trimmed.toLowerCase()
+                    );
+                    if (!match) {
+                        throw new Error(
+                            `EntitySubtypeResolver for '${this.EntityInfo.Name}' returned '${candidate}', which is not a declared IsA child entity of '${this.EntityInfo.Name}'.`
+                        );
+                    }
+                    return match.Name;
+                }
+                return null;
+            }
+        }
+
+        // 2. Entity.SubtypeSelector declarative path
+        const selectorConfig = this.EntityInfo.SubtypeSelectorConfig;
+        if (selectorConfig && selectorConfig.Path && selectorConfig.Path.trim() !== '') {
+            const pathResult = await this.evaluateSubtypeSelectorPath(selectorConfig.Path.trim());
+            if (pathResult != null && pathResult.trim() !== '') {
+                const trimmed = pathResult.trim();
+                const match = this.EntityInfo.ChildEntities.find(
+                    c => c.Name.trim().toLowerCase() === trimmed.toLowerCase()
+                );
+                if (!match) {
+                    throw new Error(
+                        `SubtypeSelector path '${selectorConfig.Path}' on '${this.EntityInfo.Name}' resolved to '${pathResult}', which is not a declared IsA child entity of '${this.EntityInfo.Name}'.`
+                    );
+                }
+                return match.Name;
+            }
+            return null;
+        }
+
+        // 3. Exactly one child, unconditional IsA
+        if (!this.EntityInfo.AllowMultipleSubtypes && this.EntityInfo.ChildEntities.length === 1) {
+            return this.EntityInfo.ChildEntities[0].Name;
+        }
+
+        // 4. Otherwise null
+        return null;
+    }
+
+    /**
+     * Create-safe prospective counterpart to InitializeChildEntity.
+     * Unlike createAndLinkChildEntity, does NOT unlink when InnerLoad finds no row —
+     * that is the create case. Idempotent. Defaults to ResolveSubtypeEntityName()
+     * when no name is passed.
+     *
+     * @param entityName Optional explicit child entity name. If omitted, resolved via ResolveSubtypeEntityName().
+     * @returns The linked child BaseEntity, or null if no subtype applies.
+     */
+    public async EnsureISAChild(entityName?: string): Promise<BaseEntity | null> {
+        if (!entityName) {
+            entityName = await this.ResolveSubtypeEntityName();
+        }
+        if (!entityName) {
+            return null;
+        }
+
+        const matchedChild = this.EntityInfo.ChildEntities?.find(
+            c => c.Name.trim().toLowerCase() === entityName.trim().toLowerCase()
+        );
+        if (!matchedChild) {
+            throw new Error(`'${entityName}' is not a declared IsA child entity of '${this.EntityInfo.Name}'.`);
+        }
+        const resolvedName = matchedChild.Name;
+
+        if (!this.EntityInfo.AllowMultipleSubtypes) {
+            // Disjoint hierarchy
+            if (this._childEntity) {
+                if (this._childEntity.EntityInfo.Name.trim().toLowerCase() === resolvedName.trim().toLowerCase()) {
+                    return this._childEntity; // Idempotent
+                }
+                throw new Error(
+                    `Entity '${this.EntityInfo.Name}' already has an attached child entity of type '${this._childEntity.EntityInfo.Name}', cannot attach '${resolvedName}' (AllowMultipleSubtypes is false).`
+                );
+            }
+
+            const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+            const childEntity = await childProvider.GetEntityObject<BaseEntity>(
+                resolvedName,
+                this._contextCurrentUser
+            );
+
+            // Wire up shared instance chain
+            this.replaceChildParentChain(childEntity);
+            this._childEntity = childEntity;
+
+            const dirtySnapshots = this.captureChainDirtyState();
+
+            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
+                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+                if (!loaded) {
+                    this.mirrorSharedKeysToChild(childEntity);
+                }
+            } else {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+
+            this.restoreChainDirtyState(dirtySnapshots);
+
+            // Recursively discover grandchildren if the child is also a parent type
+            if (childEntity.EntityInfo.IsParentType) {
+                await childEntity.EnsureISAChild();
+            }
+
+            return childEntity;
+        } else {
+            // Overlapping hierarchy (AllowMultipleSubtypes = true)
+            if (!this._childEntities) {
+                this._childEntities = [];
+            }
+            if (!this._childEntities.some(c => c.entityName.trim().toLowerCase() === resolvedName.trim().toLowerCase())) {
+                this._childEntities.push({ entityName: resolvedName });
+            }
+
+            const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+            const childEntity = await childProvider.GetEntityObject<BaseEntity>(
+                resolvedName,
+                this._contextCurrentUser
+            );
+            this.replaceChildParentChain(childEntity);
+
+            const dirtySnapshots = this.captureChainDirtyState();
+
+            if (this.PrimaryKey && this.PrimaryKey.HasValue) {
+                const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+                if (!loaded) {
+                    this.mirrorSharedKeysToChild(childEntity);
+                }
+            } else {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+
+            this.restoreChainDirtyState(dirtySnapshots);
+
+            if (childEntity.EntityInfo.IsParentType) {
+                await childEntity.EnsureISAChild();
+            }
+
+            return childEntity;
+        }
+    }
+
+    private mirrorSharedKeysToChild(childEntity: BaseEntity): void {
+        const parentPks = this.EntityInfo.PrimaryKeys;
+        if (!parentPks || parentPks.length === 0) return;
+        for (const pk of parentPks) {
+            const val = this.Get(pk.Name);
+            if (val != null) {
+                childEntity.mirrorSharedKey(pk.Name, val);
+            }
+        }
+    }
+
+    private async evaluateSubtypeSelectorPath(path: string): Promise<string | null> {
+        const segments = path.split('.').map(s => s.trim()).filter(Boolean);
+        if (segments.length === 0) return null;
+
+        let currentEntity: BaseEntity = this;
+        let currentEntityInfo: EntityInfo = this.EntityInfo;
+
+        for (let i = 0; i < segments.length - 1; i++) {
+            const fieldName = segments[i];
+            const fieldInfo = currentEntityInfo.Fields.find(
+                f => f.Name.trim().toLowerCase() === fieldName.toLowerCase()
+            );
+            if (!fieldInfo) {
+                throw new Error(
+                    `Invalid SubtypeSelector path '${path}' on '${this.EntityInfo.Name}': field '${fieldName}' was not found on entity '${currentEntityInfo.Name}'.`
+                );
+            }
+
+            const fkValue = currentEntity.Get(fieldInfo.Name);
+            if (fkValue == null || fkValue === '') {
+                return null;
+            }
+
+            const relatedEntityName = fieldInfo.RelatedEntity;
+            if (!relatedEntityName) {
+                throw new Error(
+                    `Invalid SubtypeSelector path '${path}' on '${this.EntityInfo.Name}': field '${fieldName}' on entity '${currentEntityInfo.Name}' is not a foreign key relationship.`
+                );
+            }
+
+            const targetEntity = await this.getSubtypePathTargetEntity(relatedEntityName, fkValue);
+            if (!targetEntity) {
+                return null;
+            }
+
+            currentEntity = targetEntity;
+            currentEntityInfo = targetEntity.EntityInfo;
+        }
+
+        const terminalSegment = segments[segments.length - 1];
+        const terminalField = currentEntityInfo.Fields.find(
+            f => f.Name.trim().toLowerCase() === terminalSegment.toLowerCase()
+        );
+        if (!terminalField) {
+            throw new Error(
+                `Invalid SubtypeSelector path '${path}' on '${this.EntityInfo.Name}': terminal field '${terminalSegment}' was not found on entity '${currentEntityInfo.Name}'.`
+            );
+        }
+
+        const terminalValue = currentEntity.Get(terminalField.Name);
+        if (terminalValue == null || typeof terminalValue !== 'string' || terminalValue.trim() === '') {
+            return null;
+        }
+
+        return terminalValue.trim();
+    }
+
+    private async getSubtypePathTargetEntity(entityName: string, pkValue: unknown): Promise<BaseEntity | null> {
+        const cacheKey = `${entityName.trim().toLowerCase()}|${String(pkValue).trim().toLowerCase()}`;
+        if (BaseEntity._subtypeLookupCache.has(cacheKey)) {
+            return BaseEntity._subtypeLookupCache.get(cacheKey) ?? null;
+        }
+
+        // 1. Check BaseEngineRegistry for loaded cached entities
+        const cachedMatches = BaseEngineRegistry.Instance.FindCachedEntity(entityName);
+        if (cachedMatches && cachedMatches.length > 0) {
+            for (const match of cachedMatches) {
+                const found = match.records.find(r => {
+                    const firstPK = r.FirstPrimaryKey;
+                    if (firstPK) {
+                        return String(firstPK.Value).trim().toLowerCase() === String(pkValue).trim().toLowerCase();
+                    }
+                    return false;
+                });
+                if (found) {
+                    BaseEntity._subtypeLookupCache.set(cacheKey, found);
+                    return found;
+                }
+            }
+        }
+
+        // 2. Fall back to loading via provider
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        if (!provider?.GetEntityObject) {
+            BaseEntity._subtypeLookupCache.set(cacheKey, null);
+            return null;
+        }
+
+        try {
+            const targetObj = await provider.GetEntityObject<BaseEntity>(entityName, this._contextCurrentUser);
+            if (!targetObj) {
+                BaseEntity._subtypeLookupCache.set(cacheKey, null);
+                return null;
+            }
+
+            let key: CompositeKey;
+            if (pkValue instanceof CompositeKey) {
+                key = pkValue;
+            } else {
+                key = new CompositeKey();
+                const pkName = targetObj.FirstPrimaryKey?.Name ?? 'ID';
+                key.KeyValuePairs.push(new KeyValuePair(pkName, pkValue));
+            }
+
+            const loaded = await targetObj.InnerLoad(key);
+            if (loaded) {
+                BaseEntity._subtypeLookupCache.set(cacheKey, targetObj);
+                return targetObj;
+            }
+        } catch {
+            // On load failure, return null
+        }
+
+        BaseEntity._subtypeLookupCache.set(cacheKey, null);
+        return null;
+    }
+
     private captureChainDirtyState(): Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> {
         const snapshots: Array<{ entity: BaseEntity; dirtyFields: Array<{ name: string; value: unknown }> }> = [];
         let curr: BaseEntity | null = this;
@@ -1452,6 +1831,11 @@ export abstract class BaseEntity<T = unknown> {
 
         let childParent = childEntity._parentEntity;
         let ourInstance: BaseEntity | null = this;
+
+        if (!childParent) {
+            childEntity._parentEntity = this;
+            return;
+        }
 
         while (childParent && ourInstance) {
             // Replace the child's parent reference with our shared instance
@@ -1722,6 +2106,8 @@ export abstract class BaseEntity<T = unknown> {
                 `Ensure the entity class is registered.`,
             );
         }
+        // Same rebind as GetEntityObject — 1-arg subclasses drop the ClassFactory provider.
+        instance.BindProvider(provider as unknown as IEntityDataProvider);
         await instance.Config(this.ContextCurrentUser);
         await instance.InitializeParentEntity();
         // Recurse so a *new* peer's own embeds are constructed (required nested
@@ -2640,6 +3026,47 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * True when any of the named fields exists on this entity and its current value
+     * differs from the last loaded or saved value.
+     *
+     * This is the boolean form of `GetFieldByName(name)?.Dirty === true`. Prefer it at
+     * call sites that only care whether a column has been edited — pricing, validation,
+     * and "did the user type this" gates — so they do not repeat the optional-chain and
+     * do not treat a missing field as a distinct third state.
+     *
+     * Semantics:
+     * - **Unknown or blank names return `false`.** They are not dirty; they are absent.
+     *   Callers that must distinguish "no such field" from "field is clean" should use
+     *   {@link GetFieldByName} and inspect the result.
+     * - **Names are case-insensitive and trimmed**, matching {@link GetFieldByName}.
+     * - **Read-only fields are never dirty**, even if their value was overwritten internally.
+     * - **Multiple names are OR'd.** `FieldIsDirty('UnitPrice', 'ProductPriceID')` is true
+     *   if either field has been edited. An empty rest list is a single-field check.
+     *
+     * @param fieldName First field to test. A missing/blank name contributes `false`.
+     * @param more Additional field names, each OR'd with the first.
+     * @returns `true` if at least one named field exists and is dirty; otherwise `false`.
+     *
+     * @example
+     * ```ts
+     * // Single field
+     * if (line.FieldIsDirty('UnitPrice')) { ... }
+     *
+     * // Either money column was edited
+     * if (line.FieldIsDirty('UnitPrice', 'ProductPriceID')) { ... }
+     * ```
+     */
+    public FieldIsDirty(fieldName: string, ...more: string[]): boolean {
+        const names = more.length === 0 ? [fieldName] : [fieldName, ...more];
+        for (const name of names) {
+            if (this.GetFieldByName(name)?.Dirty === true) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Convenience method to access a field by code name. This method is case-insensitive and will return null if the field is not found.
      * @param codeName
      * @returns
@@ -2677,14 +3104,22 @@ export abstract class BaseEntity<T = unknown> {
      * return, and the children are silently never persisted — the save reports success and writes
      * nothing. See {@link EntityCompanion.Dirty}.
      */
+    private _isCheckingDirty: boolean = false;
+
     get Dirty(): boolean {
-        if (!this.IsSaved) return true;
-        if (this.companionsDirty) return true;
-        // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
-        // dirty. Avoid hydrating just to check.
-        if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
-        return this._Fields.some(f => f.Dirty) ||
-               (this._parentEntity?.Dirty ?? false);
+        if (this._isCheckingDirty) return false;
+        this._isCheckingDirty = true;
+        try {
+            if (!this.IsSaved) return true;
+            if (this.companionsDirty) return true;
+            // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
+            // dirty. Avoid hydrating just to check.
+            if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
+            return this._Fields.some(f => f.Dirty) ||
+                   (this._parentEntity?.Dirty ?? false);
+        } finally {
+            this._isCheckingDirty = false;
+        }
     }
 
     /**
@@ -3145,7 +3580,7 @@ export abstract class BaseEntity<T = unknown> {
     public async GetRelatedEntityDataExt(re: EntityRelationshipInfo, filter: string = null, maxRecords: number = null): Promise<{Data: any[], TotalRowCount: number}> {
         // we need to query the database to get related entity info
         const params = EntityInfo.BuildRelationshipViewParams(this, re, filter, maxRecords)
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView(params, this._contextCurrentUser)
         if (result && result.Success) {
             return {
@@ -4309,39 +4744,51 @@ export abstract class BaseEntity<T = unknown> {
      * 
      * @returns ValidationResult The validation result
      */
+    private _isValidating: boolean = false;
+
     public Validate(): ValidationResult  {
-        const result = new ValidationResult();
-        result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
+        if (this._isValidating) {
+            const emptyResult = new ValidationResult();
+            emptyResult.Success = true;
+            return emptyResult;
+        }
+        this._isValidating = true;
+        try {
+            const result = new ValidationResult();
+            result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
 
-        // IS-A composition: validate parent entity first to collect all chain errors
-        if (this._parentEntity) {
-            const parentResult = this._parentEntity.Validate();
-            if (!parentResult.Success) {
-                result.Success = false;
-                parentResult.Errors.forEach(err => result.Errors.push(err));
+            // IS-A composition: validate parent entity first to collect all chain errors
+            if (this._parentEntity) {
+                const parentResult = this._parentEntity.Validate();
+                if (!parentResult.Success) {
+                    result.Success = false;
+                    parentResult.Errors.forEach(err => result.Errors.push(err));
+                }
             }
+
+            // Validate own fields — for IS-A entities, skip parent field mirrors since
+            // those are validated via _parentEntity above
+            for (let field of this.Fields) {
+                if (this._parentEntityFieldNames?.has(field.Name))
+                    continue; // skip parent field mirrors — authoritative validation is on _parentEntity
+
+                const err = field.Validate();
+                err.Errors.forEach(element => {
+                    result.Errors.push(element);
+                });
+                result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
+            }
+
+            // Companions validate LAST but still BEFORE any write, over their complete state including
+            // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
+            // credits", "a confirmed order must have lines" — be enforced against the whole graph rather
+            // than discovered halfway through persisting it.
+            this.validateCompanions(result);
+
+            return result;
+        } finally {
+            this._isValidating = false;
         }
-
-        // Validate own fields — for IS-A entities, skip parent field mirrors since
-        // those are validated via _parentEntity above
-        for (let field of this.Fields) {
-            if (this._parentEntityFieldNames?.has(field.Name))
-                continue; // skip parent field mirrors — authoritative validation is on _parentEntity
-
-            const err = field.Validate();
-            err.Errors.forEach(element => {
-                result.Errors.push(element);
-            });
-            result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
-        }
-
-        // Companions validate LAST but still BEFORE any write, over their complete state including
-        // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
-        // credits", "a confirmed order must have lines" — be enforced against the whole graph rather
-        // than discovered halfway through persisting it.
-        this.validateCompanions(result);
-
-        return result;
     }
 
     /**
@@ -4693,8 +5140,9 @@ export abstract class BaseEntity<T = unknown> {
             return { HasChildren: false, ChildEntityName: '' };
         }
 
-        // Use RunView to check each child entity for records with our PK
-        const rv = new RunView();
+        // Use RunView on this instance's provider — a host RunView cannot see
+        // uncommitted child rows on a graph-scoped connection.
+        const rv = new RunView(this.RunViewProviderToUse);
         const pkValue = this.PrimaryKey.Values();
 
         for (const childEntity of childEntities) {
@@ -4773,7 +5221,7 @@ export abstract class BaseEntity<T = unknown> {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
 
-        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser);
+        return BaseEntity.ResolveLeafEntityRecursive(entityInfo, primaryKey, contextUser, md);
     }
 
     /**
@@ -4783,14 +5231,15 @@ export abstract class BaseEntity<T = unknown> {
     private static async ResolveLeafEntityRecursive(
         entityInfo: EntityInfo,
         primaryKey: CompositeKey,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
         const childEntities = entityInfo.ChildEntities;
         if (childEntities.length === 0) {
             return { LeafEntityName: entityInfo.Name, IsLeaf: true };
         }
 
-        const rv = new RunView();
+        const rv = new RunView((provider ?? BaseEntity.Provider) as unknown as IRunViewProvider);
         const pkValue = primaryKey.Values();
 
         for (const child of childEntities) {
@@ -4807,7 +5256,7 @@ export abstract class BaseEntity<T = unknown> {
 
             if (result?.Success && result.Results?.length > 0) {
                 // Found a child — recurse to see if there's an even more specific leaf
-                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser);
+                return BaseEntity.ResolveLeafEntityRecursive(child, primaryKey, contextUser, provider);
             }
         }
 
@@ -4844,8 +5293,10 @@ export abstract class BaseEntity<T = unknown> {
         const pkValue = this.PrimaryKey.Values();
         if (!pkValue) return;
 
-        // Build all sibling queries and execute them in a single batch
-        const rv = new RunView();
+        // Build all sibling queries and execute them in a single batch on
+        // this instance's provider so an uncommitted sibling on the same
+        // graph connection is visible (host RunView would miss it).
+        const rv = new RunView(this.RunViewProviderToUse);
         const validSiblings = siblingChildEntities.filter(s => s.PrimaryKeys[0]);
         if (validSiblings.length === 0) return;
 
@@ -5197,7 +5648,7 @@ export abstract class BaseEntity<T = unknown> {
             ? `${rootFieldName} = '${rootId}' AND ${depthFieldName} <= ${maxDepth}`
             : `${rootFieldName} = '${rootId}'`;
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: filter,
@@ -5228,7 +5679,7 @@ export abstract class BaseEntity<T = unknown> {
         const rawIds = path.split('/').filter(id => id.length > 0 && id !== currentId);
         if (rawIds.length === 0) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const idList = rawIds.map(id => `'${id}'`).join(',');
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
@@ -5254,7 +5705,7 @@ export abstract class BaseEntity<T = unknown> {
         const currentId = this.Get(pkName);
         if (!currentId) return [];
 
-        const rv = new RunView();
+        const rv = new RunView(this.RunViewProviderToUse);
         const result = await rv.RunView<T>({
             EntityName: this.EntityInfo.Name,
             ExtraFilter: `${fkField.Name} = '${currentId}'`,

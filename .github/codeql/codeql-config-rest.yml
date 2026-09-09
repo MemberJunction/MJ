@@ -2,10 +2,12 @@
 #
 # JOB B — everything the security-critical job does not cover. 3,680 JavaScript/
 # TypeScript files after filtering, verified against MemberJunction/MJ@next on
-# 5 September 2026. Predominantly the Angular Explorer packages.
+# 5 September 2026, before plans/** was excluded (which removes two script files and
+# 197 HTML files with embedded script). Predominantly the Angular Explorer packages.
 #
-# Runs weekly and on demand only. At 3,680 files it is 45% of the surface that hit the
-# six-hour ceiling, so it should fit, but it is the job to watch on the first run.
+# Runs weekly and on demand only, on the security-extended suite. A full scan on that
+# suite measured 10m38s on a hosted runner on 5 September 2026 (226 results; the default
+# suite measured 15m33s and 172). See codeql.yml for the full table.
 #
 # The exclusion list below is the shared baseline from codeql-config.yml, plus the six
 # package paths the security-critical job owns. Keep the baseline section identical
@@ -76,7 +78,14 @@ paths-ignore:
   - '**/docs/**'
   - '**/*.md'
 
+  # --- design documents and mockups ---------------------------------------------------
+  # 197 HTML mockups and a handful of scripts; nothing built or shipped. Rationale and the
+  # policy record it requires are in codeql-config.yml. This is the one analysis where the
+  # pattern has effect: the 4 alerts that prompted it were reported by this job.
+  - 'plans/**'
+
 # NOT COVERED BY ANY JOB IN THIS WORKFLOW, STATED SO IT IS NOT MISTAKEN FOR COVERAGE:
+#   plans/       —  design documents and mockups, excluded above on 8 September 2026.
 #   migrations/  —  690 .sql files and 4 .md. CodeQL has no SQL analysis, so schema
 #   migrations are outside the reach of code scanning entirely. Review of migrations
 #   remains a human control under BC-POL-012 §10, and the automated migration check

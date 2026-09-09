@@ -4,6 +4,12 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Hoisted: `vi.mock` factories run before normal imports are evaluated, so the shared module has
+// to be pulled in during that same phase. The Graph client mock below stays local on purpose —
+// it is a flat post/get/patch/delete stub, a different shape from the chain recorder GetEvents
+// needs, and the tests here assert against its call args directly.
+const shared = await vi.hoisted(async () => await import('./graph-mocks'));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
@@ -49,26 +55,7 @@ vi.mock('@memberjunction/core', () => ({
   LogStatus: vi.fn(),
 }));
 
-vi.mock('env-var', () => {
-  const envMap: Record<string, string> = {
-    AZURE_CLIENT_ID: 'env-client-id',
-    AZURE_CLIENT_SECRET: 'env-client-secret',
-    AZURE_TENANT_ID: 'env-tenant-id',
-    AZURE_ACCOUNT_EMAIL: 'test@example.com',
-    AZURE_ACCOUNT_ID: 'env-user-id',
-    AZURE_AAD_ENDPOINT: 'https://login.microsoftonline.com',
-    AZURE_GRAPH_ENDPOINT: 'https://graph.microsoft.com',
-  };
-  return {
-    default: {
-      get: (key: string) => ({
-        default: (def: string) => ({
-          asString: () => envMap[key] ?? def,
-        }),
-      }),
-    },
-  };
-});
+vi.mock('env-var', () => shared.envVarMock());
 
 // Mock @azure/identity
 // NOTE: the implementation MUST be a regular function, not an arrow - MS Graph's auth
@@ -299,6 +286,91 @@ describe('MSGraphProvider', () => {
 
       const result = await provider.SendSingleMessage(message, { disableEnvironmentFallback: true }) as Record<string, unknown>;
       expect(result.Success).toBe(false);
+    });
+
+    /**
+     * THE DEFECT THIS BLOCK EXISTS FOR. The `Azure Service Principal` credential type declares three
+     * fields and requires all three. `resolveCredentials` used to validate FOUR, demanding an
+     * `accountEmail` the type has no way to carry, so a credential stored through the Credentials
+     * engine could not drive a single operation — it failed before doing any work. It went unnoticed
+     * only because the AZURE_ACCOUNT_EMAIL environment fallback covered for it.
+     */
+    /** GetMessages chains .filter().top().get(); the default api mock is deliberately not chainable. */
+    const expectChainedCall = () => {
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue({ value: [] }),
+      };
+      mockGraphApi.mockReturnValueOnce(chain);
+    };
+
+    const PRINCIPAL = {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      clientId: '00000000-0000-0000-0000-000000000002',
+      clientSecret: 'secret',
+      disableEnvironmentFallback: true,
+    };
+
+    it('accepts a three-field service principal when the operation names its own mailbox', async () => {
+      expectChainedCall();
+      const result = await provider.GetMessages({
+        Identifier: 'named@example.com',
+        NumMessages: 5,
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+    });
+
+    /**
+     * A mailbox is still required — it is just demanded where it is needed rather than up front.
+     *
+     * It REJECTS rather than returning a failure result because `GetMessages` has no try/catch: a
+     * credential problem has always propagated as an exception from this method, since
+     * `resolveCredentials` throws too. Pinning the existing contract rather than quietly changing it.
+     */
+    it('refuses, naming the operation and the way out, when no mailbox resolves anywhere', async () => {
+      await expect(provider.GetMessages({ NumMessages: 5 }, PRINCIPAL)).rejects.toThrow(
+        /GetMessages needs a mailbox.*accountEmail/s
+      );
+    });
+
+    /**
+     * The failure must never be a mailbox literally named "undefined". This package does not enable
+     * strictNullChecks, so nothing but the guard stands between a missing mailbox and a Graph 404
+     * that reads like "message not found" — a wrong answer wearing the costume of a real one.
+     */
+    it('refuses before calling Graph at all, rather than requesting mailbox "undefined"', async () => {
+      const before = mockGraphApi.mock.calls.length;
+      await expect(provider.GetMessages({ NumMessages: 5 }, PRINCIPAL)).rejects.toThrow(/needs a mailbox/);
+
+      expect(mockGraphApi.mock.calls.length).toBe(before);
+      for (const call of mockGraphApi.mock.calls) {
+        expect(String(call[0])).not.toContain('undefined');
+      }
+    });
+
+    it('still uses accountEmail as the default when the request names no mailbox', async () => {
+      expectChainedCall();
+      const result = await provider.GetMessages({ NumMessages: 5 }, {
+        ...PRINCIPAL,
+        accountEmail: 'default@example.com',
+      }) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+      expect(String(mockGraphApi.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('default@example.com'));
+    });
+
+    it('lets the request outrank that default', async () => {
+      expectChainedCall();
+      await provider.GetMessages({ Identifier: 'named@example.com', NumMessages: 5 }, {
+        ...PRINCIPAL,
+        accountEmail: 'default@example.com',
+      });
+
+      const path = String(mockGraphApi.mock.calls.at(-1)?.[0]);
+      expect(path).toContain(encodeURIComponent('named@example.com'));
+      expect(path).not.toContain(encodeURIComponent('default@example.com'));
     });
   });
 

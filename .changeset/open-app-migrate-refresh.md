@@ -6,3 +6,5 @@
 ---
 
 After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R__RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+
+**Superseded in part by #4292**: the "insert at the live BaseView ordinal after parking existing sequences" step was reverted. CodeGen inserts carry an apply-time `MAX(Sequence)` expression and there is no park; the post-migrate heal steps described above are unchanged.

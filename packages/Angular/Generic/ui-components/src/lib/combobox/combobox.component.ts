@@ -138,7 +138,20 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
   @Input() ValueField = '';
   @Input() Filterable = true;
   @Input() ValuePrimitive = false;
-  @Input() Disabled = false;
+  /**
+   * Host-driven disable. Composed with Angular Forms' `setDisabledState()` into `IsDisabled`
+   * (the actual gate) — see `syncDisabled`. A setter, not a bare field, because this input is
+   * routinely bound to an expression that changes over the control's lifetime, and the gate has
+   * to follow it every time.
+   */
+  @Input()
+  set Disabled(value: boolean) {
+    this.disabledInput = value;
+    this.syncDisabled();
+  }
+  get Disabled(): boolean {
+    return this.disabledInput;
+  }
   @Input() Placeholder = '';
   @Input() AllowCustom = false;
 
@@ -155,6 +168,10 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   IsOpen = false;
+  /**
+   * The single gate on `Toggle()` / `Open()` — true when EITHER the `Disabled` input or Angular
+   * Forms says so. Never assign it directly; go through `syncDisabled()`.
+   */
   IsDisabled = false;
   HighlightedIndex = -1;
   SelectedValue: unknown = null;
@@ -232,9 +249,40 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
 
   Close(): void {
     if (!this.IsOpen) return;
+    this.resetPanelState();
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Panel state only — no change detection. Split out of `Close()` because `syncDisabled()` can
+   * run from an @Input setter, i.e. DURING the parent's change-detection pass, where a nested
+   * `detectChanges()` re-enters CD and trips NG0100 on the parent's own bindings.
+   */
+  private resetPanelState(): void {
     this.IsOpen = false;
     this.HighlightedIndex = -1;
-    this.cdr.detectChanges();
+  }
+
+  /** Backing field for the `Disabled` input. */
+  private disabledInput = false;
+  /** The forms-driven disabled state, kept SEPARATE so neither source can stomp the other. */
+  private formDisabled = false;
+
+  /**
+   * Recompute the gate from both of its sources. Called whenever either changes.
+   *
+   * `IsDisabled` is derived state, and the only thing that assigned it was `setDisabledState()`.
+   * The forms-driven half was in fact fine — `setUpControl` also wires `registerOnDisabledChange`,
+   * so that hook fires on every `control.disable()`/`enable()`, not just at registration. What had
+   * no recompute path at all was the `Disabled` @Input: a plain field, so the gate froze at
+   * whatever the first compose produced and every later change to the input was dropped.
+   */
+  private syncDisabled(): void {
+    const disabled = this.disabledInput || this.formDisabled;
+    if (disabled === this.IsDisabled) return;
+    this.IsDisabled = disabled;
+    if (disabled) this.resetPanelState();
+    this.cdr.markForCheck();
   }
 
   SelectItem(item: unknown, event?: Event): void {
@@ -344,7 +392,7 @@ export class MJComboboxComponent implements ControlValueAccessor, OnDestroy {
 
   registerOnChange(fn: (value: unknown) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  setDisabledState(isDisabled: boolean): void { this.IsDisabled = isDisabled || this.Disabled; }
+  setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
   ngOnDestroy(): void { this.Close(); }
 
   private getDisplayText(): string {

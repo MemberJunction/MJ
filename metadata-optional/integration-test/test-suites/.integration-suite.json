@@ -691,6 +691,14 @@
         {
           "fields": {
             "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT87 - Nested Transactions (ambient savepoints)",
+            "Sequence": 47,
+            "Status": "Active"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
             "TestID": "@lookup:MJ: Tests.Name=IT84 - Agent Note Cache Types (entity_object invariant)",
             "Sequence": 48,
             "Status": "Active"
@@ -993,6 +1001,17 @@
           },
           "primaryKey": {
             "ID": "0E1289E0-2D35-4F05-A032-9E6EB09E0990"
+          }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT88 - User Privilege Elevation Guard",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "2EE162F6-4504-4FDF-BBFA-48AB414D9590"
           }
         }
       ]

@@ -1730,9 +1730,9 @@ ORDER BY
      *    PK, and unique key detection.
      * 3. **Cleanup**: Drops the temp tables.
      */
-    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
-            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs, excludeSchemas) +
             this.buildPendingFieldsCleanup();
     }
 
@@ -1768,12 +1768,18 @@ FROM [${schema}].[vwTableUniqueKeys];
      * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
      * CTE to deduplicate results.
      */
-    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[]): string {
+    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         // When scoped, narrow the scan to specific entities. SQL injection isn't a concern
         // here — entityIDs are MJ-internal UUIDs from the metadata cache, not user input —
         // but we quote each ID anyway for SQL Server's UUID literal syntax.
         const scopeFilter = entityIDs && entityIDs.length > 0
             ? `AND sf.EntityID IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
+        // includeSchemas is compiled into excludeSchemas before this query runs. Without this
+        // filter, Pass 1 (unscoped entityIDs) inserts pending fields for EVERY schema in the
+        // database — e.g. a Forms CodeGen run emitted Common Activity Files EntityField rows.
+        const schemaFilter = excludeSchemas && excludeSchemas.length > 0
+            ? `AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `WITH MaxSequences AS (
    SELECT
@@ -1788,11 +1794,9 @@ NumberedRows AS (
    SELECT
       sf.EntityID,
       ISNULL(ms.MaxSequence, 0) + 100000 + sf.Sequence AS Sequence,
-      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
-      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
-      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
-      -- (Sequence above stays as-is: it is what this query ORDERs BY, and what the renumber pass
-      -- later overwrites from the schema.)
+      -- The RAW schema ordinal. The INSERT emitter uses it for DefaultInView only; the emitted
+      -- Sequence is an apply-time MAX()+1 subquery. (Sequence above is only this query's ORDER BY
+      -- key — never inserted — and the renumber pass overwrites every row from the schema.)
       sf.Sequence AS SourceOrdinal,
       sf.FieldName,
       sf.Description,
@@ -1841,6 +1845,7 @@ NumberedRows AS (
    WHERE
       EntityFieldID IS NULL
       ${scopeFilter}
+      ${schemaFilter}
    )
    SELECT *
    FROM NumberedRows

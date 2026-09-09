@@ -7,6 +7,9 @@ import {
     CreateDraftResult,
     ForwardMessageParams,
     ForwardMessageResult,
+    GetEventsParams,
+    GetEventsResult,
+    GetEventsEvent,
     GetMessagesParams,
     GetMessagesResult,
     GetSingleMessageParams,
@@ -114,13 +117,22 @@ export interface MSGraphCredentials extends ProviderCredentialsBase {
 }
 
 /**
- * Resolved MS Graph credentials with all required fields populated.
+ * Resolved MS Graph credentials.
+ *
+ * `accountEmail` is OPTIONAL, and deliberately so. The three authentication fields are what a
+ * service principal is, and they are what the `Azure Service Principal` credential type declares. A
+ * mailbox is not part of a principal — the same credential legitimately drives Azure OpenAI and Blob
+ * Storage, where a mailbox means nothing — so requiring one here made every stored credential of
+ * that type unusable, since there was no fourth field for an operator to fill in.
+ *
+ * It is therefore a DEFAULT, resolved per operation by {@link MSGraphProvider.resolveMailbox}, and
+ * demanded only where an operation genuinely needs a mailbox and nothing else supplied one.
  */
 interface ResolvedMSGraphCredentials {
     tenantId: string;
     clientId: string;
     clientSecret: string;
-    accountEmail: string;
+    accountEmail?: string;
 }
 
 /**
@@ -221,9 +233,14 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const clientSecret = resolveCredentialValue(credentials?.clientSecret, Config.AZURE_CLIENT_SECRET, disableFallback);
         const accountEmail = resolveCredentialValue(credentials?.accountEmail, Config.AZURE_ACCOUNT_EMAIL, disableFallback);
 
+        // The THREE authentication fields, which is exactly what a service principal is and exactly
+        // what the `Azure Service Principal` credential type declares. `accountEmail` used to be
+        // required here, which made every stored credential of that type unusable: there was no
+        // fourth field for an operator to fill in, so every operation failed before doing anything.
+        // A mailbox is resolved per operation instead — see `resolveMailbox`.
         validateRequiredCredentials(
-            { tenantId, clientId, clientSecret, accountEmail },
-            ['tenantId', 'clientId', 'clientSecret', 'accountEmail'],
+            { tenantId, clientId, clientSecret },
+            ['tenantId', 'clientId', 'clientSecret'],
             'Microsoft Graph'
         );
 
@@ -233,6 +250,27 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             clientSecret: clientSecret!,
             accountEmail: accountEmail!
         };
+    }
+
+    /**
+     * The mailbox an operation will act on, or a refusal that says how to supply one.
+     *
+     * WHY THIS THROWS. Every caller interpolates the result into a Graph path. Returning `undefined`
+     * would put the literal string "undefined" in the URL and come back as a 404 that reads like
+     * "message not found" — a wrong answer that looks like a real one. This package does not enable
+     * `strictNullChecks`, so the compiler would not have caught that either.
+     *
+     * `credentials.accountEmail` is the LAST candidate on purpose: it is a default for the deployment,
+     * and anything the caller named for this specific request outranks it.
+     */
+    private resolveMailbox(operation: string, creds: ResolvedMSGraphCredentials, ...preferred: (string | undefined)[]): string {
+        for (const candidate of [...preferred, creds.accountEmail]) {
+            if (candidate && candidate.trim() !== '') return candidate.trim();
+        }
+        throw new Error(
+            `Microsoft Graph: ${operation} needs a mailbox and none was supplied. Pass one on the ` +
+                `request, or set accountEmail on the credential (or AZURE_ACCOUNT_EMAIL) as a default.`
+        );
     }
 
     /**
@@ -303,12 +341,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
 
             // Smart selection: use message.From if provided and different from resolved accountEmail
-            let senderEmail = creds.accountEmail;
-            if (message.From &&
-                message.From.trim() !== '' &&
-                message.From !== creds.accountEmail) {
-                senderEmail = message.From;
-            }
+            // Whatever the caller named outranks the credential default; a request that names
+            // neither is refused here rather than sending from "undefined".
+            const senderEmail = this.resolveMailbox('SendSingleMessage', creds, message.From);
 
             if (!message) {
                 return {
@@ -425,7 +460,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             };
 
             // Use email address directly in API path
-            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(creds.accountEmail)}/messages/${params.MessageID}/reply`;
+            const mailbox = this.resolveMailbox('ReplyToMessage', creds);
+            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/messages/${params.MessageID}/reply`;
             const result = await client.api(sendMessagePath).post(reply);
 
             return {
@@ -437,7 +473,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             LogError(ex);
             return {
                 Success: false,
-                ErrorMessage: 'Error sending message'
+                ErrorMessage: `Error sending message: ${ex instanceof Error ? ex.message : String(ex)}`
             };
         }
     }
@@ -455,7 +491,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         const client = this.getGraphClient(creds);
 
         const contextData = params.ContextData;
-        const emailToUse = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
+        const emailToUse = this.resolveMailbox('GetMessages', creds, params.Identifier, (contextData?.Email as string));
 
         const top: number = params.NumMessages;
         const applied: AppliedMessageFilters = { ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false };
@@ -595,7 +631,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             };
 
             // Use email address directly in API path
-            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(creds.accountEmail)}/messages/${params.MessageID}/forward`;
+            const mailbox = this.resolveMailbox('ForwardMessage', creds);
+            const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/messages/${params.MessageID}/forward`;
             const forwardResult = await client.api(sendMessagePath).post(forward);
 
             return {
@@ -606,7 +643,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         catch (ex) {
             LogError(ex);
             return {
-                ErrorMessage: 'An Error occurred while forwarding the message',
+                ErrorMessage: `An Error occurred while forwarding the message: ${ex instanceof Error ? ex.message : String(ex)}`,
                 Success: false
             };
         }
@@ -787,12 +824,9 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             const client = this.getGraphClient(creds);
 
             // Smart selection: use message.From if provided and different from resolved accountEmail
-            let senderEmail = creds.accountEmail;
-            if (params.Message.From &&
-                params.Message.From.trim() !== '' &&
-                params.Message.From !== creds.accountEmail) {
-                senderEmail = params.Message.From;
-            }
+            // Whatever the caller named outranks the credential default; a request that names
+            // neither is refused here rather than sending from "undefined".
+            const senderEmail = this.resolveMailbox('CreateDraft', creds, params.Message.From);
 
             // Build message object (similar to SendSingleMessage but saved as draft)
             const draftMessage: Record<string, unknown> = {
@@ -836,7 +870,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             LogError('Error creating draft via MS Graph', undefined, ex);
             return {
                 Success: false,
-                ErrorMessage: 'Error creating draft'
+                ErrorMessage: `Error creating draft: ${ex instanceof Error ? ex.message : String(ex)}`
             };
         }
     }
@@ -844,6 +878,159 @@ export class MSGraphProvider extends BaseCommunicationProvider {
     // ========================================================================
     // EXTENDED OPERATIONS - MS Graph supports full mailbox access
     // ========================================================================
+
+    /**
+     * Reads calendar events for one mailbox.
+     *
+     * @requires MS Graph Scope: Calendars.Read (Application)
+     *
+     * TWO ENDPOINTS, AND THE CHOICE IS VISIBLE TO THE CALLER. Graph exposes calendar data two ways
+     * and they do not return the same thing:
+     *
+     *   - `/calendarView` REQUIRES a start and end and EXPANDS recurring series into one entry per
+     *     occurrence. A weekly stand-up in a two-week window comes back as two events, each with its
+     *     own start time and id.
+     *   - `/events` needs no window and does NOT expand. That same stand-up is one row, the series
+     *     master, whose start time is whenever the series began - possibly years ago.
+     *
+     * A caller logging what actually happened wants occurrences; one asking "what meetings exist"
+     * may want masters. Silently picking would be a trap, because the two are indistinguishable by
+     * inspection - so the window decides, and `RecurrenceExpanded` on the result REPORTS which
+     * happened rather than leaving the caller to infer it.
+     *
+     * CANCELLED EVENTS ARE EXCLUDED BY DEFAULT and cannot be recovered afterwards - Graph does not
+     * return them once filtered - so `IncludeCancelled` is honoured before the `$top` cap rather
+     * than by discarding rows after the fetch, which would silently shrink the page.
+     */
+    public async GetEvents(
+        params: GetEventsParams,
+        credentials?: MSGraphCredentials
+    ): Promise<GetEventsResult> {
+        const creds = this.resolveCredentials(credentials);
+        const client = this.getGraphClient(creds);
+
+        const contextData = params.ContextData;
+        const mailbox = params.Identifier || (contextData?.Email as string) || creds.accountEmail;
+        if (!mailbox) {
+            return {
+                Success: false,
+                Events: [],
+                ErrorMessage: 'GetEvents needs an Identifier (mailbox) or credentials scoped to one.'
+            };
+        }
+
+        const expand = !!params.StartDateTime && !!params.EndDateTime;
+        const base = `${this.getApiUri()}/${encodeURIComponent(mailbox)}`;
+
+        try {
+            let request = expand
+                ? client
+                      .api(`${base}/calendarView`)
+                      .query({
+                          startDateTime: params.StartDateTime!.toISOString(),
+                          endDateTime: params.EndDateTime!.toISOString()
+                      })
+                      .orderby('start/dateTime')
+                : client.api(`${base}/events`).orderby('lastModifiedDateTime desc');
+
+            // Ask for UTC explicitly rather than relying on it. Graph returns start/end in UTC when no
+            // `Prefer: outlook.timezone` is sent, so this changes nothing today — but the default is
+            // Microsoft's to change, and every other value would need a tz database to resolve. Saying
+            // it makes the mapper's UTC assumption a request rather than a bet. `graphInstant` keeps
+            // its null fallback for the case where a non-UTC zone comes back anyway.
+            request = request.header('Prefer', 'outlook.timezone="UTC"');
+
+            // Applied server-side so the $top cap counts only events the caller asked for. Filtering
+            // after the fetch would return fewer than NumEvents and look like an empty calendar.
+            //
+            // $filter AND $orderby TOGETHER ARE ACCEPTED HERE. Outlook's backend requires every
+            // $orderby property to also appear in $filter for MESSAGES, returning 400
+            // `InefficientFilter` otherwise, and Microsoft's announcement of that rule is titled for
+            // Mail, Calendar and Contacts — so this combination looks like it should fail. It does
+            // not: both shapes below were sent against a live tenant and returned 200. Recorded here
+            // because the unit tests mock the Graph client and can never catch a 400, so the next
+            // reader has no way to re-derive it short of running the query again.
+            if (!params.IncludeCancelled) {
+                request = request.filter('isCancelled eq false');
+            }
+
+            const response = await request.top(params.NumEvents).get();
+            if (!response) {
+                return { Success: false, Events: [], ErrorMessage: 'Graph returned no response for the calendar read.' };
+            }
+
+            const sourceEvents: Record<string, unknown>[] = response.value ?? [];
+            return {
+                Success: true,
+                SourceData: sourceEvents,
+                RecurrenceExpanded: expand,
+                Events: sourceEvents.map((e) => this.toGetEventsEvent(e))
+            };
+        } catch (err) {
+            // Surfaced, not swallowed into an empty list: a caller advancing a watermark must be able
+            // to tell "could not read" from "nothing scheduled".
+            return {
+                Success: false,
+                Events: [],
+                ErrorMessage: `Graph calendar read failed for ${mailbox}: ${err instanceof Error ? err.message : String(err)}`
+            };
+        }
+    }
+
+    /**
+     * Graph event -> the normalized shape. Lossy by design; `SourceData` keeps the original.
+     *
+     * A start Graph cannot express as an instant becomes NULL rather than a guess. Graph returns
+     * naive local strings plus a separate timeZone, so a value with neither a zone suffix nor a UTC
+     * marker genuinely has no instant here, and inventing one would file a meeting at the wrong time.
+     */
+    private toGetEventsEvent(raw: Record<string, unknown>): GetEventsEvent {
+        const event = raw as {
+            id?: string;
+            seriesMasterId?: string;
+            subject?: string;
+            bodyPreview?: string;
+            start?: { dateTime?: string; timeZone?: string };
+            end?: { dateTime?: string; timeZone?: string };
+            location?: { displayName?: string };
+            organizer?: { emailAddress?: { address?: string } };
+            attendees?: { emailAddress?: { address?: string } }[];
+            isCancelled?: boolean;
+        };
+
+        const organizer = event.organizer?.emailAddress?.address?.trim().toLowerCase() || undefined;
+        const attendees = (event.attendees ?? [])
+            .map((a) => a.emailAddress?.address?.trim().toLowerCase())
+            .filter((a): a is string => !!a && a !== organizer);
+
+        return {
+            ExternalSystemRecordID: event.id ?? '',
+            SeriesID: event.seriesMasterId ?? null,
+            Subject: event.subject ?? '',
+            Body: event.bodyPreview ?? '',
+            StartTime: MSGraphProvider.graphInstant(event.start),
+            EndTime: MSGraphProvider.graphInstant(event.end),
+            Location: event.location?.displayName ?? null,
+            Organizer: organizer,
+            Attendees: [...new Set(attendees)],
+            IsCancelled: event.isCancelled === true
+        };
+    }
+
+    /** A Graph date slot as an instant, or null when it does not determine one. */
+    private static graphInstant(slot: { dateTime?: string; timeZone?: string } | undefined): Date | null {
+        const raw = slot?.dateTime?.trim();
+        if (!raw) return null;
+        // Both alternatives anchored. Unanchored, the `[Zz]` matched a "z" ANYWHERE in the string, so
+        // a value that merely contained one counted as carrying an offset and skipped the UTC check.
+        const hasOffset = /(?:[Zz]|[+-]\d{2}:?\d{2})$/.test(raw);
+        const zone = (slot?.timeZone ?? 'UTC').trim().toUpperCase();
+        // Only UTC is safe to assume. Any other named zone would need a tz database to resolve, and
+        // guessing puts the meeting hours away from when it happened.
+        if (!hasOffset && zone !== 'UTC') return null;
+        const parsed = new Date(hasOffset ? raw : `${raw}Z`);
+        return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
 
     /**
      * Returns the list of operations supported by MS Graph provider.
@@ -868,7 +1055,8 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             'CreateSubscription',
             'RenewSubscription',
             'DeleteSubscription',
-            'ParseNotification'
+            'ParseNotification',
+            'GetEvents'
         ];
     }
 
@@ -950,7 +1138,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const mailboxId = params.Identifier || creds.accountEmail;
+            const mailboxId = this.resolveMailbox('CreateSubscription', creds, params.Identifier);
             const context = params.ContextData as MSGraphSubscriptionContext | undefined;
 
             const folderSegment = await this.resolveSubscriptionFolderSegment(client, mailboxId, context);
@@ -1173,7 +1361,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('GetSingleMessage', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const messagePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}`;
@@ -1230,7 +1418,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('DeleteMessage', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const messagePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}`;
@@ -1274,7 +1462,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('MoveMessage', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const movePath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/move`;
@@ -1309,7 +1497,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('ListFolders', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             let foldersPath: string;
@@ -1364,7 +1552,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('MarkAsRead', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path - update each message
             const updatePromises = params.MessageIDs.map(async (messageId) => {
@@ -1397,7 +1585,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('ArchiveMessage', creds, (params.ContextData?.Email as string));
 
             // Find or create the Archive folder - use email address directly
             let archiveFolderId = await this.findSystemFolder(client, emailToUse, 'archive');
@@ -1442,7 +1630,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('SearchMessages', creds, (params.ContextData?.Email as string));
 
             // Build search path - use email address directly in API path
             let messagesPath: string;
@@ -1527,7 +1715,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('ListAttachments', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const attachmentsPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/attachments`;
@@ -1575,7 +1763,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         try {
             const creds = this.resolveCredentials(credentials);
             const client = this.getGraphClient(creds);
-            const emailToUse = (params.ContextData?.Email as string) || creds.accountEmail;
+            const emailToUse = this.resolveMailbox('DownloadAttachment', creds, (params.ContextData?.Email as string));
 
             // Use email address directly in API path
             const attachmentPath = `${this.getApiUri()}/${encodeURIComponent(emailToUse)}/messages/${params.MessageID}/attachments/${params.AttachmentID}`;

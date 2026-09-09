@@ -1,4 +1,5 @@
-import { BaseEntity, RunView, UserInfo, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, RunView, UserInfo, EntityInfo, Metadata } from '@memberjunction/core';
+import { ordinalCompare } from '@memberjunction/global';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { EntityConfig } from '../config';
 import { JsonWriteHelper } from './json-write-helper';
@@ -56,8 +57,8 @@ export class RecordProcessor {
     // Extract all properties from the entity
     const allProperties = this.propertyExtractor.extractAllProperties(record, fieldOverrides);
 
-    // Process fields and related entities
-    const { fields, relatedEntities } = await this.processEntityData(
+    // Process fields, collections, embeds, extension, and related entities (§6)
+    const { fields, collections, embeds, extension, relatedEntities } = await this.processEntityData(
       allProperties,
       record,
       primaryKey,
@@ -76,7 +77,10 @@ export class RecordProcessor {
       targetDir, 
       entityConfig, 
       existingRecordData, 
-      verbose
+      verbose,
+      collections,
+      embeds,
+      extension
     );
     
     // Build the final record data with proper ordering
@@ -84,7 +88,10 @@ export class RecordProcessor {
       fields,
       relatedEntities,
       primaryKey,
-      syncData
+      syncData,
+      collections,
+      embeds,
+      extension
     );
   }
 
@@ -102,8 +109,16 @@ export class RecordProcessor {
     ancestryPath: Set<string>,
     verbose?: boolean,
     batchedRelatedData?: Map<string, Map<string, BaseEntity[]>>
-  ): Promise<{ fields: Record<string, any>; relatedEntities: Record<string, RecordData[]> }> {
+  ): Promise<{
+    fields: Record<string, any>;
+    collections?: Record<string, RecordData[]>;
+    embeds?: Record<string, RecordData>;
+    extension?: RecordData['extension'];
+    relatedEntities: Record<string, RecordData[]>;
+  }> {
     const fields: Record<string, any> = {};
+    const collections: Record<string, RecordData[]> = {};
+    const embeds: Record<string, RecordData> = {};
     const relatedEntities: Record<string, RecordData[]> = {};
 
     // Process individual fields
@@ -114,6 +129,37 @@ export class RecordProcessor {
       entityConfig,
       existingRecordData,
       fields,
+      verbose
+    );
+
+    // Process collections if declared (§6)
+    await this.processCollections(
+      record,
+      targetDir,
+      entityConfig,
+      collections,
+      currentDepth,
+      ancestryPath,
+      verbose
+    );
+
+    // Process extension if present (§6)
+    const extension = await this.processExtension(
+      record,
+      primaryKey,
+      targetDir,
+      entityConfig,
+      verbose
+    );
+
+    // Process embeds if present (§6)
+    await this.processEmbeds(
+      record,
+      targetDir,
+      entityConfig,
+      embeds,
+      currentDepth,
+      ancestryPath,
       verbose
     );
 
@@ -129,7 +175,13 @@ export class RecordProcessor {
       batchedRelatedData
     );
 
-    return { fields, relatedEntities };
+    return {
+      fields,
+      ...(Object.keys(collections).length > 0 ? { collections } : {}),
+      ...(Object.keys(embeds).length > 0 ? { embeds } : {}),
+      ...(extension ? { extension } : {}),
+      relatedEntities,
+    };
   }
 
   /**
@@ -477,14 +529,24 @@ export class RecordProcessor {
     targetDir: string,
     entityConfig: EntityConfig,
     existingRecordData: RecordData | undefined,
-    verbose?: boolean
+    verbose?: boolean,
+    collections?: Record<string, RecordData[]>,
+    embeds?: Record<string, RecordData>,
+    extension?: RecordData['extension']
   ): Promise<{ lastModified: string; checksum: string }> {
     // Determine if we should include external file content in checksum
     const hasExternalizedFields = this.hasExternalizedFields(fields, entityConfig);
 
+    const checksumPayload: Record<string, unknown> = {
+      fields,
+      ...(collections && Object.keys(collections).length > 0 ? { collections } : {}),
+      ...(embeds && Object.keys(embeds).length > 0 ? { embeds } : {}),
+      ...(extension && Object.keys(extension).length > 0 ? { extension } : {}),
+    };
+
     const checksum = hasExternalizedFields
-      ? await this.syncEngine.calculateChecksumWithFileContent(fields, targetDir)
-      : this.syncEngine.calculateChecksum(fields);
+      ? await this.syncEngine.calculateChecksumWithFileContent(checksumPayload, targetDir)
+      : this.syncEngine.calculateChecksum(checksumPayload);
 
     if (verbose && hasExternalizedFields) {
       console.log(`Calculated checksum including external file content for record`);
@@ -517,6 +579,181 @@ export class RecordProcessor {
         lastModified: newTimestamp,
         checksum: checksum
       };
+    }
+  }
+
+  /**
+   * Processes first-class collections on pull (§6)
+   */
+  private async processCollections(
+    record: BaseEntity,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    collections: Record<string, RecordData[]>,
+    currentDepth: number,
+    ancestryPath: Set<string>,
+    verbose?: boolean
+  ): Promise<void> {
+    if (!record.EntityInfo?.RelatedEntities) return;
+
+    for (const rel of record.EntityInfo.RelatedEntities) {
+      if (!rel.RelatedRecordCollection) continue;
+
+      let colName = rel.RelatedEntity;
+      try {
+        const parsed = JSON.parse(rel.RelatedRecordCollection);
+        if (parsed.Name) colName = parsed.Name;
+      } catch {}
+
+      // Look up companion on record
+      let companion = record.GetCompanion(colName);
+      if (!companion) {
+        const entityRecord = record as unknown as Record<string, unknown>;
+        if (entityRecord[colName] && typeof (entityRecord[colName] as { Items?: BaseEntity[] }).Items !== 'undefined') {
+          companion = entityRecord[colName] as unknown as typeof companion;
+        }
+      }
+
+      if (!companion) continue;
+
+      const col = companion as unknown as {
+        LoadMode: string;
+        IsLoaded: boolean;
+        Items: BaseEntity[];
+        Load: () => Promise<void>;
+      };
+
+      // Rider 4 / §6: Load: 'never' collection must be skipped with a stated reason on pull, never emitted as []
+      if (col.LoadMode === 'never') {
+        console.log(`Skipping Load: 'never' collection '${colName}' on ${record.EntityInfo.Name}`);
+        continue;
+      }
+
+      if (!col.IsLoaded) {
+        try {
+          await col.Load();
+        } catch (loadErr) {
+          console.warn(`Failed to load collection '${colName}' on ${record.EntityInfo.Name}: ${loadErr instanceof Error ? loadErr.message : String(loadErr)}`);
+          continue;
+        }
+      }
+
+      const rawItems = col.Items ?? [];
+      if (rawItems.length > 0) {
+        collections[colName] = [];
+        const childEntityInfo = rawItems[0].EntityInfo;
+        const childConfig: EntityConfig = {
+          entity: childEntityInfo.Name,
+        };
+
+        // Deterministically sort collection items by primary key(s)
+        const items = [...rawItems].sort((a, b) => {
+          for (const pk of childEntityInfo.PrimaryKeys) {
+            const aVal = String(a.Get(pk.Name) ?? '');
+            const bVal = String(b.Get(pk.Name) ?? '');
+            const cmp = ordinalCompare(aVal, bVal);
+            if (cmp !== 0) return cmp;
+          }
+          return 0;
+        });
+
+        for (const child of items) {
+          const childPK: Record<string, unknown> = {};
+          for (const pk of childEntityInfo.PrimaryKeys) {
+            childPK[pk.Name] = child.Get(pk.Name);
+          }
+
+          const childData = await this.processRecord(
+            child,
+            childPK,
+            targetDir,
+            childConfig,
+            verbose,
+            false,
+            undefined,
+            currentDepth + 1,
+            new Set([...(ancestryPath ?? []), `${record.EntityInfo.Name}:${JSON.stringify(record.PrimaryKey)}`])
+          );
+          collections[colName].push(childData);
+        }
+      }
+    }
+  }
+
+  /**
+   * Processes first-class extension on pull (§6)
+   */
+  private async processExtension(
+    record: BaseEntity,
+    primaryKey: Record<string, unknown>,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    verbose?: boolean
+  ): Promise<RecordData['extension'] | undefined> {
+    const child = record.ISAChild;
+    if (!child) return undefined;
+
+    // Leaf fields only: fields present on child but NOT on parent
+    const parentFieldNames = new Set(record.EntityInfo.Fields.map((f) => f.Name.toLowerCase()));
+    const childProperties = this.propertyExtractor.extractAllProperties(child);
+    const leafFields: Record<string, unknown> = {};
+
+    for (const [fName, fVal] of Object.entries(childProperties)) {
+      if (parentFieldNames.has(fName.toLowerCase())) continue;
+      if (fName.startsWith('__mj_')) continue;
+      if (primaryKey[fName] !== undefined) continue;
+      leafFields[fName] = fVal;
+    }
+
+    // Determine if child type is ambiguous (more than one subtype exists in metadata)
+    const childSubtypes = Metadata.Provider?.Entities
+      ? Metadata.Provider.Entities.filter(
+          (e) => e.ParentID === record.EntityInfo.ID || e.ParentEntityInfo?.ID === record.EntityInfo.ID
+        )
+      : [];
+    const needsEntityName = childSubtypes.length > 1 || record.EntityInfo.AllowMultipleSubtypes;
+
+    return {
+      ...(needsEntityName ? { entity: child.EntityInfo.Name } : {}),
+      fields: leafFields,
+    };
+  }
+
+  /**
+   * Processes first-class embeds on pull (§6)
+   */
+  private async processEmbeds(
+    record: BaseEntity,
+    targetDir: string,
+    entityConfig: EntityConfig,
+    embeds: Record<string, RecordData>,
+    currentDepth: number,
+    ancestryPath: Set<string>,
+    verbose?: boolean
+  ): Promise<void> {
+    for (const field of record.EntityInfo.Fields) {
+      if (!field.RelatedEntity) continue;
+      const objectPropName = `${field.Name}_Object`;
+      const entityRecord = record as unknown as Record<string, unknown>;
+      const embedded = entityRecord[objectPropName] as BaseEntity | undefined;
+
+      if (embedded && typeof embedded.Get === 'function') {
+        const embedProperties = this.propertyExtractor.extractAllProperties(embedded);
+        const embedFields: Record<string, unknown> = {};
+        const embedPK: Record<string, unknown> = {};
+        for (const pk of embedded.EntityInfo.PrimaryKeys) {
+          embedPK[pk.Name] = embedded.Get(pk.Name);
+        }
+        for (const [fName, fVal] of Object.entries(embedProperties)) {
+          if (fName.startsWith('__mj_') || embedPK[fName] !== undefined) continue;
+          embedFields[fName] = fVal;
+        }
+
+        embeds[field.Name] = {
+          fields: embedFields,
+          ...(Object.keys(embedPK).length > 0 ? { primaryKey: embedPK } : {}),
+        };
+      }
     }
   }
 

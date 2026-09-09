@@ -74,14 +74,22 @@ function handleGraphNotification(
     res: Response,
 ): void {
     const validationToken = readValidationToken(req);
+    if (validationToken !== undefined && validationToken.length > 0 && !isWellFormedValidationToken(validationToken)) {
+        // Graph's token is a short ASCII sentence plus a request id. Anything else is not Graph, and the
+        // echo below must never reflect arbitrary bytes.
+        LogStatus('[Meetings][Teams] notification rejected: malformed-validation-token');
+        res.status(400).type('text/plain').send('Rejected.');
+        return;
+    }
     const batch = (req.body ?? {}) as GraphNotificationBatch;
     const notifications = Array.isArray(batch.value) ? batch.value : [];
     const clientStates = notifications.map((n) => n.clientState);
 
     const verdict = validateGraphNotification(validationToken, config.notificationClientState ?? '', clientStates);
     if (verdict.Kind === 'validation') {
-        // The subscription-validation handshake: echo the token verbatim as text/plain 200.
-        res.status(200).type('text/plain').send(verdict.ValidationToken);
+        // The subscription-validation handshake: echo the token verbatim as text/plain 200. The token was
+        // checked by isWellFormedValidationToken above; nosniff makes sure no client reinterprets the echo.
+        res.status(200).type('text/plain').set('X-Content-Type-Options', 'nosniff').send(verdict.ValidationToken);
         return;
     }
     if (verdict.Kind === 'reject') {
@@ -109,6 +117,17 @@ function dispatchNotifications(service: TeamsMeetingsService, notifications: Gra
             LogError(`[Meetings][Teams] failed to process notification: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
+}
+
+/** Upper bound for a Graph validation token; the real one is roughly a hundred characters. */
+const MAX_VALIDATION_TOKEN_LENGTH = 1024;
+
+/** Graph validation tokens are printable ASCII only. */
+const PRINTABLE_ASCII = /^[\x20-\x7E]+$/;
+
+/** True when the token is something Graph could have sent: bounded length, printable ASCII. */
+function isWellFormedValidationToken(token: string): boolean {
+    return token.length <= MAX_VALIDATION_TOKEN_LENGTH && PRINTABLE_ASCII.test(token);
 }
 
 /** Reads the `?validationToken=…` query param (Graph URL-encodes it), when present. */

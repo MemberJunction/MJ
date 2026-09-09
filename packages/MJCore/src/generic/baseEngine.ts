@@ -872,10 +872,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
             // multi-provider client setups instantiate entities against the correct server.
             const md = this.ProviderToUse;
-            // Find the proper entity name with original casing from the config
             const originalEntityName = matchingConfigs[0].EntityName!;
             const entity = await md.GetEntityObject(originalEntityName, this._contextUser);
-            entity.LoadFromData(recordData);
+            await entity.LoadFromData(recordData);
 
             for (const config of matchingConfigs) {
                 // Skip the AdditionalLoading check because we call it ourselves after all mutations
@@ -1486,7 +1485,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (!fresh) {
                 return null;
             }
-            fresh.LoadFromData(source.GetAll());
+            await fresh.LoadFromData(source.GetAll());
             return fresh;
         }
         catch (e) {

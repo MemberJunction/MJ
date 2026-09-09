@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, Metadata, UserInfo, ShouldJoinRecordGeoCodes, HasNativeLatLngFields, NativeLatitudeField, NativeLongitudeField, ListEmbeddedGeoSpecs } from '@memberjunction/core';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner } from '../Misc/status_logging';
 import * as fs from 'fs';
 import path from 'path';
@@ -803,6 +803,8 @@ export class SQLCodeGenBase {
         // BaseView while CodeGen keeps writing the inner view underneath it. Gating on
         // BaseViewGenerated alone would skip the inner view and leave the custom layer selecting
         // from an object that does not exist.
+        // One pass: overlay already applied → Pass 1 sees extra BaseView columns and logs
+        // EntityField INSERTs; Pass 2 DROPs/creates only GeneratedViewName, never the overlay.
         const generatesView = (entity.BaseViewGenerated || entity.HasLayeredBaseView) && !entity.VirtualEntity;
 
         const tvfSQL = generatesView ? this.generateRecursiveFKTVFs(entity) : '';
@@ -1847,16 +1849,21 @@ export class SQLCodeGenBase {
         let relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
 
-        // Geo support: add __mj_Latitude and __mj_Longitude virtual fields for geo-enabled entities
-        // Skip for Record Geo Codes itself to avoid circular self-reference in the view
+        // Geo WRITE source: native lat/lng aliases, or RecordGeoCode JOIN when the entity
+        // has writable Geo* fields and no native coords. Display-only entities (Person/Org
+        // virtual PrimaryAddress*) do not get a RecordGeoCode join on their own ID.
         if (entity.SupportsGeoCoding && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
             const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
-            const geoFieldsSelect = this.hasNativeGeoFields(entity.Fields)
+            const geoFieldsSelect = HasNativeLatLngFields(entity.Fields)
                 ? this.generateNativeGeoFields(entity.Fields, classNameFirstChar, qi)
-                : this.generateRecordGeoCodeFields(qi);
+                : (ShouldJoinRecordGeoCodes(entity) ? this.generateRecordGeoCodeFields(qi) : '');
             if (geoFieldsSelect) {
                 relatedFieldsString += (relatedFieldsString ? ',\n' : '') + geoFieldsSelect;
             }
+        }
+        const embeddedGeo = this.generateEmbeddedGeoSelect(entity, classNameFirstChar);
+        if (embeddedGeo.select) {
+            relatedFieldsString += (relatedFieldsString ? ',\n' : '') + embeddedGeo.select;
         }
         // GRANTs target the PUBLIC view (BaseView), not the one this method generates. For a
         // LAYERED entity those are different objects, and the outer one may not exist yet: the
@@ -1981,10 +1988,9 @@ export class SQLCodeGenBase {
             }
         }
 
-        // Geo support: add LEFT JOIN to vwRecordGeoCodes for entities with SupportsGeoCoding = 1
-        // that don't have native GeoLatitude/GeoLongitude fields (those get aliased directly).
-        // Skip for Record Geo Codes itself to avoid circular self-reference in the view.
-        if (entity.SupportsGeoCoding && !this.hasNativeGeoFields(entityFields) && entity.Name.trim().toLowerCase() !== 'mj: record geo codes') {
+        // Geo WRITE source: RecordGeoCode JOIN only when there are writable Geo* fields
+        // and no native lat/lng. Display-only entities skip this join.
+        if (ShouldJoinRecordGeoCodes(entity)) {
             const dialect = this._dbProvider.Dialect;
             const qi = dialect.QuoteIdentifier.bind(dialect);
             const qs = dialect.QuoteSchema.bind(dialect);
@@ -2012,6 +2018,8 @@ export class SQLCodeGenBase {
             sOutput += `LEFT OUTER JOIN\n    ${qs(mjCoreSchema, 'vwRecordGeoCodes')} AS __mj_rgc\n  ON\n    __mj_rgc.${qi('EntityID')} = '${entity.ID}'\n    AND __mj_rgc.${qi('RecordID')} = ${recordIdExpr}\n    AND __mj_rgc.${qi('LocationType')} = 'Primary'`;
         }
 
+        sOutput += this.generateEmbeddedGeoJoins(entity, classNameFirstChar);
+
         return sOutput;
     }
 
@@ -2029,9 +2037,7 @@ export class SQLCodeGenBase {
      * on any geo-eligible entity whose RecordGeoCode-based view ran once.
      */
     protected hasNativeGeoFields(entityFields: EntityFieldInfo[]): boolean {
-        const hasLat = entityFields.some(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
-        const hasLng = entityFields.some(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
-        return hasLat && hasLng;
+        return HasNativeLatLngFields(entityFields);
     }
 
     /**
@@ -2043,10 +2049,43 @@ export class SQLCodeGenBase {
         classNameFirstChar: string,
         qi: (name: string) => string
     ): string {
-        const latField = entityFields.find(f => f.ExtendedType === 'GeoLatitude' && !f.IsVirtual);
-        const lngField = entityFields.find(f => f.ExtendedType === 'GeoLongitude' && !f.IsVirtual);
+        const latField = NativeLatitudeField(entityFields);
+        const lngField = NativeLongitudeField(entityFields);
         if (!latField || !lngField) return '';
         return `    ${qi(classNameFirstChar)}.${qi(latField.Name)} AS ${qi('__mj_Latitude')},\n    ${qi(classNameFirstChar)}.${qi(lngField.Name)} AS ${qi('__mj_Longitude')}`;
+    }
+
+    /**
+     * Bubble lat/lng from EmbeddedRecord peers as `__mj_Latitude_{FK}`.
+     * Geocode lives on the Address (or other source); the parent only displays it.
+     */
+    protected generateEmbeddedGeoSelect(entity: EntityInfo, classNameFirstChar: string): { select: string; joins: string } {
+        const specs = ListEmbeddedGeoSpecs(entity.Fields);
+        if (specs.length === 0) return { select: '', joins: '' };
+        const md = new Metadata(); // global-provider-ok: CodeGen is CLI tool
+        const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
+        const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
+        const selects: string[] = [];
+        const joins: string[] = [];
+        for (const spec of specs) {
+            const related = md.Entities.find(e => e.ID.toLowerCase() === spec.relatedEntityID.toLowerCase());
+            if (!related) continue;
+            const latF = NativeLatitudeField(related.Fields) ?? related.Fields.find(f => f.Name === '__mj_Latitude' || f.Name === 'PrimaryAddressLatitude');
+            const lngF = NativeLongitudeField(related.Fields) ?? related.Fields.find(f => f.Name === '__mj_Longitude' || f.Name === 'PrimaryAddressLongitude');
+            if (!latF || !lngF) continue;
+            const alias = `__mj_emb_${spec.foreignKeyField}`;
+            const schema = spec.relatedSchemaName || related.SchemaName;
+            const table = spec.relatedBaseTable || related.BaseTable;
+            const joinKind = spec.allowsNull ? 'LEFT OUTER' : 'INNER';
+            joins.push(`${joinKind} JOIN\n    ${qs(schema, table)} AS ${alias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(spec.foreignKeyField)} = ${alias}.${qi(related.FirstPrimaryKey.Name)}`);
+            selects.push(`    ${alias}.${qi(latF.Name)} AS ${qi(spec.lat)},\n    ${alias}.${qi(lngF.Name)} AS ${qi(spec.lng)}`);
+        }
+        return { select: selects.join(',\n'), joins: joins.join('\n') };
+    }
+
+    protected generateEmbeddedGeoJoins(entity: EntityInfo, classNameFirstChar: string): string {
+        const { joins } = this.generateEmbeddedGeoSelect(entity, classNameFirstChar);
+        return joins ? ((entity.Fields.length ? '\n' : '') + joins) : '';
     }
 
     /**
