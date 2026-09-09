@@ -663,7 +663,7 @@ export class SyncEngine {
             if (allMatch) {
               // Found in batch context, return primary key
               if (entityInfo.PrimaryKeys.length > 0) {
-                const pkeyField = entityInfo.PrimaryKeys[0].Name;
+                const pkeyField = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: @lookup yields ONE value for an FK field; FK targets are single-column by design
                 const id = entity.Get(pkeyField);
                 if (this.syncMetadataEngine) {
                   this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
@@ -680,7 +680,7 @@ export class SyncEngine {
     if (this.syncMetadataEngine && this.syncMetadataEngine.isEntityPreloaded(entityName)) {
       const cachedEntity = this.syncMetadataEngine.findCachedByLookup(entityName, lookupFields);
       if (cachedEntity) {
-        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const pkeyField = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: @lookup yields ONE value for an FK field; FK targets are single-column by design
         const id = cachedEntity.Get(pkeyField);
         this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
         return id;
@@ -761,7 +761,7 @@ export class SyncEngine {
     
     if (result.Success && result.Results.length > 0) {
       if (entityInfo.PrimaryKeys.length > 0) {
-        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const pkeyField = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: @lookup yields ONE value for an FK field; FK targets are single-column by design
         const id = result.Results[0][pkeyField];
         if (this.syncMetadataEngine) {
           this.syncMetadataEngine.setCachedLookup(lookupCacheKey, id, entityName);
@@ -826,7 +826,7 @@ export class SyncEngine {
       
       // Return the new ID
       if (entityInfo.PrimaryKeys.length > 0) {
-        const pkeyField = entityInfo.PrimaryKeys[0].Name;
+        const pkeyField = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: @lookup yields ONE value for an FK field; FK targets are single-column by design
         const newId = newEntity.Get(pkeyField);
         if (this.syncMetadataEngine) {
           this.syncMetadataEngine.setCachedLookup(lookupCacheKey, newId, entityName);

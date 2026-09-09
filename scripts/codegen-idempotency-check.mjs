@@ -101,7 +101,11 @@ export function getGitStatusPorcelain(paths = ['packages/', 'metadata/']) {
   if (res.status !== 0 || res.error) {
     throw new Error(`git status failed (status=${res.status}, signal=${res.signal}): ${res.error?.message ?? res.stderr ?? '(no output)'}`);
   }
-  return res.stdout.trim().split('\n').filter(Boolean);
+  // NOT stdout.trim(): porcelain lines are ' M path' (3-char prefix) and callers slice(3).
+  // Trimming the whole buffer strips the leading space of the FIRST line only, so that one
+  // path loses its first character ('packages/x' -> 'ackages/x') and silently fails every
+  // allow-list match. Trim the trailing newline instead and leave line prefixes intact.
+  return res.stdout.split('\n').map((l) => l.replace(/\s+$/, '')).filter(Boolean);
 }
 
 export function computeFileHash(filePath) {

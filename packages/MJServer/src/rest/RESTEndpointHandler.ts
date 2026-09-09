@@ -794,25 +794,11 @@ export class RESTEndpointHandler {
     }
 
     /**
-     * Helper method to create a composite key from an ID
+     * Build the record key from the `:id` path segment. A single-column key (any column name) is
+     * the bare value; a composite key is the URL-encoded `Field1|Value1||Field2|Value2` segment.
      */
     private createCompositeKey(entityInfo: EntityInfo, id: string): CompositeKey {
-        if (entityInfo.PrimaryKeys.length === 1) {
-            // Single primary key
-            const primaryKeyField = entityInfo.PrimaryKeys[0].Name;
-            const compositeKey = new CompositeKey();
-            
-            // Use key-value pairs instead of SetValue
-            compositeKey.KeyValuePairs = [
-                { FieldName: primaryKeyField, Value: id }
-            ];
-            
-            return compositeKey;
-        } else {
-            // Composite primary key
-            // This is a simplification - in a real implementation, we would need to handle composite keys properly
-            throw new Error('Composite primary keys are not supported in this implementation');
-        }
+        return CompositeKey.FromURLSegment(entityInfo, id);
     }
 
     /**

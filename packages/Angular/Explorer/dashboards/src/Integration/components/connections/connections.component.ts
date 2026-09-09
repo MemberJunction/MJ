@@ -988,7 +988,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   get AddMapEntityIDAsKey(): CompositeKey | null {
-    return this.AddMapEntityID ? CompositeKey.FromID(this.AddMapEntityID) : null;
+    return this.AddMapEntityID ? CompositeKey.FromID(this.AddMapEntityID) : null; // first-pk-ok: AddMapEntityID is an Entities row id — a core entity keyed by ID
   }
 
   OnEntityTreeSelection(node: TreeNode | TreeNode[] | null): void {
