@@ -699,6 +699,10 @@ jobs:
           # Ignore run logs and the SQL output scratch dir; everything else that moved is drift.
           git checkout -- pnpm-lock.yaml 2>/dev/null || true
           rm -f codegen.output.log
+          # CodeGen writes a run file on EVERY run, empty when it has nothing to emit.
+          # It is scratch output, not committed state — the line above only ever removed
+          # the log, so this file made the gate unpassable even with zero real drift.
+          rm -f migrations/*/CodeGen_Run_*.sql
           git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
           if [ -s /tmp/drift.txt ]; then
             echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
@@ -813,6 +817,10 @@ jobs:
         run: |
           git checkout -- pnpm-lock.yaml 2>/dev/null || true
           rm -f codegen.output.log
+          # CodeGen writes a run file on EVERY run, empty when it has nothing to emit.
+          # It is scratch output, not committed state — the line above only ever removed
+          # the log, so this file made the gate unpassable even with zero real drift.
+          rm -f migrations/*/CodeGen_Run_*.sql
           git status --porcelain -- packages/ metadata/ migrations/ > /tmp/drift.txt || true
           if [ -s /tmp/drift.txt ]; then
             echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"

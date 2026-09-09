@@ -566,6 +566,10 @@
     },
     "primaryKey": {
       "ID": "CFDBE38F-1222-40B4-82EC-F3EA49F785C8"
+    },
+    "sync": {
+      "lastModified": "2026-09-09T13:56:38.105Z",
+      "checksum": "eb38b6ae199b43108efb59e1a1ee1d93ef03c43f5977891ec243c65b6f189243"
     }
   }
 ]
