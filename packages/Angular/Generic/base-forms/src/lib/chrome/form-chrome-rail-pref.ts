@@ -13,11 +13,6 @@ export function FormChromeRailPinnedKey(entityName: string): string {
 }
 
 /**
- * Left-nav `activeGroup` is stored per entity. Unsaved (new) records must
- * neither restore nor write it — they should open on the first first-class
- * group (Details) instead of the last related section from another record.
- */
-/**
  * The rail key a contribution asked to lead on for an UNSAVED record, or null.
  *
  * Sits beside `ShouldPersistChromeActiveGroup` because it answers the other half of the same
@@ -48,6 +43,11 @@ export function UnsavedLeadGroupKey<TMeta extends { entity?: string; leadsWhenUn
     return null;
 }
 
+/**
+ * Left-nav `activeGroup` is stored per entity. Unsaved (new) records must
+ * neither restore nor write it — they should open on the first first-class
+ * group (Details) instead of the last related section from another record.
+ */
 export function ShouldPersistChromeActiveGroup(isSaved: boolean | null | undefined): boolean {
     return isSaved === true;
 }
