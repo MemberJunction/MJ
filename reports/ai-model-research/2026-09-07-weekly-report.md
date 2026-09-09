@@ -211,9 +211,13 @@ Applied per §0.2 exactly:
 - Anthropic **Inference Provider** row → `Status: "Inactive"`.
 - Anthropic **cost row** → `Status: "Expired"` **and** `EndedAt: "2026-08-05T00:00:00.000Z"`.
 - Anthropic **Model Developer** row left `Active` (attribution, not service).
-- **Amazon Bedrock and OpenRouter rows left untouched** — Anthropic's page states explicitly that
-  partner-operated platforms (Bedrock, Google Cloud) set their own retirement schedules, and Opus
-  4.1 remains available there.
+- **Amazon Bedrock and OpenRouter rows left untouched** — those are the only two routes this model
+  has besides Anthropic direct. Anthropic's page states that partner-operated platforms set their
+  own retirement schedules, which covers the Bedrock row; the OpenRouter row is a gateway
+  passthrough and likewise unaffected by an Anthropic-API retirement. Note that Anthropic's page
+  names Bedrock *and Google Cloud* as the survivors on its own platforms — but our inventory has no
+  Vertex AI route for Opus 4.1, so that phrase does not describe our rows and must not be copied
+  into them. Of the two surviving routes only Amazon Bedrock carries a cost record.
 - The model's `IsActive` was already `false` and was not touched.
 
 Source: <https://platform.claude.com/docs/en/about-claude/model-deprecations>
