@@ -498,6 +498,125 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       expect(child.Get('PersonID')).toBe('person-456');
     });
 
+    it('resolves shorthand extension without explicit entity key via EnsureISAChild(undefined) ladder', async () => {
+      const recordData: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { OrderNumber: 'ORD-001' },
+        extension: {
+          fields: {
+            SpecialNotes: 'Inferred Subtype Note',
+          },
+        },
+      };
+
+      const spyEnsureISAChild = vi.spyOn(mockOwnerEntity, 'EnsureISAChild');
+
+      await callApplyAxes(mockOwnerEntity, recordData);
+
+      // Verify EnsureISAChild was called with undefined (delegating to the resolution ladder)
+      expect(spyEnsureISAChild).toHaveBeenCalledWith(undefined);
+      expect(mockOwnerEntity.ISAChild).not.toBeNull();
+      expect(mockOwnerEntity.ISAChild!.Get('SpecialNotes')).toBe('Inferred Subtype Note');
+    });
+
+    it('applies nested collections inside collection items (depth 2) with FK propagation', async () => {
+      // Mock order with Items collection, where each Item has SubItems collection
+      const orderItems: MockEntity[] = [];
+      const subItemsMap = new Map<string, MockEntity[]>();
+
+      mockOwnerEntity.collections['Items'] = {
+        Items: orderItems,
+        IsLoaded: true,
+        Create: () => {
+          const item = new MockEntity('OrderLines', { ID: 'item-101', OrderID: mockOwnerEntity.Get('ID') });
+          // Give the item its own SubItems collection
+          const subItems: MockEntity[] = [];
+          subItemsMap.set('item-101', subItems);
+          item.collections['SubItems'] = {
+            Items: subItems,
+            IsLoaded: true,
+            Create: () => {
+              const subItem = new MockEntity('OrderSubLines', { ID: 'sub-201', LineID: item.Get('ID') });
+              subItems.push(subItem);
+              return subItem;
+            },
+            Remove: vi.fn(),
+          };
+          orderItems.push(item);
+          return item;
+        },
+        Remove: vi.fn(),
+      };
+
+      const recordData: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { OrderNumber: 'ORD-001' },
+        collections: {
+          Items: [
+            {
+              primaryKey: { ID: 'item-101' },
+              fields: {
+                OrderID: `${METADATA_KEYWORDS.OWNER}ID`,
+                Description: 'Top Item',
+              },
+              collections: {
+                SubItems: [
+                  {
+                    primaryKey: { ID: 'sub-201' },
+                    fields: {
+                      LineID: `${METADATA_KEYWORDS.OWNER}ID`,
+                      SubDescription: 'Child of Top Item',
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      };
+
+      await callApplyAxes(mockOwnerEntity, recordData);
+
+      // Verify middle item was created with correct FK to owner
+      expect(orderItems.length).toBe(1);
+      const createdItem = orderItems[0];
+      expect(createdItem.Get('ID')).toBe('item-101');
+      expect(createdItem.Get('OrderID')).toBe('ord-1');
+      expect(createdItem.Get('Description')).toBe('Top Item');
+
+      // Verify grandchild was created with correct FK to middle item
+      const createdSubItems = subItemsMap.get('item-101');
+      expect(createdSubItems).toBeDefined();
+      expect(createdSubItems!.length).toBe(1);
+      const grandchild = createdSubItems![0];
+      expect(grandchild.Get('ID')).toBe('sub-201');
+      expect(grandchild.Get('LineID')).toBe('item-101');
+      expect(grandchild.Get('SubDescription')).toBe('Child of Top Item');
+    });
+
+    it('enforces maximum recursion depth cap (10) to guard against runaway recursion', async () => {
+      let currentRec: RecordData = {
+        primaryKey: { ID: 'leaf' },
+        fields: { Name: 'Deep leaf' },
+      };
+      // Nest extension 12 levels deep
+      for (let i = 0; i < 12; i++) {
+        currentRec = {
+          primaryKey: { ID: `lvl-${i}` },
+          fields: { Name: `Level ${i}` },
+          extension: {
+            entity: `Subtype-${i}`,
+            fields: { Name: `Level ${i}` },
+            ...currentRec,
+          },
+        };
+      }
+
+      await expect(
+        callApplyAxes(mockOwnerEntity, currentRec)
+      ).rejects.toThrow(/Composition nesting depth exceeded maximum of 10/);
+    });
+
     it('enforces 20% bulk deletion rail in authoritative collections (§8.1)', async () => {
       // Setup mock collection with 10 existing items
       const existingItems: MockEntity[] = [];

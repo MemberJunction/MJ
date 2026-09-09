@@ -144,6 +144,17 @@ describe('EntitySubtypeResolver & Prospective IsA Resolution (§4.2, §4.4, §9)
                 /already has an attached child entity of type 'Meetings', cannot attach 'Publications'/
             );
         });
+
+        it('resolves single child without args via ResolveSubtypeEntityName (ladder step 3)', async () => {
+            // Meeting has exactly one child entity: 'Webinars' (AllowMultipleSubtypes = false)
+            const meeting = createEntity(meetingEntityInfo);
+            expect(meeting.ISAChild).toBeNull();
+
+            const child = await meeting.EnsureISAChild();
+            expect(child).not.toBeNull();
+            expect(child!.EntityInfo.Name).toBe('Webinars');
+            expect(meeting.ISAChild).toBe(child);
+        });
     });
 
     describe('Resolution Ladder Precedence (§4.2)', () => {

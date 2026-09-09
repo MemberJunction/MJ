@@ -2432,9 +2432,11 @@ export class PushService {
     record: RecordData,
     fieldsOverride?: Record<string, unknown>
   ): Record<string, unknown> {
-    const payload: Record<string, unknown> = {
-      fields: fieldsOverride ?? record.fields,
-    };
+    const fields = fieldsOverride ?? record.fields;
+    if (!record.collections && !record.embeds && !record.extension) {
+      return fields as Record<string, unknown>;
+    }
+    const payload: Record<string, unknown> = { fields };
     if (record.collections) payload.collections = record.collections;
     if (record.embeds) payload.embeds = record.embeds;
     if (record.extension) payload.extension = record.extension;
@@ -2457,8 +2459,17 @@ export class PushService {
     options: PushOptions,
     callbacks?: PushCallbacks,
     entityConfig?: EntityConfig,
-    recordProvider?: IMetadataProvider
+    recordProvider?: IMetadataProvider,
+    depth: number = 0
   ): Promise<void> {
+    // Static JSON parsed from disk is an acyclic finite tree, but a defensive depth guard
+    // (MAX_COMPOSITION_DEPTH = 10) prevents runaway recursion from accidental deep nesting or malformed fixtures.
+    const MAX_COMPOSITION_DEPTH = 10;
+    if (depth > MAX_COMPOSITION_DEPTH) {
+      throw new Error(
+        `Composition nesting depth exceeded maximum of ${MAX_COMPOSITION_DEPTH} on '${entityName}'. Check for accidental deep nesting or recursive composition structures.`
+      );
+    }
     // 1. Embeds (peer first): for each embeds[fkField], {fkField}_EnsureObject(), recurse apply, do not Save the peer yet
     if (record.embeds && typeof record.embeds === 'object') {
       for (const [fkField, embedRecord] of Object.entries(record.embeds)) {
@@ -2523,7 +2534,8 @@ export class PushService {
           options,
           callbacks,
           entityConfig,
-          recordProvider
+          recordProvider,
+          depth + 1
         );
       }
     }
@@ -2686,7 +2698,8 @@ export class PushService {
             options,
             callbacks,
             entityConfig,
-            recordProvider
+            recordProvider,
+            depth + 1
           );
         }
 
@@ -2780,7 +2793,8 @@ export class PushService {
           options,
           callbacks,
           entityConfig,
-          recordProvider
+          recordProvider,
+          depth + 1
         );
       } else {
         // Map form: { [SubtypeName]: { fields: { ... } } }
@@ -2825,7 +2839,8 @@ export class PushService {
             options,
             callbacks,
             entityConfig,
-            recordProvider
+            recordProvider,
+            depth + 1
           );
         }
       }

@@ -35,38 +35,32 @@ export class JsonWriteHelper {
       const dataObj = data as Record<string, unknown>;
       // Check if this looks like a RecordData object
       if (dataObj.fields !== undefined) {
+        // This is a RecordData object - rebuild preserving original key order
+        // but ensuring known keys maintain their relative order when present
         const ordered: Record<string, unknown> = {};
-        // Canonical property ordering: fields first, matching existing corpus and createOrderedRecordData
-        const canonicalKeyOrder = [
+        // Known keys that are part of RecordData structure
+        // __mj_sync_notes is a system-managed key that should appear after sync
+        const knownKeys = [
           '$schema',
+          'primaryKey',
           'fields',
           'collections',
           'embeds',
           'extension',
           'relatedEntities',
-          'primaryKey',
           'sync',
           '__mj_sync_notes',
           'deleteRecord',
         ];
 
-        // 1. Emit $schema first if present
-        if ('$schema' in dataObj) {
-          ordered['$schema'] = dataObj['$schema'];
-        }
-
-        // 2. Emit any non-canonical keys that appear before fields (e.g. comments)
+        // Process keys in original order, preserving user's ordering
         for (const key of Object.keys(dataObj)) {
-          if (!canonicalKeyOrder.includes(key)) {
-            ordered[key] = dataObj[key];
-          }
-        }
-
-        // 3. Emit canonical keys in strict order
-        for (const key of canonicalKeyOrder) {
-          if (key === '$schema') continue;
-          if (key in dataObj && dataObj[key] !== undefined) {
+          if (knownKeys.includes(key)) {
+            // Known key - process recursively
             ordered[key] = this.normalizeRecordDataOrder(dataObj[key]);
+          } else {
+            // Unknown key (like _comments) - preserve exactly as-is
+            ordered[key] = dataObj[key];
           }
         }
 
