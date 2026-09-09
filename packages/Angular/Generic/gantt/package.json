@@ -27,8 +27,6 @@
     "@angular/core": "^21.2.22"
   },
   "dependencies": {
-    "@angular/common": "21.2.22",
-    "@angular/core": "21.2.22",
     "@memberjunction/global": "6.1.0-edge.5",
     "dhtmlx-gantt": "^9.1.1",
     "tslib": "^2.8.1"

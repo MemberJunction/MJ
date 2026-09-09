@@ -25,11 +25,11 @@
   "peerDependencies": {
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
     "@angular/router": "^21.2.22",
     "rxjs": "^7.8.2"
   },
   "dependencies": {
-    "@angular/platform-browser": "21.2.22",
     "@memberjunction/ai-core-plus": "6.1.0-edge.5",
     "@memberjunction/ai-engine-base": "6.1.0-edge.5",
     "@memberjunction/core": "6.1.0-edge.5",

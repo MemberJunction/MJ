@@ -36,10 +36,10 @@
   "peerDependencies": {
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
-    "@angular/forms": "^21.2.22"
+    "@angular/forms": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22"
   },
   "dependencies": {
-    "@angular/platform-browser": "21.2.22",
     "@memberjunction/core": "6.1.0-edge.5",
     "@memberjunction/core-entities": "6.1.0-edge.5",
     "@memberjunction/global": "6.1.0-edge.5",

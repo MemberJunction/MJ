@@ -12,10 +12,6 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@angular/animations": "21.2.22",
-    "@angular/common": "21.2.22",
-    "@angular/core": "21.2.22",
-    "@angular/platform-browser": "21.2.22",
     "@memberjunction/ai-core-plus": "6.1.0-edge.5",
     "@memberjunction/ai-engine-base": "6.1.0-edge.5",
     "@memberjunction/core": "6.1.0-edge.5",
@@ -26,8 +22,10 @@
     "rxjs": "^7.8.2"
   },
   "peerDependencies": {
+    "@angular/animations": "^21.2.22",
     "@angular/common": "^21.2.22",
-    "@angular/core": "^21.2.22"
+    "@angular/core": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22"
   },
   "author": "MemberJunction",
   "license": "BUSL-1.1",

@@ -24,14 +24,14 @@
     "@memberjunction/ng-test-utils": "6.1.0-edge.5"
   },
   "peerDependencies": {
+    "@angular/animations": "^21.2.22",
+    "@angular/cdk": "^21.2.14",
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
     "@angular/forms": "^21.2.22",
     "@angular/platform-browser": "^21.2.22"
   },
   "dependencies": {
-    "@angular/animations": "21.2.22",
-    "@angular/cdk": "21.2.14",
     "@memberjunction/ai": "6.1.0-edge.5",
     "@memberjunction/ai-agent-client": "6.1.0-edge.5",
     "@memberjunction/ai-core-plus": "6.1.0-edge.5",

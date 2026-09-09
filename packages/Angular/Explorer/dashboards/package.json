@@ -98,15 +98,15 @@
     "@memberjunction/ng-test-utils": "6.1.0-edge.5"
   },
   "peerDependencies": {
+    "@angular/animations": "^21.2.22",
+    "@angular/cdk": "^21.2.14",
     "@angular/common": "^21.2.22",
     "@angular/core": "^21.2.22",
-    "@angular/forms": "^21.2.22"
+    "@angular/forms": "^21.2.22",
+    "@angular/platform-browser": "^21.2.22",
+    "@angular/router": "^21.2.22"
   },
   "dependencies": {
-    "@angular/animations": "21.2.22",
-    "@angular/cdk": "21.2.14",
-    "@angular/platform-browser": "21.2.22",
-    "@angular/router": "21.2.22",
     "@codemirror/autocomplete": "^6.20.0",
     "@codemirror/language-data": "^6.5.2",
     "@codemirror/merge": "^6.11.2",

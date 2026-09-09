@@ -25,10 +25,10 @@
   },
   "peerDependencies": {
     "@angular/common": "^21.2.22",
-    "@angular/core": "^21.2.22"
+    "@angular/core": "^21.2.22",
+    "@angular/forms": "^21.2.22"
   },
   "dependencies": {
-    "@angular/forms": "21.2.22",
     "@codemirror/commands": "^6.10.4",
     "@codemirror/lang-javascript": "^6.2.4",
     "@codemirror/lang-json": "^6.0.2",
