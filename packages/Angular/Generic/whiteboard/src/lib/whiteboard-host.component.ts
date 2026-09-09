@@ -9,7 +9,7 @@ import {
   WhiteboardItemRemovedEventArgs, WhiteboardItemRemovingEventArgs,
   WhiteboardItemUpdatedEventArgs, WhiteboardItemUpdatingEventArgs, WhiteboardState
 } from './whiteboard-state';
-import { WhiteboardTool, WhiteboardToolRoster, ClampToolToRoster, IsToolAllowed } from './whiteboard-tool-roster';
+import { WhiteboardTool, WhiteboardToolRoster, ClampToolToRoster, IsToolAllowed, SameRoster } from './whiteboard-tool-roster';
 import {
   BuildWhiteboardExportHtml, BuildWhiteboardExportHtmlAllPages, BuildWhiteboardExportSvg,
   BuildWhiteboardExportSvgPages
@@ -116,11 +116,18 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
    */
   @Input()
   set ToolRoster(value: WhiteboardToolRoster) {
-    const next = value ?? null;
-    // Identity compare, per the Angular rule: a consumer binding a freshly-built array literal
-    // re-fires this setter every change-detection pass, and re-running the clamp on every pass
-    // would fight the user for the active tool.
-    if (next === this._toolRoster) {
+    // Anything that is not an array reads as NO roster. The type does not protect us here: a
+    // STATIC template attribute (`ToolRoster="select,pan"` — a plausible typo for the binding)
+    // hands us a string, and a string reaching the helpers' `.includes` / `.filter` would throw
+    // during render. A consumer's punctuation slip must not take the board down.
+    //
+    // The kept value is a frozen COPY, so the roster the host enforces cannot be edited behind
+    // its back — a consumer splicing its own array afterwards changes their array, not ours,
+    // and is picked up as a genuine change the next time they bind it.
+    const next = Array.isArray(value) ? Object.freeze([...value]) : null;
+    // Compare by CONTENT, not identity (see SameRoster): identity re-clamped on every change
+    // detection for a bound array literal, and never re-clamped for an array mutated in place.
+    if (SameRoster(next, this._toolRoster)) {
       return;
     }
     this._toolRoster = next;
@@ -131,6 +138,24 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     return this._toolRoster;
   }
   private _toolRoster: WhiteboardToolRoster = null;
+
+  /**
+   * Render the board read-only: nothing on it can be created, edited, moved or deleted.
+   *
+   * This is the OTHER axis from {@link ToolRoster}, and the two do not substitute for each
+   * other. The roster answers "which tools does this surface offer" — it narrows a palette the
+   * user still authors with. `ReadOnly` answers "may anything change at all" — it is about
+   * mutation, not about choice, so an empty roster is not a read-only board and a full roster
+   * on a read-only board still mutates nothing.
+   *
+   * The board component already guards every mutation entry point and hides the page strip's
+   * add / rename / delete affordances; the host adds the chrome that only it owns — the floating
+   * toolbar is not rendered (matching `WhiteboardSnapshotComponent`, which draws a read-only
+   * board with no toolbar), the agent toast's Undo is hidden because Undo applies a mutation,
+   * and the keyboard handler returns before any key can act. Pan and zoom stay live: reading a
+   * board you cannot change still means moving around it.
+   */
+  @Input() ReadOnly = false;
 
   /** Debounced (750 ms), coalesced scene-delta JSON — the live perception feed. */
   @Output() SceneDelta = new EventEmitter<string>();
@@ -496,6 +521,13 @@ export class RealtimeWhiteboardHostComponent implements OnInit, OnDestroy {
     // responds to keys when you are on the board" is the only model that stays predictable.
     // See {@link EnableGlobalShortcuts} for the (discouraged) opt-out.
     if (!this.EnableGlobalShortcuts && !this.hasFocusWithin()) {
+      return;
+    }
+    // Read-only boards answer to NO key, Escape included. Every branch below either mutates
+    // (undo/redo, Delete) or picks a tool that could, and Escape's selection-clear is not worth
+    // an exception: "the keyboard does nothing here" is one rule a user can hold, where "the
+    // keyboard does nothing except Escape" is a rule they have to be told.
+    if (this.ReadOnly) {
       return;
     }
     const target = event.target as HTMLElement | null;
