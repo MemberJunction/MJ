@@ -156,13 +156,22 @@ jobs:
         run: |
           # Use MJServer package since core and global are pinned at 2.100.3
           CURRENT_VERSION=$(jq -r .version packages/MJServer/package.json)
+          # This value comes from the PR's tree (fork PRs included) and is consumed by
+          # later shell steps, so it is validated as a version before it becomes an output.
+          if [[ ! "$CURRENT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::packages/MJServer/package.json version is not a semver string: $CURRENT_VERSION"
+            exit 1
+          fi
           echo "Current version: $CURRENT_VERSION"
           echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_OUTPUT
 
       - name: Check migration filenames
         if: steps.check_migrations.outputs.has_migrations == 'true'
+        # Step outputs reach the shell through env, never interpolated into the script
+        # text, where a value with shell metacharacters would run as code.
+        env:
+          CURRENT_VERSION: ${{ steps.get_version.outputs.CURRENT_VERSION }}
         run: |
-          CURRENT_VERSION="${{ steps.get_version.outputs.CURRENT_VERSION }}"
           IFS='.' read -ra VERSION_PARTS <<< "$CURRENT_VERSION"
 
           # Which line are migrations building toward?
