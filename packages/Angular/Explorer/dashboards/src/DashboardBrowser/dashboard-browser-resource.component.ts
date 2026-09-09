@@ -1425,15 +1425,10 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         switch (request.type) {
             case 'OpenEntityRecord': {
                 // Navigate to entity record
-                const compositeKey = new CompositeKey();
-                compositeKey.SimpleLoadFromURLSegment(request.recordId);
-                // If simple load didn't work (single ID without field name), look up actual PK field
-                if (compositeKey.KeyValuePairs.length === 0) {
-                    const md = this.ProviderToUse;
-                    const entity = md.Entities.find(e => e.Name === request.entityName);
-                    const pkFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
-                    compositeKey.LoadFromSingleKeyValuePair(pkFieldName, request.recordId);
-                }
+                // recordId is either a full "F1|v1||F2|v2" segment or a bare value; a bare value maps onto
+                // the entity's real key column, whatever it is called
+                const entity = this.ProviderToUse.Entities.find(e => e.Name === request.entityName);
+                const compositeKey = CompositeKey.FromURLSegment(entity, request.recordId);
                 this.navigationService.OpenEntityRecord(
                     request.entityName,
                     compositeKey,

@@ -62,7 +62,7 @@ export class FieldLink extends BaseLink implements OnInit {
           // requires a server round trip and hitting the DB, so we try to avoid this
 
           let compositeKey: CompositeKey = new CompositeKey([{
-            FieldName: this._targetEntityInfo.FirstPrimaryKey.Name, // AT THE MOMENT - we only support foreign keys with a single value
+            FieldName: this._targetEntityInfo.FirstPrimaryKey.Name, // first-pk-ok: FK target — a foreign-key column references exactly one key column
             Value: this.field.Value
           }]);
           md.GetEntityRecordName(relatedEntity, compositeKey).then(recordName => {
@@ -85,7 +85,7 @@ export class FieldLink extends BaseLink implements OnInit {
 
     // Create CompositeKey for navigation - we only support foreign keys with a single value at present
     const compositeKey = new CompositeKey([{
-      FieldName: this._targetEntityInfo.FirstPrimaryKey.Name,
+      FieldName: this._targetEntityInfo.FirstPrimaryKey.Name, // first-pk-ok: FK target — a foreign-key column references exactly one key column
       Value: this._targetRecordID
     }]);
 

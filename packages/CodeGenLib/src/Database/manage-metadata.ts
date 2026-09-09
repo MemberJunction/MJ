@@ -3160,14 +3160,16 @@ export class ManageMetadataBase {
          return;
       }
 
-      // Pre-build available entities list once (shared across all virtual entity decorations)
+      // Pre-build available entities list once (shared across all virtual entity decorations).
+      // Only single-column keys are offered as FK targets: an MJ foreign key references exactly one
+      // column (RelatedEntityFieldName), so a composite-key entity cannot be the target of a soft FK.
       const availableEntities = md.Entities
-         .filter(e => !e.VirtualEntity && e.PrimaryKeys.length > 0)
+         .filter(e => !e.VirtualEntity && e.PrimaryKeys.length === 1)
          .map(e => ({
             Name: e.Name,
             SchemaName: e.SchemaName,
             BaseTable: e.BaseTable,
-            PrimaryKeyField: e.PrimaryKeys[0]?.Name || 'ID'
+            PrimaryKeyField: e.FirstPrimaryKey.Name // first-pk-ok: filtered to PrimaryKeys.length === 1 above; this is the FK target column offered to the LLM
          }));
 
       logStatus(`   Decorating virtual entity fields with LLM (${virtualEntities.length} entities)...`);

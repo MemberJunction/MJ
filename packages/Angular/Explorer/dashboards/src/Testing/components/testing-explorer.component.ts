@@ -1690,7 +1690,7 @@ export class TestingExplorerComponent extends BaseAngularComponent implements On
   }
 
   EditItem(entityName: string, id: string): void {
-    SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(id));
+    SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), id));
   }
 
   ViewTestHistory(testId: string): void {
