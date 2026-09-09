@@ -2346,7 +2346,7 @@ IF ${varName} IS NOT NULL
   /**
    * Internal mssql transaction interface to safely inspect `_activeRequest` without `any`.
    */
-  private async waitForActiveRequest(timeoutMs = 10000): Promise<void> {
+  private async waitForActiveRequest(timeoutMs = 2000): Promise<void> {
     if (!this._transaction) {
       return;
     }

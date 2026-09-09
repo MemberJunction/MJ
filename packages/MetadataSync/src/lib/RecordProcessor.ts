@@ -624,9 +624,7 @@ export class RecordProcessor {
 
       // Rider 4 / §6: Load: 'never' collection must be skipped with a stated reason on pull, never emitted as []
       if (col.LoadMode === 'never') {
-        if (verbose) {
-          console.log(`Skipping Load: 'never' collection '${colName}' on ${record.EntityInfo.Name}`);
-        }
+        console.log(`Skipping Load: 'never' collection '${colName}' on ${record.EntityInfo.Name}`);
         continue;
       }
 
@@ -634,20 +632,29 @@ export class RecordProcessor {
         try {
           await col.Load();
         } catch (loadErr) {
-          if (verbose) {
-            console.warn(`Failed to load collection '${colName}' on ${record.EntityInfo.Name}: ${loadErr}`);
-          }
+          console.warn(`Failed to load collection '${colName}' on ${record.EntityInfo.Name}: ${loadErr instanceof Error ? loadErr.message : String(loadErr)}`);
           continue;
         }
       }
 
-      const items = col.Items ?? [];
-      if (items.length > 0) {
+      const rawItems = col.Items ?? [];
+      if (rawItems.length > 0) {
         collections[colName] = [];
-        const childEntityInfo = items[0].EntityInfo;
+        const childEntityInfo = rawItems[0].EntityInfo;
         const childConfig: EntityConfig = {
           entity: childEntityInfo.Name,
         };
+
+        // Deterministically sort collection items by primary key(s)
+        const items = [...rawItems].sort((a, b) => {
+          for (const pk of childEntityInfo.PrimaryKeys) {
+            const aVal = String(a.Get(pk.Name) ?? '');
+            const bVal = String(b.Get(pk.Name) ?? '');
+            const cmp = aVal.localeCompare(bVal);
+            if (cmp !== 0) return cmp;
+          }
+          return 0;
+        });
 
         for (const child of items) {
           const childPK: Record<string, unknown> = {};
@@ -664,7 +671,7 @@ export class RecordProcessor {
             false,
             undefined,
             currentDepth + 1,
-            new Set([...ancestryPath, `${record.EntityInfo.Name}:${JSON.stringify(record.PrimaryKey)}`])
+            new Set([...(ancestryPath ?? []), `${record.EntityInfo.Name}:${JSON.stringify(record.PrimaryKey)}`])
           );
           collections[colName].push(childData);
         }

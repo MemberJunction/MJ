@@ -22,6 +22,7 @@ import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { resolveCollectionRelationship } from '../lib/collection-resolver';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Parallelism is across JSON-root graphs (independent Actions), not flattened rows.
@@ -165,6 +166,7 @@ export class PushService {
   private deferredRecords: DeferredRecord[] = [];
   private stateManager: SyncStateManager | undefined;
   private syncMetadataEngine: SyncMetadataEngine;
+  private confirmedCollections: Set<string> = new Set<string>();
 
   constructor(syncEngine: SyncEngine, contextUser: UserInfo, stateManager?: SyncStateManager) {
     this.syncEngine = syncEngine;
@@ -885,6 +887,9 @@ export class PushService {
                     const rec = batchResult.record;
                     callbacks?.onLog?.(`\n❌ Processing failed for ${rec.entityName} at ${rec.path}`);
                     callbacks?.onLog?.(`   ${err.message}\n`);
+                    if (err.stack) {
+                      callbacks?.onLog?.(`   Stack: ${err.stack}\n`);
+                    }
                     throw err;
                   }
                   applyProcessResult(batchResult.result);
@@ -1377,6 +1382,17 @@ export class PushService {
           }
         }
       }
+    }
+
+    if (!isNew && !isDirty && !hasDeferrableLookupError) {
+      // Record already exists and nothing changed — skip save to avoid unnecessary DB writes and side-effects
+      const batchContextEntry = { key: lookupKey, entity };
+      return {
+        isDuplicate: false,
+        batchContextEntry,
+        warnings: localWarnings.length > 0 ? localWarnings : undefined,
+        status: 'unchanged',
+      };
     }
     
     // Save the record with detailed error logging
@@ -2546,28 +2562,9 @@ export class PushService {
         // Dynamically register collection companion if entity supports DeclareRelatedRecords
         if (!collectionCompanion && typeof (entity as unknown as { DeclareRelatedRecords?: unknown }).DeclareRelatedRecords === 'function') {
           const entityInfo = entity.EntityInfo ?? new Metadata().EntityByName(entityName);
-          const rel = entityInfo?.RelatedEntities?.find((r) => {
-            if (r.RelatedRecordCollection) {
-              try {
-                const parsed = typeof r.RelatedRecordCollection === 'string'
-                  ? (JSON.parse(r.RelatedRecordCollection) as Record<string, unknown>)
-                  : (r.RelatedRecordCollection as Record<string, unknown>);
-                if (typeof parsed['Name'] === 'string' && parsed['Name'].toLowerCase() === colName.toLowerCase()) {
-                  return true;
-                }
-              } catch {}
-            }
-            if (r.DisplayName && r.DisplayName.toLowerCase() === colName.toLowerCase()) return true;
-            if (r.RelatedEntity && r.RelatedEntity.toLowerCase() === colName.toLowerCase()) return true;
-            const stripped = r.RelatedEntity?.replace(/^.*:\s*/, '').replace(/\s+/g, '');
-            if (stripped && (stripped.toLowerCase() === colName.toLowerCase() || stripped.toLowerCase() + 's' === colName.toLowerCase() || colName.toLowerCase() + 's' === stripped.toLowerCase())) {
-              return true;
-            }
-            return false;
-          });
-
-          if (rel && rel.RelatedEntity && rel.RelatedEntityJoinField) {
-            let colOpts: {
+          const resolved = resolveCollectionRelationship(entityInfo, colName);
+          if (resolved) {
+            const colOpts: {
               Name: string;
               RelatedEntity: string;
               RelatedEntityJoinField: string;
@@ -2575,27 +2572,13 @@ export class PushService {
               OnRemove?: string;
               OrderBy?: string;
             } = {
-              Name: colName,
-              RelatedEntity: rel.RelatedEntity,
-              RelatedEntityJoinField: rel.RelatedEntityJoinField,
-              Load: 'explicit',
-              OnRemove: 'delete',
+              Name: resolved.collectionName,
+              RelatedEntity: resolved.relatedEntity,
+              RelatedEntityJoinField: resolved.joinField,
+              Load: resolved.load,
+              OnRemove: resolved.onRemove,
+              ...(resolved.orderBy ? { OrderBy: resolved.orderBy } : {}),
             };
-            if (rel.RelatedRecordCollection) {
-              try {
-                const parsed = typeof rel.RelatedRecordCollection === 'string'
-                  ? (JSON.parse(rel.RelatedRecordCollection) as Record<string, unknown>)
-                  : (rel.RelatedRecordCollection as Record<string, unknown>);
-                if (parsed) {
-                  colOpts = {
-                    ...colOpts,
-                    ...(typeof parsed['Load'] === 'string' ? { Load: parsed['Load'] } : {}),
-                    ...(typeof parsed['OnRemove'] === 'string' ? { OnRemove: parsed['OnRemove'] } : {}),
-                    ...(typeof parsed['OrderBy'] === 'string' ? { OrderBy: parsed['OrderBy'] } : {}),
-                  };
-                }
-              } catch {}
-            }
             const declareFn = (entity as unknown as { DeclareRelatedRecords: (options: unknown) => unknown }).DeclareRelatedRecords.bind(entity);
             collectionCompanion = declareFn(colOpts) as typeof collectionCompanion;
           }
@@ -2723,13 +2706,17 @@ export class PushService {
 
             // Rider 2: Authoritative-implied deletes route through confirmation
             // Confirmation prompt names the collection and the row count
-            if (callbacks?.onConfirm) {
-              const confirmMsg = `Authoritative collection '${colName}' on '${entityName}' will delete ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}. Do you want to proceed? (yes/no)`;
-              const confirmed = await callbacks.onConfirm(confirmMsg);
-              if (!confirmed) {
-                throw new Error(
-                  `Authoritative delete of ${unmentionedItems.length} record(s) in collection '${colName}' on '${entityName}' cancelled by user.`
-                );
+            if (!options.dryRun && callbacks?.onConfirm) {
+              const confirmKey = `${entityName}.${colName}`;
+              if (!this.confirmedCollections.has(confirmKey)) {
+                const confirmMsg = `Authoritative collection '${colName}' on '${entityName}' will delete ${unmentionedItems.length} unmentioned record${unmentionedItems.length > 1 ? 's' : ''}. Do you want to proceed? (yes/no)`;
+                const confirmed = await callbacks.onConfirm(confirmMsg);
+                if (!confirmed) {
+                  throw new Error(
+                    `Authoritative delete of ${unmentionedItems.length} record(s) in collection '${colName}' on '${entityName}' cancelled by user.`
+                  );
+                }
+                this.confirmedCollections.add(confirmKey);
               }
             }
 

@@ -20,6 +20,7 @@ import {
   extractKeywordValue
 } from '../constants/metadata-keywords';
 import { EntityConfig } from '../config';
+import { resolveCollectionRelationship } from '../lib/collection-resolver';
 
 // Type aliases for clarity
 type EntityData = RecordData;
@@ -1891,49 +1892,26 @@ export class ValidationService {
         continue;
       }
 
-      let relatedEntityName: string | null = null;
-      if (entityInfo.RelatedEntities) {
-        for (const rel of entityInfo.RelatedEntities) {
-          if (rel.RelatedRecordCollection) {
-            try {
-              const parsed = JSON.parse(rel.RelatedRecordCollection);
-              if (parsed.Name && parsed.Name.toLowerCase() === colName.toLowerCase()) {
-                relatedEntityName = rel.RelatedEntity;
-                break;
-              }
-            } catch {}
-          }
-          if (rel.DisplayName && rel.DisplayName.toLowerCase() === colName.toLowerCase()) {
-            relatedEntityName = rel.RelatedEntity;
-            break;
-          }
-          if (rel.RelatedEntity && rel.RelatedEntity.toLowerCase() === colName.toLowerCase()) {
-            relatedEntityName = rel.RelatedEntity;
-            break;
-          }
-          const stripped = rel.RelatedEntity?.replace(/^.*:\s*/, '').replace(/\s+/g, '');
-          if (stripped && (stripped.toLowerCase() === colName.toLowerCase() || stripped.toLowerCase() + 's' === colName.toLowerCase() || colName.toLowerCase() + 's' === stripped.toLowerCase())) {
-            relatedEntityName = rel.RelatedEntity;
-            break;
-          }
-        }
+      const resolved = resolveCollectionRelationship(entityInfo, colName);
+      if (!resolved) {
+        this.addError({
+          type: 'entity',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Collection "${colName}" is not declared on entity "${entityInfo.Name}" or has no valid relationship join field`,
+        });
+        continue;
       }
 
-      if (!relatedEntityName) {
-        const directEntity = this.metadata.EntityByName(colName);
-        if (directEntity) {
-          relatedEntityName = directEntity.Name;
-        }
-      }
-
-      const childEntityInfo = relatedEntityName ? this.metadata.EntityByName(relatedEntityName) : null;
+      const childEntityInfo = this.metadata.EntityByName(resolved.relatedEntity);
       if (!childEntityInfo) {
         this.addError({
           type: 'entity',
           severity: 'error',
           entity: entityInfo.Name,
           file: filePath,
-          message: `Collection "${colName}" is not declared on entity "${entityInfo.Name}" or related entity not found`,
+          message: `Collection "${colName}" refers to related entity "${resolved.relatedEntity}" which is not found in metadata`,
         });
         continue;
       }

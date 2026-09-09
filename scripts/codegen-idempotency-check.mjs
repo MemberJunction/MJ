@@ -56,6 +56,7 @@ export function runProcessCapture(command, args, extraEnv = {}) {
     stdio: ['pipe', 'pipe', 'pipe'],
     env,
     encoding: 'utf8',
+    maxBuffer: 256 * 1024 * 1024,
   });
   return res;
 }
@@ -88,8 +89,8 @@ async function getDbPool() {
 export function getGitDiff(paths = ['packages/', 'metadata/']) {
   runProcessCapture('git', ['add', '-N', ...paths]);
   const res = runProcessCapture('git', ['diff', '--binary', 'HEAD', '--', ...paths]);
-  if (res.status !== 0) {
-    throw new Error(`git diff failed: ${res.stderr}`);
+  if (res.status !== 0 || res.error) {
+    throw new Error(`git diff failed (status=${res.status}, signal=${res.signal}): ${res.error?.message ?? res.stderr ?? '(no output)'}`);
   }
   return res.stdout;
 }
@@ -97,8 +98,8 @@ export function getGitDiff(paths = ['packages/', 'metadata/']) {
 export function getGitStatusPorcelain(paths = ['packages/', 'metadata/']) {
   runProcessCapture('git', ['add', '-N', ...paths]);
   const res = runProcessCapture('git', ['status', '--porcelain', '--', ...paths]);
-  if (res.status !== 0) {
-    throw new Error(`git status failed: ${res.stderr}`);
+  if (res.status !== 0 || res.error) {
+    throw new Error(`git status failed (status=${res.status}, signal=${res.signal}): ${res.error?.message ?? res.stderr ?? '(no output)'}`);
   }
   return res.stdout.trim().split('\n').filter(Boolean);
 }

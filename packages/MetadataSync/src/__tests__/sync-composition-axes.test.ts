@@ -613,6 +613,57 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
         expect.stringContaining("Authoritative collection 'OrderLines' on 'Orders' will delete 1 unmentioned record")
       );
       expect(existingItems.length).toBe(9);
+      expect(existingItems.map((i) => i.Get('ID'))).toEqual([
+        'line-1', 'line-2', 'line-3', 'line-4', 'line-5', 'line-6', 'line-7', 'line-8', 'line-9'
+      ]);
+      expect(existingItems.some((i) => i.Get('ID') === 'line-10')).toBe(false);
+    });
+
+    it('proceeds with authoritative deletes when onConfirm is undefined (fail-open / non-interactive / CI)', async () => {
+      const existingItems: MockEntity[] = [];
+      for (let i = 1; i <= 10; i++) {
+        existingItems.push(new MockEntity('OrderLines', { ID: `line-${i}`, Name: `Line ${i}` }));
+      }
+
+      mockOwnerEntity.collections['OrderLines'] = {
+        Items: existingItems,
+        IsLoaded: true,
+        Create: () => new MockEntity('OrderLines'),
+        Remove: (item: MockEntity) => {
+          const idx = existingItems.indexOf(item);
+          if (idx !== -1) existingItems.splice(idx, 1);
+        },
+      };
+
+      const recordData: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { ID: 'ord-1' },
+        collections: {
+          OrderLines: existingItems.slice(0, 9).map((item) => ({
+            primaryKey: { ID: item.Get('ID') },
+            fields: { Name: item.Get('Name') },
+          })),
+        },
+      };
+
+      const entityConfig: EntityConfig = {
+        entity: 'Orders',
+        filePattern: '*.json',
+        collections: {
+          OrderLines: {
+            mode: 'authoritative',
+          },
+        },
+      };
+
+      // No onConfirm provided — non-interactive / CI path
+      await callApplyAxes(mockOwnerEntity, recordData, {}, entityConfig, {});
+
+      expect(existingItems.length).toBe(9);
+      expect(existingItems.map((i) => i.Get('ID'))).toEqual([
+        'line-1', 'line-2', 'line-3', 'line-4', 'line-5', 'line-6', 'line-7', 'line-8', 'line-9'
+      ]);
+      expect(existingItems.some((i) => i.Get('ID') === 'line-10')).toBe(false);
     });
 
     it('aborts authoritative collection deletes when user declines confirmation', async () => {
@@ -656,6 +707,122 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       await expect(
         callApplyAxes(mockOwnerEntity, recordData, {}, entityConfig, { onConfirm })
       ).rejects.toThrow(/Authoritative delete of 1 record\(s\) in collection 'OrderLines' on 'Orders' cancelled by user/);
+    });
+
+    it('push-twice idempotency: second push on identical graph produces zero modifications', async () => {
+      const existingItems: MockEntity[] = [
+        new MockEntity('OrderLines', { ID: 'line-1', Name: 'Line 1' }),
+        new MockEntity('OrderLines', { ID: 'line-2', Name: 'Line 2' }),
+      ];
+
+      mockOwnerEntity.collections['OrderLines'] = {
+        Items: existingItems,
+        IsLoaded: true,
+        Create: () => new MockEntity('OrderLines'),
+        Remove: (item: MockEntity) => {
+          const idx = existingItems.indexOf(item);
+          if (idx !== -1) existingItems.splice(idx, 1);
+        },
+      };
+
+      const recordData: RecordData = {
+        primaryKey: { ID: 'ord-1' },
+        fields: { ID: 'ord-1' },
+        collections: {
+          OrderLines: existingItems.map((item) => ({
+            primaryKey: { ID: item.Get('ID') },
+            fields: { Name: item.Get('Name') },
+          })),
+        },
+      };
+
+      const entityConfig: EntityConfig = {
+        entity: 'Orders',
+        filePattern: '*.json',
+        collections: {
+          OrderLines: {
+            mode: 'authoritative',
+          },
+        },
+      };
+
+      // Push 1
+      await callApplyAxes(mockOwnerEntity, recordData, {}, entityConfig);
+      const pass1Ids = existingItems.map((i) => i.Get('ID'));
+      expect(pass1Ids).toEqual(['line-1', 'line-2']);
+
+      // Push 2 with identical graph
+      await callApplyAxes(mockOwnerEntity, recordData, {}, entityConfig);
+      const pass2Ids = existingItems.map((i) => i.Get('ID'));
+      expect(pass2Ids).toEqual(['line-1', 'line-2']);
+      expect(existingItems.length).toBe(2);
+    });
+  });
+
+  describe('collection-resolver — Dynamic Synthesis Precedence (§8.1)', () => {
+    it('resolves collection relationships with strict 4-tier rule strength', async () => {
+      const { resolveCollectionRelationship } = await import('../lib/collection-resolver');
+
+      const mockEntityInfo = {
+        Name: 'Orders',
+        RelatedEntities: [
+          {
+            RelatedEntity: 'MJ_BizApps_Orders: Order Lines',
+            RelatedEntityJoinField: 'OrderID',
+            DisplayName: 'Lines',
+            RelatedRecordCollection: JSON.stringify({ Name: 'OrderLines', Load: 'explicit', OnRemove: 'delete' }),
+          },
+          {
+            RelatedEntity: 'MJ_BizApps_Orders: Order Notes',
+            RelatedEntityJoinField: 'OrderID',
+            DisplayName: 'OrderNotes',
+            RelatedRecordCollection: null,
+          },
+          {
+            RelatedEntity: 'OrderAuditLogs',
+            RelatedEntityJoinField: 'OrderID',
+            DisplayName: null,
+            RelatedRecordCollection: null,
+          },
+          {
+            RelatedEntity: 'OrderTracking',
+            RelatedEntityJoinField: null, // Invalid: no join field
+            DisplayName: 'Tracking',
+            RelatedRecordCollection: null,
+          },
+        ],
+      } as unknown as EntityInfo;
+
+      // Tier 1: Explicit JSON Name match
+      const t1 = resolveCollectionRelationship(mockEntityInfo, 'OrderLines');
+      expect(t1).not.toBeNull();
+      expect(t1?.relatedEntity).toBe('MJ_BizApps_Orders: Order Lines');
+      expect(t1?.joinField).toBe('OrderID');
+      expect(t1?.load).toBe('explicit');
+
+      // Tier 2: DisplayName match
+      const t2 = resolveCollectionRelationship(mockEntityInfo, 'OrderNotes');
+      expect(t2).not.toBeNull();
+      expect(t2?.relatedEntity).toBe('MJ_BizApps_Orders: Order Notes');
+      expect(t2?.joinField).toBe('OrderID');
+
+      // Tier 3: Full entity name match
+      const t3 = resolveCollectionRelationship(mockEntityInfo, 'OrderAuditLogs');
+      expect(t3).not.toBeNull();
+      expect(t3?.relatedEntity).toBe('OrderAuditLogs');
+
+      // Tier 4: Stripped name with plural tolerance
+      const t4 = resolveCollectionRelationship(mockEntityInfo, 'OrderLine');
+      expect(t4).not.toBeNull();
+      expect(t4?.relatedEntity).toBe('MJ_BizApps_Orders: Order Lines');
+
+      // Missing join field fails resolution
+      const tInvalid = resolveCollectionRelationship(mockEntityInfo, 'Tracking');
+      expect(tInvalid).toBeNull();
+
+      // Unknown collection name fails resolution
+      const tUnknown = resolveCollectionRelationship(mockEntityInfo, 'NonExistentCollection');
+      expect(tUnknown).toBeNull();
     });
   });
 
@@ -702,6 +869,112 @@ describe('Sync Composition Axes (§4, §6, §8, §9)', () => {
       // Should NOT include shared PK 'ID' or parent fields
       expect(extRecord.fields?.ID).toBeUndefined();
       expect(extRecord.fields?.OrderID).toBeUndefined();
+    });
+
+    it('emits collection items deterministically sorted by primary key on pull', async () => {
+      const mockSync = {
+        getEntityInfo: vi.fn().mockImplementation((name: string) => ({
+          Name: name,
+          PrimaryKeys: [{ Name: 'ID' }],
+          Fields: [{ Name: 'ID' }, { Name: 'Name' }],
+        })),
+        calculateChecksum: vi.fn().mockReturnValue('cs-1'),
+        calculateChecksumWithFileContent: vi.fn().mockResolvedValue('cs-1'),
+      } as unknown as SyncEngine;
+      const processor = new RecordProcessor(mockSync);
+      const mockOwner = new MockEntity('Orders', { ID: 'ord-1' }, ['ID'], ['ID']);
+
+      const itemB = new MockEntity('OrderLines', { ID: 'line-b', Name: 'Item B' }, ['ID'], ['ID', 'Name']);
+      const itemA = new MockEntity('OrderLines', { ID: 'line-a', Name: 'Item A' }, ['ID'], ['ID', 'Name']);
+      const itemC = new MockEntity('OrderLines', { ID: 'line-c', Name: 'Item C' }, ['ID'], ['ID', 'Name']);
+
+      // Deliberately unsorted in memory: B, A, C
+      const mockCol = {
+        LoadMode: 'explicit',
+        IsLoaded: true,
+        Items: [itemB, itemA, itemC],
+        Load: vi.fn().mockResolvedValue(undefined),
+      };
+
+      mockOwner.collections['OrderLines'] = mockCol as unknown as (typeof mockOwner.collections)[string];
+      mockOwner.EntityInfo.RelatedEntities = [
+        {
+          RelatedEntity: 'OrderLines',
+          RelatedEntityJoinField: 'OrderID',
+          RelatedRecordCollection: JSON.stringify({ Name: 'OrderLines' }),
+        } as unknown as EntityRelationshipInfo,
+      ];
+
+      const collections: Record<string, RecordData[]> = {};
+      await (processor as unknown as {
+        processCollections: (
+          record: MockEntity,
+          targetDir: string,
+          entityConfig: EntityConfig,
+          collections: Record<string, RecordData[]>,
+          currentDepth: number,
+          ancestryPath: Set<string>,
+          verbose?: boolean
+        ) => Promise<void>;
+      }).processCollections(
+        mockOwner,
+        '/dummy',
+        { entity: 'Orders', filePattern: '*.json' },
+        collections,
+        0,
+        new Set()
+      );
+
+      expect(collections['OrderLines']).toBeDefined();
+      expect(collections['OrderLines'].length).toBe(3);
+      // Deterministically sorted by PK: line-a, line-b, line-c
+      expect(collections['OrderLines'].map((c) => c.primaryKey?.ID)).toEqual(['line-a', 'line-b', 'line-c']);
+    });
+
+    it('skips Load: "never" collections on pull without emitting empty array', async () => {
+      const processor = new RecordProcessor();
+      const mockOwner = new MockEntity('Orders', { ID: 'ord-1' }, ['ID'], ['ID']);
+
+      const mockNeverCol = {
+        LoadMode: 'never',
+        IsLoaded: false,
+        Items: [],
+        Load: vi.fn().mockResolvedValue(undefined),
+      };
+
+      mockOwner.collections['AuditLogs'] = mockNeverCol as unknown as (typeof mockOwner.collections)[string];
+      mockOwner.EntityInfo.RelatedEntities = [
+        {
+          RelatedEntity: 'AuditLogs',
+          RelatedEntityJoinField: 'OrderID',
+          RelatedRecordCollection: JSON.stringify({ Name: 'AuditLogs', Load: 'never' }),
+        } as unknown as EntityRelationshipInfo,
+      ];
+
+      const collections: Record<string, RecordData[]> = {};
+      await (processor as unknown as {
+        processCollections: (
+          record: MockEntity,
+          targetDir: string,
+          entityConfig: EntityConfig,
+          collections: Record<string, RecordData[]>,
+          currentDepth: number,
+          ancestryPath: Set<string>,
+          verbose?: boolean
+        ) => Promise<void>;
+      }).processCollections(
+        mockOwner,
+        '/dummy',
+        { entity: 'Orders', filePattern: '*.json' },
+        collections,
+        0,
+        new Set()
+      );
+
+      // Load was never called
+      expect(mockNeverCol.Load).not.toHaveBeenCalled();
+      // Collection was not emitted as []
+      expect(collections['AuditLogs']).toBeUndefined();
     });
   });
 });

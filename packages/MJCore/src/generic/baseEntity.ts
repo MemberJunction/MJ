@@ -3104,14 +3104,22 @@ export abstract class BaseEntity<T = unknown> {
      * return, and the children are silently never persisted — the save reports success and writes
      * nothing. See {@link EntityCompanion.Dirty}.
      */
+    private _isCheckingDirty: boolean = false;
+
     get Dirty(): boolean {
-        if (!this.IsSaved) return true;
-        if (this.companionsDirty) return true;
-        // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
-        // dirty. Avoid hydrating just to check.
-        if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
-        return this._Fields.some(f => f.Dirty) ||
-               (this._parentEntity?.Dirty ?? false);
+        if (this._isCheckingDirty) return false;
+        this._isCheckingDirty = true;
+        try {
+            if (!this.IsSaved) return true;
+            if (this.companionsDirty) return true;
+            // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
+            // dirty. Avoid hydrating just to check.
+            if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
+            return this._Fields.some(f => f.Dirty) ||
+                   (this._parentEntity?.Dirty ?? false);
+        } finally {
+            this._isCheckingDirty = false;
+        }
     }
 
     /**
@@ -4736,39 +4744,51 @@ export abstract class BaseEntity<T = unknown> {
      * 
      * @returns ValidationResult The validation result
      */
+    private _isValidating: boolean = false;
+
     public Validate(): ValidationResult  {
-        const result = new ValidationResult();
-        result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
+        if (this._isValidating) {
+            const emptyResult = new ValidationResult();
+            emptyResult.Success = true;
+            return emptyResult;
+        }
+        this._isValidating = true;
+        try {
+            const result = new ValidationResult();
+            result.Success = true; // start off with assumption of success, if any field fails, we'll set this to false
 
-        // IS-A composition: validate parent entity first to collect all chain errors
-        if (this._parentEntity) {
-            const parentResult = this._parentEntity.Validate();
-            if (!parentResult.Success) {
-                result.Success = false;
-                parentResult.Errors.forEach(err => result.Errors.push(err));
+            // IS-A composition: validate parent entity first to collect all chain errors
+            if (this._parentEntity) {
+                const parentResult = this._parentEntity.Validate();
+                if (!parentResult.Success) {
+                    result.Success = false;
+                    parentResult.Errors.forEach(err => result.Errors.push(err));
+                }
             }
+
+            // Validate own fields — for IS-A entities, skip parent field mirrors since
+            // those are validated via _parentEntity above
+            for (let field of this.Fields) {
+                if (this._parentEntityFieldNames?.has(field.Name))
+                    continue; // skip parent field mirrors — authoritative validation is on _parentEntity
+
+                const err = field.Validate();
+                err.Errors.forEach(element => {
+                    result.Errors.push(element);
+                });
+                result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
+            }
+
+            // Companions validate LAST but still BEFORE any write, over their complete state including
+            // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
+            // credits", "a confirmed order must have lines" — be enforced against the whole graph rather
+            // than discovered halfway through persisting it.
+            this.validateCompanions(result);
+
+            return result;
+        } finally {
+            this._isValidating = false;
         }
-
-        // Validate own fields — for IS-A entities, skip parent field mirrors since
-        // those are validated via _parentEntity above
-        for (let field of this.Fields) {
-            if (this._parentEntityFieldNames?.has(field.Name))
-                continue; // skip parent field mirrors — authoritative validation is on _parentEntity
-
-            const err = field.Validate();
-            err.Errors.forEach(element => {
-                result.Errors.push(element);
-            });
-            result.Success = result.Success && err.Success; // if any field fails, we fail, but keep going to get all of the validation messages
-        }
-
-        // Companions validate LAST but still BEFORE any write, over their complete state including
-        // pending removals. That ordering is what lets a cross-child invariant — "debits must equal
-        // credits", "a confirmed order must have lines" — be enforced against the whole graph rather
-        // than discovered halfway through persisting it.
-        this.validateCompanions(result);
-
-        return result;
     }
 
     /**

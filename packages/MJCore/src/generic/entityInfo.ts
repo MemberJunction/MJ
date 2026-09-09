@@ -2044,8 +2044,15 @@ export class EntityInfo extends BaseInfo {
         if (this._subtypeSelectorConfig === undefined) {
             if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
                 try {
-                    this._subtypeSelectorConfig = JSON.parse(this.SubtypeSelector) as IEntitySubtypeSelectorConfig;
-                } catch {
+                    const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
+                    if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
+                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
+                        this._subtypeSelectorConfig = null;
+                    }
+                } catch (err) {
+                    LogError(`EntityInfo '${this.Name}': failed to parse SubtypeSelector JSON '${this.SubtypeSelector}': ${err instanceof Error ? err.message : String(err)}`);
                     this._subtypeSelectorConfig = null;
                 }
             } else {

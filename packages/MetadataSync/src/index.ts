@@ -19,6 +19,8 @@ export type { IncludeDirective } from './lib/json-preprocessor';
 export { SyncStateManager } from './lib/sync-state-manager';
 export type { SyncState } from './lib/sync-state-manager';
 export { parseMetadataReference } from './lib/reference-parser';
+export { resolveCollectionRelationship } from './lib/collection-resolver';
+export type { ResolvedCollectionInfo } from './lib/collection-resolver';
 
 // Deletion audit exports
 export { RecordDependencyAnalyzer } from './lib/record-dependency-analyzer';
