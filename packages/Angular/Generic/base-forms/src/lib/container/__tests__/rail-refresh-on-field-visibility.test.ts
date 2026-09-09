@@ -8,7 +8,9 @@
  *
  * `MjRecordFormContainerComponent.ngDoCheck` is the watcher. It is exercised
  * here against the real prototype (real `EffectiveEditMode` /
- * `EffectiveShowEmptyFields` getters) with a stand-in form component.
+ * `EffectiveShowEmptyFields` / `EffectiveSearchFilter` getters) with a stand-in
+ * form component. The section filter is watched too: panels the filter hides
+ * must not keep a Details card edge (`mj-chrome-details-first/-last`).
  */
 // The container's import graph reaches partially-compiled Angular libraries
 // (@angular/common), which need the JIT compiler present under the node preset.
@@ -17,7 +19,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { MjRecordFormContainerComponent } from '../record-form-container.component';
 import type { BaseFormComponent } from '../../base-form-component';
 
-type FormStub = { EditMode: boolean; showEmptyFields: boolean };
+type FormStub = { EditMode: boolean; showEmptyFields: boolean; searchFilter: string };
 
 interface Harness {
   Container: MjRecordFormContainerComponent;
@@ -26,7 +28,7 @@ interface Harness {
 }
 
 function makeHarness(): Harness {
-  const form: FormStub = { EditMode: false, showEmptyFields: false };
+  const form: FormStub = { EditMode: false, showEmptyFields: false, searchFilter: '' };
   let resolveCount = 0;
   const container = Object.create(MjRecordFormContainerComponent.prototype) as MjRecordFormContainerComponent;
   container.FormComponent = form as unknown as BaseFormComponent;
@@ -34,6 +36,7 @@ function makeHarness(): Harness {
   Object.assign(container, {
     lastRailEditMode: false,
     lastRailShowEmptyFields: false,
+    lastRailSearchFilter: '',
     scheduleChromeResolve: () => {
       resolveCount++;
     },
@@ -66,6 +69,16 @@ describe('MjRecordFormContainerComponent rail refresh on field-visibility change
     h.Form.EditMode = true;
     h.Container.ngDoCheck();
     h.Form.EditMode = false; // what EndEditMode() does from SaveRecord()/CancelEdit()
+    h.Container.ngDoCheck();
+    expect(h.ResolveCount()).toBe(2);
+  });
+
+  it('re-resolves the rail when the section filter changes (hidden panels must not keep a Details card edge)', () => {
+    h.Container.ngDoCheck();
+    h.Form.searchFilter = 'hist';
+    h.Container.ngDoCheck();
+    h.Container.ngDoCheck();
+    h.Form.searchFilter = '';
     h.Container.ngDoCheck();
     expect(h.ResolveCount()).toBe(2);
   });
