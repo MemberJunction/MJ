@@ -4600,12 +4600,24 @@ export abstract class BaseEntity<T = unknown> {
      * Note this checks DIRTY fields only. CLIENT-side that is safe on its own: nothing ever
      * nulls a restricted value in memory, so a field the user cannot see was never loaded as
      * null, is not dirty, and an unrelated edit saves cleanly with the restricted column
-     * keeping its stored value. SERVER-side it is safe only in combination with the resolver's
-     * denied-read strip: `ResolverBase.UpdateRecord` applies client-sent values via `SetMany`,
-     * which WOULD make a read-denied field genuinely dirty with a client-fabricated value —
-     * so the resolver strips denied-read fields from the client payload before applying it
-     * (`StripDeniedReadFieldsFromClientInput`), restoring the "never dirty" premise this
-     * dirty-fields-only check rests on.
+     * keeping its stored value.
+     *
+     * SERVER-side, dirty-only is safe only because `ResolverBase.UpdateRecord` guarantees the
+     * entity was hydrated FROM THE DATABASE on every FLS entity. Two distinct resolver behaviours
+     * carry that premise, and BOTH are load-bearing:
+     *
+     * 1. `StripDeniedReadFieldsFromClientInput` removes client-sent values for fields the caller
+     *    cannot READ, which `SetMany` would otherwise make genuinely dirty with fabricated data.
+     * 2. `entityInfo.EnableFieldLevelSecurity` forces the truth-load branch, so the entity's
+     *    non-dirty baseline is the real stored row rather than the client's `OldValues___`.
+     *
+     * (2) is not redundant with (1). A value arriving through `LoadFromData` is recorded by the
+     * EntityField setter as the field's INITIAL value, so it is not dirty — and this check would
+     * never see it, while `GenerateSaveSQL` sends it anyway (it filters on `NotLoaded`, never on
+     * `Dirty`). Without the forced truth-load, a caller with Read Allow + Update Deny — the
+     * canonical FLS configuration, and one that leaves (1) with nothing to strip — could write an
+     * update-denied field just by pinning its value in `OldValues___` and never naming it in the
+     * mutation. If you are considering relaxing that branch condition, this check is what breaks.
      *
      * The refusal names the missing permission when the caller can READ the field, and falls back
      * to the ambiguous "does not exist or you do not have access" wording when they cannot. See

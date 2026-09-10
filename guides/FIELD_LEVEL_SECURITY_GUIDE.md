@@ -202,6 +202,28 @@ denied set on an entity:
 | **Entity forms** | Fields the user cannot read are **not rendered at all**. The form checks access before touching a value, so one denied column cannot take out the form it sits in. A field you can read but not write renders read-only rather than editable — which matters most on **create**, where the server drops the value silently and this is the only signal you get. |
 | **Grids and view configuration** | Denied columns are not rendered, and the view-configuration panel does not offer them as columns. Your **saved column preferences are left intact** — a denial is reversible, so hiding a column never rewrites the preference that mentions it, and the column reappears when access is restored. Saved **sort** settings are dropped, because a denied field in `ORDER BY` is rejected outright rather than degrading. |
 
+### The update rejection depends on hydrating from the database
+
+The update check rejects **dirty** fields — the ones whose value differs from what the record was
+loaded with. That is only a security boundary if the loaded state is the database's, so on an
+FLS-enabled entity `ResolverBase.UpdateRecord` always loads the row rather than taking its
+`OldValues___` shortcut (`MustLoadTruthFromDatabase`).
+
+The shortcut exists because a client that already holds the prior state makes the round trip
+redundant. It is not safe here. A value the client supplies in `OldValues___` is applied through
+`LoadFromData`, which records it as the field's *initial* value — so the field is never dirty, the
+update check never examines it, and save-SQL generation sends it regardless (it omits only
+not-loaded fields, never non-dirty ones). A caller could then write a field it may not write by
+pinning the value in `OldValues___` and never naming it in the mutation.
+
+Note this is not covered by the denied-read strip. That strip forces the database load too, but
+only when the caller has at least one denied-**read** field. The configuration this feature most
+exists to serve — *read a field, but do not change it* — leaves that set empty, which is precisely
+when the entity flag has to carry the decision on its own.
+
+**If you are tuning this path, the entity flag is not the optional term.** Removing it reopens a
+silent write. `packages/MJServer/src/__tests__/resolverBase.fls.test.ts` pins it.
+
 ### The denial message — ambiguous for READ, explicit for WRITE
 
 **READ denials** — a predicate naming an unreadable field, or a typed accessor touching one — read:

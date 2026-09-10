@@ -1585,9 +1585,9 @@ export class ResolverBase {
       // that hydrates from those values — never loading what the database actually holds.
       const hasNarrowedAuditPayload = this.StripRecordChangePayloadFromClientInput(entityInfo, userInfo, input, clientNewValues);
 
-      if (entityInfo.TrackRecordChanges || !input.OldValues___ || hasDeniedReadFields || hasNarrowedAuditPayload) {
+      if (this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload)) {
         // We get here because the entity tracks record changes, OR the client did not provide OldValues,
-        // OR field-level security denies this user read on some field — in every case we need the true old values from the DB
+        // OR field-level security is in play — in every case we need the true old values from the DB
         const cKey = new CompositeKey(
           entityInfo.PrimaryKeys.map((pk) => {
             return {
@@ -1658,6 +1658,48 @@ export class ResolverBase {
       });
   }
   
+  /**
+   * Whether `UpdateRecord` must hydrate the entity from the DATABASE rather than from the
+   * client's `OldValues___`.
+   *
+   * The `OldValues___` path exists as an optimization: when nothing needs the true prior state,
+   * the client already holds it and a round trip is wasted. Each condition below is a reason
+   * that assumption fails.
+   *
+   * `EnableFieldLevelSecurity` is the security-critical one, and it is NOT redundant with
+   * `hasDeniedReadFields`. That flag reports READ denials, and the canonical FLS configuration is
+   * Read Allow + Update Deny — which leaves it false. Such a caller would be hydrated from its own
+   * `OldValues___`, and a value it supplies there for an update-denied field arrives through
+   * `LoadFromData`, which the `EntityField` setter records as that field's INITIAL value. The
+   * field is therefore not dirty, `BaseEntity.CheckFieldLevelUpdatePermissions` only rejects
+   * `field.Dirty && denied`, and `GenerateSaveSQL` sends every `IsSPParameter` field regardless of
+   * dirtiness (it skips only `NotLoaded`). The fabricated value reached `spUpdate` having passed
+   * every check: pinning a value in `OldValues___` was a write to a field the caller may not write.
+   *
+   * Forcing the truth-load closes that rather than relocating it. The entity is hydrated by
+   * `InnerLoad` from the real row, and `TestAndSetClientOldValuesToDBValues` reads the client's
+   * OldValues only to detect concurrent-edit overlap before ending in `SetMany(clientNewValues)` —
+   * it never applies them to the entity. An update-denied field can then only become dirty by being
+   * named in the mutation input itself, which is precisely the case that check does catch.
+   *
+   * Ordered so the boolean flag is evaluated last: the extra load lands only on entities that have
+   * the feature switched on, which is almost none of them.
+   */
+  protected MustLoadTruthFromDatabase(
+    entityInfo: EntityInfo,
+    input: { OldValues___?: Array<{ Key: string; Value: unknown }> },
+    hasDeniedReadFields: boolean,
+    hasNarrowedAuditPayload: boolean
+  ): boolean {
+    return (
+      entityInfo.TrackRecordChanges ||
+      !input.OldValues___ ||
+      hasDeniedReadFields ||
+      hasNarrowedAuditPayload ||
+      entityInfo.EnableFieldLevelSecurity
+    );
+  }
+
   /**
    * Field-level security guard for the update path.
    *

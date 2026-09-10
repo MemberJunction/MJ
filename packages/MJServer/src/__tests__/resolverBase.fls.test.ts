@@ -186,10 +186,14 @@ function buildUser(roleIds: string[], id = 'user-1'): UserInfo {
 
 type ClientInput = { OldValues___?: Array<{ Key: string; Value: unknown }> } & Record<string, unknown>;
 
-/** Subclass that exposes the protected guard for testing. */
+/** Subclass that exposes the protected guards for testing. */
 class TestResolver extends ResolverBase {
     public TestStrip(entityInfo: EntityInfo, userInfo: UserInfo, input: ClientInput, clientNewValues: Record<string, unknown>): boolean {
         return this.StripDeniedReadFieldsFromClientInput(entityInfo, userInfo, input, clientNewValues);
+    }
+
+    public TestMustLoadTruth(entityInfo: EntityInfo, input: ClientInput, hasDeniedReadFields: boolean, hasNarrowedAuditPayload: boolean): boolean {
+        return this.MustLoadTruthFromDatabase(entityInfo, input, hasDeniedReadFields, hasNarrowedAuditPayload);
     }
 }
 
@@ -371,5 +375,109 @@ describe('write-only fields are unreachable, so every denied-read field is strip
 
         expect(clientNewValues).not.toHaveProperty('Salary');
         expect(clientNewValues).not.toHaveProperty('Base_Salary');
+    });
+});
+
+/**
+ * Tests for ResolverBase.MustLoadTruthFromDatabase — the hydration-source decision.
+ *
+ * `UpdateRecord` may hydrate the entity from the client's `OldValues___` instead of loading the
+ * row, as an optimization for the case where nothing needs true prior state. This predicate decides
+ * when that shortcut is unsafe.
+ *
+ * The security case, and the reason `EnableFieldLevelSecurity` is in the condition at all: the
+ * canonical FLS configuration is Read Allow + Update Deny, which leaves `hasDeniedReadFields`
+ * FALSE. Before this predicate consulted the entity flag, such a caller took the shortcut and was
+ * hydrated from its own `OldValues___`. A value supplied there arrives via `LoadFromData`, which
+ * the EntityField setter records as the field's initial value — so it is not dirty,
+ * `CheckFieldLevelUpdatePermissions` (which rejects only `field.Dirty && denied`) never sees it,
+ * and `GenerateSaveSQL` sends it anyway because it filters on `NotLoaded`, never on `Dirty`.
+ * Pinning a value in `OldValues___` was a write to a field the caller may not write.
+ */
+describe('ResolverBase.MustLoadTruthFromDatabase', () => {
+    let resolver: TestResolver;
+
+    beforeEach(() => {
+        resolver = new TestResolver();
+    });
+
+    /**
+     * `Employees` where the Intern role may READ every field — including Salary — but may not
+     * UPDATE Salary. "You can see the salaries, you just cannot change them."
+     *
+     * Every field must be readable, not just Salary. `StripDeniedReadFieldsFromClientInput`
+     * returns `true` whenever the caller's denied-READ set is non-empty AT ALL, regardless of what
+     * the payload contained, so a single unrelated read denial anywhere on the entity would force
+     * the truth-load by itself and mask the gap. A caller with no read denials is the one whose
+     * hydration source was decided purely by the terms this test is about.
+     */
+    function readAllowUpdateDenyEntity(withFls: boolean): EntityInfo {
+        const init = employeeEntityInit(withFls);
+        init['TrackRecordChanges'] = false; // the shortcut is only reachable with tracking off
+        const fields = init['Fields'] as Array<Record<string, unknown>>;
+        for (const f of fields) {
+            if (f['ID'] === 'f-id') continue; // primary key — never restrictable
+            f['EntityFieldPermissions'] = openTo(f['ID'] as string);
+        }
+        const salary = fields.find((f) => f['ID'] === 'f-salary')!;
+        salary['EntityFieldPermissions'] = [
+            ...openTo('f-salary', [HR_ROLE_ID]),
+            { ID: 'f-salary-intern', EntityFieldID: 'f-salary', RoleID: INTERN_ROLE_ID, ReadAccess: 'Allow', UpdateAccess: 'Deny', CreateAccess: 'Deny' },
+        ];
+        return new EntityInfo(init);
+    }
+
+    const withOldValues = (): ClientInput => ({
+        ID: '1',
+        Notes: 'edited',
+        OldValues___: [
+            { Key: 'ID', Value: '1' },
+            { Key: 'Notes', Value: 'original' },
+            { Key: 'Salary', Value: '999999' }, // the pinned value — never in the mutation input
+        ],
+    });
+
+    it('the fixture really is Read Allow + Update Deny, with an EMPTY denied-READ set', () => {
+        const entity = readAllowUpdateDenyEntity(true);
+        const intern = buildUser([INTERN_ROLE_ID]);
+
+        // This is what makes the bypass reachable: nothing to strip, so hasDeniedReadFields is false.
+        expect(entity.GetDeniedReadFields(intern).size).toBe(0);
+        expect(entity.GetDeniedUpdateFields(intern).has('salary')).toBe(true);
+    });
+
+    it('REGRESSION: forces the truth-load on an FLS entity even when no field is denied READ', () => {
+        const entity = readAllowUpdateDenyEntity(true);
+        const intern = buildUser([INTERN_ROLE_ID]);
+        const input = withOldValues();
+
+        // Exactly what UpdateRecord computes: the strip finds nothing to remove, so it returns false.
+        const hasDeniedReadFields = resolver.TestStrip(entity, intern, input, { ID: '1', Notes: 'edited' });
+        expect(hasDeniedReadFields).toBe(false);
+        expect(input.OldValues___).toContainEqual({ Key: 'Salary', Value: '999999' }); // survives the strip
+
+        // Before the fix every other term was false here and the client's OldValues won.
+        expect(resolver.TestMustLoadTruth(entity, input, hasDeniedReadFields, false)).toBe(true);
+    });
+
+    it('keeps the OldValues shortcut when field-level security is OFF (no cost to the ~99%)', () => {
+        const entity = readAllowUpdateDenyEntity(false);
+        expect(resolver.TestMustLoadTruth(entity, withOldValues(), false, false)).toBe(false);
+    });
+
+    it('still forces the truth-load for each pre-existing reason, independently', () => {
+        const flsOff = readAllowUpdateDenyEntity(false);
+
+        // No OldValues to hydrate from.
+        expect(resolver.TestMustLoadTruth(flsOff, { ID: '1' }, false, false)).toBe(true);
+        // A denied READ field was stripped.
+        expect(resolver.TestMustLoadTruth(flsOff, withOldValues(), true, false)).toBe(true);
+        // The audit payload was narrowed.
+        expect(resolver.TestMustLoadTruth(flsOff, withOldValues(), false, true)).toBe(true);
+
+        // The entity tracks record changes.
+        const tracked = employeeEntityInit(false);
+        tracked['TrackRecordChanges'] = true;
+        expect(resolver.TestMustLoadTruth(new EntityInfo(tracked), withOldValues(), false, false)).toBe(true);
     });
 });
