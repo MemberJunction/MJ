@@ -312,6 +312,45 @@ describe('MSGraphProvider', () => {
       disableEnvironmentFallback: true,
     };
 
+    /**
+     * Reply used to pass NO request-level candidate, so it could only resolve `creds.accountEmail` —
+     * a property the `Azure Service Principal` type declares nowhere, and whose environment source
+     * `disableEnvironmentFallback` removes. It was therefore unreachable on precisely the stored
+     * credential the mailbox rework exists to support, and no test saw it: the suite only covered
+     * operations that already named their own mailbox.
+     */
+    it('resolves the Reply mailbox from ContextData, not only from the credential', async () => {
+      const chain = { post: vi.fn().mockResolvedValue({}) };
+      mockGraphApi.mockReturnValueOnce(chain);
+
+      const result = await provider.ReplyToMessage({
+        MessageID: 'msg-1',
+        Message: { ProcessedBody: 'body', ProcessedHTMLBody: '' },
+        ContextData: { Email: 'named@example.com' },
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+      expect(String(mockGraphApi.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('named@example.com'));
+    });
+
+    /**
+     * And still refuses, by name, when neither the request nor the credential carries one.
+     *
+     * Reply RETURNS that refusal rather than throwing, because unlike `GetMessages` it has a
+     * try/catch — and the catch carries the exception message, so the operation and both ways to
+     * supply a mailbox reach the caller instead of being flattened to "Error sending message".
+     */
+    it('refuses Reply when no mailbox resolves anywhere, and says why', async () => {
+      const result = await provider.ReplyToMessage({
+        MessageID: 'msg-1',
+        Message: { ProcessedBody: 'body', ProcessedHTMLBody: '' },
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('ReplyToMessage');
+      expect(result.ErrorMessage).toContain('needs a mailbox');
+    });
+
     it('accepts a three-field service principal when the operation names its own mailbox', async () => {
       expectChainedCall();
       const result = await provider.GetMessages({
