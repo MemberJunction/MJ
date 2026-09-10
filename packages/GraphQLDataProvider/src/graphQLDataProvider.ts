@@ -2013,6 +2013,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // after a local Validate() refusal, so the form paints the fields either way. Empty when
             // the server sent none (a SQL error, a permission refusal).
             result.Errors = DeserializeValidationErrors(e.response?.errors?.[0]?.extensions?.validationErrors);
+            // `Message` IS the server's CompleteMessage — those same errors, already joined — so tell
+            // CompleteMessage not to append them again (they would read twice otherwise).
+            result.MessageIncludesErrors = result.Errors.length > 0 && !!result.Message;
             LogError(e);
             return null;
         }
@@ -2253,6 +2256,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
             // Same rehydration as Save(): a delete refused with field-named reasons keeps them.
             result.Errors = DeserializeValidationErrors(e.response?.errors?.[0]?.extensions?.validationErrors);
+            result.MessageIncludesErrors = result.Errors.length > 0 && !!result.Message;
             LogError(e);
 
             return false;

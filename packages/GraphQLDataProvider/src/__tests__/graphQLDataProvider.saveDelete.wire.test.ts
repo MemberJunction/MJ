@@ -465,6 +465,34 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(entity.LatestResult.Errors[1]).toMatchObject({ Source: '', Message: 'Reviewed by the tier policy', Type: 'Warning' });
     });
 
+    it('Save: CompleteMessage carries the refusal text ONCE — Message is the server\'s CompleteMessage, Errors are the same entries', async () => {
+        // The server's Message is empty on a validation refusal, so its CompleteMessage is the errors
+        // joined; that string lands in the client's Message. Rehydrating the same entries into Errors
+        // must not make the client's CompleteMessage say each one twice (143 readers toast it).
+        const entity = loaded();
+        entity.Set('Tier', 'Platinum');
+        const serverComplete = REFUSAL_PROSE + '\nReviewed by the tier policy';
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError(serverComplete, 'SAVE_ENTITY_ERROR', { validationErrors: WIRE_ERRORS }));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        const complete = entity.LatestResult.CompleteMessage;
+        expect(complete).toBe(serverComplete);
+        expect(complete.split(REFUSAL_PROSE).length - 1, 'the prose appears exactly once').toBe(1);
+        expect(complete.split('Reviewed by the tier policy').length - 1).toBe(1);
+    });
+
+    it('Save: without the extension nothing is marked — CompleteMessage is just the message, as before', async () => {
+        const entity = loaded();
+        entity.Set('Name', 'New Name');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Timeout expired while saving.', 'SAVE_ENTITY_ERROR'));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(entity.LatestResult.MessageIncludesErrors).toBe(false);
+        expect(entity.LatestResult.CompleteMessage).toBe('Timeout expired while saving.');
+    });
+
     it('Save: leaves LatestResult.Errors empty when the error carries no validationErrors extension', async () => {
         const entity = loaded();
         entity.Set('Name', 'New Name');
@@ -501,5 +529,6 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(entity.LatestResult.Errors).toHaveLength(1);
         expect(entity.LatestResult.Errors[0]).toBeInstanceOf(ValidationErrorInfo);
         expect(entity.LatestResult.Errors[0]).toMatchObject({ Source: 'ID', Message: 'Customer has open orders.' });
+        expect(entity.LatestResult.CompleteMessage, 'once, not twice').toBe('Customer has open orders.');
     });
 });

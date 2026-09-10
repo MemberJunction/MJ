@@ -311,14 +311,6 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   private _fieldErrors: ValidationErrorInfo[] = [];
 
   /**
-   * True when the user has edited this field since the form last published validation errors.
-   *
-   * Plain `_touched` was the wrong test: it stayed true from the moment the user typed, so after a
-   * failed save the field returned its own — necessarily local, synchronous — validation, and an
-   * error the SERVER had just reported for that very field (a `ValidateAsync()` refusal, which the
-   * client cannot compute) never showed on the one field the user had just been in.
-   */
-  /**
    * The ONE way a user interaction marks this field touched: every site must also stamp the
    * revision, or a field touched after a failed save would keep showing the stale form-level error.
    */
@@ -327,6 +319,14 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this._touchedAtRevision = this.FormContext?.validationRevision ?? 0;
   }
 
+  /**
+   * True when the user has edited this field since the form last published validation errors.
+   *
+   * Plain `_touched` was the wrong test: it stayed true from the moment the user typed, so after a
+   * failed save the field returned its own — necessarily local, synchronous — validation, and an
+   * error the SERVER had just reported for that very field (a `ValidateAsync()` refusal, which the
+   * client cannot compute) never showed on the one field the user had just been in.
+   */
   private get editedSinceLastValidationFailure(): boolean {
     return this._touched && this._touchedAtRevision === (this.FormContext?.validationRevision ?? 0);
   }
