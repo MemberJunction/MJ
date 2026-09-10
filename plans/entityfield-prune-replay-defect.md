@@ -124,21 +124,15 @@ and are unaffected. **Turning the flag on removes no statement a host needs.**
 
 ## 4. The sequencing trap that decides whether heals survive
 
-**MJ core emits the prune unscoped, and core migrations run last on every upgrade.**
+**Reconcilers in versioned migrations replay from an intermediate schema state and are wrong there.**
 
-**48 of core's 49** prune invocations carry `@ExcludedSchemaNames='sys,staging'` and nothing
-else — no `@EntityIDs`, no `@IncludedSchemaNames`. Core has no `includeSchemas` configured
-(correct — it generates everything), so its emissions are global by construction, and
-`sys,staging` excludes nothing that matters. Those statements therefore evaluate **every BizApps
-schema present when they run.**
+A reconciler in a **versioned** migration replays from an intermediate schema state and is wrong there — the fix is omission, which the `omitRecurringScriptsFromLog` default now handles. A reconciler in the **repeatable** (`R__RefreshMetadata.sql`) runs after every versioned migration, at final schema state, and is correct there — leave it broad. Scoping the repeatable removes metadata maintenance for every non-core schema on every host, and after Phase 1 nothing else provides it.
 
-Set that against the documented upgrade path — `npx mj migrate -t v<version>` against core, on a
-host that already has the apps installed. Core's 48 global prunes execute against a database
-full of BizApps entities, at a moment core knows nothing about their view state.
+Historical context: **48 of core's 49** legacy prune invocations carried `@ExcludedSchemaNames='sys,staging'` and nothing else — no `@EntityIDs`, no `@IncludedSchemaNames`. Core has no `includeSchemas` configured (correct — it generates everything), so its emissions were global by construction.
 
-**Consequence: heal migrations at the end of each app repo do not survive a subsequent core
-upgrade.** Fixing core's scoping is not a companion improvement to the heals; it is the
-precondition that makes them durable. If only one change ships, it is this one.
+Set that against the documented upgrade path — `npx mj migrate -t v<version>` against core, on a host that already has the apps installed. When versioned migrations execute global prunes against a database full of BizApps entities at intermediate states before their views are updated, they prune valid fields.
+
+**Consequence: omitting recurring reconcilers from versioned migration logs ensures heal migrations at the end of each app repo survive subsequent migrations.** Fixing omission across all repos is the precondition that makes heals durable.
 
 ---
 
@@ -191,9 +185,10 @@ No new migration captured after this carries a prune. Nothing structural is lost
 1. **Flip the zod default** at `config.ts:363` to `true`, matching the fallback at `config.ts:1048`,
    so omission is safe rather than hazardous. This has real blast radius across every consumer —
    land it deliberately, with a changeset, not as a drive-by.
-2. **Stop core emitting unscoped prunes into migrations.** Preferred form: core adopts the same
-   omission and the prune becomes a live-CodeGen-only operation. If it must remain in core's
-   migrations for core's own schema, it must carry `@IncludedSchemaNames='${flyway:defaultSchema}'`.
+2. **Stop core emitting reconcilers into versioned migrations.** Versioned migrations replay from
+   an intermediate schema state; the fix is omission via `omitRecurringScriptsFromLog: true` (or
+   `--omit-recurring`). In repeatable migrations (`R__RefreshMetadata.sql`), reconcilers run after
+   every versioned migration at final schema state, where they remain broad.
 
 This is the phase that makes Phase 3 durable (§4).
 
@@ -221,6 +216,9 @@ Port the guards to app repos **before** Phase 3 lands, so the gates catch any ba
   (The legacy `.sh` matched only the 6-digit `100000` band; #4292 replaced it in MJ with the positional `.mjs` parser covering both quoting dialects, masked comments/strings, and self-tests). bizapps-orders carries **829 of 886** `EntityField`
   INSERTs with a literal `Sequence`, the exact pattern that "cannot fail on a working dev database
   … fails only on fresh installs."
+- **T-SQL parse gate (`SET PARSEONLY ON`) in CI:** Convention gates inspect migrations purely as **text** (filenames, changesets, sequences, prune statements). Not one of them would catch syntax bugs like `V202609092230`'s unescaped single quote in `'item's'`, which was well-formed by all textual conventions but completely invalid T-SQL. The parse gate (`parse_migrations` job running against a SQL Server container with `SET PARSEONLY ON -b`) closes this entire defect class without requiring full schema execution or seed data.
+- **PostgreSQL parity gate assigned to release-time:** Feature PRs ship T-SQL only; PG counterparts are converter output the build engineer generates at release (`mj sql-convert`). The parity gate on `bizapps-orders` was moved off `pull_request` (retaining `workflow_dispatch` / release run) because 23 pre-existing migrations lacked PG counterparts on `next`, creating an unpassable PR gate.
+- **Base SHA resolution in CI (`steps.base.outputs.sha`):** Replaced static `github.event.pull_request.base.sha` across all app repos with a fresh fetch of the base tip to avoid diffing against months-old base snapshots on long-lived branches.
 - **Do not** ship a migration that `RAISERROR`s on a view↔EntityField mismatch. It would brick a
   host upgrade on a benign difference. Put that assertion in the clean-room replay, where a
   failure costs a CI run instead of a customer's install.
