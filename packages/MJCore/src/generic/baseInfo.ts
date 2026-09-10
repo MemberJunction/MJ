@@ -70,6 +70,12 @@ export abstract class BaseInfo {
      * without a backing field (display-name formatters, derived flags) are intentionally skipped —
      * they can throw when source fields are null and don't belong on the wire anyway.
      *
+     * A `_`-backed getter that throws is omitted from the output rather than aborting the whole
+     * serialization. That omission is safe ONLY because such getters are recomputable: the backing
+     * field is a lazy cache over other serialized state (e.g. QueryInfo.CategoryPath over CategoryID),
+     * so the value is rebuilt on the next access after a warm boot. Do not add a `_`-backed getter
+     * whose value cannot be recomputed from the serialized fields — a throw would silently drop it.
+     *
      * Nested BaseInfo instances and arrays of them unwrap automatically via JSON.stringify's
      * native toJSON() protocol.
      *
