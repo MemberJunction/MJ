@@ -46,6 +46,32 @@
               <p class="shelter-cat__note">Loading “{{ page.queryName }}”…</p>
             }
           }
+          @case ('agent') {
+            <!-- The agent conversation, pinned to ONE agent. `showAgentPicker` is false on purpose:
+                 this is the shelter's adoption assistant, not a menu of every agent in the system.
+                 Everything here is stock MJ — the chat, the artifact rendering that turns the
+                 agent's payload into a linkable grid of animals, and the run details. -->
+            @if (AgentIds[page.agentName!] && CurrentUser) {
+              <mj-conversation-chat-area
+                  [Provider]="ProviderToUse"
+                  [environmentId]="EnvironmentId"
+                  [currentUser]="CurrentUser"
+                  [defaultAgentId]="AgentIds[page.agentName!]"
+                  [showAgentPicker]="false"
+                  [allowMentions]="false"
+                  [allowAttachments]="false"
+                  [conversation]="ChatConversation"
+                  [conversationId]="ChatConversationId"
+                  [isNewConversation]="ChatIsNew"
+                  [pendingMessage]="ChatPendingMessage"
+                  [pendingMessageConversationId]="ChatPendingConversationId"
+                  (conversationCreated)="OnChatConversationCreated($event)"
+                  (pendingMessageConsumed)="OnChatPendingMessageConsumed()"
+                  style="display:block; width:100%; height:100%;"></mj-conversation-chat-area>
+            } @else {
+              <p class="shelter-cat__note">Loading “{{ page.agentName }}”…</p>
+            }
+          }
           @case ('pending') {
             <div class="shelter-cat__pending">
               <i class="fa-solid fa-screwdriver-wrench" aria-hidden="true"></i>

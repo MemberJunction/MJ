@@ -83,6 +83,11 @@ export class ShelterAdoptionCategoryComponent extends ShelterCategoryBase {
             // answer "who is interested in this dog, and what is holding it up?", which is a question
             // about inquiries, not about people. Adopters is the supporting list you reach when a
             // particular family needs screening or their details corrected.
+            // The agent LANDS the category: a volunteer opens Adoption because someone is standing
+            // in front of them, and the first useful act is finding that person an animal. The rows
+            // it saves are Adoptions at Inquiry -- which is literally the next rail item, so the
+            // agent's output flows straight into the funnel staff already work from.
+            { id: 'match',     label: 'Find a Match', icon: 'fa-solid fa-wand-magic-sparkles', kind: 'agent', agentName: 'Harbor Shelter Adoption Matcher' },
             { id: 'adoptions', label: 'Adoptions', icon: 'fa-solid fa-heart',      kind: 'entity', entityName: 'MJ: Adoptions' },
             { id: 'adopters',  label: 'Adopters',  icon: 'fa-solid fa-user-group', kind: 'entity', entityName: 'MJ: Adopters' },
         ];

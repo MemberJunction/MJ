@@ -11638,6 +11638,24 @@ importers:
       '@livekit/track-processors':
         specifier: ^0.7.2
         version: 0.7.2(@types/dom-mediacapture-transform@0.1.11)(livekit-client@2.19.2(@types/dom-mediacapture-record@1.0.22))
+      '@memberjunction/ai':
+        specifier: 6.1.0-edge.4
+        version: link:../AI/Core
+      '@memberjunction/ai-agent-client':
+        specifier: 6.1.0-edge.4
+        version: link:../AI/AgentsClient
+      '@memberjunction/ai-core-plus':
+        specifier: 6.1.0-edge.4
+        version: link:../AI/CorePlus
+      '@memberjunction/ai-engine-base':
+        specifier: 6.1.0-edge.4
+        version: link:../AI/BaseAIEngine
+      '@memberjunction/ai-realtime-client':
+        specifier: 6.1.0-edge.4
+        version: link:../AI/RealtimeClient
+      '@memberjunction/conversations-runtime':
+        specifier: 6.1.0-edge.4
+        version: link:../ConversationsRuntime
       '@memberjunction/core':
         specifier: 6.1.0-edge.4
         version: link:../MJCore
@@ -11650,6 +11668,15 @@ importers:
       '@memberjunction/graphql-dataprovider':
         specifier: 6.1.0-edge.4
         version: link:../GraphQLDataProvider
+      '@memberjunction/interactive-component-types':
+        specifier: 6.1.0-edge.4
+        version: link:../InteractiveComponents
+      '@memberjunction/ng-agent-client':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/agent-client
+      '@memberjunction/ng-artifacts':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/artifacts
       '@memberjunction/ng-auth-services':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Explorer/auth-services
@@ -11659,15 +11686,27 @@ importers:
       '@memberjunction/ng-base-forms':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/base-forms
+      '@memberjunction/ng-base-types':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/base-types
       '@memberjunction/ng-bootstrap':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Bootstrap/dist
       '@memberjunction/ng-bootstrap-lite':
         specifier: 6.1.0-edge.4
         version: link:../Angular/BootstrapLite
+      '@memberjunction/ng-code-editor':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/code-editor
+      '@memberjunction/ng-composer':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/composer
       '@memberjunction/ng-container-directives':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/container-directives
+      '@memberjunction/ng-conversations':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/conversations
       '@memberjunction/ng-core-entity-forms':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Explorer/core-entity-forms
@@ -11692,30 +11731,60 @@ importers:
       '@memberjunction/ng-explorer-settings':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Explorer/explorer-settings
+      '@memberjunction/ng-forms':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/forms
       '@memberjunction/ng-join-grid':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/join-grid
       '@memberjunction/ng-link-directives':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Explorer/link-directives
+      '@memberjunction/ng-markdown':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/markdown
+      '@memberjunction/ng-media-player':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/media-player
+      '@memberjunction/ng-notifications':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/notifications
       '@memberjunction/ng-query-viewer':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/query-viewer
       '@memberjunction/ng-record-changes':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/record-changes
+      '@memberjunction/ng-resource-permissions':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/resource-permissions
       '@memberjunction/ng-shared':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Explorer/shared
       '@memberjunction/ng-shared-generic':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/shared
+      '@memberjunction/ng-task-graph-editor':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/task-graph-editor
+      '@memberjunction/ng-tasks':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/tasks
+      '@memberjunction/ng-testing':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/Testing
       '@memberjunction/ng-timeline':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/timeline
       '@memberjunction/ng-ui-components':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Generic/ui-components
+      '@memberjunction/ng-user-routines':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/user-routines
+      '@memberjunction/ng-whiteboard':
+        specifier: 6.1.0-edge.4
+        version: link:../Angular/Generic/whiteboard
       '@memberjunction/ng-workspace-initializer':
         specifier: 6.1.0-edge.4
         version: link:../Angular/Explorer/workspace-initializer

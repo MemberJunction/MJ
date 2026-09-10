@@ -16,6 +16,7 @@ import {
   SharedService
 } from '@memberjunction/ng-explorer-modules';
 import { AuthServicesModule, RedirectComponent, MJAuthBase } from '@memberjunction/ng-auth-services';
+import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { MJExplorerAppModule } from '@memberjunction/ng-explorer-app';
 
 // Lazy loading infrastructure
@@ -101,6 +102,7 @@ export function initializeAuth(authService: MJAuthBase): () => Promise<void> {
   ],
   imports: [
     // MJ Academy — provides <mj-entity-viewer> for ShelterEntityGridComponent
+    ConversationsModule,
     EntityViewerModule,
 
     // Angular Core Modules
