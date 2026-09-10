@@ -203,6 +203,7 @@ export class RunCodeGenBase {
   protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false): Promise<boolean> {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
+      ManageMetadataBase.clearFieldTracking();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
       reporter.mark('platform', dbPlatform());
@@ -534,6 +535,8 @@ export class RunCodeGenBase {
          reporter.counter('entitiesProcessed', new MJ.Metadata().Entities.length);
          reporter.counter('entitiesNew', ManageMetadataBase.newEntityList.length);
          reporter.counter('entitiesModified', ManageMetadataBase.modifiedEntityList.length);
+         reporter.counter('fieldsNew', ManageMetadataBase.newFieldCount);
+         reporter.counter('fieldsChanged', ManageMetadataBase.changedFieldCount);
          // EntitiesRequiringViewRegen is only defined on newer ManageMetadataBase
          // (added in search-geo-phase-3). Read defensively via property descriptor
          // so this compiles and runs against older versions too.
@@ -731,7 +734,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating Angular CORE Entities Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
         const ok = await reporter.phase('generateAngularCore', () =>
-          angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser),
+          angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser, 'AngularCoreEntities'),
         );
         if (!ok) {
           failSpinner('Error generating Angular CORE Entities code');
@@ -751,7 +754,7 @@ export class RunCodeGenBase {
         );
         const ok = await reporter.phase('generateAngular', async () => {
           for (const [dir, group] of angularGroups) {
-            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser);
+            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
             if (!groupOk) {
               return false;
             }

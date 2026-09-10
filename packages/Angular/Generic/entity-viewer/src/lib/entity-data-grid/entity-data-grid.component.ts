@@ -15,7 +15,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import type { EntityActionUXContext, EntityActionUXResult } from '@memberjunction/ng-entity-action-ux';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor } from '@memberjunction/core';
+import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression, CoerceImageSrc, ParseCssHexColor, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -4802,10 +4802,12 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
   /** Builds the driver context from the current entity + selection and mounts the named driver. */
   private mountRuntimeDriver(action: EntityActionConfig): void {
     const entity = this._entityInfo!;
-    const pkName = entity.FirstPrimaryKey?.Name;
-    const selectedRecordIDs = pkName
-      ? this.GetSelectedRows().map(r => String(r[pkName])).filter(id => id.length > 0)
-      : [];
+    // The grid's entity is arbitrary (any key column name, possibly composite), so each selected row's
+    // identity is its full primary key in the compact record-id form the record-process engine reads
+    // back with CompositeKey.FromURLSegment — a bare value for single-column keys, `F1|v1||F2|v2` otherwise.
+    const selectedRecordIDs = this.GetSelectedRows()
+      .map(r => CompositeKey.FromEntityRecord(entity, r).ToCompactURLSegment())
+      .filter(id => id.length > 0);
     this.ActiveRuntimeDriver = {
       DriverClass: action.runtimeUXDriverClass!,
       Context: {

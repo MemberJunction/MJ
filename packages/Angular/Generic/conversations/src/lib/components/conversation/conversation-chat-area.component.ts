@@ -3785,11 +3785,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   viewTestRun(testRunId: string): void {
     // Open the test run record in the entity viewer
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: testRunId });
     this.openEntityRecord.emit({
       entityName: 'MJ: Test Runs',
-      compositeKey
+      compositeKey: CompositeKey.FromID(testRunId)
     });
   }
 
@@ -3801,11 +3799,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * wrapper routes it through `NavigationService.OpenEntityRecord`.
    */
   onRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: event.RecordID });
+    // The overlay can name any entity — resolve its key column(s) from metadata, not a hardcoded ID.
     this.openEntityRecord.emit({
       entityName: event.EntityName,
-      compositeKey
+      compositeKey: CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.EntityName), event.RecordID)
     });
   }
 

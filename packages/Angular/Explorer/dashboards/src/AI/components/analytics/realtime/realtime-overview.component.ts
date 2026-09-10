@@ -604,9 +604,7 @@ export class AnalyticsRealtimeOverviewComponent extends BaseAngularComponent imp
 
     /** Opens the AIAgentSession record using the shared Explorer record-open path. */
     public OpenSession(sessionId: string): void {
-        const key = new CompositeKey();
-        key.LoadFromSingleKeyValuePair('ID', sessionId);
-        SharedService.Instance.OpenEntityRecord('MJ: AI Agent Sessions', key);
+        SharedService.Instance.OpenEntityRecord('MJ: AI Agent Sessions', CompositeKey.FromID(sessionId));
     }
 
     // ── Builders ──

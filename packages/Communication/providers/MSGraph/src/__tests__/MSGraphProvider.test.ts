@@ -287,6 +287,130 @@ describe('MSGraphProvider', () => {
       const result = await provider.SendSingleMessage(message, { disableEnvironmentFallback: true }) as Record<string, unknown>;
       expect(result.Success).toBe(false);
     });
+
+    /**
+     * THE DEFECT THIS BLOCK EXISTS FOR. The `Azure Service Principal` credential type declares three
+     * fields and requires all three. `resolveCredentials` used to validate FOUR, demanding an
+     * `accountEmail` the type has no way to carry, so a credential stored through the Credentials
+     * engine could not drive a single operation — it failed before doing any work. It went unnoticed
+     * only because the AZURE_ACCOUNT_EMAIL environment fallback covered for it.
+     */
+    /** GetMessages chains .filter().top().get(); the default api mock is deliberately not chainable. */
+    const expectChainedCall = () => {
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue({ value: [] }),
+      };
+      mockGraphApi.mockReturnValueOnce(chain);
+    };
+
+    const PRINCIPAL = {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      clientId: '00000000-0000-0000-0000-000000000002',
+      clientSecret: 'secret',
+      disableEnvironmentFallback: true,
+    };
+
+    /**
+     * Reply used to pass NO request-level candidate, so it could only resolve `creds.accountEmail` —
+     * a property the `Azure Service Principal` type declares nowhere, and whose environment source
+     * `disableEnvironmentFallback` removes. It was therefore unreachable on precisely the stored
+     * credential the mailbox rework exists to support, and no test saw it: the suite only covered
+     * operations that already named their own mailbox.
+     */
+    it('resolves the Reply mailbox from ContextData, not only from the credential', async () => {
+      const chain = { post: vi.fn().mockResolvedValue({}) };
+      mockGraphApi.mockReturnValueOnce(chain);
+
+      const result = await provider.ReplyToMessage({
+        MessageID: 'msg-1',
+        Message: { ProcessedBody: 'body', ProcessedHTMLBody: '' },
+        ContextData: { Email: 'named@example.com' },
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+      expect(String(mockGraphApi.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('named@example.com'));
+    });
+
+    /**
+     * And still refuses, by name, when neither the request nor the credential carries one.
+     *
+     * Reply RETURNS that refusal rather than throwing, because unlike `GetMessages` it has a
+     * try/catch — and the catch carries the exception message, so the operation and both ways to
+     * supply a mailbox reach the caller instead of being flattened to "Error sending message".
+     */
+    it('refuses Reply when no mailbox resolves anywhere, and says why', async () => {
+      const result = await provider.ReplyToMessage({
+        MessageID: 'msg-1',
+        Message: { ProcessedBody: 'body', ProcessedHTMLBody: '' },
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('ReplyToMessage');
+      expect(result.ErrorMessage).toContain('needs a mailbox');
+    });
+
+    it('accepts a three-field service principal when the operation names its own mailbox', async () => {
+      expectChainedCall();
+      const result = await provider.GetMessages({
+        Identifier: 'named@example.com',
+        NumMessages: 5,
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+    });
+
+    /**
+     * A mailbox is still required — it is just demanded where it is needed rather than up front.
+     *
+     * It REJECTS rather than returning a failure result because `GetMessages` has no try/catch: a
+     * credential problem has always propagated as an exception from this method, since
+     * `resolveCredentials` throws too. Pinning the existing contract rather than quietly changing it.
+     */
+    it('refuses, naming the operation and the way out, when no mailbox resolves anywhere', async () => {
+      await expect(provider.GetMessages({ NumMessages: 5 }, PRINCIPAL)).rejects.toThrow(
+        /GetMessages needs a mailbox.*accountEmail/s
+      );
+    });
+
+    /**
+     * The failure must never be a mailbox literally named "undefined". This package does not enable
+     * strictNullChecks, so nothing but the guard stands between a missing mailbox and a Graph 404
+     * that reads like "message not found" — a wrong answer wearing the costume of a real one.
+     */
+    it('refuses before calling Graph at all, rather than requesting mailbox "undefined"', async () => {
+      const before = mockGraphApi.mock.calls.length;
+      await expect(provider.GetMessages({ NumMessages: 5 }, PRINCIPAL)).rejects.toThrow(/needs a mailbox/);
+
+      expect(mockGraphApi.mock.calls.length).toBe(before);
+      for (const call of mockGraphApi.mock.calls) {
+        expect(String(call[0])).not.toContain('undefined');
+      }
+    });
+
+    it('still uses accountEmail as the default when the request names no mailbox', async () => {
+      expectChainedCall();
+      const result = await provider.GetMessages({ NumMessages: 5 }, {
+        ...PRINCIPAL,
+        accountEmail: 'default@example.com',
+      }) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+      expect(String(mockGraphApi.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('default@example.com'));
+    });
+
+    it('lets the request outrank that default', async () => {
+      expectChainedCall();
+      await provider.GetMessages({ Identifier: 'named@example.com', NumMessages: 5 }, {
+        ...PRINCIPAL,
+        accountEmail: 'default@example.com',
+      });
+
+      const path = String(mockGraphApi.mock.calls.at(-1)?.[0]);
+      expect(path).toContain(encodeURIComponent('named@example.com'));
+      expect(path).not.toContain(encodeURIComponent('default@example.com'));
+    });
   });
 
   describe('CreateDraft', () => {

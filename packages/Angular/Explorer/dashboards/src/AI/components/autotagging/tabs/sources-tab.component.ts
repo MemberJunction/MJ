@@ -461,7 +461,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
         try {
             const p = this.ProviderToUse;
             const entity = await p.GetEntityObject<BaseEntity>('MJ: Content Sources', p.CurrentUser);
-            await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: card.ID }]));
+            await entity.InnerLoad(CompositeKey.FromID(card.ID));
             const deleted = await entity.Delete();
             if (deleted) {
                 MJNotificationService.Instance.CreateSimpleNotification('Source deleted', 'success', 2500);
@@ -623,7 +623,7 @@ export class ClassifySourcesTabComponent extends BaseAngularComponent {
     private async linkScheduleToSource(sourceID: string, scheduledJobID: string | null): Promise<void> {
         const p = this.ProviderToUse;
         const entity = await p.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources', p.CurrentUser);
-        await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
+        await entity.InnerLoad(CompositeKey.FromID(sourceID));
         entity.ScheduledJobID = scheduledJobID;
         const saved = await entity.Save();
         if (!saved) {
