@@ -2795,10 +2795,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // params object the Pre hooks produced.
             // ── Field-level security projection (OUTPUT boundary of this path) ──
             // Every row-bearing leg above (serve-from-cache, full query, differential)
-            // returns rows WITHOUT traversing PostRunView, so the projection that guards
-            // the standard pipeline never runs here — and unrestricted users' slots and
-            // full-width DB reads can carry denied columns. Strip them per item, for BOTH
+            // returns rows WITHOUT traversing PostRunView, so the projections that guard
+            // the standard pipeline never run here — and unrestricted users' slots and
+            // full-width DB reads can carry denied columns. Apply them per item, for BOTH
             // full results and differential updatedRows, before the Post hooks run.
+            //
+            // BOTH projections, in this order — they are siblings, not alternatives, and
+            // `PostRunView` calls them as a pair at all four of its projection points. Applying
+            // only the first leaves the audit trail leaking: `ApplyFieldSecurityProjection`
+            // short-circuits on the RunView entity's own `EnableFieldLevelSecurity`, and
+            // `MJ: Record Changes` has that flag OFF by design, so it is a no-op on exactly the
+            // rows that matter. The denied values there are INSIDE the `ChangesJSON` /
+            // `FullRecordJSON` payload columns, which no amount of column stripping reaches —
+            // `ApplyRecordChangeFieldSecurityProjection` is what projects them against the entity
+            // each row is about. Reachable from a browser: this transport is selected when
+            // `params.some(p => p.CacheLocal)` (providerBase.ts), so a Record Changes view
+            // batched alongside any cache-local view rides onto it.
             for (const item of allResults) {
                 const flsBearing = item as { viewIndex: number; results?: T[]; differentialData?: { updatedRows?: unknown[] } };
                 const flsParams = params[flsBearing.viewIndex]?.params;
@@ -2807,10 +2819,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
                 if (Array.isArray(flsBearing.results)) {
                     flsBearing.results = this.ApplyFieldSecurityProjection(flsBearing.results, flsParams, user);
+                    flsBearing.results = this.ApplyRecordChangeFieldSecurityProjection(flsBearing.results, flsParams, user);
                 }
                 if (Array.isArray(flsBearing.differentialData?.updatedRows)) {
                     flsBearing.differentialData.updatedRows =
                         this.ApplyFieldSecurityProjection(flsBearing.differentialData.updatedRows, flsParams, user);
+                    flsBearing.differentialData.updatedRows =
+                        this.ApplyRecordChangeFieldSecurityProjection(flsBearing.differentialData.updatedRows, flsParams, user);
                 }
             }
 
