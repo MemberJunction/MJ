@@ -42,7 +42,11 @@ export interface MJRichNotificationOptions {
    * should hear it once, in one wording.
    */
   dedupeKey?: string;
-  /** Default 15 000. */
+  /**
+   * Default 3 000 — wide enough to fold the two announcements of one completion (the deferred
+   * server notification and the client's, tens of ms apart), narrow enough that a different
+   * agent finishing seconds later in the same conversation is announced on its own.
+   */
   dedupeWindowMs?: number;
   /**
    * Hold the toast this long before showing it, giving a better-worded announcement with the
@@ -53,7 +57,7 @@ export interface MJRichNotificationOptions {
   deferMs?: number;
   /** Runs when the toast body is clicked, e.g. open the conversation. */
   onClick?: () => void;
-  /** Consulted by {@link MJNotificationService.CompletionImageUrlResolver} when the caller gives no image. */
+  /** Handed to {@link MJNotificationService.CompletionImageUrlResolver}, whose answer wins over `imageUrl`. */
   context?: MJNotificationContext;
 }
 
@@ -115,8 +119,12 @@ export class MJNotificationService {
    */
   public CompletionImageUrlResolver: ((context: MJNotificationContext) => string | null | undefined) | null = null;
 
-  /** Rich toasts on screen by dedupe key, so a repeat announcement extends rather than stacks. */
-  private readonly liveRichToasts = new Map<string, { element: HTMLElement; timer: ReturnType<typeof setTimeout> | null; shownAt: number }>();
+  /**
+   * Rich toasts on screen by dedupe key, so a repeat announcement extends rather than stacks.
+   * An entry lives exactly as long as its toast: it is dropped the moment dismissal starts, so
+   * a same-key call during the slide-out renders a fresh toast instead of extending a dying one.
+   */
+  private readonly liveRichToasts = new Map<string, { element: HTMLElement; shownAt: number; extend: (hideAfter: number | undefined) => void }>();
   /** Rich toasts held back by `deferMs`, by dedupe key — a same-key call takes their place. */
   private readonly pendingRichToasts = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -353,21 +361,22 @@ export class MJNotificationService {
     const key = options.dedupeKey;
     if (key) {
       const live = this.liveRichToasts.get(key);
-      const windowMs = options.dedupeWindowMs ?? 15000;
-      if (live && live.element.isConnected && Date.now() - live.shownAt < windowMs) {
-        // Already announced — keep what the reader is looking at, just a little longer.
-        if (live.timer) {
-          clearTimeout(live.timer);
+      if (live) {
+        if (live.element.isConnected && Date.now() - live.shownAt < (options.dedupeWindowMs ?? 3000)) {
+          // Already announced — keep what the reader is looking at, just a little longer.
+          live.extend(options.hideAfter);
+          return;
         }
-        live.timer = options.hideAfter ? setTimeout(() => this.dismissToast(live.element), options.hideAfter) : null;
-        return;
+        this.liveRichToasts.delete(key);
       }
       const pending = this.pendingRichToasts.get(key);
       if (pending) {
-        // A held-back announcement is superseded by this one, which shows right away.
+        // A held-back announcement is superseded by this one.
         clearTimeout(pending);
         this.pendingRichToasts.delete(key);
-      } else if (options.deferMs) {
+      }
+      if (options.deferMs) {
+        // Deferred (or deferred again): the wait starts over with the latest wording.
         this.pendingRichToasts.set(key, setTimeout(() => {
           this.pendingRichToasts.delete(key);
           this.showRichToast(options);
@@ -396,21 +405,58 @@ export class MJNotificationService {
       border: 1px solid var(--mj-border-default); border-left: 4px solid var(--mj-brand-primary);
       border-radius: var(--mj-radius-lg); box-shadow: var(--mj-shadow-lg);
       font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
-      animation: mj-toast-slide-in 0.3s ease-out; ${options.onClick ? 'cursor: pointer;' : ''}
+      animation: mj-toast-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1); ${options.onClick ? 'cursor: pointer;' : ''}
     `;
+    // The live region enters the DOM empty and is filled afterwards, so assistive tech
+    // announces the content as an update rather than ignoring a pre-populated region.
+    container.appendChild(toast);
     this.fillRichToast(toast, options, imageUrl);
+
+    const dismiss = () => {
+      if (key && this.liveRichToasts.get(key)?.element === toast) {
+        this.liveRichToasts.delete(key);
+      }
+      this.dismissToast(toast);
+    };
+    toast.querySelector('.mj-toast-close')?.addEventListener('click', dismiss);
     if (options.onClick) {
       toast.addEventListener('click', (e) => {
         if ((e.target as HTMLElement).closest('button')) return;
         options.onClick?.();
-        this.dismissToast(toast);
+        dismiss();
       });
     }
-    container.appendChild(toast);
 
-    const timer = options.hideAfter ? setTimeout(() => this.dismissToast(toast), options.hideAfter) : null;
+    // Auto-hide with hover-pause, the same contract as the simple toast.
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let hideAfter = options.hideAfter;
+    const arm = () => {
+      if (timer) {
+        clearTimeout(timer);
+      }
+      timer = hideAfter ? setTimeout(dismiss, hideAfter) : null;
+    };
+    toast.addEventListener('mouseenter', () => {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    });
+    toast.addEventListener('mouseleave', () => {
+      if (hideAfter && !timer) {
+        timer = setTimeout(dismiss, 2000);
+      }
+    });
+    arm();
     if (key) {
-      this.liveRichToasts.set(key, { element: toast, timer, shownAt: Date.now() });
+      this.liveRichToasts.set(key, {
+        element: toast,
+        shownAt: Date.now(),
+        extend: (nextHideAfter) => {
+          hideAfter = nextHideAfter;
+          arm();
+        }
+      });
     }
   }
 
@@ -420,41 +466,46 @@ export class MJNotificationService {
     return fromHost || options.imageUrl || null;
   }
 
-  /** (Re)writes a rich toast's content — first paint and de-duplicated updates alike. */
+  /** Writes a rich toast's content. Written once per toast — a de-duplicated repeat never re-fills. */
   private fillRichToast(toast: HTMLElement, options: MJRichNotificationOptions, imageUrl: string | null): void {
+    // The icon chip uses the house tint — the brand colour mixed to 14% under itself — which
+    // holds contrast in both themes; a solid brand-light background does not.
     const media = imageUrl
       ? `<img src="${this.escapeAttribute(imageUrl)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:var(--mj-bg-surface);" />`
-      : `<span aria-hidden="true" style="width:40px;height:40px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;background:var(--mj-brand-primary-light);color:var(--mj-brand-primary);font-size:18px;"><i class="${this.escapeAttribute(options.iconClass || 'fa-solid fa-robot')}"></i></span>`;
+      : `<span aria-hidden="true" style="width:40px;height:40px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;background:color-mix(in srgb, var(--mj-brand-primary) 14%, transparent);color:var(--mj-brand-primary);font-size:18px;"><i class="${this.escapeAttribute(options.iconClass || 'fa-solid fa-robot')}"></i></span>`;
     const detail = options.message
       ? `<div style="color:var(--mj-text-secondary);margin-top:2px;">${this.escapeHtml(options.message)}</div>`
       : '';
-    const close = options.hideAfter
-      ? ''
-      : `<button type="button" aria-label="Dismiss" style="background:none;border:none;color:var(--mj-text-secondary);cursor:pointer;font-size:18px;padding:0 0 0 var(--mj-space-2);line-height:1;flex:none;">×</button>`;
     toast.innerHTML = `
       ${media}
       <div style="flex:1;min-width:0;">
         <div style="font-weight:var(--mj-font-semibold);font-size:var(--mj-text-base);">${this.escapeHtml(options.title)}</div>
         ${detail}
       </div>
-      ${close}
+      <button type="button" class="mj-toast-close" aria-label="Dismiss" style="background:transparent;border:none;padding:4px 6px;border-radius:4px;color:var(--mj-text-muted);cursor:pointer;flex:none;"><i class="fa-solid fa-xmark"></i></button>
     `;
-    toast.querySelector('button')?.addEventListener('click', () => this.dismissToast(toast));
   }
 
   private dismissToast(toast: HTMLElement): void {
     if (!toast.isConnected) return;
-    toast.style.animation = 'mj-toast-slide-out 0.3s ease-in forwards';
+    toast.style.animation = 'mj-toast-slide-out 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards';
     toast.addEventListener('animationend', () => toast.remove(), { once: true });
   }
 
+  /** One writer for the toast keyframes — the simple and rich toasts share the same animation. */
   private ensureToastKeyframes(): void {
     if (document.getElementById('mj-toast-keyframes')) return;
     const styleEl = document.createElement('style');
     styleEl.id = 'mj-toast-keyframes';
     styleEl.textContent = `
-      @keyframes mj-toast-slide-in { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
-      @keyframes mj-toast-slide-out { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-20px); } }
+      @keyframes mj-toast-slide-in {
+        from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes mj-toast-slide-out {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to { opacity: 0; transform: translateY(-12px) scale(0.96); }
+      }
     `;
     document.head.appendChild(styleEl);
   }
@@ -563,22 +614,7 @@ export class MJNotificationService {
 
     container.appendChild(toast);
 
-    // Inject keyframes if not already present
-    if (!document.getElementById('mj-toast-keyframes')) {
-      const styleEl = document.createElement('style');
-      styleEl.id = 'mj-toast-keyframes';
-      styleEl.textContent = `
-        @keyframes mj-toast-slide-in {
-          from { opacity: 0; transform: translateY(-12px) scale(0.96); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        @keyframes mj-toast-slide-out {
-          from { opacity: 1; transform: translateY(0) scale(1); }
-          to { opacity: 0; transform: translateY(-12px) scale(0.96); }
-        }
-      `;
-      document.head.appendChild(styleEl);
-    }
+    this.ensureToastKeyframes();
 
     // Auto-hide with hover-pause support
     if (hideAfter > 0) {

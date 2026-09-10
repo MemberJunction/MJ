@@ -1,7 +1,7 @@
 // Angular components in this package are partial-compiled — load the JIT compiler first
 // (same convention as the other component suites in this node test environment).
 import '@angular/compiler';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { ConversationChatAreaComponent } from '../lib/components/conversation/conversation-chat-area.component';
 
 /**
@@ -30,7 +30,6 @@ function createComponent(readReplyFromTop = false): ConversationChatAreaComponen
   open['scrollToBottom'] = false;
   open['readerAtBottom'] = true;
   open['currentTurnStartMessageId'] = null;
-  open['currentTurnLanded'] = false;
   open['pendingTurnStartMessageId'] = null;
   open['bottomFollowSuppressedUntil'] = 0;
   open['turnStartRetryHandle'] = null;
@@ -41,6 +40,8 @@ function createComponent(readReplyFromTop = false): ConversationChatAreaComponen
 const userMessage = { ID: 'user-1', Role: 'User', Status: 'Complete' };
 const replyInProgress = { ID: 'ai-1', Role: 'AI', Status: 'In-Progress' };
 const replyComplete = { ID: 'ai-1', Role: 'AI', Status: 'Complete' };
+/** The refinement path's "Continuing with X for refinement…" line — settled the moment it is emitted. */
+const refinementStatus = { ID: 'ai-status', Role: 'AI', Status: 'Complete' };
 
 function follow(component: ConversationChatAreaComponent, change: 'load' | 'new' | 'update', message?: unknown): void {
   (component as unknown as { followTranscript(c: string, m?: unknown): void }).followTranscript(change, message);
@@ -136,16 +137,41 @@ describe('followTranscript — readReplyFromTop', () => {
     expect(armed(component)).toBe(false);
   });
 
-  it('the turn lands once — a second completion emit neither lands again nor snaps to the bottom', () => {
+  it('repeat completion emits for the same reply never fall through to the bottom snap', () => {
     const component = createComponent(true);
     follow(component, 'new', userMessage);
     disarm(component);
     follow(component, 'update', replyComplete);
+    expect(pendingLanding(component)).toBe('user-1');
     (component as unknown as Open)['pendingTurnStartMessageId'] = null;
+    (component as unknown as Open)['readerAtBottom'] = false; // the landing moved the reader off the bottom
     follow(component, 'update', replyComplete); // message-input emits completion twice
     follow(component, 'new', replyComplete);    // ...and onAgentResponse appends the finished message again
     expect(pendingLanding(component)).toBeNull();
     expect(armed(component)).toBe(false);
+  });
+
+  it('the refinement path lands again on the real reply, not only on the settled status line before it', () => {
+    const component = createComponent(true);
+    follow(component, 'new', userMessage);
+    disarm(component);
+    follow(component, 'new', refinementStatus);         // "Continuing with X for refinement…" — already Complete
+    expect(pendingLanding(component)).toBe('user-1');    // lands (the turn fits: bottom), reader stays at the bottom
+    (component as unknown as Open)['pendingTurnStartMessageId'] = null;
+    follow(component, 'new', { ID: 'ai-2', Role: 'AI', Status: 'Complete' }); // the reply, created already Complete
+    expect(pendingLanding(component)).toBe('user-1');    // lands again — now the turn is the real thing
+    expect(armed(component)).toBe(false);
+  });
+
+  it('a message the reader sends right after a landing follows normally — the landing suppression is lifted', () => {
+    const component = createComponent(true);
+    const open = component as unknown as Open;
+    follow(component, 'new', userMessage);
+    follow(component, 'update', replyComplete);
+    expect(open['bottomFollowSuppressedUntil'] as number).toBeGreaterThan(Date.now());
+    follow(component, 'new', { ID: 'user-2', Role: 'User', Status: 'Complete' });
+    expect(armed(component)).toBe(true);
+    expect(open['bottomFollowSuppressedUntil']).toBe(0);
   });
 
   it("the reader's message arriving as an update (the auto-send path) still opens the turn", () => {
@@ -198,24 +224,49 @@ describe('followTranscript — readReplyFromTop', () => {
 });
 
 describe('scrollTurnToTop — where the finished turn lands', () => {
-  function seedPane(component: ConversationChatAreaComponent, opts: { clientHeight: number; scrollTop: number; scrollHeight: number; turnStartTop: number }) {
+  interface PaneOptions {
+    clientHeight: number;
+    scrollTop: number;
+    scrollHeight: number;
+    /** The turn's first message, in content coordinates. */
+    turnStartTop: number;
+    /** A pinned sticky date header, when the conversation shows one. */
+    stickyHeader?: { offsetHeight: number; cssTop: string; offsetTop: number };
+  }
+
+  /**
+   * Stubs answer per selector, so the code's own queries are what is exercised: the turn's
+   * message comes from the LIST (FindTimelineElement), the sticky header from the pane.
+   */
+  function seedPane(component: ConversationChatAreaComponent, opts: PaneOptions) {
     const open = component as unknown as Open;
     const scroll = vi.fn();
     const turnStart = { getBoundingClientRect: () => ({ top: opts.turnStartTop - opts.scrollTop }) };
+    const stickyHeader = opts.stickyHeader
+      ? { offsetHeight: opts.stickyHeader.offsetHeight, offsetTop: opts.stickyHeader.offsetTop, offsetParent: {} }
+      : null;
     open['scrollContainer'] = {
       nativeElement: {
         clientHeight: opts.clientHeight,
         scrollTop: opts.scrollTop,
         scrollHeight: opts.scrollHeight,
         getBoundingClientRect: () => ({ top: 0 }),
-        querySelector: () => turnStart,
+        querySelector: (selector: string) => (selector === '.sticky-date-header' ? stickyHeader : null),
         scroll
       }
     };
+    open['messageListComponent'] = { FindTimelineElement: (id: string) => (id === 'user-1' ? turnStart : null) };
+    if (opts.stickyHeader) {
+      vi.stubGlobal('getComputedStyle', () => ({ top: opts.stickyHeader!.cssTop }));
+    }
     return scroll;
   }
   const land = (component: ConversationChatAreaComponent) =>
     (component as unknown as { scrollTurnToTop(id: string): void }).scrollTurnToTop('user-1');
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
 
   it('a turn taller than the pane is scrolled so its first message sits at the top (gap 16)', () => {
     const component = createComponent(true);
@@ -233,6 +284,42 @@ describe('scrollTurnToTop — where the finished turn lands', () => {
     land(component);
     expect(scroll).not.toHaveBeenCalled();
     expect(scrollToBottomNow).toHaveBeenCalled();
+  });
+
+  it('a pinned sticky date header is cleared by its height plus its CSS inset — never its offsetTop, which tracks the scroll', () => {
+    const component = createComponent(true);
+    // 5000px down a long conversation: offsetTop of the pinned header reports ~5000
+    const scroll = seedPane(component, {
+      clientHeight: 369, scrollTop: 5000, scrollHeight: 5800, turnStartTop: 5016,
+      stickyHeader: { offsetHeight: 28, cssTop: '12px', offsetTop: 5012 }
+    });
+    land(component);
+    // 5016 - (16 + 28 + 12) = 4960 — the turn starts under the header, not at the top of the conversation
+    expect(scroll).toHaveBeenCalledWith({ top: 4960, behavior: 'smooth' });
+  });
+
+  it('with a sticky header, a turn that fits is still judged by its real height', () => {
+    const component = createComponent(true);
+    const scroll = seedPane(component, {
+      clientHeight: 369, scrollTop: 5000, scrollHeight: 5300, turnStartTop: 5016,
+      stickyHeader: { offsetHeight: 28, cssTop: '12px', offsetTop: 5012 }
+    });
+    const scrollToBottomNow = vi.fn();
+    (component as unknown as Open)['scrollToBottomNow'] = scrollToBottomNow;
+    land(component);
+    expect(scroll).not.toHaveBeenCalled();
+    expect(scrollToBottomNow).toHaveBeenCalled();
+  });
+
+  it('resolves the message through the list, so an unmounted or session-folded message is still found', () => {
+    const component = createComponent(true);
+    const scroll = seedPane(component, { clientHeight: 369, scrollTop: 900, scrollHeight: 1600, turnStartTop: 914 });
+    const open = component as unknown as Open;
+    const list = open['messageListComponent'] as { FindTimelineElement: (id: string) => unknown };
+    const spy = vi.spyOn(list, 'FindTimelineElement');
+    land(component);
+    expect(spy).toHaveBeenCalledWith('user-1');
+    expect(scroll).toHaveBeenCalled();
   });
 
   it('does nothing in default mode', () => {

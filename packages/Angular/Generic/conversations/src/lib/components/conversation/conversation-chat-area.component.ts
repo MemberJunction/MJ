@@ -783,8 +783,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   private readerAtBottom = true;
   /** readReplyFromTop: the reader's message that opened the current turn. */
   private currentTurnStartMessageId: string | null = null;
-  /** readReplyFromTop: whether the current turn's reply has already landed (completion is emitted more than once). */
-  private currentTurnLanded = false;
   /** readReplyFromTop: set when the reply lands, consumed once it has rendered. */
   private pendingTurnStartMessageId: string | null = null;
   /**
@@ -4531,11 +4529,15 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    *
    * With `readReplyFromTop`, the reader's own message opens a turn — whether it arrives as
    * `new` or, on the auto-send path where the chat area already holds it, as `update` — and
-   * the reply landing (an AI message reaching Complete or Error) scrolls that turn to the top
-   * instead of following, for a reader who was still following. Completion is emitted more
-   * than once; the turn lands on the first and the rest must not pull the reader back down.
-   * A `load` does not forget the turn: creating a conversation from the composer sends the
-   * first message while the initial load is still in flight.
+   * every settled AI message of that turn (Complete or Error) lands the turn instead of
+   * following, for a reader who was still following. EVERY settled message, not the first:
+   * the refinement path emits a settled status line ("Continuing with X…") before the reply,
+   * and a turn that landed on the status line alone must land again when the reply arrives
+   * (re-landing is idempotent — the same target, or nothing once the reader has been moved
+   * off the bottom). Completion is also emitted more than once for one message; none of those
+   * emits may fall through to the bottom follow. A `load` does not forget the turn: creating
+   * a conversation from the composer sends the first message while the initial load is still
+   * in flight.
    */
   private followTranscript(change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity): void {
     if (change === 'load') {
@@ -4545,20 +4547,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.readReplyFromTop) {
       if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
         this.currentTurnStartMessageId = message.ID;
-        this.currentTurnLanded = false;
       } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
-        if (!this.currentTurnLanded) {
-          this.currentTurnLanded = true;
-          if (this.readerAtBottom) {
-            this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
-            this.scrollToBottom = false;
-            this.bottomFollowSuppressedUntil = Date.now() + 1500;
-          }
+        if (this.readerAtBottom) {
+          this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
+          this.scrollToBottom = false;
+          this.bottomFollowSuppressedUntil = Date.now() + 1500;
         }
         return;
       }
     }
     if (change === 'new' || this.readerAtBottom) {
+      if (change === 'new') {
+        // A genuinely new message wants following even while a landing is settling —
+        // the reader sending again right after a reply landed must not be swallowed.
+        this.bottomFollowSuppressedUntil = 0;
+      }
       this.scrollToBottom = true;
     }
   }
@@ -4577,7 +4580,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
     const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
-    const target = container?.querySelector<HTMLElement>(`[data-message-id="${messageId}"]`);
+    // Resolved through the list's timeline, not a `[data-message-id]` query: a far-off item
+    // is unmounted into a spacer and a session-stamped row folds into its session card, and
+    // the list answers with the node that stands for the message in either case.
+    const target = this.messageListComponent?.FindTimelineElement(messageId) ?? null;
     if (!container || !target) {
       // The reply's final render lands a tick or two after the array changes — the same
       // latency the bottom-follow path absorbs with its 100 ms timer.
@@ -4604,8 +4610,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   private turnTopClearance(container: HTMLElement): number {
     const stickyHeader = container.querySelector<HTMLElement>('.sticky-date-header');
-    const stickyHeight = stickyHeader && stickyHeader.offsetParent ? stickyHeader.offsetHeight + stickyHeader.offsetTop : 0;
-    return ConversationChatAreaComponent.TURN_TOP_GAP_PX + stickyHeight;
+    if (!stickyHeader || !stickyHeader.offsetParent) {
+      return ConversationChatAreaComponent.TURN_TOP_GAP_PX;
+    }
+    // The header's CSS inset (`top: 12px`), NOT `offsetTop`: on a pinned sticky element
+    // `offsetTop` reports the used position, which tracks the scroll offset.
+    const inset = parseFloat(getComputedStyle(stickyHeader).top) || 0;
+    return ConversationChatAreaComponent.TURN_TOP_GAP_PX + stickyHeader.offsetHeight + inset;
   }
 
   /** An element's top edge in the scroller's content coordinates — what scrollTop counts in. */
@@ -4616,7 +4627,6 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   private clearTurnTracking(): void {
     this.currentTurnStartMessageId = null;
-    this.currentTurnLanded = false;
     this.pendingTurnStartMessageId = null;
     this.bottomFollowSuppressedUntil = 0;
     if (this.turnStartRetryHandle) {

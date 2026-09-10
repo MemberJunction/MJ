@@ -58,12 +58,39 @@ describe('CreateRichNotification', () => {
     expect((el as HTMLElement).style.background).toContain('var(--mj-bg-surface-card)');
   });
 
-  it('falls back to an icon when there is no image', () => {
+  it('falls back to an icon chip on the house tint when there is no image', () => {
     const service = createService();
     service.CreateRichNotification({ title: 'Agent finished' });
     const [el] = toasts();
     expect(imageOf(el)).toBeNull();
     expect(el.querySelector('i.fa-solid.fa-robot')).not.toBeNull();
+    const chip = el.querySelector('span[aria-hidden]') as HTMLElement;
+    expect(chip.style.background).toContain('color-mix(in srgb, var(--mj-brand-primary) 14%, transparent)');
+    expect(chip.style.color).toBe('var(--mj-brand-primary)');
+  });
+
+  it('always has a close button, auto-hide or not', () => {
+    const service = createService();
+    service.CreateRichNotification({ title: 'Agent finished', hideAfter: 5000 });
+    const [el] = toasts();
+    const close = el.querySelector('button.mj-toast-close') as HTMLButtonElement;
+    expect(close).not.toBeNull();
+    close.click();
+    expect((el as HTMLElement).style.animation).toContain('mj-toast-slide-out');
+  });
+
+  it('enters the DOM as an empty live region and is filled afterwards', () => {
+    const service = createService();
+    const container = document.createElement('div');
+    container.id = 'mj-toast-container';
+    document.body.appendChild(container);
+    let contentAtAppend: string | null = null;
+    const nativeAppend = container.appendChild.bind(container);
+    container.appendChild = ((node: Node) => { contentAtAppend = node.textContent?.trim() ?? ''; return nativeAppend(node); }) as typeof container.appendChild;
+    service.CreateRichNotification({ title: 'Agent finished' });
+    expect(contentAtAppend).toBe('');                        // appended empty...
+    expect(titleOf(toasts()[0])).toBe('Agent finished');    // ...then filled
+    expect(toasts()[0].getAttribute('role')).toBe('status');
   });
 
   it("the host's CompletionImageUrlResolver wins over the caller's image — the host knows how the assistant is branded", () => {
@@ -76,12 +103,74 @@ describe('CreateRichNotification', () => {
   it('a toast already on screen is never rewritten by a same-key call — it just stays up longer', () => {
     const service = createService();
     service.CreateRichNotification({ ...base, title: 'Betty finished', message: 'in General Discussion', hideAfter: 5000 });
-    vi.advanceTimersByTime(4000);
+    vi.advanceTimersByTime(2000);
     service.CreateRichNotification({ ...base, hideAfter: 5000 });
     expect(toasts()).toHaveLength(1);
     expect(titleOf(toasts()[0])).toBe('Betty finished');
-    vi.advanceTimersByTime(4000); // 8 s after the first show — past its own timer, inside the extension
+    vi.advanceTimersByTime(4000); // 6 s after the first show — past its own timer, inside the extension
     expect(toasts()[0].getAttribute('style')).not.toContain('mj-toast-slide-out');
+  });
+
+  it('a same-key call outside the dedupe window is a new announcement', () => {
+    const service = createService();
+    service.CreateRichNotification({ ...base, title: 'Sage finished' });          // sticky, no hideAfter
+    vi.advanceTimersByTime(3001);
+    service.CreateRichNotification({ ...base, title: 'Marketing Agent finished' });
+    expect(toasts()).toHaveLength(2);
+    expect(titleOf(toasts()[1])).toBe('Marketing Agent finished');
+  });
+
+  it('a same-key call during the slide-out renders a fresh toast instead of extending a dying one', () => {
+    const service = createService();
+    service.CreateRichNotification({ ...base, hideAfter: 1000 });
+    vi.advanceTimersByTime(1000);                                    // dismissal starts: still connected, animating out
+    expect(toasts()[0].getAttribute('style')).toContain('mj-toast-slide-out');
+    service.CreateRichNotification({ ...base, title: 'Betty finished' });
+    expect(toasts()).toHaveLength(2);
+    expect(titleOf(toasts()[1])).toBe('Betty finished');
+  });
+
+  it('two deferred same-key calls: the second re-defers with its wording rather than showing at once', () => {
+    const service = createService();
+    service.CreateRichNotification({ ...base, deferMs: 1500 });
+    vi.advanceTimersByTime(1000);
+    service.CreateRichNotification({ ...base, title: 'Later wording', deferMs: 1500 });
+    expect(toasts()).toHaveLength(0);
+    vi.advanceTimersByTime(1499);
+    expect(toasts()).toHaveLength(0);
+    vi.advanceTimersByTime(1);
+    expect(toasts()).toHaveLength(1);
+    expect(titleOf(toasts()[0])).toBe('Later wording');
+  });
+
+  it('releases its registry entry when the toast is dismissed', () => {
+    const service = createService();
+    const live = (service as unknown as Open)['liveRichToasts'] as Map<string, unknown>;
+    service.CreateRichNotification({ ...base, hideAfter: 1000 });
+    expect(live.size).toBe(1);
+    vi.advanceTimersByTime(1000);
+    expect(live.size).toBe(0);
+  });
+
+  it('hover pauses the auto-hide and leaving re-arms it', () => {
+    const service = createService();
+    service.CreateRichNotification({ title: 'Agent finished', hideAfter: 5000 });
+    const [el] = toasts();
+    el.dispatchEvent(new Event('mouseenter'));
+    vi.advanceTimersByTime(10000);
+    expect((el as HTMLElement).style.animation).not.toContain('mj-toast-slide-out');
+    el.dispatchEvent(new Event('mouseleave'));
+    vi.advanceTimersByTime(2000);
+    expect((el as HTMLElement).style.animation).toContain('mj-toast-slide-out');
+  });
+
+  it('shares one keyframes writer with the simple toast, so neither strips the other\'s easing', () => {
+    const service = createService();
+    service.CreateRichNotification({ title: 'Agent finished' });
+    service.CreateSimpleNotification('Saved', 'success', 3000);
+    const sheets = document.querySelectorAll('#mj-toast-keyframes');
+    expect(sheets).toHaveLength(1);
+    expect(sheets[0].textContent).toContain('scale(0.96)');
   });
 
   it('a deferred toast is superseded by a same-key call, which shows at once — one toast, the later wording', () => {
