@@ -90,6 +90,31 @@ describe('planArtifactTarget', () => {
                 .toEqual({ kind: 'version', artifactId: 'art-B', source: 'caller' });
         });
     });
+
+    describe("'version-source' with a targetArtifactId that is not a string", () => {
+        // Model output arrives as parsed JSON, so the field can hold any JSON type. Only a string can
+        // name an artifact; anything else is discarded HERE, at the boundary that introduces it, so
+        // the runner never has to reason about a non-string id.
+        it('a number + a source → versions the run source, as if no target were named', () => {
+            const d = { behavior: 'version-source', targetArtifactId: 5 as unknown as string } as ArtifactDirective;
+            expect(planArtifactTarget(d, 'src-1')).toEqual({ kind: 'version', artifactId: 'src-1', source: 'caller' });
+        });
+
+        it('an object + a source → versions the run source', () => {
+            const d = { behavior: 'version-source', targetArtifactId: { id: 'x' } as unknown as string } as ArtifactDirective;
+            expect(planArtifactTarget(d, 'src-1')).toEqual({ kind: 'version', artifactId: 'src-1', source: 'caller' });
+        });
+
+        it('a number + no source → legacy chain', () => {
+            const d = { behavior: 'version-source', targetArtifactId: 5 as unknown as string } as ArtifactDirective;
+            expect(planArtifactTarget(d, undefined)).toEqual({ kind: 'legacy' });
+        });
+
+        it("a string is passed through untouched — shape, existence and authorization are the runner's job", () => {
+            expect(planArtifactTarget({ behavior: 'version-source', targetArtifactId: ' not-a-uuid ' }, 'src-1'))
+                .toEqual({ kind: 'version', artifactId: ' not-a-uuid ', source: 'directive' });
+        });
+    });
 });
 
 describe('IsKnownArtifactBehavior', () => {

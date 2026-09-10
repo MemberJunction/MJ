@@ -959,6 +959,21 @@ export class AgentRunner {
                     `("${AgentRunner.DescribeUntrustedValue(rawDirective!.behavior)}") — using the historical chain instead`
                 );
             }
+            // planArtifactTarget discards a non-string targetArtifactId silently (it is pure and
+            // cannot log). Before this check lived in the pure function, VetArtifactVersionTarget
+            // logged such a value as "not a valid artifact ID"; keep that visibility here so a
+            // producer sending the wrong JSON type shows up in the run log rather than only as an
+            // artifact that versioned the run's source.
+            if (directive?.behavior === 'version-source') {
+                const rawTarget: unknown = directive.targetArtifactId;
+                if (rawTarget !== undefined && rawTarget !== null && typeof rawTarget !== 'string') {
+                    LogError(
+                        `Ignoring targetArtifactId from agent "${agent?.Name}": ` +
+                        `"${AgentRunner.DescribeUntrustedValue(rawTarget)}" is not a string — ` +
+                        `versioning the run's sourceArtifactId instead`
+                    );
+                }
+            }
             let plan = planArtifactTarget(directive, sourceArtifactId);
             if (plan.kind === 'suppress') {
                 LogStatus(`Skipping artifact creation - agent "${agent?.Name}" suppressed artifacts for this step`);

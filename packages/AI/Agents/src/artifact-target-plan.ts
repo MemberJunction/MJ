@@ -33,10 +33,10 @@ export type ArtifactTargetPlan =
     /**
      * Version an existing artifact.
      *
-     * `artifactId` is typed `string` for callers' convenience, but when `source` is `'directive'`
-     * the value is unvalidated model output that arrived as parsed JSON: it may be any JSON type,
-     * may carry surrounding whitespace, and may not be UUID-shaped at all. The runner validates
-     * it before it reaches a query. Do not interpolate it into SQL on the strength of this type.
+     * When `source` is `'directive'` the value is model output that arrived as parsed JSON.
+     * {@link planArtifactTarget} guarantees it is a non-empty string and nothing more: it may carry
+     * surrounding whitespace and may not be UUID-shaped at all. The runner validates it before it
+     * reaches a query. Do not interpolate it into SQL on the strength of this type.
      */
     | { kind: 'version'; artifactId: string; source: ArtifactTargetSource }
     | { kind: 'legacy' };
@@ -95,7 +95,11 @@ export function planArtifactTarget(
         case 'create-new':
             return { kind: 'create-new' };
         case 'version-source':
-            return directive.targetArtifactId
+            // Model output: only a string can name an artifact. Any other JSON type is discarded
+            // HERE, at the boundary that introduces the value, so a `version` plan's `artifactId`
+            // is always a string downstream. Shape (UUID), existence and authorization remain the
+            // runner's job — see AgentRunner.VetArtifactVersionTarget.
+            return typeof directive.targetArtifactId === 'string' && directive.targetArtifactId
                 ? { kind: 'version', artifactId: directive.targetArtifactId, source: 'directive' }
                 : withoutDirective();
         default:
