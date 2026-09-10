@@ -191,7 +191,7 @@ denied set on an entity:
 |---|---|
 | **RunView / list results** | Denied columns are stripped from result rows at the output boundary — on both cache hits and cache misses. |
 | **Single-record GraphQL loads** | Denied fields are stripped from the response (`MapFieldNamesToCodeNames`, the same boundary that masks encrypted fields). |
-| **Caller-authored predicates** — `ExtraFilter`, `OrderBy`, `Aggregates[].expression` | The request is **rejected** before execution. Output stripping alone would be theater: `ExtraFilter: "Salary > 200000"` or `Aggregates: [{expression: 'MIN(Salary)'}]` reconstructs values without the column ever appearing in a result. |
+| **Caller-authored predicates** — `ExtraFilter`, `OrderBy`, `Aggregates[].expression` **on the request** (a saved view's own stored clauses are *not* screened — see §5) | The request is **rejected** before execution. Output stripping alone would be theater: `ExtraFilter: "Salary > 200000"` or `Aggregates: [{expression: 'MIN(Salary)'}]` reconstructs values without the column ever appearing in a result. |
 | **`UserSearchString`** | Not rejected — denied fields are simply excluded from the searched-field list. |
 | **Saves (update)** | A save that modifies a field the user cannot update is rejected server-side before SQL generation. |
 | **Saves (denied-read fields)** | Values a client sends for fields it cannot *read* are **silently ignored** — such a field was stripped from every payload the client ever received, so any value it sends back is fabricated by the transport, not user intent. This is what makes "load a record, edit an unrelated field, save" safe for restricted users. |
@@ -491,7 +491,9 @@ Until it runs, only the API tier reflects the change.
 
 ### Accepted residuals
 
-Two things this feature does *not* do. Both are deliberate; neither is a defect to be filed.
+Three things this feature does *not* do. The first two are deliberate. The third is a known gap with
+a fix pending; it is recorded here because §2 promises the opposite and an administrator planning a
+restriction needs to know before they rely on it.
 
 - **The shape of your restrictions ships to every authenticated browser.** Enforcement is
   server-side and complete, but the `EntityFieldPermissions` dataset item is part of the metadata
@@ -504,6 +506,25 @@ Two things this feature does *not* do. Both are deliberate; neither is a defect 
   readable rather than denied fields (§2). Values never ship; only the rule shape does. Metadata
   tiering ([#3485](https://github.com/MemberJunction/MJ/issues/3485)) is the fix, after which
   restricted users stop receiving rules that do not concern them.
+
+- **A saved User View's own filter and sort are NOT screened against your denials.** §2 says a
+  caller-authored predicate naming a denied field is rejected before execution, and that is true of
+  `ExtraFilter`, `OrderBy` and `Aggregates[].expression` on the request. It is **not** true of the
+  `WhereClause` and `OrderByClause` stored on a User View: those are applied later, inside the
+  provider's own query assembly, and never reach the predicate gate. The only screen they get is the
+  forbidden-keyword check, which has no notion of denied columns.
+
+  This is not admin-gated. Only `CustomWhereClause` requires elevation; an ordinary filter is saved
+  by any user, and a sort is written by clicking a grid column header. So a user denied read on
+  `Employees.Salary` can save a view filtered `Salary > 200000`, run it, and read the answer off the
+  row set — the column is still stripped from the output, but *which rows come back* is the
+  disclosure. Binary-searching the threshold recovers exact values; a saved `Salary DESC` sort leaks
+  the ranking in one call.
+
+  Until this is closed, treat a restriction as protecting the **values** rather than proving
+  non-disclosure, on any entity where restricted users can save their own views. The fix is to run
+  the gate against the effective clauses after the stored view resolves, rather than only against
+  the caller-supplied `RunViewParams`.
 
 - **Field security on a CORE MJ entity has not been exercised end to end.** Every scenario behind
   this guide was validated against application entities. Restricting a field on a core `__mj` entity
