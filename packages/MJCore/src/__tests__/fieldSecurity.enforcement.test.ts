@@ -958,3 +958,104 @@ describe('BaseEntity Get/Set field-security gate', () => {
     });
 
 });
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Non-identifier field names — the Name / CodeName key-space split
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * A denied field whose `Name` is not a valid identifier must still be stripped from result rows.
+ *
+ * The denied set is built from `field.Name`, but the row projection matches against a ROW's own
+ * keys — and rows are keyed by `CodeName`, because `getRunTimeViewFieldString` emits
+ * `[Name] AS [CodeName]` whenever the two differ and `CodeNameFromString` replaces every
+ * `[^a-zA-Z0-9_]` with `_`. So for a column `Base Salary` the set holds `base salary` while the
+ * rows are keyed `Base_Salary`: nothing matches and the denied values are returned in full.
+ *
+ * Every field name shipped in MJ core is already a valid identifier — verified against a live
+ * database, zero rows in `__mj.EntityField` have a name containing a non-identifier character —
+ * so `Name === CodeName` throughout and no existing fixture could catch this. It needs a customer
+ * entity with a column like `Base Salary`, `Emp #` or `2024 Bonus`, which §1 of the FLS guide
+ * names as the population the feature exists for. Hence a fixture that deliberately has one.
+ */
+describe('Denied fields whose Name is not a valid identifier', () => {
+    const SPACED_ENTITY_ID = 'entity-employees-spaced';
+
+    /** `Base Salary` is HR-only; `Notes` is open to both. */
+    function spacedEntityInit(): Record<string, unknown> {
+        return {
+            ID: SPACED_ENTITY_ID,
+            Name: 'Employees',
+            SchemaName: 'dbo',
+            BaseTable: 'Employee',
+            BaseView: 'vwEmployees',
+            IncludeInAPI: true,
+            AllowCreateAPI: true,
+            AllowUpdateAPI: true,
+            AllowDeleteAPI: true,
+            EnableFieldLevelSecurity: true,
+            Permissions: [
+                { EntityID: SPACED_ENTITY_ID, RoleID: HR_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
+                { EntityID: SPACED_ENTITY_ID, RoleID: INTERN_ROLE_ID, CanCreate: true, CanRead: true, CanUpdate: true, CanDelete: true },
+            ],
+            Fields: [
+                { ID: 'f-id', EntityID: SPACED_ENTITY_ID, Sequence: 1, Name: 'ID', Entity: 'Employees', Type: 'uniqueidentifier', IsPrimaryKey: true },
+                {
+                    ID: 'f-base-salary', EntityID: SPACED_ENTITY_ID, Sequence: 2, Name: 'Base Salary', Entity: 'Employees', Type: 'money',
+                    EntityFieldPermissions: openTo('f-base-salary', [HR_ROLE_ID]),
+                },
+                { ID: 'f-notes', EntityID: SPACED_ENTITY_ID, Sequence: 3, Name: 'Notes', Entity: 'Employees', Type: 'nvarchar', EntityFieldPermissions: openTo('f-notes') },
+            ],
+        };
+    }
+
+    const spacedProvider = (): TestProvider => {
+        const provider = new TestProvider();
+        provider.seedEntities([new EntityInfo(spacedEntityInit())]);
+        return provider;
+    };
+
+    it('the fixture really does split the two key spaces', () => {
+        const entity = new EntityInfo(spacedEntityInit());
+        const field = entity.Fields.find(f => f.Name === 'Base Salary')!;
+
+        expect(field.CodeName).toBe('Base_Salary');
+        expect(field.CodeName).not.toBe(field.Name);
+    });
+
+    it('the denied set carries BOTH the Name and the CodeName', () => {
+        const entity = new EntityInfo(spacedEntityInit());
+        const denied = entity.GetDeniedReadFields(buildUser([INTERN_ROLE_ID]));
+
+        expect(denied.has('base salary')).toBe(true);  // Name space — BaseEntity, predicate gate
+        expect(denied.has('base_salary')).toBe(true);  // CodeName space — row projections
+    });
+
+    it('REGRESSION: strips the denied column from rows keyed by CodeName', () => {
+        // This is the shape rows actually arrive in: `[Base Salary] AS [Base_Salary]`.
+        const rows = [
+            { ID: '1', Base_Salary: 250000, Notes: 'n1' },
+            { ID: '2', Base_Salary: 180000, Notes: 'n2' },
+        ];
+        const projected = spacedProvider().applyProjection(rows, viewParams(), buildUser([INTERN_ROLE_ID]));
+
+        expect(projected.every(r => !('Base_Salary' in r))).toBe(true);
+        expect(projected.map(r => r.Notes)).toEqual(['n1', 'n2']); // permitted fields survive
+    });
+
+    it('also strips rows keyed by the raw Name, so neither key space regresses', () => {
+        const rows = [{ ID: '1', 'Base Salary': 250000, Notes: 'n1' }];
+        const projected = spacedProvider().applyProjection(rows, viewParams(), buildUser([INTERN_ROLE_ID]));
+
+        expect('Base Salary' in projected[0]).toBe(false);
+        expect(projected[0].Notes).toBe('n1');
+    });
+
+    it('leaves the permitted role untouched in both key spaces', () => {
+        const provider = spacedProvider();
+        const hr = buildUser([HR_ROLE_ID]);
+
+        expect(provider.applyProjection([{ ID: '1', Base_Salary: 250000 }], viewParams(), hr)[0].Base_Salary).toBe(250000);
+        expect(provider.applyProjection([{ ID: '1', 'Base Salary': 250000 }], viewParams(), hr)[0]['Base Salary']).toBe(250000);
+    });
+});

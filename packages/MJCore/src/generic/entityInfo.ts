@@ -3049,6 +3049,23 @@ export class EntityInfo extends BaseInfo {
      * Every field is aggregated, including those carrying no permission records — on an enabled
      * entity those are denied. Unrestrictable fields (primary keys, `__mj_` columns) come back
      * open, decided inside `GetUserFieldPermissions` rather than skipped here.
+     *
+     * **Carries BOTH `Name` and `CodeName`**, because the callers do not all live in the same key
+     * space and a set holding only one of them silently no-ops in the other. `BaseEntity` and the
+     * predicate gate ask about field *Names*; the row projections
+     * (`ProviderBase.OmitFieldsFromRows`, the Record Changes payload projector) match against a
+     * *row's own keys*, and rows are keyed by `CodeName` — `getRunTimeViewFieldString` emits
+     * `[Name] AS [CodeName]` whenever the two differ, and `CodeNameFromString` replaces every
+     * `[^a-zA-Z0-9_]` with `_`. So for a column named `Base Salary` a Name-only set holds
+     * `base salary` while the rows are keyed `Base_Salary`, nothing matches, and the denied values
+     * are returned in full. Every shipped MJ field name is already a valid identifier, so the two
+     * coincide throughout core and no fixture caught this; it needs a customer entity with a
+     * column like `Base Salary` or `Emp #` — which is the population this feature exists for.
+     *
+     * Widening cannot over-deny. The only way an extra entry could catch an innocent field is if a
+     * DENIED field's `CodeName` equalled a different, permitted field's `Name` — but two fields
+     * that collide on `CodeName` already collide on their generated property, which is not a
+     * schema CodeGen can emit.
      */
     private getDeniedFields(user: UserInfo, isDenied: (permissions: EntityFieldUserPermissionInfo) => boolean): Set<string> {
         const denied = new Set<string>();
@@ -3058,6 +3075,7 @@ export class EntityInfo extends BaseInfo {
         for (const field of this._Fields) {
             if (isDenied(field.GetUserFieldPermissions(user, true))) {
                 denied.add(field.Name.trim().toLowerCase());
+                denied.add(field.CodeName.trim().toLowerCase());
             }
         }
         return denied;
