@@ -29,6 +29,13 @@ function createService(): MJNotificationService {
 }
 
 const toasts = () => Array.from(document.querySelectorAll('#mj-toast-container .mj-toast--rich'));
+/** The rich toast fills its live region on the next animation frame — step one. */
+const frame = () => vi.advanceTimersToNextFrame();
+/** Create and paint: what a caller sees one frame later. */
+function show(service: MJNotificationService, options: MJRichNotificationOptions): void {
+  service.CreateRichNotification(options);
+  frame();
+}
 const bodyOf = (el: Element) => el.querySelector(':scope > div') as HTMLElement;
 const titleOf = (el: Element) => bodyOf(el).children[0]?.textContent?.trim();
 const detailOf = (el: Element) => bodyOf(el).children[1]?.textContent?.trim() ?? null;
@@ -38,7 +45,7 @@ const base: MJRichNotificationOptions = { title: 'Betty completed your request',
 
 describe('CreateRichNotification', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date', 'requestAnimationFrame', 'cancelAnimationFrame'] });
     document.body.innerHTML = '';
     document.head.innerHTML = '';
   });
@@ -48,7 +55,7 @@ describe('CreateRichNotification', () => {
 
   it('renders title, detail and the caller\'s image on a token-styled card', () => {
     const service = createService();
-    service.CreateRichNotification({ title: 'Betty finished', message: 'in General Discussion', imageUrl: '/betty.svg' });
+    show(service, { title: 'Betty finished', message: 'in General Discussion', imageUrl: '/betty.svg' });
     const [el] = toasts();
     expect(toasts()).toHaveLength(1);
     expect(titleOf(el)).toBe('Betty finished');
@@ -60,7 +67,7 @@ describe('CreateRichNotification', () => {
 
   it('falls back to an icon chip on the house tint when there is no image', () => {
     const service = createService();
-    service.CreateRichNotification({ title: 'Agent finished' });
+    show(service, { title: 'Agent finished' });
     const [el] = toasts();
     expect(imageOf(el)).toBeNull();
     expect(el.querySelector('i.fa-solid.fa-robot')).not.toBeNull();
@@ -71,7 +78,7 @@ describe('CreateRichNotification', () => {
 
   it('always has a close button, auto-hide or not', () => {
     const service = createService();
-    service.CreateRichNotification({ title: 'Agent finished', hideAfter: 5000 });
+    show(service, { title: 'Agent finished', hideAfter: 5000 });
     const [el] = toasts();
     const close = el.querySelector('button.mj-toast-close') as HTMLButtonElement;
     expect(close).not.toBeNull();
@@ -79,32 +86,28 @@ describe('CreateRichNotification', () => {
     expect((el as HTMLElement).style.animation).toContain('mj-toast-slide-out');
   });
 
-  it('enters the DOM as an empty live region and is filled afterwards', () => {
+  it('enters the DOM as an empty live region and is filled on the next frame, so it is announced', () => {
     const service = createService();
-    const container = document.createElement('div');
-    container.id = 'mj-toast-container';
-    document.body.appendChild(container);
-    let contentAtAppend: string | null = null;
-    const nativeAppend = container.appendChild.bind(container);
-    container.appendChild = ((node: Node) => { contentAtAppend = node.textContent?.trim() ?? ''; return nativeAppend(node); }) as typeof container.appendChild;
     service.CreateRichNotification({ title: 'Agent finished' });
-    expect(contentAtAppend).toBe('');                        // appended empty...
-    expect(titleOf(toasts()[0])).toBe('Agent finished');    // ...then filled
+    expect(toasts()).toHaveLength(1);
     expect(toasts()[0].getAttribute('role')).toBe('status');
+    expect(toasts()[0].textContent?.trim()).toBe('');       // in the tree, empty, this task
+    frame();
+    expect(titleOf(toasts()[0])).toBe('Agent finished');    // filled a frame later
   });
 
   it("the host's CompletionImageUrlResolver wins over the caller's image — the host knows how the assistant is branded", () => {
     const service = createService();
     service.CompletionImageUrlResolver = (ctx) => (ctx.conversationId === 'c1' ? '/org-avatar.png' : null);
-    service.CreateRichNotification({ ...base, imageUrl: '/agent-logo.png' });
+    show(service, { ...base, imageUrl: '/agent-logo.png' });
     expect(imageOf(toasts()[0])).toBe('/org-avatar.png');
   });
 
   it('a toast already on screen is never rewritten by a same-key call — it just stays up longer', () => {
     const service = createService();
-    service.CreateRichNotification({ ...base, title: 'Betty finished', message: 'in General Discussion', hideAfter: 5000 });
+    show(service, { ...base, title: 'Betty finished', message: 'in General Discussion', hideAfter: 5000 });
     vi.advanceTimersByTime(2000);
-    service.CreateRichNotification({ ...base, hideAfter: 5000 });
+    show(service, { ...base, hideAfter: 5000 });
     expect(toasts()).toHaveLength(1);
     expect(titleOf(toasts()[0])).toBe('Betty finished');
     vi.advanceTimersByTime(4000); // 6 s after the first show — past its own timer, inside the extension
@@ -113,19 +116,19 @@ describe('CreateRichNotification', () => {
 
   it('a same-key call outside the dedupe window is a new announcement', () => {
     const service = createService();
-    service.CreateRichNotification({ ...base, title: 'Sage finished' });          // sticky, no hideAfter
+    show(service, { ...base, title: 'Sage finished' });          // sticky, no hideAfter
     vi.advanceTimersByTime(3001);
-    service.CreateRichNotification({ ...base, title: 'Marketing Agent finished' });
+    show(service, { ...base, title: 'Marketing Agent finished' });
     expect(toasts()).toHaveLength(2);
     expect(titleOf(toasts()[1])).toBe('Marketing Agent finished');
   });
 
   it('a same-key call during the slide-out renders a fresh toast instead of extending a dying one', () => {
     const service = createService();
-    service.CreateRichNotification({ ...base, hideAfter: 1000 });
+    show(service, { ...base, hideAfter: 1000 });
     vi.advanceTimersByTime(1000);                                    // dismissal starts: still connected, animating out
     expect(toasts()[0].getAttribute('style')).toContain('mj-toast-slide-out');
-    service.CreateRichNotification({ ...base, title: 'Betty finished' });
+    show(service, { ...base, title: 'Betty finished' });
     expect(toasts()).toHaveLength(2);
     expect(titleOf(toasts()[1])).toBe('Betty finished');
   });
@@ -139,6 +142,7 @@ describe('CreateRichNotification', () => {
     vi.advanceTimersByTime(1499);
     expect(toasts()).toHaveLength(0);
     vi.advanceTimersByTime(1);
+    frame();
     expect(toasts()).toHaveLength(1);
     expect(titleOf(toasts()[0])).toBe('Later wording');
   });
@@ -154,7 +158,7 @@ describe('CreateRichNotification', () => {
 
   it('hover pauses the auto-hide and leaving re-arms it', () => {
     const service = createService();
-    service.CreateRichNotification({ title: 'Agent finished', hideAfter: 5000 });
+    show(service, { title: 'Agent finished', hideAfter: 5000 });
     const [el] = toasts();
     el.dispatchEvent(new Event('mouseenter'));
     vi.advanceTimersByTime(10000);
@@ -178,7 +182,7 @@ describe('CreateRichNotification', () => {
     service.CreateRichNotification({ ...base, deferMs: 1500 });       // the server's announcement, held back
     expect(toasts()).toHaveLength(0);
     vi.advanceTimersByTime(50);
-    service.CreateRichNotification({ ...base, title: 'Betty finished', message: 'in General Discussion' }); // the client's
+    show(service, { ...base, title: 'Betty finished', message: 'in General Discussion' }); // the client's
     expect(toasts()).toHaveLength(1);
     expect(titleOf(toasts()[0])).toBe('Betty finished');
     vi.advanceTimersByTime(3000);
@@ -191,6 +195,7 @@ describe('CreateRichNotification', () => {
     vi.advanceTimersByTime(1499);
     expect(toasts()).toHaveLength(0);
     vi.advanceTimersByTime(1);
+    frame();
     expect(toasts()).toHaveLength(1);
     expect(titleOf(toasts()[0])).toBe('Betty completed your request');
   });
@@ -207,7 +212,7 @@ describe('CreateRichNotification', () => {
 
   it('escapes markup in title and detail', () => {
     const service = createService();
-    service.CreateRichNotification({ title: '<b>x</b>', message: '<img src=x onerror=alert(1)>' });
+    show(service, { title: '<b>x</b>', message: '<img src=x onerror=alert(1)>' });
     const [el] = toasts();
     expect(el.querySelector('b')).toBeNull();
     expect(el.querySelectorAll('img')).toHaveLength(0);

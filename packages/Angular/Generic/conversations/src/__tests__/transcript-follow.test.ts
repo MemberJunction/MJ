@@ -163,6 +163,19 @@ describe('followTranscript — readReplyFromTop', () => {
     expect(armed(component)).toBe(false);
   });
 
+  it('an AI message arriving new inside the landing window does NOT lift the suppression — only the reader\'s own message does', () => {
+    const component = createComponent(true);
+    const open = component as unknown as Open;
+    follow(component, 'new', userMessage);
+    follow(component, 'update', replyComplete);
+    const until = open['bottomFollowSuppressedUntil'] as number;
+    expect(until).toBeGreaterThan(Date.now());
+    disarm(component);
+    open['currentTurnStartMessageId'] = null; // an AI message from outside any tracked turn
+    follow(component, 'new', { ID: 'ai-9', Role: 'AI', Status: 'In-Progress' });
+    expect(open['bottomFollowSuppressedUntil']).toBe(until);
+  });
+
   it('a message the reader sends right after a landing follows normally — the landing suppression is lifted', () => {
     const component = createComponent(true);
     const open = component as unknown as Open;

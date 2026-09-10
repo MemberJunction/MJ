@@ -4557,9 +4557,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
     if (change === 'new' || this.readerAtBottom) {
-      if (change === 'new') {
-        // A genuinely new message wants following even while a landing is settling —
-        // the reader sending again right after a reply landed must not be swallowed.
+      if (change === 'new' && message?.Role === 'User') {
+        // The reader sending again right after a reply landed must not be swallowed by the
+        // landing's suppression. Only THEIR message lifts it: an AI message arriving new
+        // inside the window belongs to the turn that just landed and must not cancel it.
         this.bottomFollowSuppressedUntil = 0;
       }
       this.scrollToBottom = true;

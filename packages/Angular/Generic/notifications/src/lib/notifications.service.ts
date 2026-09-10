@@ -407,10 +407,16 @@ export class MJNotificationService {
       font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
       animation: mj-toast-slide-in 0.28s cubic-bezier(0.16, 1, 0.3, 1); ${options.onClick ? 'cursor: pointer;' : ''}
     `;
-    // The live region enters the DOM empty and is filled afterwards, so assistive tech
-    // announces the content as an update rather than ignoring a pre-populated region.
+    // The live region enters the DOM empty and is filled on the NEXT frame, not in the same
+    // task: a region that is already populated when the accessibility tree first sees it is
+    // not announced. Everything else about the toast — registry entry, timers, click handling —
+    // is wired now, so nothing waits on the fill.
     container.appendChild(toast);
-    this.fillRichToast(toast, options, imageUrl);
+    this.nextFrame(() => {
+      if (toast.isConnected) {
+        this.fillRichToast(toast, options, imageUrl);
+      }
+    });
 
     const dismiss = () => {
       if (key && this.liveRichToasts.get(key)?.element === toast) {
@@ -418,14 +424,17 @@ export class MJNotificationService {
       }
       this.dismissToast(toast);
     };
-    toast.querySelector('.mj-toast-close')?.addEventListener('click', dismiss);
-    if (options.onClick) {
-      toast.addEventListener('click', (e) => {
-        if ((e.target as HTMLElement).closest('button')) return;
-        options.onClick?.();
+    // Delegated, because the close button does not exist until the fill.
+    toast.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).closest('.mj-toast-close')) {
         dismiss();
-      });
-    }
+        return;
+      }
+      if (options.onClick) {
+        options.onClick();
+        dismiss();
+      }
+    });
 
     // Auto-hide with hover-pause, the same contract as the simple toast.
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -484,6 +493,15 @@ export class MJNotificationService {
       </div>
       <button type="button" class="mj-toast-close" aria-label="Dismiss" style="background:transparent;border:none;padding:4px 6px;border-radius:4px;color:var(--mj-text-muted);cursor:pointer;flex:none;"><i class="fa-solid fa-xmark"></i></button>
     `;
+  }
+
+  /** Next paint, or the next task where no frame scheduler exists (tests, workers). */
+  private nextFrame(callback: () => void): void {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(() => callback());
+    } else {
+      setTimeout(callback, 0);
+    }
   }
 
   private dismissToast(toast: HTMLElement): void {
