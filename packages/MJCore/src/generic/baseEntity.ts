@@ -3564,6 +3564,28 @@ export abstract class BaseEntity<T = unknown> {
                 return this.LeafEntity.Save(_options);
             }
 
+            // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
+            // isn't already claimed by another child type (e.g., can't create Meeting
+            // if a Publication already exists with the same Product ID).
+            // Skipped when the parent entity has AllowMultipleSubtypes = true,
+            // which permits overlapping child types (e.g., Person -> Member + Volunteer).
+            //
+            // THIS RUNS BEFORE THE TRANSACTION OPENS, AND THAT ORDERING IS LOAD-BEARING.
+            // EnforceDisjointSubtype asks a sibling subtype's VIEW whether it already claims this
+            // key, and a subtype view JOINs its own table to the PARENT table. It does so through a
+            // fresh RunView -- a different connection, outside this save's transaction. Run it after
+            // the parent chain has been saved and it blocks on the parent row THIS SAVE just wrote
+            // and still holds locked: the request sits until the 30s SQL timeout, every single time,
+            // on every IS-A child create whose parent has more than one subtype. Asking the question
+            // here costs nothing and cannot self-block, because nothing has been written yet -- and
+            // the shared primary key, which is all the check needs, is already known.
+            if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
+                const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
+                if (parentEntityInfo && !parentEntityInfo.AllowMultipleSubtypes) {
+                    await this.EnforceDisjointSubtype();
+                }
+            }
+
             // IS-A orchestration: determine if this is the initiating save in a parent chain
             const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
 
@@ -3627,18 +3649,6 @@ export abstract class BaseEntity<T = unknown> {
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
-
-            // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
-            // isn't already claimed by another child type (e.g., can't create Meeting
-            // if a Publication already exists with the same Product ID).
-            // Skipped when the parent entity has AllowMultipleSubtypes = true,
-            // which permits overlapping child types (e.g., Person -> Member + Volunteer).
-            if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
-                const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
-                if (parentEntityInfo && !parentEntityInfo.AllowMultipleSubtypes) {
-                    await this.EnforceDisjointSubtype();
-                }
-            }
 
             if (_options.IgnoreDirtyState || initialDirtyState || _options.ReplayOnly) {
                 // Raise save_started event only when we're actually going to save

@@ -85,8 +85,13 @@ export class MJAnimalFormComponentExtended extends MJAnimalFormComponent {
     }
 
     public override async ngOnInit(): Promise<void> {
-        await super.ngOnInit();
+        // BEFORE super's async init, not after. The record arrives already loaded, so ISAChild is
+        // there to read synchronously -- and adopting it now means the species panel exists from the
+        // first change-detection pass. Setting it afterwards created the panel mid-cycle, and
+        // mj-collapsible-panel derives an `mj-panel-empty` host class from its projected content,
+        // so that class flipped after Angular had already checked it (NG0100 in dev mode).
         this.syncSubtype();
+        await super.ngOnInit();
     }
 
     /**

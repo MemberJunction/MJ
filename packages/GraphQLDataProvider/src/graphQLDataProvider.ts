@@ -1858,8 +1858,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mutationName = `${type}${graphQLTypeName}`
 
-            // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
+            // Only pass along writable fields, AND the PKEY value if this is an update.
+            //
+            // An IS-A child being CREATED is the third case, and it looks like a create while
+            // behaving like an update: its primary key is not the server's to mint, it is the
+            // parent's, and the client already generated it in NewRecord(). Without this, the key
+            // is filtered out (a child's shared PK is ReadOnly, because in IS-A the shared key IS
+            // the relationship), the server mints a DIFFERENT GUID, and the client is left holding
+            // one that does not exist -- the row saves correctly and then Refresh 404s on it. The
+            // generated Create*Input types already declare ID as nullable, so this needs no server
+            // change. Full write-up: ~/MJDev/reports/isa-promotion-graphql/.
+            const isaChildCreate = !entity.IsSaved && entity.EntityInfo.IsChildType;
+            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaChildCreate)));
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`
