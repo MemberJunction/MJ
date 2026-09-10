@@ -1,8 +1,8 @@
 # Records Region: Single Temporary Tab (VS Code preview-tab behavior)
 
-**Branch:** `records-temporary-tabs` (cut from `origin/next` @ `500daa01b3`, pushed, tracks `origin/records-temporary-tabs`)
+**Branch:** `records-temporary-tabs` (rebased onto `origin/next` 2026-09-09, tracks `origin/records-temporary-tabs`)
 **Ask:** Amith, 2026-09-01. The Records tabset must behave like the main Golden Layout tabset: at most one temporary (italic) tab, plain opens replace it, shift-click opens a separate tab, double-click and right-click promote. Target: edge.6.
-**Status:** PLAN ONLY. Nothing implemented.
+**Status:** IMPLEMENTED 2026-09-09. Steps 1-6 done; verified live in MJExplorer. Every §5 decision is resolved below — the plan text in §1-§4 is kept as written for the record, with implementation notes where reality differed.
 
 ---
 
@@ -91,12 +91,22 @@ Patch changeset (no migration/metadata). Packages: `@memberjunction/ng-shared`, 
 
 ---
 
-## 5. Design decisions to settle before/while building
+## 5. Design decisions — RESOLVED
 
-- **D1 — Unsaved edits in the temp tab (the data-safety question).** Replacement destroys the pane. If the user started editing a record in the temporary tab and clicks another record, we either (a) auto-promote the tab to permanent the moment its form enters edit mode (VS Code promotes previews on modification; my recommendation), or (b) run the existing unsaved-changes guard before replacing. Requires locating the record form's dirty/edit-mode signal (the shell already reacts to `handleResourceRecordSaved`, `tab-container.component.ts:1417`). Decide with Amith; (a) is more predictable and avoids modal interruptions mid-browse.
-- **D2 — Shift-click polarity.** Amith's note says shift opens a new PERMANENT tab. The main tabset actually does the inverse: the new tab is temporary and the pin cascade promotes the PREVIOUS temp (`workspace-state-manager.ts:360-366`). Both yield "two tabs, one temp" but differ in which one is italic afterward. Consistency argues for mirroring the main tabset exactly; VS Code matches Amith's description. One-line change either way; confirm with Amith which he intends the vocabulary to be (and whether the main tabset should change to match).
-- **D3 — Pin on "Move to Workspace"?** Docking a record to the main workspace is an act of investment; arguably it should pin (promote) as part of the move. Today the temp status rides along. Cheap to add; cosmetic either way because docked records are excluded from both consumption pools.
-- **D4 — Keyboard-initiated opens.** Shift detection is a global mousedown listener, so shift+Enter on a grid row registers no modifier and will replace. Acceptable v1; note in the PR.
+- **D1 — Unsaved edits in the temp tab. RESOLVED: refuse to consume an editing tab.** The plan offered (a) auto-promote on dirty or (b) "run the existing unsaved-changes guard". **(b) was based on machinery that does not exist** — there is no unsaved-changes guard anywhere in the shell or base-application; the only unsaved handling in Explorer lives inside individual forms. And (a) had no signal to hang off: `BaseFormComponent` has `StartEditMode`/`EndEditMode` but no output, and `FormStateService.setEditMode` stores a `Set<string>` keyed by **entity name**, so it cannot tell two open tabs of the same entity apart — exactly the case that matters.
+  Shipped instead: a record whose form is in edit mode simply **leaves the consumption pool**, so the next plain open lands in its own tab. Same user-visible outcome as VS Code's promote-on-modify, with no dirty-tracking pipeline. `MjEntityFormHostComponent` already exposes the live form, so the chain is a synchronous read (`mj-single-record.IsEditing()` → `BaseResourceComponent.IsEditing()`, default `false` → `TabContainerComponent.IsRecordTabEditing()` → the pool predicate) and `ng-base-forms` needed no change. MJ forms are read-only until the user explicitly clicks Edit, so edit mode is a deliberate gesture and a sound proxy for "work worth protecting".
+- **D1b — New (unsaved) records. NOT IN THE ORIGINAL PLAN; decided during build.** An unsaved new record is the sharpest form of the D1 problem: it is unsaved from the moment it opens. `OpenNewEntityRecord` keeps forcing its own tab AND now opens it **pinned** under the records style, which takes it out of the pool entirely. Visible consequence: a brand new record shows a thumbtack and loses its close X. Flagged for Matt as a UX call that can be revisited.
+- **D2 — Shift-click polarity. RESOLVED: mirror the main tabset.** The new tab is temporary and the scoped cascade promotes the previous one — the inverse of the original ask's wording, which described VS Code. Rationale: the ask is literally "behave like the main Golden Layout tabset", so the description was a recollection of that tabset rather than a separate requirement, and consistency serves the stated goal. Pinned by a test in `base-application.test.ts`; flipping it is one line plus one assertion.
+- **D3 — Pin on "Move to Workspace"? RESOLVED: no change.** Docked records fail `RecordsRegionTabFilter` and so sit in neither pool — they were already immune to replacement, which was the only thing pinning would have bought. Left alone.
+- **D4 — Keyboard-initiated opens. RESOLVED: accepted for v1.** Shift detection is a global mousedown listener, so shift+Enter on a grid row registers no modifier and replaces. Unchanged from the plan; called out in the PR.
+
+### Implementation notes where reality differed from §4
+
+- **Step 3 was smaller than feared.** The component cache keys on driver + record + app, **not** on tab id, so `cleanupTabComponent` parks the outgoing record as a future cache hit and the incoming record is a miss by construction. `loadTabContent` already calls `ensureRecordOriginCrumb`, so crumb re-capture came free rather than needing bespoke handling.
+- **Step 4 needed no work.** `buildResourceUrl` already has a `case 'records':` branch and `syncUrlWithWorkspace` has no records exemption, so records tabs were already driving the URL. No Step 4b.
+- **Deep-link scoping moved.** §4 put it at the route resolvers in `MJExplorer/src/app/app-routing.module.ts`; that package must not be modified, so the scope is assigned in `ShellComponent.processTabRequest`, which every URL-driven open funnels through anyway.
+- **`OpenTab`'s dedup became live for records for the first time** (record opens previously always went to `OpenTabForced`). It has an explicit `Records` branch matching Entity + record id, so there is no cross-entity collision; pinned by a test.
+- **The §7 rider was not optional.** `updateTabTitleFromResource` targeting the main layout manager stopped being cosmetic the moment replacement began retitling records tabs on every plain click, so it shipped in the same change.
 
 ## 6. Edge cases and guards checklist
 
