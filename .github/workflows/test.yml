@@ -207,6 +207,14 @@ jobs:
       #
       # Here they are plain workflow steps: no hash, no cache, executed on every run. They read
       # source text and need no dist/, which is why they belong in this job and not behind the build.
+      #
+      # #4371 fixed the same defect by excluding the two MJGlobal scanners from that package's
+      # vitest config and running them from their old path. This supersedes it: the scanners are
+      # OUT of packages/ entirely, so there is no per-package config to keep in sync and no way to
+      # reintroduce them to a cached task by accident. It also covers MJCore's PrimaryKeyCompliance,
+      # which has the same shape and the same defect. The config sets passWithNoTests: false — that
+      # guard is #4371's, and it is worth keeping: a future rename must fail loudly, not pass with
+      # zero tests and silently disable the gate.
       - name: Repo-wide source scanners
         if: ${{ !cancelled() }}
         run: npx vitest run --config .github/guards/vitest.config.mts

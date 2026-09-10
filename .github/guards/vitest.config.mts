@@ -25,5 +25,9 @@ export default defineConfig({
         root: dirname(fileURLToPath(import.meta.url)),
         include: ['**/*.guard.test.ts'],
         testTimeout: 60000,
+        // Explicit, and the point of it (from #4371): if these files are ever renamed or the glob
+        // stops matching, the step must FAIL rather than pass with zero tests. A gate that quietly
+        // matches nothing is the same silent-green failure this whole directory exists to prevent.
+        passWithNoTests: false,
     },
 });

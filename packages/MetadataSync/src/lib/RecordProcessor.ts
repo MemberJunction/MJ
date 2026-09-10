@@ -1,5 +1,5 @@
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { ordinalCompare } from '@memberjunction/global';
+import { ordinalCompare, UUIDsEqual } from '@memberjunction/global';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { EntityConfig } from '../config';
 import { JsonWriteHelper } from './json-write-helper';
@@ -706,9 +706,10 @@ export class RecordProcessor {
     }
 
     // Determine if child type is ambiguous (more than one subtype exists in metadata)
-    const childSubtypes = Metadata.Provider?.Entities
-      ? Metadata.Provider.Entities.filter(
-          (e) => e.ParentID === record.EntityInfo.ID || e.ParentEntityInfo?.ID === record.EntityInfo.ID
+    const provider = Metadata.Provider; // global-provider-ok: MetadataSync is a single-provider CLI process
+    const childSubtypes = provider?.Entities
+      ? provider.Entities.filter(
+          (e) => UUIDsEqual(e.ParentID, record.EntityInfo.ID) || UUIDsEqual(e.ParentEntityInfo?.ID, record.EntityInfo.ID)
         )
       : [];
     const needsEntityName = childSubtypes.length > 1 || record.EntityInfo.AllowMultipleSubtypes;
