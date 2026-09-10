@@ -1,4 +1,5 @@
 import { Component } from '@angular/core';
+import { BaseEntity } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseFormComponent } from '@memberjunction/ng-base-forms';
 import { MJAnimalEntity } from '@memberjunction/core-entities';
@@ -50,6 +51,110 @@ import type { ShelterHeroChip, ShelterHeroStat } from '../HarborShelter/shelter-
 })
 export class MJAnimalFormComponentExtended extends MJAnimalFormComponent {
     public declare record: MJAnimalEntity;
+
+    // ── The species subtype ──────────────────────────────────────────────────
+    //
+    // An animal IS-A Dog or IS-A Cat, and the subtype's fields belong on THIS form. The alternative
+    // -- separate Dogs and Cats pages you must visit to create one -- would tell a learner that IS-A
+    // costs two extra screens and buys nothing, which is the opposite of the truth.
+    //
+    // `MJ: Dogs` and `MJ: Cats` share Animal's primary key, so there is no join column to set and no
+    // "attach" step: EnsureISAChild links the child into this record's chain, and the ordinary Save
+    // writes Animal and Dog in one transaction because IS-A delegates to the leaf.
+
+    /** The linked Dog or Cat record, or null when this animal has no subtype. */
+    public SubtypeChild: BaseEntity | null = null;
+    public SubtypeError: string | null = null;
+
+    private static readonly SUBTYPE_BY_SPECIES: Readonly<Record<string, string>> = {
+        Dog: 'MJ: Dogs',
+        Cat: 'MJ: Cats',
+    };
+
+    public get IsDogSubtype(): boolean {
+        return this.SubtypeChild?.EntityInfo?.Name === 'MJ: Dogs';
+    }
+
+    public get IsCatSubtype(): boolean {
+        return this.SubtypeChild?.EntityInfo?.Name === 'MJ: Cats';
+    }
+
+    /** Panel heading -- "Dog Profile" reads better than "Subtype". */
+    public get SubtypeSectionName(): string {
+        return this.IsDogSubtype ? 'Dog Profile' : this.IsCatSubtype ? 'Cat Profile' : 'Species Profile';
+    }
+
+    public override async ngOnInit(): Promise<void> {
+        await super.ngOnInit();
+        this.syncSubtype();
+    }
+
+    /**
+     * Called from the Species field's (ValueChange). On a NEW animal this is the moment the dog or
+     * cat fields become relevant, so the subtype is attached here rather than after a save-and-reopen.
+     */
+    public async OnSpeciesChanged(): Promise<void> {
+        if (this.record?.IsSaved) {
+            // Nothing to do. Species on a saved animal is just a column; the subtype it implies is
+            // fixed at creation. See the note on attachSubtype().
+            return;
+        }
+        await this.attachSubtype();
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Adopt the subtype this record already has. MJ's own InitializeChildEntity discovers it during
+     * Load and hands it to us as ISAChild, so a saved Dog or Cat needs no work here at all.
+     */
+    private syncSubtype(): void {
+        this.SubtypeChild = this.record?.ISAChild ?? null;
+        this.cdr.markForCheck();
+    }
+
+    /**
+     * Attach the subtype for the chosen species, on a record that has not been saved yet.
+     *
+     * Correcting the species here is ordinary: nothing exists in the database, so the wrong subtype
+     * is released and the right one attached. DetachISAChild refuses to release a SAVED subtype, so
+     * "you may change your mind before saving, never after" is enforced by MJ rather than by a rule
+     * this form remembers to apply.
+     *
+     * DELIBERATELY LIMITED TO CREATE. An animal gets its subtype when it is created, and never
+     * afterwards. PROMOTION -- giving a saved animal a subtype it never had -- is genuinely useful
+     * and is NOT here, because it does not work over MJ's GraphQL transport on this pin: the child's
+     * primary key is ReadOnly (in IS-A the shared key IS the relationship), so it is filtered out of
+     * the create mutation, and the server then mints a fresh one and inserts a SECOND parent row.
+     * Written up for upstream in `plans/MJ Academy Action Logs/HANDOFF-isa-promotion-graphql.md`.
+     *
+     * All of this collapses when the course re-pins to a release carrying MJ's declarative subtype
+     * resolution (`EntitySubtypeResolver` / `Entity.SubtypeSelector`, MJ #3825), which resolves the
+     * subtype from the record's own data and needs none of this code.
+     */
+    private async attachSubtype(): Promise<void> {
+        const species = this.record?.Species;
+        const target = species ? MJAnimalFormComponentExtended.SUBTYPE_BY_SPECIES[species] : undefined;
+        const attached = this.record?.ISAChild;
+
+        if (attached?.EntityInfo.Name === target) {
+            return; // already the right one
+        }
+        if (attached) {
+            this.record.DetachISAChild(); // never saved on this path, so this cannot refuse
+        }
+
+        this.SubtypeError = null;
+        if (!target) {
+            this.SubtypeChild = null;
+            return;
+        }
+        try {
+            this.SubtypeChild = await this.record.EnsureISAChild(target);
+        } catch (e) {
+            this.SubtypeChild = null;
+            this.SubtypeError = e instanceof Error ? e.message : String(e);
+        }
+    }
 
     /** True once the shelter has taken the animal in -- guards the whole hero. */
     public get HasIntake(): boolean {

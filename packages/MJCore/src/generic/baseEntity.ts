@@ -1370,6 +1370,50 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Release an IS-A subtype that was attached but never written.
+     *
+     * NOT PART OF THE UPSTREAM COMMIT -- see EnsureISAChild's note. Upstream has no counterpart,
+     * and the gap is real: EnsureISAChild refuses a second subtype on a disjoint parent, so once a
+     * record has been told "you are a Dog" there is no supported way to say "no, a Cat" -- not even
+     * on a record that has never been saved, where nothing has happened yet that anyone could want
+     * to keep. A UI that lets someone pick a species therefore dead-ends on the first correction,
+     * which is exactly what the Animal form did before this existed.
+     *
+     * WHAT IT WILL NOT DO. If the attached child has been SAVED, this throws. Detaching a real row
+     * is a demotion: the subtype row still exists in the database, and dropping the in-memory link
+     * would leave the caller believing an animal is no longer a dog while `__mj.Dog` still says it
+     * is. That is a genuine data operation with genuine data loss, and it deserves an explicit
+     * delete, not a side effect of changing a dropdown. That refusal is what makes "you may correct
+     * the species before saving, never after" enforceable rather than a convention.
+     *
+     * @returns true if a child was released, false if there was nothing attached.
+     * @throws if the attached child has been saved, or on an overlapping (AllowMultipleSubtypes) parent.
+     */
+    public DetachISAChild(): boolean {
+        if (this.EntityInfo.AllowMultipleSubtypes) {
+            throw new Error(
+                `DetachISAChild does not apply to '${this.EntityInfo.Name}': AllowMultipleSubtypes is true, ` +
+                `so subtypes are tracked as a list rather than a single attached child.`,
+            );
+        }
+        const child = this._childEntity;
+        if (!child) {
+            return false;
+        }
+        if (child.IsSaved) {
+            throw new Error(
+                `Cannot detach '${child.EntityInfo.Name}' from '${this.EntityInfo.Name}': that subtype record ` +
+                `has been saved. Delete the subtype record explicitly if the record genuinely is no longer one.`,
+            );
+        }
+        this._childEntity = null;
+        // Leave _childEntityDiscoveryDone alone. It records that we already asked the database which
+        // subtype this record has; detaching an in-memory child does not make that answer stale, and
+        // clearing it would buy a redundant FindISAChildEntity round trip on the next load.
+        return true;
+    }
+
+    /**
      * Copy this record's primary key onto the child. In IS-A the shared key IS the relationship, so
      * the child cannot be saved until it carries the parent's key.
      */
