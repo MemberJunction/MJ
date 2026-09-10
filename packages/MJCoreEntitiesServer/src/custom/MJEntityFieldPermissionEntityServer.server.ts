@@ -55,7 +55,20 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
     public override Validate(): ValidationResult {
         const result = super.Validate();
 
-        const targetField = this.resolveTarget()?.Field;
+        const target = this.resolveTarget();
+        if (target) {
+            const entityPermissionRejection = MJEntityFieldPermissionEntityServer.EntityPermissionRequiredRejectionReason(
+                target.Entity,
+                this.RoleID
+            );
+            if (entityPermissionRejection) {
+                result.Errors.push(
+                    new ValidationErrorInfo('RoleID', entityPermissionRejection, this.RoleID, ValidationErrorType.Failure)
+                );
+            }
+        }
+
+        const targetField = target?.Field;
         if (targetField) {
             const rejection = MJEntityFieldPermissionEntityServer.RejectionReason(targetField);
             if (rejection) {
@@ -329,6 +342,41 @@ export class MJEntityFieldPermissionEntityServer extends MJEntityFieldPermission
      * field, and the runtime aggregation guards hold regardless of what is stored here. Failing
      * closed would trade a real, recurring workflow block for no additional protection.
      */
+    /**
+     * Why this role may not carry a field rule on this entity, or null when it may.
+     *
+     * A field permission REFINES an entity permission — the entity gate decides whether you reach
+     * the record at all, and field rules then decide which columns of it you see. A rule bound to a
+     * role that has no relationship to the entity is not a refinement of anything, and it is the
+     * configuration that made the reconciler's orphan test ambiguous: such a row is fully live at
+     * runtime (aggregation matches on role membership alone) while looking inert to any check that
+     * asks what the role can do on its own.
+     *
+     * Requires only that an entity-permission row EXISTS, not that it grants read. A role whose
+     * entity permission grants nothing is the ordinary way to express a deny-only carve-out —
+     * "these users are normal, minus this column" — and demanding a grant would force an
+     * administrator to hand out entity access in order to take a column away. Deleting the entity
+     * permission removes the relationship, and reconciliation then cleans up the field rules with
+     * it; see `computeOrphanRowIDs`, which tests exactly this condition.
+     *
+     * Attributed to `RoleID` because that is the value the administrator must change — either pick
+     * a role that has entity access, or grant this one an entity permission first.
+     */
+    public static EntityPermissionRequiredRejectionReason(entity: EntityInfo, roleID: string | null): string | null {
+        if (!roleID) {
+            return null; // the NOT NULL column is the base class's problem to report, not ours
+        }
+        if (entity.Permissions.some((p) => UUIDsEqual(p.RoleID, roleID))) {
+            return null;
+        }
+        return (
+            `This role has no entity permission on '${entity.Name}', so a field rule for it would refine nothing. ` +
+            `Field permissions narrow the access an entity permission already grants — give the role an entity ` +
+            `permission on '${entity.Name}' first (one that grants nothing is fine, and is how a deny-only ` +
+            `carve-out is expressed), then set the field rule.`
+        );
+    }
+
     private resolveTarget(): { Entity: EntityInfo; Field: EntityFieldInfo } | null {
         if (!this.EntityFieldID) {
             return null; // the NOT NULL column is the base class's problem to report, not ours

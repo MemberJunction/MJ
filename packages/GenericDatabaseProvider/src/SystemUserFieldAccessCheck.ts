@@ -48,6 +48,61 @@ export class SystemUserFieldAccessCheck extends BaseSingleton<SystemUserFieldAcc
 
     public async HandleStartup(_contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         this.Run(provider);
+        this.RunOrphanedFieldRuleSweep(provider);
+    }
+
+    /**
+     * Reports field permission rows whose role holds no entity permission on the same entity.
+     *
+     * `MJEntityFieldPermissionEntityServer.Validate()` refuses to create such a row, and
+     * reconciliation deletes any it finds — but both only see writes that go through the entity
+     * layer. Direct SQL, a migration, or a `ReplayOnly` save can author one unobserved, and until
+     * the next reconciliation it is fully live: field-rule aggregation matches on role membership
+     * alone, so the rule applies to any user holding that role who reaches the entity through a
+     * different one. That makes it a real access change with no visible cause.
+     *
+     * Scoped to FLS-enabled entities, matching where reconciliation runs and where the rules
+     * actually decide anything — a rule on a disabled entity is dormant rather than wrong.
+     *
+     * Reads cached metadata only; no queries.
+     *
+     * @returns the number of orphaned rows found
+     */
+    public RunOrphanedFieldRuleSweep(provider?: IMetadataProvider | null): number {
+        const entities = provider?.Entities ?? [];
+        const offenders: string[] = [];
+
+        for (const entity of entities) {
+            if (!entity.EnableFieldLevelSecurity) {
+                continue; // rules here decide nothing, so an orphan is dormant rather than wrong
+            }
+            const rolesWithEntityPermission = new Set(
+                entity.Permissions.map((p) => (p.RoleID ?? '').trim().toLowerCase()).filter(Boolean)
+            );
+            for (const field of entity.Fields) {
+                for (const rule of field.FieldPermissions) {
+                    const roleID = (rule.RoleID ?? '').trim().toLowerCase();
+                    if (roleID && !rolesWithEntityPermission.has(roleID)) {
+                        offenders.push(`  - ${entity.Name}.${field.Name} (role ${rule.RoleID})`);
+                    }
+                }
+            }
+        }
+
+        if (offenders.length === 0) {
+            return 0;
+        }
+
+        const shown = offenders.slice(0, MAX_REPORTED).join('\n');
+        const more = offenders.length > MAX_REPORTED ? `\n  ...and ${offenders.length - MAX_REPORTED} more` : '';
+        LogError(
+            `[FieldSecurity] ${offenders.length} field permission row(s) name a role with no entity permission on the ` +
+            `same entity. A field rule refines an entity permission, so these refine nothing on their own — yet they ` +
+            `still apply to any user who holds the role and reaches the entity through another one. The next ` +
+            `reconciliation will delete them. Grant the role an entity permission if the rule is intended, or remove ` +
+            `the rule.\n${shown}${more}`
+        );
+        return offenders.length;
     }
 
     /**

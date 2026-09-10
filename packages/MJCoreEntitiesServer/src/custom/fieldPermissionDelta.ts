@@ -72,11 +72,17 @@ type RoleEntityAccessForFieldVerbs = {
  */
 export function ComputeFieldPermissionDelta(entity: EntityInfo): FieldPermissionDelta {
     const accessByRoleID = buildRoleEntityAccessMap(entity);
+    const rolesWithEntityPermission = buildRolesWithAnyEntityPermission(entity);
     const restrictableFields = entity.Fields.filter(isRestrictable);
 
+    // The two halves ask DIFFERENT questions of the same permission rows, and must not share an
+    // answer. Creating a snapshot row is a grant, so it is offered only to roles that can actually
+    // READ the entity (`accessByRoleID`). Deleting a row destroys an administrator's configuration,
+    // so it is justified only when the row can no longer influence any decision — which turns on
+    // whether the role relates to the entity at all, never on the strength of that relationship.
     return {
         ToInsert: computeMissingRows(restrictableFields, accessByRoleID),
-        ToDelete: computeOrphanRowIDs(entity, accessByRoleID),
+        ToDelete: computeOrphanRowIDs(entity, rolesWithEntityPermission),
     };
 }
 
@@ -87,6 +93,35 @@ export function ComputeFieldPermissionDelta(entity: EntityInfo): FieldPermission
  */
 function isRestrictable(field: EntityFieldInfo): boolean {
     return !field.IsUnrestrictableField && !field.IsOnUnrestrictableEntity;
+}
+
+/**
+ * Every role holding ANY entity-permission row for this entity, whatever it grants and whichever
+ * `Type` it carries.
+ *
+ * This is the orphan test's criterion, and it is deliberately weaker than
+ * {@link buildRoleEntityAccessMap}. A field rule bound to a role is live at runtime purely on ROLE
+ * MEMBERSHIP — `EntityFieldInfo.AggregateFieldRulesForUser` matches on
+ * `user.UserRoles.find(...)` and never consults that role's entity-level access. So a role that
+ * grants nothing at entity level still contributes its field rules to the aggregate of any user who
+ * holds it AND gets entity access from a different role. Judging such a row inert because its own
+ * role cannot read the entity confuses a per-role fact with a per-user one, and deleting it on that
+ * basis destroys a `Deny` that was fully in force — turning "a Deny always wins" into
+ * "a Deny wins until reconciliation runs".
+ *
+ * Membership of this set is what `MJEntityFieldPermissionEntityServer.Validate()` requires before a
+ * field rule may be written at all, so the rule reconciliation enforces on cleanup is the same one
+ * authoring enforces on write.
+ */
+function buildRolesWithAnyEntityPermission(entity: EntityInfo): Set<string> {
+    const roleIDs = new Set<string>();
+    for (const permission of entity.Permissions) {
+        const roleID = normalizeID(permission.RoleID);
+        if (roleID) {
+            roleIDs.add(roleID);
+        }
+    }
+    return roleIDs;
 }
 
 /**
@@ -173,24 +208,31 @@ function computeMissingRows(
 }
 
 /**
- * Rows that should no longer exist. Three ways a row becomes an orphan:
+ * Rows that should no longer exist. Two ways a row becomes an orphan:
  *
  *  - its field is no longer restrictable (a column was made a primary key, or the entity joined
- *    the unrestrictable list);
- *  - its role lost entity-level read, so the entity gate excludes it and the row can no longer
- *    affect any decision;
- *  - its role no longer exists at all, which reads the same way here.
+ *    the unrestrictable list), so the aggregation returns fully-open for it regardless of any rule;
+ *  - its role holds no entity-permission row for this entity at all, so no user can carry the rule
+ *    into an aggregate through this entity — which also covers a role that no longer exists.
  *
  * A row whose FIELD was dropped disappears with the field's cascade, so it never reaches this
  * walk — `entity.Fields` is the live set.
+ *
+ * **A role's entity-level ACCESS is deliberately not part of this test**, and an earlier version of
+ * this function that used it was wrong. It reasoned that a role without entity read is excluded by
+ * the entity gate, so its field rules cannot matter. But `EntityInfo.GetUserPermisions` aggregates
+ * the entity gate across ALL of a user's roles, exactly as the field aggregation does — so a user
+ * reading the entity through role S still carries role R's field rules, whatever R grants on its
+ * own. Deleting them silently restored access an administrator had explicitly denied, and
+ * `computeMissingRows` only ever writes `Allow`, so it never came back.
  */
-function computeOrphanRowIDs(entity: EntityInfo, accessByRoleID: Map<string, RoleEntityAccessForFieldVerbs>): string[] {
+function computeOrphanRowIDs(entity: EntityInfo, rolesWithEntityPermission: Set<string>): string[] {
     const orphans: string[] = [];
     for (const field of entity.Fields) {
         const fieldIsRestrictable = isRestrictable(field);
         for (const permission of field.FieldPermissions) {
             const roleID = normalizeID(permission.RoleID);
-            if (!fieldIsRestrictable || !roleID || !accessByRoleID.has(roleID)) {
+            if (!fieldIsRestrictable || !roleID || !rolesWithEntityPermission.has(roleID)) {
                 orphans.push(permission.ID);
             }
         }

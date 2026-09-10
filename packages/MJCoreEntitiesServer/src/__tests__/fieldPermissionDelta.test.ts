@@ -344,3 +344,82 @@ describe('IsEmptyFieldPermissionDelta', () => {
         })).toBe(false);
     });
 });
+
+/**
+ * The orphan test keys on whether a role has ANY entity permission on the entity — never on what
+ * that permission grants.
+ *
+ * The distinction is the whole point. Field-rule aggregation matches on ROLE MEMBERSHIP alone
+ * (`EntityFieldInfo.AggregateFieldRulesForUser` never consults entity-level access), and the entity
+ * gate is itself aggregated across all of a user's roles. So a role granting nothing at entity level
+ * still contributes its field rules to any user who holds it and reaches the entity through another
+ * role. An earlier version judged such rows inert because their own role could not read the entity,
+ * and deleted them — silently restoring access an administrator had explicitly denied, permanently,
+ * since `computeMissingRows` only ever writes `Allow`.
+ */
+describe('ComputeFieldPermissionDelta — orphan test uses EP existence, not EP access', () => {
+    /** A carve-out role: related to the entity, granting nothing. "Normal users, minus one column." */
+    const carveOutPermission = () => entityPermission({ RoleID: INTERN_ROLE_ID, CanRead: false, CanUpdate: false, CanCreate: false });
+
+    it('REGRESSION: keeps a Deny owned by a role whose entity permission grants nothing', () => {
+        const entity = buildEntity({
+            permissions: [
+                entityPermission({ RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true }),
+                carveOutPermission(),
+            ],
+            salaryRows: [fieldPermission(SALARY_FIELD_ID, { ID: 'fp-deny', RoleID: INTERN_ROLE_ID, Read: DENY })],
+        });
+
+        const delta = ComputeFieldPermissionDelta(entity);
+
+        expect(delta.ToDelete).not.toContain('fp-deny');
+    });
+
+    it('keeps an Allow owned by such a role too — it can be the only thing granting the field', () => {
+        const entity = buildEntity({
+            permissions: [
+                entityPermission({ RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true }),
+                carveOutPermission(),
+            ],
+            notesRows: [fieldPermission(NOTES_FIELD_ID, { ID: 'fp-allow', RoleID: INTERN_ROLE_ID, Read: ALLOW })],
+        });
+
+        expect(ComputeFieldPermissionDelta(entity).ToDelete).not.toContain('fp-allow');
+    });
+
+    it('still deletes a row whose role has NO entity permission at all', () => {
+        // FINANCE has no entity-permission row here, so nothing ties the rule to this entity and
+        // `Validate()` would refuse to author it in the first place.
+        const entity = buildEntity({
+            permissions: [entityPermission({ RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true })],
+            salaryRows: [fieldPermission(SALARY_FIELD_ID, { ID: 'fp-unrelated', RoleID: FINANCE_ROLE_ID, Read: DENY })],
+        });
+
+        expect(ComputeFieldPermissionDelta(entity).ToDelete).toContain('fp-unrelated');
+    });
+
+    it('still deletes a row on a field that is no longer restrictable', () => {
+        const entity = buildEntity({
+            permissions: [entityPermission({ RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true })],
+            pkRows: [fieldPermission(ID_FIELD_ID, { ID: 'fp-on-pk', RoleID: HR_ROLE_ID, Read: DENY })],
+        });
+
+        expect(ComputeFieldPermissionDelta(entity).ToDelete).toContain('fp-on-pk');
+    });
+
+    it('a carve-out role is still not OFFERED snapshot rows — creation keeps the stricter test', () => {
+        // The two halves must not converge: the role relates to the entity (so its rows survive)
+        // but cannot read it (so it is not handed new grants).
+        const entity = buildEntity({
+            permissions: [
+                entityPermission({ RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true }),
+                carveOutPermission(),
+            ],
+        });
+
+        const delta = ComputeFieldPermissionDelta(entity);
+
+        expect(insertFor(delta, SALARY_FIELD_ID, INTERN_ROLE_ID)).toBeUndefined();
+        expect(insertFor(delta, SALARY_FIELD_ID, HR_ROLE_ID)).toBeDefined();
+    });
+});
