@@ -1,0 +1,48 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
+-- ============================================================================
+
+-- Extensions
+
+-- PG-EMPTY-BY-DESIGN: on PostgreSQL spUpdateExistingEntityFieldsFromSchema is CodeGen output,
+-- not migration content.
+--
+-- The SQL Server migration (V202609081500__v6.1.x__Restore_spUpdateExistingEntityFieldsFromSchema_Guards)
+-- is a single CREATE OR ALTER PROC that restores V202607202100's soft-PK guard and #uef_*
+-- materialization, keeps V202608260829's @IncludedSchemaNames parameter, and adds the missing
+-- soft-FK gating on RelatedEntityID / RelatedEntityFieldName in both the WHERE and SET clauses.
+-- On SQL Server that procedure ships AS migration content, so changing it means rewriting it in
+-- a migration.
+--
+-- PostgreSQL does not get it that way. The routine is EMITTED BY CODEGEN from
+-- packages/CodeGenLib/src/Database/providers/postgresql/metadataSupportObjects.ts, with a
+-- PostgreSQL-specific body (PL/pgSQL, information_schema/pg_catalog lookups, quoted-identifier
+-- handling) that shares no text with the T-SQL original. The T-SQL body is not even expressible
+-- here: it is built on STRING_SPLIT, TABLE variables, TRY_CONVERT and #temp materialization.
+--
+-- The PostgreSQL side of THIS change was delivered in the SAME commit. `1d9a99ec48`
+-- ("fix(codegen,core-entities): implement rev 3.1 idempotency and field churn guardrails")
+-- added this migration and modified metadataSupportObjects.ts (+14 lines) together, and the
+-- generator carries the same soft-FK gating this migration adds to SQL Server:
+--
+--     "RelatedEntityID"        = CASE WHEN tgt."AutoUpdateRelatedEntityInfo"
+--                                      AND NOT tgt."IsSoftForeignKey"
+--                                     THEN fr.related_entity_id
+--                                     ELSE tgt."RelatedEntityID" END,
+--     "RelatedEntityFieldName" = CASE WHEN tgt."AutoUpdateRelatedEntityInfo"
+--                                      AND NOT tgt."IsSoftForeignKey"
+--                                     THEN fr.related_entity_field_name
+--                                     ELSE tgt."RelatedEntityFieldName" END,
+--
+-- with the matching COALESCE-based soft-FK predicates on the detection side. So the guardrails
+-- are present on PostgreSQL; they arrive by regenerating the support objects, exactly as they do
+-- for every other CodeGen-owned routine.
+--
+-- Transpiling the T-SQL body here would not be a port — it would OVERWRITE a generated PL/pgSQL
+-- routine with a T-SQL-shaped one. This is the same case, and the same procedure, that
+-- DEPLOYMENT.md names in "An empty counterpart is sometimes correct".
+--
+-- Nothing is lost by leaving this empty: the procedure is consumed by CodeGen while it reconciles
+-- metadata against the database, and is not on any application runtime path.
+-- ============================================================================
