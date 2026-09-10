@@ -143,3 +143,17 @@
 @media (max-width: 720px) {
   .animal-photo { grid-template-columns: 1fr; }
 }
+
+/* ── Species profile panel states ─────────────────────────────────────────────
+   The one message the panel can carry instead of fields: a refusal, when someone tries
+   to change species on an animal whose subtype is already started. Prose, not a field,
+   so it does not inherit the field-row grid above. */
+.mj-forms-error {
+    padding: var(--mj-space-4);
+    border-radius: var(--mj-radius-md);
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border: 1px solid var(--mj-status-error);
+    line-height: 1.5;
+}
+

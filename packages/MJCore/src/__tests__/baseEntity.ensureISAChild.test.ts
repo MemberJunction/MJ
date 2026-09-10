@@ -103,3 +103,42 @@ describe('EnsureISAChild (backported subset)', () => {
         );
     });
 });
+
+/**
+ * DetachISAChild is NOT part of the upstream commit -- it fills the gap that refusal leaves, so a
+ * species can be corrected BEFORE the record is saved. See the method's own doc comment. Deleted
+ * with it at the LTS re-pin unless the release carries an equivalent.
+ */
+describe('DetachISAChild', () => {
+    it('releases an UNSAVED child so a different subtype can be chosen', async () => {
+        const product = createEntity(productEntityInfo);
+        const meeting = await product.EnsureISAChild('Meetings');
+        expect(product.ISAChild).toBe(meeting);
+
+        expect(product.DetachISAChild()).toBe(true);
+        expect(product.ISAChild).toBeNull();
+
+        // and now the correction actually goes through, which is the whole point
+        const publication = await product.EnsureISAChild('Publications');
+        expect(publication!.EntityInfo.Name).toBe('Publications');
+        expect(product.ISAChild).toBe(publication);
+    });
+
+    it('reports false when there is nothing attached', () => {
+        const product = createEntity(productEntityInfo);
+        expect(product.DetachISAChild()).toBe(false);
+    });
+
+    it('REFUSES to detach a child that has been saved -- that is a demotion, not a correction', async () => {
+        const product = createEntity(productEntityInfo);
+        const meeting = await product.EnsureISAChild('Meetings');
+        // Stand in for a child that came back from the database rather than one we just attached.
+        (meeting as unknown as { _everSaved: boolean })._everSaved = true;
+
+        expect(() => product.DetachISAChild()).toThrow(
+            /Cannot detach 'Meetings' from 'Products': that subtype record has been saved/,
+        );
+        // and it stays attached -- a refused detach must not half-apply
+        expect(product.ISAChild).toBe(meeting);
+    });
+});

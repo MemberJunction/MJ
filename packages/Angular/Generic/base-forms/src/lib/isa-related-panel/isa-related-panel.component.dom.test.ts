@@ -84,3 +84,75 @@ describe('MjIsaRelatedPanelComponent (DOM)', () => {
     expect(out).toEqual([evt]);
   });
 });
+
+/**
+ * Re-discovery triggers. The panel used to re-ask "what subtypes does this record have?" on
+ * exactly two events: a NEW record object arriving, and the in-app Refresh. Neither happens when
+ * a save attaches a subtype -- IS-A writes parent and child in one transaction and the form keeps
+ * the same record object across it -- so the panel sat empty on a record that plainly had a Dog
+ * until the user pressed Refresh. Leaving edit mode is now the third trigger.
+ *
+ * These call ngOnChanges directly rather than binding inputs: the point under test IS the change
+ * handler, and a bound-input render would also fire the Record branch and mask which one ran.
+ */
+describe('MjIsaRelatedPanelComponent re-discovery (ngOnChanges)', () => {
+  const DOG = { EntityInfo: { Name: 'MJ: Dogs', IsParentType: false, IsChildType: true } } as unknown as BaseEntity;
+  const ANIMAL_WITH_DOG = {
+    GetRecordName: () => 'Scout',
+    PrimaryKey: PK,
+    ISAChild: DOG,
+    EntityInfo: { Name: 'MJ: Animals', IsParentType: true, IsChildType: false, AllowMultipleSubtypes: false },
+  } as unknown as BaseEntity;
+
+  /** A panel already mounted and already showing nothing, as it is the instant before a save. */
+  function mounted() {
+    const f = renderComponentFixture(MjIsaRelatedPanelComponent, {
+      imports: [IsaCardStub],
+      declarations: [MjIsaRelatedPanelComponent],
+      setup: (c) => { c.Record = ANIMAL_WITH_DOG; c.RelatedItems = []; c.EditMode = true; },
+    });
+    return f;
+  }
+
+  const change = (previousValue: unknown, currentValue: unknown) =>
+    ({ previousValue, currentValue, firstChange: false, isFirstChange: () => false });
+
+  /** DiscoverRelatedItems awaits through several layers, so one microtask is not enough to see it. */
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  it('re-discovers when the form leaves edit mode (the post-save case)', async () => {
+    const f = mounted();
+    const c = f.componentInstance;
+    c.EditMode = false;
+    c.ngOnChanges({ EditMode: change(true, false) });
+    await settle();
+    expect(c.RelatedItems.map((i) => i.EntityName)).toEqual(['MJ: Dogs']);
+  });
+
+  it('does NOT re-discover when the form ENTERS edit mode', async () => {
+    const f = mounted();
+    const c = f.componentInstance;
+    c.EditMode = true;
+    c.ngOnChanges({ EditMode: change(false, true) });
+    await settle();
+    expect(c.RelatedItems).toEqual([]);
+  });
+
+  it('re-discovers on a new Record without consulting the EditMode branch', async () => {
+    const f = mounted();
+    const c = f.componentInstance;
+    c.ngOnChanges({ Record: change(null, ANIMAL_WITH_DOG) });
+    await settle();
+    expect(c.RelatedItems.map((i) => i.EntityName)).toEqual(['MJ: Dogs']);
+  });
+
+  it('finds nothing for a record that has no subtype, so no phantom panel appears', async () => {
+    const f = mounted();
+    const c = f.componentInstance;
+    c.Record = { ...ANIMAL_WITH_DOG, ISAChild: null } as unknown as BaseEntity;
+    c.EditMode = false;
+    c.ngOnChanges({ EditMode: change(true, false) });
+    await settle();
+    expect(c.RelatedItems).toEqual([]);
+  });
+});

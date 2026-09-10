@@ -36,8 +36,11 @@
       [Form]="this" [FormContext]="formContext">
     <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Name" Type="textbox"
         [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+    <!-- (ValueChange) is what makes the species profile below appear the moment a species is chosen,
+         rather than only after a save-and-reopen. On a NEW animal that is the whole point. -->
     <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="Species" Type="select"
-        [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        [EditMode]="EditMode" [FormContext]="formContext"
+        (ValueChange)="OnSpeciesChanged()"></mj-form-field>
     <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="BreedID" Type="textbox"
         [EditMode]="EditMode" [FormContext]="formContext" LinkType="Record"></mj-form-field>
     <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="MicrochipNumber" Type="textbox"
@@ -125,6 +128,48 @@
     <mj-form-field [Record]="record" [ShowLabel]="true" FieldName="__mj_UpdatedAt" Type="textbox"
         [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
   </mj-collapsible-panel>
+
+  <!-- ─── The species profile ────────────────────────────────────────────────────────────────
+       The Dog or Cat record's OWN fields, on the animal's own form. [Record] points these fields at
+       a DIFFERENT entity object than the rest of the form -- that is all it takes, and it is the
+       same binding used everywhere above.
+
+       Nothing here saves the subtype: IS-A delegates Save() to the leaf, so the ordinary Save
+       button writes Animal and Dog in one transaction.
+
+       Note what each list does NOT contain. No leash field on a cat, no litter field on a dog --
+       not omitted, the column does not exist on that subtype. That is the argument for splitting
+       them, visible on screen. ─────────────────────────────────────────────────────────────────── -->
+  @if (SubtypeError) {
+    <mj-collapsible-panel SectionKey="speciesProfile" [SectionName]="SubtypeSectionName" Icon="fa fa-triangle-exclamation"
+        [FormContext]="formContext">
+      <div class="mj-forms-error">{{ SubtypeError }}</div>
+    </mj-collapsible-panel>
+  } @else if (SubtypeChild) {
+    <mj-collapsible-panel SectionKey="speciesProfile" [SectionName]="SubtypeSectionName"
+        [Icon]="IsDogSubtype ? 'fa fa-dog' : 'fa fa-cat'" [FormContext]="formContext">
+      @if (IsDogSubtype) {
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="EnergyLevel" Type="select"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="IsLeashTrained" Type="checkbox"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="IsHouseTrained" Type="checkbox"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="IsGoodWithDogs" Type="checkbox"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+      }
+      @if (IsCatSubtype) {
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="IsIndoorOnly" Type="checkbox"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="IsDeclawed" Type="checkbox"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="IsLitterTrained" Type="checkbox"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+        <mj-form-field [Record]="SubtypeChild" [ShowLabel]="true" FieldName="IsGoodWithCats" Type="checkbox"
+            [EditMode]="EditMode" [FormContext]="formContext"></mj-form-field>
+      }
+    </mj-collapsible-panel>
+  }
 
   <mj-form-panel-slot Entity="MJ: Animals" Slot="after-fields"
       [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>

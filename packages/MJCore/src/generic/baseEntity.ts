@@ -1370,6 +1370,50 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     /**
+     * Release an IS-A subtype that was attached but never written.
+     *
+     * NOT PART OF THE UPSTREAM COMMIT -- see EnsureISAChild's note. Upstream has no counterpart,
+     * and the gap is real: EnsureISAChild refuses a second subtype on a disjoint parent, so once a
+     * record has been told "you are a Dog" there is no supported way to say "no, a Cat" -- not even
+     * on a record that has never been saved, where nothing has happened yet that anyone could want
+     * to keep. A UI that lets someone pick a species therefore dead-ends on the first correction,
+     * which is exactly what the Animal form did before this existed.
+     *
+     * WHAT IT WILL NOT DO. If the attached child has been SAVED, this throws. Detaching a real row
+     * is a demotion: the subtype row still exists in the database, and dropping the in-memory link
+     * would leave the caller believing an animal is no longer a dog while `__mj.Dog` still says it
+     * is. That is a genuine data operation with genuine data loss, and it deserves an explicit
+     * delete, not a side effect of changing a dropdown. That refusal is what makes "you may correct
+     * the species before saving, never after" enforceable rather than a convention.
+     *
+     * @returns true if a child was released, false if there was nothing attached.
+     * @throws if the attached child has been saved, or on an overlapping (AllowMultipleSubtypes) parent.
+     */
+    public DetachISAChild(): boolean {
+        if (this.EntityInfo.AllowMultipleSubtypes) {
+            throw new Error(
+                `DetachISAChild does not apply to '${this.EntityInfo.Name}': AllowMultipleSubtypes is true, ` +
+                `so subtypes are tracked as a list rather than a single attached child.`,
+            );
+        }
+        const child = this._childEntity;
+        if (!child) {
+            return false;
+        }
+        if (child.IsSaved) {
+            throw new Error(
+                `Cannot detach '${child.EntityInfo.Name}' from '${this.EntityInfo.Name}': that subtype record ` +
+                `has been saved. Delete the subtype record explicitly if the record genuinely is no longer one.`,
+            );
+        }
+        this._childEntity = null;
+        // Leave _childEntityDiscoveryDone alone. It records that we already asked the database which
+        // subtype this record has; detaching an in-memory child does not make that answer stale, and
+        // clearing it would buy a redundant FindISAChildEntity round trip on the next load.
+        return true;
+    }
+
+    /**
      * Copy this record's primary key onto the child. In IS-A the shared key IS the relationship, so
      * the child cannot be saved until it carries the parent's key.
      */
@@ -3520,6 +3564,28 @@ export abstract class BaseEntity<T = unknown> {
                 return this.LeafEntity.Save(_options);
             }
 
+            // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
+            // isn't already claimed by another child type (e.g., can't create Meeting
+            // if a Publication already exists with the same Product ID).
+            // Skipped when the parent entity has AllowMultipleSubtypes = true,
+            // which permits overlapping child types (e.g., Person -> Member + Volunteer).
+            //
+            // THIS RUNS BEFORE THE TRANSACTION OPENS, AND THAT ORDERING IS LOAD-BEARING.
+            // EnforceDisjointSubtype asks a sibling subtype's VIEW whether it already claims this
+            // key, and a subtype view JOINs its own table to the PARENT table. It does so through a
+            // fresh RunView -- a different connection, outside this save's transaction. Run it after
+            // the parent chain has been saved and it blocks on the parent row THIS SAVE just wrote
+            // and still holds locked: the request sits until the 30s SQL timeout, every single time,
+            // on every IS-A child create whose parent has more than one subtype. Asking the question
+            // here costs nothing and cannot self-block, because nothing has been written yet -- and
+            // the shared primary key, which is all the check needs, is already known.
+            if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
+                const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
+                if (parentEntityInfo && !parentEntityInfo.AllowMultipleSubtypes) {
+                    await this.EnforceDisjointSubtype();
+                }
+            }
+
             // IS-A orchestration: determine if this is the initiating save in a parent chain
             const isISAInitiator = (!!this._parentEntity) && !_options.IsParentEntitySave;
 
@@ -3583,18 +3649,6 @@ export abstract class BaseEntity<T = unknown> {
             const type: EntityPermissionType = this.IsSaved ? EntityPermissionType.Update : EntityPermissionType.Create;
             const saveSubType = this.IsSaved ? 'update' : 'create';
             this.CheckPermissions(type, true) // this will throw an error and exit out if we don't have permission
-
-            // IS-A disjoint subtype enforcement: on CREATE, ensure parent record
-            // isn't already claimed by another child type (e.g., can't create Meeting
-            // if a Publication already exists with the same Product ID).
-            // Skipped when the parent entity has AllowMultipleSubtypes = true,
-            // which permits overlapping child types (e.g., Person -> Member + Volunteer).
-            if (!this.IsSaved && this.EntityInfo.IsChildType && !_options.ReplayOnly) {
-                const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
-                if (parentEntityInfo && !parentEntityInfo.AllowMultipleSubtypes) {
-                    await this.EnforceDisjointSubtype();
-                }
-            }
 
             if (_options.IgnoreDirtyState || initialDirtyState || _options.ReplayOnly) {
                 // Raise save_started event only when we're actually going to save
