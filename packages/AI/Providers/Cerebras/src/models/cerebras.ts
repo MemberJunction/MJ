@@ -237,20 +237,23 @@ export class CerebrasLLM extends BaseLLM {
         /**
          * NARROWED TO THE NON-STREAMING MEMBER OF THE UNION, DELIBERATELY.
          *
-         * Newer versions of the SDK export `ChatCompletion` as a UNION:
+         * The SDK exports `ChatCompletion` as a UNION, and has done since at least 1.64.1 — the
+         * version the lockfile pins:
          *   ChatCompletion.ChatCompletionResponse | ChatCompletion.ChatChunkResponse | ChatCompletion.ErrorChunkResponse
-         * Only the first carries `choices`, `usage` and `model`, so holding the bare union makes all
-         * three reads below fail to compile (TS2339). This method is `nonStreamingChatCompletion` and
-         * never sets `stream`, so the non-streaming member is correct by construction rather than by
-         * assumption; the other two arrive only on a stream, and a transport failure throws into the
-         * catch below rather than returning an error chunk here. The cast is erased at runtime.
          *
-         * WHICH VERSIONS THIS BITES: the lockfile resolves `@cerebras/cerebras_cloud_sdk` to 1.64.1,
-         * where `ChatCompletion` is not a union, so this file compiles without the narrowing and CI
-         * has always been green. The declared range is `^1.64.1`, which admits 1.91.0 — where it IS a
-         * union. So this is a LATENT break rather than a current one: it surfaces for anyone who
-         * installs fresh outside the lockfile, and it becomes CI's problem the moment the lockfile is
-         * refreshed, where it would arrive attached to an unrelated dependency bump.
+         * `ErrorChunkResponse` declares only `error` and `status_code`, so `choices`, `usage` and
+         * `model` are not common to all three members. On the bare union each of those three reads
+         * therefore comes back as `unknown` rather than its real type, and assigning `unknown` is what
+         * fails — the property access itself stays legal, because every member also carries an
+         * `[k: string]: unknown` index signature.
+         *
+         * WHAT CHANGED HERE is only WHERE that is handled. The original code coped by casting at each
+         * of the three reads; this narrows once, at the declaration, and the reads then need nothing.
+         * Same behaviour, one assertion instead of three, and the cast is erased at runtime either way.
+         *
+         * The narrowing is safe BY CONSTRUCTION rather than by assumption: this method is
+         * `nonStreamingChatCompletion` and never sets `stream`, streaming has its own method, and a
+         * transport failure throws into the catch below rather than returning an error chunk here.
          */
         let chatResponse: ChatCompletion.ChatCompletionResponse;
         try {
@@ -263,7 +266,8 @@ export class CerebrasLLM extends BaseLLM {
         }
         const endTime = new Date();
 
-        // Cast to any to extract the choices
+        // `choice` stays `any` here: the per-choice shape is read loosely below (`message.reasoning`
+        // is not on every model's response), and tightening it is a separate change.
         const choices: ChatResultChoice[] = chatResponse.choices.map((choice: any) => {
             const rawMessage = choice.message.content;
             // in some cases, Cerebras models do thinking and return that as the first part 
@@ -285,11 +289,7 @@ export class CerebrasLLM extends BaseLLM {
         });
          
          
-        // Cast retained deliberately: `usage` is declared `Usage | null | undefined` on the union
-        // member, and the reads below assume it is present. This package compiles without
-        // strictNullChecks, so dropping the cast would look clean and merely hide that assumption
-        // until the day strict is turned on. `choices` needs no such cast — it is a required field.
-        const usage = chatResponse.usage as ChatCompletion.ChatCompletionResponse.Usage
+        const usage = chatResponse.usage
         // OpenAI-compatible cache reporting (if Cerebras enables prompt caching for the model): the
         // cache-read count is nested at prompt_tokens_details.cached_tokens and is INCLUDED in
         // prompt_tokens. Normalize to the uniform ModelUsage contract: promptTokens must be
