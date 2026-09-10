@@ -207,15 +207,18 @@ Last migration in each of **bizapps-orders** and **bizapps-common**. Follow the 
 - apply-time `(SELECT COALESCE(MAX([Sequence]),0) FROM … WHERE EntityID = …) + 1` — never a literal `Sequence`
 - placed after every statement that could prune the rows it inserts
 - **no MJ-core migration** — the Addresses geo fields are bizapps-common's (§1)
+- **Precondition:** any CodeGen capture must be generated against an MJ that contains `2f305df1ac` (source-linked workspace, e.g. `M5` joined workspace / `mj dev workspace`), **not** published `@memberjunction/codegen-lib@6.1.0-edge.5` (published 2026-09-02, which predates #4292's literal-Sequence fix and still emits literal Sequences with the `+100000` park).
 
 Scope must be **measured, not assumed** — see §7.
 
 ### Phase 4 — guards, so "don't do it again" is not the mechanism
 
-- **New CI gate, all four repos:** reject any migration containing `spDeleteUnneededEntityFields`.
+Port the guards to app repos **before** Phase 3 lands, so the gates catch any bad capture immediately:
+
+- **New CI gate, all four repos:** reject any migration containing `spDeleteUnneededEntityFields` (`check-migration-no-prune.mjs`).
   Deterministic, cheap, catches the class at authoring time.
-- **Port `check-migration-entityfield-sequence.sh`** to `bizapps-orders` and `more-cheese`
-  (MJ and bizapps-common already have it). bizapps-orders carries **829 of 886** `EntityField`
+- **Port modern positional `check-migration-entityfield-sequence.mjs`** to `bizapps-orders` and `more-cheese`, and **upgrade** `bizapps-common` from `.sh` to `.mjs`.
+  (The legacy `.sh` matched only the 6-digit `100000` band; #4292 replaced it in MJ with the positional `.mjs` parser covering both quoting dialects, masked comments/strings, and self-tests). bizapps-orders carries **829 of 886** `EntityField`
   INSERTs with a literal `Sequence`, the exact pattern that "cannot fail on a working dev database
   … fails only on fresh installs."
 - **Do not** ship a migration that `RAISERROR`s on a view↔EntityField mismatch. It would brick a
