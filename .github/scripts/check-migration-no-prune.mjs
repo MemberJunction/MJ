@@ -2,17 +2,23 @@
 /**
  * check-migration-no-prune.mjs
  *
- * A versioned migration must not contain spDeleteUnneededEntityFields.
+ * A versioned or baseline migration must not contain spDeleteUnneededEntityFields.
  *
  * ── WHY ─────────────────────────────────────────────────────────────────────────
  * spDeleteUnneededEntityFields reconciles __mj.EntityField against the columns
  * visible in each entity's BaseView at the moment it runs. That is valid against
  * a finished schema during live CodeGen execution.
  *
- * In a replayable versioned migration (Flyway V*__*.sql), it executes against an
- * intermediate schema state where subsequent migrations have not yet created or
- * altered views. The procedure erroneously concludes newly added fields are
- * "unneeded" and deletes them, breaking BaseEntity.Save() on clean database replays.
+ * In a replayable versioned or baseline migration (Flyway V*__*.sql or B*__*.sql),
+ * it executes against an intermediate schema state where subsequent migrations have
+ * not yet created or altered views. The procedure erroneously concludes newly added
+ * fields are "unneeded" and deletes them, breaking BaseEntity.Save() on clean
+ * database replays.
+ *
+ * Unlike the sequence gate (which excludes baselines because initial dumps have
+ * no second-migration sequence collision risk), this gate MUST inspect both V and B
+ * migrations: baselines run on a clean install, which is the exact moment an
+ * unneeded-fields prune executes against an incomplete view set and deletes sibling fields.
  *
  * CodeGen marks these calls `isRecurringScript: true`, and `omitRecurringScriptsFromLog: true`
  * suppresses them from emitted migration logs. They must remain live-CodeGen-only.
@@ -38,9 +44,14 @@ import { stripSqlComments } from './check-codegen-tail.mjs';
 
 const RED = '\x1b[0;31m', YELLOW = '\x1b[0;33m', GREEN = '\x1b[0;32m', DIM = '\x1b[2m', NC = '\x1b[0m';
 const GIT_MAX_BUFFER = Number(process.env.MJ_GIT_MAX_BUFFER) || 256 * 1024 * 1024;
-const VERSIONED_MIGRATION_RE = /(^|\/)V\d{12}__[^/]*\.sql$/;
+// Flyway versioned (V) and baseline (B) migrations.
+// NOTE: unlike the sequence gate (which excludes baselines because baselines are initial dumps with no
+// second-migration UQ_EntityField_EntityID_Sequence collision risk), this gate MUST include baselines.
+// A baseline runs on a clean install, which is the exact moment an unneeded-fields prune executes against
+// an incomplete view set and deletes newly created fields from sibling schemas.
+const VERSIONED_MIGRATION_RE = /(^|\/)[VB]\d{12}__[^/]*\.sql$/;
 const FIXTURE_DIR_RE = /(^|\/)tests?\//;
-const inScope = (f) => VERSIONED_MIGRATION_RE.test(f) && !FIXTURE_DIR_RE.test(f);
+export const inScope = (f) => VERSIONED_MIGRATION_RE.test(f) && !FIXTURE_DIR_RE.test(f);
 
 /** Opening / reference to spDeleteUnneededEntityFields in any quoting or call convention. */
 const PRUNE_PROC_RE = /(?:\[spDeleteUnneededEntityFields\]|"spDeleteUnneededEntityFields"|`spDeleteUnneededEntityFields`|\bspDeleteUnneededEntityFields\b)/i;
@@ -117,11 +128,29 @@ export const SELF_TEST_FIXTURES = [
     ]
 ];
 
+const SCOPE_TEST_FIXTURES = [
+    ['V-prefix migration is in scope', true, 'migrations/v1/V202607141200__v1.0.0.sql'],
+    ['B-prefix baseline migration is in scope', true, 'migrations/v1/B202607141200__v1.0.0.sql'],
+    ['fixture in tests/ is excluded', false, 'tests/migrations/V202607141200__v1.0.0.sql'],
+    ['fixture in test/ is excluded', false, 'test/migrations/B202607141200__v1.0.0.sql'],
+    ['repeatable migration is excluded', false, 'migrations/R__RefreshMetadata.sql'],
+    ['non-migration sql file is excluded', false, 'scripts/seed.sql'],
+];
+
 export function runSelfTest() {
     let failed = 0;
     for (const [name, expected, sql] of SELF_TEST_FIXTURES) {
         const hits = scanContent(sql);
         const actual = hits.length > 0;
+        if (actual !== expected) {
+            console.error(`${RED}FAIL${NC} ${name}: expected ${expected}, got ${actual}`);
+            failed++;
+        } else {
+            console.log(`${GREEN}PASS${NC} ${name}`);
+        }
+    }
+    for (const [name, expected, path] of SCOPE_TEST_FIXTURES) {
+        const actual = inScope(path);
         if (actual !== expected) {
             console.error(`${RED}FAIL${NC} ${name}: expected ${expected}, got ${actual}`);
             failed++;

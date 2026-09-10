@@ -12,6 +12,8 @@
  *   - `includeSchemas` as `@IncludedSchemaNames` when set
  */
 
+import { mj_core_schema } from '../Config/config';
+
 export interface HealSchemaRoutineParams {
     values: string[];
     names: string[];
@@ -39,9 +41,9 @@ export function getAuthoredExcludeSchemas(fallback?: string[]): string[] {
 }
 
 /**
- * Named-parameter lists for a heal SP call.
- * `@IncludedSchemaNames` is omitted when `includeSchemas` is empty so classic
- * MJ (no include list) keeps the historical EXEC shape.
+ * When `includeSchemas` is set, work is limited to those schemas.
+ * When `includeSchemas` is empty/undefined (MJ core), `@IncludedSchemaNames` defaults to
+ * `mj_core_schema()` so reconcilers never evaluate sibling app schemas on host databases.
  */
 export function buildHealSchemaRoutineParams(options: {
     authoredExclude: string[];
@@ -60,6 +62,9 @@ export function buildHealSchemaRoutineParams(options: {
     const include = (options.includeSchemas ?? []).map((s) => s.trim()).filter((s) => s.length > 0);
     if (include.length > 0) {
         values.push(`'${include.join(',')}'`);
+        names.push('IncludedSchemaNames');
+    } else {
+        values.push(`'${mj_core_schema()}'`);
         names.push('IncludedSchemaNames');
     }
 
