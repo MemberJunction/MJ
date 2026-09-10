@@ -236,7 +236,10 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     // Subscribe to refresh trigger for dynamic version changes
     if (this.refreshTrigger) {
       this.refreshTrigger.pipe(takeUntil(this.destroy$)).subscribe(async (data) => {
-        if (data.artifactId === this.artifactId) {
+        // UUIDsEqual, not ===: SQL Server hands back upper-case UUIDs and PostgreSQL lower-case, so
+        // a raw comparison silently drops a legitimate refresh whenever the emitting side and this
+        // input picked up the id from differently-cased sources.
+        if (UUIDsEqual(data.artifactId, this.artifactId)) {
           // Reload all versions to get any new ones
           await this.loadArtifact(data.versionNumber);
         }
@@ -265,6 +268,14 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
     // Reload artifact when artifactId changes
     if (changes['artifactId'] && !changes['artifactId'].firstChange) {
       await this.loadArtifact(this.versionNumber);
+      // `loadArtifact` already honored the (possibly also-changed) versionNumber, so the branch
+      // below has nothing left to do. Angular delivers both inputs in ONE SimpleChanges when a
+      // caller switches artifact and version together, and these are two independent `if`s: the
+      // version branch used to find the version `loadArtifact` had just loaded sitting in the
+      // freshly populated `allVersions` and load its content, attributes, collections and links a
+      // second time — roughly six redundant round trips per open, including a second full content
+      // download, none of them cancellable by a later load.
+      return;
     }
 
     // Switch to new version when versionNumber changes (but artifactId stays the same)
