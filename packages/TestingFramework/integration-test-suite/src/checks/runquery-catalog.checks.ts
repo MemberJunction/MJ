@@ -159,7 +159,7 @@ export function PickReferenceEntity(provider: IMetadataProvider): EntityInfo | u
  * Returns undefined for names with no identifier role (falls through to type derivation).
  */
 function identifierRoleValue(paramName: string, entity: EntityInfo): string | undefined {
-    const pk = entity.PrimaryKeys[0]?.Name ?? 'ID';
+    const pk = entity.FirstPrimaryKey?.Name ?? 'ID';
     switch (paramName.trim().toLowerCase()) {
         case 'schemaname': return entity.SchemaName;
         case 'baseview': return entity.BaseView;

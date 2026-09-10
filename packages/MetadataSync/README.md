@@ -658,10 +658,22 @@ Reference fields from the root entity in nested structures:
 - `@root:CategoryID` -- Get the root's CategoryID
 - Useful for deeply nested relationships
 
+### @owner: References
+Reference fields synchronously in-memory from the owner record for children nested inside collections, embeds, or extensions:
+- `@owner:ShipToPersonID` -- Copies the owner's `ShipToPersonID` value into a nested child or subtype extension field without database queries.
+- Cannot be used at root level; valid only within child collections, embeds, or extensions where an enclosing owner entity exists.
+
 ### @env: References
 Support environment-specific values:
 - `@env:VARIABLE_NAME`
 - Useful for different environments (dev/staging/prod)
+
+### First-Class Composition Axes (`collections`, `embeds`, `extension`)
+MetadataSync natively supports three composition axes directly within `RecordData`, persisted in a single `Save()` call on the root entity graph:
+- **`collections`**: Declared `RelatedRecordCollection` sets (e.g. `Lines`, `AgendaItems`). Supports `upsert` mode (default: match by PK, leaves unmentioned items intact) and `authoritative` mode (configured in `.mj-sync.json`: computes deletion set, enforced with a 20% max implied delete safety rail unless `--allow-bulk-delete` is passed).
+- **`embeds`**: 1:1 peer record embeds keyed by foreign key field name (e.g. `ShipToAddressID`). Peer records are ensured and assigned before parent entity save.
+- **`extension`**: 1:1 IsA subtype extensions (e.g. `Event Order Lines` extending `Order Lines`). Leaf fields only (parent fields in leaf extensions are rejected during validation). Resolved automatically via prospective subtype resolution (`EnsureISAChild()`).
+
 
 ### Primary Key Handling
 The tool automatically detects primary key fields from entity metadata:
@@ -1349,9 +1361,16 @@ The pull command supports smart update capabilities with extensive configuration
     },
     "ignoreNullFields": false,
     "ignoreVirtualFields": false
+  },
+  "push": {
+    "skipGeoCoding": true
   }
 }
 ```
+
+`push.skipGeoCoding` maps to `EntitySaveOptions.SkipGeoCoding` for this entity only. Use it on display-only geo entities (People/Organizations whose coords are virtual `PrimaryAddressLatitude`). Do **not** use a global CLI `--skip-geocode` as the only control. Addresses with native lat/lng already set do not call the provider even without this flag.
+
+Parallel `--parallel-batch-size` defaults to **10**. Isolation is **per JSON-root graph**, not per flattened row: an Action and its nested Action Params share one `CreateIndependentInstance()` (shared pool, own transaction stack), the same pattern MJAPI uses per request. Durable AfterCreate actions without a queue submitter fire after that instance's transaction depth is 0 — they must not nest in the caller's `EntityTransactionScope`.
 
 ### Pull Configuration Options
 
@@ -1522,10 +1541,18 @@ Records are automatically grouped into dependency levels:
 - **Level 1**: Records that depend only on Level 0 records
 - **Level 2**: Records that depend on Level 0 or Level 1 records
 
-Records within the same dependency level can be safely processed in parallel.
+Records are grouped into **JSON-root graphs** (an Action and its nested Action Params share one graph). Each graph gets one `CreateIndependentInstance()`. After each parallel batch the pool releases a graph when it will not appear at a later level, **or** when `TransactionDepth` is already 0 (`Save()` settled, so a fresh instance at the next level is safe). Graphs with leftover depth stay live until their last level. Peak live independent instances is therefore bounded by `--parallel-batch-size`, plus any still-open leftover-depth graphs — not "always equal to the file's root count", and not "always equal to the batch size" if leftover depth is holding graphs across levels.
+
+Every DB read and write for a graph — `GetEntityObject`, `Save`, `Load`, `RunView`, lookups, RecordGeoCode — must use that same provider. That is an **ORM** invariant (`BaseEntity.BindProvider`); mixing the host connection with a graph instance in one tree is a deadlock: the child FK waits on an uncommitted parent on another pooled connection. `BaseEntity.Save()` still opens and settles its own `EntityTransactionScope` per record; leftover depth (a subclass `BeginTransaction`, a nested entity action) is committed at drain on success and rolled back on failure. If the **first** `CreateIndependentInstance` in a file fails, **all** graphs in that file use the host (inside the push transaction). If it fails *after* independent instances already exist, the file is aborted — never a mix.
+
+The first thrown record error **fails the file** (fail-fast). A record that returns `status: 'error'` without throwing (e.g. missing primaryKey with `autoCreateMissingRecords=false`) also prevents that graph's leftover depth from being committed.
+
+**Sibling graphs** at the same dependency level run in parallel. The default `--parallel-batch-size` is **10**, not 1. Defaulting to 1 was a wrong workaround for mixed-provider hangs; pass `1` only when you want to serialize graphs for debugging. `--parallel-batch-size 1` does **not** mean one global provider — it only serializes graphs.
+
+Releasing settled graphs between levels bounds peak live instances at the batch size. The cost is more `CreateIndependentInstance` calls (one per graph per level when `Save()` settles, so L×N instead of N, each doing a `Config()` / metadata round trip). That is the chosen tradeoff for a CLI. If a large push is slow, this is the first place to look.
 
 ```bash
-# Default processing
+# Default processing (batch size 10, isolated providers)
 mj sync push
 
 # Process 20 records in parallel
@@ -1534,7 +1561,7 @@ mj sync push --parallel-batch-size=20
 # Maximum parallelism (50 records)
 mj sync push --parallel-batch-size=50
 
-# Conservative approach for debugging
+# Serialize graphs for debugging — not the default
 mj sync push --parallel-batch-size=1
 ```
 

@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { mkdirSync } from 'fs';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
+import { ordinalCompare } from '@memberjunction/global';
 import { logError } from './status_logging';
 
 /**
@@ -41,7 +42,7 @@ export class RemoteOperationGeneratorBase {
             // Active only, sorted by key for deterministic output (no git churn when nothing changed).
             const active = remoteOps
                 .filter((o) => o.Status === 'Active')
-                .sort((a, b) => a.OperationKey.localeCompare(b.OperationKey));
+                .sort((a, b) => ordinalCompare(a.OperationKey, b.OperationKey));
 
             const anyBody = active.some((o) => this.hasGeneratedBody(o));
             const header = this.buildFileHeader(active, anyBody);
@@ -130,8 +131,8 @@ export class RemoteOperationGeneratorBase {
 
         // @memberjunction/core first, then the rest alphabetically — deterministic output across runs.
         const importLines = [...imports.entries()]
-            .sort(([a], [b]) => (a === '@memberjunction/core' ? -1 : b === '@memberjunction/core' ? 1 : a.localeCompare(b)))
-            .map(([library, items]) => `import { ${[...items].sort().join(', ')} } from "${library}";`)
+            .sort(([a], [b]) => (a === '@memberjunction/core' ? -1 : b === '@memberjunction/core' ? 1 : ordinalCompare(a, b)))
+            .map(([library, items]) => `import { ${[...items].sort(ordinalCompare).join(', ')} } from "${library}";`)
             .join('\n');
 
         return `/*************************************************

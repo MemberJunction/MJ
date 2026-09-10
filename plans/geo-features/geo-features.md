@@ -171,10 +171,11 @@ AutoUpdateSupportsGeoCoding   BIT   DEFAULT 1
 - Entity with only `Name`, `Description`, `Status` fields → CodeGen leaves `SupportsGeoCoding = 0`
 
 When `SupportsGeoCoding = 1`:
-- CodeGen generates geo-aware subclass code for this entity (GeoFieldMappings + AfterSave hook)
-- CodeGen adds `__mj_Latitude` and `__mj_Longitude` virtual fields to the base view
-- UI shows map view toggle in EntityViewer
-- Scheduled geocoding job includes this entity
+- **Read side:** map view, distance, and similar. Virtual Geo\* fields (e.g. `PrimaryAddressLatitude`, `__mj_Latitude_{FK}`) count. Entity-viewer / map resolve lat/lng in this order: writable native → `PrimaryAddressLatitude` → `__mj_Latitude_{FK}` → `__mj_Latitude`.
+- **Write side (GeoCodeSyncService):** only if the entity has **1+ writable** (`!IsVirtual && AllowUpdateAPI`) Geo\* fields. Person/Org PrimaryAddress\* are virtual — the service never runs. Native lat/lng already populated → do not call the provider (sample data / pasted coords).
+- CodeGen joins `vwRecordGeoCodes` only for write-source entities **without** native lat/lng. Address stores coords on the row (`Latitude`/`Longitude` tagged `GeoLatitude`/`GeoLongitude`).
+- EmbeddedRecord FKs (e.g. `ShipToAddressID`) bubble as `__mj_Latitude_ShipToAddressID` (display only).
+- **Anti-patterns:** hand-authored `RecordGeoCode` JSON + SHA to skip import geocoding; treating Person/Org primary address as `EmbeddedRecord` (that is AddressLink + layered view); global CLI `--skip-geocode` as the only control (use per-entity `push.skipGeoCoding` in `.mj-sync.json`).
 
 #### Virtual Fields in Base View (CodeGen-Generated)
 

@@ -222,7 +222,8 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
      */
     generateCRUDCreate(entity: EntityInfo): string {
         const spName = this.getCRUDRoutineName(entity, 'Create');
-        const firstKey = entity.FirstPrimaryKey;
+        const firstKey = entity.FirstPrimaryKey; // first-pk-ok: read only inside the UNIQUEIDENTIFIER branch, which is guarded by entity.PrimaryKeys.length === 1; the IDENTITY and composite branches iterate entity.PrimaryKeys
+        const identityKey = entity.PrimaryKeys.find(k => k.AutoIncrement);
         const efString = this.generateCRUDParamString(entity.Fields, false);
         const permissions = this.generateCRUDPermissions(entity, spName, 'Create');
 
@@ -232,8 +233,15 @@ SELECT * FROM [${esc(schema)}].[${esc(tableName)}];`;
         let additionalFieldList = '';
         let additionalValueList = '';
 
-        if (firstKey.AutoIncrement) {
-            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = SCOPE_IDENTITY()`;
+        if (identityKey) {
+            // IDENTITY key. On a composite key such as (TenantID, ID IDENTITY) the remaining key
+            // columns are caller-supplied: they must be inserted and included in the row lookup.
+            // For a single-column identity key callerSuppliedKeys is empty and nothing is added.
+            const callerSuppliedKeys = entity.PrimaryKeys.filter(k => !k.AutoIncrement);
+            additionalFieldList = callerSuppliedKeys.map(k => `[${k.Name}]`).join(',\n                ');
+            additionalValueList = callerSuppliedKeys.map(k => `@${k.CodeName}`).join(',\n                ');
+            const callerSuppliedKeyPredicates = callerSuppliedKeys.map(k => ` AND [${k.Name}] = @${k.CodeName}`).join('');
+            selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${identityKey.Name}] = SCOPE_IDENTITY()${callerSuppliedKeyPredicates}`;
         } else if (firstKey.Type.toLowerCase().trim() === 'uniqueidentifier' && entity.PrimaryKeys.length === 1) {
             const hasDefaultValue = firstKey.DefaultValue && firstKey.DefaultValue.trim().length > 0;
 
@@ -712,8 +720,8 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${col
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const schemaName = entity.SchemaName;
         const tableName = entity.BaseTable;
         const fieldName = field.Name;
@@ -786,8 +794,8 @@ GO
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const schemaName = entity.SchemaName;
         const tableName = entity.BaseTable;
         const fieldName = field.Name;
@@ -856,8 +864,8 @@ GO
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const schemaName = entity.SchemaName;
         const tableName = entity.BaseTable;
         const fieldName = field.Name;
@@ -936,7 +944,7 @@ GO
         const classNameFirstChar = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const schemaName = entity.SchemaName;
         const functionName = `fn${entity.BaseTable}${field.Name}_GetHierarchyMeta`;
-        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: hierarchy TVF argument; sql_codegen.getHierarchyFKs skips composite-key entities and the TVF generator throws for them
         return `OUTER APPLY\n    [${schemaName}].[${functionName}]([${classNameFirstChar}].[${primaryKey}], [${classNameFirstChar}].[${field.Name}]) AS ${alias}`;
     }
 
@@ -950,8 +958,8 @@ GO
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = entity.FirstPrimaryKey.SQLFullType; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const schemaName = entity.SchemaName;
         const tableName = entity.BaseTable;
         const fieldName = field.Name;
@@ -1026,7 +1034,7 @@ GO
         const classNameFirstChar = entity.BaseTableCodeName.charAt(0).toLowerCase();
         const schemaName = entity.SchemaName;
         const functionName = `fn${entity.BaseTable}${field.Name}_GetRootID`;
-        const primaryKey = entity.FirstPrimaryKey.Name;
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: hierarchy TVF argument; sql_codegen.getHierarchyFKs skips composite-key entities and the TVF generator throws for them
         return `OUTER APPLY\n    [${schemaName}].[${functionName}]([${classNameFirstChar}].[${primaryKey}], [${classNameFirstChar}].[${field.Name}]) AS ${alias}`;
     }
 
@@ -1097,7 +1105,13 @@ GO
     private generateCascadeCursorDelete(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
         const qi = this.Dialect.QuoteIdentifier.bind(this.Dialect);
         const qs = this.Dialect.QuoteSchema.bind(this.Dialect);
-        const whereClause = `${qi(fkField.CodeName)} = @${parentEntity.FirstPrimaryKey.CodeName}`;
+        const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
+        if (!parentKey) {
+            const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
+            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            return '\n' + warning;
+        }
+        const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
         const spName = this.getCRUDRoutineName(relatedEntity, 'Delete');
         const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
         const pkComponents = this.buildPrimaryKeyComponents(relatedEntity, variablePrefix);
@@ -1133,7 +1147,13 @@ GO
     private generateCascadeCursorUpdate(parentEntity: EntityInfo, relatedEntity: EntityInfo, fkField: EntityFieldInfo): string {
         const qi = this.Dialect.QuoteIdentifier.bind(this.Dialect);
         const qs = this.Dialect.QuoteSchema.bind(this.Dialect);
-        const whereClause = `${qi(fkField.CodeName)} = @${parentEntity.FirstPrimaryKey.CodeName}`;
+        const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
+        if (!parentKey) {
+            const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
+            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, 'Delete')} generation: ${warning.trim()}`);
+            return '\n' + warning;
+        }
+        const whereClause = `${qi(fkField.CodeName)} = @${parentKey.CodeName}`;
         const variablePrefix = `${relatedEntity.CodeName}_${fkField.CodeName}`;
         const spName = this.getCRUDRoutineName(relatedEntity, 'Update');
         const updateParams = this.buildUpdateCursorParameters(relatedEntity, fkField, variablePrefix);
@@ -1730,9 +1750,9 @@ ORDER BY
      *    PK, and unique key detection.
      * 3. **Cleanup**: Drops the temp tables.
      */
-    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         return this.buildPendingFieldsTempTables(mjCoreSchema) +
-            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs) +
+            this.buildPendingFieldsMainQuery(mjCoreSchema, entityIDs, excludeSchemas) +
             this.buildPendingFieldsCleanup();
     }
 
@@ -1768,12 +1788,18 @@ FROM [${schema}].[vwTableUniqueKeys];
      * Uses MaxSequences CTE to calculate proper field ordering and NumberedRows
      * CTE to deduplicate results.
      */
-    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[]): string {
+    private buildPendingFieldsMainQuery(schema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         // When scoped, narrow the scan to specific entities. SQL injection isn't a concern
         // here — entityIDs are MJ-internal UUIDs from the metadata cache, not user input —
         // but we quote each ID anyway for SQL Server's UUID literal syntax.
         const scopeFilter = entityIDs && entityIDs.length > 0
             ? `AND sf.EntityID IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
+        // includeSchemas is compiled into excludeSchemas before this query runs. Without this
+        // filter, Pass 1 (unscoped entityIDs) inserts pending fields for EVERY schema in the
+        // database — e.g. a Forms CodeGen run emitted Common Activity Files EntityField rows.
+        const schemaFilter = excludeSchemas && excludeSchemas.length > 0
+            ? `AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `WITH MaxSequences AS (
    SELECT
@@ -1788,11 +1814,9 @@ NumberedRows AS (
    SELECT
       sf.EntityID,
       ISNULL(ms.MaxSequence, 0) + 100000 + sf.Sequence AS Sequence,
-      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
-      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
-      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
-      -- (Sequence above stays as-is: it is what this query ORDERs BY, and what the renumber pass
-      -- later overwrites from the schema.)
+      -- The RAW schema ordinal. The INSERT emitter uses it for DefaultInView only; the emitted
+      -- Sequence is an apply-time MAX()+1 subquery. (Sequence above is only this query's ORDER BY
+      -- key — never inserted — and the renumber pass overwrites every row from the schema.)
       sf.Sequence AS SourceOrdinal,
       sf.FieldName,
       sf.Description,
@@ -1841,6 +1865,7 @@ NumberedRows AS (
    WHERE
       EntityFieldID IS NULL
       ${scopeFilter}
+      ${schemaFilter}
    )
    SELECT *
    FROM NumberedRows

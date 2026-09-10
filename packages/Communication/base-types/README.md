@@ -86,6 +86,7 @@ classDiagram
         +SearchMessages() SearchMessagesResult
         +ListAttachments() ListAttachmentsResult
         +DownloadAttachment() DownloadAttachmentResult
+        +GetEvents() GetEventsResult
     }
 
     class SendGridProvider {
@@ -138,6 +139,7 @@ These methods have default implementations that return "not supported" errors. O
 | `SearchMessages()` | Search messages by query string |
 | `ListAttachments()` | List attachments on a message |
 | `DownloadAttachment()` | Download an attachment by ID |
+| `GetEvents()` | Read calendar events for one calendar |
 
 #### Capability Discovery
 
@@ -244,6 +246,7 @@ All parameter and result types used across the framework:
 | `SearchMessagesParams` / `SearchMessagesResult` | Message search |
 | `ListAttachmentsParams` / `ListAttachmentsResult` | Attachment listing |
 | `DownloadAttachmentParams` / `DownloadAttachmentResult` | Attachment download |
+| `GetEventsParams` / `GetEventsResult` / `GetEventsEvent` | Calendar retrieval |
 | `ProviderOperation` | Union type of all operation names |
 | `MessageFolder` / `MessageAttachment` | Data structures for folders and attachments |
 

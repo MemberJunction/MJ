@@ -3706,6 +3706,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     },
                 };
 
+                // The event drives BaseEngine caches directly, AND — because this provider
+                // registers the entities its metadata is built from (the MJ_Metadata dataset's
+                // items) with ProviderBase's static event fan-out — it also schedules a debounced
+                // metadata staleness check when the written entity is one of them. See
+                // ProviderBase.handleMetadataMemberEntityEvent; no entity names are listed here.
                 MJGlobal.Instance.RaiseEvent({
                     event: MJEventType.ComponentEvent,
                     eventCode: BaseEntity.BaseEventCode,
@@ -3726,9 +3731,68 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
     }
 
     /**
+     * Minimum client-side coalescing window after a metadata member write, in milliseconds.
+     * See {@link MetadataMemberRefreshDelayMs} for why this is tens of seconds and jittered.
+     */
+    public static ClientMemberRefreshWindowMinMs: number = 15_000;
+
+    /**
+     * Random jitter added on top of {@link ClientMemberRefreshWindowMinMs} each time the window
+     * is armed, so the fleet of connected browsers never runs its checks in the same instant.
+     */
+    public static ClientMemberRefreshWindowJitterMs: number = 30_000;
+
+    /**
+     * The client's window is long and RANDOMIZED where the server's is a short debounce,
+     * because the economics are inverted. MJ_Metadata's members are not only permission
+     * entities — they include entities ordinary users and agents write routinely
+     * (`MJ: Dashboards`, `MJ: Queries` and its children, `MJ: Libraries`), and the server
+     * broadcasts every save to every connected browser. With the server-style 500ms window,
+     * one dashboard save would make EVERY session run a staleness check and — since the member
+     * table's timestamp genuinely moved — re-pull the multi-megabyte metadata graph, all
+     * within the same half-second: at 200 sessions, gigabytes of egress per routine save.
+     * A window of 15–45s (uniform jitter per arming) caps each browser at one status check and
+     * at most one pull per window regardless of org-wide write rate, and spreads those pulls
+     * so they cannot stampede the server. Client metadata freshness is a UX nicety, not an
+     * enforcement surface — the server enforces from its OWN metadata on its unchanged ~1–2s
+     * path, so a browser rendering a just-revoked column for up to a window is display-only
+     * (the wire strips it regardless).
+     */
+    protected get MetadataMemberRefreshDelayMs(): number {
+        return GraphQLDataProvider.ClientMemberRefreshWindowMinMs
+            + Math.random() * GraphQLDataProvider.ClientMemberRefreshWindowJitterMs;
+    }
+
+    /**
+     * Coalesce instead of debounce: with a window this long, re-arming on every event would let
+     * steady org-wide write activity postpone the refresh forever. Joining the armed window
+     * guarantees at most one refresh per window at any write rate.
+     */
+    protected get MetadataMemberRefreshRearmsOnNewEvents(): boolean {
+        return false;
+    }
+
+    /**
+     * How this client refreshes after one of the entities its metadata is built from changes
+     * (see ProviderBase.handleMetadataMemberEntityEvent — membership comes from the MJ_Metadata
+     * dataset definition, not a list). A browser must not re-pull the full metadata graph on
+     * every such write, so instead of the base class's hard Refresh this runs the staleness
+     * check: `RefreshIfNeeded` compares server timestamps and refetches only when genuinely
+     * stale, so a spurious event costs one cheap status round-trip. The check-interval throttle
+     * is bypassed because by the time the coalescing window fires, the caller holds positive
+     * evidence at least one member entity was written since the window was armed — the throttle
+     * would otherwise silently drop it. Volume is governed by the window above, not the
+     * throttle.
+     */
+    protected async RefreshAfterMetadataMemberChange(): Promise<boolean> {
+        return this.RefreshIfNeeded(undefined, true);
+    }
+
+    /**
      * Unsubscribes from cache invalidation events. Called during cleanup/logout.
      */
     public UnsubscribeFromCacheInvalidation(): void {
+        this.CancelPendingMetadataMemberRefresh();
         if (this._cacheInvalidationSubscription) {
             this._cacheInvalidationSubscription.unsubscribe();
             this._cacheInvalidationSubscription = null;

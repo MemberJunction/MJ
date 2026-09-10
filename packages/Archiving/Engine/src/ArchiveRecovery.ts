@@ -97,7 +97,7 @@ export class ArchiveRecovery {
     private async LoadArchiveRunDetail(detailId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
         const md = this.Provider;
         const detail = await md.GetEntityObject('MJ: Archive Run Details', contextUser);
-        const loaded = await detail.InnerLoad(CompositeKey.FromKeyValuePair('ID', detailId));
+        const loaded = await detail.InnerLoad(CompositeKey.FromID(detailId));
         return loaded ? detail : null;
     }
 
@@ -107,7 +107,7 @@ export class ArchiveRecovery {
     private async LoadArchiveRun(archiveRunId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
         const md = this.Provider;
         const run = await md.GetEntityObject('MJ: Archive Runs', contextUser);
-        const loaded = await run.InnerLoad(CompositeKey.FromKeyValuePair('ID', archiveRunId));
+        const loaded = await run.InnerLoad(CompositeKey.FromID(archiveRunId));
         return loaded ? run : null;
     }
 
@@ -119,7 +119,7 @@ export class ArchiveRecovery {
 
         const md = this.Provider;
         const config = await md.GetEntityObject('MJ: Archive Configurations', contextUser);
-        const loaded = await config.InnerLoad(CompositeKey.FromKeyValuePair('ID', configId));
+        const loaded = await config.InnerLoad(CompositeKey.FromID(configId));
         if (!loaded) {
             throw new Error(`ArchiveConfiguration not found: ${configId}`);
         }

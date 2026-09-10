@@ -127,6 +127,14 @@ export {
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 export * from './auth/actingContextResolver.js';
+// The context-user ladder (#4209). Public because `auth/exampleNewUserSubClass.ts` — the template
+// integrators are told to copy into their OWN package — resolves through it, and `package.json`
+// publishes only "."; without this the example compiles here and cannot be reused anywhere else.
+// `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
+// they exist so the LRU's bound is assertable, the tests import them from the module directly, and
+// a published export is a maintenance commitment no caller asked for.
+export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
 export * from './generic/PushStatusResolver.js';
@@ -1266,17 +1274,24 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // because they lack Access-Control-Allow-Origin headers, preventing the
   // client from reading the error code and triggering token refresh.
   const corsAllowed = configInfo.cors?.allowedOrigins ?? ['*'];
+  const corsWildcard = corsAllowed.includes('*');
+  // SECURITY: never combine credentials with a wildcard/reflect-any-origin policy. When
+  // allowedOrigins is ['*'] the origin callback reflects the caller's Origin, and pairing that
+  // with Access-Control-Allow-Credentials: true lets any site a signed-in user visits make
+  // credentialed cross-origin reads. MJ's primary auth is a Bearer token (not auto-sent
+  // cross-origin), so dropping credentials under the wildcard default is safe; deployments that
+  // genuinely need credentialed CORS must configure an explicit allowedOrigins list.
   app.use(cors<cors.CorsRequest>({
     origin: (origin, callback) => {
       // Allow all origins when ['*'] (default/backward-compatible),
       // or when no Origin header (server-to-server calls).
-      if (corsAllowed.includes('*') || !origin || corsAllowed.includes(origin)) {
+      if (corsWildcard || !origin || corsAllowed.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
-    credentials: configInfo.cors?.allowCredentials ?? true,
+    credentials: corsWildcard ? false : (configInfo.cors?.allowCredentials ?? true),
     maxAge: configInfo.cors?.maxAge ?? 86400,
   }));
 

@@ -1162,7 +1162,7 @@ export class RecordAttachmentsComponent extends BaseAngularComponent implements 
    */
   public OpenAttachmentRecord(attachment: RecordAttachmentItem): void {
     if (attachment.FileID) {
-      const pkey = CompositeKey.FromID(attachment.FileID);
+      const pkey = CompositeKey.FromID(attachment.FileID); // first-pk-ok: FileID is the FK to MJ: Files (opened two lines below) — core entity keyed by ID
       if (this.navigationService) {
         this.navigationService.OpenEntityRecord('MJ: Files', pkey);
       } else {

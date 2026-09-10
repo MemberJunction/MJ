@@ -64,6 +64,7 @@ export class AnalysisOrchestrator {
    * Execute the full analysis workflow
    */
   public async execute(): Promise<OrchestratorResult> {
+    let db: DatabaseConnection | undefined;
     try {
       // Create run folder
       if (!this.config.output.outputDir) {
@@ -124,7 +125,7 @@ export class AnalysisOrchestrator {
         idleTimeoutMillis: this.config.database.idleTimeoutMillis
       };
 
-      const db = new DatabaseConnection(driverConfig);
+      db = new DatabaseConnection(driverConfig);
       await db.connect();
       const testResult = await db.test();
 
@@ -465,6 +466,9 @@ export class AnalysisOrchestrator {
       };
 
     } catch (error) {
+      if (db) {
+        await db.close().catch(() => { /* best-effort cleanup after an already-failed run */ });
+      }
       return {
         success: false,
         state: {} as DatabaseDocumentation,
