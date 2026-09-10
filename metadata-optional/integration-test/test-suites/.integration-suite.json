@@ -1013,6 +1013,17 @@
           "primaryKey": {
             "ID": "2EE162F6-4504-4FDF-BBFA-48AB414D9590"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT89 - Role Privilege Elevation Guard",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "5345610B-4E73-497C-8994-099492F48C3B"
+          }
         }
       ]
     },

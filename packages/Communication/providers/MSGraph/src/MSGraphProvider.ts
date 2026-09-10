@@ -459,8 +459,12 @@ export class MSGraphProvider extends BaseCommunicationProvider {
                 comment: params.Message.ProcessedBody || params.Message.ProcessedHTMLBody
             };
 
-            // Use email address directly in API path
-            const mailbox = this.resolveMailbox('ReplyToMessage', creds);
+            // `ContextData.Email` FIRST, as eleven sibling operations already read it. Without it this
+            // site could only resolve `creds.accountEmail` — which the `Azure Service Principal`
+            // credential type declares no property for, and which `disableEnvironmentFallback` removes
+            // the environment source for. Reply was therefore unreachable on exactly the stored
+            // credential the mailbox rework exists to support.
+            const mailbox = this.resolveMailbox('ReplyToMessage', creds, params.ContextData?.Email as string);
             const sendMessagePath: string = `${this.getApiUri()}/${encodeURIComponent(mailbox)}/messages/${params.MessageID}/reply`;
             const result = await client.api(sendMessagePath).post(reply);
 
