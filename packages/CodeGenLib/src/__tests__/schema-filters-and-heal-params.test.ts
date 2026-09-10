@@ -60,12 +60,12 @@ describe('entityInCustomBaseViewRefreshScope', () => {
 });
 
 describe('buildHealSchemaRoutineParams', () => {
-    it('scopes IncludedSchemaNames to mj_core_schema() when includeSchemas is empty (MJ core)', () => {
+    it('omits IncludedSchemaNames when includeSchemas is empty (classic MJ)', () => {
         const p = buildHealSchemaRoutineParams({
             authoredExclude: ['sys', 'staging'],
         });
-        expect(p.names).toEqual(['ExcludedSchemaNames', 'IncludedSchemaNames']);
-        expect(p.values).toEqual([`'sys,staging'`, `'__mj'`]);
+        expect(p.names).toEqual(['ExcludedSchemaNames']);
+        expect(p.values).toEqual([`'sys,staging'`]);
     });
 
     it('adds IncludedSchemaNames from includeSchemas and never a sibling snapshot', () => {
