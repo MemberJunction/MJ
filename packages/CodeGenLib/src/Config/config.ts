@@ -358,9 +358,9 @@ const sqlOutputConfigSchema = z.object({
    */
   convertCoreSchemaToFlywayMigrationFile: z.boolean().default(true),
   /**
-   * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to false
+   * If true, scripts that are being emitted via SQL logging that are marked by CodeGen as recurring will be SKIPPED. Defaults to true
    */
-  omitRecurringScriptsFromLog: z.boolean().default(false),
+  omitRecurringScriptsFromLog: z.boolean().default(true),
   /**
    * Optional array of schema-to-placeholder mappings for Flyway migrations.
    * Each mapping specifies a database schema name and its corresponding Flyway placeholder.
