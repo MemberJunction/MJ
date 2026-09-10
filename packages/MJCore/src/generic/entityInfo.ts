@@ -3016,7 +3016,15 @@ export class EntityInfo extends BaseInfo {
     }
     
     /**
-     * Returns RLS security info attributes for a given user and permission type
+     * Returns RLS security info attributes for a given user and permission type.
+     *
+     * Only permission rows that GRANT the operation (the matching `Can*` flag is true) contribute a
+     * filter. The filters of a user's roles are OR'd together by the caller, so a filter collected
+     * from a row that does not grant the operation would WIDEN the clause: a user granted Create by
+     * role A (bound to filter F1) would create against `F1 OR F2` when role B keeps a leftover
+     * `CreateRLSFilterID = F2` beside `CanCreate = false`. `GetUserPermisions` aggregates the flags
+     * across roles, so such a user passes the permission gate on role A alone; nothing else stops
+     * F2 from applying. A user with no granting row gets no clause here — and no permission either.
      * @param user 
      * @param type 
      * @returns 
@@ -3030,19 +3038,19 @@ export class EntityInfo extends BaseInfo {
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
                     case EntityPermissionType.Create:
-                        if (ep.CreateRLSFilterID)
+                        if (ep.CanCreate && ep.CreateRLSFilterID)
                             matchObject = ep.CreateRLSFilterObject;
                         break;
                     case EntityPermissionType.Read:
-                        if (ep.ReadRLSFilterID)
+                        if (ep.CanRead && ep.ReadRLSFilterID)
                             matchObject = ep.ReadRLSFilterObject;
                         break;
                     case EntityPermissionType.Update:
-                        if (ep.UpdateRLSFilterID)
+                        if (ep.CanUpdate && ep.UpdateRLSFilterID)
                             matchObject = ep.UpdateRLSFilterObject;
                         break;
                     case EntityPermissionType.Delete:
-                        if (ep.DeleteRLSFilterID)
+                        if (ep.CanDelete && ep.DeleteRLSFilterID)
                             matchObject = ep.DeleteRLSFilterObject;
                         break;
                 }
