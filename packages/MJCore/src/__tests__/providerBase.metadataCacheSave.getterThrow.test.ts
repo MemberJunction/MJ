@@ -15,28 +15,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { BaseInfo } from '../generic/baseInfo';
-import { ProviderBase } from '../generic/providerBase';
 import { QueryInfo } from '../generic/queryInfo';
 import { Metadata } from '../generic/metadata';
-import {
-    RunViewResult,
-    ProviderType,
-    EntityRecordNameInput,
-    EntityRecordNameResult,
-    PotentialDuplicateResponse,
-    DatasetResultType,
-    DatasetStatusResultType,
-    ILocalStorageProvider,
-    IMetadataProvider,
-    AllMetadata,
-    MetadataInfo,
-} from '../generic/interfaces';
-import { RunQueryResult } from '../generic/runQuery';
-import { QueryExecutionSpec } from '../generic/queryExecutionSpec';
-import { CompositeKey } from '../generic/compositeKey';
-import { UserInfo, RecordDependency } from '../generic/securityInfo';
-import { RecordMergeRequest, RecordMergeResult } from '../generic/entityInfo';
-import { TransactionGroupBase } from '../generic/transactionGroup';
+import { ILocalStorageProvider, IMetadataProvider, AllMetadata, MetadataInfo } from '../generic/interfaces';
+import { TestMetadataProvider } from './mocks/TestMetadataProvider';
+import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
 // ─── 1. BaseInfo.toJSON ────────────────────────────────────────────────────
 
@@ -80,23 +63,23 @@ describe('BaseInfo.toJSON with a getter that throws', () => {
 
 // ─── 2. SaveLocalMetadataToStorage ordering ────────────────────────────────
 
-class RecordingStorage implements ILocalStorageProvider {
+/** The shared in-memory storage mock, plus the two things these tests need: write ORDER, and a failure on ONE key. */
+class RecordingStorage extends MockCacheStorageProvider {
     public readonly Writes: string[] = [];
-    constructor(private readonly failOnKeyContaining: string | null = null) {}
-    async GetItem<T = unknown>(): Promise<T | null> { return null; }
-    async GetItems<T = unknown>(keys: string[]): Promise<Map<string, T | null>> {
-        return new Map(keys.map((k) => [k, null]));
+    constructor(private readonly failOnKeyContaining: string | null = null) {
+        super();
     }
-    async SetItem<T>(key: string): Promise<void> {
+    override async SetItem(key: string, value: string, category?: string): Promise<void> {
         if (this.failOnKeyContaining && key.includes(this.failOnKeyContaining)) {
             throw new Error(`simulated storage failure writing ${key}`);
         }
         this.Writes.push(key);
+        return super.SetItem(key, value, category);
     }
-    async Remove(): Promise<void> { /* noop */ }
 }
 
-class CacheSaveTestProvider extends ProviderBase {
+/** The shared provider mock, with the storage swapped for the recording one and a seam to seed the snapshot. */
+class CacheSaveTestProvider extends TestMetadataProvider {
     constructor(private readonly storage: ILocalStorageProvider) {
         super();
     }
@@ -105,42 +88,9 @@ class CacheSaveTestProvider extends ProviderBase {
         this.UpdateLocalMetadata(md);
         (this as unknown as { _latestLocalMetadataTimestamps: MetadataInfo[] })._latestLocalMetadataTimestamps = timestamps;
     }
-    override get LocalStorageProvider(): ILocalStorageProvider { return this.storage; }
-    // ── Boilerplate abstract implementations ──────────────────────────
-    override get PlatformKey() { return 'sqlserver' as const; }
-    protected get AllowRefresh(): boolean { return true; }
-    public get ProviderType(): ProviderType { return 'Database'; }
-    public get DatabaseConnection(): object { return {}; }
-    protected async InternalGetEntityRecordName(): Promise<string> { return ''; }
-    protected async InternalGetEntityRecordNames(_info: EntityRecordNameInput[]): Promise<EntityRecordNameResult[]> { return []; }
-    public async GetRecordFavoriteStatus(): Promise<boolean> { return false; }
-    public async SetRecordFavoriteStatus(): Promise<void> { /* noop */ }
-    protected async InternalRunView<T>(): Promise<RunViewResult<T>> {
-        return { Success: true, Results: [] as T[], TotalRowCount: 0, ExecutionTime: 0, RowCount: 0, UserViewRunID: '', Filtered: false, ErrorMessage: '' };
+    public override get LocalStorageProvider(): ILocalStorageProvider {
+        return this.storage;
     }
-    protected async InternalRunViews<T>(): Promise<RunViewResult<T>[]> { return []; }
-    protected async InternalRunQuery(): Promise<RunQueryResult> { return { Success: true, Results: [], Fields: [] }; }
-    protected async InternalRunQueries(): Promise<RunQueryResult[]> { return []; }
-    protected async InternalExecuteQueryFromSpec(_spec: QueryExecutionSpec, _contextUser?: UserInfo): Promise<RunQueryResult> {
-        throw new Error('Not supported');
-    }
-    protected async GetCurrentUser(): Promise<UserInfo> { return new UserInfo(null as unknown as IMetadataProvider, {}); }
-    public async GetRecordDependencies(): Promise<RecordDependency[]> { return []; }
-    public async GetRecordDuplicates(): Promise<PotentialDuplicateResponse> {
-        return { EntityName: '', PrimaryKey: new CompositeKey(), DuplicateRunDetailMatchRecords: [] };
-    }
-    public async MergeRecords(): Promise<RecordMergeResult> {
-        return { Success: false, OverallStatus: 'Error', RecordMergeLogID: '', RecordStatus: [], Request: {} as RecordMergeRequest, KeyValueOfSurvivingRecord: new CompositeKey() };
-    }
-    public async GetDatasetByName(): Promise<DatasetResultType> {
-        return { DatasetID: '', DatasetName: '', Success: false, Status: 'Error', Results: [], LatestUpdateDate: new Date() };
-    }
-    public async GetDatasetStatusByName(): Promise<DatasetStatusResultType> {
-        return { DatasetID: '', DatasetName: '', Success: false, Status: 'Error', LatestUpdateDate: new Date(), EntityUpdateDates: [] };
-    }
-    public get InstanceConnectionString(): string { return 'test-backend'; }
-    public async CreateTransactionGroup(): Promise<TransactionGroupBase> { return {} as TransactionGroupBase; }
-    protected get Metadata(): IMetadataProvider { return {} as IMetadataProvider; }
 }
 
 function timestamps(): MetadataInfo[] {
