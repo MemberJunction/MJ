@@ -229,6 +229,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.workspaceManager.TempTabConsumptionFilter = this.resolvedRecordOpenStyle === 'records'
         ? (tab) => !IsRecordsTabConfiguration(tab.configuration)
         : null;
+      // The records region's OWN temp-tab pool (TabRequest.TempScope 'records').
+      // Region membership again, not record identity, so a record docked to the
+      // workspace is in neither pool: "Move to Workspace" takes a record out of
+      // preview replacement, which is the point of docking it.
+      // ...minus any tab the user is actively editing. Replacement destroys the
+      // pane, so an editing tab leaves the pool and the next plain open gets
+      // its own tab — the edit survives without a modal interrupting a browse.
+      // (VS Code reaches the same outcome by promoting a modified preview; this
+      // is the same guarantee read off state we already have, instead of a new
+      // dirty-tracking pipeline.)
+      this.workspaceManager.RecordsRegionTabFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.tabContainerRef?.IsRecordTabEditing(tab.id)
+        : null;
   }
 
   get ShowSearchBar(): boolean {
@@ -829,6 +842,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     if (shouldSetActiveApp) {
       await this.appManager.SetActiveApp(request.ApplicationId);
+    }
+
+    // Scope URL-driven record opens to the records pool. Assigned HERE rather
+    // than at the resolver that built the request: those live in MJExplorer,
+    // which this package must not modify, and every one of them funnels
+    // through this method anyway. Without it a deep link to a record consumes
+    // the NAV temp tab and converts it into a records tab — the asymmetry
+    // records opens through NavigationService no longer have.
+    if (this.RecordTabsStyle && IsRecordsRegionTab(request.Configuration)) {
+      request.TempScope = 'records';
     }
 
     this.workspaceManager.OpenTab(request, appColor);
