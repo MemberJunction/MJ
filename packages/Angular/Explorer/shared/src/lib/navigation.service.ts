@@ -494,7 +494,13 @@ export class NavigationService implements OnDestroy {
       }
     }
 
-    let forceNew = tabsMode || this.shouldForceNewTab(options);
+    // Records style no longer forces a new tab unconditionally: a plain click
+    // consumes the records region's temporary tab (preview-tab behavior), and
+    // only shift — or an explicit forceNewTab, which is what finally makes
+    // single-record's "Open in New Tab" do something — adds a second tab.
+    // The region scoping below is what keeps a nav click from ever consuming
+    // a record, which is the protection the old unconditional force provided.
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -507,10 +513,12 @@ export class NavigationService implements OnDestroy {
       },
       ResourceRecordId: recordId,
       IsPinned: options?.pinTab || false,
-      // Records style: opening a record must not pin the nav tab (see
-      // TabRequest.PreservePinState) — a pinned nav tab forces the main tab
-      // bar visible on every nav page.
-      PreservePinState: tabsMode
+      // Records style: this open belongs to the RECORDS temp-tab pool, so both
+      // consumption and the pin cascade stay inside the region and the nav
+      // tab's temp status is untouched (a pinned nav tab would force the main
+      // tab bar visible on every nav page). Classic style keeps the single
+      // 'main' pool.
+      TempScope: tabsMode ? 'records' : 'main'
     };
 
     // Handle transition from single-resource mode
@@ -993,6 +1001,9 @@ export class NavigationService implements OnDestroy {
     const appId = tabsMode && activeApp ? activeApp.ID : this.getDefaultApplicationId();
     const appColor = tabsMode && activeApp ? activeApp.GetColor() : this.getDefaultAppColor();
 
+    // A NEW record keeps forcing its own tab under the records style: it is
+    // unsaved work from the moment it opens, so it must never land on top of
+    // a record the user is reading.
     let forceNew = tabsMode || this.shouldForceNewTab(options);
 
     const request: TabRequest = {
@@ -1007,8 +1018,12 @@ export class NavigationService implements OnDestroy {
         ...this.resolveSourceContext(options)
       },
       ResourceRecordId: '',  // Empty for new records
-      IsPinned: options?.pinTab || false,
-      PreservePinState: tabsMode
+      // Pinned under the records style so the region's preview replacement can
+      // never consume it: an unsaved new record is exactly the tab that must
+      // not vanish when the user clicks the next row in a grid. (VS Code holds
+      // the same line — an untitled buffer is never a preview tab.)
+      IsPinned: options?.pinTab || tabsMode,
+      TempScope: tabsMode ? 'records' : 'main'
     };
 
     // Handle transition from single-resource mode
