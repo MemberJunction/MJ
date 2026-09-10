@@ -4,7 +4,7 @@ import { ActionResult } from '../action-test-harness/action-test-harness.compone
 
 /**
  * A dialog wrapper component for the Action Test Harness.
- * This component provides a modal dialog experience without Kendo dependencies.
+ * This component provides a modal dialog experience with no third-party UI dependencies.
  *
  * Usage:
  * <mj-action-test-harness-dialog

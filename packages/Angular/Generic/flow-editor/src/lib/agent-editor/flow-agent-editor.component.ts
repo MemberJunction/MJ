@@ -167,7 +167,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
       this.cdr.detectChanges();
 
       // Flag that we need an initial zoom; it will fire when the host element
-      // first becomes visible (e.g. Kendo PanelBar expands)
+      // first becomes visible (e.g. a collapsed accordion panel expands)
       this.setupInitialZoomObserver();
     }
   }
@@ -240,7 +240,7 @@ export class FlowAgentEditorComponent extends BaseAngularComponent implements On
 
   /**
    * Observe the host element's size. When it transitions from zero to non-zero height
-   * (i.e. the collapsed Kendo panel expands), trigger the initial auto-arrange or zoom-to-fit.
+   * (i.e. the collapsed panel expands), trigger the initial auto-arrange or zoom-to-fit.
    */
   private setupInitialZoomObserver(): void {
     if (this.nodes.length === 0) return;

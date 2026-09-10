@@ -138,5 +138,5 @@ export class YourModule {}
 - [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- ResourcePermissionEntity, ResourcePermissionEngine
 - [@memberjunction/ng-notifications](../notifications/README.md) -- Notification service
 - [@memberjunction/ng-generic-dialog](../generic-dialog/README.md) -- Dialog component
-- `@progress/kendo-angular-grid` -- Grid rendering
-- `@progress/kendo-angular-dropdowns` -- Dropdown selectors
+- `ag-grid-angular` -- Grid rendering
+- `@memberjunction/ng-ui-components` -- Dropdown selectors

@@ -345,7 +345,7 @@ These predate the mjButton directive. They use single-dash naming (`.mj-btn-prim
 
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components
-- **NEVER use Kendo icons** - Replace all Kendo icon references (k-icon, k-i-*) with Font Awesome equivalents
+- **NEVER use another icon set** - Font Awesome is the only icon library in MJ; there is no `k-icon`/`k-i-*` or other vendor icon font to fall back on
 - Font Awesome classes: `fa-solid`, `fa-regular`, `fa-light`, `fa-brands`
 - Use semantic icon names that clearly represent their function
 - Examples:
@@ -847,7 +847,7 @@ Before a lazy chunk loads, the ClassFactory has **no registration** for classes 
 
 ## MJ UI Components (`@memberjunction/ng-ui-components`)
 
-- **All UI components** should use the MJ UI components package — NOT Kendo, PrimeNG, or Angular Material. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
+- **All UI components** should use the MJ UI components package — NOT PrimeNG, Angular Material, or any other third-party UI kit. **Never hand-roll a feature-specific equivalent of anything this package already provides** — check the catalog before building any control, layout region, overlay, or pattern.
 - **Canonical catalog with full APIs and usage examples: `packages/Angular/Generic/ui-components/README.md`**
 - Component overview:
   - **Controls**: `button[mjButton]`, `mj-dropdown`, `mj-combobox`, `mj-switch`, `mj-numeric-input`, `mj-datepicker`, `[mjClickable]`

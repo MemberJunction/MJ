@@ -19,7 +19,8 @@ import {
   MJUserViewEntity_IGridSortSetting,
   MJUserViewEntity_ISortStateItem
 } from '@memberjunction/core-entities';
-import { CompositeFilterDescriptor, FilterFieldInfo } from '@memberjunction/ng-filter-builder';
+import { FilterFieldInfo } from '@memberjunction/ng-filter-builder';
+import type { CompositeFilterDescriptor } from '@memberjunction/core';
 import { ExportDialogConfig, ExportDialogResult } from '@memberjunction/ng-export-service';
 import { ExportColumn } from '@memberjunction/export-engine';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -1286,7 +1287,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
   // ========================================
 
   /**
-   * Build a `GridState` (Kendo-compatible) from the save event. Priority: explicit columns from the
+   * Build a `GridState` from the save event. Priority: explicit columns from the
    * config panel → live grid state → entity `DefaultInView` fields. Returns null when no columns.
    */
   private buildGridState(event: ViewSaveEvent): MJUserViewEntity_IGridState | null {
@@ -1357,7 +1358,7 @@ export class ViewWorkspaceComponent extends BaseAngularComponent implements OnIn
     return null;
   }
 
-  /** Serialize the filter state to JSON, defaulting to an empty Kendo filter. */
+  /** Serialize the filter state to JSON, defaulting to an empty filter. */
   private buildFilterStateJson(event: ViewSaveEvent): string {
     return event.FilterState
       ? JSON.stringify(event.FilterState)

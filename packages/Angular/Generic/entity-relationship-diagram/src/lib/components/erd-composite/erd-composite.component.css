@@ -22,10 +22,6 @@
   width: 100%;
 }
 
-.main-splitter .k-pane {
-  overflow: hidden;
-}
-
 .erd-pane-container {
   position: relative;
   width: 100%;

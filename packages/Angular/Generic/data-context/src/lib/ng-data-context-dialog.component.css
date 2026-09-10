@@ -8,13 +8,6 @@
     box-shadow: var(--mj-shadow-lg);
 }
 
-/* Position the window properly */
-:host ::ng-deep .k-window {
-    margin: 0 auto;
-    top: 10% !important;
-    position: fixed !important;
-}
-
 
 .data-context-window.maximized {
     position: fixed !important;
@@ -70,35 +63,6 @@
     overflow: auto;
     display: flex;
     flex-direction: column;
-}
-
-/* Override Kendo Window Styles */
-:host ::ng-deep .k-window-titlebar {
-    background-color: var(--mj-bg-surface);
-    border-bottom: 1px solid var(--mj-border-default);
-    padding: 12px 16px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-:host ::ng-deep .k-window-title {
-    display: contents;
-}
-
-:host ::ng-deep .k-window-actions {
-    display: none; /* Hide default Kendo window actions since we have custom ones */
-}
-
-:host ::ng-deep .k-window-content {
-    padding: 0;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-
-:host ::ng-deep .k-window {
-    border: none;
 }
 
 /* Animations */

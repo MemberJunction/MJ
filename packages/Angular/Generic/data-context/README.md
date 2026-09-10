@@ -127,7 +127,7 @@ Main component for displaying a data context and its items.
 
 ### DataContextDialogComponent (`mj-data-context-dialog`)
 
-Dialog wrapper displaying the DataContextComponent in a Kendo dialog.
+Dialog wrapper displaying the DataContextComponent in an MJ dialog.
 
 #### Inputs
 
@@ -157,7 +157,7 @@ A data context in MemberJunction consists of:
 ## Features
 
 - **Multi-source composition**: Combine entity views, stored queries, raw SQL, and specific records into a single named context
-- **Virtual scrolling**: Efficient handling of large datasets via Kendo Grid
+- **Virtual scrolling**: Efficient handling of large datasets via Data Grid
 - **Column sorting and resizing**: Interactive grid features
 - **Metadata integration**: Uses MemberJunction's metadata system for entity loading
 - **Loading state management**: Built-in loading indicators
@@ -175,10 +175,10 @@ A data context in MemberJunction consists of:
 | `@memberjunction/global` | Global utilities |
 | `@memberjunction/ng-container-directives` | Container directives |
 | `@memberjunction/ng-shared` | Shared Angular utilities |
-| `@progress/kendo-angular-grid` | Grid with virtual scrolling |
-| `@progress/kendo-angular-indicators` | Loading indicators |
-| `@progress/kendo-angular-dialog` | Dialog component |
-| `@progress/kendo-angular-buttons` | Button components |
+| `@memberjunction/ng-ui-components` | Grid with virtual scrolling |
+| `@memberjunction/ng-ui-components` | Loading indicators |
+| `@memberjunction/ng-ui-components` | Dialog component |
+| `@memberjunction/ng-ui-components` | Button components |
 
 ### Peer Dependencies
 

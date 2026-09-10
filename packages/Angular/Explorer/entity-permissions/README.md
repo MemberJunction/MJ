@@ -8,9 +8,9 @@ This package provides two main components for permission management: `EntityPerm
 
 ```mermaid
 graph TD
-    ESWG["EntitySelectorWithGridComponent"] --> DD["Entity Dropdown\n(Kendo DropDown)"]
+    ESWG["EntitySelectorWithGridComponent"] --> DD["Entity Dropdown\n(MJ Dropdown)"]
     ESWG --> EPG["EntityPermissionsGridComponent"]
-    EPG --> KG["Kendo Grid"]
+    EPG --> KG["Data Grid"]
     EPG --> EP["EntityPermissionEntity[]"]
 
     style ESWG fill:#7c5295,stroke:#563a6b,color:#fff
@@ -40,8 +40,8 @@ npm install @memberjunction/ng-entity-permissions
 |---|---|
 | `@memberjunction/core` | Metadata, RunView |
 | `@memberjunction/core-entities` | EntityPermissionEntity |
-| `@progress/kendo-angular-grid` | Permissions grid |
-| `@progress/kendo-angular-dropdowns` | Entity/role selector |
+| `@memberjunction/ng-ui-components` | Permissions grid |
+| `@memberjunction/ng-ui-components` | Entity/role selector |
 
 ## Usage
 

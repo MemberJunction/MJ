@@ -10,7 +10,7 @@ The `ListDetailGridComponent` takes a `listId` and loads the associated `ListEnt
 graph TD
     LDG["ListDetailGridComponent\n(<mj-list-detail-grid>)"] --> LE["ListEntity\n(List metadata)"]
     LDG --> EDG["EntityDataGridComponent\n(<mj-entity-data-grid>)"]
-    EDG --> KG["Kendo Grid"]
+    EDG --> KG["Data Grid"]
     LE --> SF["SQL Subquery Filter\n(ListDetail records)"]
 
     style LDG fill:#7c5295,stroke:#563a6b,color:#fff

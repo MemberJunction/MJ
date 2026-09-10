@@ -299,15 +299,10 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
           }
         }
 
-        // Navigate to initial route
-        if (this.initialPath === '/') {
-          // use first nav item url instead
-          setTimeout(() => {
-            // Find the KendoDrawer element, and simulate a click for the first item
-            const drawerElement = this.document.querySelector('li.k-drawer-item.k-level-0') as HTMLElement;
-            if (drawerElement) drawerElement.click();
-          }, 10); // wait for the drawer to finish rerender and then do this
-        } else {
+        // Navigate to initial route. '/' is left to the shell's own default landing —
+        // the branch that used to run here queried a nav element that no longer exists,
+        // so it matched nothing and was already a no-op when it was removed.
+        if (this.initialPath !== '/') {
           this.router.navigateByUrl(this.initialPath, { replaceUrl: true });
         }
       } else if (result.error) {

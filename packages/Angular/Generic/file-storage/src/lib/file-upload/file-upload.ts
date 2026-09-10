@@ -6,7 +6,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { z } from 'zod';
 
 /**
- * Minimal file info interface replacing Kendo's FileInfo.
+ * Minimal file info interface for uploads.
  */
 export interface FileSelectInfo {
   name: string;

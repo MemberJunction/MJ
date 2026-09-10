@@ -86,7 +86,7 @@ npm install @memberjunction/ng-explorer-core
 | `@memberjunction/ng-conversations` | Chat conversation components |
 | `@memberjunction/ng-artifacts` | Artifact viewer |
 | `golden-layout` | Tab container layout engine |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 
 ## Usage
 

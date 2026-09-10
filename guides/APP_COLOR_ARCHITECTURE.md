@@ -10,7 +10,7 @@ Per the Feb 3, 2025 UX design meeting, the team decided:
 - **All dashboard content uses the unified MJ token system** — same colors everywhere, regardless of which app you're in.
 - **No per-app content theming** — avoids the "rainbow effect" and keeps the product feeling unified.
 
-This guide serves as the team reference for the design token system. Kendo UI has been fully removed — all components now use `@memberjunction/ng-ui-components` with `--mj-*` semantic tokens.
+This guide serves as the team reference for the design token system. All components use `@memberjunction/ng-ui-components` with `--mj-*` semantic tokens.
 
 ---
 
@@ -333,7 +333,7 @@ The following files contain hardcoded hex colors that need migration. They are o
 
 ### Actions Dashboard (Already Migrated)
 
-The Actions dashboard components (`categories-list-view`, `code-management`, `security-permissions`) have been migrated to MJ semantic tokens. All Kendo theme variables (`--kendo-color-primary`, etc.) have been removed.
+The Actions dashboard components (`categories-list-view`, `code-management`, `security-permissions`) use MJ semantic tokens throughout.
 
 ---
 
@@ -416,11 +416,11 @@ This file maps legacy variable names to MJ tokens for backward compatibility:
 | `--border-radius` | `--mj-radius-lg` | Various |
 | `--transition-time` | `--mj-transition-base` | Various |
 
-The five Kendo-specific variables (`--kendo-color-primary`, etc.) have been removed along with `_kendo-theme-override.scss` as part of the Kendo removal in Phase 2.1.
+The vendor theme variables and their `_*-theme-override.scss` shim were removed in Phase 2.1.
 
 ### Migration Path
 
-All Kendo overrides have been removed. New components should use MJ semantic tokens directly. For example:
+All vendor theme overrides have been removed. New components should use MJ semantic tokens directly. For example:
 
 ```css
 /* BEFORE — legacy variable */
@@ -513,5 +513,5 @@ Before writing custom card/button/badge/panel CSS, check `_shared-patterns.scss`
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_tokens.scss` | All MJ design tokens (primitives + semantic, light + dark) |
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_shared-patterns.scss` | 60+ reusable token-based class patterns |
 | `packages/Angular/Explorer/explorer-app/src/lib/styles/_variables.scss` | Legacy variable bridge (deprecated) |
-| ~~`_kendo-theme-override.scss`~~ | **Deleted** — Kendo overrides removed in Phase 2.1 |
+| ~~`_kendo-theme-override.scss`~~ | **Deleted** — vendor theme overrides removed in Phase 2.1 |
 | `guides/THEMING.md` | Full theming system documentation |

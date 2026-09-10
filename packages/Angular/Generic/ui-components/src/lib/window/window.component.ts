@@ -1,10 +1,10 @@
 import { Component, Input, Output, EventEmitter, HostListener, OnDestroy, ElementRef, ChangeDetectorRef, NgZone, inject } from '@angular/core';
 
 /**
- * mj-window — Floating window panel. Replaces `<kendo-window>`.
+ * mj-window — Floating window panel.
  *
  * Unlike mj-dialog, this does NOT have a backdrop and does NOT block interaction
- * with the rest of the page. It's a floating panel, similar to Kendo's Window.
+ * with the rest of the page. It's a floating panel.
  *
  * Supports dragging (via titlebar), resizing (via edges/corners), minimize, and maximize.
  *
@@ -384,7 +384,7 @@ export class MJWindowComponent implements OnDestroy {
 }
 
 /**
- * mj-window-titlebar — Custom titlebar for mj-window. Replaces `<kendo-window-titlebar>`.
+ * mj-window-titlebar — Custom titlebar for mj-window.
  */
 @Component({
   selector: 'mj-window-titlebar',

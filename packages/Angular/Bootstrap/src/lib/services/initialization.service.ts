@@ -102,19 +102,19 @@ export class MJInitializationService {
   }
 
   /**
-   * Navigate to initial route after successful login
+   * Navigate to initial route after successful login.
+   *
+   * `'/'` is left to the shell's own default landing. The branch that used to handle it
+   * queried a nav element that no longer exists, so it matched nothing and was already a
+   * no-op when it was removed.
+   *
+   * @param _document no longer used. Retained so the signature stays source-compatible for
+   *                  callers; drop it at the next major.
    */
-  navigateToInitialRoute(initialPath: string, document: Document): void {
+  navigateToInitialRoute(initialPath: string, _document: Document): void {
     localStorage.removeItem('jwt-retry-ts');
 
-    if (initialPath === '/') {
-      // Use first nav item instead
-      setTimeout(() => {
-        // Find the KendoDrawer element and simulate a click for the first item
-        const drawerElement = document.querySelector('li.k-drawer-item.k-level-0') as any;
-        if (drawerElement) drawerElement.click();
-      }, 10); // Wait for the drawer to finish render
-    } else {
+    if (initialPath !== '/') {
       this.router.navigateByUrl(initialPath, { replaceUrl: true });
     }
   }

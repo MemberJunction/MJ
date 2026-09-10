@@ -164,7 +164,7 @@ npm install @memberjunction/ng-dashboards
 | `@memberjunction/ng-shared`, `@memberjunction/ng-shared-generic` | Shared services, loading indicators |
 | `@memberjunction/ng-dashboard-viewer` | Dashboard rendering |
 | `@memberjunction/ng-query-viewer` | Query execution and display |
-| `@progress/kendo-angular-*` | Kendo UI components |
+| `@memberjunction/ng-ui-components` | MJ UI components |
 | `d3` | Data visualization |
 | `codemirror` | Code editing |
 

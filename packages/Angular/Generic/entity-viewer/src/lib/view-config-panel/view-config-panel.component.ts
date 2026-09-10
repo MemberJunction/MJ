@@ -15,11 +15,11 @@ import {
   UserInfoEngine
 } from '@memberjunction/core-entities';
 import {
-  CompositeFilterDescriptor,
   FilterFieldInfo,
   FilterFieldType,
   CreateEmptyFilter
 } from '@memberjunction/ng-filter-builder';
+import type { CompositeFilterDescriptor } from '@memberjunction/core';
 import { ViewConfigSummary } from '../types';
 
 /**
@@ -65,7 +65,7 @@ export interface ViewSaveEvent {
   SortItems: SortItem[];
   SmartFilterEnabled: boolean;
   SmartFilterPrompt: string;
-  /** Traditional filter state in Kendo-compatible JSON format */
+  /** Traditional filter state in MJ's portable filter JSON format */
   FilterState: CompositeFilterDescriptor | null;
   /** Aggregates configuration */
   AggregatesConfig: ViewGridAggregatesConfig | null;

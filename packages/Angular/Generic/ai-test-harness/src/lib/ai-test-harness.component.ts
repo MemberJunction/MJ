@@ -802,7 +802,7 @@ export class AITestHarnessComponent extends BaseAngularComponent implements OnIn
                 filteredModels = AIEngineBase.Instance.Models.filter(model => model.IsActive);
             }
             
-            // Set default response format from prompt with slight delay for Kendo dropdown
+            // Set default response format from prompt with slight delay for the dropdown
             setTimeout(() => {
                 const format = this.responseFormatOptions.find(f => f.value.trim().toLowerCase() === prompt.ResponseFormat.trim().toLowerCase());
                 if (format) {

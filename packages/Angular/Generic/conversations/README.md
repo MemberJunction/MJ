@@ -512,9 +512,9 @@ RxJS `BehaviorSubject` instances for all state, with derived observables using `
 | `@memberjunction/ng-whiteboard` | The generic collaborative whiteboard (consumed by the realtime Whiteboard channel + artifact viewer) |
 | `@memberjunction/ai-realtime-client` | Browser-side realtime drivers (OpenAI / Gemini / ElevenLabs / AssemblyAI) used by `RealtimeSessionService` |
 
-### Kendo UI Packages
+### UI Packages
 
-Uses `@progress/kendo-angular-dialog`, `@progress/kendo-angular-buttons`, `@progress/kendo-angular-inputs`, `@progress/kendo-angular-layout`, `@progress/kendo-angular-indicators`, `@progress/kendo-angular-dropdowns`, `@progress/kendo-angular-notification`, `@progress/kendo-angular-upload`, `@progress/kendo-angular-dateinputs`.
+Uses `@memberjunction/ng-ui-components` for dialogs, buttons, inputs, layout, indicators, dropdowns, notifications, upload and date inputs.
 
 ### Peer Dependencies
 

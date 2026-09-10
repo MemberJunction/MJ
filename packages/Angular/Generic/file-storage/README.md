@@ -4,7 +4,7 @@ Angular components for managing file storage in MemberJunction applications, pro
 
 ## Overview
 
-The `@memberjunction/ng-file-storage` package provides three core components that together form a file management interface: a hierarchical category tree for organizing files, a Kendo Grid for browsing and managing files within categories, and an upload component with provider integration and overwrite protection. All file operations flow through MemberJunction's entity system and storage provider abstraction, supporting Azure Blob Storage, AWS S3, and other backends.
+The `@memberjunction/ng-file-storage` package provides three core components that together form a file management interface: a hierarchical category tree for organizing files, a AG Grid for browsing and managing files within categories, and an upload component with provider integration and overwrite protection. All file operations flow through MemberJunction's entity system and storage provider abstraction, supporting Azure Blob Storage, AWS S3, and other backends.
 
 ```mermaid
 flowchart TD
@@ -161,7 +161,7 @@ Hierarchical tree view for managing file categories with drag-and-drop reorganiz
 
 ### FilesGridComponent (`mj-files-grid`)
 
-Kendo Grid for displaying and managing files with inline editing.
+AG Grid for displaying and managing files with inline editing.
 
 #### Inputs
 
@@ -289,14 +289,14 @@ type FileUploadEvent =
 | `@memberjunction/ng-container-directives` | Container directives |
 | `@memberjunction/ng-shared` | Shared Angular services |
 | `@memberjunction/ng-shared-generic` | Shared generic components |
-| `@progress/kendo-angular-grid` | Data grid |
-| `@progress/kendo-angular-treeview` | Category tree |
-| `@progress/kendo-angular-upload` | File upload |
-| `@progress/kendo-angular-dialog` | Confirmation dialogs |
-| `@progress/kendo-angular-buttons` | Button components |
-| `@progress/kendo-angular-dropdowns` | Dropdown components |
-| `@progress/kendo-angular-indicators` | Loading indicators |
-| `@progress/kendo-angular-menu` | Context menu |
+| `ag-grid-angular` | Data grid |
+| `ag-grid-angular` | Category tree |
+| `@memberjunction/ng-ui-components` | File upload |
+| `@memberjunction/ng-ui-components` | Confirmation dialogs |
+| `@memberjunction/ng-ui-components` | Button components |
+| `@memberjunction/ng-ui-components` | Dropdown components |
+| `@memberjunction/ng-ui-components` | Loading indicators |
+| `@memberjunction/ng-ui-components` | Context menu |
 
 ### Peer Dependencies
 

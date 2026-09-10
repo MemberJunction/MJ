@@ -318,13 +318,3 @@
 .sub-agent-dialog::-webkit-scrollbar-thumb:hover {
   background: var(--mj-text-disabled);
 }
-
-/* Ensure dialog appears above banner and other elements */
-:host ::ng-deep .k-dialog,
-:host ::ng-deep .k-window {
-  z-index: 10000 !important;
-}
-
-:host ::ng-deep .k-overlay {
-  z-index: 9999 !important;
-}

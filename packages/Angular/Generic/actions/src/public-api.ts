@@ -2,7 +2,7 @@
  * @memberjunction/ng-actions
  *
  * A reusable Angular module for testing and running MemberJunction Actions.
- * This package has no Kendo dependencies and can be used in any Angular application.
+ * This package has no third-party UI dependencies and can be used in any Angular application.
  */
 
 // Module

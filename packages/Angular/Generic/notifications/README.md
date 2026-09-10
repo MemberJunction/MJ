@@ -1,6 +1,6 @@
 # @memberjunction/ng-notifications
 
-Angular singleton service for managing user notifications in MemberJunction applications. Provides both temporary UI notifications (Kendo toasts) and persistent database-backed notifications via the User Notifications entity.
+Angular singleton service for managing user notifications in MemberJunction applications. Provides both temporary UI notifications (MJ toasts) and persistent database-backed notifications via the User Notifications entity.
 
 ## Installation
 
@@ -25,7 +25,7 @@ flowchart TD
         F["Notification State"]
     end
     subgraph Outputs["Outputs"]
-        G["Kendo UI Toast"]
+        G["MJ Toast"]
         H["UserNotification Entity (DB)"]
         I["Notifications$ Observable"]
         J["UnreadCount$ Observable"]
@@ -147,4 +147,4 @@ The service automatically handles these MJGlobal events:
 - [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- UserNotificationEntity
 - [@memberjunction/global](../../../MJGlobal/README.md) -- MJGlobal event system
 - [@memberjunction/graphql-dataprovider](../../../GraphQLDataProvider/README.md) -- Push notification subscriptions
-- `@progress/kendo-angular-notification` -- Toast notification rendering
+- `@memberjunction/ng-ui-components` -- Toast notification rendering

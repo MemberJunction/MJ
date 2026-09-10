@@ -1,12 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ViewEncapsulation, HostListener, ElementRef, ViewChild } from '@angular/core';
 import {
-  FilterDescriptor,
   FilterFieldInfo,
   FilterFieldType,
-  FilterOperator,
   FilterSource
 } from '../types/filter.types';
-import { CompositeFilter } from '@memberjunction/core';
+import { CompositeFilter, FilterDescriptor, FilterOperator } from '@memberjunction/core';
 import { GetOperatorsForType, OperatorInfo, OperatorRequiresValue } from '../types/operators';
 
 /**

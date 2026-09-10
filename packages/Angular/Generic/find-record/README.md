@@ -10,7 +10,7 @@ npm install @memberjunction/ng-find-record
 
 ## Overview
 
-The Find Record package provides a reusable search interface that works with any entity registered in the MemberJunction metadata system. It uses debounced search input with the RunView API and displays results in a Kendo UI grid for easy selection.
+The Find Record package provides a reusable search interface that works with any entity registered in the MemberJunction metadata system. It uses debounced search input with the RunView API and displays results in a data grid for easy selection.
 
 ```mermaid
 flowchart LR
@@ -22,7 +22,7 @@ flowchart LR
         C --> D["BaseEntity Results"]
     end
     subgraph Display["UI Components"]
-        D --> E["Kendo Grid"]
+        D --> E["AG Grid"]
         E --> F["OnRecordSelected"]
     end
 
@@ -109,7 +109,7 @@ Inherits all inputs from `FindRecordComponent`, plus:
 
 1. User types in the search input; input is debounced (default 300ms)
 2. A search executes via `RunView` with `UserSearchString` and `ResultType: 'entity_object'`
-3. Results display in a Kendo UI grid with the configured display fields
+3. Results display in a data grid with the configured display fields
 4. Clicking a row emits the selected `BaseEntity` instance via `OnRecordSelected`
 
 ## Dependencies
@@ -117,7 +117,7 @@ Inherits all inputs from `FindRecordComponent`, plus:
 - [@memberjunction/core](../../../MJCore/readme.md) -- Metadata, RunView, BaseEntity
 - [@memberjunction/core-entities](../../../MJCoreEntities/readme.md) -- Entity type definitions
 - [@memberjunction/ng-shared](../shared/README.md) -- Shared Angular utilities
-- `@progress/kendo-angular-grid` -- Grid display
+- `ag-grid-angular` -- Grid display
 
 ## Related Packages
 

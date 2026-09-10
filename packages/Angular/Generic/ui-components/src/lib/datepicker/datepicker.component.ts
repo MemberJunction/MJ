@@ -4,7 +4,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
 import { CalendarDay, WEEK_DAYS, BuildCalendarWeeks, FormatDate, GetMonthYearLabel } from '../calendar/calendar-utils';
 
 /**
- * mj-datepicker — Date picker with calendar popup. Replaces `<kendo-datepicker>`.
+ * mj-datepicker — Date picker with calendar popup.
  */
 @Component({
   selector: 'mj-datepicker',

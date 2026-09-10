@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/ng-actions",
   "version": "6.1.0-edge.5",
-  "description": "MemberJunction Action Runner - Reusable components for testing and running actions with no Kendo dependencies",
+  "description": "MemberJunction Action Runner - Reusable components for testing and running actions, with no third-party UI dependencies",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
   "files": [

@@ -608,8 +608,8 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
 
     /**
      * Create a where clause for SQL from the structured filter state JSON information
-     * @param FilterState A string containing a valid Filter State JSON string - this uses the format that the Kendo Filter component uses which is generic and can be used anywhere
-     * with/without kendo
+     * @param FilterState A string containing a valid Filter State JSON string, in MJ's portable
+     * filter format (`CompositeFilterDescriptor` in `@memberjunction/core`), which is UI-agnostic
      * @param EntityInfo The entity info for the entity that the UserView is based on
      * @returns a string that represents a valid SQL WHERE clause
      * @memberof UserViewEntitySubclass
@@ -944,7 +944,7 @@ export class ViewGridState {
     sortSettings?: ViewGridSortSetting[];
     /** Column settings - visibility, width, order, pinning, etc. */
     columnSettings?: ViewGridColumnSetting[];
-    /** Filter state (Kendo-compatible format) */
+    /** Filter state — MJ's portable `CompositeFilterDescriptor` JSON */
     filter?: ViewFilterInfo;
     /** Aggregate calculations and display configuration */
     aggregates?: ViewGridAggregatesConfig;

@@ -252,7 +252,7 @@ export class FillContainer implements OnInit, OnDestroy {
    * @returns True if element is within a grid, false otherwise
    */
   protected elementWithinGrid(element: HTMLElement): boolean {
-    // check if the element is within a kendo grid 
+    // check if the element is within a grid (role="grid")
     let parent = element.parentElement;
     while (parent) {
       if (parent.role === 'grid') {

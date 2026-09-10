@@ -3,13 +3,6 @@
     padding: 10px;
     border-top: 1px solid rgba(0, 0, 0, 0.08);
   }
-  ::ng-deep .modal-body-wrap .k-window-content {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    flex: 1;
-    padding: 0;
-  }
   .resource-wrap {
     flex: 1;
     padding: 24px;
@@ -26,17 +19,11 @@
       flex-direction: column;
       gap: 20px;
   }
-  ::ng-deep .resource-wrap .k-label {
-    color: var(--mj-text-secondary);
-    font-size: 14px;
-    font-style: normal;
-    font-weight: 400;
-    line-height: 20px;
-  }
-  ::ng-deep .resource-wrap .k-dropdownlist {
-    border-radius: 4px;
-    border: 1px solid rgba(0, 0, 0, 0.08);
-    background: transparent;
-    line-height: 32px;
-    margin: 0;
-  }
+
+/* Confirmation copy inside the dialog body. The previous utility classes here never
+   applied (one was not even a valid single class token), so this paragraph had been
+   rendering unstyled. */
+.confirm-message {
+    margin: var(--mj-space-6);
+    text-align: center;
+}
