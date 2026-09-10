@@ -496,7 +496,13 @@ export class RunCodeGenBase {
         pipelineSuccess = false;
         return false;
       } else {
-        succeedSpinner('AI Generated Code loaded from Metadata');
+        // Report the COUNT, not just success. Loading zero validators is a legitimate state for a
+        // database that has none, and an invisible catastrophe for one that has plenty: file
+        // generation emits each entity as though it had no `Validate()` override, silently deleting
+        // whatever was committed. Both times that regression shipped, the log said exactly this
+        // line and nothing else. A number here makes the next one visible in CI output.
+        const loadedValidators = ManageMetadataBase.generatedValidators.length;
+        succeedSpinner(`AI Generated Code loaded from Metadata (${loadedValidators} validator${loadedValidators === 1 ? '' : 's'})`);
       }
 
       const skipFiles = skipFileGeneration || getSettingValue('skip_file_generation', false);
