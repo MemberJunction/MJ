@@ -1858,8 +1858,17 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
             const mutationName = `${type}${graphQLTypeName}`
 
-            // only pass along writable fields, AND the PKEY value if this is an update
-            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && entity.IsSaved));
+            // Only pass along writable fields, AND the primary key when the server must NOT mint it:
+            // on an update, and on an IS-A child CREATE. An IS-A child's key is ReadOnly because in
+            // IS-A the shared key IS the relationship — it belongs to the root, not to this table —
+            // and it is already known. A child create carrying an EXISTING parent's key is a
+            // PROMOTION (an Animal that is now also a Dog). The parent's own Save() is short-circuited
+            // above (IsParentEntitySave) on the premise that this mutation carries the whole chain,
+            // so if the key were dropped here nothing would tell the server which parent row this is
+            // about: it would mint a fresh GUID and INSERT a second copy of the parent. IsChildType
+            // (not ParticipatesInIsA) is the right predicate — a ROOT's key is its own to mint.
+            const isaChildCreate = !entity.IsSaved && entity.EntityInfo.IsChildType;
+            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaChildCreate)));
                 const inner = `                ${mutationName}(input: $input) {
                 ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
             }`

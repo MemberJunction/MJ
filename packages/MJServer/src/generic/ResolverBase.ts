@@ -10,6 +10,7 @@ import {
   EntitySaveOptions,
   IMetadataProvider,
   IRunViewProvider,
+  KeyValuePair,
   LogDebug,
   LogError,
   LogStatus,
@@ -1404,6 +1405,58 @@ export class ResolverBase {
     }
   }
 
+  /**
+   * IS-A PROMOTION over the wire: an EXISTING parent record gaining a subtype — an Animal that is
+   * now also a Dog. It arrives as the CHILD's create mutation carrying the existing parent's
+   * primary key, because in IS-A the shared key is the relationship and the child has no key of
+   * its own to mint. `NewRecord()` has just reset the whole chain to "new", so left alone the
+   * parent would save as a CREATE: a second copy of a row that already exists (a unique-constraint
+   * violation at best, a silently duplicated parent at worst).
+   *
+   * When a child create carries a complete primary key, bind the new child to the existing parent
+   * row with `AttachToParent` (#3825): it loads the parent chain, so the parent saves as an UPDATE
+   * and only the child is INSERTed. A key that matches no row leaves the fresh chain exactly as
+   * `NewRecord()` built it — the ordinary whole-chain create. A non-IS-A entity, or a create with
+   * no key, never gets past the guards.
+   *
+   * @returns true when the child was attached to an existing parent row.
+   */
+  protected async attachToExistingParentIfPromotion(entityObject: BaseEntity, input: Record<string, unknown>): Promise<boolean> {
+    if (!entityObject.EntityInfo.IsChildType) {
+      return false;
+    }
+    const key = this.primaryKeyFromInput(entityObject.EntityInfo, input);
+    if (!key) {
+      return false;
+    }
+    const attached = await entityObject.AttachToParent(key);
+    if (!attached) {
+      // No parent row under that key: this is a whole-chain create on the CALLER's key (the
+      // client mints the shared key at the root and sends it, so honoring it keeps the client's
+      // in-memory chain and the stored rows on one key). AttachToParent restored the fresh chain,
+      // but the root's ReadOnly key slot is no longer writable — a later SetMany would silently
+      // keep the server-minted value — so re-seed the chain with the supplied key explicitly.
+      entityObject.NewRecord(key);
+    }
+    return attached;
+  }
+
+  /**
+   * The entity's primary key as supplied on a mutation input, or null when any part of it is
+   * missing. Composite keys are all-or-nothing: a half-specified key identifies nothing.
+   */
+  protected primaryKeyFromInput(entityInfo: EntityInfo, input: Record<string, unknown>): CompositeKey | null {
+    const pairs: KeyValuePair[] = [];
+    for (const pk of entityInfo.PrimaryKeys) {
+      const value = input[pk.Name] ?? input[pk.CodeName];
+      if (value === null || value === undefined || value === '') {
+        return null;
+      }
+      pairs.push(new KeyValuePair(pk.Name, value));
+    }
+    return pairs.length > 0 ? CompositeKey.FromKeyValuePairs(pairs) : null;
+  }
+
   protected async CreateRecord(entityName: string, input: any, provider: DatabaseProviderBase, userPayload: UserPayload, pubSub: PubSubEngine) {
     // Check API key scope authorization for entity create operations
     await this.CheckAPIKeyScopeAuthorization('entity:create', entityName, userPayload);
@@ -1421,6 +1474,10 @@ export class ResolverBase {
       for (const key of Object.keys(input)) {
         if (key !== 'RestoreContext___') fieldsForSet[key] = input[key];
       }
+      // IS-A promotion: bind the new child to its EXISTING parent row BEFORE the field
+      // assignments, so values the client sent for parent fields land on the loaded parent
+      // (as an update) instead of being wiped by the load.
+      await this.attachToExistingParentIfPromotion(entityObject, fieldsForSet);
       entityObject.SetMany(fieldsForSet);
 
       // Reconstruct the client-side restore context, if any, on this server
