@@ -148,8 +148,11 @@ const COMPLETE_ME = { Animal: 'Domino', Adopter: 'priya.raman@example.com', Inqu
 //
 // There is no "update the existing animals' temperament" pass, and that is not an omission.
 // Module 7's migration deliberately carries NO backfill (see its section 3), so no animal created
-// before module 7 has a Dog or Cat row -- and MJ cannot retrofit one, because attaching a subtype to
-// an existing parent is an anti-pattern its save path does not model. The fourteen animals from
+// before module 7 has a Dog or Cat row -- and on THIS pin (v6.1.0-edge.4) one cannot be retrofitted,
+// because attaching a subtype to an existing parent is an anti-pattern its save path does not model.
+// (True of the pin, not of MemberJunction: MJ #3825 added IS-A promotion and EnsureISAChild() does
+// exactly this, landing after our pin. Creating animals AS subtypes stays correct either way.)
+// The fourteen animals from
 // module 5 therefore stay plain Animals, which is exactly what a shelter's historical records look
 // like.
 //

@@ -287,11 +287,18 @@ GO
    thing known for certain at intake. Animals that predate the subtypes simply do not have one, which
    is exactly what a real shelter's historical records look like.
 
-   And they CANNOT be retrofitted through the app, which is worth knowing before you try: MJ does not
-   model attaching a subtype to a parent row that already exists. Verified against this API, not
-   assumed -- `CreateMJDog` with only an existing ID starts a NEW chain, so the parent insert arrives
-   empty ("Failed to save parent entity 'MJ: Animals': Name cannot be null"), and supplying the
-   parent's fields too collides on PK_Animal. The IS-A guide names this as an anti-pattern.
+   ON THIS VERSION OF MJ they cannot be retrofitted through the app either, which is worth knowing
+   before you try. Verified against this API rather than assumed: `CreateMJDog` with only an existing
+   ID starts a NEW chain, so the parent insert arrives empty ("Failed to save parent entity
+   'MJ: Animals': Name cannot be null"), and supplying the parent's fields too collides on PK_Animal.
+   The IS-A guide on this pin names it as an anti-pattern.
+
+   That is a statement about v6.1.0-edge.4, NOT about MemberJunction. MJ #3825 ("IS-A promotion --
+   attach a NEW child to an EXISTING parent") added a promotion path, and BaseEntity.EnsureISAChild()
+   now does exactly this job -- bizapps-orders uses it so a Product form can mount its EventProduct
+   fields on a product that already exists. It landed after our pin. When this course moves to the
+   LTS release, promotion becomes available and the create-as-subtype path below still works
+   unchanged, so nothing here has to be rewritten.
    --------------------------------------------------------------------------------------------- */
 
 /* ==============================================================================================
