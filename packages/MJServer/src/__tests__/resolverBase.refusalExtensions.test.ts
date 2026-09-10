@@ -39,6 +39,7 @@ describe('RefusalExtensions', () => {
         const ext = RefusalExtensions('CREATE_ENTITY_ERROR', 'Widgets', dbFailure);
         expect(ext).toEqual({ code: 'CREATE_ENTITY_ERROR', entityName: 'Widgets' });
         expect('validationErrors' in ext).toBe(false);
+        expect('messageIncludesValidationErrors' in ext).toBe(false);
     });
 
     it('carries every field-named reason as a plain, JSON-safe object', () => {
@@ -54,6 +55,9 @@ describe('RefusalExtensions', () => {
             { Source: 'TagID', Message: 'Cannot add TagScope row for tag "Global" because it is marked IsGlobal=1.', Value: 'abc', Type: 'Failure' },
             { Source: '', Message: 'Record-level note', Value: null, Type: 'Warning' },
         ]);
+        // The server states that the message it throws (CompleteMessage) already renders these — the
+        // client must never have to infer that from the text.
+        expect(ext.messageIncludesValidationErrors).toBe(true);
         // What GraphQL actually ships is JSON: the payload must survive it unchanged.
         expect(JSON.parse(JSON.stringify(ext))).toEqual(ext);
     });

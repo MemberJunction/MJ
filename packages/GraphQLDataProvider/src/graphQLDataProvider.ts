@@ -2012,10 +2012,12 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // registered on the entity — means `record.LatestResult.Errors` reads exactly as it does
             // after a local Validate() refusal, so the form paints the fields either way. Empty when
             // the server sent none (a SQL error, a permission refusal).
-            result.Errors = DeserializeValidationErrors(e.response?.errors?.[0]?.extensions?.validationErrors);
-            // `Message` IS the server's CompleteMessage — those same errors, already joined — so tell
-            // CompleteMessage not to append them again (they would read twice otherwise).
-            result.MessageIncludesErrors = result.Errors.length > 0 && !!result.Message;
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            // Whether `Message` already renders those errors is a fact only the SERVER knows (it threw
+            // the message), so it states it on the wire and we repeat it — never inferred here. Without
+            // the statement CompleteMessage keeps today's behaviour (the text may read twice).
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
             return null;
         }
@@ -2255,8 +2257,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Success = false;
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
             // Same rehydration as Save(): a delete refused with field-named reasons keeps them.
-            result.Errors = DeserializeValidationErrors(e.response?.errors?.[0]?.extensions?.validationErrors);
-            result.MessageIncludesErrors = result.Errors.length > 0 && !!result.Message;
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
 
             return false;

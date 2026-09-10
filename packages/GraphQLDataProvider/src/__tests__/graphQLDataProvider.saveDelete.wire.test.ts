@@ -472,7 +472,7 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         const entity = loaded();
         entity.Set('Tier', 'Platinum');
         const serverComplete = REFUSAL_PROSE + '\nReviewed by the tier policy';
-        GraphQLWire.EnqueueError(new FakeGraphQLResponseError(serverComplete, 'SAVE_ENTITY_ERROR', { validationErrors: WIRE_ERRORS }));
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError(serverComplete, 'SAVE_ENTITY_ERROR', { validationErrors: WIRE_ERRORS, messageIncludesValidationErrors: true }));
 
         await provider.Save(entity, user, new EntitySaveOptions());
 
@@ -480,6 +480,20 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         expect(complete).toBe(serverComplete);
         expect(complete.split(REFUSAL_PROSE).length - 1, 'the prose appears exactly once').toBe(1);
         expect(complete.split('Reviewed by the tier policy').length - 1).toBe(1);
+    });
+
+    it('Save: the once-only marking is the SERVER\'s statement, never inferred — a server that sends validationErrors without it keeps today\'s behaviour', async () => {
+        // The client cannot know what an arbitrary server put in `message`; only the producer that
+        // threw it can say it is CompleteMessage. Without that statement, nothing is assumed.
+        const entity = loaded();
+        entity.Set('Tier', 'Platinum');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Some other message entirely.', 'SAVE_ENTITY_ERROR', { validationErrors: WIRE_ERRORS }));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(entity.LatestResult.MessageIncludesErrors).toBe(false);
+        expect(entity.LatestResult.Errors).toHaveLength(2);
+        expect(entity.LatestResult.CompleteMessage).toBe('Some other message entirely.\n' + REFUSAL_PROSE + '\nReviewed by the tier policy');
     });
 
     it('Save: without the extension nothing is marked — CompleteMessage is just the message, as before', async () => {
@@ -520,6 +534,7 @@ describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension"
         const entity = loaded();
         GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Customer has open orders.', 'DELETE_ENTITY_ERROR', {
             validationErrors: [{ Source: 'ID', Message: 'Customer has open orders.', Value: 'CUST-0001', Type: 'Failure' }],
+            messageIncludesValidationErrors: true,
         }));
 
         const ok = await provider.Delete(entity, new EntityDeleteOptions(), user);
