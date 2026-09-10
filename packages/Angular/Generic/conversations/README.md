@@ -126,6 +126,7 @@ Embedding products (white-labeled end-user apps, embedded widgets) can pare the 
 | `allowRealtime` | The composer's real-time voice (co-agent) launcher button |
 | `showEmptyFill` | The message list's built-in "No messages yet" filler |
 | `showLoadingState` | The centered loading spinner (loading still short-circuits rendering, so hiding it does not flash the empty state) |
+| `readReplyFromTop` | **Default `false`.** When `true`, a finished turn (the reader's message plus the reply) is scrolled to the top of the pane if it is taller than the pane, so the run ends at the start of the answer instead of its end. A turn that fits stays where it is; a reader who scrolled up during the run is never moved. Independent of this flag, an in-place message update (progress, status, streamed text) only follows the tail for a reader who is already at the bottom |
 | `showAgentPicker` | The agent picker |
 | `showAgentModePicker` | The agent-mode picker |
 | `showExportButton` | The conversation export button |

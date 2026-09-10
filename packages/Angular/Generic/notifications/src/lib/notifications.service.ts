@@ -14,6 +14,49 @@ import { map, shareReplay } from 'rxjs/operators';
  * Multi-provider note: callers under a non-default provider should set
  * `service.Provider = component.ProviderToUse` before invoking any methods.
  */
+/** What a rich toast knows about the thing it announces — handed to {@link MJNotificationService.CompletionImageUrlResolver}. */
+export interface MJNotificationContext {
+  conversationId?: string | null;
+  agentId?: string | null;
+  agentName?: string | null;
+}
+
+/** A toast with an image (or icon), a bold title and a line of detail — see {@link MJNotificationService.CreateRichNotification}. */
+export interface MJRichNotificationOptions {
+  /** Bold first line, e.g. "Sage finished". */
+  title: string;
+  /** Second line, e.g. "in General Discussion". */
+  message?: string | null;
+  /** Image at the left — an agent's avatar. Wins over `iconClass`. */
+  imageUrl?: string | null;
+  /** Font Awesome class used when there is no image, e.g. "fa-solid fa-robot". */
+  iconClass?: string | null;
+  /** Auto-hide in ms; omit for a sticky toast with a close button. */
+  hideAfter?: number;
+  /**
+   * Toasts sharing a key within `dedupeWindowMs` collapse into ONE. A toast already on screen
+   * wins — a later call with the same key only keeps it up longer, so the wording never
+   * changes under the reader's eyes. A toast still waiting on `deferMs` is replaced by the
+   * later call and shown at once. An agent run's completion is announced twice — by the
+   * server's Agent Completion notification and by the client that ran it — and the reader
+   * should hear it once, in one wording.
+   */
+  dedupeKey?: string;
+  /** Default 15 000. */
+  dedupeWindowMs?: number;
+  /**
+   * Hold the toast this long before showing it, giving a better-worded announcement with the
+   * same `dedupeKey` the chance to take its place. The server's completion notification uses
+   * this: the client that ran the agent announces the same completion a few ms later with the
+   * agent's name and the conversation's, and that is the one to show.
+   */
+  deferMs?: number;
+  /** Runs when the toast body is clicked, e.g. open the conversation. */
+  onClick?: () => void;
+  /** Consulted by {@link MJNotificationService.CompletionImageUrlResolver} when the caller gives no image. */
+  context?: MJNotificationContext;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -63,6 +106,19 @@ export class MJNotificationService {
    * The notification DB record is still created and the badge count still updates.
    */
   public ShouldSuppressToast?: (statusObj: Record<string, unknown>) => boolean;
+
+  /**
+   * Host hook: the image for agent-completion toasts. A white-label host brands the
+   * assistant itself — the avatar on its chat bubbles — and that is the face the toast
+   * should wear, whichever path announced the completion. Return null/undefined to fall back
+   * to the agent's own LogoURL / IconClass.
+   */
+  public CompletionImageUrlResolver: ((context: MJNotificationContext) => string | null | undefined) | null = null;
+
+  /** Rich toasts on screen by dedupe key, so a repeat announcement extends rather than stacks. */
+  private readonly liveRichToasts = new Map<string, { element: HTMLElement; timer: ReturnType<typeof setTimeout> | null; shownAt: number }>();
+  /** Rich toasts held back by `deferMs`, by dedupe key — a same-key call takes their place. */
+  private readonly pendingRichToasts = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor() {
     const g = GetGlobalObjectStore()!;
@@ -127,7 +183,20 @@ export class MJNotificationService {
                 // (e.g., user is actively viewing the conversation that triggered it)
                 const suppress = this.ShouldSuppressToast?.(statusObj) ?? false;
                 if (!suppress) {
-                  this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                  if (statusObj.conversationId) {
+                    // An agent finished in a conversation. The client that ran it announces the
+                    // same completion from message-input; the shared key folds the two into one.
+                    this.CreateRichNotification({
+                      title: statusObj.title || 'Finished',
+                      message: statusObj.message || null,
+                      hideAfter: 5000,
+                      dedupeKey: `agent-completion:${statusObj.conversationId}`,
+                      deferMs: 1500,
+                      context: { conversationId: statusObj.conversationId }
+                    });
+                  } else {
+                    this.CreateSimpleNotification(statusObj.title || 'New Notification Available', "success", 3000);
+                  }
                 }
                 // Always refresh the notification list (badge count, unread state)
                 MJNotificationService.RefreshUserNotifications();
@@ -273,6 +342,125 @@ export class MJNotificationService {
     const defaultHide = style === 'error' ? 5000 : style === 'warning' ? 4500 : 3500;
     const effectiveHideAfter = hideAfter !== undefined ? hideAfter : defaultHide;
     this.showToast(message, style, effectiveHideAfter);
+  }
+
+  /**
+   * Shows a rich toast: an image or icon, a bold title and a line of detail, on the surface
+   * tokens (so a white-label brand ramp themes it) with the brand colour as its accent.
+   * See {@link MJRichNotificationOptions} for de-duplication.
+   */
+  public CreateRichNotification(options: MJRichNotificationOptions): void {
+    const key = options.dedupeKey;
+    if (key) {
+      const live = this.liveRichToasts.get(key);
+      const windowMs = options.dedupeWindowMs ?? 15000;
+      if (live && live.element.isConnected && Date.now() - live.shownAt < windowMs) {
+        // Already announced — keep what the reader is looking at, just a little longer.
+        if (live.timer) {
+          clearTimeout(live.timer);
+        }
+        live.timer = options.hideAfter ? setTimeout(() => this.dismissToast(live.element), options.hideAfter) : null;
+        return;
+      }
+      const pending = this.pendingRichToasts.get(key);
+      if (pending) {
+        // A held-back announcement is superseded by this one, which shows right away.
+        clearTimeout(pending);
+        this.pendingRichToasts.delete(key);
+      } else if (options.deferMs) {
+        this.pendingRichToasts.set(key, setTimeout(() => {
+          this.pendingRichToasts.delete(key);
+          this.showRichToast(options);
+        }, options.deferMs));
+        return;
+      }
+    } else if (options.deferMs) {
+      setTimeout(() => this.showRichToast(options), options.deferMs);
+      return;
+    }
+    this.showRichToast(options);
+  }
+
+  private showRichToast(options: MJRichNotificationOptions): void {
+    const imageUrl = this.resolveRichImage(options);
+    const key = options.dedupeKey;
+    const container = this.ensureToastContainer();
+    this.ensureToastKeyframes();
+    const toast = document.createElement('div');
+    toast.className = 'mj-toast mj-toast--rich';
+    toast.setAttribute('role', 'status');
+    toast.style.cssText = `
+      pointer-events: auto; display: flex; align-items: center; gap: var(--mj-space-3);
+      min-width: 280px; max-width: 420px; padding: var(--mj-space-3) var(--mj-space-4);
+      background: var(--mj-bg-surface-card); color: var(--mj-text-primary);
+      border: 1px solid var(--mj-border-default); border-left: 4px solid var(--mj-brand-primary);
+      border-radius: var(--mj-radius-lg); box-shadow: var(--mj-shadow-lg);
+      font-family: var(--mj-font-family); font-size: var(--mj-text-sm);
+      animation: mj-toast-slide-in 0.3s ease-out; ${options.onClick ? 'cursor: pointer;' : ''}
+    `;
+    this.fillRichToast(toast, options, imageUrl);
+    if (options.onClick) {
+      toast.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        options.onClick?.();
+        this.dismissToast(toast);
+      });
+    }
+    container.appendChild(toast);
+
+    const timer = options.hideAfter ? setTimeout(() => this.dismissToast(toast), options.hideAfter) : null;
+    if (key) {
+      this.liveRichToasts.set(key, { element: toast, timer, shownAt: Date.now() });
+    }
+  }
+
+  /** Host resolver first (it knows how the assistant is branded), then the caller's image. */
+  private resolveRichImage(options: MJRichNotificationOptions): string | null {
+    const fromHost = options.context ? this.CompletionImageUrlResolver?.(options.context) : null;
+    return fromHost || options.imageUrl || null;
+  }
+
+  /** (Re)writes a rich toast's content — first paint and de-duplicated updates alike. */
+  private fillRichToast(toast: HTMLElement, options: MJRichNotificationOptions, imageUrl: string | null): void {
+    const media = imageUrl
+      ? `<img src="${this.escapeAttribute(imageUrl)}" alt="" style="width:40px;height:40px;border-radius:50%;object-fit:cover;flex:none;background:var(--mj-bg-surface);" />`
+      : `<span aria-hidden="true" style="width:40px;height:40px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;background:var(--mj-brand-primary-light);color:var(--mj-brand-primary);font-size:18px;"><i class="${this.escapeAttribute(options.iconClass || 'fa-solid fa-robot')}"></i></span>`;
+    const detail = options.message
+      ? `<div style="color:var(--mj-text-secondary);margin-top:2px;">${this.escapeHtml(options.message)}</div>`
+      : '';
+    const close = options.hideAfter
+      ? ''
+      : `<button type="button" aria-label="Dismiss" style="background:none;border:none;color:var(--mj-text-secondary);cursor:pointer;font-size:18px;padding:0 0 0 var(--mj-space-2);line-height:1;flex:none;">×</button>`;
+    toast.innerHTML = `
+      ${media}
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:var(--mj-font-semibold);font-size:var(--mj-text-base);">${this.escapeHtml(options.title)}</div>
+        ${detail}
+      </div>
+      ${close}
+    `;
+    toast.querySelector('button')?.addEventListener('click', () => this.dismissToast(toast));
+  }
+
+  private dismissToast(toast: HTMLElement): void {
+    if (!toast.isConnected) return;
+    toast.style.animation = 'mj-toast-slide-out 0.3s ease-in forwards';
+    toast.addEventListener('animationend', () => toast.remove(), { once: true });
+  }
+
+  private ensureToastKeyframes(): void {
+    if (document.getElementById('mj-toast-keyframes')) return;
+    const styleEl = document.createElement('style');
+    styleEl.id = 'mj-toast-keyframes';
+    styleEl.textContent = `
+      @keyframes mj-toast-slide-in { from { opacity:0; transform:translateY(-20px); } to { opacity:1; transform:translateY(0); } }
+      @keyframes mj-toast-slide-out { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-20px); } }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
+  private escapeAttribute(value: string): string {
+    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
   /**
