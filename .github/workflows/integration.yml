@@ -603,8 +603,7 @@ jobs:
   # output generated from a CLEAN migrated+synced DB will differ from artifacts committed
   # from a stale one; (2) the c31d487cb class — schema changed, nobody re-ran CodeGen, the
   # column is absent rather than wrong, so nothing errors and no test notices.
-  # REPORT-FIRST (continue-on-error): the first runs establish whether the committed
-  # artifacts are currently in sync; flip to blocking once green.
+  # Blocking gate: committed generated artifacts must match output from a clean DB.
   codegen-drift:
     name: CodeGen drift gate
     needs: [changes]
