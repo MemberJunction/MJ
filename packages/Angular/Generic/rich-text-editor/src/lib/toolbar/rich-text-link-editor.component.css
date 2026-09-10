@@ -1,0 +1,45 @@
+/*
+ * mj-rich-text-link-editor — the inline popover under the toolbar. ViewEncapsulation.None,
+ * so these rules are global once the component loads; the class prefix keeps them scoped.
+ */
+
+
+.mj-rte-link-editor {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mj-space-2);
+    padding: var(--mj-space-2) var(--mj-space-3);
+    background: var(--mj-bg-surface-elevated);
+    border-bottom: 1px solid var(--mj-border-default);
+    box-shadow: var(--mj-shadow-sm);
+}
+
+.mj-rte-link-editor-label {
+    font-size: var(--mj-text-sm);
+    color: var(--mj-text-secondary);
+}
+
+.mj-rte-link-editor-input {
+    flex: 1 1 12rem;
+    min-width: 0;
+    padding: var(--mj-space-1-5) var(--mj-space-2);
+    font: inherit;
+    font-size: var(--mj-text-sm);
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: var(--mj-radius-sm);
+}
+
+.mj-rte-link-editor-input:focus-visible {
+    outline: none;
+    border-color: var(--mj-border-focus);
+    box-shadow: var(--mj-focus-ring);
+}
+
+.mj-rte-link-editor-actions {
+    display: flex;
+    gap: var(--mj-space-1);
+}
+
