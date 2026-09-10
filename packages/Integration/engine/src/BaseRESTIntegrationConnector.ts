@@ -695,8 +695,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         deadlineMs?: number,
         watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
-        const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
-        if (this.DetectTemplateVars(obj.APIPath).length === 0) {
+        // FIRST CONTACT MUST STILL SAMPLE. A runtime-discovered object has no persisted
+        // IntegrationObject yet — the pipeline samples BEFORE it persists — and this lookup used to
+        // throw right here, before the connector was ever consulted. The whole sampling fallback
+        // chain (this stream → fallback DiscoverFields) then ran without a single record: no
+        // statistical PK, no observed widths, ever, for exactly the objects discovery exists to
+        // learn. A missing row only means the record-constrained template-var sampler below cannot
+        // be used (it needs obj.APIPath / obj.ID); the generic FetchChanges loop needs neither and
+        // hands routing to the connector, which owns first contact. A connector that genuinely
+        // cannot route an unpersisted object still throws there — the previous behaviour, one call
+        // later, and now with the object's own error rather than a catalog miss.
+        let obj: ReturnType<typeof this.GetCachedObject> | null = null;
+        try {
+            obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
+        } catch {
+            /* not persisted yet — take the generic loop below */
+        }
+        if (!obj || this.DetectTemplateVars(obj.APIPath).length === 0) {
             // FORWARD THE DEADLINE. Dropping it here silently un-bounds every REST connector that
             // lands on this fallback — which is every connector expressing parent scope as
             // CONFIGURATION rather than as URL template vars.
