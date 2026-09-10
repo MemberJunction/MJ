@@ -209,6 +209,15 @@ export interface OracleResult {
    * Additional details (oracle-specific)
    */
   details?: unknown;
+
+  /**
+   * When true, this oracle is *advisory*: its result is reported and scored for
+   * diagnostics but does NOT gate the test's Passed/Failed status. Used for
+   * efficiency/quality signals (e.g. step-count) that shouldn't fail an
+   * otherwise-successful run. Drivers set this from the oracle's config; absent
+   * or false means the oracle gates as normal.
+   */
+  advisory?: boolean;
 }
 
 /**
@@ -318,6 +327,70 @@ export interface TestRunResult {
    * Resolved variables that were used for this test run
    */
   resolvedVariables?: ResolvedTestVariables;
+
+  /**
+   * Execution-tier label a tiered driver reports — e.g. Computer Use's
+   * `'replay'` / `'replay-with-heal'` / `'llm'`. The tier that PRODUCED this
+   * result: a replay that diverged and fell back reports `'llm'`. Reporting
+   * segments tier mix / replay share by it. Absent for single-tier drivers.
+   */
+  tier?: string;
+
+  /**
+   * Replay telemetry, present whenever a replay was ATTEMPTED — so the drift
+   * signal (`diverged` > 0) survives even a green LLM-fallback result. Absent
+   * on pure-LLM runs. See {@link ReplayTelemetry}.
+   */
+  replay?: ReplayTelemetry;
+}
+
+/**
+ * Lightweight summary of a superseded FAILED attempt, oldest first, threaded
+ * back to the driver by a retry loop so a retry is not a blind re-roll.
+ *
+ * On this branch nothing populates it — the retry loop that does lives with the
+ * regression suite. It is declared here because the tiered driver already reads
+ * `failureMemo` off the latest entry: replay's in-attempt LLM fallback and the
+ * cross-attempt memo are the same seam, and splitting them across branches would
+ * fork `ComputerUseTestDriver` for no gain.
+ */
+export interface PriorAttemptSummary {
+  /** 1-based attempt number. */
+  attempt: number;
+  /** Terminal status of this superseded attempt. */
+  status: 'Passed' | 'Failed' | 'Skipped' | 'Error' | 'Timeout';
+  /** Score this attempt achieved. */
+  score: number;
+  /** How long this attempt ran, in ms. */
+  durationMs: number;
+  /** Error/diagnostic message from this attempt, if any. */
+  errorMessage?: string;
+  /**
+   * The driver's non-blind retry memo for this attempt — a short, payload-free
+   * "here's what went wrong last time" the driver can feed to the next attempt
+   * so attempt 2+ isn't a blind re-roll. Present only when the driver produced one.
+   */
+  failureMemo?: string;
+}
+
+/**
+ * Compact per-attempt replay outcome a tiered driver may surface.
+ * Mirrors the engine's replay counts so a report's replay-health panel and the
+ * "is replay lying to us?" check can be computed without the full step list.
+ */
+export interface ReplayTelemetry {
+  /** The replay sub-tier the run dispatched into. */
+  tier: 'replay' | 'replay-with-heal';
+  /** Number of script steps replayed. */
+  steps: number;
+  /** Steps that self-healed (recorded target drifted, re-resolved). */
+  healed: number;
+  /** Steps that diverged (replay+heal failed) — the UI-drift signal. */
+  diverged: number;
+  /** Whether every step hit or healed (no unrecovered divergence). */
+  allStepsSucceeded: boolean;
+  /** Whether a divergence forced an in-attempt fall back to the LLM tier. */
+  fellBackToLlm: boolean;
 }
 
 /**

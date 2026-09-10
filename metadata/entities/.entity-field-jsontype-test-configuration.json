@@ -1,0 +1,38 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Tests.Configuration so CodeGen emits a typed",
+      "ConfigurationObject accessor returning MJTestEntity_ITestConfiguration.",
+      "The column already exists (nvarchar(MAX) NULL) — this only types it, so there",
+      "is no migration.",
+      "The EntityField row must exist before this @lookup resolves on push; it does,",
+      "the column has been on MJ: Tests since the entity was introduced.",
+      "Source: metadata/entities/JSONType-interfaces/ITestConfiguration.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Tests"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "ITestConfiguration",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/ITestConfiguration.ts"
+          },
+          "_comments": [
+            "Test.Configuration — per-test bag shared by every test type. Named props are",
+            "framework-level (ReplayScript, AllowLLMFallback); an index signature carries",
+            "each driver's own config through untouched."
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Tests&Name=Configuration"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tests"
+    }
+  }
+]

@@ -98,6 +98,16 @@ export interface SuiteFlags extends CommonFlags {
 /**
  * Flags for list command
  */
+/** Flags for `mj test scripts` — replay-script review and promotion. */
+export interface ScriptsFlags extends CommonFlags {
+    /** Narrow to one test by name or ID. */
+    test?: string;
+    /** Promote the pending script(s) into the slot replay uses. */
+    promote?: boolean;
+    /** Drop the pending script(s), leaving the promoted one in place. */
+    discard?: boolean;
+}
+
 export interface ListFlags extends CommonFlags {
     type?: string;
     suites?: boolean;
