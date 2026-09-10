@@ -515,8 +515,32 @@ export class RunCodeGenBase {
       }
 
       startSpinner('Running system integrity checks...');
-      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      succeedSpinner('System integrity checks completed');
+      // The return value is the point. It used to be discarded: every check built a
+      // { Success, Message, Name } result, `RunIntegrityChecks` logged the failures, and this line
+      // threw the array away and printed a success tick regardless — so CodeGen reported
+      // `success: true, errors: []` over a run that had just printed `Integrity check FAILED`.
+      // Whether a failure STOPS the run is `integrityChecks.failOnError`; whether it is reported
+      // honestly is not configurable.
+      const integrityResults = await SystemIntegrityBase.RunIntegrityChecks(conn, true);
+      const failedChecks = integrityResults.filter((r) => !r.Success);
+      if (failedChecks.length === 0) {
+        succeedSpinner('System integrity checks completed');
+      } else {
+        const names = failedChecks.map((r) => r.Name).join(', ');
+        const summary = `System integrity checks FAILED: ${names}`;
+        failSpinner(summary);
+        for (const r of failedChecks) {
+          logError(`   ${r.Name}: ${r.Message}`);
+        }
+        if (configInfo.integrityChecks?.failOnError) {
+          pipelineSuccess = false;
+          return false;
+        }
+        logError(
+          `${summary} — continuing because integrityChecks.failOnError is false. ` +
+            `Set it to true to make this stop the run.`,
+        );
+      }
 
       const afterCommands = commands('AFTER');
       if (afterCommands && afterCommands.length > 0) {

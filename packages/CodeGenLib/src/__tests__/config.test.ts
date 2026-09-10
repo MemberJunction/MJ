@@ -37,6 +37,7 @@ vi.mock('@memberjunction/config', () => ({
 }));
 
 import { parseBooleanEnv } from '@memberjunction/config';
+import { DEFAULT_CODEGEN_CONFIG } from '../Config/config';
 
 describe('Config Types', () => {
     describe('parseBooleanEnv (utility function)', () => {
@@ -52,6 +53,24 @@ describe('Config Types', () => {
         it('should parse "false" string', () => {
             expect(parseBooleanEnv('false', true)).toBe(false);
         });
+    });
+});
+
+describe('integrityChecks defaults', () => {
+    // `failOnError: false` is a DELIBERATE default, not an oversight, and it is the kind of value
+    // someone tidies to `true` on sight. Until it existed the checks could not fail at all:
+    // `runCodeGen` discarded RunIntegrityChecks()'s results, printed a success tick, and reported
+    // `success: true, errors: []` over a run that had just logged `Integrity check FAILED`.
+    // It ships `false` ONLY because the `MJ: Entities` Sequence drift it reports is live on `next`
+    // today — flipping it in the same change would red every CodeGen run before anyone could act on
+    // the finding. Flip it once that drift is resolved; do not flip it to tidy the config.
+    it('defaults failOnError to false, so enabling it stays a deliberate act', () => {
+        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.failOnError).toBe(false);
+    });
+
+    it('still runs the checks by default — reporting is not what is gated', () => {
+        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.enabled).toBe(true);
+        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.entityFieldsSequenceCheck).toBe(true);
     });
 });
 
