@@ -1,0 +1,67 @@
+[
+  {
+    "fields": {
+      "Name": "Harbor Shelter - Save My Matches",
+      "Description": "Save the animals a visitor liked. Finds or creates their Adopter record from name and email, then writes one MJ: Adoptions row per animal at status Inquiry.",
+      "Instructions": "@file:templates/harbor-adopter-intake.skill.md",
+      "Status": "Active",
+      "ActivationMode": "Auto",
+      "Category": "Harbor Street Animal Shelter",
+      "IconClass": "fa-solid fa-clipboard-user",
+      "Color": "#2563EB"
+    },
+    "primaryKey": {
+      "ID": "81A4CD06-AC54-4D0D-B3D7-0E4057EB1BFF"
+    },
+    "relatedEntities": {
+      "MJ: AI Skill Actions": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Get Records"
+          },
+          "primaryKey": {
+            "ID": "FCF6593A-F0CF-44CC-B1AD-B44CF58198E8"
+          },
+          "sync": {
+            "lastModified": "2026-09-10T22:07:15.096Z",
+            "checksum": "99c8438344e728d4331972694beb6f768860f50ba2d0ff37af5329b0948b4052"
+          }
+        },
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Create Record"
+          },
+          "primaryKey": {
+            "ID": "907519A3-6699-4AF4-99BC-CC29FADCDE54"
+          },
+          "sync": {
+            "lastModified": "2026-09-10T22:07:15.109Z",
+            "checksum": "c7f42354f5b6e794190e3898cd674013ab650976b0464b60ce662cdcf50fdbaf"
+          }
+        }
+      ],
+      "MJ: AI Agent Skills": [
+        {
+          "fields": {
+            "SkillID": "@parent:ID",
+            "AgentID": "@lookup:MJ: AI Agents.Name=Harbor Shelter Adoption Matcher",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "DE3C2B98-2DC7-4AC6-8A6B-0BD09D709D5C"
+          },
+          "sync": {
+            "lastModified": "2026-09-10T22:07:15.138Z",
+            "checksum": "6e1a5c3c8990d93e1470fe834bd243a4fa2ccbfa4a68aa165f423c4df05526e2"
+          }
+        }
+      ]
+    },
+    "sync": {
+      "lastModified": "2026-09-10T22:14:20.940Z",
+      "checksum": "4a23a367fccbe14238f1f17c0285281560212d7b49a931f744425abafa98eaa4"
+    }
+  }
+]

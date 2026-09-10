@@ -15,8 +15,27 @@
       "ID": "6EEDCFF2-8B8B-424A-A122-90B9316DBCC4"
     },
     "sync": {
-      "lastModified": "2026-09-10T21:15:32.757Z",
-      "checksum": "d1296e7fb1acc2d0cef3f5bd60a3d63e72586d49b064dce06cb65855e9f18d78"
+      "lastModified": "2026-09-10T22:14:20.567Z",
+      "checksum": "f944fbdfd174d9d70e145c4724bb789bb2a03305bd20360221d984a523934e4b"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.7 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "63A932F7-BDA5-4D93-A5EA-4878175E15D1"
+          },
+          "sync": {
+            "lastModified": "2026-09-10T21:27:57.524Z",
+            "checksum": "cc4c1432c57a79be2550990a458939d4c8103b2f692156d0f99a2cbe1ca6545d"
+          }
+        }
+      ]
     }
   }
 ]

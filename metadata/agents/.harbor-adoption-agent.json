@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Harbor Shelter Adoption Matcher",
-      "Description": "Internal walk-in tool for Harbor Street Animal Shelter. A staff member describes an adopter's home; the agent finds Available animals that fit, explains why in plain language, and — on confirmation — saves the ones they liked as MJ: Adoptions rows at status Inquiry. Those rows are both the interest list and the first step of the adoption funnel.",
+      "Description": "Visitor-facing kiosk assistant for Harbor Street Animal Shelter. A visitor uses it on an iPad in the lobby: they describe their home, the agent finds Available animals that fit and explains why in plain language. When they want to keep one, it activates the 'Save My Matches' skill, which sets up their Adopter record and writes MJ: Adoptions rows at status Inquiry — the interest list AND the first step of the adoption funnel.",
       "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
       "Status": "Active",
       "IconClass": "fa-solid fa-heart",
@@ -21,7 +21,9 @@
       ],
       "MaxIterationsPerRun": 12,
       "MaxCostPerRun": 1,
-      "MaxTimePerRun": 180000
+      "MaxTimePerRun": 180000,
+      "AcceptsSkills": "Limited",
+      "SkillActivationMode": "Auto"
     },
     "primaryKey": {
       "ID": "EFC3526E-8958-45B1-B31D-4D3CD57D3F45"
@@ -39,7 +41,7 @@
             "ID": "5288DAF9-D00D-4F3B-8BD4-9F00E9A4DB90"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:15:33.105Z",
+            "lastModified": "2026-09-10T21:25:55.173Z",
             "checksum": "94be599e2b3035263ee165be35c177d0c8d3abc35f383efff311ec543c59d75a"
           }
         }
@@ -58,7 +60,7 @@
             "ID": "0EFE0DF1-B484-4BCF-AD7F-A7784F9FE039"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:15:33.144Z",
+            "lastModified": "2026-09-10T21:25:55.206Z",
             "checksum": "10cf76ed4f1405c5f8b2592cc200aa1f3fc36dc4a5910724628869beb1b9d80a"
           }
         },
@@ -74,7 +76,7 @@
             "ID": "26037F3B-2735-4F19-A6B5-71FF685C214F"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:15:33.161Z",
+            "lastModified": "2026-09-10T21:25:55.223Z",
             "checksum": "3897e22308259b9d3b8d4da55fcc4ebf11c2169a75327fd81bf16c269b18d862"
           }
         },
@@ -90,7 +92,7 @@
             "ID": "490288D9-B5B7-4A27-B22D-EB1B07DEE602"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:15:33.181Z",
+            "lastModified": "2026-09-10T21:25:55.244Z",
             "checksum": "75721c03cde53e782b103a704c32dfd3059711de0f623a6841d9226a78d0a3dd"
           }
         },
@@ -106,8 +108,25 @@
             "ID": "7CDD516F-D1FF-418B-8C67-566B83061D3C"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:15:33.204Z",
+            "lastModified": "2026-09-10T21:25:55.267Z",
             "checksum": "20ba9a61acd09ad171d4df45e56e7cfe07d1210ea07aea3aca16586dfc4599c2"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "ON_HOLD_ANIMALS",
+            "Description": "Animals on HOLD -- someone else's adoption is already in progress on them. These may be MENTIONED so a visitor knows the animal exists, but they are NOT on offer and may never become available. Deliberately a SEPARATE source from AVAILABLE_ANIMALS: the source an animal came from is what tells the agent whether it may offer that animal or merely mention it. Intake and Transferred animals appear in NEITHER source and must never be named.",
+            "SourceType": "RunView",
+            "EntityName": "MJ: Animals",
+            "ExtraFilter": "Status = 'Hold'"
+          },
+          "primaryKey": {
+            "ID": "D05FDF2B-A072-41EF-B912-5EE22C4B441B"
+          },
+          "sync": {
+            "lastModified": "2026-09-10T22:14:20.807Z",
+            "checksum": "2f2af59baf37f7fad587577991386445bd657be6f553844e11e947da7ef39e10"
           }
         }
       ],
@@ -116,21 +135,21 @@
           "fields": {
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Create Record",
-            "Status": "Active"
+            "Status": "Revoked"
           },
           "primaryKey": {
             "ID": "1F8CEFDA-675E-4606-9331-280705F0C60D"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:15:33.230Z",
-            "checksum": "f677b284d019d5cf93ba0125433e3f29cb520831c238683cf1303d6ca4ae1cf4"
+            "lastModified": "2026-09-10T22:08:18.407Z",
+            "checksum": "a654774bd3d7baf3ba3aef843314c005a34c7785a8fbe26c778b058d7eaa2623"
           }
         }
       ]
     },
     "sync": {
-      "lastModified": "2026-09-10T21:15:33.070Z",
-      "checksum": "fadc1303850c83537100599104fd968cf2c404ba869125be37b13fb3f705b582"
+      "lastModified": "2026-09-10T22:07:14.942Z",
+      "checksum": "3008ee688a6bb9cc557eac291118b22ce21c9f52ea84a0401bc39b7ca2a05e5d"
     }
   }
 ]
