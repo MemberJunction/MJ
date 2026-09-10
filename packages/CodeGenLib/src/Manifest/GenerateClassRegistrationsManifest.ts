@@ -979,15 +979,41 @@ function generateManifestContent(
         lines.push('');
     }
 
-    // Runtime reference array — this is the static code path that prevents tree-shaking
+    // Runtime reference array — this is the static code path that prevents tree-shaking.
+    //
+    // Emitted in bounded CHUNKS rather than as one array literal, which is not cosmetic.
+    // TypeScript computes the best common type of an array literal's elements even when the
+    // declaration is annotated `any[]`, so a single literal listing every registered class
+    // produces a union with one member per distinct constructor. Past roughly a thousand
+    // members that union exceeds what the checker will represent and the file fails to
+    // compile with `TS2590: Expression produces a union type that is too complex to
+    // represent` — pointing at the `[`, with nothing else wrong. It is a cliff, not a slope:
+    // the manifest compiles until the day one more package registers one more class, and
+    // then every consumer of the bootstrap package stops building at once. Chunking keeps
+    // each inferred union bounded by CHUNK_SIZE regardless of how large the tree grows.
+    const CHUNK_SIZE = 200;
+    const chunkCount = Math.max(1, Math.ceil(allAliases.length / CHUNK_SIZE));
     lines.push('/**');
     lines.push(' * Runtime references to every @RegisterClass decorated class.');
     lines.push(' * This array creates a static code path the bundler cannot tree-shake.');
+    lines.push(' *');
+    lines.push(' * Split into fixed-size chunks so no single array literal grows a union large');
+    lines.push(' * enough to trip TS2590; the exported array is their concatenation.');
     lines.push(' */');
+    for (let chunk = 0; chunk < chunkCount; chunk++) {
+        const slice = allAliases.slice(chunk * CHUNK_SIZE, (chunk + 1) * CHUNK_SIZE);
+        lines.push('// eslint-disable-next-line @typescript-eslint/no-explicit-any');
+        lines.push(`const CLASS_REGISTRATIONS_${chunk}: any[] = [`);
+        for (const alias of slice) {
+            lines.push(`    ${alias},`);
+        }
+        lines.push('];');
+        lines.push('');
+    }
     lines.push('// eslint-disable-next-line @typescript-eslint/no-explicit-any');
     lines.push(`export const CLASS_REGISTRATIONS: any[] = [`);
-    for (const alias of allAliases) {
-        lines.push(`    ${alias},`);
+    for (let chunk = 0; chunk < chunkCount; chunk++) {
+        lines.push(`    ...CLASS_REGISTRATIONS_${chunk},`);
     }
     lines.push('];');
     lines.push('');

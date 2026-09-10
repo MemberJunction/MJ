@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (411 classes)
+// @memberjunction/core-entities (423 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -286,7 +286,12 @@ import {
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAdopterEntity,
+    MJAdopterEntityExtended,
+    MJAdoptionEntity,
+    MJAdoptionEntityExtended,
     MJAnimalEntity,
+    MJAnimalEntityExtended,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -308,7 +313,11 @@ import {
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJBreedEntityExtended,
     MJCareLogEntity,
+    MJCareLogEntityExtended,
+    MJCatEntity,
+    MJCatEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -379,6 +388,8 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDogEntity,
+    MJDogEntityExtended,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -433,6 +444,7 @@ import {
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJHousingEntity,
+    MJHousingEntityExtended,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -991,7 +1003,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (42 classes)
+// @memberjunction/core-entities-server (48 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1010,14 +1022,20 @@ import {
     MJAPIApplicationScopeEntityServer,
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
+    MJAdopterEntityServer,
+    MJAdoptionEntityServer,
+    MJAnimalEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
+    MJBreedEntityServer,
+    MJCareLogEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
+    MJHousingEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1204,9 +1222,12 @@ import {
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
+ *
+ * Split into fixed-size chunks so no single array literal grows a union large
+ * enough to trip TS2590; the exported array is their concatenation.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CLASS_REGISTRATIONS: any[] = [
+const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
     AzureEmbedding,
@@ -1352,7 +1373,12 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAdopterEntity,
+    MJAdopterEntityExtended,
+    MJAdoptionEntity,
+    MJAdoptionEntityExtended,
     MJAnimalEntity,
+    MJAnimalEntityExtended,
     MJApplicationEntity,
     MJApplicationEntityEntity,
     MJApplicationRoleEntity,
@@ -1374,7 +1400,11 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAuthorizationEntity,
     MJAuthorizationRoleEntity,
     MJBreedEntity,
+    MJBreedEntityExtended,
     MJCareLogEntity,
+    MJCareLogEntityExtended,
+    MJCatEntity,
+    MJCatEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1398,6 +1428,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
@@ -1445,6 +1479,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDogEntity,
+    MJDogEntityExtended,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1499,6 +1535,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
     MJHousingEntity,
+    MJHousingEntityExtended,
     MJIdentityClaimEntity,
     MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
@@ -1595,6 +1632,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
@@ -1795,6 +1836,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     LinkedInGetFollowersAction,
     LinkedInGetOrganizationPostsAction,
     LinkedInGetPersonalPostsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     LinkedInGetPostAnalyticsAction,
     LinkedInSchedulePostAction,
     LinkedInSearchPostsAction,
@@ -1948,14 +1993,20 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAPIApplicationScopeEntityServer,
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
+    MJAdopterEntityServer,
+    MJAdoptionEntityServer,
+    MJAnimalEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
+    MJBreedEntityServer,
+    MJCareLogEntityServer,
     MJCompanyIntegrationEntityServer,
     MJComponentEntityServer,
     MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJEntityDocumentEntityServer,
+    MJHousingEntityServer,
     MJListDetailEntityServer,
     MJListEntityServer,
     MJMLTrainingPipelineEntityServer,
@@ -1989,6 +2040,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     CheckUserPermissionAction,
     ColorConverterAction,
     ComposeListsAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     ConditionalAction,
     CopyObjectAction,
     CreateDirectoryAction,
@@ -2127,11 +2182,20 @@ export const CLASS_REGISTRATIONS: any[] = [
     AgentEvalDriver,
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const CLASS_REGISTRATIONS: any[] = [
+    ...CLASS_REGISTRATIONS_0,
+    ...CLASS_REGISTRATIONS_1,
+    ...CLASS_REGISTRATIONS_2,
+    ...CLASS_REGISTRATIONS_3,
+    ...CLASS_REGISTRATIONS_4,
+];
+
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 918;
+export const CLASS_REGISTRATIONS_COUNT = 936;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (415 classes)
+// @memberjunction/core-entities (423 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -303,6 +303,10 @@ import {
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAdopterEntity,
+    MJAdopterEntityExtended,
+    MJAdoptionEntity,
+    MJAdoptionEntityExtended,
     MJAnimalEntity,
     MJAnimalEntityExtended,
     MJApplicationEntity,
@@ -329,6 +333,8 @@ import {
     MJBreedEntityExtended,
     MJCareLogEntity,
     MJCareLogEntityExtended,
+    MJCatEntity,
+    MJCatEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -399,6 +405,8 @@ import {
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDogEntity,
+    MJDogEntityExtended,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1211,7 +1219,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (46 classes)
+// @memberjunction/core-entities-server (48 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1230,6 +1238,8 @@ import {
     MJAPIApplicationScopeEntityServer,
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
+    MJAdopterEntityServer,
+    MJAdoptionEntityServer,
     MJAnimalEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -1460,9 +1470,12 @@ import {
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
+ *
+ * Split into fixed-size chunks so no single array literal grows a union large
+ * enough to trip TS2590; the exported array is their concatenation.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CLASS_REGISTRATIONS: any[] = [
+const CLASS_REGISTRATIONS_0: any[] = [
     AnthropicLLM,
     AssemblyAIRealtime,
     AzureEmbedding,
@@ -1617,6 +1630,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJActionLibraryEntity,
     MJActionParamEntity,
     MJActionResultCodeEntity,
+    MJAdopterEntity,
+    MJAdopterEntityExtended,
+    MJAdoptionEntity,
+    MJAdoptionEntityExtended,
     MJAnimalEntity,
     MJAnimalEntityExtended,
     MJApplicationEntity,
@@ -1643,6 +1660,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJBreedEntityExtended,
     MJCareLogEntity,
     MJCareLogEntityExtended,
+    MJCatEntity,
+    MJCatEntityExtended,
     MJClusterAnalysisClusterEntity,
     MJClusterAnalysisEntity,
     MJCollectionArtifactEntity,
@@ -1657,6 +1676,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJCompanyEntity,
     MJCompanyIntegrationEntity,
     MJCompanyIntegrationEntityMapEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJCompanyIntegrationFieldMapEntity,
     MJCompanyIntegrationRecordMapEntity,
     MJCompanyIntegrationRunAPILogEntity,
@@ -1713,6 +1736,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
+    MJDogEntity,
+    MJDogEntityExtended,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
     MJDuplicateRunEntity,
@@ -1855,6 +1880,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJResourcePermissionEntityExtended,
     MJResourceTypeEntity,
     MJRoleEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJRowLevelSecurityFilterEntity,
     MJSQLDialectEntity,
     MJScheduledJobEntity,
@@ -2055,6 +2084,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     HootSuiteBulkSchedulePostsAction,
     HootSuiteCreateScheduledPostAction,
     HootSuiteDeleteScheduledPostAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
     HootSuiteGetSocialProfilesAction,
@@ -2255,6 +2288,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     SlackMessagingExtension,
     TeamsMessagingExtension,
     ActionLogRetentionScheduledJobDriver,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     ActionScheduledJobDriver,
     AgentRunSweepScheduledJobDriver,
     AgentScheduledJobDriver,
@@ -2280,6 +2317,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAPIApplicationScopeEntityServer,
     MJAPIKeyScopeEntityServer,
     MJActionEntityServer,
+    MJAdopterEntityServer,
+    MJAdoptionEntityServer,
     MJAnimalEntityServer,
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
@@ -2453,6 +2492,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     UpdateRecordAction,
     ValidateAddressAction,
     ValidateEmailUniqueAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     VectorizeEntityAction,
     VoidSignatureRequestAction,
     WebPageContentAction,
@@ -2475,11 +2518,21 @@ export const CLASS_REGISTRATIONS: any[] = [
     IntegrationTestDriver,
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const CLASS_REGISTRATIONS: any[] = [
+    ...CLASS_REGISTRATIONS_0,
+    ...CLASS_REGISTRATIONS_1,
+    ...CLASS_REGISTRATIONS_2,
+    ...CLASS_REGISTRATIONS_3,
+    ...CLASS_REGISTRATIONS_4,
+    ...CLASS_REGISTRATIONS_5,
+];
+
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1010;
+export const CLASS_REGISTRATIONS_COUNT = 1020;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
