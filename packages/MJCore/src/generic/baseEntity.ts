@@ -1284,6 +1284,119 @@ export abstract class BaseEntity<T = unknown> {
      * Walks the child's parent chain and our own chain in lockstep, replacing
      * each child-chain parent with the corresponding entity from our chain.
      */
+    /**
+     * Attach an IS-A subtype to THIS record, creating the link if it does not exist yet.
+     *
+     * BACKPORTED from MJ #3825 / b307804571 ("prospective IsA subtype resolution"), which landed
+     * after this workspace's v6.1.0-edge.4 pin. See BACKPORT-TODO.md item 12a: this is expected to be
+     * REMOVED when the course re-pins to the LTS release, which carries the real thing.
+     *
+     * WHY IT IS HERE. Without it, a subtype can only be created by creating the CHILD -- `NewRecord()`
+     * starts a fresh chain, so `dog.Set('ID', existingAnimalId)` fights the parent over the primary
+     * key, and the IS-A guide names that as an anti-pattern. That leaves an app with no way to say
+     * "this animal is a dog" from the animal's own form, which makes IS-A look like a cost with no
+     * benefit -- exactly the wrong lesson.
+     *
+     * WHAT WAS DELIBERATELY LEFT OUT of the upstream commit:
+     *   - `ResolveSubtypeEntityName()` and the whole `EntitySubtypeResolver` / `IEntitySubtypeSelectorConfig`
+     *     machinery, which powers the NO-ARGUMENT form by resolving the subtype from the parent's own
+     *     data. Callers here pass the entity name explicitly, so none of it is needed. Skipping it is
+     *     what turns a 316-line commit into ~75 lines.
+     *   - Nothing else: every helper this calls (`replaceChildParentChain`, `captureChainDirtyState`,
+     *     `restoreChainDirtyState`, `InnerLoad`, `ResetNeverSetFlag`) already exists on this pin.
+     *
+     * Idempotent: calling it twice for the same subtype returns the same child instance.
+     *
+     * @param entityName The child entity to attach, e.g. 'MJ: Dogs'. Required on this backport.
+     * @returns the linked child, or null if no name was given.
+     */
+    public async EnsureISAChild(entityName: string): Promise<BaseEntity | null> {
+        if (!entityName) {
+            return null;
+        }
+
+        const matchedChild = this.EntityInfo.ChildEntities?.find(
+            (c) => c.Name.trim().toLowerCase() === entityName.trim().toLowerCase(),
+        );
+        if (!matchedChild) {
+            throw new Error(`'${entityName}' is not a declared IsA child entity of '${this.EntityInfo.Name}'.`);
+        }
+        const resolvedName = matchedChild.Name;
+
+        // Disjoint hierarchies only. The overlapping branch (AllowMultipleSubtypes = true) is part of
+        // the upstream method and is deliberately NOT backported -- nothing in this course uses it,
+        // and porting an untested path would be carrying risk for no benefit.
+        if (this.EntityInfo.AllowMultipleSubtypes) {
+            throw new Error(
+                `EnsureISAChild on this backport supports disjoint hierarchies only; '${this.EntityInfo.Name}' ` +
+                `has AllowMultipleSubtypes = true. Re-pin to the LTS release for the full implementation.`,
+            );
+        }
+
+        if (this._childEntity) {
+            if (this._childEntity.EntityInfo.Name.trim().toLowerCase() === resolvedName.trim().toLowerCase()) {
+                return this._childEntity; // idempotent
+            }
+            throw new Error(
+                `Entity '${this.EntityInfo.Name}' already has an attached child entity of type ` +
+                `'${this._childEntity.EntityInfo.Name}', cannot attach '${resolvedName}' (AllowMultipleSubtypes is false).`,
+            );
+        }
+
+        const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const childEntity = await childProvider.GetEntityObject<BaseEntity>(resolvedName, this._contextCurrentUser);
+
+        // Share this instance chain so child._parentEntity === this, exactly as discovery does.
+        this.replaceChildParentChain(childEntity);
+        this._childEntity = childEntity;
+
+        const dirtySnapshots = this.captureChainDirtyState();
+
+        // THE PROSPECTIVE PART, and the reason this differs from InitializeChildEntity: when
+        // InnerLoad finds no row we do NOT unlink. That is the create case -- an animal that is
+        // about to become a dog. A brand-new parent has no key to load by at all, so it goes
+        // straight to mirroring.
+        if (this.PrimaryKey && this.PrimaryKey.HasValue) {
+            const loaded = await childEntity.InnerLoad(this.PrimaryKey);
+            if (!loaded) {
+                this.mirrorSharedKeysToChild(childEntity);
+            }
+        } else {
+            this.mirrorSharedKeysToChild(childEntity);
+        }
+
+        this.restoreChainDirtyState(dirtySnapshots);
+        return childEntity;
+    }
+
+    /**
+     * Copy this record's primary key onto the child. In IS-A the shared key IS the relationship, so
+     * the child cannot be saved until it carries the parent's key.
+     */
+    private mirrorSharedKeysToChild(childEntity: BaseEntity): void {
+        const parentPks = this.EntityInfo.PrimaryKeys;
+        if (!parentPks || parentPks.length === 0) return;
+        for (const pk of parentPks) {
+            const val = this.Get(pk.Name);
+            if (val != null) {
+                childEntity.mirrorSharedKey(pk.Name, val);
+            }
+        }
+    }
+
+    /**
+     * Set a shared key WITHOUT marking the field dirty, then re-arm its never-set flag so the
+     * primary key can still be assigned normally afterwards. A plain Set() would make a
+     * freshly-linked child look edited and drag it into a save it has no business being in.
+     */
+    private mirrorSharedKey(name: string, value: unknown): void {
+        if (!this.GetFieldByName(name)) {
+            return;
+        }
+        this.SetLocal(name, value);
+        this.GetFieldByName(name)?.ResetNeverSetFlag();
+    }
+
     private replaceChildParentChain(childEntity: BaseEntity): void {
         // The child was just created via GetEntityObject, which called
         // InitializeParentEntity() and built a SEPARATE parent chain.
