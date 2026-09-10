@@ -188,7 +188,17 @@ export class SkillImportExportService {
         return resolved;
     }
 
-    /** Deletes existing junction rows for the skill and recreates them from the resolved ID set — the simplest correct resync for a small bounded set of rows. */
+    /**
+     * Deletes existing junction rows for the skill and recreates them from the resolved ID set — the
+     * simplest correct resync for a small bounded set of rows.
+     *
+     * Delete-and-recreate must not lose what the SKILL.md cannot express. The frontmatter carries
+     * action NAMES only, so a per-row setting like `AISkillAction.ExposeToModel` (#4226) would be
+     * reset to its default on every re-import — a skill whose "Create exam" button was deliberately
+     * hidden from the model would silently become model-callable again the next time someone saved
+     * its SKILL.md. Rows that survive the resync (same action before and after) keep their setting;
+     * only genuinely new rows take the default.
+     */
     private static async resyncJunction(
         skillId: string,
         entityName: 'MJ: AI Skill Actions' | 'MJ: AI Skill Sub Agents',
@@ -204,8 +214,13 @@ export class SkillImportExportService {
             ResultType: 'entity_object'
         }, contextUser);
 
+        const carried = new Map<string, boolean>();
         if (existing.Success) {
             for (const row of existing.Results) {
+                if (entityName === 'MJ: AI Skill Actions') {
+                    const actionRow = row as MJAISkillActionEntity;
+                    carried.set(actionRow.ActionID.toUpperCase(), actionRow.ExposeToModel);
+                }
                 const deleted = await row.Delete();
                 if (!deleted) {
                     throw new Error(`Failed to remove existing ${entityName} row during skill re-sync: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
@@ -218,6 +233,10 @@ export class SkillImportExportService {
             junctionRow.NewRecord();
             junctionRow.SkillID = skillId;
             (junctionRow as unknown as Record<string, string>)[idFieldName] = id;
+            const kept = carried.get(id.toUpperCase());
+            if (entityName === 'MJ: AI Skill Actions' && kept !== undefined) {
+                (junctionRow as MJAISkillActionEntity).ExposeToModel = kept;
+            }
             const saved = await junctionRow.Save();
             if (!saved) {
                 throw new Error(`Failed to create ${entityName} row during skill re-sync: ${junctionRow.LatestResult?.CompleteMessage ?? 'unknown error'}`);
