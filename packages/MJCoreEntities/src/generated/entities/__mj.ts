@@ -7234,6 +7234,12 @@ export const MJAISkillActionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ExposeToModel: z.boolean().describe(`
+        * * Field Name: ExposeToModel
+        * * Display Name: Expose to Model
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether activating the skill offers this action to the model as a callable tool. 1 (default): yes, today's behaviour. 0: the action is bundled with the skill for permission and attribution but is never put in front of the model; only application code (a menu button in the skill's reply, a routine, a sub-agent the app runs) invokes it. Use 0 for actions a person triggers through the UI on a later turn, so the model does not call them on its own.`),
     Skill: z.string().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
@@ -52765,6 +52771,20 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ExposeToModel
+    * * Display Name: Expose to Model
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether activating the skill offers this action to the model as a callable tool. 1 (default): yes, today's behaviour. 0: the action is bundled with the skill for permission and attribution but is never put in front of the model; only application code (a menu button in the skill's reply, a routine, a sub-agent the app runs) invokes it. Use 0 for actions a person triggers through the UI on a later turn, so the model does not call them on its own.
+    */
+    get ExposeToModel(): boolean {
+        return this.Get('ExposeToModel');
+    }
+    set ExposeToModel(value: boolean) {
+        this.Set('ExposeToModel', value);
     }
 
     /**

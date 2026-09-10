@@ -16590,6 +16590,9 @@ export class MJAISkillAction_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {description: `Whether activating the skill offers this action to the model as a callable tool. 1 (default): yes, today's behaviour. 0: the action is bundled with the skill for permission and attribution but is never put in front of the model; only application code (a menu button in the skill's reply, a routine, a sub-agent the app runs) invokes it. Use 0 for actions a person triggers through the UI on a later turn, so the model does not call them on its own.`}) 
+    ExposeToModel: boolean;
+        
     @Field() 
     @MaxLength(255)
     Skill: string;
@@ -16614,6 +16617,9 @@ export class CreateMJAISkillActionInput {
     @Field({ nullable: true })
     ActionID?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    ExposeToModel?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16632,6 +16638,9 @@ export class UpdateMJAISkillActionInput {
 
     @Field({ nullable: true })
     ActionID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    ExposeToModel?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

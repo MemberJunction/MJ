@@ -980,6 +980,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * The subset of {@link GetSkillActionIDs} the model may see: rows with `ExposeToModel` set.
+     * Bundling an action into a skill grants the activating agent permission to run it; whether the
+     * model is also OFFERED it as a tool is this second decision. An action a person triggers through
+     * the application on a later turn (a menu button in the skill's reply) is bundled with
+     * `ExposeToModel = 0` so the model never calls it on its own. This is what
+     * `BaseAgent.enableSkillCapabilities` hands the model; attribution keeps using the full list, so a
+     * code-invoked action under an active skill is still recorded against that skill.
+     */
+    public GetSkillExposedActionIDs(skillID: string): string[] {
+        return this._skillActions
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID) && sa.ExposeToModel !== false)
+            .map(sa => sa.ActionID);
+    }
+
+    /**
      * Returns the sub-agent IDs bundled into a skill (via "MJ: AI Skill Sub Agents"). Callers
      * resolve the full `MJAIAgentEntityExtended` objects via `this.Agents` / `GetAgentByID`.
      */
