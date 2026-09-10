@@ -682,6 +682,12 @@ jobs:
         run: |
           node packages/MJCLI/bin/run.js migrate
           node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          # This push is the gate's SETUP, not its system-under-test, and it writes `sync` blocks
+          # back into every record it touches — documented behaviour (metadata/CLAUDE.md rule 1)
+          # that rule 1b forbids a PR from committing. Undo ONLY that, so a PR which merely adds a
+          # metadata record is not failed for it. A minted primaryKey — or any other write-back —
+          # leaves the file dirty and still reds the drift step below.
+          node scripts/ci-restore-sync-only-metadata.mjs
 
       - name: Run CodeGen against the migrated DB
         id: codegen
@@ -803,6 +809,9 @@ jobs:
         run: |
           node packages/MJCLI/bin/run.js migrate
           node packages/MJCLI/bin/run.js sync push --dir=metadata --ci
+          # Setup push, not the system-under-test — undo its documented `sync` write-back only, so a
+          # metadata-adding PR is not failed for it. Same reasoning as the PR-gate lane above.
+          node scripts/ci-restore-sync-only-metadata.mjs
 
       - name: Run CodeGen (AI enabled)
         id: codegen
