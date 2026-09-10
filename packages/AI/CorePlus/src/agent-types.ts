@@ -526,7 +526,10 @@ export type ArtifactDirective = {
      *   artifacts that would wrap the step's generated files or media. (The run's media audit rows
      *   are still written; suppression governs what the user is shown, not lineage.)
      *
-     * An unrecognized value is treated as no directive at all, and logged.
+     * An unrecognized value is treated as no directive at all — not merely as no targeting — and
+     * logged. `name` and `description` are discarded with it: a `behavior` this consumer cannot
+     * parse means the producer disagrees with it about the wire format, which is no basis for
+     * trusting the object's other fields.
      */
     behavior: 'create-new' | 'version-source' | 'suppress';
     /**

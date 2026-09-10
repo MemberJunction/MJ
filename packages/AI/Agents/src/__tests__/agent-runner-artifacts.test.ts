@@ -793,3 +793,109 @@ describe('AgentRunner query builders — id escaping', () => {
         expect(filters[0]).toBe(`ArtifactID='${TARGET_UUID}'`);
     });
 });
+
+/**
+ * Review follow-ups from #4300.
+ *
+ * The first two pin the contract the type doc and log line state: an unrecognized `behavior`
+ * is treated as NO directive, not merely as no targeting. Before this, `planArtifactTarget`
+ * correctly ignored such a directive for targeting while `createArtifactHeader` still consumed
+ * its `name`/`description` — so a directive the log said was being ignored silently changed two
+ * things: it named the artifact, and it suppressed the extracted-name fallback.
+ */
+describe('AgentRunner.ProcessAgentArtifacts — unrecognized directive behavior (#4300 review)', () => {
+    it('does not take the name or description from a directive whose behavior it cannot parse', async () => {
+        const artifact = makeEntity('art-new');
+        const version = makeEntity('ver-1');
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({
+                artifactDirective: {
+                    behavior: 'createNew' as unknown as 'create-new',
+                    name: 'Sales Dashboard',
+                    description: 'Should not be used',
+                },
+            }),
+            'detail-1', undefined, contextUser, provider
+        );
+
+        expect(artifact.Name).not.toBe('Sales Dashboard');
+        expect(artifact.Description).not.toBe('Should not be used');
+        expect(artifact.Name).toContain('Test Agent');
+    });
+
+    it('still adopts the extracted name when the behavior is unrecognized', async () => {
+        // The second, subtler effect: a garbled directive's `name` used to suppress this fallback.
+        const artifact = makeEntity('art-new');
+        const version = makeEntity('ver-1', { Attributes: [{ StandardProperty: 'name', Value: 'Extracted Name' }] });
+        const { provider } = makeProvider((name) => (name === 'MJ: Artifacts' ? artifact : version));
+        const runner = new TestableAgentRunner(provider);
+
+        await runner.ProcessAgentArtifacts(
+            makeResult({ artifactDirective: { behavior: 'nonsense' as unknown as 'create-new', name: 'Sales Dashboard' } }),
+            'detail-1', undefined, contextUser, provider
+        );
+
+        expect(artifact.Name).toBe('Extracted Name');
+    });
+
+    it('an unrecognized behavior still versions the run sourceArtifactId, exactly like no directive', async () => {
+        const version = makeEntity('ver-2');
+        const { provider } = makeProvider(() => version);
+        const runner = new TestableAgentRunner(provider);
+        runner.MaxVersion = 1;
+
+        const info = await runner.ProcessAgentArtifacts(
+            makeResult({ artifactDirective: { behavior: 'createNew' as unknown as 'create-new' } }),
+            'detail-1', TARGET_UUID, contextUser, provider
+        );
+
+        expect(info).toEqual({ artifactId: TARGET_UUID, versionId: 'ver-2', versionNumber: 2 });
+    });
+});
+
+/** Exposes the real (un-stubbed) dedup check. */
+class DedupRunner extends AgentRunner {
+    public callCheckForDuplicateVersion(
+        artifactId: string,
+        candidateContent: string,
+        latestVersionNumber: number,
+        user: UserInfo,
+        provider: IMetadataProvider
+    ): Promise<string | null> {
+        return this.CheckForDuplicateVersion(artifactId, candidateContent, latestVersionNumber, user, provider);
+    }
+}
+
+describe('AgentRunner.CheckForDuplicateVersion — non-numeric version guard (#4300 review)', () => {
+    /** Provider exposing only the single-view RunView the dedup check uses. */
+    function dedupProvider(): { provider: IMetadataProvider; runView: ReturnType<typeof vi.fn> } {
+        const runView = vi.fn(async () => ({ Success: true, Results: [] } as unknown as RunViewResult));
+        return { provider: { RunView: runView } as unknown as IMetadataProvider, runView };
+    }
+
+    it('skips the query rather than emitting VersionNumber=NaN', async () => {
+        const { provider, runView } = dedupProvider();
+        const runner = new DedupRunner(provider);
+
+        const result = await runner.callCheckForDuplicateVersion(
+            TARGET_UUID, '{}', 'not-a-number' as unknown as number, contextUser, provider
+        );
+
+        expect(result).toBeNull();
+        expect(runView).not.toHaveBeenCalled();
+    });
+
+    it('still queries for a finite version number', async () => {
+        const { provider, runView } = dedupProvider();
+        const runner = new DedupRunner(provider);
+
+        await runner.callCheckForDuplicateVersion(TARGET_UUID, '{}', 3, contextUser, provider);
+
+        expect(runView).toHaveBeenCalledTimes(1);
+        const params = runView.mock.calls[0][0] as RunViewParams;
+        expect(params.ExtraFilter).toContain('VersionNumber=3');
+    });
+});

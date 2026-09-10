@@ -740,10 +740,24 @@ export class AgentRunner {
     ): Promise<string | null> {
         const candidateHash = createHash('sha256').update(candidateContent, 'utf8').digest('hex');
 
+        // `Number()` alone yields NaN for a non-numeric input, which would reach SQL Server as
+        // `VersionNumber=NaN` and fail the query rather than match nothing. Every caller is
+        // internal so this cannot fire today; the guard matches the care taken on the id path
+        // above, and skipping the dedup check is the safe direction — it costs a duplicate
+        // version at worst, where a thrown query costs the whole artifact.
+        const latestVersion = Number(latestVersionNumber);
+        if (!Number.isFinite(latestVersion)) {
+            LogError(
+                `CheckForDuplicateVersion: latestVersionNumber is not a finite number ` +
+                `("${AgentRunner.DescribeUntrustedValue(latestVersionNumber)}") — skipping the duplicate check`
+            );
+            return null;
+        }
+
         const rv = RunView.FromMetadataProvider(provider || this._provider);
         const result = await rv.RunView<{ ID: string; ContentHash: string }>({
             EntityName: 'MJ: Artifact Versions',
-            ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${Number(latestVersionNumber)}`,
+            ExtraFilter: `ArtifactID='${AgentRunner.FilterId(artifactId, 'CheckForDuplicateVersion artifactId')}' AND VersionNumber=${latestVersion}`,
             Fields: ['ID', 'ContentHash'],
             MaxRows: 1,
             ResultType: 'simple'
@@ -929,14 +943,20 @@ export class AgentRunner {
             // Target selection: the agent's directive first (it knows what the payload IS —
             // a deliverable, a draft, a plan), then the legacy chain
             // (sourceArtifactId → previous artifact on this message → new artifact).
-            const directive = agentResult.artifactDirective;
-            if (directive && !IsKnownArtifactBehavior(directive.behavior)) {
-                // Not fatal — planArtifactTarget treats it as no directive — but it means a producer
-                // and this consumer disagree about the wire format, which is worth seeing in the log
-                // rather than inferring later from artifacts that landed in the wrong place.
+            // An unrecognized behavior drops the WHOLE directive, not just its targeting. Every
+            // field of it is model output, and a `behavior` this consumer cannot parse means the
+            // producer and this consumer disagree about the wire format — which is no basis for
+            // trusting the object's other fields. Keeping the raw directive here would let one the
+            // log says is being ignored still name the artifact through `createArtifactHeader` AND
+            // suppress the extracted-name fallback below, so "ignored" would silently mean two
+            // behavior changes.
+            const rawDirective = agentResult.artifactDirective;
+            const behaviorRecognized = !rawDirective || IsKnownArtifactBehavior(rawDirective.behavior);
+            const directive = behaviorRecognized ? rawDirective : undefined;
+            if (!behaviorRecognized) {
                 LogError(
                     `Ignoring artifact directive from agent "${agent?.Name}": unrecognized behavior ` +
-                    `("${AgentRunner.DescribeUntrustedValue(directive.behavior)}") — using the historical chain instead`
+                    `("${AgentRunner.DescribeUntrustedValue(rawDirective!.behavior)}") — using the historical chain instead`
                 );
             }
             let plan = planArtifactTarget(directive, sourceArtifactId);
@@ -1156,7 +1176,32 @@ export class AgentRunner {
      * server-side argument rather than model output, and adding a round trip plus a new denial mode
      * to that path would change behavior for every existing agent. (The pre-existing exposure on
      * that path — any authenticated caller may name any artifact id — is unchanged by this PR and
-     * wants its own fix.)
+     * wants its own fix.) One exception, and it is deliberate rather than incidental: if the agent
+     * named the SAME id first and it failed authorization, `rejectedIds` refuses it on the caller
+     * rung too. The caller path still performs no authorization of its own; it just cannot be used
+     * to launder an id this run has already refused.
+     *
+     * **Why this does not call `PermissionEngine` / `ArtifactPermissionProvider`.** That provider
+     * (`MJCoreEntities/src/custom/PermissionProviders/ArtifactPermissionProvider.ts`) answers
+     * "may this user Update this artifact" from the permission ROWS, and is the right home for that
+     * question in general — see `guides/UNIFIED_PERMISSIONS_GUIDE.md` §1. It is not used here for
+     * two reasons specific to this path. First, it answers only half the question: it reads grant
+     * rows and does not treat the artifact's OWNER as an editor, so the `UserID` check below would
+     * remain regardless and the owner half would still live in two places. Second, and decisive:
+     * `PermissionEngine.CheckPermission` returns `Allowed: false` with "Unknown permission domain"
+     * when its domain is not loaded, and this path's response to a denial is a SILENT fallback to
+     * creating a new artifact. A deployment that has not synced `metadata/permission-domains` — or
+     * any caller that reaches the runner before `PermissionEngine.Config()` — would therefore stop
+     * versioning for every legitimate editor, with nothing in the logs to say why. A direct query
+     * has no such dependency on engine state. As of this writing `PermissionEngine` has no
+     * server-side callers anywhere in the tree; every usage is the Explorer Sharing Center.
+     *
+     * The cost of that choice is drift: this is a third answer to "can this user edit this
+     * artifact", alongside the provider and `ng-conversations`' `artifact-permission.service.ts`.
+     * **If artifact sharing grows a new grant shape — role grantees, `SupportsDeny`, cascade from
+     * collections — this method must be updated with the provider.** Revisit the delegation once
+     * `PermissionEngine` is routinely configured server-side, at which point composing (owner check
+     * here, grant half via `CheckPermission`) becomes the better trade.
      *
      * @param plan - The `version` plan to vet.
      * @param contextUser - User the run executes as.
