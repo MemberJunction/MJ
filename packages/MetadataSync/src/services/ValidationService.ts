@@ -1,4 +1,5 @@
 import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, RunView } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import * as fs from 'fs';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
@@ -376,7 +377,7 @@ export class ValidationService {
         // Section 4.5 diagnostics:
         // Check if related entity looks like an IsA child (shared PK / ParentID is this entity)
         if (
-          relatedEntityInfo.ParentID === entityInfo.ID ||
+          UUIDsEqual(relatedEntityInfo.ParentID, entityInfo.ID) ||
           (relatedEntityInfo.ParentEntityInfo && relatedEntityInfo.ParentEntityInfo.Name.trim().toLowerCase() === entityInfo.Name.trim().toLowerCase())
         ) {
           this.addWarning({
@@ -1700,7 +1701,7 @@ export class ValidationService {
       } else {
         // Look up registered subtypes
         const childSubtypes = this.metadata.Entities.filter(
-          (e) => e.ParentID === parentEntityInfo.ID || e.ParentEntityInfo?.ID === parentEntityInfo.ID
+          (e) => UUIDsEqual(e.ParentID, parentEntityInfo.ID) || UUIDsEqual(e.ParentEntityInfo?.ID, parentEntityInfo.ID)
         );
         if (childSubtypes.length === 1) {
           childEntityName = childSubtypes[0].Name;
@@ -1742,8 +1743,8 @@ export class ValidationService {
       }
 
       const isSubtype =
-        childEntityInfo.ParentID === parentEntityInfo.ID ||
-        childEntityInfo.ParentEntityInfo?.ID === parentEntityInfo.ID;
+        UUIDsEqual(childEntityInfo.ParentID, parentEntityInfo.ID) ||
+        UUIDsEqual(childEntityInfo.ParentEntityInfo?.ID, parentEntityInfo.ID);
       if (!isSubtype) {
         this.addError({
           type: 'entity',
@@ -1782,8 +1783,8 @@ export class ValidationService {
       }
 
       const isSubtype =
-        childEntityInfo.ParentID === parentEntityInfo.ID ||
-        childEntityInfo.ParentEntityInfo?.ID === parentEntityInfo.ID;
+        UUIDsEqual(childEntityInfo.ParentID, parentEntityInfo.ID) ||
+        UUIDsEqual(childEntityInfo.ParentEntityInfo?.ID, parentEntityInfo.ID);
       if (!isSubtype) {
         this.addError({
           type: 'entity',
