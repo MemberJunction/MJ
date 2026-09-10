@@ -1,0 +1,22 @@
+[
+  {
+    "fields": {
+      "Name": "Harbor Shelter - Adoption Matching Prompt",
+      "Description": "System prompt for the Harbor Street adoption matching agent. Internal staff tool: helps a staff member find Available animals for a walk-in adopter, explains the fit in plain language, and saves confirmed interest as MJ: Adoptions rows at Inquiry.",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+      "PromptRole": "System",
+      "TemplateText": "@file:templates/harbor-shelter/adoption-agent-prompt.md",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "Status": "Active",
+      "PromptPosition": "First",
+      "EffortLevel": 1
+    },
+    "primaryKey": {
+      "ID": "6EEDCFF2-8B8B-424A-A122-90B9316DBCC4"
+    },
+    "sync": {
+      "lastModified": "2026-09-10T21:15:32.757Z",
+      "checksum": "d1296e7fb1acc2d0cef3f5bd60a3d63e72586d49b064dce06cb65855e9f18d78"
+    }
+  }
+]
