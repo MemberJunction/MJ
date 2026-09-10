@@ -384,10 +384,91 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
           appColor: app?.GetColor() || DEFAULT_APP_COLOR,
           typeIcon: this.resolveTabTypeIcon(tab)
         });
-        // Origin can change on re-open re-capture — keep the pane crumb live
-        this.updateOriginCrumb(tab);
+        // Preview-tab replacement REUSES this tab id with a different record,
+        // so the pane content has to follow the style update. When the reload
+        // fires it owns the pane, crumb included — don't touch the crumb here.
+        if (!this.reloadRecordsTabIfResourceChanged(tab)) {
+          // Origin can change on re-open re-capture — keep the pane crumb live
+          this.updateOriginCrumb(tab);
+        }
       }
     });
+  }
+
+  /**
+   * True when the record tab's live component reports in-progress edits.
+   * The shell folds this into the records temp-tab pool predicate, so a tab
+   * being edited is simply not in the pool and the next plain open creates its
+   * own tab instead of replacing it. Unknown/unloaded tabs are not editing:
+   * nothing is rendered, so there is nothing to lose.
+   */
+  public IsRecordTabEditing(tabId: string): boolean {
+    return this.componentRefs.get(tabId)?.instance.IsEditing() === true;
+  }
+
+  /**
+   * Records-region mirror of the main sync path's `needsReload` check (see
+   * {@link syncTabsWithConfiguration}). Temp-tab consumption overwrites a
+   * record tab IN PLACE — same tab id, new Entity/recordId — so the tab list
+   * alone can't tell us the pane went stale; the resource signature bound to
+   * the live component can. Without this, replacement renames the tab and
+   * leaves the PREVIOUS record rendered underneath the new title.
+   *
+   * Id reuse (rather than close + create) is deliberate: it's what keeps
+   * `layoutCoversExactTabSet` satisfied, so desktop split layouts survive a
+   * replacement.
+   *
+   * @returns true when it took ownership of the pane. The caller must then
+   * leave the origin crumb alone — `loadTabContent` re-creates it via
+   * `ensureRecordOriginCrumb` once the incoming record attaches.
+   */
+  private reloadRecordsTabIfResourceChanged(tab: WorkspaceTab): boolean {
+    // Batch creation/restore and breakpoint rebuilds re-enter this sync with
+    // panes that are mid-construction; those paths load their own content.
+    if (this.recordsCreatingTabs || this.recordsRebuilding) {
+      return false;
+    }
+    // No live component means nothing is rendered to go stale — the tab loads
+    // from current config on its next show (MarkTabNotLoaded → isFirstShow).
+    const componentRef = this.componentRefs.get(tab.id);
+    const existing = componentRef?.instance.Data;
+    if (!existing) {
+      return false;
+    }
+
+    const config = tab.configuration;
+    const existingConfig = (existing.Configuration ?? {}) as Record<string, unknown>;
+    // Same precedence getResourceDataFromTab uses, so this compares against
+    // what a reload would ACTUALLY bind. Reading the two in a different order
+    // would register as a permanent difference and reload the pane on every
+    // configuration emission.
+    const nextRecordId = (config['recordId'] as string) || tab.resourceRecordId || '';
+    const changed =
+      (existing.ResourceRecordID || '') !== nextRecordId ||
+      (existingConfig['Entity'] as string | undefined) !== (config['Entity'] as string | undefined) ||
+      (existingConfig['applicationId'] as string | undefined) !== tab.applicationId;
+    if (!changed) {
+      return false;
+    }
+
+    // Detach the outgoing record into the component cache — it keys on
+    // driver + record + app, NOT on tab id, so re-opening that record later is
+    // still a cache hit and the incoming record is a miss (a fresh component,
+    // which is the whole point). Also drops the outgoing crumb.
+    this.cleanupTabComponent(tab.id);
+    this.recordsLayoutManager.MarkTabNotLoaded(tab.id);
+    this.updateTabDisplayName(tab);
+
+    // Only the visible pane reloads now; the rest reload when next shown.
+    if (this.workspaceManager.GetActiveTabId() === tab.id) {
+      const container = this.recordsLayoutManager.GetContainer(tab.id);
+      if (container) {
+        void this.loadTabContent(tab.id, container).then(() => {
+          this.recordsLayoutManager.MarkTabLoaded(tab.id);
+        });
+      }
+    }
+    return true;
   }
 
   /** Focus a records-region tab without feeding back into SetActiveTab loops */
@@ -1928,8 +2009,17 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      // Update the tab title in Golden Layout
-      this.layoutManager.UpdateTabStyle(tabId, { title: displayName });
+      // Update the tab title in whichever Golden Layout hosts this tab. Its
+      // siblings (updateTabDisplayName, onTabShown) already fork on region;
+      // this one did not, so a records tab's resource-derived title was
+      // written to the MAIN manager, which does not own that tab id, and the
+      // record kept its generic placeholder title. Masked while records tabs
+      // were immortal — the next configuration emission re-applied the title
+      // from config — but preview-tab replacement retitles a records tab on
+      // every plain click, so it stops being cosmetic.
+      const tab = this.workspaceManager.GetTab(tabId);
+      const manager = tab && this.isRecordTab(tab) ? this.recordsLayoutManager : this.layoutManager;
+      manager.UpdateTabStyle(tabId, { title: displayName });
 
       // Update the tab title in workspace configuration for persistence
       this.workspaceManager.UpdateTabTitle(tabId, displayName);
