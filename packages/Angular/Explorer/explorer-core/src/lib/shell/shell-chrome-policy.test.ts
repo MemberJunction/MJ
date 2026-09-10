@@ -62,6 +62,17 @@ describe('BaseShellChromePolicy', () => {
     expect(flags.appSwitcherStyle).toBe('compact');
   });
 
+  it('a throwing host policy leaves the Instance Config chrome unchanged instead of taking the shell down', () => {
+    class BrokenPolicy extends BaseShellChromePolicy {
+      public override Resolve(): ShellChromeFlags {
+        throw new Error('plan lookup failed');
+      }
+    }
+    const ceiling: ShellChromeFlags = { ...allOn, notifications: false };
+    expect(() => ApplyShellChromePolicy(ceiling, new BrokenPolicy())).not.toThrow();
+    expect(ApplyShellChromePolicy(ceiling, new BrokenPolicy())).toEqual(ceiling);
+  });
+
   it('the policy receives a copy — mutating its argument does not leak into the baseline', () => {
     class MutatingPolicy extends BaseShellChromePolicy {
       public override Resolve(flags: ShellChromeFlags): ShellChromeFlags {

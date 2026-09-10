@@ -1,4 +1,5 @@
 import { Subject } from 'rxjs';
+import { LogError } from '@memberjunction/core';
 import type { RecordOpenStyle } from '@memberjunction/ng-shared';
 import type { AppSwitcherStyle } from './components/header/app-switcher.component';
 
@@ -57,7 +58,16 @@ export class BaseShellChromePolicy {
  * booleans narrow only, `recordOpenStyle` is kept, `appSwitcherStyle` is taken as given.
  */
 export function ApplyShellChromePolicy(baseline: ShellChromeFlags, policy: BaseShellChromePolicy): ShellChromeFlags {
-  const answer = policy.Resolve({ ...baseline });
+  let answer: ShellChromeFlags;
+  try {
+    answer = policy.Resolve({ ...baseline });
+  } catch (error) {
+    // Host code. A throwing policy must not take the shell's chrome down with it: the reader
+    // keeps the Instance Config chrome, and the error names the subclass rather than
+    // surfacing as mysteriously missing buttons.
+    LogError(`Shell chrome policy ${policy.constructor.name}.Resolve threw; using the Instance Config chrome unchanged. ${error instanceof Error ? error.message : String(error)}`);
+    return { ...baseline };
+  }
   return {
     searchBar: baseline.searchBar && answer.searchBar,
     searchPreview: baseline.searchPreview && answer.searchPreview,
