@@ -483,6 +483,21 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
   }
 
   /**
+   * The node standing for a LOADED message on screen — the mounted item, the spacer holding
+   * its place while it is unmounted, or the session card a session-stamped row folds into.
+   * Null when the message is not in the loaded window. Hosts that need to MEASURE a message
+   * (not just scroll to it) use this instead of a `[data-message-id]` query, which fails for
+   * exactly the cases listed — see {@link scrollToTimelineEntry}.
+   */
+  public FindTimelineElement(messageId: string): HTMLElement | null {
+    const detail = this.messages?.find(m => UUIDsEqual(m.ID, messageId));
+    if (!detail) {
+      return null;
+    }
+    return this.resolveTimelineNode(detail.ID, detail.AgentSessionID) ?? null;
+  }
+
+  /**
    * Shared resolution for both jump paths: timeline key -> rendered node.
    *
    * Two things a `[data-message-id]` query cannot do, and both matter here:
@@ -497,6 +512,16 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
     agentSessionId: string | null,
     block: ScrollLogicalPosition
   ): boolean {
+    const node = this.resolveTimelineNode(detailId, agentSessionId);
+    if (!node) {
+      return false;
+    }
+    node.scrollIntoView({ behavior: 'smooth', block });
+    return true;
+  }
+
+  /** Timeline key -> rendered node for a detail (or the session card its stamped row folds into). */
+  private resolveTimelineNode(detailId: string, agentSessionId: string | null): HTMLElement | undefined {
     const stampedSessionId = agentSessionId?.trim() || null;
     const timeline = BuildConversationTimeline(this.messages);
     const item = timeline.find(entry =>
@@ -504,16 +529,7 @@ export class MessageListComponent extends BaseAngularComponent implements OnInit
         ? stampedSessionId !== null && UUIDsEqual(entry.Group.SessionID, stampedSessionId)
         : UUIDsEqual(entry.Detail.ID, detailId)
     );
-    if (!item) {
-      return false;
-    }
-
-    const node = this.nodeForKey(this.getTimelineKey(item));
-    if (!node) {
-      return false;
-    }
-    node.scrollIntoView({ behavior: 'smooth', block });
-    return true;
+    return item ? this.nodeForKey(this.getTimelineKey(item)) : undefined;
   }
 
   // Track whether initial render has happened
