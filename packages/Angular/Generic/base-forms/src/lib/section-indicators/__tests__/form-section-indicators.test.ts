@@ -64,7 +64,7 @@ describe('SectionIndicatorsAreEmpty', () => {
     expect(SectionIndicatorsAreEmpty({ DirtyCount: 0, ErrorCount: 0, WarningCount: 0 })).toBe(true);
   });
 
-  it('is false as soon as any count is positive', () => {
+  it('is false as soon as one count is positive', () => {
     expect(SectionIndicatorsAreEmpty({ DirtyCount: 1 })).toBe(false);
     expect(SectionIndicatorsAreEmpty({ WarningCount: 1 })).toBe(false);
   });
