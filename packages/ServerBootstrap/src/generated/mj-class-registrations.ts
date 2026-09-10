@@ -1228,7 +1228,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (42 classes)
+// @memberjunction/core-entities-server (45 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1263,11 +1263,14 @@ import {
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2347,11 +2350,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2494,13 +2500,13 @@ const CLASS_REGISTRATIONS_4: any[] = [
     TestMCPConnectionAction,
     TestRuntimeActionAction,
     TextAnalyzerAction,
-    URLLinkValidatorAction,
-    URLMetadataExtractorAction,
-    UnitConverterAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    URLLinkValidatorAction,
+    URLMetadataExtractorAction,
+    UnitConverterAction,
     UnshareListAction,
     UpdateListItemStatusAction,
     UpdateRecordAction,
@@ -2542,7 +2548,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1025;
+export const CLASS_REGISTRATIONS_COUNT = 1028;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

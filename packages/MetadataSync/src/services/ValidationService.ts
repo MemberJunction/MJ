@@ -1,4 +1,4 @@
-import { EntityFieldInfo, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, EntityRelationshipInfo, Metadata, RunView } from '@memberjunction/core';
 import * as fs from 'fs';
 import * as path from 'path';
 import { minimatch } from 'minimatch';
@@ -19,10 +19,12 @@ import {
   isMetadataKeyword,
   extractKeywordValue
 } from '../constants/metadata-keywords';
+import { EntityConfig } from '../config';
+import { resolveCollectionRelationship } from '../lib/collection-resolver';
 
 // Type aliases for clarity
 type EntityData = RecordData;
-type EntitySyncConfig = any;
+type EntitySyncConfig = EntityConfig;
 
 export class ValidationService {
   private metadata: Metadata;
@@ -30,6 +32,7 @@ export class ValidationService {
   private warnings: ValidationWarning[] = [];
   private entityDependencies: Map<string, EntityDependency> = new Map();
   private processedEntities: Set<string> = new Set();
+  private claimedPrimaryKeys: Map<string, string> = new Map();
   private options: ValidationOptions;
   private userRoleCache: Map<string, string[]> = new Map();
 
@@ -161,15 +164,31 @@ export class ValidationService {
       return null;
     }
 
+    // Validate collection modes if defined (§8.1)
+    if (config.collections) {
+      for (const [colName, colConfig] of Object.entries(config.collections)) {
+        const c = colConfig as { mode?: string; maxImpliedDeletePercent?: number };
+        if (c.mode && c.mode !== 'upsert' && c.mode !== 'authoritative') {
+          this.addError({
+            type: 'validation',
+            severity: 'error',
+            file: configPath,
+            message: `Invalid collection mode "${c.mode}" for collection "${colName}". Allowed values: "upsert", "authoritative"`,
+          });
+        }
+      }
+    }
+
     const files = await this.getMatchingFiles(dir, config.filePattern);
     let totalEntities = 0;
     const fileResults = new Map<string, FileValidationResult>();
 
     for (const file of files) {
-      const filePath = path.join(dir, file);
-      const result = await this.validateFile(filePath, entityInfo, config);
-      totalEntities += result.entityCount;
-      fileResults.set(filePath, result);
+      const result = await this.validateFile(file, entityInfo, config);
+      if (result) {
+        totalEntities += result.entityCount;
+        fileResults.set(file, result);
+      }
     }
 
     return { files: files.length, entities: totalEntities, fileResults };
@@ -178,7 +197,7 @@ export class ValidationService {
   /**
    * Validates a single metadata file
    */
-  private async validateFile(filePath: string, entityInfo: any, config: EntitySyncConfig): Promise<FileValidationResult> {
+  private async validateFile(filePath: string, entityInfo: EntityInfo, config: EntitySyncConfig): Promise<FileValidationResult> {
     const fileErrors: ValidationError[] = [];
     let entityCount = 0;
 
@@ -217,12 +236,60 @@ export class ValidationService {
    */
   private async validateEntityData(
     entityData: EntityData,
-    entityInfo: any,
+    entityInfo: EntityInfo,
     filePath: string,
     config: EntitySyncConfig,
     parentContext?: { entity: string; field: string },
     depth: number = 0,
+    ownerContext?: { entity: string },
   ): Promise<void> {
+    // Validate top-level keys with did-you-mean (§5.1)
+    const knownTopLevelKeys = [
+      '$schema',
+      'primaryKey',
+      'fields',
+      'collections',
+      'embeds',
+      'extension',
+      'relatedEntities',
+      'sync',
+      '__mj_sync_notes',
+      'deleteRecord',
+      '_comments',
+    ];
+    for (const key of Object.keys(entityData)) {
+      if (!knownTopLevelKeys.includes(key)) {
+        const suggestion = this.findClosestKey(key, knownTopLevelKeys);
+        const didYouMean = suggestion ? ` Did you mean "${suggestion}"?` : '';
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Unknown top-level property "${key}" in record.${didYouMean}`,
+          suggestion: `Allowed top-level properties are: ${knownTopLevelKeys.join(', ')}`,
+        });
+      }
+    }
+
+    // Check for double ownership across metadata files (§6)
+    if (entityData.primaryKey && Object.keys(entityData.primaryKey).length > 0) {
+      const claimKey = `${entityInfo.Name}:${JSON.stringify(entityData.primaryKey)}`;
+      const existingFile = this.claimedPrimaryKeys.get(claimKey);
+      if (existingFile && existingFile !== filePath) {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Record with primaryKey ${JSON.stringify(entityData.primaryKey)} on entity "${entityInfo.Name}" is already claimed by "${existingFile}". Double ownership is not allowed.`,
+          suggestion: 'Ensure records are owned by only one sync file or collection',
+        });
+      } else {
+        this.claimedPrimaryKeys.set(claimKey, filePath);
+      }
+    }
+
     // Skip validation for deletion records - they don't need field validation or reference checks
     if ((entityData as any).deleteRecord?.delete === true) {
       // Only validate that primaryKey exists for deletion records
@@ -271,10 +338,25 @@ export class ValidationService {
     // block) so the required-field best-practice check can be limited to NEW
     // records — an existing record already holds the value in the DB, so a
     // missing NOT-NULL field in the file is not a problem and would only be noise.
-    await this.validateFields(entityData.fields, entityInfo, filePath, parentContext, !!entityData.primaryKey);
+    await this.validateFields(entityData.fields, entityInfo, filePath, parentContext, !!entityData.primaryKey, ownerContext);
 
     // Track dependencies
     this.trackEntityDependencies(entityData, entityInfo.Name, filePath);
+
+    // Validate extension (§4.1, §4.2)
+    if (entityData.extension) {
+      await this.validateExtension(entityData.extension, entityInfo, filePath, config, depth);
+    }
+
+    // Validate collections (§4.1, §8.1)
+    if (entityData.collections) {
+      await this.validateCollections(entityData.collections, entityInfo, filePath, config, depth);
+    }
+
+    // Validate embeds (§4.1)
+    if (entityData.embeds) {
+      await this.validateEmbeds(entityData.embeds, entityInfo, filePath, config, depth);
+    }
 
     // Validate related entities
     if (entityData.relatedEntities) {
@@ -289,6 +371,41 @@ export class ValidationService {
             message: `Related entity "${relatedEntityName}" not found in metadata`,
           });
           continue;
+        }
+
+        // Section 4.5 diagnostics:
+        // Check if related entity looks like an IsA child (shared PK / ParentID is this entity)
+        if (
+          relatedEntityInfo.ParentID === entityInfo.ID ||
+          (relatedEntityInfo.ParentEntityInfo && relatedEntityInfo.ParentEntityInfo.Name.trim().toLowerCase() === entityInfo.Name.trim().toLowerCase())
+        ) {
+          this.addWarning({
+            type: 'bestpractice',
+            severity: 'warning',
+            entity: entityInfo.Name,
+            file: filePath,
+            message: `relatedEntities['${relatedEntityName}'] looks like an IsA child (shared PK). Use extension — see §4.1.`,
+          });
+        }
+
+        // Check if a RelatedRecordCollection exists whose related entity is this child
+        const matchingCollectionRel = entityInfo.RelatedEntities?.find((rel: EntityRelationshipInfo) => {
+          if (!rel.RelatedRecordCollection) return false;
+          return rel.RelatedEntity?.trim().toLowerCase() === relatedEntityName.trim().toLowerCase();
+        });
+        if (matchingCollectionRel) {
+          let colName = relatedEntityName;
+          try {
+            const parsed = JSON.parse(matchingCollectionRel.RelatedRecordCollection);
+            if (parsed.Name) colName = parsed.Name;
+          } catch {}
+          this.addWarning({
+            type: 'bestpractice',
+            severity: 'warning',
+            entity: entityInfo.Name,
+            file: filePath,
+            message: `relatedEntities['${relatedEntityName}'] could be collections['${colName}'].`,
+          });
         }
 
         const relatedEntities = Array.isArray(relatedData) ? relatedData : [relatedData];
@@ -308,6 +425,7 @@ export class ValidationService {
     filePath: string,
     parentContext?: { entity: string; field: string },
     isExistingRecord: boolean = false,
+    ownerContext?: { entity: string },
   ): Promise<void> {
     const entityFields = entityInfo.Fields;
     const fieldMap = new Map(entityFields.map((f) => [f.Name, f]));
@@ -368,7 +486,7 @@ export class ValidationService {
       }
 
       // Validate field value and references
-      await this.validateFieldValue(fieldValue, fieldInfo, entityInfo, filePath, parentContext);
+      await this.validateFieldValue(fieldValue, fieldInfo, entityInfo, filePath, parentContext, ownerContext);
     }
 
     // Check for required fields — only for NEW records. An existing record
@@ -444,9 +562,10 @@ export class ValidationService {
     entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
+    ownerContext?: { entity: string },
   ): Promise<void> {
     if (typeof value === 'string' && this.isValidReference(value)) {
-      await this.validateReference(value, fieldInfo, entityInfo, filePath, parentContext);
+      await this.validateReference(value, fieldInfo, entityInfo, filePath, parentContext, ownerContext);
       // Skip further validation for references as they will be resolved later
       return;
     }
@@ -586,6 +705,7 @@ export class ValidationService {
     entityInfo: EntityInfo,
     filePath: string,
     parentContext?: { entity: string; field: string },
+    ownerContext?: { entity: string },
   ): Promise<void> {
     const parsed = this.parseReference(reference);
     if (!parsed) {
@@ -609,6 +729,9 @@ export class ValidationService {
         break;
       case METADATA_KEYWORDS.TEMPLATE:
         await this.validateTemplateReference(parsed.value, filePath, entityInfo.Name, fieldInfo.Name);
+        break;
+      case METADATA_KEYWORDS.OWNER:
+        this.validateOwnerReference(parsed.value, ownerContext, filePath, entityInfo.Name, fieldInfo.Name);
         break;
       case METADATA_KEYWORDS.PARENT:
         this.validateParentReference(parsed.value, parentContext, filePath, entityInfo.Name, fieldInfo.Name);
@@ -1139,6 +1262,7 @@ export class ValidationService {
     this.warnings = [];
     this.entityDependencies.clear();
     this.processedEntities.clear();
+    this.claimedPrimaryKeys.clear();
     this.userRoleCache.clear();
   }
 
@@ -1397,7 +1521,8 @@ export class ValidationService {
     sourceFile: string,
     entityName: string,
     visitedFiles: Set<string>,
-    parentContext?: { entity: string; field: string }
+    parentContext?: { entity: string; field: string },
+    ownerContext?: { entity: string }
   ): Promise<void> {
     if (obj === null || obj === undefined) {
       return;
@@ -1405,7 +1530,7 @@ export class ValidationService {
 
     if (Array.isArray(obj)) {
       for (const item of obj) {
-        await this.validateJsonReferences(item, sourceFile, entityName, visitedFiles, parentContext);
+        await this.validateJsonReferences(item, sourceFile, entityName, visitedFiles, parentContext, ownerContext);
       }
     } else if (typeof obj === 'object') {
       for (const [key, value] of Object.entries(obj)) {
@@ -1429,6 +1554,11 @@ export class ValidationService {
             if (parsed) {
               this.validateParentReference(parsed.value, parentContext, sourceFile, entityName, key);
             }
+          } else if (value.startsWith(METADATA_KEYWORDS.OWNER)) {
+            const parsed = this.parseReference(value);
+            if (parsed) {
+              this.validateOwnerReference(parsed.value, ownerContext, sourceFile, entityName, key);
+            }
           } else if (value.startsWith(METADATA_KEYWORDS.ROOT)) {
             const parsed = this.parseReference(value);
             if (parsed) {
@@ -1450,9 +1580,435 @@ export class ValidationService {
           }
         } else if (value && typeof value === 'object') {
           // Recursively process nested objects
-          await this.validateJsonReferences(value, sourceFile, entityName, visitedFiles, parentContext);
+          await this.validateJsonReferences(value, sourceFile, entityName, visitedFiles, parentContext, ownerContext);
         }
       }
+    }
+  }
+
+  /**
+   * Validates an @owner: reference
+   */
+  private validateOwnerReference(
+    ownerFieldName: string,
+    ownerContext: { entity: string; record?: RecordData } | undefined,
+    filePath: string,
+    entityName: string,
+    currentFieldName: string
+  ): void {
+    if (!ownerContext) {
+      this.addError({
+        type: 'reference',
+        severity: 'error',
+        entity: entityName,
+        field: currentFieldName,
+        file: filePath,
+        message: `@owner: cannot be used at root level or outside an embedded/extension/collection context`,
+        suggestion: 'Use @owner: only within extension, embeds, or collections where an enclosing owner entity is present',
+      });
+      return;
+    }
+
+    const ownerEntityInfo = this.metadata.EntityByName(ownerContext.entity);
+    if (ownerEntityInfo) {
+      const ownerField = ownerEntityInfo.Fields.find(
+        (f) => f.Name.toLowerCase() === ownerFieldName.toLowerCase()
+      );
+      if (!ownerField) {
+        this.addError({
+          type: 'reference',
+          severity: 'error',
+          entity: entityName,
+          field: currentFieldName,
+          file: filePath,
+          message: `Field "${ownerFieldName}" does not exist on owner entity "${ownerContext.entity}"`,
+          suggestion: `Verify that "${ownerContext.entity}" has a field named "${ownerFieldName}"`,
+        });
+      }
+    }
+  }
+
+  /**
+   * Finds closest matching key using Levenshtein distance
+   */
+  private findClosestKey(target: string, candidates: string[]): string | null {
+    let closestKey: string | null = null;
+    let minDistance = 3;
+    const lowerTarget = target.toLowerCase();
+    for (const candidate of candidates) {
+      const distance = this.levenshteinDistance(lowerTarget, candidate.toLowerCase());
+      if (distance < minDistance) {
+        minDistance = distance;
+        closestKey = candidate;
+      }
+    }
+    return closestKey;
+  }
+
+  private levenshteinDistance(a: string, b: string): number {
+    const matrix: number[][] = [];
+    for (let i = 0; i <= b.length; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= a.length; j++) {
+      matrix[0][j] = j;
+    }
+    for (let i = 1; i <= b.length; i++) {
+      for (let j = 1; j <= a.length; j++) {
+        if (b.charAt(i - 1) === a.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[b.length][a.length];
+  }
+
+  /**
+   * Validates an extension block (§4.1, §4.2, §4.5)
+   */
+  private async validateExtension(
+    extensionData: unknown,
+    parentEntityInfo: EntityInfo,
+    filePath: string,
+    config: EntityConfig,
+    depth: number
+  ): Promise<void> {
+    if (!extensionData || typeof extensionData !== 'object') {
+      this.addError({
+        type: 'field',
+        severity: 'error',
+        entity: parentEntityInfo.Name,
+        file: filePath,
+        message: '"extension" must be an object',
+      });
+      return;
+    }
+
+    const extObj = extensionData as Record<string, unknown>;
+
+    // Case 1: Shorthand form with explicit 'fields' object
+    if ('fields' in extObj && typeof extObj.fields === 'object' && extObj.fields !== null) {
+      let childEntityName: string | undefined;
+      if (typeof extObj.entity === 'string' && extObj.entity.trim().length > 0) {
+        childEntityName = extObj.entity.trim();
+      } else {
+        // Look up registered subtypes
+        const childSubtypes = this.metadata.Entities.filter(
+          (e) => e.ParentID === parentEntityInfo.ID || e.ParentEntityInfo?.ID === parentEntityInfo.ID
+        );
+        if (childSubtypes.length === 1) {
+          childEntityName = childSubtypes[0].Name;
+        } else if (childSubtypes.length === 0) {
+          this.addError({
+            type: 'entity',
+            severity: 'error',
+            entity: parentEntityInfo.Name,
+            file: filePath,
+            message: `Entity "${parentEntityInfo.Name}" has no registered IsA child subtypes`,
+          });
+          return;
+        } else if (parentEntityInfo.AllowMultipleSubtypes) {
+          this.addError({
+            type: 'entity',
+            severity: 'error',
+            entity: parentEntityInfo.Name,
+            file: filePath,
+            message: `Entity "${parentEntityInfo.Name}" allows multiple subtypes. Shorthand extension form is ambiguous; use map form keyed by subtype entity name.`,
+          });
+          return;
+        }
+      }
+
+      if (!childEntityName) {
+        return;
+      }
+
+      const childEntityInfo = this.metadata.EntityByName(childEntityName);
+      if (!childEntityInfo) {
+        this.addError({
+          type: 'entity',
+          severity: 'error',
+          entity: parentEntityInfo.Name,
+          file: filePath,
+          message: `Extension entity "${childEntityName}" not found in metadata`,
+        });
+        return;
+      }
+
+      const isSubtype =
+        childEntityInfo.ParentID === parentEntityInfo.ID ||
+        childEntityInfo.ParentEntityInfo?.ID === parentEntityInfo.ID;
+      if (!isSubtype) {
+        this.addError({
+          type: 'entity',
+          severity: 'error',
+          entity: parentEntityInfo.Name,
+          file: filePath,
+          message: `"${childEntityName}" is not an IsA subtype of "${parentEntityInfo.Name}"`,
+        });
+        return;
+      }
+
+      await this.validateExtensionFields(
+        extObj.fields as Record<string, unknown>,
+        parentEntityInfo,
+        childEntityInfo,
+        filePath,
+        config,
+        depth
+      );
+      return;
+    }
+
+    // Case 2: Map form where keys are subtype entity names (e.g. { "Event Order Lines": { fields: { ... } } })
+    for (const [subKey, subVal] of Object.entries(extObj)) {
+      if (subKey === '$schema' || subKey === 'sync' || subKey === '__mj_sync_notes') continue;
+      const childEntityInfo = this.metadata.EntityByName(subKey);
+      if (!childEntityInfo) {
+        this.addError({
+          type: 'entity',
+          severity: 'error',
+          entity: parentEntityInfo.Name,
+          file: filePath,
+          message: `Extension subtype entity "${subKey}" not found in metadata`,
+        });
+        continue;
+      }
+
+      const isSubtype =
+        childEntityInfo.ParentID === parentEntityInfo.ID ||
+        childEntityInfo.ParentEntityInfo?.ID === parentEntityInfo.ID;
+      if (!isSubtype) {
+        this.addError({
+          type: 'entity',
+          severity: 'error',
+          entity: parentEntityInfo.Name,
+          file: filePath,
+          message: `"${subKey}" is not an IsA subtype of "${parentEntityInfo.Name}"`,
+        });
+        continue;
+      }
+
+      if (!subVal || typeof subVal !== 'object') {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: childEntityInfo.Name,
+          file: filePath,
+          message: `Extension for "${subKey}" must be an object with "fields"`,
+        });
+        continue;
+      }
+
+      const subRecord = subVal as Record<string, unknown>;
+      if ('fields' in subRecord && typeof subRecord.fields === 'object' && subRecord.fields !== null) {
+        await this.validateExtensionFields(
+          subRecord.fields as Record<string, unknown>,
+          parentEntityInfo,
+          childEntityInfo,
+          filePath,
+          config,
+          depth
+        );
+      }
+    }
+  }
+
+  /**
+   * Validates leaf fields within an extension block (§4.1, §4.5, §9)
+   */
+  private async validateExtensionFields(
+    fields: Record<string, unknown>,
+    parentEntityInfo: EntityInfo,
+    childEntityInfo: EntityInfo,
+    filePath: string,
+    config: EntityConfig,
+    depth: number
+  ): Promise<void> {
+    for (const fieldName of Object.keys(fields)) {
+      const isParentField = parentEntityInfo.Fields.some(
+        (f) => f.Name.toLowerCase() === fieldName.toLowerCase()
+      );
+      if (isParentField) {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: childEntityInfo.Name,
+          field: fieldName,
+          file: filePath,
+          message: `Field "${fieldName}" is owned by parent entity "${parentEntityInfo.Name}". Leaf extension must only contain subtype-specific fields.`,
+          suggestion: `Move "${fieldName}" to the root record fields object`,
+        });
+      }
+    }
+
+    await this.validateFields(
+      fields,
+      childEntityInfo,
+      filePath,
+      { entity: parentEntityInfo.Name, field: 'extension' },
+      false,
+      { entity: parentEntityInfo.Name }
+    );
+  }
+
+  /**
+   * Validates a collections block (§4.1, §8.1)
+   */
+  private async validateCollections(
+    collectionsData: unknown,
+    entityInfo: EntityInfo,
+    filePath: string,
+    config: EntityConfig,
+    depth: number
+  ): Promise<void> {
+    if (!collectionsData || typeof collectionsData !== 'object' || Array.isArray(collectionsData)) {
+      this.addError({
+        type: 'field',
+        severity: 'error',
+        entity: entityInfo.Name,
+        file: filePath,
+        message: '"collections" must be an object map of collection names to record arrays',
+      });
+      return;
+    }
+
+    const colMap = collectionsData as Record<string, unknown>;
+    for (const [colName, colItems] of Object.entries(colMap)) {
+      if (!Array.isArray(colItems)) {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Collection "${colName}" must be an array of records. Per-record mode wrappers (e.g. {"mode": "authoritative", "items": [...]}) are forbidden; mode is directory-level only.`,
+        });
+        continue;
+      }
+
+      const resolved = resolveCollectionRelationship(entityInfo, colName);
+      if (!resolved) {
+        this.addError({
+          type: 'entity',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Collection "${colName}" is not declared on entity "${entityInfo.Name}" or has no valid relationship join field`,
+        });
+        continue;
+      }
+
+      const childEntityInfo = this.metadata.EntityByName(resolved.relatedEntity);
+      if (!childEntityInfo) {
+        this.addError({
+          type: 'entity',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Collection "${colName}" refers to related entity "${resolved.relatedEntity}" which is not found in metadata`,
+        });
+        continue;
+      }
+
+      for (const item of colItems) {
+        if (!item || typeof item !== 'object') {
+          this.addError({
+            type: 'field',
+            severity: 'error',
+            entity: childEntityInfo.Name,
+            file: filePath,
+            message: `Collection item in "${colName}" must be an object`,
+          });
+          continue;
+        }
+
+        await this.validateEntityData(
+          item as RecordData,
+          childEntityInfo,
+          filePath,
+          config,
+          { entity: entityInfo.Name, field: colName },
+          depth + 1,
+          { entity: entityInfo.Name }
+        );
+      }
+    }
+  }
+
+  /**
+   * Validates an embeds block (§4.1)
+   */
+  private async validateEmbeds(
+    embedsData: unknown,
+    entityInfo: EntityInfo,
+    filePath: string,
+    config: EntityConfig,
+    depth: number
+  ): Promise<void> {
+    if (!embedsData || typeof embedsData !== 'object' || Array.isArray(embedsData)) {
+      this.addError({
+        type: 'field',
+        severity: 'error',
+        entity: entityInfo.Name,
+        file: filePath,
+        message: '"embeds" must be an object map of foreign key field names to record objects',
+      });
+      return;
+    }
+
+    const embedsMap = embedsData as Record<string, unknown>;
+    for (const [key, embedVal] of Object.entries(embedsMap)) {
+      if (!embedVal || typeof embedVal !== 'object') {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Embedded record for "${key}" must be an object`,
+        });
+        continue;
+      }
+
+      const field = entityInfo.Fields.find(
+        (f) =>
+          f.Name.toLowerCase() === key.toLowerCase() ||
+          (f.Name + 'ID').toLowerCase() === key.toLowerCase() ||
+          (key + 'ID').toLowerCase() === f.Name.toLowerCase()
+      );
+
+      let targetEntityName = field?.RelatedEntity;
+      if (!targetEntityName) {
+        const direct = this.metadata.EntityByName(key);
+        if (direct) targetEntityName = direct.Name;
+      }
+
+      const targetEntityInfo = targetEntityName ? this.metadata.EntityByName(targetEntityName) : null;
+      if (!targetEntityInfo) {
+        this.addError({
+          type: 'field',
+          severity: 'error',
+          entity: entityInfo.Name,
+          file: filePath,
+          message: `Embedded reference "${key}" does not correspond to a foreign key or relationship on entity "${entityInfo.Name}"`,
+        });
+        continue;
+      }
+
+      await this.validateEntityData(
+        embedVal as RecordData,
+        targetEntityInfo,
+        filePath,
+        config,
+        { entity: entityInfo.Name, field: key },
+        depth + 1,
+        { entity: entityInfo.Name }
+      );
     }
   }
 }

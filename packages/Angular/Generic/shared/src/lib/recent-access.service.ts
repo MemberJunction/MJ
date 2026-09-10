@@ -270,16 +270,12 @@ export class RecentAccessService {
       }
     }
 
-    // Plain value — look up entity primary key field(s) to construct the key
+    // Plain value — map it onto the entity's real primary key column (whatever it is called).
+    // FromURLSegment also re-parses a delimited segment, covering the case where the try above failed.
     const entityInfo = md.Entities.find(e => e.Name === entityName);
-    if (!entityInfo) return null;
+    if (!entityInfo || entityInfo.PrimaryKeys.length === 0) return null;
 
-    const pkField = entityInfo.FirstPrimaryKey;
-    if (!pkField) return null;
-
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
-    return compositeKey;
+    return CompositeKey.FromURLSegment(entityInfo, recordId);
   }
 
   /**

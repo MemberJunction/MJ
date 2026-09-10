@@ -27,6 +27,7 @@ const REFERENCE_PATTERNS: ReadonlyArray<readonly [ReferenceType, RegExp]> = [
   [METADATA_KEYWORDS.TEMPLATE, /^@template:(.+)$/],
   [METADATA_KEYWORDS.PARENT, /^@parent:(.+)$/],
   [METADATA_KEYWORDS.ROOT, /^@root:(.+)$/],
+  [METADATA_KEYWORDS.OWNER, /^@owner:(.+)$/],
   [METADATA_KEYWORDS.ENV, /^@env:(.+)$/],
 ];
 

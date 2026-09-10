@@ -36,6 +36,17 @@ vi.mock('@memberjunction/core', () => {
         static FromID(id: string) {
             return { id };
         }
+        static FromURLSegment(_entity: unknown, id: string) {
+            return { id };
+        }
+        /** Mirrors the real contract: a bare value for a single-column key, `F1|v1||F2|v2` otherwise. */
+        static FromEntityRecord(entity: { PrimaryKeys: Array<{ Name: string }> }, record: Record<string, unknown>) {
+            const pairs = entity.PrimaryKeys.map((pk) => ({ FieldName: pk.Name, Value: String(record[pk.Name] ?? '') }));
+            return {
+                ToCompactURLSegment: () =>
+                    pairs.length === 1 ? pairs[0].Value : pairs.map((p) => `${p.FieldName}|${p.Value}`).join('||'),
+            };
+        }
     }
     return { Metadata, RunView, RunQuery, CompositeKey };
 });
@@ -170,6 +181,7 @@ describe('loadEntityRecords — card subtitle rendering of normalized date cells
             { Name: 'Name', IsPrimaryKey: false, DefaultInView: true, Type: 'nvarchar' },
             { Name: 'OrderDate', IsPrimaryKey: false, DefaultInView: true, Type: 'datetime' },
         ],
+        PrimaryKeys: [{ Name: 'ID' }],
         FirstPrimaryKey: { Name: 'ID' },
         NameField: { Name: 'Name' },
     };
