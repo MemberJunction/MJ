@@ -38,6 +38,92 @@
       "cache": false,
       "persistent": true
     },
+    "@memberjunction/ai-engine-base#test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/__tests__/**",
+        "vitest.config.*",
+        "tsconfig.json",
+        "tsconfig.spec.json",
+        "$TURBO_ROOT$/metadata/ai-usage-types/**"
+      ],
+      "cache": true
+    },
+    "@memberjunction/computer-use#test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/__tests__/**",
+        "vitest.config.*",
+        "tsconfig.json",
+        "tsconfig.spec.json",
+        "$TURBO_ROOT$/metadata/prompts/templates/computer-use/**"
+      ],
+      "cache": true
+    },
+    "@memberjunction/codegen-lib#test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/__tests__/**",
+        "vitest.config.*",
+        "tsconfig.json",
+        "tsconfig.spec.json",
+        "$TURBO_ROOT$/metadata/prompts/templates/codegen/**",
+        "$TURBO_ROOT$/migrations/**"
+      ],
+      "cache": true
+    },
+    "@memberjunction/cli#test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/__tests__/**",
+        "vitest.config.*",
+        "tsconfig.json",
+        "tsconfig.spec.json",
+        "$TURBO_ROOT$/templates/claude-pack/**"
+      ],
+      "cache": true
+    },
+    "@memberjunction/sql-converter#test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/__tests__/**",
+        "vitest.config.*",
+        "tsconfig.json",
+        "tsconfig.spec.json",
+        "$TURBO_ROOT$/migrations/v5/**",
+        "$TURBO_ROOT$/migrations-pg/v5/**"
+      ],
+      "cache": true
+    },
+    "@memberjunction/integration-test-suite#test": {
+      "dependsOn": ["build"],
+      "outputs": ["coverage/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/__tests__/**",
+        "vitest.config.*",
+        "tsconfig.json",
+        "tsconfig.spec.json",
+        "$TURBO_ROOT$/metadata-optional/integration-test/**"
+      ],
+      "cache": true
+    },
     "test:types": {
       "dependsOn": ["build"],
       "outputs": [],

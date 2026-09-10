@@ -52,6 +52,15 @@ on:
       # script itself lives in scripts/ — without this entry a detector-only PR never
       # runs its tests.
       - 'scripts/check-pg-migration-content.mjs'
+      # The repo-wide source scanners and their standalone vitest project (#4369). They live
+      # outside packages/ precisely so turbo cannot cache them, which also puts them outside
+      # the 'packages/**' entry above: without these, a PR that WEAKENS a scanner — deletes a
+      # rule, widens KNOWN_EXCEPTIONS, drops a whole suite — triggers no run at all. That is
+      # the same trap the neighbouring entries exist to close, on the guards that were just
+      # rescued from a silent one.
+      - '.github/guards/**'
+      # And the placement guard that keeps a new scanner from being written as a package test.
+      - '.github/scripts/check-scanner-placement.mjs'
       # Same trap, same fix, for the CodeGen-tail guard: its unit suite lives in __tests__
       # above, but a PR touching only the guard would never run the tests that prove its
       # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
@@ -187,6 +196,29 @@ jobs:
       - name: MJ CLI resolution guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
+
+      # Repo-wide source scanners (#4369). These assert about the WHOLE packages/ tree — UUID
+      # comparison compliance, global-provider references, primary-key compliance — so they can
+      # never be a turbo task: turbo hashes `<pkg>#test` from that package's own files only, and
+      # a scanner's cache key therefore cannot contain the code it checks. They previously lived
+      # in packages/MJGlobal and packages/MJCore, where `next` replayed a cached green over nine
+      # real MetadataSync violations for two days while the affected-package PR filter
+      # (`--filter=...[base]`, dependents-only) never selected MJGlobal for a MetadataSync change.
+      #
+      # Here they are plain workflow steps: no hash, no cache, executed on every run. They read
+      # source text and need no dist/, which is why they belong in this job and not behind the build.
+      - name: Repo-wide source scanners
+        if: ${{ !cancelled() }}
+        run: npx vitest run --config .github/guards/vitest.config.mts
+
+      # ...and the guard that keeps them there. Fails when any test inside a package reads a path
+      # outside its own package without either a $TURBO_ROOT$ input widening that package's cache
+      # key or an explicit annotation. Without this, the next repo-wide scanner gets written as a
+      # package test and silently rots exactly the same way — the failure mode is invisible, so
+      # nothing else would catch it.
+      - name: Scanner placement guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-scanner-placement.mjs packages
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}

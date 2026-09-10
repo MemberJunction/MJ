@@ -12,7 +12,7 @@ type _TFormLayout = Expect<Equal<NonNullable<FormLayoutResult['fieldCategories']
 type _TVirtualEntity = Expect<Equal<NonNullable<VirtualEntityDecorationResult['fieldDescriptions'][number]['extendedType']>, EntityFieldExtendedType>>;
 
 describe('T6 — ExtendedType Enum Parity (C3, FM5)', () => {
-   const repoRoot = path.resolve(__dirname, '../../../../../');
+   const repoRoot = path.resolve(__dirname, '../../../../../'); // scanner-placement-ok: reads metadata/prompts/templates/codegen, declared on @memberjunction/codegen-lib#test in turbo.json
    const formLayoutTemplatePath = path.join(repoRoot, 'metadata/prompts/templates/codegen/form-layout-generation.template.md');
    const veTemplatePath = path.join(repoRoot, 'metadata/prompts/templates/codegen/virtual-entity-field-decoration.template.md');
 

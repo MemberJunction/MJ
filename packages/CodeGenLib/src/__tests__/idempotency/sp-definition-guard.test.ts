@@ -4,7 +4,7 @@ import * as path from 'path';
 import { PostgreSQLCodeGenProvider } from '../../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 
 describe('T16 — Proc Definition Contract and Drift Guard (C1, §0.3, D16)', () => {
-   const repoRoot = path.resolve(__dirname, '../../../../../');
+   const repoRoot = path.resolve(__dirname, '../../../../../'); // scanner-placement-ok: reads migrations/, declared on @memberjunction/codegen-lib#test in turbo.json
    const migrationsDir = path.join(repoRoot, 'migrations');
 
    it('finds newest migration defining spUpdateExistingEntityFieldsFromSchema and asserts guards', () => {
