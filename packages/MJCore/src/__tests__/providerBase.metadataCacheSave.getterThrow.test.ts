@@ -17,7 +17,7 @@ import { describe, it, expect } from 'vitest';
 import { BaseInfo } from '../generic/baseInfo';
 import { QueryInfo } from '../generic/queryInfo';
 import { Metadata } from '../generic/metadata';
-import { ILocalStorageProvider, IMetadataProvider, AllMetadata, MetadataInfo } from '../generic/interfaces';
+import { ILocalStorageProvider, IMetadataProvider, AllMetadata } from '../generic/interfaces';
 import { TestMetadataProvider } from './mocks/TestMetadataProvider';
 import { MockCacheStorageProvider } from './mocks/MockCacheStorageProvider';
 
@@ -84,29 +84,19 @@ class CacheSaveTestProvider extends TestMetadataProvider {
         super();
     }
     /** Seed the in-memory snapshot the way a completed GetAllMetadata does. */
-    public Seed(md: AllMetadata, timestamps: MetadataInfo[]): void {
+    public Seed(md: AllMetadata): void {
         this.UpdateLocalMetadata(md);
-        (this as unknown as { _latestLocalMetadataTimestamps: MetadataInfo[] })._latestLocalMetadataTimestamps = timestamps;
     }
     public override get LocalStorageProvider(): ILocalStorageProvider {
         return this.storage;
     }
 }
 
-function timestamps(): MetadataInfo[] {
-    const t = new MetadataInfo();
-    t.ID = 'ts-1';
-    t.Type = 'Entities';
-    t.UpdatedAt = new Date('2026-01-01T00:00:00Z');
-    t.RowCount = 1;
-    return [t];
-}
-
 describe('SaveLocalMetadataToStorage write order', () => {
     it('writes the payload before the timestamps, so timestamps can never describe a payload that is not there', async () => {
         const storage = new RecordingStorage();
         const provider = new CacheSaveTestProvider(storage);
-        provider.Seed(new AllMetadata(), timestamps());
+        provider.Seed(new AllMetadata());
 
         await provider.SaveLocalMetadataToStorage();
 
@@ -122,7 +112,7 @@ describe('SaveLocalMetadataToStorage write order', () => {
     it('a failed payload write leaves NO timestamps behind, so the next boot retries the save', async () => {
         const storage = new RecordingStorage('_AllMetadata');
         const provider = new CacheSaveTestProvider(storage);
-        provider.Seed(new AllMetadata(), timestamps());
+        provider.Seed(new AllMetadata());
 
         await expect(provider.SaveLocalMetadataToStorage()).resolves.toBeUndefined(); // fail-soft, as before
 
@@ -137,7 +127,7 @@ describe('SaveLocalMetadataToStorage write order', () => {
             md.AllQueries = [new QueryInfo({ ID: 'q-1', Name: 'Q', CategoryID: 'cat-1' })];
             const storage = new RecordingStorage();
             const provider = new CacheSaveTestProvider(storage);
-            provider.Seed(md, timestamps());
+            provider.Seed(md);
 
             await provider.SaveLocalMetadataToStorage();
 
