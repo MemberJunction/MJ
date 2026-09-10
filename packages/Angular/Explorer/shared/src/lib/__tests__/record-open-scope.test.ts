@@ -33,7 +33,7 @@ vi.mock('@memberjunction/ng-base-types', () => ({ BaseAngularComponent: class {}
 vi.mock('@memberjunction/core', () => ({
   BaseEntity: class {},
   Metadata: class {},
-  CompositeKey: class {},
+  CompositeKey: class { SimpleLoadFromURLSegment() { /* no-op for these specs */ } },
   LogError: vi.fn(),
 }));
 vi.mock('@memberjunction/core-entities', () => ({
@@ -176,5 +176,91 @@ describe('NavigationService record opens — temp-tab scope', () => {
       const fn = stubs.openTabForced.mock.calls.length ? stubs.openTabForced : stubs.openTab;
       expect(requestFrom(fn).IsPinned).toBe(false);
     });
+  });
+});
+
+
+// ===================== Record origin chain (crumb ping-pong) =====================
+// Under the preview-tab model an in-record link CONSUMES the parent's tab, so
+// returning to the parent re-opens it rather than reactivating its tab. A
+// re-open that RECAPTURES the origin makes the child the parent's origin — the
+// two records point at each other and the real entry point is unreachable.
+// The chain is what makes the return restore instead of recapture.
+describe('record origin chain', () => {
+  it('caps the ancestor chain so the persisted config cannot grow without bound', async () => {
+    const { TruncateRecordOriginChain, MAX_RECORD_ORIGIN_DEPTH } = await import('../record-open-style');
+    // Build a chain deeper than the cap.
+    let origin: Record<string, unknown> = { sourceLabel: 'gen0' };
+    for (let i = 1; i <= MAX_RECORD_ORIGIN_DEPTH + 3; i++) {
+      origin = { sourceLabel: `gen${i}`, sourceParentOrigin: origin };
+    }
+    let depth = 0;
+    let cursor = TruncateRecordOriginChain(origin as never);
+    while (cursor) {
+      depth++;
+      cursor = cursor.sourceParentOrigin;
+    }
+    expect(depth).toBe(MAX_RECORD_ORIGIN_DEPTH);
+  });
+
+  it('round-trips a nested chain through the tab configuration reader', async () => {
+    const { GetRecordSourceContext } = await import('../record-open-style');
+    const context = GetRecordSourceContext({
+      sourceAppId: 'app-1',
+      sourceLabel: 'System',
+      sourceRecordEntity: 'MJ: Action Categories',
+      sourceRecordId: 'ID|child',
+      sourceParentOrigin: {
+        sourceAppId: 'app-1',
+        sourceAppName: 'Data Explorer',
+        sourceNavLabel: 'Data',
+      },
+    });
+    // The grandparent survives serialization — that value IS the restored crumb.
+    expect(context?.sourceParentOrigin?.sourceNavLabel).toBe('Data');
+    expect(context?.sourceParentOrigin?.sourceAppName).toBe('Data Explorer');
+  });
+
+  it('returning to the parent RESTORES its origin instead of capturing the child', async () => {
+    SetRecordOpenStyle('records');
+    const { service } = createService();
+    const internals = service as unknown as Record<string, unknown>;
+    // The parent's tab was consumed by the link click, so the reactivate
+    // fast path must miss and the re-open path must run.
+    internals['workspaceManager'] = { GetConfiguration: () => ({ tabs: [] }) };
+    const openEntityRecord = vi.fn();
+    internals['OpenEntityRecord'] = openEntityRecord;
+
+    const entryPoint = { sourceAppId: 'app-1', sourceAppName: 'Data Explorer', sourceNavLabel: 'Data' };
+    await service.ReturnToRecordSource({
+      sourceLabel: 'User Management',
+      sourceRecordEntity: 'MJ: Action Categories',
+      sourceRecordId: 'ID|parent',
+      sourceParentOrigin: entryPoint,
+    });
+
+    expect(openEntityRecord).toHaveBeenCalledTimes(1);
+    const options = openEntityRecord.mock.calls[0][2];
+    // Not undefined — undefined would let resolveSourceContext capture the
+    // CHILD as the parent's new origin, which is the ping-pong bug.
+    expect(options?.recordSource).toEqual(entryPoint);
+  });
+
+  it("falls back to 'none' rather than a circular crumb when there is no chain", async () => {
+    SetRecordOpenStyle('records');
+    const { service } = createService();
+    const internals = service as unknown as Record<string, unknown>;
+    internals['workspaceManager'] = { GetConfiguration: () => ({ tabs: [] }) };
+    const openEntityRecord = vi.fn();
+    internals['OpenEntityRecord'] = openEntityRecord;
+
+    await service.ReturnToRecordSource({
+      sourceLabel: 'User Management',
+      sourceRecordEntity: 'MJ: Action Categories',
+      sourceRecordId: 'ID|parent',
+    });
+
+    // A missing crumb beats one that points back at where you just came from.
+    expect(openEntityRecord.mock.calls[0][2]?.recordSource).toBe('none');
   });
 });

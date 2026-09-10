@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { WorkspaceStateManager, NavItem, DynamicNavItem, TabRequest, ApplicationManager } from '@memberjunction/ng-base-application';
 import { NavigationOptions } from './navigation.interfaces';
-import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext } from './record-open-style';
+import { IsRecordTabsStyle, RECORDS_RESOURCE_TYPE, IsRecordsTabConfiguration, RecordSourceContext, GetRecordSourceContext, TruncateRecordOriginChain } from './record-open-style';
 import { CompositeKey } from '@memberjunction/core';
 import { fromEvent, BehaviorSubject, Subject, Subscription, Observable } from 'rxjs';
 import type { AppContextSnapshot } from '@memberjunction/ai-core-plus';
@@ -585,6 +585,9 @@ export class NavigationService implements OnDestroy {
       sourceQueryParams: undefined,
       sourceRecordEntity: undefined,
       sourceRecordId: undefined,
+      // Clear the ancestor chain too — this is an explicit re-capture, and a
+      // surviving chain would hand the crumb an origin from a previous open.
+      sourceParentOrigin: undefined,
       ...this.resolveSourceContext(options)
     });
   }
@@ -609,6 +612,15 @@ export class NavigationService implements OnDestroy {
       if (src.sourceLabel) context['sourceLabel'] = src.sourceLabel;
       if (src.sourceQueryParams && Object.keys(src.sourceQueryParams).length > 0) {
         context['sourceQueryParams'] = src.sourceQueryParams;
+      }
+      if (src.sourceRecordEntity) context['sourceRecordEntity'] = src.sourceRecordEntity;
+      if (src.sourceRecordId) context['sourceRecordId'] = src.sourceRecordId;
+      // An explicit origin can carry an ancestor chain (ReturnToRecordSource
+      // replays one). Dropping it here would re-lose the entry point on the
+      // very navigation that exists to restore it.
+      const chained = TruncateRecordOriginChain(src.sourceParentOrigin);
+      if (chained) {
+        context['sourceParentOrigin'] = chained;
       }
       return context;
     }
@@ -646,6 +658,15 @@ export class NavigationService implements OnDestroy {
         context['sourceLabel'] = activeTab.title;
         context['sourceRecordEntity'] = parentEntity;
         context['sourceRecordId'] = parentRecordId;
+        // Carry the parent's OWN origin forward. Preview-tab replacement
+        // consumes the parent's tab, so returning to it later re-opens rather
+        // than reactivates — and a re-open would recapture the CHILD as the
+        // origin. Keeping the chain is what lets the return restore the real
+        // entry point instead of pointing the two records at each other.
+        const parentOrigin = TruncateRecordOriginChain(GetRecordSourceContext(activeTab.configuration));
+        if (parentOrigin) {
+          context['sourceParentOrigin'] = parentOrigin;
+        }
       }
       return context;
     }
@@ -731,7 +752,14 @@ export class NavigationService implements OnDestroy {
       }
       const parentKey = new CompositeKey();
       parentKey.SimpleLoadFromURLSegment(origin.sourceRecordId);
-      this.OpenEntityRecord(origin.sourceRecordEntity, parentKey);
+      // RESTORE the parent's origin; do not let the re-open capture a fresh
+      // one. Standing on the child at this moment, a capture would make the
+      // child the parent's origin — the two records would point at each other
+      // and the real entry point would be unreachable. 'none' when we have no
+      // chain: a missing crumb beats a circular one.
+      this.OpenEntityRecord(origin.sourceRecordEntity, parentKey, {
+        recordSource: origin.sourceParentOrigin ?? 'none'
+      });
       return;
     }
     if (!origin.sourceAppId) {
