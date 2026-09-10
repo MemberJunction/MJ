@@ -61,4 +61,28 @@ describe('RelatedGridHeightPx', () => {
         expect(RelatedGridHeightPx(40, RELATED_GRID_DEFAULT_MAX_PX)).toBe(RELATED_GRID_DEFAULT_MAX_PX);
         expect(RelatedGridHeightPx(1, RELATED_GRID_DEFAULT_MAX_PX)).toBe(contentHeight(1));
     });
+
+    it('a measured allowance REPLACES the fixed reserve: 0 releases it, a real bar is budgeted exactly', () => {
+        // A caller that measured the bar knows better than the reserve. 0 means the columns
+        // fit (or the platform draws overlay scrollbars), so nothing is reserved at all.
+        const reserved = contentHeight(1); // the unmeasured form, reserve included
+        expect(RelatedGridHeightPx(1, null, 0)).toBe(reserved - RELATED_GRID_HSCROLLBAR_PX);
+        expect(RelatedGridHeightPx(1, null, 15)).toBe(reserved - RELATED_GRID_HSCROLLBAR_PX + 15);
+        expect(RelatedGridHeightPx(2, undefined, 8)).toBe(contentHeight(2) - RELATED_GRID_HSCROLLBAR_PX + 8);
+        // The empty state carries no fixed reserve, but it can overflow horizontally too
+        // (header wider than the panel), so a measured bar is still budgeted there.
+        expect(RelatedGridHeightPx(0, null, 8)).toBe(contentHeight(0) + 8);
+    });
+
+    it('a non-finite or negative value is not a measurement and keeps the fixed reserve', () => {
+        expect(RelatedGridHeightPx(1, null, Number.NaN)).toBe(contentHeight(1));
+        expect(RelatedGridHeightPx(1, null, Number.POSITIVE_INFINITY)).toBe(contentHeight(1));
+        expect(RelatedGridHeightPx(1, null, -3)).toBe(contentHeight(1));
+    });
+
+    it('keeps the maxHeight cap authoritative over the scrollbar allowance', () => {
+        expect(RelatedGridHeightPx(40, RELATED_GRID_DEFAULT_MAX_PX, 15)).toBe(RELATED_GRID_DEFAULT_MAX_PX);
+        const tightCap = contentHeight(1) + 4;
+        expect(RelatedGridHeightPx(1, tightCap, RELATED_GRID_HSCROLLBAR_PX + 8)).toBe(tightCap);
+    });
 });
