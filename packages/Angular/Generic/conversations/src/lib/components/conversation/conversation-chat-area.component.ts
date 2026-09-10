@@ -209,6 +209,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    */
   @Input() showLoadingState = true;
 
+  /**
+   * Read each reply from its top instead of its bottom.
+   *
+   * Default false (current behaviour): the pane follows the tail, so a run ends with the
+   * reader looking at the END of the answer and scrolling back up to start reading it.
+   *
+   * When true, sending and the run itself behave as before, but when the reply lands and
+   * the reader was following it, the turn — the reader's own message with the reply under
+   * it — is scrolled so it starts at the top of the pane, IF it is taller than the pane. A
+   * turn that fits stays where it is: it is all on screen anyway. A reader who scrolled up
+   * during the run is never moved; the scroll-to-bottom button is their way back.
+   */
+  @Input() readReplyFromTop = false;
+
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
   //     state so white-labeled end-user surfaces can pare the chat down through the
@@ -761,6 +775,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
   private scrollToBottom = false;
+  /**
+   * Whether the reader was at (within a few px of) the bottom at the last scroll event.
+   * An in-place message update only follows the tail for a reader who is already there;
+   * one who scrolled up to reread history is left alone, whichever mode is on.
+   */
+  private readerAtBottom = true;
+  /** readReplyFromTop: the reader's message that opened the current turn. */
+  private currentTurnStartMessageId: string | null = null;
+  /** readReplyFromTop: set when the reply lands, consumed once it has rendered. */
+  private pendingTurnStartMessageId: string | null = null;
+  /**
+   * readReplyFromTop: while a landing is under way, bottom-follow timers already armed by the
+   * last progress updates must not fire and drag the reader back down.
+   */
+  private bottomFollowSuppressedUntil = 0;
+  private turnStartRetryHandle: ReturnType<typeof setTimeout> | null = null;
+  /** Gap kept between the pane's top edge and the turn's first message. */
+  private static readonly TURN_TOP_GAP_PX = 16;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
@@ -1483,10 +1515,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.scrollToBottom) {
       this.scrollToBottom = false;
       setTimeout(() => {
+        if (Date.now() < this.bottomFollowSuppressedUntil) {
+          return;
+        }
         this.scrollToBottomNow();
         // Check scroll state after scrolling to bottom
         this.checkScroll();
       }, 100);
+    }
+    if (this.pendingTurnStartMessageId) {
+      const messageId = this.pendingTurnStartMessageId;
+      this.pendingTurnStartMessageId = null;
+      // Deferred for the same reason checkScroll() is not called synchronously below.
+      setTimeout(() => this.scrollTurnToTop(messageId), 0);
     }
     // Removed synchronous checkScroll() from else branch to prevent
     // ExpressionChangedAfterItHasBeenCheckedError. Calling detectChanges()
@@ -1504,6 +1545,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Complete destroy subject to cleanup subscriptions
     this.destroy$.next();
     this.destroy$.complete();
+
+    this.clearTurnTracking();
 
     // Remove resize listeners
     window.removeEventListener('mousemove', this.boundOnResizeMove);
@@ -1527,6 +1570,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private resetConversationScopedViewState(): void {
+    this.clearTurnTracking();
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
     this.selectedVersionNumber = undefined;
@@ -1764,7 +1808,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
-      this.scrollToBottom = true;
+      this.followTranscript('load');
 
       // Process peripheral data (agent runs, artifacts, ratings, attachments) from engine cache
       await this.loadPeripheralData(conversationId, snapshot, loadToken);
@@ -2200,8 +2244,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
 
-    // Scroll to bottom when new message is sent
-    this.scrollToBottom = true;
+    // Where the viewport goes: a fresh send follows — an in-place update of a message that
+    // is already on screen must not re-run the send path's scroll.
+    this.followTranscript(existingIndex >= 0 ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
     // so progress updates that arrive via PubSub run outside Angular's zone. Without this,
@@ -2555,8 +2600,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.resetComponentState(this.conversationId);
     }
 
-    // Scroll to bottom when agent responds
-    this.scrollToBottom = true;
+    // Where the viewport goes when the agent responds
+    this.followTranscript('new', event.message);
 
     // CRITICAL FIX: Always refresh the agent run data when agent completes
     // This ensures we get the final status and timestamps, replacing any stale data from when agent started
@@ -4433,6 +4478,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const scrollDifference = element.scrollHeight - (element.scrollTop + element.clientHeight);
     const hasScrollableContent = element.scrollHeight > element.clientHeight + 50;
     const atBottom = scrollDifference <= buffer;
+    this.readerAtBottom = atBottom;
 
     const newValue = !atBottom && hasScrollableContent;
 
@@ -4467,6 +4513,126 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.scrollContainer) {
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
+    }
+  }
+
+  /**
+   * Decides where the viewport goes after the transcript changed.
+   *
+   * - `load`   — a conversation was opened: the bottom.
+   * - `new`    — a message was appended: follow the tail, as before.
+   * - `update` — a message already on screen changed in place (progress, status, streamed
+   *              text). Never moves a reader who has scrolled away; keeps a reader who is
+   *              at the bottom there as the bubble grows. (Before this, every progress
+   *              update re-ran the send path's scroll — message-input re-emits
+   *              `messageSent` per update — and yanked the reader to the bottom.)
+   *
+   * With `readReplyFromTop`, the reader's own message opens a turn — whether it arrives as
+   * `new` or, on the auto-send path where the chat area already holds it, as `update` — and
+   * every settled AI message of that turn (Complete or Error) lands the turn instead of
+   * following, for a reader who was still following. EVERY settled message, not the first:
+   * the refinement path emits a settled status line ("Continuing with X…") before the reply,
+   * and a turn that landed on the status line alone must land again when the reply arrives
+   * (re-landing is idempotent — the same target, or nothing once the reader has been moved
+   * off the bottom). Completion is also emitted more than once for one message; none of those
+   * emits may fall through to the bottom follow. A `load` does not forget the turn: creating
+   * a conversation from the composer sends the first message while the initial load is still
+   * in flight.
+   */
+  private followTranscript(change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity): void {
+    if (change === 'load') {
+      this.scrollToBottom = true;
+      return;
+    }
+    if (this.readReplyFromTop) {
+      if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
+        this.currentTurnStartMessageId = message.ID;
+      } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
+        if (this.readerAtBottom) {
+          this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
+          this.scrollToBottom = false;
+          this.bottomFollowSuppressedUntil = Date.now() + 1500;
+        }
+        return;
+      }
+    }
+    if (change === 'new' || this.readerAtBottom) {
+      if (change === 'new' && message?.Role === 'User') {
+        // The reader sending again right after a reply landed must not be swallowed by the
+        // landing's suppression. Only THEIR message lifts it: an AI message arriving new
+        // inside the window belongs to the turn that just landed and must not cancel it.
+        this.bottomFollowSuppressedUntil = 0;
+      }
+      this.scrollToBottom = true;
+    }
+  }
+
+  private isSettled(message: MJConversationDetailEntity): boolean {
+    return message.Status === 'Complete' || message.Status === 'Error';
+  }
+
+  /**
+   * readReplyFromTop: once the reply has rendered, scrolls the turn so its first message
+   * sits at the top of the pane — but only if the turn is taller than the pane. A turn that
+   * fits is already fully on screen at the bottom, and moving it would be motion for nothing.
+   */
+  private scrollTurnToTop(messageId: string, attempt: number = 0): void {
+    if (!this.readReplyFromTop) {
+      return;
+    }
+    const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
+    // Resolved through the list's timeline, not a `[data-message-id]` query: a far-off item
+    // is unmounted into a spacer and a session-stamped row folds into its session card, and
+    // the list answers with the node that stands for the message in either case.
+    const target = this.messageListComponent?.FindTimelineElement(messageId) ?? null;
+    if (!container || !target) {
+      // The reply's final render lands a tick or two after the array changes — the same
+      // latency the bottom-follow path absorbs with its 100 ms timer.
+      if (attempt < 20) {
+        this.turnStartRetryHandle = setTimeout(() => this.scrollTurnToTop(messageId, attempt + 1), 50);
+      }
+      return;
+    }
+    this.turnStartRetryHandle = null;
+    const turnTop = this.offsetWithinScroller(target) - this.turnTopClearance(container);
+    const turnHeight = container.scrollHeight - turnTop; // the turn is the newest content
+    if (turnHeight > container.clientHeight) {
+      container.scroll({ top: turnTop, behavior: 'smooth' });
+    } else {
+      this.scrollToBottomNow();
+    }
+    this.checkScroll();
+  }
+
+  /**
+   * How far below the pane's top edge the turn's first message lands: the standard gap, plus
+   * room for the list's sticky date header when it is showing — it pins to this scroller's
+   * top and would otherwise sit on the message's first line.
+   */
+  private turnTopClearance(container: HTMLElement): number {
+    const stickyHeader = container.querySelector<HTMLElement>('.sticky-date-header');
+    if (!stickyHeader || !stickyHeader.offsetParent) {
+      return ConversationChatAreaComponent.TURN_TOP_GAP_PX;
+    }
+    // The header's CSS inset (`top: 12px`), NOT `offsetTop`: on a pinned sticky element
+    // `offsetTop` reports the used position, which tracks the scroll offset.
+    const inset = parseFloat(getComputedStyle(stickyHeader).top) || 0;
+    return ConversationChatAreaComponent.TURN_TOP_GAP_PX + stickyHeader.offsetHeight + inset;
+  }
+
+  /** An element's top edge in the scroller's content coordinates — what scrollTop counts in. */
+  private offsetWithinScroller(el: HTMLElement): number {
+    const container = this.scrollContainer.nativeElement as HTMLElement;
+    return el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+  }
+
+  private clearTurnTracking(): void {
+    this.currentTurnStartMessageId = null;
+    this.pendingTurnStartMessageId = null;
+    this.bottomFollowSuppressedUntil = 0;
+    if (this.turnStartRetryHandle) {
+      clearTimeout(this.turnStartRetryHandle);
+      this.turnStartRetryHandle = null;
     }
   }
 
@@ -4660,7 +4826,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     this.intentCheckMessage = tempMessage;
     this.messages = [...this.messages, tempMessage];
-    this.scrollToBottom = true;
+    this.followTranscript('new', tempMessage);
     this.cdr.detectChanges();
   }
 
