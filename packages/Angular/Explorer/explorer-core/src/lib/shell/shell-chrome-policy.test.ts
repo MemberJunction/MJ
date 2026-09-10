@@ -113,6 +113,36 @@ describe('ShellComponent — the cached flags follow the policy', () => {
   });
 });
 
+describe('ShellComponent — a hidden search bar has no keyboard back door', () => {
+  function createShell(searchBar: boolean): ShellComponent {
+    const shell = Object.create(ShellComponent.prototype) as ShellComponent;
+    const open = shell as unknown as Record<string, unknown>;
+    open['_chromeFlags'] = { ...allOn, searchBar };
+    open['omnibarPalette'] = { Open: vi.fn() };
+    return shell;
+  }
+
+  it('OpenOmnibar does nothing while search is hidden — Ctrl/Cmd+K and Cmd+/ route here', () => {
+    const shell = createShell(false);
+    shell.OpenOmnibar('');
+    expect(((shell as unknown as Record<string, unknown>)['omnibarPalette'] as { Open: ReturnType<typeof vi.fn> }).Open).not.toHaveBeenCalled();
+  });
+
+  it('OpenOmnibar still opens the palette when search is shown', () => {
+    const shell = createShell(true);
+    shell.OpenOmnibar('q');
+    expect(((shell as unknown as Record<string, unknown>)['omnibarPalette'] as { Open: ReturnType<typeof vi.fn> }).Open).toHaveBeenCalledWith('q');
+  });
+
+  it('the palette itself is only rendered with the search bar', () => {
+    const html = readFileSync(join(__dirname, 'shell.component.html'), 'utf8');
+    const at = html.indexOf('<mj-omnibar-palette');
+    const guard = html.lastIndexOf('@if (ShowSearchBar)', at);
+    expect(guard).toBeGreaterThan(-1);
+    expect(html.slice(guard, at)).not.toMatch(/\n\}\n/); // no closing brace between the guard and the palette
+  });
+});
+
 describe('the user menu fits the viewport', () => {
   const css = readFileSync(join(__dirname, 'shell.component.css'), 'utf8');
   const block = css.slice(css.indexOf('.user-context-menu {'), css.indexOf('}', css.indexOf('.user-context-menu {')));

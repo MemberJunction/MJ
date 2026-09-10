@@ -352,6 +352,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   /** Header affordance click → open the palette. */
   OpenOmnibar(initialQuery = ''): void {
+      if (!this.ShowSearchBar) {
+          return;
+      }
       this.omnibarPalette?.Open(initialQuery);
   }
 
@@ -2920,6 +2923,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Toggle search popup visibility
    */
   toggleSearch(): void {
+    if (!this.ShowSearchBar) {
+      return;
+    }
     if (this.UseOmnibar) {
       this.OpenOmnibar();
       return;
@@ -3005,6 +3011,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       (.desktop-only) but its ViewChild still exists — focusing an invisible input
       would silently eat the interaction. */
   OnHeaderSearchClick(): void {
+      // No search surface at all when the chrome hides search — the header affordance is
+      // gone, but the Ctrl/Cmd+K chord and the mobile icon route here too.
+      if (!this.ShowSearchBar) {
+          return;
+      }
       const isMobile = window.matchMedia('(max-width: 768px)').matches;
       if (this.UseOmnibar) {
           this.OpenOmnibar();
