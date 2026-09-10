@@ -39,6 +39,7 @@ import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AppSwitcherStyle } from './components/header/app-switcher.component';
+import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -47,21 +48,6 @@ import { AppSwitcherStyle } from './components/header/app-switcher.component';
  * - Golden Layout-based tab container
  * - Unified workspace state management
  */
-/**
- * Instance-config-backed shell chrome flags, resolved once from InstanceConfigEngine
- * and cached for the component's lifetime. Angular change detection evaluates the
- * getters that expose these constantly, so a per-read engine lookup would run
- * thousands of times; resolving the whole set once keeps every read a field access.
- */
-interface ShellChromeFlags {
-  searchBar: boolean;
-  searchPreview: boolean;
-  notifications: boolean;
-  appSwitcher: boolean;
-  appSwitcherStyle: AppSwitcherStyle;
-  appNav: boolean;
-  recordOpenStyle: RecordOpenStyle;
-}
 
 @Component({
   standalone: false,
@@ -165,12 +151,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   // memoized `chromeFlags` accessor below (see ShellChromeFlags) so Angular's
   // change detection reads a cached field instead of hitting the engine per pass.
   private _chromeFlags: ShellChromeFlags | null = null;
+  /**
+   * The host's chrome policy (see {@link BaseShellChromePolicy}) — the identity unless a host
+   * registered a subclass. Consulted on every resolve; its `Changed` drops the cache.
+   */
+  private readonly chromePolicy: BaseShellChromePolicy =
+      MJGlobal.Instance.ClassFactory.CreateInstance<BaseShellChromePolicy>(BaseShellChromePolicy) ?? new BaseShellChromePolicy();
 
   /**
    * Resolve the instance-config chrome flags once and cache them. Computed live
    * from the fail-open defaults until InstanceConfigEngine has loaded, then frozen
    * on the first post-load read — so the pre-load defaults are never cached over
    * the real values, and every steady-state read is a plain field access.
+   *
+   * Instance Config is the ceiling; the host's chrome policy may narrow it per user
+   * (see {@link BaseShellChromePolicy}). The cache is dropped when the policy fires
+   * `Changed`, so an organization or plan switch repaints the chrome.
    */
   private get chromeFlags(): ShellChromeFlags {
       if (this._chromeFlags) {
@@ -178,7 +174,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
       const engine = InstanceConfigEngine.Instance;
       const rawStyle = engine.Get('Shell.AppSwitcher.Style');
-      const flags: ShellChromeFlags = {
+      const baseline: ShellChromeFlags = {
           searchBar: engine.GetBoolean('Shell.SearchBar.Enabled', true),
           searchPreview: engine.GetBoolean('Shell.SearchBar.EnablePreview', true),
           notifications: engine.GetBoolean('Shell.Notifications.Enabled', true),
@@ -193,10 +189,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // depend on when a template happens to be evaluated.
           recordOpenStyle: this.resolvedRecordOpenStyle,
       };
+      const flags = ApplyShellChromePolicy(baseline, this.chromePolicy);
       if (engine.Loaded) {
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /** The policy's answer may have changed: forget the cached flags and repaint. */
+  private onChromePolicyChanged(): void {
+      this._chromeFlags = null;
+      this.cdr.markForCheck();
   }
 
   /** The record-open style resolved at startup ('records' until resolved) */
@@ -524,6 +527,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.workspaceManager.TabBarVisible.subscribe(visible => {
         this.tabBarVisible = visible;
       })
+    );
+
+    // The host's chrome policy says its answer may have changed (org or plan switch)
+    this.subscriptions.push(
+      this.chromePolicy.Changed.subscribe(() => this.onChromePolicyChanged())
     );
 
     // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
