@@ -1,17 +1,57 @@
 import { describe, it, expect } from 'vitest';
-import { lintText, stripComments, hasAdjacentKnownLimitation, ALLOWLIST } from '../../../scripts/check-spec-antipatterns.mjs';
+import { lintText, stripCommentsAndStrings, hasAdjacentKnownLimitation, ALLOWLIST } from '../../../scripts/check-spec-antipatterns.mjs';
 
 const whys = (text, kind) => lintText(text, kind).map((f) => f.why);
 
-describe('stripComments', () => {
+describe('stripCommentsAndStrings', () => {
     it('strips line comments so prose about an anti-pattern does not trip a rule', () => {
         expect(whys(`// mentioning expect(true) or as any here is fine\nexpect(x).toBe(1);\n`, 'node')).toEqual([]);
     });
 
     it('strips block-comment interiors line-wise', () => {
-        const stripped = stripComments(['/* expect(true)', 'still comment as any', '*/ expect(x).toBe(1);']);
+        const stripped = stripCommentsAndStrings(['/* expect(true)', 'still comment as any', '*/ expect(x).toBe(1);']);
         expect(stripped.join('\n')).not.toContain('expect(true)');
         expect(stripped.join('\n')).toContain('expect(x).toBe(1);');
+    });
+});
+
+describe('stripCommentsAndStrings — string literals are prose too', () => {
+    it('does not flag `as any` inside a test title (the #4355 false positive)', () => {
+        // Verbatim from packages/Angular/Generic/base-forms — "as soon AS ANY count" tripped the rule.
+        expect(whys(`it('is false as soon as any count is positive', () => {});`, 'node')).toEqual([]);
+    });
+
+    it('does not flag an anti-pattern named in a double-quoted string', () => {
+        expect(whys(`const why = "as any is banned repo-wide";`, 'node')).toEqual([]);
+    });
+
+    it('does not flag one named in a template literal', () => {
+        expect(whys('const why = `we ban as any here`;', 'node')).toEqual([]);
+    });
+
+    it('STILL flags real code inside a template expression', () => {
+        expect(whys('const s = `${value as any}`;', 'node')).toContain('`as any` — banned repo-wide (CLAUDE.md)');
+    });
+
+    it('still flags real code on a line that also carries a harmless string', () => {
+        expect(whys(`const x = describe('as any', () => {}) as any;`, 'node')).toContain(
+            '`as any` — banned repo-wide (CLAUDE.md)'
+        );
+    });
+
+    it('an escaped quote does not end the literal early', () => {
+        expect(whys(`const s = 'it\\'s as any, really';`, 'node')).toEqual([]);
+    });
+
+    it('carries an unterminated template literal to the next line', () => {
+        const stripped = stripCommentsAndStrings(['const s = `line one', 'still literal as any', '`; const y = z as any;']);
+        expect(stripped[1]).not.toContain('as any');
+        expect(stripped[2]).toContain('as any');
+    });
+
+    it('preserves line count and order so reported line numbers stay accurate', () => {
+        const src = `const a = 1;\nit('as any', () => {});\nconst b = c as any;\n`;
+        expect(lintText(src, 'node').map((f) => f.line)).toEqual([3]);
     });
 });
 
