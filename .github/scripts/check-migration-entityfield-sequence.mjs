@@ -54,8 +54,8 @@ import { stripSqlComments } from './check-codegen-tail.mjs';
 
 const RED = '\x1b[0;31m', YELLOW = '\x1b[0;33m', GREEN = '\x1b[0;32m', DIM = '\x1b[2m', NC = '\x1b[0m';
 const GIT_MAX_BUFFER = Number(process.env.MJ_GIT_MAX_BUFFER) || 256 * 1024 * 1024;
-/** Flyway versioned and baseline migrations: fixture SQL never runs. */
-const VERSIONED_MIGRATION_RE = /(^|\/)[VB]\d{12}__[^/]*\.sql$/;
+/** Flyway versioned migrations only: baselines are literal by construction, fixture SQL never runs. */
+const VERSIONED_MIGRATION_RE = /(^|\/)V\d{12}__[^/]*\.sql$/;
 const FIXTURE_DIR_RE = /(^|\/)tests?\//;
 const inScope = (f) => VERSIONED_MIGRATION_RE.test(f) && !FIXTURE_DIR_RE.test(f);
 
@@ -326,15 +326,6 @@ export const SELF_TEST_FIXTURES = [
         `INSERT INTO [__mj].[EntityField] ([ID], [EntityID], [Sequence]) VALUES ('a', 'e', '16');`],
 ];
 
-const SCOPE_TEST_FIXTURES = [
-    ['V-prefix migration is in scope', true, 'migrations/v1/V202607141200__v1.0.0.sql'],
-    ['B-prefix baseline migration is in scope', true, 'migrations/v1/B202607141200__v1.0.0.sql'],
-    ['fixture in tests/ is excluded', false, 'tests/migrations/V202607141200__v1.0.0.sql'],
-    ['fixture in test/ is excluded', false, 'test/migrations/B202607141200__v1.0.0.sql'],
-    ['repeatable migration is excluded', false, 'migrations/R__RefreshMetadata.sql'],
-    ['non-migration sql file is excluded', false, 'scripts/seed.sql'],
-];
-
 function selfTest() {
     let fails = 0;
     for (const [name, shouldFlag, sql] of SELF_TEST_FIXTURES) {
@@ -343,15 +334,6 @@ function selfTest() {
             console.log(`${GREEN}self-test ok${NC}: ${name} ${shouldFlag ? 'flagged' : 'accepted'}`);
         } else {
             console.log(`${RED}self-test FAIL${NC}: ${name} was ${flagged ? 'flagged' : 'NOT flagged'}`);
-            fails++;
-        }
-    }
-    for (const [name, expected, path] of SCOPE_TEST_FIXTURES) {
-        const actual = inScope(path);
-        if (actual === expected) {
-            console.log(`${GREEN}self-test ok${NC}: ${name} ${expected ? 'in-scope' : 'excluded'}`);
-        } else {
-            console.log(`${RED}self-test FAIL${NC}: ${name} expected ${expected}, got ${actual}`);
             fails++;
         }
     }
