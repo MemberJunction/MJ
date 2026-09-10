@@ -1208,15 +1208,21 @@ export class AgentRunner {
      * creating a new artifact. A deployment that has not synced `metadata/permission-domains` — or
      * any caller that reaches the runner before `PermissionEngine.Config()` — would therefore stop
      * versioning for every legitimate editor, with nothing in the logs to say why. A direct query
-     * has no such dependency on engine state. As of this writing `PermissionEngine` has no
-     * server-side callers anywhere in the tree; every usage is the Explorer Sharing Center.
+     * has no such dependency on engine state. As of this writing nothing server-side calls
+     * `PermissionEngine` or runs its `Config()`: its callers are Explorer's Permissions dashboard,
+     * the Sharing Center, and the integration test suite. (`Lists/server`,
+     * `Communication/notifications` and the MJCoreEntities entity extensions call
+     * `ResourcePermissionEngine`, a different class over `MJ: Resource Permissions`.)
      *
      * The cost of that choice is drift: this is a third answer to "can this user edit this
      * artifact", alongside the provider and `ng-conversations`' `artifact-permission.service.ts`.
      * **If artifact sharing grows a new grant shape — role grantees, `SupportsDeny`, cascade from
      * collections — this method must be updated with the provider.** Revisit the delegation once
-     * `PermissionEngine` is routinely configured server-side, at which point composing (owner check
-     * here, grant half via `CheckPermission`) becomes the better trade.
+     * `PermissionEngine` is routinely configured server-side. The cleaner precondition is upstream:
+     * `CollectionPermissionProvider` already treats a collection's owner as a synthetic full-access
+     * grantee, and the same treatment in `ArtifactPermissionProvider` would make it a complete
+     * answer, at which point this method should delegate to `CheckPermission(..., 'Update')`
+     * outright rather than compose an owner check around it.
      *
      * @param plan - The `version` plan to vet.
      * @param contextUser - User the run executes as.
