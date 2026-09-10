@@ -59,6 +59,7 @@ function makeWidgetInfo(): EntityInfo {
       { ID: 'F4', Name: 'Notes', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
       // NOT NULL but read-only — like __mj_CreatedAt: empty on a new record, filled by the save itself.
       { ID: 'F5', Name: 'CreatedAt', Type: 'datetimeoffset', AllowsNull: false, AllowUpdateAPI: false },
+      { ID: 'F6', Name: 'DueDate', Type: 'datetime', AllowsNull: true, AllowUpdateAPI: true },
     ],
   });
 }
@@ -100,6 +101,7 @@ function warning(source: string, message = 'check this'): ValidationErrorInfo {
     <mj-collapsible-panel SectionKey="notes" SectionName="Notes" [Form]="form" [FormContext]="ctx" [Indicators]="extra">
       <mj-form-field [Record]="record" FieldName="Notes" Type="textbox" [EditMode]="editMode" [FormContext]="ctx"></mj-form-field>
       <mj-form-field [Record]="record" FieldName="CreatedAt" Type="datepicker" [EditMode]="editMode" [FormContext]="ctx"></mj-form-field>
+      <mj-form-field [Record]="record" FieldName="DueDate" Type="datepicker" [EditMode]="editMode" [FormContext]="ctx"></mj-form-field>
     </mj-collapsible-panel>
     <mj-collapsible-panel SectionKey="modificationsPanel" SectionName="Modifications" Variant="related-entity"
                           ValidationSources="Modifications" [Form]="form" [FormContext]="ctx">
@@ -297,6 +299,19 @@ describe('Section indicators — invalid fields', () => {
     expect(el.classList.contains('mj-panel-has-warnings')).toBe(true);
     expect(el.querySelector('.mj-forms-panel-warning-badge')?.textContent?.trim()).toBe('1');
     expect(el.querySelector('.mj-forms-panel-error-badge')).toBeNull();
+  });
+});
+
+describe('Section indicators — stored date the input cannot parse', () => {
+  it('counts it as a warning, exactly as the field paints its own amber underline', () => {
+    const f = render({ record: makeSavedWidget({ DueDate: 'not a date' }) });
+    const due = fieldByName(f, 'DueDate');
+    expect(due.StoredDateIsUnreadable).toBe(true);
+    expect(due.ShowWarnings).toBe(false); // the validation pipeline knows nothing about it
+    const notes = panelByKey(f, 'notes');
+    expect(notes.SectionWarningCount).toBe(1);
+    expect(notes.SectionErrorCount).toBe(0);
+    expect(hostEl(f, 'notes').querySelector('.mj-forms-panel-warning-badge')?.textContent?.trim()).toBe('1');
   });
 });
 

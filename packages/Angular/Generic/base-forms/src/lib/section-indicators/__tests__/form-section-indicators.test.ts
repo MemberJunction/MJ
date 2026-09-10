@@ -263,4 +263,14 @@ describe('FormSectionIndicatorCoordinator', () => {
     expect(unrouted.map((e) => e.Source)).toEqual(['Orphan']);
     expect(c.UnroutedValidationErrors(undefined)).toEqual([]);
   });
+
+  it('lets only rail-reachable sources claim, so a chrome-dropped section cannot swallow a failure', () => {
+    const c = new FormSectionIndicatorCoordinator();
+    c.Register(source('identity', {}, ['Name']));
+    c.Register(source('hiddenExtras', {}, ['Code']));
+    const unrouted = c.UnroutedValidationErrors([failure('Name'), failure('Code')], new Set(['identity']));
+    expect(unrouted.map((e) => e.Source)).toEqual(['Code']);
+    // no reachable set → every registered source may claim (the standalone-panel case)
+    expect(c.UnroutedValidationErrors([failure('Name'), failure('Code')])).toEqual([]);
+  });
 });

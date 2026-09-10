@@ -411,7 +411,9 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
       // is empty and read-only — the user cannot fix it, and it fills itself on save).
       if (!field.EditMode || field.IsFieldReadOnly) return;
       if (field.ShowErrors || field.IsRequiredEmpty) ErrorCount++;
-      else if (field.ShowWarnings) WarningCount++;
+      // The field paints its amber underline on EITHER of these — a stored date the input
+      // cannot parse warns on its own, outside the validation pipeline.
+      else if (field.ShowWarnings || field.StoredDateIsUnreadable) WarningCount++;
     });
     return { DirtyCount, ErrorCount, WarningCount };
   }

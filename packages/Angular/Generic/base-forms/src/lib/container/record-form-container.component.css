@@ -581,6 +581,20 @@ mj-collapsible-panel.mj-form-role-more {
   text-align: center;
 }
 
+/* Screen-reader-only text (the indicators' live region). */
+.mj-forms-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ============================================
    RAIL SECTION INDICATORS
    A rail item says WHICH section holds unsaved edits or an invalid field, read

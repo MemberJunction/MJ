@@ -37,14 +37,14 @@
         }
         @if (SectionErrorCount > 0) {
           <span class="mj-forms-panel-error-badge"
-                role="status"
+                role="img"
                 [title]="SectionErrorTitle"
                 [attr.aria-label]="SectionErrorTitle">
             <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ SectionErrorCount }}
           </span>
         } @else if (SectionWarningCount > 0) {
           <span class="mj-forms-panel-warning-badge"
-                role="status"
+                role="img"
                 [title]="SectionWarningTitle"
                 [attr.aria-label]="SectionWarningTitle">
             <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ SectionWarningCount }}

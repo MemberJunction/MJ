@@ -111,10 +111,18 @@ export class FormSectionIndicatorCoordinator {
   /**
    * Form-level errors no registered section claims. Surfaced deliberately: an error that
    * vanished from every badge is worse than the no-badge behaviour this replaced.
+   *
+   * `reachableKeys`, when given, limits WHICH sources may claim: a section that is
+   * registered but sits in no rail group (hidden by `hiddenSectionKeys`, dropped by the
+   * chrome) has no badge anywhere, so letting it claim would make its failure vanish.
+   * Its errors stay unrouted and land in the whole-form total instead.
    */
-  public UnroutedValidationErrors(errors: readonly ValidationErrorInfo[] | null | undefined): ValidationErrorInfo[] {
+  public UnroutedValidationErrors(
+    errors: readonly ValidationErrorInfo[] | null | undefined,
+    reachableKeys?: ReadonlySet<string>,
+  ): ValidationErrorInfo[] {
     if (!errors?.length) return [];
-    const sources = [...this.sources.values()];
+    const sources = [...this.sources.values()].filter((source) => !reachableKeys || reachableKeys.has(source.SectionKey));
     return errors.filter((error) => {
       const parsed = ParseValidationSource(error.Source);
       if (!parsed.Source) return false;

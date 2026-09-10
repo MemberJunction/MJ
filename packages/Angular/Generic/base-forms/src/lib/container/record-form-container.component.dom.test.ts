@@ -234,6 +234,7 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
       const f = renderRail({ sources: [source('identity', {}), source('payments', {})] });
       expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-error')).toBeNull();
       expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-dirty')).toBeNull();
+      expect((f.nativeElement.querySelector('[aria-live="polite"]') as HTMLElement).textContent?.trim()).toBe('');
     });
 
     it('badges the rail group that owns the invalid field, and only that one', () => {
@@ -326,6 +327,20 @@ describe('MjRecordFormContainerComponent (DOM)', () => {
       expect(f.componentInstance.FormIndicators).toEqual({ DirtyCount: 0, ErrorCount: 1, WarningCount: 0 });
       f.componentInstance.OnChromeRailCollapse();
       expect(f.nativeElement.querySelector('.mj-forms-chrome-rail-error.is-spine')?.textContent?.trim()).toBe('1');
+    });
+
+    it('a registered section in no rail group cannot claim a failure — it stays in the whole-form total', () => {
+      const f = renderRail({ sources: [source('identity', {}, ['Name']), source('hiddenExtras', {}, ['Code'])], showValidation: true, errors: [failure('Code')] });
+      expect(f.componentInstance.UnroutedValidationErrorCount).toBe(1);
+      expect(f.componentInstance.FormIndicators.ErrorCount).toBe(1);
+    });
+
+    it('announces the whole-form totals through one persistent polite live region, and badges are plain indicators', () => {
+      const f = renderRail({ sources: [source('identity', { ErrorCount: 2, DirtyCount: 1 })] });
+      const region = f.nativeElement.querySelector('[aria-live="polite"].mj-forms-visually-hidden') as HTMLElement | null;
+      expect(region?.textContent?.trim()).toBe('2 fields in this record need attention. 1 unsaved change in this record');
+      expect(f.nativeElement.querySelector('[role="status"]')).toBeNull();
+      expect(errorBadge(f, 'Details')?.getAttribute('role')).toBe('img');
     });
 
     it('shows the whole-form totals on the collapsed rail spine', () => {

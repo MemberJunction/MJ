@@ -770,7 +770,26 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
   private unroutedValidationErrors(): ValidationErrorInfo[] {
     const ctx = this.fc?.formContext;
     if (!ctx?.showValidation || !ctx.validationErrors?.length) return [];
-    return this.sectionIndicators.UnroutedValidationErrors(ctx.validationErrors);
+    // Only a section with a rail item may claim: a registered section the chrome dropped
+    // (hidden by config, in no group) has no badge anywhere, so its failures must stay
+    // in the whole-form total rather than disappear.
+    const reachable = new Set(this.ChromeGroups.flatMap((group) => group.SectionKeys));
+    return this.sectionIndicators.UnroutedValidationErrors(ctx.validationErrors, reachable);
+  }
+
+  /**
+   * One sentence for the persistent polite live region. The badges themselves are
+   * plain indicators (`role="img"`): they are inserted together with their text, which
+   * screen readers announce unreliably, and one edit can add three at once. A single
+   * region that exists from the start and changes its text announces once, reliably.
+   */
+  public get FormIndicatorsAnnouncement(): string {
+    const totals = this.FormIndicators;
+    const parts: string[] = [];
+    if (totals.ErrorCount > 0) parts.push(DescribeSectionErrors(totals.ErrorCount, 'this record'));
+    else if (totals.WarningCount > 0) parts.push(DescribeSectionWarnings(totals.WarningCount, 'this record'));
+    if (totals.DirtyCount > 0) parts.push(DescribeSectionDirty(totals.DirtyCount, 'this record'));
+    return parts.join('. ');
   }
 
   public RailDirtyTitle(count: number, where: string): string {
