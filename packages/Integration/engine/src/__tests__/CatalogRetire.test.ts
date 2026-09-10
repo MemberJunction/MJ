@@ -1,8 +1,17 @@
 /**
- * Removing a table means two different things depending on which catalog owns the row, and the
+ * Removing a TABLE means two different things depending on which catalog owns the row, and the
  * difference is deliberate (plan.md): a SHARED IntegrationObject is the declared floor every other
  * connection of that connector reads, so it is only DISABLED; a PER-CONNECTION row is nobody
  * else's, so "removed" means removed — "they just dont exist, its likely a cascade delete".
+ *
+ * A COLUMN is not a table, and the rule does not carry across. plan.md draws the line twice — "for
+ * tables only, if its not there after discovery algorithm, just removes it" and "columns that are
+ * in MJC already never get removed ... NEVER columns" — and everything.txt says why: "sometimes, a
+ * column may be missing ... it doesnt automatically conclude the column no longer exist". A column
+ * absent from a sample is absent from a SAMPLE. Deleting it throws away the observed width, the
+ * provenance and the selection that only this connection knows, so a later sample that does see it
+ * starts from nothing. Both catalogs therefore DISABLE a field, and only the table cascade deletes
+ * one.
  *
  * The policy lives in the writer so the persist path never branches on a flag.
  *
@@ -91,11 +100,24 @@ describe('per-connection catalog retires by deleting', () => {
     expect(target.Delete).not.toHaveBeenCalled();
   });
 
-  it('deletes a field outright', async () => {
+  it('DISABLES an absent field rather than deleting it', async () => {
+    // The dictated exception to the delete rule. A column missing from one sample is not a column
+    // that has gone; disabling reverses itself the moment discovery sees it again, and keeps the
+    // width, provenance and selection that deleting would destroy.
     const w = new PerConnectionCatalogWriter({} as never, 'ci-1', 'int-1', {} as never, new Date());
-    const f = makeRow(CATALOG_FIELD_COLUMNS, { ID: 'f-9' });
+    const f = makeRow(CATALOG_FIELD_COLUMNS, { ID: 'f-9', Status: 'Active' });
     const out = await w.RetireField(f as never);
-    expect(out).toEqual({ ok: true, deleted: true });
-    expect(f.Delete).toHaveBeenCalled();
+    expect(out).toEqual({ ok: true, deleted: false });
+    expect(f.Status).toBe('Disabled');
+    expect(f.Delete).not.toHaveBeenCalled();
+  });
+
+  it('still deletes a field when its OBJECT is removed — that is the table cascade', async () => {
+    const child = makeRow(CATALOG_FIELD_COLUMNS, { ID: 'f-1' });
+    rows[FIELDS] = [child];
+    const w = new PerConnectionCatalogWriter({} as never, 'ci-1', 'int-1', {} as never, new Date());
+    const target = makeRow(CATALOG_OBJECT_COLUMNS, { ID: 'obj-1', Name: 'Widget' });
+    await w.RetireObject(target as never);
+    expect(child.Delete).toHaveBeenCalled();
   });
 });

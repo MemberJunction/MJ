@@ -152,7 +152,7 @@ export interface CatalogWriter {
      * `if` at the call site:
      *   - SHARED rows are DISABLED, never deleted. They are the declared metadata every other
      *     connection of the connector still reads, and a missing row there is unrecoverable.
-     *   - PER-CONNECTION rows are DELETED. plan.md: "Removed tables are more than deselected,
+     *   - PER-CONNECTION OBJECTS are DELETED. plan.md: "Removed tables are more than deselected,
      *     they just dont exist, its likely a cascade delete." Nothing else owns them, and leaving
      *     tombstones would make the connection's catalog drift from its source forever.
      *
@@ -422,8 +422,28 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
         return { ok: await row.Delete(), deleted: true };
     }
 
+    /**
+     * DISABLE, never delete — unlike the object above.
+     *
+     * The delete rule is dictated for TABLES and only tables: plan.md says "for tables only, if
+     * its not there after discovery algorithm, just removes it", and again "columns that are in
+     * MJC already never get removed, tables maybe if discovery objects doesnt find them, NEVER
+     * columns".
+     *
+     * The reason is in everything.txt: "sometimes, a column may be missing. If that is the case,
+     * then it doesnt automatically conclude the column no longer exist ... typically just may mean
+     * there is no more values". A column absent from one sample is absent from a SAMPLE, not from
+     * the source. Deleting the row destroys what only this connection knows about it — the
+     * observed width, the provenance, the selection state — so the next sample that does see it
+     * starts from nothing instead of reactivating. Disabling keeps all of it and reverses itself
+     * on rediscovery, which is what the shared catalog has always done.
+     *
+     * A field DOES get deleted when its OBJECT is removed; that cascade lives in RetireObject and
+     * is the table rule, not this one.
+     */
     public async RetireField(row: MJIntegrationObjectFieldEntity): Promise<{ ok: boolean; deleted: boolean }> {
-        return { ok: await row.Delete(), deleted: true };
+        row.Status = 'Disabled';
+        return { ok: await row.Save(), deleted: false };
     }
 
     public MarkSeen(row: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity, sampled: boolean): void {
