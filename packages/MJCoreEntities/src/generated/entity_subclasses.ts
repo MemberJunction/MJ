@@ -858,6 +858,166 @@ export const MJActionSchema = z.object({
 export type MJActionEntityType = z.infer<typeof MJActionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Adopters
+ */
+export const MJAdopterSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    FirstName: z.string().describe(`
+        * * Field Name: FirstName
+        * * Display Name: First Name
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The adopter's given name.`),
+    LastName: z.string().describe(`
+        * * Field Name: LastName
+        * * Display Name: Last Name
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The adopter's family name.`),
+    Email: z.string().describe(`
+        * * Field Name: Email
+        * * Display Name: Email Address
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Contact email, and the practical identity of an adopter -- unique, because two records for the same family split their history and hide a prior denial.`),
+    HousingType: z.union([z.literal('Apartment'), z.literal('Condo'), z.literal('Farm'), z.literal('House'), z.literal('Other')]).nullable().describe(`
+        * * Field Name: HousingType
+        * * Display Name: Housing Type
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Apartment
+    *   * Condo
+    *   * Farm
+    *   * House
+    *   * Other
+        * * Description: What kind of home this is: House, Apartment, Condo, Farm or Other. One of the three matching signals a shelter actually screens on, alongside HasYard and HasOtherPets. NULL means not yet collected.`),
+    HasYard: z.boolean().nullable().describe(`
+        * * Field Name: HasYard
+        * * Display Name: Has Enclosed Yard
+        * * SQL Data Type: bit
+        * * Description: Whether the home has an enclosed yard. Matters most for the high-energy dogs Dog.EnergyLevel identifies. NULL means not yet collected.`),
+    HasOtherPets: z.boolean().nullable().describe(`
+        * * Field Name: HasOtherPets
+        * * Display Name: Has Other Pets
+        * * SQL Data Type: bit
+        * * Description: Whether there are already animals in the home. Pairs with Dog.IsGoodWithDogs and Cat.IsGoodWithCats to decide whether a placement is plausible. NULL means not yet collected.`),
+    IsApproved: z.boolean().describe(`
+        * * Field Name: IsApproved
+        * * Display Name: Is Approved
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this adopter has passed screening. A property of the PERSON, not of any one adoption, so it is recorded once and reused across every inquiry they make -- which is the whole reason Adopter is a separate entity rather than fields repeated on Adoption.`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Soft retirement. An adopter who has moved away or asked to be removed is deactivated rather than deleted, because their completed adoptions are permanent history.`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Full Name
+        * * SQL Data Type: nvarchar(101)
+        * * Description: The adopter's full display name, computed from FirstName + LastName and PERSISTED. It exists because MemberJunction needs a NAME FIELD: CodeGen marks a field as the entity's name field only when it is literally called Name, and without one, every foreign key pointing at Adopter has no display column to show. Adoption grids would render the adopter as a first name alone -- "Ada" rather than "Ada Okafor" -- and CodeGen would need an extra metadata pass to resolve which column to use at all. Computed rather than stored so it cannot drift from its parts, and PERSISTED so it can be indexed and read like any other column. MJ's CRUD procedures exclude computed columns, so nothing attempts to write it.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAdopterEntityType = z.infer<typeof MJAdopterSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Adoptions
+ */
+export const MJAdoptionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AnimalID: z.string().describe(`
+        * * Field Name: AnimalID
+        * * Display Name: Animal
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)
+        * * Description: The animal being enquired about.`),
+    AdopterID: z.string().describe(`
+        * * Field Name: AdopterID
+        * * Display Name: Adopter
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Adopters (vwAdopters.ID)
+        * * Description: The family making the enquiry.`),
+    Status: z.union([z.literal('Approved'), z.literal('Cancelled'), z.literal('Completed'), z.literal('Denied'), z.literal('Inquiry'), z.literal('Screening'), z.literal('Withdrawn')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Inquiry
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Cancelled
+    *   * Completed
+    *   * Denied
+    *   * Inquiry
+    *   * Screening
+    *   * Withdrawn
+        * * Description: Where this adoption stands. Inquiry, Screening, Approved and Completed are a forward-only ladder; Withdrawn (the adopter pulled out), Denied (the shelter refused) and Cancelled (it fell through for some other reason) are exits reachable from any non-terminal state, because an adoption can collapse at any point. Completing one is what flips the animal to Adopted.`),
+    InquiryDate: z.date().describe(`
+        * * Field Name: InquiryDate
+        * * Display Name: Inquiry Date
+        * * SQL Data Type: date
+        * * Description: When the family first asked about this animal. Set at creation and never moved, so the time an adoption took can always be measured.`),
+    CompletedDate: z.date().nullable().describe(`
+        * * Field Name: CompletedDate
+        * * Display Name: Completed Date
+        * * SQL Data Type: date
+        * * Description: When the adoption completed. Required whenever Status is Completed and enforced by a check constraint, because a completed adoption with no date is unusable in every report that matters.`),
+    Fee: z.number().nullable().describe(`
+        * * Field Name: Fee
+        * * Display Name: Adoption Fee
+        * * SQL Data Type: decimal(18, 2)
+        * * Description: The adoption fee agreed for this placement. Lives here rather than on Animal or Adopter because it describes the transaction: the same animal can be waived a fee for one family and not another.`),
+    DenialReason: z.string().nullable().describe(`
+        * * Field Name: DenialReason
+        * * Display Name: Denial Reason
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Why the shelter refused. Required whenever Status is Denied and enforced by a check constraint: a rejection with no recorded reason cannot be explained to the applicant later and cannot be reviewed for fairness.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-text detail about this particular enquiry -- home visit observations, scheduling, what the family is looking for.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Animal: z.string().describe(`
+        * * Field Name: Animal
+        * * Display Name: Animal Name
+        * * SQL Data Type: nvarchar(100)`),
+    Adopter: z.string().describe(`
+        * * Field Name: Adopter
+        * * Display Name: Adopter Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJAdoptionEntityType = z.infer<typeof MJAdoptionSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Actions
  */
 export const MJAIActionSchema = z.object({
@@ -8513,7 +8673,7 @@ export const MJAnimalSchema = z.object({
         * * Description: Dog or Cat. Duplicated from Breed on purpose: species is known at intake even when breed is not, and it is the discriminator every downstream feature filters on.`),
     BreedID: z.string().nullable().describe(`
         * * Field Name: BreedID
-        * * Display Name: Breed ID
+        * * Display Name: Breed
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Breeds (vwBreeds.ID)`),
     MicrochipNumber: z.string().nullable().describe(`
@@ -8587,17 +8747,27 @@ export const MJAnimalSchema = z.object({
         * * Default Value: getutcdate()`),
     HousingID: z.string().nullable().describe(`
         * * Field Name: HousingID
-        * * Display Name: Housing ID
+        * * Display Name: Housing Unit
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Housings (vwHousings.ID)
         * * Description: The housing unit this animal is currently assigned to. Nullable because an animal is logged at intake, usually before anyone has placed it.`),
+    IsGoodWithPeople: z.boolean().nullable().describe(`
+        * * Field Name: IsGoodWithPeople
+        * * Display Name: Is Good With People
+        * * SQL Data Type: bit
+        * * Description: Whether this animal is comfortable around people. Lives on Animal rather than on the Dog and Cat subtypes because it is asked of every animal identically -- an attribute shared by all subtypes belongs on the parent. NULL means not yet assessed, which is deliberately distinct from a recorded No: an animal is logged at intake and evaluated later.`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Staff Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Internal staff notes about this animal -- the escape hatch for the odd descriptive thing that has no column of its own. Distinct from Description, which is the outward-facing blurb an adopter reads: Notes is where "bolts the door if you leave it ajar" or "only eats the pate food" goes. Lives on Animal rather than on the Dog and Cat subtypes for exactly the same reason IsGoodWithPeople does -- staff take notes on every animal identically, so an attribute shared by all subtypes belongs on the parent.`),
     Breed: z.string().nullable().describe(`
         * * Field Name: Breed
-        * * Display Name: Breed
+        * * Display Name: Breed Name
         * * SQL Data Type: nvarchar(100)`),
     Housing: z.string().nullable().describe(`
         * * Field Name: Housing
-        * * Display Name: Housing
+        * * Display Name: Housing Name
         * * SQL Data Type: nvarchar(50)`),
 });
 
@@ -10854,6 +11024,109 @@ export const MJCareLogSchema = z.object({
 });
 
 export type MJCareLogEntityType = z.infer<typeof MJCareLogSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Cats
+ */
+export const MJCatSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)`),
+    IsIndoorOnly: z.boolean().nullable().describe(`
+        * * Field Name: IsIndoorOnly
+        * * Display Name: Indoor Only
+        * * SQL Data Type: bit
+        * * Description: Whether this cat must be placed in an indoor-only home. A placement condition specific to cats, commonly required for declawed or FIV-positive animals. NULL means not yet assessed.`),
+    IsDeclawed: z.boolean().nullable().describe(`
+        * * Field Name: IsDeclawed
+        * * Display Name: Declawed
+        * * SQL Data Type: bit
+        * * Description: Whether this cat has been declawed. Recorded because it is adoption-relevant -- a declawed cat generally cannot be placed outdoors -- and because it is surgical history the shelter did not perform and must not lose. NULL means not known.`),
+    IsLitterTrained: z.boolean().nullable().describe(`
+        * * Field Name: IsLitterTrained
+        * * Display Name: Litter Trained
+        * * SQL Data Type: bit
+        * * Description: Whether this cat reliably uses a litter box. The cat equivalent of Dog.IsHouseTrained, deliberately given its own name because the two are different behaviours. NULL means not yet assessed.`),
+    IsGoodWithCats: z.boolean().nullable().describe(`
+        * * Field Name: IsGoodWithCats
+        * * Display Name: Good With Cats
+        * * SQL Data Type: bit
+        * * Description: Whether this cat tolerates other cats. Decides whether it can share a condo and whether it can go to a multi-cat home. NULL means not yet assessed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    Species: z.string().describe(`
+        * * Field Name: Species
+        * * Display Name: Species
+        * * SQL Data Type: nvarchar(20)`),
+    BreedID: z.string().nullable().describe(`
+        * * Field Name: BreedID
+        * * Display Name: Breed
+        * * SQL Data Type: uniqueidentifier`),
+    MicrochipNumber: z.string().nullable().describe(`
+        * * Field Name: MicrochipNumber
+        * * Display Name: Microchip Number
+        * * SQL Data Type: nvarchar(30)`),
+    IntakeDate: z.date().describe(`
+        * * Field Name: IntakeDate
+        * * Display Name: Intake Date
+        * * SQL Data Type: date`),
+    IntakeReason: z.string().nullable().describe(`
+        * * Field Name: IntakeReason
+        * * Display Name: Intake Reason
+        * * SQL Data Type: nvarchar(30)`),
+    Sex: z.string().nullable().describe(`
+        * * Field Name: Sex
+        * * Display Name: Sex
+        * * SQL Data Type: nvarchar(10)`),
+    EstimatedBirthDate: z.date().nullable().describe(`
+        * * Field Name: EstimatedBirthDate
+        * * Display Name: Estimated Birth Date
+        * * SQL Data Type: date`),
+    WeightKg: z.number().nullable().describe(`
+        * * Field Name: WeightKg
+        * * Display Name: Weight (kg)
+        * * SQL Data Type: decimal(6, 2)`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    PhotoBase64: z.string().nullable().describe(`
+        * * Field Name: PhotoBase64
+        * * Display Name: Photo
+        * * SQL Data Type: nvarchar(MAX)`),
+    HousingID: z.string().nullable().describe(`
+        * * Field Name: HousingID
+        * * Display Name: Housing
+        * * SQL Data Type: uniqueidentifier`),
+    IsGoodWithPeople: z.boolean().nullable().describe(`
+        * * Field Name: IsGoodWithPeople
+        * * Display Name: Good With People
+        * * SQL Data Type: bit`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)`),
+});
+
+export type MJCatEntityType = z.infer<typeof MJCatSchema>;
 
 /**
  * zod schema definition for the entity MJ: Cluster Analysis
@@ -16224,6 +16497,115 @@ export const MJDatasetSchema = z.object({
 });
 
 export type MJDatasetEntityType = z.infer<typeof MJDatasetSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Dogs
+ */
+export const MJDogSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)`),
+    EnergyLevel: z.union([z.literal('High'), z.literal('Low'), z.literal('Moderate'), z.literal('Very High')]).nullable().describe(`
+        * * Field Name: EnergyLevel
+        * * Display Name: Energy Level
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * High
+    *   * Low
+    *   * Moderate
+    *   * Very High
+        * * Description: How much exercise this dog needs: Low, Moderate, High or Very High. Shelters assess and advertise this for dogs because it is the single biggest predictor of a returned adoption. NULL means not yet assessed.`),
+    IsLeashTrained: z.boolean().nullable().describe(`
+        * * Field Name: IsLeashTrained
+        * * Display Name: Is Leash Trained
+        * * SQL Data Type: bit
+        * * Description: Whether this dog walks acceptably on a leash. Dog-only: a cat is never leash trained in any sense the shelter tracks, which is why the column is here and not on Animal. NULL means not yet assessed.`),
+    IsHouseTrained: z.boolean().nullable().describe(`
+        * * Field Name: IsHouseTrained
+        * * Display Name: Is House Trained
+        * * SQL Data Type: bit
+        * * Description: Whether this dog is reliably house trained. Named IsHouseTrained rather than sharing a column with the cat equivalent because the two mean different things -- a cat uses a litter box, tracked separately as Cat.IsLitterTrained. NULL means not yet assessed.`),
+    IsGoodWithDogs: z.boolean().nullable().describe(`
+        * * Field Name: IsGoodWithDogs
+        * * Display Name: Is Good With Dogs
+        * * SQL Data Type: bit
+        * * Description: Whether this dog tolerates other dogs. Drives kennel pairing and playgroup decisions. NULL means not yet assessed.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Name
+        * * SQL Data Type: nvarchar(100)`),
+    Species: z.string().describe(`
+        * * Field Name: Species
+        * * Display Name: Species
+        * * SQL Data Type: nvarchar(20)`),
+    BreedID: z.string().nullable().describe(`
+        * * Field Name: BreedID
+        * * Display Name: Breed
+        * * SQL Data Type: uniqueidentifier`),
+    MicrochipNumber: z.string().nullable().describe(`
+        * * Field Name: MicrochipNumber
+        * * Display Name: Microchip Number
+        * * SQL Data Type: nvarchar(30)`),
+    IntakeDate: z.date().describe(`
+        * * Field Name: IntakeDate
+        * * Display Name: Intake Date
+        * * SQL Data Type: date`),
+    IntakeReason: z.string().nullable().describe(`
+        * * Field Name: IntakeReason
+        * * Display Name: Intake Reason
+        * * SQL Data Type: nvarchar(30)`),
+    Sex: z.string().nullable().describe(`
+        * * Field Name: Sex
+        * * Display Name: Sex
+        * * SQL Data Type: nvarchar(10)`),
+    EstimatedBirthDate: z.date().nullable().describe(`
+        * * Field Name: EstimatedBirthDate
+        * * Display Name: Estimated Birth Date
+        * * SQL Data Type: date`),
+    WeightKg: z.number().nullable().describe(`
+        * * Field Name: WeightKg
+        * * Display Name: Weight (kg)
+        * * SQL Data Type: decimal(6, 2)`),
+    Status: z.string().describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)`),
+    PhotoBase64: z.string().nullable().describe(`
+        * * Field Name: PhotoBase64
+        * * Display Name: Photo
+        * * SQL Data Type: nvarchar(MAX)`),
+    HousingID: z.string().nullable().describe(`
+        * * Field Name: HousingID
+        * * Display Name: Housing
+        * * SQL Data Type: uniqueidentifier`),
+    IsGoodWithPeople: z.boolean().nullable().describe(`
+        * * Field Name: IsGoodWithPeople
+        * * Display Name: Is Good With People
+        * * SQL Data Type: bit`),
+    Notes: z.string().nullable().describe(`
+        * * Field Name: Notes
+        * * Display Name: Notes
+        * * SQL Data Type: nvarchar(MAX)`),
+});
+
+export type MJDogEntityType = z.infer<typeof MJDogSchema>;
 
 /**
  * zod schema definition for the entity MJ: Duplicate Run Detail Matches
@@ -36764,6 +37146,506 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     */
     get ParentIDChildCount(): number | null {
         return this.Get('ParentIDChildCount');
+    }
+}
+
+
+/**
+ * MJ: Adopters - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Adopter
+ * * Base View: vwAdopters
+ * * @description A person or household applying to adopt. A related record with its own list and form: an adopter is meaningful on their own, exists before any particular adoption, and outlives every one of them. Never deleted while adoptions reference them -- history has to survive the person moving away, which is why Adoption declares OnRemove refuse rather than delete.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Adopters')
+export class MJAdopterEntity extends BaseEntity<MJAdopterEntityType> {
+
+  /**
+  * Related records: MJ: Adoptions
+  *
+  * Loads, validates and persists as one unit with this MJ: Adopters record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Adopters → MJ: Adoptions' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Adoptions = this.DeclareRelatedRecords<MJAdoptionEntity>({
+      Name: 'Adoptions',
+        RelatedEntity: 'MJ: Adoptions',
+        RelatedEntityJoinField: 'AdopterID',
+        OrderBy: 'InquiryDate DESC',
+        Load: 'explicit',
+        OnRemove: 'refuse',
+        Source: 'database',
+        ReadOnly: false,
+  });
+
+    /**
+    * Loads the MJ: Adopters record from the database
+    * @param ID: string - primary key value to load the MJ: Adopters record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAdopterEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: FirstName
+    * * Display Name: First Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The adopter's given name.
+    */
+    get FirstName(): string {
+        return this.Get('FirstName');
+    }
+    set FirstName(value: string) {
+        this.Set('FirstName', value);
+    }
+
+    /**
+    * * Field Name: LastName
+    * * Display Name: Last Name
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The adopter's family name.
+    */
+    get LastName(): string {
+        return this.Get('LastName');
+    }
+    set LastName(value: string) {
+        this.Set('LastName', value);
+    }
+
+    /**
+    * * Field Name: Email
+    * * Display Name: Email Address
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Contact email, and the practical identity of an adopter -- unique, because two records for the same family split their history and hide a prior denial.
+    */
+    get Email(): string {
+        return this.Get('Email');
+    }
+    set Email(value: string) {
+        this.Set('Email', value);
+    }
+
+    /**
+    * * Field Name: HousingType
+    * * Display Name: Housing Type
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Apartment
+    *   * Condo
+    *   * Farm
+    *   * House
+    *   * Other
+    * * Description: What kind of home this is: House, Apartment, Condo, Farm or Other. One of the three matching signals a shelter actually screens on, alongside HasYard and HasOtherPets. NULL means not yet collected.
+    */
+    get HousingType(): 'Apartment' | 'Condo' | 'Farm' | 'House' | 'Other' | null {
+        return this.Get('HousingType');
+    }
+    set HousingType(value: 'Apartment' | 'Condo' | 'Farm' | 'House' | 'Other' | null) {
+        this.Set('HousingType', value);
+    }
+
+    /**
+    * * Field Name: HasYard
+    * * Display Name: Has Enclosed Yard
+    * * SQL Data Type: bit
+    * * Description: Whether the home has an enclosed yard. Matters most for the high-energy dogs Dog.EnergyLevel identifies. NULL means not yet collected.
+    */
+    get HasYard(): boolean | null {
+        return this.Get('HasYard');
+    }
+    set HasYard(value: boolean | null) {
+        this.Set('HasYard', value);
+    }
+
+    /**
+    * * Field Name: HasOtherPets
+    * * Display Name: Has Other Pets
+    * * SQL Data Type: bit
+    * * Description: Whether there are already animals in the home. Pairs with Dog.IsGoodWithDogs and Cat.IsGoodWithCats to decide whether a placement is plausible. NULL means not yet collected.
+    */
+    get HasOtherPets(): boolean | null {
+        return this.Get('HasOtherPets');
+    }
+    set HasOtherPets(value: boolean | null) {
+        this.Set('HasOtherPets', value);
+    }
+
+    /**
+    * * Field Name: IsApproved
+    * * Display Name: Is Approved
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this adopter has passed screening. A property of the PERSON, not of any one adoption, so it is recorded once and reused across every inquiry they make -- which is the whole reason Adopter is a separate entity rather than fields repeated on Adoption.
+    */
+    get IsApproved(): boolean {
+        return this.Get('IsApproved');
+    }
+    set IsApproved(value: boolean) {
+        this.Set('IsApproved', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Soft retirement. An adopter who has moved away or asked to be removed is deactivated rather than deleted, because their completed adoptions are permanent history.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Full Name
+    * * SQL Data Type: nvarchar(101)
+    * * Description: The adopter's full display name, computed from FirstName + LastName and PERSISTED. It exists because MemberJunction needs a NAME FIELD: CodeGen marks a field as the entity's name field only when it is literally called Name, and without one, every foreign key pointing at Adopter has no display column to show. Adoption grids would render the adopter as a first name alone -- "Ada" rather than "Ada Okafor" -- and CodeGen would need an extra metadata pass to resolve which column to use at all. Computed rather than stored so it cannot drift from its parts, and PERSISTED so it can be indexed and read like any other column. MJ's CRUD procedures exclude computed columns, so nothing attempts to write it.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Adoptions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Adoption
+ * * Base View: vwAdoptions
+ * * @description One family's pursuit of one animal, from first enquiry to outcome. The whole funnel, not just the successful end of it -- which is how the question "is anyone interested in this dog?" gets answered. Meaningful from both sides, so neither Animal nor Adopter owns it; it carries the facts that describe the transaction itself rather than either party.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Adoptions')
+export class MJAdoptionEntity extends BaseEntity<MJAdoptionEntityType> {
+    /**
+    * Loads the MJ: Adoptions record from the database
+    * @param ID: string - primary key value to load the MJ: Adoptions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAdoptionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Adoptions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Fee: The adoption fee must be greater than or equal to zero. Negative fees are not allowed.
+    * * Table-Level: The completed date of an inquiry must be on or after the date the inquiry was made.
+    * * Table-Level: If the status is set to 'Completed', a completed date must be provided to ensure accurate tracking of when the process was finalized.
+    * * Table-Level: If an application status is set to 'Denied', a denial reason must be provided to explain why the application was rejected.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateFeeIsNonNegative(result);
+        this.ValidateCompletedDateAfterInquiryDate(result);
+        this.ValidateCompletedDateWhenStatusIsCompleted(result);
+        this.ValidateDenialReasonForDeniedStatus(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The adoption fee must be greater than or equal to zero. Negative fees are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFeeIsNonNegative(result: ValidationResult) {
+    	if (this.Fee != null && this.Fee < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Fee",
+    			"The fee must be greater than or equal to 0.",
+    			this.Fee,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The completed date of an inquiry must be on or after the date the inquiry was made.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedDateAfterInquiryDate(result: ValidationResult) {
+    	if (this.CompletedDate != null && this.InquiryDate != null) {
+    		const completed = new Date(this.CompletedDate);
+    		const inquiry = new Date(this.InquiryDate);
+    		if (completed < inquiry) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"CompletedDate",
+    				"The completed date cannot be earlier than the inquiry date.",
+    				this.CompletedDate,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * If the status is set to 'Completed', a completed date must be provided to ensure accurate tracking of when the process was finalized.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedDateWhenStatusIsCompleted(result: ValidationResult) {
+    	if (this.Status === "Completed" && this.CompletedDate == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CompletedDate",
+    			"A Completed Date must be provided when the status is set to 'Completed'.",
+    			this.CompletedDate,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * If an application status is set to 'Denied', a denial reason must be provided to explain why the application was rejected.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDenialReasonForDeniedStatus(result: ValidationResult) {
+    	if (this.Status === "Denied" && (this.DenialReason === null || this.DenialReason === undefined || this.DenialReason.trim() === "")) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DenialReason",
+    			"A denial reason must be provided when the status is set to Denied.",
+    			this.DenialReason,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AnimalID
+    * * Display Name: Animal
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)
+    * * Description: The animal being enquired about.
+    */
+    get AnimalID(): string {
+        return this.Get('AnimalID');
+    }
+    set AnimalID(value: string) {
+        this.Set('AnimalID', value);
+    }
+
+    /**
+    * * Field Name: AdopterID
+    * * Display Name: Adopter
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Adopters (vwAdopters.ID)
+    * * Description: The family making the enquiry.
+    */
+    get AdopterID(): string {
+        return this.Get('AdopterID');
+    }
+    set AdopterID(value: string) {
+        this.Set('AdopterID', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Inquiry
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Cancelled
+    *   * Completed
+    *   * Denied
+    *   * Inquiry
+    *   * Screening
+    *   * Withdrawn
+    * * Description: Where this adoption stands. Inquiry, Screening, Approved and Completed are a forward-only ladder; Withdrawn (the adopter pulled out), Denied (the shelter refused) and Cancelled (it fell through for some other reason) are exits reachable from any non-terminal state, because an adoption can collapse at any point. Completing one is what flips the animal to Adopted.
+    */
+    get Status(): 'Approved' | 'Cancelled' | 'Completed' | 'Denied' | 'Inquiry' | 'Screening' | 'Withdrawn' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Approved' | 'Cancelled' | 'Completed' | 'Denied' | 'Inquiry' | 'Screening' | 'Withdrawn') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: InquiryDate
+    * * Display Name: Inquiry Date
+    * * SQL Data Type: date
+    * * Description: When the family first asked about this animal. Set at creation and never moved, so the time an adoption took can always be measured.
+    */
+    get InquiryDate(): Date {
+        return this.Get('InquiryDate');
+    }
+    set InquiryDate(value: Date) {
+        this.Set('InquiryDate', value);
+    }
+
+    /**
+    * * Field Name: CompletedDate
+    * * Display Name: Completed Date
+    * * SQL Data Type: date
+    * * Description: When the adoption completed. Required whenever Status is Completed and enforced by a check constraint, because a completed adoption with no date is unusable in every report that matters.
+    */
+    get CompletedDate(): Date | null {
+        return this.Get('CompletedDate');
+    }
+    set CompletedDate(value: Date | null) {
+        this.Set('CompletedDate', value);
+    }
+
+    /**
+    * * Field Name: Fee
+    * * Display Name: Adoption Fee
+    * * SQL Data Type: decimal(18, 2)
+    * * Description: The adoption fee agreed for this placement. Lives here rather than on Animal or Adopter because it describes the transaction: the same animal can be waived a fee for one family and not another.
+    */
+    get Fee(): number | null {
+        return this.Get('Fee');
+    }
+    set Fee(value: number | null) {
+        this.Set('Fee', value);
+    }
+
+    /**
+    * * Field Name: DenialReason
+    * * Display Name: Denial Reason
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Why the shelter refused. Required whenever Status is Denied and enforced by a check constraint: a rejection with no recorded reason cannot be explained to the applicant later and cannot be reviewed for fairness.
+    */
+    get DenialReason(): string | null {
+        return this.Get('DenialReason');
+    }
+    set DenialReason(value: string | null) {
+        this.Set('DenialReason', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-text detail about this particular enquiry -- home visit observations, scheduling, what the family is looking for.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Animal
+    * * Display Name: Animal Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Animal(): string {
+        return this.Get('Animal');
+    }
+
+    /**
+    * * Field Name: Adopter
+    * * Display Name: Adopter Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Adopter(): string {
+        return this.Get('Adopter');
     }
 }
 
@@ -57937,6 +58819,46 @@ export class MJAIVendorEntity extends BaseEntity<MJAIVendorEntityType> {
  */
 @RegisterClass(BaseEntity, 'MJ: Animals')
 export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
+
+  /**
+  * Related records: MJ: Care Logs
+  *
+  * Loads, validates and persists as one unit with this MJ: Animals record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Animals → MJ: Care Logs' relationship; edit that row, not this file.
+  *
+  */
+  public readonly CareLogs = this.DeclareRelatedRecords<MJCareLogEntity>({
+      Name: 'CareLogs',
+        RelatedEntity: 'MJ: Care Logs',
+        RelatedEntityJoinField: 'AnimalID',
+        OrderBy: 'CareDate DESC',
+        Load: 'explicit',
+        OnRemove: 'delete',
+        Source: 'database',
+        ReadOnly: false,
+  });
+
+
+  /**
+  * Related records: MJ: Adoptions
+  *
+  * Loads, validates and persists as one unit with this MJ: Animals record — see
+  * guides/TRANSACTIONS_AND_BATCHING_GUIDE.md. Declared by the RelatedRecordCollection metadata on
+  * the 'MJ: Animals → MJ: Adoptions' relationship; edit that row, not this file.
+  *
+  */
+  public readonly Adoptions = this.DeclareRelatedRecords<MJAdoptionEntity>({
+      Name: 'Adoptions',
+        RelatedEntity: 'MJ: Adoptions',
+        RelatedEntityJoinField: 'AnimalID',
+        OrderBy: 'InquiryDate DESC',
+        Load: 'explicit',
+        OnRemove: 'refuse',
+        Source: 'database',
+        ReadOnly: false,
+  });
+
     /**
     * Loads the MJ: Animals record from the database
     * @param ID: string - primary key value to load the MJ: Animals record.
@@ -58030,7 +58952,7 @@ export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
 
     /**
     * * Field Name: BreedID
-    * * Display Name: Breed ID
+    * * Display Name: Breed
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Breeds (vwBreeds.ID)
     */
@@ -58194,7 +59116,7 @@ export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
 
     /**
     * * Field Name: HousingID
-    * * Display Name: Housing ID
+    * * Display Name: Housing Unit
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Housings (vwHousings.ID)
     * * Description: The housing unit this animal is currently assigned to. Nullable because an animal is logged at intake, usually before anyone has placed it.
@@ -58207,8 +59129,34 @@ export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
     }
 
     /**
+    * * Field Name: IsGoodWithPeople
+    * * Display Name: Is Good With People
+    * * SQL Data Type: bit
+    * * Description: Whether this animal is comfortable around people. Lives on Animal rather than on the Dog and Cat subtypes because it is asked of every animal identically -- an attribute shared by all subtypes belongs on the parent. NULL means not yet assessed, which is deliberately distinct from a recorded No: an animal is logged at intake and evaluated later.
+    */
+    get IsGoodWithPeople(): boolean | null {
+        return this.Get('IsGoodWithPeople');
+    }
+    set IsGoodWithPeople(value: boolean | null) {
+        this.Set('IsGoodWithPeople', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Staff Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Internal staff notes about this animal -- the escape hatch for the odd descriptive thing that has no column of its own. Distinct from Description, which is the outward-facing blurb an adopter reads: Notes is where "bolts the door if you leave it ajar" or "only eats the pate food" goes. Lives on Animal rather than on the Dog and Cat subtypes for exactly the same reason IsGoodWithPeople does -- staff take notes on every animal identically, so an attribute shared by all subtypes belongs on the parent.
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
+    }
+
+    /**
     * * Field Name: Breed
-    * * Display Name: Breed
+    * * Display Name: Breed Name
     * * SQL Data Type: nvarchar(100)
     */
     get Breed(): string | null {
@@ -58217,7 +59165,7 @@ export class MJAnimalEntity extends BaseEntity<MJAnimalEntityType> {
 
     /**
     * * Field Name: Housing
-    * * Display Name: Housing
+    * * Display Name: Housing Name
     * * SQL Data Type: nvarchar(50)
     */
     get Housing(): string | null {
@@ -63862,7 +64810,7 @@ export class MJBreedEntity extends BaseEntity<MJBreedEntityType> {
  * * Schema: __mj
  * * Base Table: CareLog
  * * Base View: vwCareLogs
- * * @description An event log of care given to an animal: one row per thing that was done, on a date. Introduced in MJ Academy module 5 as a plain foreign-key table so the learner wires the parent-child link by hand; converted to an embedded record in module 7.
+ * * @description An event log of care given to an animal: one row per thing that was done, on a date. Introduced in MJ Academy module 5 as a plain foreign-key table, then declared in module 7 as a RELATED-RECORD COLLECTION on the Animals-to-Care-Logs relationship -- so an animal and its care logs load, validate and save as one unit. Not an "embedded record": in MemberJunction that term means a 1:1 peer whose foreign key sits on the owner, which is the opposite arrangement.
  * * Primary Key: ID
  * @extends {BaseEntity}
  * @class
@@ -64077,6 +65025,318 @@ export class MJCareLogEntity extends BaseEntity<MJCareLogEntityType> {
     */
     get Animal(): string {
         return this.Get('Animal');
+    }
+}
+
+
+/**
+ * MJ: Cats - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Cat
+ * * Base View: vwCats
+ * * @description The cat-specific half of an Animal. An IS-A subtype: its ID column is both its primary key and a foreign key to Animal.ID, so a Cat row and its Animal row share one key and form one logical record. Holds only what is meaningless for a dog -- litter training, declaw history, indoor-only placement, cat-to-cat tolerance.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Cats')
+export class MJCatEntity extends BaseEntity<MJCatEntityType> {
+    /**
+    * Loads the MJ: Cats record from the database
+    * @param ID: string - primary key value to load the MJ: Cats record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJCatEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: IsIndoorOnly
+    * * Display Name: Indoor Only
+    * * SQL Data Type: bit
+    * * Description: Whether this cat must be placed in an indoor-only home. A placement condition specific to cats, commonly required for declawed or FIV-positive animals. NULL means not yet assessed.
+    */
+    get IsIndoorOnly(): boolean | null {
+        return this.Get('IsIndoorOnly');
+    }
+    set IsIndoorOnly(value: boolean | null) {
+        this.Set('IsIndoorOnly', value);
+    }
+
+    /**
+    * * Field Name: IsDeclawed
+    * * Display Name: Declawed
+    * * SQL Data Type: bit
+    * * Description: Whether this cat has been declawed. Recorded because it is adoption-relevant -- a declawed cat generally cannot be placed outdoors -- and because it is surgical history the shelter did not perform and must not lose. NULL means not known.
+    */
+    get IsDeclawed(): boolean | null {
+        return this.Get('IsDeclawed');
+    }
+    set IsDeclawed(value: boolean | null) {
+        this.Set('IsDeclawed', value);
+    }
+
+    /**
+    * * Field Name: IsLitterTrained
+    * * Display Name: Litter Trained
+    * * SQL Data Type: bit
+    * * Description: Whether this cat reliably uses a litter box. The cat equivalent of Dog.IsHouseTrained, deliberately given its own name because the two are different behaviours. NULL means not yet assessed.
+    */
+    get IsLitterTrained(): boolean | null {
+        return this.Get('IsLitterTrained');
+    }
+    set IsLitterTrained(value: boolean | null) {
+        this.Set('IsLitterTrained', value);
+    }
+
+    /**
+    * * Field Name: IsGoodWithCats
+    * * Display Name: Good With Cats
+    * * SQL Data Type: bit
+    * * Description: Whether this cat tolerates other cats. Decides whether it can share a condo and whether it can go to a multi-cat home. NULL means not yet assessed.
+    */
+    get IsGoodWithCats(): boolean | null {
+        return this.Get('IsGoodWithCats');
+    }
+    set IsGoodWithCats(value: boolean | null) {
+        this.Set('IsGoodWithCats', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Species
+    * * Display Name: Species
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Species(): string {
+        return this.Get('Species');
+    }
+    set Species(value: string) {
+        this.Set('Species', value);
+    }
+
+    /**
+    * * Field Name: BreedID
+    * * Display Name: Breed
+    * * SQL Data Type: uniqueidentifier
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get BreedID(): string | null {
+        return this.Get('BreedID');
+    }
+    set BreedID(value: string | null) {
+        this.Set('BreedID', value);
+    }
+
+    /**
+    * * Field Name: MicrochipNumber
+    * * Display Name: Microchip Number
+    * * SQL Data Type: nvarchar(30)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get MicrochipNumber(): string | null {
+        return this.Get('MicrochipNumber');
+    }
+    set MicrochipNumber(value: string | null) {
+        this.Set('MicrochipNumber', value);
+    }
+
+    /**
+    * * Field Name: IntakeDate
+    * * Display Name: Intake Date
+    * * SQL Data Type: date
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get IntakeDate(): Date {
+        return this.Get('IntakeDate');
+    }
+    set IntakeDate(value: Date) {
+        this.Set('IntakeDate', value);
+    }
+
+    /**
+    * * Field Name: IntakeReason
+    * * Display Name: Intake Reason
+    * * SQL Data Type: nvarchar(30)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get IntakeReason(): string | null {
+        return this.Get('IntakeReason');
+    }
+    set IntakeReason(value: string | null) {
+        this.Set('IntakeReason', value);
+    }
+
+    /**
+    * * Field Name: Sex
+    * * Display Name: Sex
+    * * SQL Data Type: nvarchar(10)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Sex(): string | null {
+        return this.Get('Sex');
+    }
+    set Sex(value: string | null) {
+        this.Set('Sex', value);
+    }
+
+    /**
+    * * Field Name: EstimatedBirthDate
+    * * Display Name: Estimated Birth Date
+    * * SQL Data Type: date
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get EstimatedBirthDate(): Date | null {
+        return this.Get('EstimatedBirthDate');
+    }
+    set EstimatedBirthDate(value: Date | null) {
+        this.Set('EstimatedBirthDate', value);
+    }
+
+    /**
+    * * Field Name: WeightKg
+    * * Display Name: Weight (kg)
+    * * SQL Data Type: decimal(6, 2)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get WeightKg(): number | null {
+        return this.Get('WeightKg');
+    }
+    set WeightKg(value: number | null) {
+        this.Set('WeightKg', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PhotoBase64
+    * * Display Name: Photo
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get PhotoBase64(): string | null {
+        return this.Get('PhotoBase64');
+    }
+    set PhotoBase64(value: string | null) {
+        this.Set('PhotoBase64', value);
+    }
+
+    /**
+    * * Field Name: HousingID
+    * * Display Name: Housing
+    * * SQL Data Type: uniqueidentifier
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get HousingID(): string | null {
+        return this.Get('HousingID');
+    }
+    set HousingID(value: string | null) {
+        this.Set('HousingID', value);
+    }
+
+    /**
+    * * Field Name: IsGoodWithPeople
+    * * Display Name: Good With People
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get IsGoodWithPeople(): boolean | null {
+        return this.Get('IsGoodWithPeople');
+    }
+    set IsGoodWithPeople(value: boolean | null) {
+        this.Set('IsGoodWithPeople', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
     }
 }
 
@@ -78560,6 +79820,324 @@ export class MJDatasetEntity extends BaseEntity<MJDatasetEntityType> {
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
+ * MJ: Dogs - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: Dog
+ * * Base View: vwDogs
+ * * @description The dog-specific half of an Animal. An IS-A subtype: its ID column is both its primary key and a foreign key to Animal.ID, so a Dog row and its Animal row share one key and form one logical record. Holds only what is meaningless for a cat -- leash training, house training, energy level, dog-to-dog tolerance. Attributes shared by every species live on Animal instead.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Dogs')
+export class MJDogEntity extends BaseEntity<MJDogEntityType> {
+    /**
+    * Loads the MJ: Dogs record from the database
+    * @param ID: string - primary key value to load the MJ: Dogs record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJDogEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Animals (vwAnimals.ID)
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EnergyLevel
+    * * Display Name: Energy Level
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * High
+    *   * Low
+    *   * Moderate
+    *   * Very High
+    * * Description: How much exercise this dog needs: Low, Moderate, High or Very High. Shelters assess and advertise this for dogs because it is the single biggest predictor of a returned adoption. NULL means not yet assessed.
+    */
+    get EnergyLevel(): 'High' | 'Low' | 'Moderate' | 'Very High' | null {
+        return this.Get('EnergyLevel');
+    }
+    set EnergyLevel(value: 'High' | 'Low' | 'Moderate' | 'Very High' | null) {
+        this.Set('EnergyLevel', value);
+    }
+
+    /**
+    * * Field Name: IsLeashTrained
+    * * Display Name: Is Leash Trained
+    * * SQL Data Type: bit
+    * * Description: Whether this dog walks acceptably on a leash. Dog-only: a cat is never leash trained in any sense the shelter tracks, which is why the column is here and not on Animal. NULL means not yet assessed.
+    */
+    get IsLeashTrained(): boolean | null {
+        return this.Get('IsLeashTrained');
+    }
+    set IsLeashTrained(value: boolean | null) {
+        this.Set('IsLeashTrained', value);
+    }
+
+    /**
+    * * Field Name: IsHouseTrained
+    * * Display Name: Is House Trained
+    * * SQL Data Type: bit
+    * * Description: Whether this dog is reliably house trained. Named IsHouseTrained rather than sharing a column with the cat equivalent because the two mean different things -- a cat uses a litter box, tracked separately as Cat.IsLitterTrained. NULL means not yet assessed.
+    */
+    get IsHouseTrained(): boolean | null {
+        return this.Get('IsHouseTrained');
+    }
+    set IsHouseTrained(value: boolean | null) {
+        this.Set('IsHouseTrained', value);
+    }
+
+    /**
+    * * Field Name: IsGoodWithDogs
+    * * Display Name: Is Good With Dogs
+    * * SQL Data Type: bit
+    * * Description: Whether this dog tolerates other dogs. Drives kennel pairing and playgroup decisions. NULL means not yet assessed.
+    */
+    get IsGoodWithDogs(): boolean | null {
+        return this.Get('IsGoodWithDogs');
+    }
+    set IsGoodWithDogs(value: boolean | null) {
+        this.Set('IsGoodWithDogs', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Name
+    * * SQL Data Type: nvarchar(100)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Species
+    * * Display Name: Species
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Species(): string {
+        return this.Get('Species');
+    }
+    set Species(value: string) {
+        this.Set('Species', value);
+    }
+
+    /**
+    * * Field Name: BreedID
+    * * Display Name: Breed
+    * * SQL Data Type: uniqueidentifier
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get BreedID(): string | null {
+        return this.Get('BreedID');
+    }
+    set BreedID(value: string | null) {
+        this.Set('BreedID', value);
+    }
+
+    /**
+    * * Field Name: MicrochipNumber
+    * * Display Name: Microchip Number
+    * * SQL Data Type: nvarchar(30)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get MicrochipNumber(): string | null {
+        return this.Get('MicrochipNumber');
+    }
+    set MicrochipNumber(value: string | null) {
+        this.Set('MicrochipNumber', value);
+    }
+
+    /**
+    * * Field Name: IntakeDate
+    * * Display Name: Intake Date
+    * * SQL Data Type: date
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get IntakeDate(): Date {
+        return this.Get('IntakeDate');
+    }
+    set IntakeDate(value: Date) {
+        this.Set('IntakeDate', value);
+    }
+
+    /**
+    * * Field Name: IntakeReason
+    * * Display Name: Intake Reason
+    * * SQL Data Type: nvarchar(30)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get IntakeReason(): string | null {
+        return this.Get('IntakeReason');
+    }
+    set IntakeReason(value: string | null) {
+        this.Set('IntakeReason', value);
+    }
+
+    /**
+    * * Field Name: Sex
+    * * Display Name: Sex
+    * * SQL Data Type: nvarchar(10)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Sex(): string | null {
+        return this.Get('Sex');
+    }
+    set Sex(value: string | null) {
+        this.Set('Sex', value);
+    }
+
+    /**
+    * * Field Name: EstimatedBirthDate
+    * * Display Name: Estimated Birth Date
+    * * SQL Data Type: date
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get EstimatedBirthDate(): Date | null {
+        return this.Get('EstimatedBirthDate');
+    }
+    set EstimatedBirthDate(value: Date | null) {
+        this.Set('EstimatedBirthDate', value);
+    }
+
+    /**
+    * * Field Name: WeightKg
+    * * Display Name: Weight (kg)
+    * * SQL Data Type: decimal(6, 2)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get WeightKg(): number | null {
+        return this.Get('WeightKg');
+    }
+    set WeightKg(value: number | null) {
+        this.Set('WeightKg', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Status(): string {
+        return this.Get('Status');
+    }
+    set Status(value: string) {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PhotoBase64
+    * * Display Name: Photo
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get PhotoBase64(): string | null {
+        return this.Get('PhotoBase64');
+    }
+    set PhotoBase64(value: string | null) {
+        this.Set('PhotoBase64', value);
+    }
+
+    /**
+    * * Field Name: HousingID
+    * * Display Name: Housing
+    * * SQL Data Type: uniqueidentifier
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get HousingID(): string | null {
+        return this.Get('HousingID');
+    }
+    set HousingID(value: string | null) {
+        this.Set('HousingID', value);
+    }
+
+    /**
+    * * Field Name: IsGoodWithPeople
+    * * Display Name: Is Good With People
+    * * SQL Data Type: bit
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get IsGoodWithPeople(): boolean | null {
+        return this.Get('IsGoodWithPeople');
+    }
+    set IsGoodWithPeople(value: boolean | null) {
+        this.Set('IsGoodWithPeople', value);
+    }
+
+    /**
+    * * Field Name: Notes
+    * * Display Name: Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * IS-A Source: Inherited from MJ: Animals
+    */
+    get Notes(): string | null {
+        return this.Get('Notes');
+    }
+    set Notes(value: string | null) {
+        this.Set('Notes', value);
     }
 }
 

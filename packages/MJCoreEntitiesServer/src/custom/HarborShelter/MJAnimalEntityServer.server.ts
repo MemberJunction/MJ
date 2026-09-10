@@ -1,4 +1,4 @@
-import { BaseEntity, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, RelatedRecordCollection, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAnimalEntityExtended, ShelterFail, ShelterFinalize } from '@memberjunction/core-entities';
 import {
@@ -152,15 +152,85 @@ export class MJAnimalEntityServer extends MJAnimalEntityExtended {
 
     /**
      * An animal cannot be offered for adoption without a completed vaccination on file. This is the
-     * child-lookup shape: not "is a field valid" but "does a related record exist".
+     * related-record shape: not "is a field valid" but "does a related record exist".
+     *
+     * ## MODULE 7 REWROTE THIS RULE. What changed, and what deliberately did not.
+     *
+     * Module 6 wrote it as a single row count, and it carried a hole its own comment admitted:
+     *
+     *     if (!this.IsSaved) return;   // an unsaved animal has no care history yet
+     *
+     * That early return meant an animal could not be created WITH its first vaccination — the care
+     * log cannot exist before the animal it points at, so the rule had to look away on create, and
+     * a brand-new animal could be saved straight to Available with nothing on file.
+     *
+     * Module 7 declared `MJ: Animals -> MJ: Care Logs` as a related-record collection (one JSON blob
+     * in `metadata/entities/.harbor-shelter-collections.json`; no TypeScript, CodeGen emits
+     * `this.CareLogs` onto the generated class). Unsaved care logs now travel with the animal's own
+     * save, inside one transaction — so they are visible HERE, and the hole closes. Step 1 below is
+     * what closes it.
+     *
+     * ## Why this rule is still `ValidateAsync` and still server-side
+     *
+     * The tempting conclusion is that a declared collection makes this synchronous and moves it to
+     * the browser, next to the record-only rules. It does not, and the reason is worth knowing:
+     *
+     *   - `Load: 'lazy'` — filling on first read of `Items`, with no await — requires
+     *     `Source: 'cache'` AND read-only, because a property getter cannot `await`. Only a
+     *     synchronous read from an already-loaded `BaseEngine` cache can fill one.
+     *   - Care logs are transactional rows that no engine caches, and this collection is writable.
+     *     So `lazy` is not available to it, and CodeGen refuses the combination rather than emitting
+     *     a declaration that compiles and silently never fills.
+     *
+     * A synchronous `Validate()` reading `this.CareLogs.Items` on an unloaded collection would
+     * therefore see an empty array and PASS an animal whose vaccination is sitting in the database.
+     * That is a false green, and strictly worse than the rule it replaced.
+     *
+     * So module 6's dividing line survives intact, and this is where it stops being a convention and
+     * becomes a law: a rule about another record needs a read, a read needs an `await`, and a getter
+     * cannot await.
+     *
+     * ## Why the row count is still here
+     *
+     * The collection adds the rows the database cannot yet see; it does not replace asking the
+     * database. Step 3 keeps the count deliberately — `CareLogs.Load()` would materialise every care
+     * log to answer a yes/no question, and worse, loading over the unsaved items from step 1 throws
+     * by design ("cannot load over unsaved changes"), because merging would invent an ordering and
+     * could duplicate.
      */
     private async validateAvailableRequiresVaccination(result: ValidationResult): Promise<void> {
         if (this.Status !== 'Available') return;
         if (!ShelterIsNewOrDirty(this, 'Status')) return;
-        // An unsaved animal has no care history yet, and blocking it here would make it impossible
-        // to create one that is already vaccinated. The rule bites on the transition TO Available.
-        if (!this.IsSaved) return;
 
+        // 1. A completed vaccination riding along in THIS save counts. These items are unsaved, so
+        //    no query can see them -- this is the case module 6 had to give up on.
+        //
+        //    `GetCompanion('CareLogs')` rather than `this.CareLogs`, for the same bootstrapping
+        //    reason the Dog/Cat rules use `Get('Species')`: the typed property is emitted by CodeGen
+        //    from the relationship metadata, and CodeGen cannot run until this package's siblings
+        //    are built. `GetCompanion` is on BaseEntity, so it compiles before the declaration
+        //    exists -- and `undefined` is a real answer, which is what makes step 3 a genuine
+        //    fallback rather than dead defensive code.
+        const careLogs = this.GetCompanion<RelatedRecordCollection<BaseEntity>>('CareLogs');
+        const ridingAlong = (careLogs?.Items ?? []).some(
+            (c) => !c.IsSaved && c.Get('CareType') === 'Vaccination' && c.Get('IsComplete') === true,
+        );
+        if (ridingAlong) return;
+
+        // 2. A brand-new animal has no history to read, so step 1 was the only possible source.
+        //    Unlike module 6, failing here is now correct rather than unfair: creating an animal
+        //    together with its vaccination is available, so refusing one without is a real answer.
+        if (!this.IsSaved) {
+            return ShelterFail(
+                result,
+                'Status',
+                'A new animal cannot be created as Available with no vaccination. Add a completed ' +
+                    'Vaccination care log to this animal and save both together, or create it as Intake first.',
+                this.Status,
+            );
+        }
+
+        // 3. Otherwise ask the database about what is already on file.
         const vaccinations = await ShelterCountRows(this,
             'MJ: Care Logs',
             `AnimalID = '${this.ID}' AND CareType = 'Vaccination' AND IsComplete = 1`,

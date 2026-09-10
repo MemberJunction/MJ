@@ -48,13 +48,34 @@ async function gql(query, variables) {
     return json.data;
 }
 
-/** Row count for an entity, via the same RunView path the app uses. */
+/**
+ * Row count for an entity, via the entity's generated dynamic-view query.
+ *
+ * FIXED 8 Sep 2026. This previously called `GetData(input:{EntityName, MaxRows})`, which does not
+ * exist in that shape -- `GetDataInputType` takes a `Token` plus a list of `Queries` and serves
+ * stored-query access, not entity reads. So every call was a GraphQL validation error, swallowed by
+ * a `.catch(() => null)`, and this function always returned null. Null is falsy, so the
+ * "skip if the entity already has rows" guard below never fired: a second run would have DUPLICATED
+ * the demo data instead of skipping it. Nobody noticed because the script had only ever been run
+ * against an empty database.
+ *
+ * The query name is per-entity and generated, so it is mapped explicitly -- deriving it from the
+ * entity name would be a guess, and a wrong guess is a runtime error.
+ *
+ * No `.catch()` here on purpose. A failed count must not read as "no rows".
+ */
+const COUNT_VIEW = {
+    'MJ: Breeds': 'RunMJBreedDynamicView',
+    'MJ: Housings': 'RunMJHousingDynamicView',
+    'MJ: Animals': 'RunMJAnimalDynamicView',
+    'MJ: Care Logs': 'RunMJCareLogDynamicView',
+};
+
 async function count(entityName) {
-    const d = await gql(
-        `query($e:String!){ GetData(input:{EntityName:$e, MaxRows:1}) { TotalRowCount } }`,
-        { e: entityName },
-    ).catch(() => null);
-    return d?.GetData?.TotalRowCount ?? null;
+    const q = COUNT_VIEW[entityName];
+    if (!q) throw new Error(`No dynamic-view mapping for ${entityName}`);
+    const d = await gql(`query{ ${q}(input:{EntityName:"${entityName}"}){ TotalRowCount } }`);
+    return d?.[q]?.TotalRowCount ?? 0;
 }
 
 /** A 1x1 transparent PNG — a genuinely valid base64 image, so the field holds real data. */
@@ -125,6 +146,9 @@ const CARE = [
     { Animal: 'Juniper',    CareType: 'Surgery',     DaysAgo: 9,  Description: 'Spay. Routine, no complications.',                               PerformedBy: 'Dr. Halloran', IsComplete: false, FollowUpIn: -2,  Notes: 'Post-op check and suture removal — OVERDUE.' },
     { Animal: 'Otis',       CareType: 'Behavioral',  DaysAgo: 14, Description: 'Leash reactivity assessment. Reactive to dogs within 5m.',       PerformedBy: 'M. Vance',     IsComplete: true,  FollowUpIn: -7,  Notes: 'Begin counter-conditioning, three sessions weekly.' },
     { Animal: 'Otis',       CareType: 'Behavioral',  DaysAgo: 5,  Description: 'Session 3. Threshold improved to roughly 2m.',                   PerformedBy: 'M. Vance',     IsComplete: false, FollowUpIn: -1,  Notes: 'Re-assessment due — OVERDUE.' },
+    // Pepper's primary course, COMPLETED. Without this she is Available with no completed
+    // vaccination on file -- which module 6's rule forbids and module 7 actually enforces.
+    { Animal: 'Pepper',     CareType: 'Vaccination', DaysAgo: 29, Description: 'FVRCP primary course completed.',                          PerformedBy: 'Dr. Halloran', IsComplete: true,  FollowUpIn: null, Notes: 'Primary course done; booster scheduled.' },
     { Animal: 'Pepper',     CareType: 'Vaccination', DaysAgo: 28, Description: 'FVRCP and rabies.',                                              PerformedBy: 'Dr. Halloran', IsComplete: false, FollowUpIn: -3,  Notes: 'Rabies booster due — OVERDUE.' },
     { Animal: 'Pepper',     CareType: 'Grooming',    DaysAgo: 6,  Description: 'Nail trim and brush-out.',                                       PerformedBy: 'R. Okonkwo',   IsComplete: true,  FollowUpIn: 24,  Notes: 'Monthly is enough for this coat.' },
     { Animal: 'Nutmeg',     CareType: 'Vaccination', DaysAgo: 50, Description: 'FVRCP, rabies, and FeLV test (negative).',                       PerformedBy: 'Dr. Halloran', IsComplete: true,  FollowUpIn: null, Notes: 'Fully vaccinated on arrival paperwork; confirmed here.' },
@@ -144,6 +168,7 @@ const M_BREED = `mutation($i:CreateMJBreedInput!){ CreateMJBreed(input:$i){ ID N
 const M_HOUSING = `mutation($i:CreateMJHousingInput!){ CreateMJHousing(input:$i){ ID Name } }`;
 const M_ANIMAL = `mutation($i:CreateMJAnimalInput!){ CreateMJAnimal(input:$i){ ID Name Status } }`;
 const M_CARE = `mutation($i:CreateMJCareLogInput!){ CreateMJCareLog(input:$i){ ID CareType } }`;
+const M_ANIMAL_STATUS = `mutation($i:UpdateMJAnimalInput!){ UpdateMJAnimal(input:$i){ ID Name Status } }`;
 
 async function main() {
     const existing = {
@@ -186,7 +211,8 @@ async function main() {
                 Sex: a.Sex,
                 EstimatedBirthDate: daysAgo(a.BirthDaysAgo),
                 WeightKg: a.WeightKg,
-                Status: a.Status,
+                // Deliberately NOT a.Status -- see the two-phase note in main().
+                Status: 'Intake',
                 Description: a.Description,
                 PhotoBase64: PIXEL_PNG,
                 HousingID: a.Housing ? housingIds.get(a.Housing) : null,
@@ -215,6 +241,29 @@ async function main() {
         care++;
     }
     console.log(`Care logs: ${care}`);
+
+    // ── Phase 2: set each animal's real status ────────────────────────────────
+    //
+    // WHY THIS IS TWO PHASES. Every animal above was created as 'Intake', not with its intended
+    // status, and that is not tidiness -- it is the shelter's own rule. An animal may only be
+    // listed Available once a completed Vaccination is on file, and a care log cannot exist before
+    // the animal it points at. Module 6 wrote that rule but had to look away on create; module 7
+    // closed the hole, so creating an Available animal with nothing on file is now correctly
+    // REFUSED. Intake -> vaccinate -> Available is also simply how a shelter works.
+    //
+    // (The one-save alternative is real: module 7 declared Care Logs as a related-record
+    // collection, so an animal and its first vaccination CAN be saved together in one
+    // transaction. That goes through MJ.SaveEntityGraph rather than CreateMJAnimal, which is more
+    // machinery than a seed script needs -- and doing it in two visible phases shows the rule
+    // working, which is the more useful thing for a course.)
+    let restatused = 0;
+    for (const a of ANIMALS) {
+        if (a.Status === 'Intake') continue;
+        await gql(M_ANIMAL_STATUS, { i: { ID: animalIds.get(a.Name), Status: a.Status } });
+        restatused++;
+    }
+    console.log(`Statuses applied: ${restatused}`);
+
     console.log('\nSeed complete — all rows written through GraphQL mutations.');
 }
 

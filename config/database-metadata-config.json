@@ -1,0 +1,19 @@
+{
+  "$schema": "./database-metadata-config.schema.json",
+  "description": "Database metadata configuration for MemberJunction CodeGen in the MJ Academy workspace. Declares intent that the physical schema cannot express -- soft primary keys, soft foreign keys, virtual entities, and IS-A type relationships.",
+  "version": "1.2",
+  "ISARelationships": [
+    {
+      "_comment": "MJ Academy module 7. Dog IS-A Animal (Table-Per-Type): Dog's single PK (ID) is also an FK to Animal.ID. ChildEntity + ParentEntity use BASE TABLE names + SchemaName so the binding is independent of the entity-name prefix -- which matters here, because this course leaves MJ's default naming in place, so the entities are 'MJ: Dogs' and 'MJ: Animals'. CodeGen matches by Name OR (BaseTable + SchemaName). Same shape as bizapps-orders' EventProduct IS-A Product. (bizapps-accounting names its PARENT as an entity Name instead -- 'MJ: Companies' -- because there the parent is a core entity OUTSIDE the app's schema, so BaseTable + SchemaName could not find it. Ours are all in __mj, so the orders form applies.)",
+      "ChildEntity": "Dog",
+      "ParentEntity": "Animal",
+      "SchemaName": "__mj"
+    },
+    {
+      "_comment": "Cat IS-A Animal. A SIBLING of Dog, not a chain: both point at Animal. Entity.AllowMultipleSubtypes is left at its default of false, so MJ enforces DISJOINT subtypes -- an animal may be a Dog or a Cat and never both, and a second subtype row for the same ID is refused at save with a 'Disjoint subtype violation'. That default is correct here; the opt-in exists for identity hierarchies where overlap is real (a Person who is both a Member and a Volunteer).",
+      "ChildEntity": "Cat",
+      "ParentEntity": "Animal",
+      "SchemaName": "__mj"
+    }
+  ]
+}

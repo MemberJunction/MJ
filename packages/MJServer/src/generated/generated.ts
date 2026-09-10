@@ -18,7 +18,7 @@ import { mj_core_schema } from '../config.js';
 
 
 
-import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAnimalEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBreedEntity, MJCareLogEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJHousingEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRSUPendingWorkEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJAdopterEntity, MJAdoptionEntity, MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAnimalEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJBreedEntity, MJCareLogEntity, MJCatEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDogEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityAIActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJHousingEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJRSUPendingWorkEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJSQLDialectEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -2340,6 +2340,432 @@ export class MJActionResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Actions', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Adopters
+//****************************************************************************
+@ObjectType({ description: `A person or household applying to adopt. A related record with its own list and form: an adopter is meaningful on their own, exists before any particular adoption, and outlives every one of them. Never deleted while adoptions reference them -- history has to survive the person moving away, which is why Adoption declares OnRemove refuse rather than delete.` })
+export class MJAdopter_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The adopter's given name.`}) 
+    @MaxLength(50)
+    FirstName: string;
+        
+    @Field({description: `The adopter's family name.`}) 
+    @MaxLength(50)
+    LastName: string;
+        
+    @Field({description: `Contact email, and the practical identity of an adopter -- unique, because two records for the same family split their history and hide a prior denial.`}) 
+    @MaxLength(255)
+    Email: string;
+        
+    @Field({nullable: true, description: `What kind of home this is: House, Apartment, Condo, Farm or Other. One of the three matching signals a shelter actually screens on, alongside HasYard and HasOtherPets. NULL means not yet collected.`}) 
+    @MaxLength(20)
+    HousingType?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether the home has an enclosed yard. Matters most for the high-energy dogs Dog.EnergyLevel identifies. NULL means not yet collected.`}) 
+    HasYard?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether there are already animals in the home. Pairs with Dog.IsGoodWithDogs and Cat.IsGoodWithCats to decide whether a placement is plausible. NULL means not yet collected.`}) 
+    HasOtherPets?: boolean;
+        
+    @Field(() => Boolean, {description: `Whether this adopter has passed screening. A property of the PERSON, not of any one adoption, so it is recorded once and reused across every inquiry they make -- which is the whole reason Adopter is a separate entity rather than fields repeated on Adoption.`}) 
+    IsApproved: boolean;
+        
+    @Field(() => Boolean, {description: `Soft retirement. An adopter who has moved away or asked to be removed is deactivated rather than deleted, because their completed adoptions are permanent history.`}) 
+    IsActive: boolean;
+        
+    @Field({description: `The adopter's full display name, computed from FirstName + LastName and PERSISTED. It exists because MemberJunction needs a NAME FIELD: CodeGen marks a field as the entity's name field only when it is literally called Name, and without one, every foreign key pointing at Adopter has no display column to show. Adoption grids would render the adopter as a first name alone -- "Ada" rather than "Ada Okafor" -- and CodeGen would need an extra metadata pass to resolve which column to use at all. Computed rather than stored so it cannot drift from its parts, and PERSISTED so it can be indexed and read like any other column. MJ's CRUD procedures exclude computed columns, so nothing attempts to write it.`}) 
+    @MaxLength(101)
+    Name: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Adopters
+//****************************************************************************
+@InputType()
+export class CreateMJAdopterInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    FirstName?: string;
+
+    @Field({ nullable: true })
+    LastName?: string;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    HousingType: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasYard: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasOtherPets: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsApproved?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Adopters
+//****************************************************************************
+@InputType()
+export class UpdateMJAdopterInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    FirstName?: string;
+
+    @Field({ nullable: true })
+    LastName?: string;
+
+    @Field({ nullable: true })
+    Email?: string;
+
+    @Field({ nullable: true })
+    HousingType?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasYard?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    HasOtherPets?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsApproved?: boolean;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Adopters
+//****************************************************************************
+@ObjectType()
+export class RunMJAdopterViewResult {
+    @Field(() => [MJAdopter_])
+    Results: MJAdopter_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAdopter_)
+export class MJAdopterResolver extends ResolverBase {
+    @Query(() => RunMJAdopterViewResult)
+    async RunMJAdopterViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAdopterViewResult)
+    async RunMJAdopterViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAdopterViewResult)
+    async RunMJAdopterDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Adopters';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAdopter_, { nullable: true })
+    async MJAdopter(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAdopter_ | null> {
+        this.CheckUserReadPermissions('MJ: Adopters', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAdopters')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Adopters', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Adopters', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAdopter_)
+    async CreateMJAdopter(
+        @Arg('input', () => CreateMJAdopterInput) input: CreateMJAdopterInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Adopters', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAdopter_)
+    async UpdateMJAdopter(
+        @Arg('input', () => UpdateMJAdopterInput) input: UpdateMJAdopterInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Adopters', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAdopter_)
+    async DeleteMJAdopter(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Adopters', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Adoptions
+//****************************************************************************
+@ObjectType({ description: `One family\'s pursuit of one animal, from first enquiry to outcome. The whole funnel, not just the successful end of it -- which is how the question "is anyone interested in this dog?" gets answered. Meaningful from both sides, so neither Animal nor Adopter owns it; it carries the facts that describe the transaction itself rather than either party.` })
+export class MJAdoption_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({description: `The animal being enquired about.`}) 
+    @MaxLength(36)
+    AnimalID: string;
+        
+    @Field({description: `The family making the enquiry.`}) 
+    @MaxLength(36)
+    AdopterID: string;
+        
+    @Field({description: `Where this adoption stands. Inquiry, Screening, Approved and Completed are a forward-only ladder; Withdrawn (the adopter pulled out), Denied (the shelter refused) and Cancelled (it fell through for some other reason) are exits reachable from any non-terminal state, because an adoption can collapse at any point. Completing one is what flips the animal to Adopted.`}) 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({description: `When the family first asked about this animal. Set at creation and never moved, so the time an adoption took can always be measured.`}) 
+    InquiryDate: Date;
+        
+    @Field({nullable: true, description: `When the adoption completed. Required whenever Status is Completed and enforced by a check constraint, because a completed adoption with no date is unusable in every report that matters.`}) 
+    CompletedDate?: Date;
+        
+    @Field(() => Float, {nullable: true, description: `The adoption fee agreed for this placement. Lives here rather than on Animal or Adopter because it describes the transaction: the same animal can be waived a fee for one family and not another.`}) 
+    Fee?: number;
+        
+    @Field({nullable: true, description: `Why the shelter refused. Required whenever Status is Denied and enforced by a check constraint: a rejection with no recorded reason cannot be explained to the applicant later and cannot be reviewed for fairness.`}) 
+    @MaxLength(500)
+    DenialReason?: string;
+        
+    @Field({nullable: true, description: `Free-text detail about this particular enquiry -- home visit observations, scheduling, what the family is looking for.`}) 
+    Notes?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Animal: string;
+        
+    @Field() 
+    @MaxLength(50)
+    Adopter: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Adoptions
+//****************************************************************************
+@InputType()
+export class CreateMJAdoptionInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AnimalID?: string;
+
+    @Field({ nullable: true })
+    AdopterID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    InquiryDate?: Date;
+
+    @Field({ nullable: true })
+    CompletedDate: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    Fee: number | null;
+
+    @Field({ nullable: true })
+    DenialReason: string | null;
+
+    @Field({ nullable: true })
+    Notes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Adoptions
+//****************************************************************************
+@InputType()
+export class UpdateMJAdoptionInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AnimalID?: string;
+
+    @Field({ nullable: true })
+    AdopterID?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    InquiryDate?: Date;
+
+    @Field({ nullable: true })
+    CompletedDate?: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    Fee?: number | null;
+
+    @Field({ nullable: true })
+    DenialReason?: string | null;
+
+    @Field({ nullable: true })
+    Notes?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Adoptions
+//****************************************************************************
+@ObjectType()
+export class RunMJAdoptionViewResult {
+    @Field(() => [MJAdoption_])
+    Results: MJAdoption_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAdoption_)
+export class MJAdoptionResolver extends ResolverBase {
+    @Query(() => RunMJAdoptionViewResult)
+    async RunMJAdoptionViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAdoptionViewResult)
+    async RunMJAdoptionViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAdoptionViewResult)
+    async RunMJAdoptionDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Adoptions';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAdoption_, { nullable: true })
+    async MJAdoption(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAdoption_ | null> {
+        this.CheckUserReadPermissions('MJ: Adoptions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAdoptions')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Adoptions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Adoptions', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAdoption_)
+    async CreateMJAdoption(
+        @Arg('input', () => CreateMJAdoptionInput) input: CreateMJAdoptionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Adoptions', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAdoption_)
+    async UpdateMJAdoption(
+        @Arg('input', () => UpdateMJAdoptionInput) input: UpdateMJAdoptionInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Adoptions', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAdoption_)
+    async DeleteMJAdoption(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Adoptions', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -20363,6 +20789,12 @@ export class MJAnimal_ {
     @MaxLength(36)
     HousingID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether this animal is comfortable around people. Lives on Animal rather than on the Dog and Cat subtypes because it is asked of every animal identically -- an attribute shared by all subtypes belongs on the parent. NULL means not yet assessed, which is deliberately distinct from a recorded No: an animal is logged at intake and evaluated later.`}) 
+    IsGoodWithPeople?: boolean;
+        
+    @Field({nullable: true, description: `Internal staff notes about this animal -- the escape hatch for the odd descriptive thing that has no column of its own. Distinct from Description, which is the outward-facing blurb an adopter reads: Notes is where "bolts the door if you leave it ajar" or "only eats the pate food" goes. Lives on Animal rather than on the Dog and Cat subtypes for exactly the same reason IsGoodWithPeople does -- staff take notes on every animal identically, so an attribute shared by all subtypes belongs on the parent.`}) 
+    Notes?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(100)
     Breed?: string;
@@ -20420,6 +20852,12 @@ export class CreateMJAnimalInput {
     @Field({ nullable: true })
     HousingID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithPeople: boolean | null;
+
+    @Field({ nullable: true })
+    Notes: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -20471,6 +20909,12 @@ export class UpdateMJAnimalInput {
 
     @Field({ nullable: true })
     HousingID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithPeople?: boolean | null;
+
+    @Field({ nullable: true })
+    Notes?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -26532,7 +26976,7 @@ export class MJBreedResolver extends ResolverBase {
 //****************************************************************************
 // ENTITY CLASS for MJ: Care Logs
 //****************************************************************************
-@ObjectType({ description: `An event log of care given to an animal: one row per thing that was done, on a date. Introduced in MJ Academy module 5 as a plain foreign-key table so the learner wires the parent-child link by hand; converted to an embedded record in module 7.` })
+@ObjectType({ description: `An event log of care given to an animal: one row per thing that was done, on a date. Introduced in MJ Academy module 5 as a plain foreign-key table, then declared in module 7 as a RELATED-RECORD COLLECTION on the Animals-to-Care-Logs relationship -- so an animal and its care logs load, validate and save as one unit. Not an "embedded record": in MemberJunction that term means a 1:1 peer whose foreign key sits on the owner, which is the opposite arrangement.` })
 export class MJCareLog_ {
     @Field() 
     @MaxLength(36)
@@ -26736,6 +27180,316 @@ export class MJCareLogResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Care Logs', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Cats
+//****************************************************************************
+@ObjectType({ description: `The cat-specific half of an Animal. An IS-A subtype: its ID column is both its primary key and a foreign key to Animal.ID, so a Cat row and its Animal row share one key and form one logical record. Holds only what is meaningless for a dog -- litter training, declaw history, indoor-only placement, cat-to-cat tolerance.` })
+export class MJCat_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this cat must be placed in an indoor-only home. A placement condition specific to cats, commonly required for declawed or FIV-positive animals. NULL means not yet assessed.`}) 
+    IsIndoorOnly?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this cat has been declawed. Recorded because it is adoption-relevant -- a declawed cat generally cannot be placed outdoors -- and because it is surgical history the shelter did not perform and must not lose. NULL means not known.`}) 
+    IsDeclawed?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this cat reliably uses a litter box. The cat equivalent of Dog.IsHouseTrained, deliberately given its own name because the two are different behaviours. NULL means not yet assessed.`}) 
+    IsLitterTrained?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this cat tolerates other cats. Decides whether it can share a condo and whether it can go to a multi-cat home. NULL means not yet assessed.`}) 
+    IsGoodWithCats?: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field() 
+    @MaxLength(20)
+    Species: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    BreedID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(30)
+    MicrochipNumber?: string;
+        
+    @Field() 
+    IntakeDate: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(30)
+    IntakeReason?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    Sex?: string;
+        
+    @Field({nullable: true}) 
+    EstimatedBirthDate?: Date;
+        
+    @Field(() => Float, {nullable: true}) 
+    WeightKg?: number;
+        
+    @Field() 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field({nullable: true}) 
+    PhotoBase64?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    HousingID?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    IsGoodWithPeople?: boolean;
+        
+    @Field({nullable: true}) 
+    Notes?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cats
+//****************************************************************************
+@InputType()
+export class CreateMJCatInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsIndoorOnly: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDeclawed: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLitterTrained: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithCats: boolean | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Species?: string;
+
+    @Field({ nullable: true })
+    BreedID: string | null;
+
+    @Field({ nullable: true })
+    MicrochipNumber: string | null;
+
+    @Field({ nullable: true })
+    IntakeDate?: Date;
+
+    @Field({ nullable: true })
+    IntakeReason: string | null;
+
+    @Field({ nullable: true })
+    Sex: string | null;
+
+    @Field({ nullable: true })
+    EstimatedBirthDate: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    WeightKg: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    PhotoBase64: string | null;
+
+    @Field({ nullable: true })
+    HousingID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithPeople: boolean | null;
+
+    @Field({ nullable: true })
+    Notes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Cats
+//****************************************************************************
+@InputType()
+export class UpdateMJCatInput {
+    @Field()
+    ID: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsIndoorOnly?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDeclawed?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLitterTrained?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithCats?: boolean | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Species?: string;
+
+    @Field({ nullable: true })
+    BreedID?: string | null;
+
+    @Field({ nullable: true })
+    MicrochipNumber?: string | null;
+
+    @Field({ nullable: true })
+    IntakeDate?: Date;
+
+    @Field({ nullable: true })
+    IntakeReason?: string | null;
+
+    @Field({ nullable: true })
+    Sex?: string | null;
+
+    @Field({ nullable: true })
+    EstimatedBirthDate?: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    WeightKg?: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    PhotoBase64?: string | null;
+
+    @Field({ nullable: true })
+    HousingID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithPeople?: boolean | null;
+
+    @Field({ nullable: true })
+    Notes?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Cats
+//****************************************************************************
+@ObjectType()
+export class RunMJCatViewResult {
+    @Field(() => [MJCat_])
+    Results: MJCat_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJCat_)
+export class MJCatResolver extends ResolverBase {
+    @Query(() => RunMJCatViewResult)
+    async RunMJCatViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCatViewResult)
+    async RunMJCatViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJCatViewResult)
+    async RunMJCatDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Cats';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJCat_, { nullable: true })
+    async MJCat(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJCat_ | null> {
+        this.CheckUserReadPermissions('MJ: Cats', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwCats')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Cats', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Cats', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJCat_)
+    async CreateMJCat(
+        @Arg('input', () => CreateMJCatInput) input: CreateMJCatInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Cats', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJCat_)
+    async UpdateMJCat(
+        @Arg('input', () => UpdateMJCatInput) input: UpdateMJCatInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Cats', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJCat_)
+    async DeleteMJCat(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Cats', key, options, provider, userPayload, pubSub);
     }
     
 }
@@ -41166,6 +41920,317 @@ export class MJDatasetResolver extends ResolverBase {
         const provider = GetReadWriteProvider(providers);
         const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
         return this.DeleteRecord('MJ: Datasets', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: Dogs
+//****************************************************************************
+@ObjectType({ description: `The dog-specific half of an Animal. An IS-A subtype: its ID column is both its primary key and a foreign key to Animal.ID, so a Dog row and its Animal row share one key and form one logical record. Holds only what is meaningless for a cat -- leash training, house training, energy level, dog-to-dog tolerance. Attributes shared by every species live on Animal instead.` })
+export class MJDog_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: `How much exercise this dog needs: Low, Moderate, High or Very High. Shelters assess and advertise this for dogs because it is the single biggest predictor of a returned adoption. NULL means not yet assessed.`}) 
+    @MaxLength(20)
+    EnergyLevel?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this dog walks acceptably on a leash. Dog-only: a cat is never leash trained in any sense the shelter tracks, which is why the column is here and not on Animal. NULL means not yet assessed.`}) 
+    IsLeashTrained?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this dog is reliably house trained. Named IsHouseTrained rather than sharing a column with the cat equivalent because the two mean different things -- a cat uses a litter box, tracked separately as Cat.IsLitterTrained. NULL means not yet assessed.`}) 
+    IsHouseTrained?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this dog tolerates other dogs. Drives kennel pairing and playgroup decisions. NULL means not yet assessed.`}) 
+    IsGoodWithDogs?: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field() 
+    @MaxLength(100)
+    Name: string;
+        
+    @Field() 
+    @MaxLength(20)
+    Species: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    BreedID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(30)
+    MicrochipNumber?: string;
+        
+    @Field() 
+    IntakeDate: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(30)
+    IntakeReason?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(10)
+    Sex?: string;
+        
+    @Field({nullable: true}) 
+    EstimatedBirthDate?: Date;
+        
+    @Field(() => Float, {nullable: true}) 
+    WeightKg?: number;
+        
+    @Field() 
+    @MaxLength(20)
+    Status: string;
+        
+    @Field({nullable: true}) 
+    Description?: string;
+        
+    @Field({nullable: true}) 
+    PhotoBase64?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    HousingID?: string;
+        
+    @Field(() => Boolean, {nullable: true}) 
+    IsGoodWithPeople?: boolean;
+        
+    @Field({nullable: true}) 
+    Notes?: string;
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: Dogs
+//****************************************************************************
+@InputType()
+export class CreateMJDogInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    EnergyLevel: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLeashTrained: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsHouseTrained: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithDogs: boolean | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Species?: string;
+
+    @Field({ nullable: true })
+    BreedID: string | null;
+
+    @Field({ nullable: true })
+    MicrochipNumber: string | null;
+
+    @Field({ nullable: true })
+    IntakeDate?: Date;
+
+    @Field({ nullable: true })
+    IntakeReason: string | null;
+
+    @Field({ nullable: true })
+    Sex: string | null;
+
+    @Field({ nullable: true })
+    EstimatedBirthDate: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    WeightKg: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    PhotoBase64: string | null;
+
+    @Field({ nullable: true })
+    HousingID: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithPeople: boolean | null;
+
+    @Field({ nullable: true })
+    Notes: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: Dogs
+//****************************************************************************
+@InputType()
+export class UpdateMJDogInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    EnergyLevel?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsLeashTrained?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsHouseTrained?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithDogs?: boolean | null;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Species?: string;
+
+    @Field({ nullable: true })
+    BreedID?: string | null;
+
+    @Field({ nullable: true })
+    MicrochipNumber?: string | null;
+
+    @Field({ nullable: true })
+    IntakeDate?: Date;
+
+    @Field({ nullable: true })
+    IntakeReason?: string | null;
+
+    @Field({ nullable: true })
+    Sex?: string | null;
+
+    @Field({ nullable: true })
+    EstimatedBirthDate?: Date | null;
+
+    @Field(() => Float, { nullable: true })
+    WeightKg?: number | null;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    PhotoBase64?: string | null;
+
+    @Field({ nullable: true })
+    HousingID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    IsGoodWithPeople?: boolean | null;
+
+    @Field({ nullable: true })
+    Notes?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: Dogs
+//****************************************************************************
+@ObjectType()
+export class RunMJDogViewResult {
+    @Field(() => [MJDog_])
+    Results: MJDog_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJDog_)
+export class MJDogResolver extends ResolverBase {
+    @Query(() => RunMJDogViewResult)
+    async RunMJDogViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDogViewResult)
+    async RunMJDogViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJDogViewResult)
+    async RunMJDogDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: Dogs';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJDog_, { nullable: true })
+    async MJDog(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJDog_ | null> {
+        this.CheckUserReadPermissions('MJ: Dogs', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwDogs')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Dogs', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: Dogs', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJDog_)
+    async CreateMJDog(
+        @Arg('input', () => CreateMJDogInput) input: CreateMJDogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: Dogs', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJDog_)
+    async UpdateMJDog(
+        @Arg('input', () => UpdateMJDogInput) input: UpdateMJDogInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: Dogs', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJDog_)
+    async DeleteMJDog(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: Dogs', key, options, provider, userPayload, pubSub);
     }
     
 }

@@ -14,7 +14,7 @@
       "ID": "@lookup:MJ: Entities.Name=MJ: Animals"
     },
     "sync": {
-      "lastModified": "2026-09-04T16:32:22.797Z",
+      "lastModified": "2026-09-08T20:31:40.121Z",
       "checksum": "22cad292a30e43d6b7e7830a1b5162015d94b75146036710c455743108741f1d"
     },
     "_comments": [
@@ -45,7 +45,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Care Logs&Name=FollowUpDate"
           },
           "sync": {
-            "lastModified": "2026-09-04T16:56:13.623Z",
+            "lastModified": "2026-09-08T20:31:40.203Z",
             "checksum": "3980a054b5d6fcb2805ae6a0b030e114ef8da0fb49036cc2ea1cd1b3823228cd"
           }
         }

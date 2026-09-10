@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, ChangeDetectorRef, Component, OnInit, inject }
 import { RegisterClassEx } from '@memberjunction/global';
 import { BaseFormPanel } from '@memberjunction/ng-base-forms';
 import { MJAnimalEntity } from '@memberjunction/core-entities';
-import { RunView, RunViewParams } from '@memberjunction/core';
+import { BaseEntity, RelatedRecordCollection, RunViewParams } from '@memberjunction/core';
 
 /** One care entry, shaped for display. */
 interface CareRow {
@@ -26,6 +26,7 @@ interface CareSummary {
 }
 
 const CARE_LOGS = 'MJ: Care Logs';
+
 /**
  * MJ Academy — the Animal "Care & Health" overview.
  *
@@ -44,7 +45,8 @@ const CARE_LOGS = 'MJ: Care Logs';
  * the rows rather than stored in them, which is exactly the kind of thing a custom panel earns its
  * place with -- the same reason bizapps-orders' overview panels exist.
  *
- * ONE READ, not one per figure: a single RunView returns the animal's care rows and every number
+ * ONE READ, not one per figure: the declared CareLogs collection returns the animal's care rows and
+ * every number the panel shows is derived from that one array
  * below is computed from that array in memory.
  */
 @RegisterClassEx(BaseFormPanel, {
@@ -103,24 +105,21 @@ export class AnimalCareOverviewPanel extends BaseFormPanel<MJAnimalEntity> imple
         this.LoadError = null;
         this.cdr.markForCheck();
         try {
-            // BaseFormPanel is a plain @Directive -- it does NOT extend BaseAngularComponent, so
-            // it has no ProviderToUse of its own. The host form does, so borrow it; that keeps a
-            // multi-provider app reading from the same provider as the form around it. Falling back
-            // to a bare RunView() keeps the panel usable outside a form.
-            const provider = this.FormComponent?.ProviderToUse;
-            const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
-            const res = await rv.RunView<CareRow>(
-                {
-                    EntityName: CARE_LOGS,
-                    ExtraFilter: `AnimalID = '${this.Record.ID}'`,
-                    Fields: ['ID', 'CareDate', 'CareType', 'Description', 'FollowUpDate', 'IsComplete'],
-                    OrderBy: 'CareDate DESC',
-                    ResultType: 'simple',
-                },
-                provider?.CurrentUser,
-            );
-            if (!res.Success) throw new Error(res.ErrorMessage ?? 'Could not read care history.');
-            this.Summary = this.summarise(res.Results ?? []);
+            // MODULE 7. One line, where module 5 had a hand-built read.
+            //
+            // Module 5 restated the relationship here: the filter (`AnimalID = ...`), the field
+            // list, and the sort order -- every one a second copy of something the
+            // EntityRelationship row already knew, and module 6's vaccination rule made a third.
+            // Declaring the relationship as a related-record collection replaced all of it.
+            //
+            // `GetCompanion` is on BaseEntity, so the panel never has to know its record is an
+            // Animal, and no cast is needed. `Load(true)` forces a re-read because the panel is
+            // reused as the form moves between records, and a stale collection would render
+            // confidently wrong numbers.
+            const careLogs = this.Record.GetCompanion<RelatedRecordCollection>('CareLogs');
+            if (!careLogs) throw new Error('The Care Logs collection is not declared on MJ: Animals.');
+            await careLogs.Load(true);
+            this.Summary = this.summarise(careLogs.Items);
         } catch (e) {
             this.LoadError = e instanceof Error ? e.message : String(e);
             this.Summary = null;
@@ -131,15 +130,26 @@ export class AnimalCareOverviewPanel extends BaseFormPanel<MJAnimalEntity> imple
     }
 
     /** Everything the panel shows, derived from the one array. Rows arrive newest-first. */
-    private summarise(rows: CareRow[]): CareSummary {
+    /**
+     * `readonly` because that is what the collection hands out. MJ makes `Items` readonly
+     * deliberately -- a caller cannot push or splice around the collection's back, which is exactly
+     * the hole that made module 5's hand-built array unsafe to share.
+     */
+    private summarise(rows: readonly BaseEntity[]): CareSummary {
         const today = this.todayUTC();
-        const newestOfType = (type: string): string | null =>
-            rows.find((r) => r.CareType === type)?.CareDate ?? null;
+        // Reading through Get() rather than typed accessors keeps this working whether the
+        // collection hands back MJCareLogEntity or a plain BaseEntity, and matches how the
+        // module 6 rules read the same rows.
+        const day = (r: BaseEntity, f: string): string | null => {
+            const v = r.Get(f);
+            return v instanceof Date ? v.toISOString() : typeof v === 'string' && v ? v : null;
+        };
+        const newestOfType = (type: string): string | null => { const r = rows.find((x) => x.Get('CareType') === type); return r ? day(r, 'CareDate') : null; };
 
         const openFollowUps = rows
-            .filter((r) => !r.IsComplete && r.FollowUpDate)
-            .map((r) => ({ row: r, day: this.dayValue(r.FollowUpDate) }))
-            .filter((x): x is { row: CareRow; day: number } => x.day !== null);
+            .filter((r) => r.Get('IsComplete') !== true && day(r, 'FollowUpDate'))
+            .map((r) => ({ row: r, day: this.dayValue(day(r, 'FollowUpDate')) }))
+            .filter((x): x is { row: BaseEntity; day: number } => x.day !== null);
 
         // Oldest first, so the soonest-due (and most overdue) is the one we surface.
         openFollowUps.sort((a, b) => a.day - b.day);
@@ -149,7 +159,7 @@ export class AnimalCareOverviewPanel extends BaseFormPanel<MJAnimalEntity> imple
             LastVaccination: newestOfType('Vaccination'),
             LastExam: newestOfType('Exam'),
             OverdueCount: openFollowUps.filter((x) => x.day < today).length,
-            NextFollowUp: openFollowUps[0]?.row.FollowUpDate ?? null,
+            NextFollowUp: openFollowUps[0] ? day(openFollowUps[0].row, 'FollowUpDate') : null,
             OpenCount: openFollowUps.length,
         };
     }

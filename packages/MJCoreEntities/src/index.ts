@@ -13,6 +13,11 @@ export * from './custom/HarborShelter/MJAnimalEntityExtended';
 export * from './custom/HarborShelter/MJCareLogEntityExtended';
 export * from './custom/HarborShelter/MJHousingEntityExtended';
 export * from './custom/HarborShelter/MJBreedEntityExtended';
+// MJ Academy module 7 -- the relationship entities.
+export * from './custom/HarborShelter/MJDogEntityExtended';
+export * from './custom/HarborShelter/MJCatEntityExtended';
+export * from './custom/HarborShelter/MJAdopterEntityExtended';
+export * from './custom/HarborShelter/MJAdoptionEntityExtended';
 export * from './custom/MJEntityFieldEntityExtended';
 export * from './custom/MJComponentEntityExtended';
 export * from './custom/MJEnvironmentEntityExtended';

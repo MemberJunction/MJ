@@ -196,8 +196,13 @@ module.exports = {
   customSQLScripts: [
   ],
 
-  // Soft PK/FK configuration for tables without database constraints
-  additionalSchemaInfo: './metadata/integrations/additionalSchemaInfo.json',
+  // Intent the physical schema cannot express: soft PK/FK, virtual entities, and IS-A type
+  // relationships. Repointed from './metadata/integrations/additionalSchemaInfo.json' (which never
+  // existed -- neither the file nor the directory) to the name this repo's own template instructs:
+  // config/database-metadata-config.template.json says "Copy this file to
+  // database-metadata-config.json and customize for your database." Keeping it out of ./metadata
+  // also keeps it clear of the metadata-sync root.
+  additionalSchemaInfo: './config/database-metadata-config.json',
 
   // Output directories specific to monorepo structure
   output: [

@@ -14,6 +14,15 @@ import { ShelterCategoryBase, ShelterCategoryPage } from './shelter-category.bas
  * Each one needs its OWN @RegisterClass key. Sharing a DriverClass across nav items makes the
  * shell highlight every item that uses it, because the active-item match keys on the class.
  *
+ * Module 7 filled in the Adoption category, which module 5 shipped as a single 'pending' placeholder
+ * so the top bar would already be the shape it was going to keep. Nothing about the shell changed to
+ * accommodate it -- two entity pages replaced one placeholder, which is what a category costs.
+ *
+ * NOTE what module 7 did NOT add: separate Dogs and Cats pages. Animals stays the ONE list. A dog is
+ * an animal, so it belongs in the animal list; the subtype shows up on the FORM, where MJ's own
+ * mj-isa-related-panel surfaces it beside the record. One list, two forms -- adding subtype list
+ * pages would split the roster in half and teach exactly the wrong thing about IS-A.
+ *
  * The Dashboard stays a plain top-bar item with no rail (see shelter-dashboard.resource.ts): it has
  * exactly one page, and a rail holding a single item is chrome with nothing to navigate.
  */
@@ -70,16 +79,12 @@ export class ShelterAdoptionCategoryComponent extends ShelterCategoryBase {
     public get CategoryIcon(): string { return 'fa-solid fa-heart'; }
     public get Pages(): ShelterCategoryPage[] {
         return [
-            {
-                id: 'adopters',
-                label: 'Adopters',
-                icon: 'fa-solid fa-user',
-                kind: 'pending',
-                pendingNote:
-                    'Adopters and adoption records arrive in module 7, where the shelter gains its ' +
-                    'relationship entities. The category is here now so the top bar is the shape it ' +
-                    'will keep.',
-            },
+            // Adoptions first: the funnel is what staff work FROM. A volunteer opens this category to
+            // answer "who is interested in this dog, and what is holding it up?", which is a question
+            // about inquiries, not about people. Adopters is the supporting list you reach when a
+            // particular family needs screening or their details corrected.
+            { id: 'adoptions', label: 'Adoptions', icon: 'fa-solid fa-heart',      kind: 'entity', entityName: 'MJ: Adoptions' },
+            { id: 'adopters',  label: 'Adopters',  icon: 'fa-solid fa-user-group', kind: 'entity', entityName: 'MJ: Adopters' },
         ];
     }
 }

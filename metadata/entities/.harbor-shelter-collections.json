@@ -1,0 +1,141 @@
+[
+  {
+    "_comments": [
+      "MJ Academy module 7 -- Animal's two related-record collections.",
+      "",
+      "This file is the module's payoff, and it is worth understanding what it replaces. In module 5",
+      "the Care & Health panel built its own RunView over Care Logs and folded every figure in",
+      "TypeScript. In module 6 the 'an animal cannot be listed Available without a completed",
+      "vaccination' rule built ANOTHER read of the same rows, with a hand-written filter string. Two",
+      "hand-rolled reads of one relationship, in two packages, neither aware of the other.",
+      "",
+      "One JSON blob on the relationship row replaces both. CodeGen emits the declaration onto the",
+      "GENERATED entity class, so animal.CareLogs exists with no subclass and works in the browser as",
+      "well as on the server -- and one animal.Save() now writes the animal and its care logs in a",
+      "single transaction.",
+      "",
+      "CareLogs -- Source 'database', because care logs are transactional records that no BaseEngine",
+      "caches; they must be read fresh. ReadOnly false and Load 'explicit' are the defaults for a",
+      "database collection, stated here rather than left implicit because this is a WRITABLE",
+      "collection and silence would read as an oversight.",
+      "",
+      "OnRemove 'delete' is the ownership statement, and it is where 'owned by its parent' actually",
+      "lives -- a policy value on the relationship row, not an adjective in a lesson. A care log has no",
+      "meaning without the animal it describes, so removing one from the collection deletes the row,",
+      "and deleting the animal cascades to its logs first, inside the same transaction. Contrast the",
+      "Adoptions collections below.",
+      "",
+      "No Sequence policy: care logs are events on a date, not positions in a list. CareDate DESC gives",
+      "the read order every screen wants (newest care first) without MJ renumbering anything.",
+      "",
+      "WHY Load IS 'explicit' AND NOT 'lazy', WHICH IS THE THING PEOPLE GET WRONG. 'lazy' would let",
+      "animal.CareLogs.Items fill on first read with no await -- but it requires Source 'cache' AND",
+      "read-only, because a property getter cannot await, so only a synchronous read from an already",
+      "loaded BaseEngine cache can fill one. Care logs are database-backed and writable, so 'lazy' is",
+      "not available to them, and CodeGen rejects the combination rather than emitting a declaration",
+      "that compiles and silently never fills. That constraint is the reason module 6's vaccination",
+      "rule stays in ValidateAsync -- see the rule's own comment."
+    ],
+    "fields": {
+      "Name": "MJ: Animals"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "CareLogs",
+              "Source": "database",
+              "ReadOnly": false,
+              "Load": "explicit",
+              "OnRemove": "delete",
+              "OrderBy": "CareDate DESC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Animals&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Care Logs&RelatedEntityJoinField=AnimalID"
+          },
+          "sync": {
+            "lastModified": "2026-09-08T20:31:39.984Z",
+            "checksum": "3e74692f763c9e610de5098cb94f214d35e3d67ac0469b98589b826eda905883"
+          }
+        },
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Adoptions",
+              "Source": "database",
+              "ReadOnly": false,
+              "Load": "explicit",
+              "OnRemove": "refuse",
+              "OrderBy": "InquiryDate DESC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Animals&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Adoptions&RelatedEntityJoinField=AnimalID"
+          },
+          "sync": {
+            "lastModified": "2026-09-08T20:31:40.014Z",
+            "checksum": "e0b512a885cf6e4882b0a07a8ed6fd3d1bd1bdb55f7f3b9d7cad6882b80677e4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Animals"
+    }
+  },
+  {
+    "_comments": [
+      "Adopter -> Adoptions. The SAME entity, declared as a collection from the OTHER side.",
+      "",
+      "This pair is the clearest demonstration in the module of what makes Adoption a different shape",
+      "from CareLog. Care Logs is a collection on Animal and nowhere else, because a care log belongs to",
+      "exactly one animal. Adoptions is a collection on BOTH Animal and Adopter, because an adoption is",
+      "meaningful from both directions -- and the two declarations are kept apart only by",
+      "RelatedEntityJoinField in the lookup below (AnimalID on the Animal side, AdopterID here).",
+      "",
+      "OnRemove 'refuse' on BOTH sides, and this is the important contrast with CareLogs.",
+      "",
+      "'refuse' makes Remove() throw. Detaching an adoption from its animal or its adopter is always a",
+      "bug: the row's entire meaning is the pair, so an adoption with one side removed is not a lighter",
+      "record, it is a corrupt one. 'delete' would be actively dangerous here -- pruning a family's",
+      "inquiry list would erase the adoption history of the animals involved, and a completed adoption",
+      "is permanent record that must survive an adopter moving away. 'orphan' cannot even be expressed:",
+      "both foreign keys are NOT NULL.",
+      "",
+      "So the three OnRemove policies are not stylistic preferences. Each one is the honest answer to",
+      "one question -- does this record still mean anything once it is detached from this parent?",
+      "CareLog: no, delete it. Adoption: the question is malformed, refuse it."
+    ],
+    "fields": {
+      "Name": "MJ: Adopters"
+    },
+    "relatedEntities": {
+      "MJ: Entity Relationships": [
+        {
+          "fields": {
+            "RelatedRecordCollection": {
+              "Name": "Adoptions",
+              "Source": "database",
+              "ReadOnly": false,
+              "Load": "explicit",
+              "OnRemove": "refuse",
+              "OrderBy": "InquiryDate DESC"
+            }
+          },
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Relationships.EntityID=@lookup:MJ: Entities.Name=MJ: Adopters&RelatedEntityID=@lookup:MJ: Entities.Name=MJ: Adoptions&RelatedEntityJoinField=AdopterID"
+          },
+          "sync": {
+            "lastModified": "2026-09-08T20:31:40.038Z",
+            "checksum": "e0b512a885cf6e4882b0a07a8ed6fd3d1bd1bdb55f7f3b9d7cad6882b80677e4"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Adopters"
+    }
+  }
+]

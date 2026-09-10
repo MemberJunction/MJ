@@ -10,13 +10,38 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Animal Identity Section -->
+    <!-- Personal Information Section -->
     <mj-collapsible-panel
-        SectionKey="animalIdentity"
-        SectionName="Animal Identity"
-        Icon="fa fa-id-card"
+        SectionKey="personalInformation"
+        SectionName="Personal Information"
+        Icon="fa fa-user"
         [Form]="this"
         [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="FirstName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="LastName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Email"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Email"
+        ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -25,53 +50,20 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Species"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="BreedID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="MicrochipNumber"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Shelter History Section -->
+    <!-- Home and Lifestyle Section -->
     <mj-collapsible-panel
-        SectionKey="shelterHistory"
-        SectionName="Shelter History"
-        Icon="fa fa-history"
+        SectionKey="homeAndLifestyle"
+        SectionName="Home and Lifestyle"
+        Icon="fa fa-home"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="IntakeDate"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IntakeReason"
+            FieldName="HousingType"
             Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -79,58 +71,15 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Status"
-            Type="select"
+            FieldName="HasYard"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="HousingID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
-        ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Physical Attributes Section -->
-    <mj-collapsible-panel
-        SectionKey="physicalAttributes"
-        SectionName="Physical Attributes"
-        Icon="fa fa-weight"
-        [Form]="this"
-        [FormContext]="formContext">
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Sex"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="EstimatedBirthDate"
-            Type="datepicker"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="WeightKg"
-            Type="number"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="IsGoodWithPeople"
+            FieldName="HasOtherPets"
             Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -138,34 +87,26 @@
 
     </mj-collapsible-panel>
 
-    <!-- Animal Profile Section -->
+    <!-- Status and Screening Section -->
     <mj-collapsible-panel
-        SectionKey="animalProfile"
-        SectionName="Animal Profile"
-        Icon="fa fa-align-left"
+        SectionKey="statusAndScreening"
+        SectionName="Status and Screening"
+        Icon="fa fa-check-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="Description"
-            Type="textarea"
+            FieldName="IsApproved"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="PhotoBase64"
-            Type="textarea"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Notes"
-            Type="textarea"
+            FieldName="IsActive"
+            Type="checkbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -204,31 +145,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Care Logs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCareLogs"
-        SectionName="Care Logs"
-        Icon="fa fa-notes-medical"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCareLogs')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Care Logs','AnimalID')"
-                [NewRecordValues]="NewRecordValues('MJ: Care Logs','AnimalID')"
-                [AllowLoad]="IsSectionExpanded('mJCareLogs')"
-                [ShowToolbar]="true"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCareLogs', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Adoptions Section -->
     <mj-collapsible-panel
         SectionKey="mJAdoptions"
@@ -242,8 +158,8 @@
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Adoptions','AnimalID')"
-                [NewRecordValues]="NewRecordValues('MJ: Adoptions','AnimalID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Adoptions','AdopterID')"
+                [NewRecordValues]="NewRecordValues('MJ: Adoptions','AdopterID')"
                 [AllowLoad]="IsSectionExpanded('mJAdoptions')"
                 [ShowToolbar]="true"
                 (Navigate)="OnFormNavigate($event)"

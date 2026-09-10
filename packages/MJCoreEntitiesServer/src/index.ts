@@ -2,6 +2,10 @@ export * from './custom/HarborShelter/MJAnimalEntityServer.server';
 export * from './custom/HarborShelter/MJHousingEntityServer.server';
 export * from './custom/HarborShelter/MJBreedEntityServer.server';
 export * from './custom/HarborShelter/MJCareLogEntityServer.server';
+// MJ Academy module 7 -- Dogs and Cats need NO server class: an IS-A subtype's only rule
+// (species must match the parent) is record-only, so it lives in the shared package.
+export * from './custom/HarborShelter/MJAdoptionEntityServer.server';
+export * from './custom/HarborShelter/MJAdopterEntityServer.server';
 export * from './custom/MJAIPromptEntityServer.server';
 export * from './custom/MJEntityDocumentEntityServer.server';
 export * from './custom/MJAIPromptRunEntityServer.server';

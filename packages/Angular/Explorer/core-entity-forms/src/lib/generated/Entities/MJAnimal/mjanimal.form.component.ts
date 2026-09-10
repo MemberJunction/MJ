@@ -21,7 +21,8 @@ export class MJAnimalFormComponent extends BaseFormComponent {
             { sectionKey: 'physicalAttributes', sectionName: 'Physical Attributes', isExpanded: true },
             { sectionKey: 'animalProfile', sectionName: 'Animal Profile', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJCareLogs', sectionName: 'Care Logs', isExpanded: false }
+            { sectionKey: 'mJCareLogs', sectionName: 'Care Logs', isExpanded: false },
+            { sectionKey: 'mJAdoptions', sectionName: 'Adoptions', isExpanded: false }
         ]);
     }
 }
