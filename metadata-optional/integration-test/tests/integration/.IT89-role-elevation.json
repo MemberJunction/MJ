@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT89 - Role Privilege Elevation Guard",
+    "Description": "Issue #4282 on the real stack: ClassFactory resolves MJUserRoleEntityServer for MJ: User Roles and MJRoleEntityServer for MJ: Roles, and the provider builds both (RE1); a non-Owner assigning a role they do not hold is refused by the guard's Validate() with the error attributed to RoleID (RE2); a non-Owner assigning a role they DO hold still validates, so delegated administration is not closed (RE3); an Owner may assign any role, so the admin path stays open (RE4); creating a MJ: Roles row is refused for a non-Owner and permitted for an Owner (RE5); and — where a non-Owner principal actually holds CanCreate on MJ: User Roles — a real Save() of a self-grant does not succeed, attempted inside an always-rolled-back transaction (RE6). The guards' branch logic is unit-covered in MJCoreEntitiesServer; this bundle proves the wiring. Server transport; no fixtures created and nothing persisted.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Issue #4282 on the real stack: ClassFactory resolves MJUserRoleEntityServer for MJ: User Roles and MJRoleEntityServer for MJ: Roles, and the provider builds both (RE1); a non-Owner assigning a role they do not hold is refused by the guard's Validate() with the error attributed to RoleID (RE2); a non-Owner assigning a role they DO hold still validates, so delegated administration is not closed (RE3); an Owner may assign any role, so the admin path stays open (RE4); creating a MJ: Roles row is refused for a non-Owner and permitted for an Owner (RE5); and — where a non-Owner principal actually holds CanCreate on MJ: User Roles — a real Save() of a self-grant does not succeed, attempted inside an always-rolled-back transaction (RE6). The guards' branch logic is unit-covered in MJCoreEntitiesServer; this bundle proves the wiring. Server transport; no fixtures created and nothing persisted."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "role-elevation"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "3F6C1B84-9D27-4A15-B0EE-7C4A2D8F5E31"
+  }
+}

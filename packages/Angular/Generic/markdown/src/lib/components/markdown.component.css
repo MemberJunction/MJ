@@ -518,6 +518,12 @@
   margin-bottom: 8px;
 }
 
+/* A specific reason, when we have one — e.g. the lazily-fetched diagram engine
+   never arrived, which is a different problem than bad diagram source. */
+.mj-markdown-container .mermaid-error[data-mermaid-error]::before {
+  content: attr(data-mermaid-error);
+}
+
 /* ============================================
    Heading Anchors
    ============================================ */

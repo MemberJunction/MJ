@@ -1,26 +1,17 @@
 import { RegisterClass } from '@memberjunction/global';
 import { QuickBooksBaseAction } from '../quickbooks-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
-import { UserInfo } from '@memberjunction/core';
 import { BaseAction } from '@memberjunction/actions';
+import { ACCOUNTING_VERBS, ERP_INTEGRATION, erpPluginKey } from '../../../constants';
+import { JournalEntryLine } from '../../../types';
+import { journalEntryBalanceError, parseAndValidateJournalEntryLines, totalDebits } from '../../../journal-entry';
 
-/**
- * Journal entry line interface
- */
-export interface JournalEntryLine {
-    accountId: string;
-    debit?: number;
-    credit?: number;
-    description?: string;
-    entityType?: 'Customer' | 'Vendor' | 'Employee';
-    entityId?: string;
-    classId?: string;
-    departmentId?: string;
-}
+export type { JournalEntryLine } from '../../../types';
 
 /**
  * Action to create a journal entry in QuickBooks Online
  */
+@RegisterClass(BaseAction, erpPluginKey(ACCOUNTING_VERBS.CreateJournalEntry, ERP_INTEGRATION.QuickBooksOnline))
 @RegisterClass(BaseAction, 'CreateQuickBooksJournalEntryAction')
 export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
     
@@ -51,17 +42,15 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
             const linesData = this.getParamValue(params.Params, 'Lines');
             const adjustmentEntry = this.getParamValue(params.Params, 'AdjustmentEntry') || false;
 
-            // Validate and parse lines
-            const lines = this.parseAndValidateLines(linesData);
+            const lines = parseAndValidateJournalEntryLines(linesData);
+            for (let i = 0; i < lines.length; i++) {
+                if (!lines[i].accountId) {
+                    throw new Error(`Line ${i + 1}: accountId is required for QuickBooks Online`);
+                }
+            }
 
-            // Validate journal entry balance
             if (!this.validateJournalEntryBalance(lines)) {
-                return {
-                    Success: false,
-                    ResultCode: 'VALIDATION_ERROR',
-                    Message: 'Journal entry is not balanced. Total debits must equal total credits.',
-                    Params: params.Params
-                };
+                return journalEntryBalanceError(params.Params);
             }
 
             // Build the journal entry object for QuickBooks
@@ -70,7 +59,7 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
                 TxnDate: this.formatQBODate(entryDate instanceof Date ? entryDate : new Date(entryDate)),
                 PrivateNote: privateNote,
                 Adjustment: adjustmentEntry,
-                Line: lines.map((line, index) => this.mapToQBOJournalLine(line, index + 1))
+                Line: lines.map((line) => this.mapToQBOJournalLine(line))
             };
 
             // Create the journal entry in QuickBooks
@@ -97,7 +86,7 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
                 },
                 {
                     Name: 'TotalAmount',
-                    Value: createdEntry.TotalAmt,
+                    Value: createdEntry.TotalAmt ?? totalDebits(lines),
                     Type: 'Output'
                 },
                 {
@@ -125,66 +114,15 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
         }
     }
 
-
-    /**
-     * Parse and validate journal entry lines
-     */
-    private parseAndValidateLines(linesParam: any): JournalEntryLine[] {
-        if (!linesParam) {
-            throw new Error('Lines parameter is required');
-        }
-
-        let lines: JournalEntryLine[];
-        
-        // Handle if lines is a JSON string
-        if (typeof linesParam === 'string') {
-            try {
-                lines = JSON.parse(linesParam);
-            } catch (error) {
-                throw new Error('Invalid JSON format for Lines parameter');
-            }
-        } else {
-            lines = linesParam;
-        }
-
-        if (!Array.isArray(lines)) {
-            throw new Error('Lines must be an array');
-        }
-
-        if (lines.length < 2) {
-            throw new Error('Journal entry must have at least 2 lines');
-        }
-
-        // Validate each line
-        lines.forEach((line, index) => {
-            if (!line.accountId) {
-                throw new Error(`Line ${index + 1}: accountId is required`);
-            }
-
-            if (line.debit === undefined && line.credit === undefined) {
-                throw new Error(`Line ${index + 1}: either debit or credit amount is required`);
-            }
-
-            if (line.debit !== undefined && line.credit !== undefined) {
-                throw new Error(`Line ${index + 1}: cannot have both debit and credit on the same line`);
-            }
-
-            if (line.debit !== undefined && line.debit < 0) {
-                throw new Error(`Line ${index + 1}: debit amount cannot be negative`);
-            }
-
-            if (line.credit !== undefined && line.credit < 0) {
-                throw new Error(`Line ${index + 1}: credit amount cannot be negative`);
-            }
-        });
-
-        return lines;
-    }
-
     /**
      * Map journal entry line to QuickBooks format
      */
-    private mapToQBOJournalLine(line: JournalEntryLine, lineNumber: number): any {
+    private mapToQBOJournalLine(line: JournalEntryLine): any {
+        const classId = line.classId
+            || line.dimensions?.find(d => d.code === 'Class')?.valueCode;
+        const departmentId = line.departmentId
+            || line.dimensions?.find(d => d.code === 'Department')?.valueCode;
+
         const qbLine: any = {
             DetailType: 'JournalEntryLineDetail',
             Amount: line.debit || line.credit || 0,
@@ -196,12 +134,10 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
             }
         };
 
-        // Add description if provided
         if (line.description) {
             qbLine.Description = line.description;
         }
 
-        // Add entity reference if provided
         if (line.entityType && line.entityId) {
             qbLine.JournalEntryLineDetail.Entity = {
                 Type: line.entityType,
@@ -211,17 +147,15 @@ export class CreateQuickBooksJournalEntryAction extends QuickBooksBaseAction {
             };
         }
 
-        // Add class reference if provided
-        if (line.classId) {
+        if (classId) {
             qbLine.JournalEntryLineDetail.ClassRef = {
-                value: line.classId
+                value: classId
             };
         }
 
-        // Add department reference if provided
-        if (line.departmentId) {
+        if (departmentId) {
             qbLine.JournalEntryLineDetail.DepartmentRef = {
-                value: line.departmentId
+                value: departmentId
             };
         }
 

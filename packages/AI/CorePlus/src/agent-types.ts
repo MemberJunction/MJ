@@ -234,7 +234,19 @@ export interface FileOutputRef {
     fileId?: string;
     /** File size in bytes */
     sizeBytes?: number;
+    /**
+     * How the artifact MJ creates for this file is shown. `Always` (default): a normal artifact, with a
+     * card on the message and the viewer. `System Only`: the artifact, its version and its download URL
+     * exist, but the chat keeps it out of the message cards (a host opts in with `showSystemArtifacts`).
+     * An action whose file is a DOWNLOAD — an export the user asked for and will open elsewhere — says
+     * so here, instead of the host having to hide a card that opens an empty viewer.
+     * @since 6.1.0
+     */
+    visibility?: FileOutputVisibility;
 }
+
+/** The visibility an action can ask for on the artifact made from its file output. */
+export type FileOutputVisibility = 'Always' | 'System Only';
 
 /**
  * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
@@ -263,12 +275,17 @@ export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
     const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
     if (!fileData && !fileId) return null;
 
+    const rawVisibility = fo['visibility'];
+    const visibility: FileOutputVisibility | undefined =
+        rawVisibility === 'Always' || rawVisibility === 'System Only' ? rawVisibility : undefined;
+
     return {
         fileName,
         mimeType,
         fileData,
         fileId,
-        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined,
+        visibility
     };
 }
 
@@ -418,6 +435,14 @@ export type AgentSubAgentRequest<TContext = any> = {
      */
     context?: TContext;
 }
+
+/**
+ * Why BaseAgent's `filterAvailableSkills` hook is being asked. `catalog` is the set the model is
+ * OFFERED (the auto-activatable skills rendered into the prompt); `auto-activation` is a
+ * model-initiated Skill step being validated or executed; `requested` is a user's explicit
+ * `/skill` request arriving through `ExecuteAgentParams.requestedSkillIDs`.
+ */
+export type SkillAvailabilityPurpose = 'catalog' | 'auto-activation' | 'requested';
 
 /**
  * A skill the agent's response requested be activated (by catalog name — the agent only
@@ -680,6 +705,17 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
 export type ExecuteAgentResult<P = any> = {
     /** Whether the agent execution was successful */
     success: boolean;
+    /**
+     * Transport-level failure text when {@link agentRun} is missing (lost WebSocket,
+     * fire-and-forget timeout). Prefer `agentRun.ErrorMessage` when the run exists.
+     */
+    errorMessage?: string;
+    /**
+     * True when the fire-and-forget mutation returned an ACK before the transport
+     * died (server has the run). False when the request never left the browser.
+     * Undefined when the caller does not know.
+     */
+    requestAcknowledged?: boolean;
     /** Optional payload returned by the agent */
     payload?: P;
     /**
@@ -1007,6 +1043,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: MJAIAgentRunEntityExtended;
+    /**
+     * The skills active in the PARENT run when this sub-agent was invoked. Skills activate on the root
+     * agent only, so a sub-agent's own activated set is always empty; this is how the root's active
+     * skills reach the actions a sub-agent runs (`Context.ActiveSkillIDs`), e.g. a retrieval sub-agent's
+     * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
+     */
+    parentActivatedSkillIDs?: readonly string[];
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /**

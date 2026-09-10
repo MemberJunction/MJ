@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/tag-engine-base",
   "type": "module",
-  "version": "6.1.0-edge.4",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Tag Engine Base - hierarchical tag registry with lookup helpers, usable on client and server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,9 +16,9 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.4",
-    "@memberjunction/global": "6.1.0-edge.4",
-    "@memberjunction/core-entities": "6.1.0-edge.4"
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5"
   },
   "devDependencies": {
     "@types/node": "24.10.11",

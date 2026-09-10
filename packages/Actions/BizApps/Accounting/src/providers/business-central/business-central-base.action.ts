@@ -93,8 +93,12 @@ export abstract class BusinessCentralBaseAction extends BaseAccountingAction {
                 throw new Error(errorMessage);
             }
 
-            const result = await response.json();
-            return result as T;
+            // Bound actions such as Microsoft.NAV.post return 204 with an empty body.
+            const text = await response.text();
+            if (!text || !text.trim()) {
+                return undefined as T;
+            }
+            return JSON.parse(text) as T;
         } catch (error) {
             if (error instanceof Error) {
                 throw error;

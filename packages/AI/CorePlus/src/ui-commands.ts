@@ -100,10 +100,18 @@ export interface OpenResourceCommand {
 
     /**
      * ID of the resource to open.
-     * For Record type: Just the ID value (entityName is separate)
-     * For other types: The resource identifier (dashboard ID, report ID, etc.)
+     * For Record type with a single primary key: that key's value (`entityName` is separate).
+     * For other types: The resource identifier (dashboard ID, report ID, etc.).
+     * Optional on Record when {@link keys} supplies the primary key.
      */
-    resourceId: string;
+    resourceId?: string;
+
+    /**
+     * Composite (or explicit) primary-key fields for Record type.
+     * Keys are entity field names from metadata. When present, these win per field
+     * over {@link resourceId}. Use this when the entity PK is not a single `ID`.
+     */
+    keys?: Record<string, string | number>;
 
     /**
      * Mode for opening the resource.

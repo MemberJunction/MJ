@@ -1,5 +1,6 @@
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
-import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { EscapeSQLString, MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { AIEngine } from '@memberjunction/aiengine';
 import type { MJSearchScopePermissionEntity, MJAIAgentEntity, MJAISkillEntity, MJAISkillSearchScopeEntity } from '@memberjunction/core-entities';
 
 /**
@@ -16,12 +17,13 @@ export type SearchScopePermissionLevel = 'None' | 'Read' | 'Search' | 'Manage';
 export type SearchScopePermissionSource =
     | 'DirectGrant'                // SearchScopePermission row keyed by UserID
     | 'RoleGrant'                  // SearchScopePermission row keyed by one of the user's RoleIDs
-    | 'AgentUnscopedAll'           // Agent's SearchScopeAccess = 'All' overrides per-scope rules
+    | 'AgentUnscopedAll'           // Agent's SearchScopeAccess = 'All' supplied a grant as a FALLBACK (steps 2/3 found none); it does not override them
     | 'AgentNone'                  // Agent's SearchScopeAccess = 'None' rejects regardless of user grants
     | 'AgentAssignedNotListed'     // Agent's SearchScopeAccess = 'Assigned' and this scope is not in its assigned list
-    | 'SkillUnscopedAll'           // Skill's SearchScopeAccess = 'All' overrides per-scope rules
+    | 'SkillUnscopedAll'           // Skill's SearchScopeAccess = 'All' supplied a grant as a FALLBACK, and only with its agent confirmed (step 4b)
     | 'SkillNone'                  // Skill's SearchScopeAccess = 'None' rejects regardless of user grants
     | 'SkillAssignedNotListed'     // Skill's SearchScopeAccess = 'Assigned' and this scope is not in its assigned list
+    | 'PrincipalNotActivatable'    // A supplied agent/skill principal the caller may not wield, or that would not load
     | 'NoGrant';                   // No applicable row found
 
 export interface EffectivePermission {
@@ -128,6 +130,11 @@ function highestLevel(a: SearchScopePermissionLevel, b: SearchScopePermissionLev
  * }
  * ```
  *
+ * One caution on that pattern: a stock denial whose Source is 'PrincipalNotActivatable' means
+ * the CALLER may not wield the named principal. An override that widens past it re-opens the
+ * wieldability gate — widen from the user's own entitlements, never on the strength of a
+ * principal the stock resolver just refused.
+ *
  * **Do not pass a priority.** Subclassing the stock resolver is what orders the registration, and
  * it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as
  * "one higher than the highest already registered for this (base, key)" — and a subclass cannot be
@@ -158,13 +165,23 @@ export abstract class SearchScopePermissionResolverBase {
 export const SEARCH_SCOPE_PERMISSION_RESOLVER_KEY = 'SearchScopePermissionResolver';
 
 /**
- * Resolves the effective SearchScope permission for a (user, scope, agent)
- * triple.
+ * Resolves the effective SearchScope permission for a (user, scope, agent, skill)
+ * tuple — plus the caller's tenant (`PrimaryScopeRecordID`), which narrows tenant-scoped grants.
  *
  * Resolution order (later steps only run if the earlier did not produce a
  * definitive answer):
  *
- *   1. Agent.SearchScopeAccess === 'None' → reject (explicit agent-side deny).
+ *   1.  Agent.SearchScopeAccess === 'None' → reject (explicit agent-side deny).
+ *   1b. Agent.SearchScopeAccess === 'Assigned' and this scope is not in its list → reject.
+ *   1c/1d. The SAME two rules for a SKILL principal, deliberately identical in shape.
+ *   1e. A supplied SKILL must be ACTIVATABLE by the caller → otherwise reject.
+ *       This one surprises people, so it is worth stating here rather than only at the code.
+ *       A skill is judged wherever it is NAMED, not only where it grants, because it steers the
+ *       bound through a surface this verdict never sees: SearchParams.AISkillID binds into
+ *       Principals.SkillID, and for a `restricts: true` dimension the expansion query's output IS
+ *       the enforced bound. Judging it only at step 4b would let a user holding their own grant
+ *       (steps 2/3) name any skill and widen with it.
+ *       The AGENT is deliberately NOT judged here — see step 4.
  *   2. Direct grant: a SearchScopePermission row with UserID = user.ID and
  *      SearchScopeID = scope.ID. PermissionLevel = 'None' is an explicit
  *      deny that short-circuits and rejects regardless of role grants.
@@ -172,8 +189,18 @@ export const SEARCH_SCOPE_PERMISSION_RESOLVER_KEY = 'SearchScopePermissionResolv
  *      user's UserRoles. The highest non-None level wins. None entries are
  *      ignored at the role level (see comment below).
  *   4. Agent.SearchScopeAccess === 'All' → allow at Search level (lets
- *      trusted agents act across all scopes when no user-side grant exists).
- *   5. No grant → reject.
+ *      trusted agents act across all scopes when no user-side grant exists), but ONLY if the
+ *      caller may actually run that agent. The agent is judged HERE and not at supply because
+ *      elsewhere AIAgentID is attribution — pre-execution RAG threads it purely for
+ *      SearchExecutionLog — and gating attribution turns an analytics field into an outage.
+ *      A DENIAL here rejects (for the message — 4b would refuse it too). A merely unevaluable agent
+ *      falls through, and is then rejected by 4b if an 'All' skill follows, or by step 5 if not.
+ *      Either way the outcome is a rejection; the distinction survives in the message.
+ *   4b. Skill.SearchScopeAccess === 'All' → allow at Search level, but ONLY with the agent
+ *      positively confirmed. Step 1e is not sufficient here: it vouches for the SKILL, and
+ *      GetSkillsForAgent reads SKILL permissions, which say nothing about whether this caller may
+ *      run the agent the skill would activate on. Both a denial and an unevaluable agent refuse.
+ *   5. No grant → reject, naming the unwieldable 'All' agent if that was the only candidate.
  *
  * The user-direct-None rule (step 2) is intentional: an admin who explicitly
  * denies a user on a scope should not have that decision overridden by a
@@ -229,6 +256,27 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
             // Restricts but does not grant — the user still needs a per-scope grant below.
         }
 
+        // Step 1e: A SUPPLIED SKILL MUST BE ACTIVATABLE, WHOEVER ENDS UP GRANTING.
+        //
+        // The agent is judged at step 4, where it widens, because elsewhere it is pure attribution:
+        // the pre-execution RAG path threads AIAgentID only so SearchExecutionLog can attribute the
+        // search, and gating that turns an analytics field into an outage.
+        //
+        // A skill has no such second life. It is supplied for exactly one reason — to STEER — and it
+        // steers through a second surface the permission verdict never sees: `SearchParams.AISkillID`
+        // is bound into `Principals.SkillID` and, for a `restricts: true` dimension, the expansion
+        // query's output IS the enforced bound. Judging it only in the 'All' fallback would leave a
+        // user who holds their own DirectGrant or RoleGrant free to name any skill and widen the bound
+        // with it — the exact "an id a caller merely NAMED" case this gate exists to close, and
+        // perversely the case where a stricter skill is judged and an 'All' skill is not.
+        if (Skill) {
+            const activatable = await this.skillIsActivatable(Agent, Skill, User);
+            if (activatable.ok === false) {
+                return this.buildResult(false, 'None', 'PrincipalNotActivatable',
+                    `${activatable.reason} — a skill steers the bound, so it is judged wherever it is named.`);
+            }
+        }
+
         // Load all SearchScopePermission rows for this scope. We pull the
         // whole set (typically small per scope) and filter in JS so we can
         // apply the user-direct-None short-circuit deterministically.
@@ -263,20 +311,82 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
                 `User '${User.Name}' inherits level '${level}' on this scope through role membership.`);
         }
 
+        // JUDGE THE AGENT ONCE, FOR BOTH FALLBACKS.
+        //
+        // Both 'All' arms widen THROUGH this agent, so both need its verdict — step 4b included,
+        // because a skill that widens does so on the agent it would activate on. Step 1e does NOT
+        // cover that: `GetSkillsForAgent` filters the user's rights on the SKILL, never on the agent.
+        // Without this, an 'All' skill launders an agent the caller may not run.
+        const agentFallbackInPlay = !!Agent
+            && (Agent.SearchScopeAccess === 'All' || Skill?.SearchScopeAccess === 'All');
+        const agentVerdict = agentFallbackInPlay
+            ? await this.agentIsWieldable(Agent as MJAIAgentEntity, User)
+            : null;
+        // A WIDENING FALLBACK REQUIRES A POSITIVE CONFIRMATION, NOT MERELY THE ABSENCE OF A DENIAL.
+        //
+        // An earlier revision let `kind: 'unavailable'` (agent missing from the metadata cache) fall
+        // through to the skill fallback, reasoning that a cache blip should not refuse a user whose
+        // own grant covered the scope. That reasoning is impossible: steps 2 and 3 RETURN, so a user
+        // with a direct or role grant never reaches a fallback at all. What it actually did was grant
+        // 'Search' on any scope, to a user with NO grant, whenever an agent was absent from the cache
+        // — an admin creating an agent after boot was enough. Fail-open in the one place the module's
+        // own docblock says must fail closed.
+        //
+        // The distinction still earns its keep in the MESSAGE (a load problem reads differently from a
+        // denial) and at step 4, where falling through only ever ends in a refusal anyway.
+        const agentUnconfirmed = agentVerdict && agentVerdict.ok === false ? agentVerdict.reason : null;
+        const agentDenied = agentVerdict && agentVerdict.ok === false && agentVerdict.kind === 'denied'
+            ? agentVerdict.reason : null;
+
         // Step 4: agent fallback. SearchScopeAccess='All' lets trusted agents
         // operate across scopes when the user has no per-scope grant.
         if (Agent && Agent.SearchScopeAccess === 'All') {
-            return this.buildResult(true, 'Search', 'AgentUnscopedAll',
-                `Agent '${Agent.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
+            // A PRINCIPAL MAY ONLY WIDEN IF THE CALLER MAY WIELD IT.
+            //
+            // This is the one place an agent GRANTS an outcome: by here the user has no direct or
+            // role grant, and 'All' is about to supply one. Elsewhere `Agent` is attribution — the
+            // pre-execution RAG path threads AIAgentID purely so SearchExecutionLog can attribute
+            // the search — so the check belongs HERE and not at the point the id is supplied.
+            // Gating supply instead of grant is what turns an analytics field into an outage.
+            if (agentVerdict?.ok) {
+                return this.buildResult(true, 'Search', 'AgentUnscopedAll',
+                    `Agent '${Agent.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
+            }
+            // THIS EARLY RETURN EXISTS FOR THE MESSAGE, NOT FOR THE OUTCOME. A fallen-through
+            // denial is refused anyway — by step 4b when an 'All' skill follows, otherwise by
+            // step 5 — so deleting this block changes no verdict in any combination of agent
+            // access, skill access, wieldability and user grant; only the wording moves. It stays
+            // because "this user may not run agent X" is a better answer than either of those
+            // phrasings.
+            if (agentDenied) {
+                return this.buildResult(false, 'None', 'PrincipalNotActivatable',
+                    `Agent '${Agent.Name}' has SearchScopeAccess='All', but ${agentDenied} — the fallback does not apply.`);
+            }
         }
 
-        // Step 4b: skill fallback, mirroring the agent's 'All'.
+        // Step 4b: skill fallback, mirroring the agent's 'All'. Step 1e already judged the SKILL —
+        // a skill is judged wherever it is named, not only where it grants — but that is not the whole
+        // question here, because this arm WIDENS, and it widens through the agent.
         if (Skill && Skill.SearchScopeAccess === 'All') {
+            // The skill widens through the agent it would activate on, so this fallback needs that
+            // agent positively confirmed. Both an outright denial and an unevaluable one refuse:
+            // step 1e vouches for the SKILL (GetSkillsForAgent reads skill permissions), which says
+            // nothing about whether this caller may run the agent it would activate on.
+            if (agentUnconfirmed) {
+                return this.buildResult(false, 'None', 'PrincipalNotActivatable',
+                    `Skill '${Skill.Name}' has SearchScopeAccess='All', but ${agentUnconfirmed} — a skill widens through its agent, so it cannot grant what the agent has not been confirmed to allow.`);
+            }
             return this.buildResult(true, 'Search', 'SkillUnscopedAll',
                 `Skill '${Skill.Name}' has SearchScopeAccess='All'; granting 'Search' as a fallback for this scope.`);
         }
 
-        // Step 5: no grant.
+        // Step 5: no grant. When an 'All' agent was the only thing that could have granted and it
+        // was refused, say so — otherwise the caller sees a bare 'NoGrant' and cannot tell a missing
+        // permission from an agent that could not be evaluated.
+        if (agentUnconfirmed) {
+            return this.buildResult(false, 'None', 'PrincipalNotActivatable',
+                `Agent '${Agent?.Name}' has SearchScopeAccess='All', but ${agentUnconfirmed} — the fallback does not apply, and no direct or role grant covers this scope.`);
+        }
         return this.buildResult(false, 'None', 'NoGrant',
             `User '${User.Name}' has no direct grant, no qualifying role grant, and no agent- or skill-side fallback for this scope.`);
     }
@@ -327,7 +437,7 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         const rv = new RunView();
         const result = await rv.RunView<MJAISkillSearchScopeEntity>({
             EntityName: 'MJ: AI Skill Search Scopes',
-            ExtraFilter: `SkillID='${skillID}' AND SearchScopeID='${searchScopeID}' AND Status='Active'`,
+            ExtraFilter: `SkillID='${EscapeSQLString(skillID)}' AND SearchScopeID='${EscapeSQLString(searchScopeID)}' AND Status='Active'`,
             ResultType: 'simple',
             // Same reasoning as loadPermissionsForScope: a permission decision must never read
             // a stale cache.
@@ -356,7 +466,7 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         const rv = new RunView();
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: AI Agent Search Scopes',
-            ExtraFilter: `AgentID='${agentID}' AND SearchScopeID='${searchScopeID}' AND Status='Active'`,
+            ExtraFilter: `AgentID='${EscapeSQLString(agentID)}' AND SearchScopeID='${EscapeSQLString(searchScopeID)}' AND Status='Active'`,
             Fields: ['ID'],
             ResultType: 'simple',
             // Same fail-closed semantics as loadPermissionsForScope: a stale
@@ -383,7 +493,7 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         const rv = new RunView();
         const result = await rv.RunView<MJSearchScopePermissionEntity>({
             EntityName: 'MJ: Search Scope Permissions',
-            ExtraFilter: `SearchScopeID='${searchScopeID}'`,
+            ExtraFilter: `SearchScopeID='${EscapeSQLString(searchScopeID)}'`,
             ResultType: 'simple',
             // Permission decisions must NEVER read stale cache — a freshly-revoked grant
             // or a freshly-granted permission must take effect immediately. Skipping
@@ -399,6 +509,87 @@ export class SearchScopePermissionResolver extends SearchScopePermissionResolver
         }
         return result.Results ?? [];
     }
+
+    /**
+     * May this user run this agent? Asked at the WIDENING FALLBACKS — the agent's own
+     * `SearchScopeAccess='All'` arm (step 4) and, because a skill widens through the agent it would
+     * activate on, the skill's `'All'` arm too (step 4b). Not only the agent's own arm: a non-`'All'`
+     * agent still reaches this check when the SKILL is `'All'`. Agent permissions are open by default
+     * (no rows means anyone may run it), so without this an id a caller merely NAMED could grant
+     * `Search`.
+     *
+     * Deliberately NOT asked at the point an `AIAgentID` is supplied: pre-execution RAG threads it
+     * purely so `SearchExecutionLog` can attribute the search, and gating that turns an analytics
+     * field into a retrieval outage.
+     *
+     * A stale metadata cache is reported distinctly. `GetUserAgentPermissions` throws when the agent
+     * is absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created
+     * after the cache loaded would otherwise read as "not permitted" — a metadata-load problem
+     * wearing an authorization message.
+     */
+    protected async agentIsWieldable(
+        agent: MJAIAgentEntity,
+        user: UserInfo,
+    ): Promise<{ ok: true } | { ok: false; kind: 'unavailable' | 'denied'; reason: string }> {
+        await AIEngine.Instance.Config(false, user);
+        if (!AIEngine.Instance.Agents.some(a => UUIDsEqual(a.ID, agent.ID))) {
+            return { ok: false, kind: 'unavailable', reason: `agent '${agent.Name}' is not in the AI metadata cache, so its permissions cannot be evaluated (a metadata-load problem, not a denial)` };
+        }
+        const perms = await AIEngine.Instance.GetUserAgentPermissions(agent.ID, user);
+        if (!perms?.canRun) return { ok: false, kind: 'denied', reason: `this user may not run agent '${agent.Name}'` };
+        return { ok: true };
+    }
+
+    /**
+     * Could this caller actually activate this skill on this agent? Asked wherever a skill is NAMED,
+     * because a skill steers the bound from a surface the permission verdict never sees — see step 1e.
+     *
+     * DOES NOT CHECK THE AGENT, AND THAT IS NOT SUFFICIENT ON ITS OWN. `GetSkillsForAgent` is
+     * agent-accepted ∩ agent-granted ∩ Active ∩ user-runnable-ON-THE-SKILL — read it
+     * (`BaseAIEngine.GetSkillsForAgent`): its permission filter is `AISkillPermissionHelper`, the
+     * user's rights on the SKILL. It never consults `AIAgentPermission`. So a user who may not run
+     * the agent still gets a NON-empty list here, because skill permissions are open by default.
+     *
+     * The agent is therefore judged separately, at the fallbacks (steps 4 and 4b), NOT here. That
+     * keeps an agent-side cache problem from refusing a user whose own grant covers the scope.
+     *
+     * It does NOT make this method exempt from the same hazard: step 1e runs BEFORE the grant steps,
+     * so a skill that cannot be confirmed refuses such a user too. That is deliberate — an
+     * unconfirmed skill must not steer the bound — but it is a real availability cost, which is why
+     * the cache case is separated from a denial below and reported as what it is.
+     */
+    protected async skillIsActivatable(
+        agent: MJAIAgentEntity | null,
+        skill: MJAISkillEntity,
+        user: UserInfo,
+    ): Promise<{ ok: true } | { ok: false; kind: 'unavailable' | 'denied'; reason: string }> {
+        await AIEngine.Instance.Config(false, user);
+        if (!agent) return { ok: false, kind: 'denied', reason: `skill '${skill.Name}' is judged relative to the calling agent, and none was supplied` };
+
+        // SAME UNAVAILABLE-VS-DENIED DISTINCTION THE AGENT ARM CARRIES, FOR THE SAME REASON.
+        //
+        // `GetSkillsForAgent` reads `_skills` out of the AIEngine cache. A cold (never-loaded) cache yields
+        // an empty list, which is indistinguishable from "this user may not activate that skill" if
+        // you only look at the result. Reporting that as a permission denial sends an operator after
+        // skill grants when the real fault is metadata loading — and because step 1e runs BEFORE the
+        // direct/role grant steps, it is a user with their own grant who gets the misleading message.
+        // Still refuses either way: a skill that cannot be confirmed must not steer the bound.
+        // (A stale-but-LOADED cache is non-empty, so a skill created after boot reports as denied,
+        // not unavailable — the freshness caveat runs the other way from the agent arm's check.)
+        if (AIEngine.Instance.Agents.length === 0) {
+            return { ok: false, kind: 'unavailable', reason: `the AI metadata cache is empty, so skill '${skill.Name}' cannot be evaluated (a metadata-load problem, not a denial)` };
+        }
+        // The declared parameter is the Extended agent entity, but the implementation reads only
+        // `ID` and `AcceptsSkills` — both on the base type — so the cast bridges a declared shape,
+        // not missing data. Revisit if GetSkillsForAgent ever reads Extended-only members.
+        const activatable = AIEngine.Instance.GetSkillsForAgent(
+            agent as Parameters<typeof AIEngine.Instance.GetSkillsForAgent>[0], user);
+        if (!activatable.some(x => UUIDsEqual(x.ID, skill.ID))) {
+            return { ok: false, kind: 'denied', reason: `skill '${skill.Name}' is not activatable by agent '${agent.Name}' for this user` };
+        }
+        return { ok: true };
+    }
+
 
     /** Bundles the result fields together with a closure-bound toSqlPredicate. */
     private buildResult(

@@ -1,6 +1,8 @@
 import { Injectable } from '@angular/core';
 import Prism from 'prismjs';
-import mermaid from 'mermaid';
+// TYPE-ONLY — erased at compile time, so it costs nothing at runtime. The mermaid engine
+// itself is fetched on demand; see `loadMermaid()`.
+import type { Mermaid } from 'mermaid';
 import {
   MarkdownEngine,
   MarkdownConfig,
@@ -9,6 +11,8 @@ import {
   HeadingInfo,
   HighlightFunction
 } from '@memberjunction/markdown-core';
+import DOMPurify from 'dompurify';
+import { escapeHtml } from '@memberjunction/markdown-core';
 
 // Import common Prism language components
 // Additional languages can be imported by the consuming application
@@ -37,6 +41,65 @@ import 'prismjs/components/prism-graphql';
  * concerns here — Mermaid rendering, copy buttons, and the DOM-based fixup of
  * HTML that marked miscoded as a code block.
  */
+/**
+ * The DOMPurify instance used for rendered HTML, created once per window and configured
+ * once. A private instance rather than the shared default so the hooks below cannot leak
+ * into other packages' DOMPurify usage, and so the configuration is parsed once instead
+ * of on every render.
+ *
+ * Profile: HTML + SVG + SVG filters, which keeps structural markup, inline styles, data
+ * attributes and inline vector graphics and removes the script vectors. Deviations from
+ * DOMPurify's defaults, each deliberate:
+ * - FORCE_BODY: a document that starts with `<style>` keeps it (otherwise the parser hoists
+ *   a leading style element into <head> and it is dropped); agent-authored mockups start
+ *   that way.
+ * - SANITIZE_DOM off: DOMPurify would strip any id or name that collides with a document
+ *   or form property (`title`, `name`, `location`, ...), which are exactly the slugs
+ *   heading ids produce. This app does not read globals off `window` by element id, so
+ *   DOM clobbering has no effect here, and heading anchors matter.
+ * - `target` on links is kept, with `rel="noopener noreferrer"` enforced when it is set.
+ * - `<use>` is allowed only with a same-document reference (`#id`); external references
+ *   are removed. SMIL `<animate>`/`<set>` stay disallowed: they can rewrite `href`.
+ */
+let purifier: ReturnType<typeof DOMPurify> | null = null;
+
+function getPurifier(): ReturnType<typeof DOMPurify> | null {
+  if (purifier) return purifier;
+  if (typeof window === 'undefined') return null;
+  const instance = DOMPurify(window);
+  if (!instance.isSupported) return null;
+  instance.setConfig({
+    USE_PROFILES: { html: true, svg: true, svgFilters: true },
+    ADD_TAGS: ['use'],
+    ADD_ATTR: ['target'],
+    FORCE_BODY: true,
+    SANITIZE_DOM: false,
+  });
+  instance.addHook('uponSanitizeAttribute', (node, data) => {
+    const name = data.attrName.toLowerCase();
+    if (node.nodeName.toLowerCase() === 'use' && (name === 'href' || name === 'xlink:href')) {
+      // Same-document sprite references only. Anything else can load an external document.
+      data.keepAttr = data.attrValue.trim().startsWith('#');
+    }
+  });
+  instance.addHook('afterSanitizeAttributes', (node) => {
+    const tag = node.nodeName.toLowerCase();
+    if (tag === 'a' && node.hasAttribute('target')) {
+      node.setAttribute('rel', 'noopener noreferrer');
+    }
+    if (tag === 'use') {
+      // The attribute hook above has already dropped any non-fragment reference; a <use>
+      // with nothing left to reference is removed rather than left as an empty element.
+      const ref = node.getAttribute('href') ?? node.getAttribute('xlink:href');
+      if (!ref || !ref.trim().startsWith('#')) {
+        node.parentNode?.removeChild(node);
+      }
+    }
+  });
+  purifier = instance;
+  return purifier;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -45,6 +108,10 @@ export class MarkdownService {
   private mermaidInitialized = false;
   private lastMermaidTheme: string | null = null;
   private currentConfig: ResolvedMarkdownConfig = { ...DEFAULT_MARKDOWN_CONFIG };
+  /** The mermaid engine, once its lazy chunk has landed. Null until a diagram is actually rendered. */
+  private mermaidEngine: Mermaid | null = null;
+  /** In-flight load, so N diagrams in one document share ONE chunk fetch. */
+  private mermaidLoad: Promise<Mermaid> | null = null;
 
   /**
    * Prism-backed highlight function injected into the core engine. The engine
@@ -97,7 +164,28 @@ export class MarkdownService {
       html = this.unwrapMiscodedHtml(html);
     }
 
+    // The service is the one place every consumer passes through (the component, the chat
+    // widget, anything binding parse() output to innerHTML), so the sanitizer runs here.
+    // enableJavaScript is the explicit opt-out.
+    if (!this.currentConfig.enableJavaScript) {
+      html = this.sanitizeHtml(html);
+    }
+
     return html;
+  }
+
+  /**
+   * Sanitize rendered HTML for binding to innerHTML while preserving layout HTML, inline
+   * styles and inline SVG. See the DOMPurify configuration at the top of this file for
+   * what is kept and removed. Where no DOM is available to sanitize with, the markup is
+   * escaped and rendered as text rather than trusted.
+   */
+  public sanitizeHtml(html: string): string {
+    const instance = getPurifier();
+    if (!instance) {
+      return escapeHtml(html);
+    }
+    return instance.sanitize(html);
   }
 
   /**
@@ -122,10 +210,42 @@ export class MarkdownService {
   }
 
   /**
+   * Fetch the mermaid engine, on first use only.
+   *
+   * MEASURED BUNDLE DEFERRAL — this is deliberately a dynamic `import()`, NOT a top-level
+   * one, and must not be "tidied" back into a static import. `mermaid` and the parsing /
+   * graph engines it pulls with it (`@mermaid-js/parser`, `langium`, `chevrotain`,
+   * `cytoscape`, `katex`, `d3`) were ~0.95 MB raw of every host's initial download even
+   * when no document ever contained a diagram. That is a rounding error for an in-app
+   * host and the whole cost for a CDN-loaded embedding of the realtime session overlay
+   * (MJ #3882). Documents with no diagram now never fetch the chunk at all.
+   *
+   * The in-flight promise is cached so N diagrams in one document share one fetch; a
+   * FAILED load clears it, so a later render can retry. Retries are bounded by
+   * user-driven render calls — there is no loop here.
+   */
+  private async loadMermaid(): Promise<Mermaid> {
+    if (this.mermaidEngine) {
+      return this.mermaidEngine;
+    }
+
+    this.mermaidLoad ??= import('mermaid').then((module) => module.default);
+
+    try {
+      this.mermaidEngine = await this.mermaidLoad;
+      return this.mermaidEngine;
+    } catch (error) {
+      this.mermaidLoad = null;
+      throw error;
+    }
+  }
+
+  /**
    * Initialize Mermaid with the current theme configuration.
    * Re-initializes when the effective theme changes.
+   * @param mermaid The lazily-loaded mermaid engine (see {@link loadMermaid})
    */
-  private initializeMermaid(): void {
+  private initializeMermaid(mermaid: Mermaid): void {
     const effectiveTheme = this.resolveEffectiveMermaidTheme();
 
     if (this.mermaidInitialized && this.lastMermaidTheme === effectiveTheme) {
@@ -152,12 +272,25 @@ export class MarkdownService {
   public async renderMermaid(container: HTMLElement): Promise<boolean> {
     if (!this.currentConfig.enableMermaid) return false;
 
-    this.initializeMermaid();
-
-    // Find all mermaid code blocks
+    // Find all mermaid code blocks BEFORE touching the engine — this is the branch the
+    // deferral hangs off: no diagrams in this document means no chunk fetch at all.
     const mermaidBlocks = container.querySelectorAll('pre > code.language-mermaid, .mermaid');
 
     if (mermaidBlocks.length === 0) return false;
+
+    let mermaid: Mermaid;
+    try {
+      mermaid = await this.loadMermaid();
+    } catch (error) {
+      // The chunk could not be fetched (offline, blocked host, bad deploy). Say so on
+      // every block we were going to render — an empty panel would look like the diagram
+      // simply wasn't there.
+      console.error('Failed to load the Mermaid diagram engine:', error);
+      this.markMermaidBlocksFailed(mermaidBlocks, 'Diagram engine failed to load');
+      return false;
+    }
+
+    this.initializeMermaid(mermaid);
 
     for (let i = 0; i < mermaidBlocks.length; i++) {
       const block = mermaidBlocks[i];
@@ -182,13 +315,31 @@ export class MarkdownService {
         elementToReplace?.parentNode?.replaceChild(wrapper, elementToReplace);
       } catch (error) {
         console.warn('Mermaid rendering failed:', error);
-        // Add error class to show it failed
-        const parent = block.tagName === 'CODE' ? block.parentElement : block;
-        parent?.classList.add('mermaid-error');
+        // Show it failed on this block — the source stays visible underneath.
+        this.markMermaidBlocksFailed([block], 'Diagram rendering failed');
       }
     }
 
     return true;
+  }
+
+  /**
+   * Mark mermaid blocks as un-renderable, so the failure is VISIBLE rather than a block of
+   * raw diagram source the reader can't explain. The `.mermaid-error` class carries the
+   * error styling and a default caption; `data-mermaid-error` overrides that caption with
+   * the specific reason (see `.mermaid-error[data-mermaid-error]::before` in the component
+   * stylesheet).
+   *
+   * @param blocks The mermaid code blocks (or `.mermaid` elements) that could not be rendered
+   * @param message Short reason shown above the un-rendered source
+   */
+  private markMermaidBlocksFailed(blocks: ArrayLike<Element>, message: string): void {
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      const target = block.tagName === 'CODE' ? block.parentElement : block;
+      target?.classList.add('mermaid-error');
+      target?.setAttribute('data-mermaid-error', message);
+    }
   }
 
   /**
@@ -357,17 +508,15 @@ export class MarkdownService {
                                testDoc.body.innerHTML.includes('<'));
 
           if (hasStructure) {
-            // Replace the <pre> with the actual HTML content
-            const wrapper = document.createElement('div');
-            wrapper.className = 'unwrapped-html';
-            wrapper.innerHTML = content;
-
-            // Move all children from wrapper to replace pre
-            const fragment = document.createDocumentFragment();
-            while (wrapper.firstChild) {
-              fragment.appendChild(wrapper.firstChild);
-            }
-            pre.parentNode?.replaceChild(fragment, pre);
+            // Replace the <pre> with the actual HTML content. The nodes are built inside a
+            // <template> of the inert DOMParser document, never on the live `document`:
+            // setting innerHTML on a live element fires image error handlers at parse time,
+            // before the sanitizer in parse() has seen the markup. A <template> also parses
+            // in body context, so a mockup that starts with <style> keeps it (a full-document
+            // parse would hoist it into <head> and drop it).
+            const template = doc.createElement('template');
+            template.innerHTML = content;
+            pre.replaceWith(template.content);
             modified = true;
           }
         }

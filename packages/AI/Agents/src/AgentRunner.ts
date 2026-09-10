@@ -39,6 +39,30 @@ interface ArtifactVersionRow {
 }
 
 /**
+ * Identifies an artifact (and the version) that a run created.
+ */
+export interface CreatedArtifactInfo {
+    artifactId: string;
+    versionId: string;
+    versionNumber: number;
+}
+
+/**
+ * Choose the artifact a run should be represented by.
+ *
+ * A FILE artifact wins over the payload artifact: the file is the deliverable the user asked for
+ * (a .docx, a .pdf), while the payload artifact is a snapshot of the agent's internal state.
+ * Callers surface this as a single "open the artifact" affordance, so a document-generating run
+ * used to point at raw JSON. With several files, the first is the primary one.
+ */
+export function selectPrimaryArtifact(
+    fileArtifacts: readonly CreatedArtifactInfo[] | undefined,
+    payloadArtifact: CreatedArtifactInfo | undefined
+): CreatedArtifactInfo | undefined {
+    return fileArtifacts?.[0] ?? payloadArtifact;
+}
+
+/**
  * AgentRunner provides a thin wrapper for executing AI agents.
  * 
  * This class handles:
@@ -187,12 +211,16 @@ export class AgentRunner {
         userMessageDetailId: string;
         /** The conversation detail ID for the agent response (only present if server created it) */
         agentResponseDetailId?: string;
-        /** Artifact information if created */
-        artifactInfo?: {
-            artifactId: string;
-            versionId: string;
-            versionNumber: number;
-        };
+        /**
+         * The artifact to show for this response, if one was created.
+         *
+         * A FILE artifact wins over the payload artifact when both exist: the file is the
+         * deliverable the user asked for (a .docx, a .pdf), whereas the payload artifact is a
+         * snapshot of the agent's internal state. Callers that surface a single "open the
+         * artifact" affordance — MJ Explorer, the Slack/Teams bridge — were previously handed the
+         * payload artifact even when the run's whole point was the file.
+         */
+        artifactInfo?: CreatedArtifactInfo;
     }> {
         const md = params.provider || this._provider;
         const contextUser = params.contextUser;
@@ -201,11 +229,12 @@ export class AgentRunner {
             throw new Error('contextUser is required for RunAgentInConversation');
         }
 
+        let agentResponseDetail: MJConversationDetailEntity | undefined;
+
         try {
             let conversationId: string;
             let userMessageDetailId: string;
             let agentResponseDetailId: string | undefined;
-            let agentResponseDetail: MJConversationDetailEntity | undefined;
 
             // If conversationDetailId is provided, use it (UI-created agent response detail)
             if (options.conversationDetailId) {
@@ -505,9 +534,16 @@ export class AgentRunner {
             };
 
             // Step 6b: Process file artifacts produced by file-generation actions.
-            const processFileArtifacts = async () => {
+            //
+            // The created artifacts are RETURNED, not discarded: a file artifact is the
+            // deliverable the user asked for, so it is what `artifactInfo` should point at.
+            // Previously only the payload artifact was reported, which meant a run whose whole
+            // purpose was to produce a .docx or .pdf handed callers a link to the agent's
+            // internal state instead — MJ Explorer and the Slack/Teams bridge both surface
+            // `artifactInfo` as "open the artifact".
+            const processFileArtifacts = async (): Promise<CreatedArtifactInfo[]> => {
                 if (agentResult.success && agentResponseDetailId && agentResult.fileOutputs?.length) {
-                    await this.ProcessFileArtifacts(
+                    return this.ProcessFileArtifacts(
                         agentResult.fileOutputs,
                         agentResponseDetailId,
                         contextUser,
@@ -516,6 +552,7 @@ export class AgentRunner {
                         params.agent.AcceptUnregisteredFiles
                     );
                 }
+                return [];
             };
 
             // Step 7: Save media outputs to AIAgentRunMedia (audit) and create artifacts (display)
@@ -557,7 +594,8 @@ export class AgentRunner {
                             agentResponseDetailId,
                             mediaForArtifacts,
                             contextUser,
-                            md
+                            md,
+                            agentResult.resolvedStorageAccountId
                         );
                     }
                     return ids;
@@ -576,9 +614,15 @@ export class AgentRunner {
             // before we return, so the resolver's 'complete' event still guarantees the client sees
             // every write.
             await updateDetail();
-            const artifactInfo = await processArtifacts();
-            await processFileArtifacts();
+            const payloadArtifact = await processArtifacts();
+            const fileArtifacts = await processFileArtifacts();
             await saveMedia();
+
+            // A file artifact wins: it is the thing the user asked for. The payload artifact is a
+            // snapshot of the agent's internal state, useful when the payload IS the deliverable
+            // (a report agent) and misleading when it is not — a document run reported the
+            // payload, so "open the artifact" opened raw JSON instead of the document.
+            const artifactInfo = selectPrimaryArtifact(fileArtifacts, payloadArtifact);
 
             return {
                 agentResult,
@@ -591,6 +635,17 @@ export class AgentRunner {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             LogError(`RunAgentInConversation failed: ${errorMessage}`, undefined, error);
+            if (agentResponseDetail && agentResponseDetail.Status === 'In-Progress') {
+                try {
+                    await agentResponseDetail.EnsureSaveComplete();
+                    agentResponseDetail.Status = 'Error';
+                    agentResponseDetail.Message = errorMessage;
+                    agentResponseDetail.Error = errorMessage;
+                    await agentResponseDetail.Save();
+                } catch (persistError) {
+                    LogError(`Failed to persist Error on conversation detail after agent crash: ${persistError}`, undefined, persistError);
+                }
+            }
             throw error;
         }
     }
@@ -1214,6 +1269,10 @@ export class AgentRunner {
      * @param mediaOutputs - Media outputs to persist as artifacts
      * @param contextUser - User context for DB operations
      * @param provider - Optional metadata provider for multi-provider support
+     * @param resolvedStorageAccountId - Pre-resolved storage account from the agent's resolution
+     *   chain. Optional, and optional on purpose: this is a public method, and callers that
+     *   predate storage-backed media keep working — omitting it just falls back to the first
+     *   active account inside {@link uploadBase64ToStorage}.
      *
      * @since 5.38.0
      */
@@ -1221,13 +1280,21 @@ export class AgentRunner {
         conversationDetailId: string,
         mediaOutputs: MediaOutput[],
         contextUser: UserInfo,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        resolvedStorageAccountId?: string
     ): Promise<void> {
         if (!mediaOutputs || mediaOutputs.length === 0) {
             return;
         }
 
-        await ArtifactMetadataEngine.Instance.Config(false, contextUser);
+        // BOTH engines, as ProcessFileArtifacts does. FileStorageEngine reports zero accounts
+        // until it has loaded, so checking HasStorageAccounts without configuring it first reads
+        // an empty cache and silently routes every media artifact inline — indistinguishable from
+        // a deployment that genuinely has no storage.
+        await Promise.all([
+            ArtifactMetadataEngine.Instance.Config(false, contextUser),
+            FileStorageEngine.Instance.Config(false, contextUser),
+        ]);
         const md = provider || this._provider;
         let successCount = 0;
 
@@ -1241,28 +1308,39 @@ export class AgentRunner {
                     ? Math.ceil(media.data.length * 0.75)
                     : undefined;
 
-                await this.createArtifactWithVersion({
-                    mimeType: media.mimeType,
-                    fileName,
-                    sizeBytes: estimatedSizeBytes,
-                    conversationDetailId,
-                    contextUser,
-                    provider: md,
-                    acceptUnregisteredFiles: true,
-                    label: `media ${media.modality}`,
-                    setVersionFields: (version) => {
-                        // DecideInlineStorage applies consistent text-vs-binary storage
-                        // decisions across all artifact creation paths. For media (images,
-                        // audio, video), it wraps the base64 in a data URL; for text-y
-                        // MIMEs it decodes to UTF-8. Same helper the server hook and
-                        // ConversationAttachmentService use.
-                        if (media.data) {
-                            const stored = DecideInlineStorage(media.mimeType, media.data);
-                            version.ContentMode = stored.contentMode;
-                            version.Content = stored.content;
+                // Storage-backed when an account is configured, exactly as ProcessFileArtifacts
+                // does for file outputs.
+                const fileId = media.data
+                    ? await this.uploadToStorageIfConfigured(
+                          media.data, fileName, media.mimeType, contextUser, resolvedStorageAccountId, md, 'CreateMediaArtifacts')
+                    : undefined;
+
+                if (fileId) {
+                    await this.createFileArtifact(
+                        fileId, media.mimeType, fileName, estimatedSizeBytes, conversationDetailId, contextUser, md, true,
+                        `media ${media.modality}`);
+                } else {
+                    await this.createArtifactWithVersion({
+                        mimeType: media.mimeType,
+                        fileName,
+                        sizeBytes: estimatedSizeBytes,
+                        conversationDetailId,
+                        contextUser,
+                        provider: md,
+                        acceptUnregisteredFiles: true,
+                        label: `media ${media.modality}`,
+                        setVersionFields: (version) => {
+                            // DecideInlineStorage applies consistent text-vs-binary storage
+                            // decisions across all artifact creation paths: for media it wraps
+                            // the base64 in a data URL; for text-y MIMEs it decodes to UTF-8.
+                            if (media.data) {
+                                const stored = DecideInlineStorage(media.mimeType, media.data);
+                                version.ContentMode = stored.contentMode;
+                                version.Content = stored.content;
+                            }
                         }
-                    }
-                });
+                    });
+                }
 
                 successCount++;
             } catch (error) {
@@ -1271,6 +1349,39 @@ export class AgentRunner {
         }
 
         LogStatus(`Created ${successCount} of ${mediaOutputs.length} media artifact(s) for detail ${conversationDetailId}`);
+    }
+
+    /**
+     * Uploads bytes to MJStorage when a storage account is configured, returning the new
+     * `MJ: Files` ID — or `undefined` to tell the caller to store the bytes inline.
+     *
+     * The single home of the storage-or-inline contract for every artifact this runner creates,
+     * file outputs and media alike. Deliberately never throws: delivery must not fail because
+     * storage is unavailable, so an upload error degrades to inline with a log line.
+     *
+     * @param logPrefix - Names the calling path in the log so an operator can tell which kind of
+     *   artifact fell back, without the two paths carrying separate copies of this logic.
+     */
+    private async uploadToStorageIfConfigured(
+        base64Data: string,
+        fileName: string,
+        mimeType: string,
+        contextUser: UserInfo,
+        resolvedStorageAccountId: string | undefined,
+        provider: IMetadataProvider,
+        logPrefix: string
+    ): Promise<string | undefined> {
+        if (!FileStorageEngine.Instance.HasStorageAccounts) {
+            LogStatus(`${logPrefix}: no storage accounts configured for "${fileName}", storing inline`);
+            return undefined;
+        }
+        try {
+            return await this.uploadBase64ToStorage(
+                base64Data, fileName, mimeType, contextUser, resolvedStorageAccountId, provider);
+        } catch (storageError) {
+            LogStatus(`${logPrefix}: storage upload failed for "${fileName}", storing inline: ${(storageError as Error).message}`);
+            return undefined;
+        }
     }
 
     // ── File artifact processing ───────────────────────────────────────────────
@@ -1295,8 +1406,8 @@ export class AgentRunner {
         resolvedStorageAccountId?: string,
         provider?: IMetadataProvider,
         acceptUnregisteredFiles?: boolean
-    ): Promise<void> {
-        if (fileOutputs.length === 0) return;
+    ): Promise<CreatedArtifactInfo[]> {
+        if (fileOutputs.length === 0) return [];
 
         const md = provider || this._provider;
         const acceptUnregistered = acceptUnregisteredFiles ?? false;
@@ -1307,9 +1418,12 @@ export class AgentRunner {
             FileStorageEngine.Instance.Config(false, contextUser),
         ]);
 
-        await Promise.all(
+        const created = await Promise.all(
             fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId, md, acceptUnregistered))
         );
+        // Entries are undefined only for outputs whose creation failed (logged above), so the
+        // caller sees exactly the artifacts that exist.
+        return created.filter((info): info is CreatedArtifactInfo => info != null);
     }
 
     /** Uploads or resolves a single file output and creates the artifact records.
@@ -1321,42 +1435,21 @@ export class AgentRunner {
         resolvedStorageAccountId: string | undefined,
         provider: IMetadataProvider,
         acceptUnregisteredFiles: boolean
-    ): Promise<void> {
+    ): Promise<CreatedArtifactInfo | undefined> {
         try {
             if (fo.fileId) {
                 // File already in storage — create file-backed artifact
-                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-                return;
+                return await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, 'file', fo.visibility);
             }
 
-            // Check if any storage accounts are configured
-            const hasStorage = FileStorageEngine.Instance.HasStorageAccounts;
-
-            if (!hasStorage) {
-                // No storage configured — go straight to inline artifact
-                LogStatus(`ProcessFileArtifacts: no storage accounts configured for "${fo.fileName}", creating inline artifact`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-                return;
-            }
-
-            // Try to upload to storage
-            try {
-                const fileId = await this.uploadBase64ToStorage(
-                    fo.fileData!,
-                    fo.fileName,
-                    fo.mimeType,
-                    contextUser,
-                    resolvedStorageAccountId,
-                    provider
-                );
-                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-            } catch (storageError) {
-                // Upload failed — fall back to inline artifact
-                LogStatus(`ProcessFileArtifacts: storage upload failed for "${fo.fileName}", creating inline artifact: ${(storageError as Error).message}`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
-            }
+            const fileId = await this.uploadToStorageIfConfigured(
+                fo.fileData!, fo.fileName, fo.mimeType, contextUser, resolvedStorageAccountId, provider, 'ProcessFileArtifacts');
+            return fileId
+                ? await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, 'file', fo.visibility)
+                : await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, fo.visibility);
         } catch (error) {
             LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
+            return undefined;
         }
     }
 
@@ -1403,11 +1496,13 @@ export class AgentRunner {
             acceptUnregisteredFiles: boolean;
             /** Callback to set version-specific fields (ContentMode, FileID/Content, etc.) */
             setVersionFields: (version: MJArtifactVersionEntity) => void;
+            /** The artifact's Visibility; `Always` when the caller says nothing. */
+            visibility?: MJArtifactEntity['Visibility'];
             /** Label for log/error messages (e.g. 'file' or 'inline file') */
             label: string;
         }
-    ): Promise<void> {
-        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label } = params;
+    ): Promise<CreatedArtifactInfo> {
+        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label, visibility } = params;
 
         // Resolve the artifact type using the wildcard-aware resolver with an
         // extension hint for application/octet-stream uploads.
@@ -1453,7 +1548,7 @@ export class AgentRunner {
             artifact.Name = fileName;
             artifact.TypeID = artifactTypeId;
             artifact.UserID = contextUser.ID;
-            artifact.Visibility = 'Always';
+            artifact.Visibility = visibility ?? 'Always';
             if (!(await artifact.Save())) {
                 throw new Error(`Failed to save artifact for ${label}: ${fileName}`);
             }
@@ -1490,6 +1585,7 @@ export class AgentRunner {
             }
 
             LogStatus(`Created ${label} artifact: ${fileName} (${mimeType}) → artifact ${artifact.ID}, version ${version.ID}`);
+            return { artifactId: artifact.ID, versionId: version.ID, versionNumber: version.VersionNumber };
         } catch (error) {
             if (useTransaction) {
                 try {
@@ -1502,7 +1598,11 @@ export class AgentRunner {
         }
     }
 
-    /** Creates a file-backed artifact (version references a FileID in MJStorage). */
+    /**
+     * Creates a file-backed artifact (version references a FileID in MJStorage). `label` names the
+     * thing being stored in diagnostics ("file", "media Image") so a failure reads as specifically as
+     * the inline path's would.
+     */
     private async createFileArtifact(
         fileId: string,
         mimeType: string,
@@ -1511,11 +1611,13 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        acceptUnregisteredFiles: boolean
-    ): Promise<void> {
-        await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
-            label: 'file',
+        acceptUnregisteredFiles: boolean,
+        label: string = 'file',
+        visibility?: MJArtifactEntity['Visibility']
+    ): Promise<CreatedArtifactInfo> {
+        return this.createArtifactWithVersion({
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, visibility,
+            label,
             setVersionFields: (version) => {
                 version.ContentMode = 'File';
                 version.FileID = fileId;
@@ -1532,10 +1634,11 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        acceptUnregisteredFiles: boolean
-    ): Promise<void> {
-        await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
+        acceptUnregisteredFiles: boolean,
+        visibility?: MJArtifactEntity['Visibility']
+    ): Promise<CreatedArtifactInfo> {
+        return this.createArtifactWithVersion({
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, visibility,
             label: 'inline file',
             setVersionFields: (version) => {
                 version.ContentMode = 'Text';

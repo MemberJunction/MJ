@@ -347,6 +347,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
                     SkipEntityActions: false,
                     ReplayOnly: false,
                     IsParentEntityDelete: false,
+                    SkipRecordChanges: false,
                 },
             });
             expect(entity.LatestResult.Success).toBe(true);
@@ -369,6 +370,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
                     SkipEntityActions: false,
                     ReplayOnly: true,
                     IsParentEntityDelete: false,
+                    SkipRecordChanges: false,
                 },
             });
         });

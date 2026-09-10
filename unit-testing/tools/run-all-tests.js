@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { readdirSync, statSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
@@ -77,10 +77,17 @@ function runPackageTests(pkg, runDir) {
 
   try {
     // Run vitest with JSON reporter
-    execSync(`npm test -- --reporter=json --outputFile=${resultsFile}`, {
+    // Argument array, not a shell string: the results path is built from the package name
+    // and must never be interpreted by a shell. Windows is the exception: Node refuses to
+    // spawn npm.cmd without a shell (EINVAL since the CVE-2024-27980 fix), so a shell is
+    // used there and the one path argument is quoted for cmd.exe.
+    const isWindows = process.platform === 'win32';
+    const outputFileArg = `--outputFile=${isWindows ? JSON.stringify(resultsFile) : resultsFile}`;
+    execFileSync('npm', ['test', '--', '--reporter=json', outputFileArg], {
       cwd: pkg.path,
       stdio: 'pipe',
-      encoding: 'utf-8'
+      encoding: 'utf-8',
+      shell: isWindows
     });
 
     console.log(`   ✅ Passed`);

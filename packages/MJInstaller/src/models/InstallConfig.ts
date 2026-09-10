@@ -20,6 +20,7 @@
  * @see mergeConfigs — merges multiple partial configs (later wins).
  */
 import fs from 'node:fs/promises';
+import type { PackageManagerType } from './PackageManager.js';
 export interface InstallConfig {
   // ── Database ──────────────────────────────────────────────────────────
 
@@ -77,6 +78,18 @@ export interface InstallConfig {
    *   if you need to work on MJ framework code itself.
    */
   InstallMode: 'distribution' | 'monorepo';
+
+  // ── Package manager ───────────────────────────────────────────────────
+
+  /**
+   * Package manager used to install and build the workspace.
+   * - `'pnpm'` (default) — matches the era-6 platform manifest.
+   * - `'npm'` — explicit override for environments that cannot add pnpm.
+   *
+   * There is no silent fallback: preflight hard-fails when the configured
+   * package manager is not on PATH, so installs stay deterministic.
+   */
+  PackageManager: PackageManagerType;
 
   // ── Auth provider ─────────────────────────────────────────────────────
 
@@ -154,6 +167,7 @@ export const InstallConfigDefaults: PartialInstallConfig = {
   ExplorerPort: 4200,
   AuthProvider: 'none',
   InstallMode: 'distribution',
+  PackageManager: 'pnpm',
 };
 
 // ── Environment variable mapping ──────────────────────────────────────────
@@ -184,6 +198,7 @@ const ENV_VAR_MAP: ReadonlyArray<{
   { EnvVar: 'MJ_INSTALL_MISTRAL_KEY',       Field: 'MistralKey',       Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_BASE_ENCRYPTION_KEY', Field: 'BaseEncryptionKey', Parse: (v) => v },
   { EnvVar: 'MJ_INSTALL_MODE',              Field: 'InstallMode',       Parse: (v) => v as InstallConfig['InstallMode'] },
+  { EnvVar: 'MJ_INSTALL_PACKAGE_MANAGER',   Field: 'PackageManager',    Parse: (v) => v as InstallConfig['PackageManager'] },
 ];
 
 /**
@@ -269,6 +284,7 @@ const KNOWN_KEYS: ReadonlySet<string> = new Set<string>([
   'CodeGenUser', 'CodeGenPassword', 'APIUser', 'APIPassword',
   'APIPort', 'ExplorerPort', 'AuthProvider', 'AuthProviderValues',
   'OpenAIKey', 'AnthropicKey', 'MistralKey', 'BaseEncryptionKey', 'InstallMode', 'CreateNewUser',
+  'PackageManager',
 ]);
 
 /**

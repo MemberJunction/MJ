@@ -369,11 +369,32 @@
   --mj-shadow-brand-sm: 0 2px 8px rgba(0, 118, 182, 0.3);
   --mj-shadow-brand-md: 0 4px 12px rgba(0, 118, 182, 0.4);
 
-  /* Focus Ring */
+  /* Focus Ring
+     ------------------------------------------------------------------
+     TWO tokens, and they are NOT interchangeable:
+
+       --mj-focus-ring        a complete two-part BOX-SHADOW VALUE.
+                              Use ONLY in `box-shadow`.
+       --mj-focus-ring-color  a COLOR. Use in `outline`, `border-color`,
+                              or anywhere a single color is expected.
+
+     `outline: 2px solid var(--mj-focus-ring)` parses as valid-looking CSS and
+     renders NOTHING — the shorthand's color slot rejects a multi-part shadow
+     value and the whole declaration is dropped, silently, with no console
+     warning. Downstream consumers shipped four of these before a sweep caught
+     them. `.github/scripts/check-focus-ring.sh` now fails on that pattern.
+
+     Correct:   outline: none; box-shadow: var(--mj-focus-ring);
+     Correct:   outline: var(--mj-ring-width) solid var(--mj-focus-ring-color);
+                outline-offset: var(--mj-ring-offset);
+     ------------------------------------------------------------------ */
   --mj-ring-width: 2px;
   --mj-ring-offset: 2px;
   --mj-ring-color: var(--mj-brand-primary);
+  /* box-shadow VALUE — never valid in `outline`. See the block above. */
   --mj-focus-ring: 0 0 0 var(--mj-ring-offset) var(--mj-bg-surface), 0 0 0 calc(var(--mj-ring-offset) + var(--mj-ring-width)) var(--mj-ring-color);
+  /* COLOR — the outline-safe companion to --mj-focus-ring. */
+  --mj-focus-ring-color: var(--mj-ring-color);
 
   /* Transitions */
   --mj-transition-fast: 150ms ease;

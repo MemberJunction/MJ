@@ -10,7 +10,7 @@ import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunc
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { registerIntegrationCustomColumnPromoter, IntegrationCustomColumnPromoter } from './integration/CustomColumnPromoter.js';
-import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap } from './integration/EntityMapLifecycle.js';
+import { DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, selectFieldsToMap } from './integration/EntityMapLifecycle.js';
 import { default as BodyParser } from 'body-parser';
 import compression from 'compression'; // Add compression middleware
 import cors from 'cors';
@@ -127,6 +127,14 @@ export {
 } from './auth/index.js';
 export * from './auth/APIKeyScopeAuth.js';
 export * from './auth/actingContextResolver.js';
+// The context-user ladder (#4209). Public because `auth/exampleNewUserSubClass.ts` — the template
+// integrators are told to copy into their OWN package — resolves through it, and `package.json`
+// publishes only "."; without this the example compiles here and cannot be reused anywhere else.
+// `ReportedMisconfigurationCount` / `MAX_REPORTED_MISCONFIGURATIONS` are deliberately NOT here:
+// they exist so the LRU's bound is assertable, the tests import them from the module directly, and
+// a published export is a maintenance commitment no caller asked for.
+export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
+export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
 
 export * from './generic/PushStatusResolver.js';
@@ -1265,17 +1273,24 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // because they lack Access-Control-Allow-Origin headers, preventing the
   // client from reading the error code and triggering token refresh.
   const corsAllowed = configInfo.cors?.allowedOrigins ?? ['*'];
+  const corsWildcard = corsAllowed.includes('*');
+  // SECURITY: never combine credentials with a wildcard/reflect-any-origin policy. When
+  // allowedOrigins is ['*'] the origin callback reflects the caller's Origin, and pairing that
+  // with Access-Control-Allow-Credentials: true lets any site a signed-in user visits make
+  // credentialed cross-origin reads. MJ's primary auth is a Bearer token (not auto-sent
+  // cross-origin), so dropping credentials under the wildcard default is safe; deployments that
+  // genuinely need credentialed CORS must configure an explicit allowedOrigins list.
   app.use(cors<cors.CorsRequest>({
     origin: (origin, callback) => {
       // Allow all origins when ['*'] (default/backward-compatible),
       // or when no Origin header (server-to-server calls).
-      if (corsAllowed.includes('*') || !origin || corsAllowed.includes(origin)) {
+      if (corsWildcard || !origin || corsAllowed.includes(origin)) {
         callback(null, true);
       } else {
         callback(new Error(`Origin ${origin} not allowed by CORS`));
       }
     },
-    credentials: configInfo.cors?.allowCredentials ?? true,
+    credentials: corsWildcard ? false : (configInfo.cors?.allowCredentials ?? true),
     maxAge: configInfo.cors?.maxAge ?? 86400,
   }));
 
@@ -1691,6 +1706,10 @@ async function processRSUPendingWork(): Promise<void> {
   for (const pending of pendingItems) {
     const pendingWorkID = pending.ID;
     const item = pending.Work;
+    // Declared outside the try so the catch can narrow a retry to what is still outstanding: what
+    // actually got mapped this attempt. Each retry is then strictly smaller, and one poison object
+    // cannot keep re-running its healthy siblings.
+    const mappedObjectNames = new Set<string>();
     try {
       const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
 
@@ -1813,15 +1832,16 @@ async function processRSUPendingWork(): Promise<void> {
         }
 
         if (isNewMap) createdEntityMapIDs.push(entityMapID);
+        mappedObjectNames.add(objName);
 
         // Create field maps — filter by SourceObjectFields (null = all)
         try {
           const sourceObj = schema.Objects.find(o => o.ExternalName.toLowerCase() === objName.toLowerCase());
 
           const selectedFields = sourceObjectFields[objName]; // null = all, string[] = specific
-          const fieldsToMap = selectedFields
-            ? (sourceObj?.Fields ?? []).filter(f => selectedFields.some(sf => sf.toLowerCase() === f.Name.toLowerCase()))
-            : (sourceObj?.Fields ?? []);
+          // Always maps the PRIMARY KEY, selected or not — see selectFieldsToMap for why identity
+          // cannot be left to the selection.
+          const fieldsToMap = selectFieldsToMap(sourceObj?.Fields ?? [], selectedFields);
 
           // Load existing field maps to avoid duplicates
           const existingFieldMaps = await rvPending.RunView<MJCompanyIntegrationFieldMapEntity>({
@@ -1966,8 +1986,20 @@ async function processRSUPendingWork(): Promise<void> {
       await rsm.CompletePendingWork(pendingWorkID, systemUser);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID}: ${message}`);
-      await rsm.FailPendingWork(pendingWorkID, message, systemUser);
+      const attempt = (item.Attempts ?? 0) + 1;
+      console.error(`[RSU] Failed to process pending work for ${item.CompanyIntegrationID} (attempt ${attempt}): ${message}`);
+      // RSU is a long chain — migrations, CodeGen, commit, compile, restart — and a failure partway
+      // through is often transient (a restart landing mid-consumption, one bad provider call).
+      // Failing terminally on the first error means the objects this item would have mapped are
+      // silently never mapped, and the only recovery is someone noticing and re-applying by hand.
+      const remaining = (item.SourceObjectNames ?? []).filter(n => !mappedObjectNames.has(n));
+      const requeued = await rsm.RetryPendingWork(pendingWorkID, item, remaining, systemUser);
+      if (!requeued) {
+        // Budget spent, or nothing left to retry. This message is the operator's only signal, so
+        // it names what was left undone rather than just the error.
+        const undone = remaining.length > 0 ? ` Objects never mapped: ${remaining.slice(0, 20).join(', ')}${remaining.length > 20 ? ` (+${remaining.length - 20} more)` : ''}.` : '';
+        await rsm.FailPendingWork(pendingWorkID, `${message}${undone} Re-apply this connector to finish it.`, systemUser);
+      }
     }
   }
 

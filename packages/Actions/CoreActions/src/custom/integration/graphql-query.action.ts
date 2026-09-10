@@ -2,7 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
 import { JSONParamHelper } from "../utilities/json-param-helper";
-import { SafeFetch, SSRFError } from "@memberjunction/network-utils";
+import { SafeFetch, SSRFError, DrainResponseBody } from "@memberjunction/network-utils";
 
 /**
  * Action that executes GraphQL queries and mutations
@@ -148,6 +148,7 @@ export class GraphQLQueryAction extends BaseAction {
 
             // Check for HTTP errors
             if (response.status < 200 || response.status >= 300) {
+                await DrainResponseBody(response);
                 return {
                     Success: false,
                     Message: `HTTP error ${response.status}: ${response.statusText}`,

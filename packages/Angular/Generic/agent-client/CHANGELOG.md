@@ -1,5 +1,14 @@
 # @memberjunction/ng-agent-client
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [1940a4d]
+- Updated dependencies [23c2521]
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-agent-client@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Patch Changes

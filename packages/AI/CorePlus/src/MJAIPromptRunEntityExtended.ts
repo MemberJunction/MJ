@@ -11,13 +11,22 @@ export interface JSONRepairInfo {
     /** Whether the JSON was repaired */
     repaired: true;
     /** Which repair strategy succeeded */
-    method: 'JSON5' | 'AIRepair';
+    method: 'JSON5' | 'LexicalEscaping' | 'AIRepair';
     /** The original JSON parse error message */
     originalError: string;
     /** First 200 characters of the raw LLM output (for diagnostics) */
     rawOutputPrefix: string;
     /** The prompt run ID of the repair prompt execution (AI repair only) */
     repairPromptRunId?: string;
+    /**
+     * Offsets escaped by the lexical repair, in fix order (LexicalEscaping only).
+     *
+     * Recorded because that repair infers intent: it assumes a quote inside a string value was
+     * meant to be escaped. That is nearly always right, but it is a judgment, so it should never
+     * be invisible. A rising count here means model output is drifting and the prompt likely
+     * needs attention.
+     */
+    repairedOffsets?: number[];
 }
 
 /**

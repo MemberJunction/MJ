@@ -1,5 +1,122 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- d735407: Class-registration manifests are emitted in chunks, so the array stops being one union away from not compiling.
+
+  `mj codegen manifest` wrote every discovered `@RegisterClass` class into a single array literal. TypeScript computes the best common type of an array literal's elements **even when the declaration is annotated `any[]`**, so that literal produces a union with one member per distinct constructor. Past roughly a thousand members the checker refuses to represent it and the file fails with `TS2590: Expression produces a union type that is too complex to represent`, reported at the `[` with nothing else wrong.
+
+  It is a cliff, not a slope. The manifest compiles fine until the day one package registers one more class, and then every consumer of the bootstrap package stops building at once — with an error that points at generated code and names nothing that changed. `@memberjunction/server-bootstrap` was at 1,009 registrations; five new classes in one branch was enough to cross it.
+
+  The emitter now writes `CLASS_REGISTRATIONS_0…N` at 200 entries each and exports their concatenation, so each inferred union is bounded by the chunk size no matter how large the dependency tree grows. Consumers are unaffected: `CLASS_REGISTRATIONS` is the same `any[]` with the same contents in the same order, and every class reference is still a static code path the bundler cannot tree-shake. Verified against a 1,300-class reproduction: the flat literal fails with TS2590, the chunked form compiles.
+
+- 9fe3019: Keep disambiguating a colliding entity name until it is actually free
+
+  Entity names are generated from the table name with trailing discriminators stripped, so
+  distinct tables routinely generate the same name. When that happened, CodeGen appended the
+  schema name once and assumed the result was unique — but it is not, and nothing re-checked it.
+
+  With a NetSuite catalog, `customlist72`, `customlist74`, `customlist160`, `customlist436`,
+  `customlist534` and `customlist873` all generate "Custom Lists". The first took the plain name,
+  the second took `Custom Lists__netsuite`, and every one after that produced the identical
+  `Custom Lists__netsuite` — a duplicate-key failure on `UQ_Entity_Name`, so those entities were
+  never created. CodeGen carried on and emitted only a repeated identical INSERT error, leaving
+  the install short several entities with no indication of which or why.
+
+  The disambiguation now continues past the schema suffix with a counter until the name is free,
+  bounded so a schema where everything collapses to one name still fails loudly rather than
+  hanging. Name comparison is also now case-insensitive on both sides, matching the collation
+  `UQ_Entity_Name` is enforced under — the in-run check used an exact `===` while the metadata
+  check beside it lowercased, so names differing only in case read as free and then collided on
+  insert.
+
+  The logic is extracted as `ManageMetadataBase.resolveUniqueEntityName` and unit-tested.
+
+- 047a80f: Escape single quotes in generated entity descriptions before interpolating them into SQL. The AI-generated description is free text and routinely contains apostrophes; one unescaped quote aborted the entire CodeGen run with "Unclosed quotation mark" at the end of an otherwise-complete pass. The entity-name literals in the same function are escaped as well. '' doubling is correct on both supported dialects.
+- 887ba9c: Catch entity fields the base view cannot produce
+
+  `validateEntityFieldsResolve()` cross-checks every entity's declared fields against the columns its base view actually produces. It is the read-side counterpart to `validateExpectedCRUDFunctions`: that one asks whether the runtime can write an entity, this asks the prior question of whether it can read it at all. Deliberately not filtered by `excludeSchemas`, because excluded schemas are exactly where nothing else is watching and where the drift is permanent. Reported but non-fatal by default; `MJ_CODEGEN_STRICT_FIELD_RESOLUTION=true` makes it a hard gate.
+
+  The condition it catches has been live on PostgreSQL: the PG port of the v5.45 External Data Sources migration registered `EntityField` rows for `ExternalDataSourceID` and `ExternalObjectName` without rebuilding `__mj.vwEntities`, so the metadata promised two columns the view could not produce and every read of `MJ: Entities` failed — rendered by a grid as "no data" rather than as an error, which is why an install could sit like that for months. That specific drift is repaired by `V202608202230__v6.1.x__PG_CodeGen_Regen.pg-only.sql`, which rebuilds the four affected core views. What was missing was anything that _notices_; this is that.
+
+- The EntityField sequence park is idempotent across CodeGen passes.
+
+  `parkEntityFieldSequencesSQL` lifts an entity's existing `EntityField.Sequence` values into a `+100000` band so a following INSERT can use the real BaseView column ordinal without colliding on `UQ_EntityField_EntityID_Sequence`. It was guarded by `Sequence < 100000`, which does not make it safe to emit twice.
+
+  After the first park, the only rows left below the band are precisely the ones that pass just INSERTED at their catalog ordinals. A second park therefore lifts _those_ into the band — landing on the row the first park moved from the same ordinal — and the migration dies with a duplicate key at `100000 + ordinal`.
+
+  Any entity that gains fields in **both** CodeGen passes reaches that state: the real columns in pass 1, and in pass 2 the denormalized name column that a new foreign key introduces. `AIPromptRun` does exactly that, and a from-scratch `mj migrate` caught it.
+
+  The park now runs only when nothing on the entity is parked yet, so a second emission is a no-op. A regression test pins the guard, because the previous condition looked correct in isolation and only failed on the second pass.
+
+- b42c125: Two silent failures made loud: the manifest generator's unbuilt-package fallback, and UR13's race with the live routine dispatcher.
+
+  **The manifest generator no longer guesses when a lazy package hasn't been built.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the `.d.ts` each `exports` entry's `types` field names, and skips any it cannot find. On an unbuilt workspace it finds none, returns an empty map, and the package falls through to the whole-package branch of `groupClassesIntoChunks()` — which replaces its per-subpath lazy chunks with one eager chunk. The result is valid TypeScript that compiles and passes review with its code splitting quietly removed. Running `mj codegen manifest` against an unbuilt tree collapsed `ng-dashboards`' twelve per-dashboard chunks into a single import and deleted 254 lines from `lazy-feature-config.ts` without a single warning.
+
+  `resolveLazySubpathExports()` now throws instead, naming the package and the directory it searched.
+
+  The guard is deliberately narrow, because "declares subpaths that didn't resolve" is a much weaker signal than it first appears — two innocent cases produce it:
+  - Every ng-packagr output publishes `"./package.json": { "default": "./package.json" }`, an entry with no `types` field that resolution skips by design. Only entries carrying `types` are counted.
+  - A subpath whose `.d.ts` declares no classes is skipped exactly like a missing one. `BootstrapLite`'s `./mj-class-registrations` is a real example — a generated manifest of const arrays, built and present, with nothing to reach.
+
+  So the check fires only for a package that actually **contributes lazy classes**, since that is the only case where an empty map mis-groups anything. A package contributing no classes has nothing to lose to the fallback.
+
+  **UR13 no longer races the product it is testing.** The check asserted an exact global run-row count for a routine that the shipped `User Routine Dispatcher` scheduled job — `Status=Active`, per-minute cron — is equally entitled to claim. `ConcurrencyMode=Skip` cannot prevent the overlap: it serialises _scheduled_ runs against each other, while the check constructs a driver in-process against a fabricated `MJScheduledJobEntity` that is never saved, so the engine cannot see it. The scheduler polls on a timer anchored to MJAPI's boot rather than to the wall clock, so whether a sweep lands inside the bundle's ~3-second window varies run to run — which is why this failed on `next` after a slow boot with no relevant code change.
+
+  It now snapshots the run rows before the pass and asserts on the delta, which is strictly stronger than what it replaced:
+  - `Details.RoutinesRun === 1` states the no-double-run property directly against _our_ sweep, where it is deterministic, rather than inferring it from a row count anyone may write to.
+  - Every new run row must satisfy the OnChange contract, not just the one at index 1 — all of them replay the same expression, so the property has to hold for each regardless of which dispatcher produced it.
+
+  `UR11` and `UR14` share the same exposure and are left alone here; they are not currently failing, and the durable fix for them is a fixture-level decision (pausing the live dispatcher for the bundle) that belongs to the suite's owner.
+
+- 5fc861f: CodeGen treats schema as the incremental unit at 2,000+ entities: per-schema emit with write-if-changed and dirty-schema regen, `'schema.table'` exclude strings, schema-parallel file generation, incremental `tsc` on core-entities and server, hydrate-by-schema catalog projections, and `schemaOutput` routing so brownfield/demo schemas do not land in published packages. BigSchemaDemo is the droppable test bed.
+- Updated dependencies [574008d]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [8b78695]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [905820a]
+  - @memberjunction/cli-core@6.1.0-edge.5
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/external-data-sources@6.1.0-edge.5
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.5
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.5
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.5
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.5
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.5
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.5
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.5
+  - @memberjunction/query-processor@6.1.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.5
+  - @memberjunction/sql-parser@6.1.0-edge.5
+  - @memberjunction/config@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Minor Changes

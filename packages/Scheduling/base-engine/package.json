@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/scheduling-engine-base",
   "type": "module",
-  "version": "6.1.0-edge.4",
+  "version": "6.1.0-edge.5",
   "description": "MemberJunction: Base Scheduling Engine Package - extended entity types and metadata caching, can be used anywhere.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,10 +16,10 @@
   "author": "MemberJunction.com",
   "license": "BUSL-1.1",
   "dependencies": {
-    "@memberjunction/core": "6.1.0-edge.4",
-    "@memberjunction/global": "6.1.0-edge.4",
-    "@memberjunction/core-entities": "6.1.0-edge.4",
-    "@memberjunction/scheduling-base-types": "6.1.0-edge.4",
+    "@memberjunction/core": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/scheduling-base-types": "6.1.0-edge.5",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

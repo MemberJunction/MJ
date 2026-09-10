@@ -150,6 +150,17 @@
           </div>
         }
 
+        <!-- One per attached artifact whose rows are still loading. Rendered AFTER the loaded
+             cards, so an artifact arriving appends rather than reordering what is already on
+             screen. Carries the same system-artifact de-emphasis as the card it becomes. -->
+        @for (pending of pendingArtifactPlaceholders; track pending.artifactId) {
+          <div class="artifact-wrapper" [class.system-artifact]="pending.visibility === 'System Only'">
+            <div class="artifact-pending">
+              <mj-loading [text]="pendingLabel(pending)" size="small"></mj-loading>
+            </div>
+          </div>
+        }
+
         <!-- Agent Response Form (shown only for last message by owner) -->
         @if (isLastMessageInConversation && isConversationOwner && responseForm) {
           <mj-dynamic-form

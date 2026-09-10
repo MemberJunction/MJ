@@ -2205,7 +2205,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param params - The original RunView parameters (for re-storing the cache)
      * @param updatedRows - Rows that have been created or updated since the cache was stored
      * @param deletedRecordIDs - Record IDs (in CompositeKey concatenated string format) that have been deleted
-     * @param primaryKeyFieldName - The name of the primary key field (or first PK field for composite keys)
+     * @param primaryKeyFieldNames - Every primary key column name, in key order (a single name is accepted for a
+     *   single-column key). Cached and updated rows are keyed on ALL of them so a composite key matches the
+     *   server's full `deletedRecordIDs` segment; passing only the first column silently truncates the key.
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
      * @param serverRowCount - The database's authoritative total row count (fresh COUNT(*) over the
      *   view) from the smart-cache check. Used as the merged entry's `totalRowCount` when it exceeds
@@ -2221,7 +2223,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         params: RunViewParams,
         updatedRows: unknown[],
         deletedRecordIDs: string[],
-        primaryKeyFieldName: string,
+        primaryKeyFieldNames: string | string[],
         newMaxUpdatedAt: string,
         serverRowCount?: number,
         aggregateResults?: AggregateResult[],
@@ -2275,7 +2277,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             }
 
             // Build a map of existing records by composite key string for O(1) lookups
-            const pkFieldNames = [primaryKeyFieldName];
+            const pkFieldNames = Array.isArray(primaryKeyFieldNames) ? primaryKeyFieldNames : [primaryKeyFieldNames];
             const resultMap = new Map<string, unknown>();
             for (const row of cached.results) {
                 const rowObj = row as Record<string, unknown>;

@@ -136,7 +136,8 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
             // we kick the stream off. Same predicate / message as the
             // synchronous resolver — single source of truth.
             if (scopeIDs && scopeIDs.length) {
-                const denial = await this.rejectForbiddenScopes(scopeIDs, currentUser, agentID);
+                const denial = await this.rejectForbiddenScopes(scopeIDs, currentUser, agentID,
+                    (searchContext as SearchContext | undefined)?.PrimaryScopeRecordID ?? null);
                 if (denial) {
                     // Mirror the synchronous resolver: surface denied attempts in
                     // the analytics dashboard so an admin tuning permissions can
@@ -144,12 +145,12 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
                     await SearchEngine.Instance.LogForbiddenSearch({
                         Query: query,
                         ScopeIDs: scopeIDs,
-                        FailureReason: denial,
+                        FailureReason: denial.auditReason,
                         StartTime: startTime,
                         ContextUser: currentUser,
                         AIAgentID: agentID ?? null,
                     });
-                    return { Success: false, StreamID: streamID, ErrorMessage: denial };
+                    return { Success: false, StreamID: streamID, ErrorMessage: denial.message };
                 }
             }
 
@@ -297,19 +298,43 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
         scopeIDs: string[],
         user: UserInfo,
         agentID: string | undefined,
-    ): Promise<string | undefined> {
+        primaryScopeRecordID: string | null,
+    ): Promise<{ message: string; auditReason: string } | undefined> {
         const agent = await this.loadAgent(agentID, user);
+        // A NAMED PRINCIPAL THAT WOULD NOT LOAD IS A REFUSAL, NOT AN ABSENCE.
+        //
+        // `loadAgent` returns null both when no agentID was supplied and when the one supplied does
+        // not exist. Conflating them means the agent rules never fire, and the raw client string is
+        // then handed to Search() and bound into the expansion query unjudged.
+        if (agentID && !agent) {
+            LogStatus(`StreamScopedSearch denied: agent '${agentID}' was supplied but could not be loaded`);
+            const msg = `Forbidden: AIAgentID '${agentID}' could not be loaded, so it cannot be judged.`;
+            return { message: msg, auditReason: msg };
+        }
         const resolver = GetSearchScopePermissionResolver();
+        // THE TENANT BELONGS IN THE PERMISSION DECISION, NOT ONLY IN THE SEARCH.
+        // `isGrantForTenant` DISCARDS a tenant-scoped row when the caller supplies no tenant —
+        // including a tenant-scoped PermissionLevel='None', an explicit per-tenant deny. Omitting
+        // the tenant here threw every such row away before the decision. The Scoped Search action
+        // passes it; these paths now do too.
         for (const scopeID of scopeIDs) {
             const verdict = await resolver.ResolveEffectivePermission({
                 User: user,
                 SearchScopeID: scopeID,
                 Agent: agent,
+                PrimaryScopeRecordID: primaryScopeRecordID,
                 ContextUser: user,
             });
             if (!verdict.Allowed) {
+                // The log keeps the full reason; the CLIENT gets the id it sent plus the Source.
+                // `verdict.Reason` names the principal, which is a name oracle over the catalogues.
                 LogStatus(`StreamScopedSearch denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
-                return `Forbidden: ${verdict.Reason}`;
+                return {
+                    message: `Forbidden: refused for ${agentID ? `AIAgentID '${agentID}'` : 'this user'} on scope '${scopeID}' (${verdict.Source}).`,
+                    // The audit row is server-side: it keeps the FULL reason, names and all —
+                    // matching the Scoped Search action's Forbidden rows.
+                    auditReason: verdict.Reason ?? 'Permission denied',
+                };
             }
             // Read level grants metadata visibility but not the right to run a
             // search. Mirror the SearchKnowledge resolver's gate so the streaming
@@ -317,12 +342,19 @@ export class SearchKnowledgeStreamResolver extends ResolverBase {
             if (verdict.Level === 'Read') {
                 const reason = `User '${user.Name}' has Read-level access on this scope, which permits metadata visibility but not search execution. Search or Manage is required to run a query.`;
                 LogStatus(`StreamScopedSearch denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`);
-                return `Forbidden: ${reason}`;
+                return { message: `Forbidden: ${reason}`, auditReason: reason };
             }
         }
         return undefined;
     }
 
+    /**
+     * Loads the AIAgent record by ID. Returns null both when no agentID was
+     * supplied and when the lookup fails — and the CALLERS distinguish those:
+     * a supplied-but-unloadable id is REFUSED (an unjudged principal must not
+     * reach the search or the listing), while "not supplied" means no agent
+     * rules apply.
+     */
     private async loadAgent(agentID: string | undefined, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         if (!agentID) return null;
         try {

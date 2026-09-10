@@ -12,6 +12,7 @@
  *   sync.connector.built          — connector instance constructed (class + import path)
  *   sync.connector.test           — TestConnection result (success + duration)
  *   sync.entity-map.start         — per-IO sync starting (direction, watermark, externalObjectName)
+ *   sync.entity-map.skipped       — per-IO sync skipped without contacting the source (skippedReason)
  *   sync.fetch.batch.start        — outbound API fetch about to fire (page/offset/cursor + URL hints)
  *   sync.fetch.batch.complete     — fetch returned (record count, duration, hasMore)
  *   sync.record.decision          — per-record action (Create/Update/Skip/Delete) + reason + matchKey
@@ -43,6 +44,7 @@ export type SyncLogEvent =
     | 'sync.connector.test'
     | 'sync.entity-map.start'
     | 'sync.entity-map.exclusions'
+    | 'sync.entity-map.skipped'
     | 'sync.resume.keyset'
     | 'sync.partition.reconcile'
     | 'sync.fetch.batch.start'

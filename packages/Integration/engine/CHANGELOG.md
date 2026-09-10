@@ -1,5 +1,419 @@
 # @memberjunction/integration-engine
 
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 323df0f: Adaptive per-connection fetch concurrency gate. The engine can fire more simultaneous vendor fetches than the account's concurrency grant allows (lanes × prefetch), and vendors that govern by concurrent requests answer the overflow with long backoffs served inside the fetch — invisible to every resource metric because a backoff is idle. The gate caps simultaneous in-flight fetches per company integration with a FIFO queue, and its cap is adaptive: it halves when a throttle is reported (including throttles a connector absorbed in its own retry and surfaced via ctx.RateLimitReport) and creeps back up by one on clean outcomes, clamped at the ceiling — so it converges on the account's real grant with zero configuration. **Opt-in:** the gate only exists when a ceiling is declared — a per-connection `Configuration.fetchConcurrency` override or the connector's `MaxConcurrencyHint`. Connectors that declare neither are completely ungated, byte-for-byte the previous behavior.
+- 405c035: `syncConcurrency` now applies to writes, not just fetches.
+
+  Opting into concurrency already made the apply path give up batch atomicity — on that path each
+  record auto-commits on its own pooled connection specifically so concurrent streams cannot collide
+  on a held transaction — and then applied the records one at a time anyway. The caller paid the price
+  of concurrency and received none of it.
+
+  The transaction-free path now runs a bounded pool of workers pulling from a shared cursor, capped by
+  the requested `syncConcurrency` (clamped to 16). A fixed pool rather than `Promise.all` over the
+  batch, because 500 simultaneous saves would swamp the connection pool.
+
+  Both error behaviours are preserved: a poison record is still dead-lettered while its siblings
+  commit, and a `SchemaNotGeneratedError` still fail-stops the whole map — now by stopping the workers
+  at their next pull rather than grinding through the remaining records against a table that does not
+  exist. `ApplyRecords` takes the concurrency as a defaulted trailing parameter, so the serial path and
+  any caller that does not pass it are unchanged.
+
+- b9a8324: An operator can bound how much a batched apply holds in memory.
+
+  A batched write group holds every enrolled record's rendered SQL and parameters until `Submit`, so
+  peak memory for an apply is roughly (maps in flight × group size × row size). With wide rows that is
+  the largest allocation a sync makes, and a box that has run out of heap has no way to trade a little
+  throughput for headroom.
+
+  `MJ_INTEGRATION_BATCH_FLUSH_AT` sets a ceiling on deferred writes per group: on reaching it the
+  group is submitted and replaced mid-batch.
+
+  Unset — the default — means no mid-batch flush at all, so a batch remains exactly one group and one
+  transaction. That default is deliberate: splitting a batch into several transactions is a real
+  trade, since an earlier flush stays committed if a later one fails. The per-record fallback that
+  follows a failed batch is idempotent, so the split is recoverable, but it is no longer
+  all-or-nothing — which is why it happens only when explicitly asked for.
+
+- ff1b875: Discovery: bound the keyless-parent sample to the classifier's significance floor.
+
+  When a REST template-var child is sampled, its parent chain is walked lazily — the leaf's record target is the only bound, and it propagates all the way up. The one exception is a parent that declares no primary key: it cannot be descended into until its key is classified from its own rows, so some rows must be read up front.
+
+  That read was sized to the leaf's target (default 500). The value-statistic classifier's significance floor is 50 rows, and above it more rows buy no additional verdict — so up to 10x the needed parents were fetched before a single child record was yielded. Because a parent may itself be a template-var child, each of those rows is a fetch that recurses up every level above it, multiplying the over-pull by the chain's depth.
+
+  The buffer is now `min(target, 50)`. The resolved key is a local addressing decision used only to build child URLs — it is never persisted as the parent's primary key, which comes from that parent's own first-class discovery pass — so the extra rows were being spent on a throwaway verdict. Sampling accuracy is unchanged (50 is the floor the classifier itself applies, and the same floor every top-level object's key decision uses), and the declared-key path is untouched.
+
+- 653c51d: A discovery sample that degrades to the catalog description now says so.
+
+  When streaming fails, `DiscoverFieldsViaFetch` falls back to single-sample `DiscoverFields` — the
+  catalog's own description, which carries no observed widths. The fallback was announced only to the
+  console, so from the pipeline's side it was indistinguishable from a successful sample: the method
+  returned fields and the run recorded a discovery that succeeded. The object then kept whatever width
+  its catalog guessed, and every longer value it later received was dropped at sync time as a string
+  overflow.
+
+  `DiscoverFieldsViaFetch` takes an optional `OnFallback` notifier, and the creation pipeline passes
+  one that emits a `discover-fields-fallback` stage error naming the object and what is unknown for
+  that run. Behaviour is otherwise unchanged — the fallback still happens, callers that pass no
+  notifier are byte-identical, and a throwing notifier cannot turn a degraded discovery into a failed
+  one.
+
+- 716b930: Discovery samples the union of declared and runtime objects, and honours a scoped introspection.
+
+  Sampling was reachable only through a `DiscoverObjects` hit: the loop that sampled iterated the
+  runtime list, so a declared object the connector does not re-surface at runtime — the normal shape
+  for a catalog-driven connector, and for every object when `DiscoverObjects` fails — was never
+  sampled. It kept whatever width the catalog guessed, which is how a column declared at 255 drops
+  every longer record at sync time, and it could only gain undeclared columns later, one sync at a
+  time, through the overflow path.
+
+  `StageIntrospect` now iterates declared ∪ runtime, sampling each object exactly once through a
+  single extracted `SampleDeclaredObjectInPlace`. A `DiscoverObjects` failure is no longer total —
+  the declared catalog is already in hand, so those objects are still sampled — and the failure is
+  recorded on the Introspect checkpoint as `discoverObjectsFailed` so a consumer can tell "the source
+  has no other objects" from "we never got to ask". A scoped introspection's `ObjectNames` filter now
+  also applies to the runtime pass, which previously pulled and sampled the whole catalog anyway.
+
+  Merge direction is unchanged: sampling fills gaps and widens, never overrides, and a sampling
+  failure leaves the declaration exactly as it was.
+
+- fa616d3: Discovery samples the source for every declared object, and merges what it sees without overriding what was declared.
+
+  Streaming records at introspect time used to happen only for an object that arrived with no fields. That is a gate on the wrong question: sampling answers three, and a declaration can only pre-answer one of them.
+
+  | question                                    | can a declaration answer it?                   |
+  | ------------------------------------------- | ---------------------------------------------- |
+  | what is the primary key?                    | **yes** — a declared key is authoritative      |
+  | which fields does the source actually send? | no — a catalog lists what the vendor documents |
+  | how wide are the values?                    | no — only the data knows                       |
+
+  So an object declared with fields and a key was never sampled. Its undeclared columns arrived later through the custom-overflow path, one sync at a time, and its widths were whatever the catalog guessed — a column declared 100 wide against 900-wide data is not slow discovery, it is a truncation or a migration written by hand afterwards.
+
+  Sampling is now unconditional, and the merge is deliberately one-directional — it fills gaps and widens, never overrides:
+  - **Primary key** — a declared key wins outright, even when the sample nominates a different column. Overriding it is how a child table ends up keyed on its parent's foreign key. An observed key is adopted only when none was declared.
+  - **New fields** — an observed field absent from the declaration is added, so its column exists at RSU time instead of appearing in overflow after a sync.
+  - **Widths** — effective length is `max(declared, observed)`, and an unbounded declaration beats any measured number. Never shrink: shrinking is the one outcome that loses data.
+  - **Everything else** — labels, descriptions, types, nullability, relationships — the declaration stands. A sampled type is inferred from a handful of values; a declared one was written down.
+
+  A fetch failure leaves the declaration exactly as it was, so the worst case is the behaviour that shipped before, and the error now says which of the two losses occurred — an object with no fields at all cannot sync until sampling succeeds, whereas one with a declaration merely runs with unknown widths for that run.
+
+  This supersedes the narrower fix that widened the gate to "no fields, or no key": the gate is gone, and the key rule it introduced is preserved as the primary-key rule above.
+
+- 79afbff: Discovery can now sample a multi-var child — and everything beneath it — when the tuple is provable.
+
+  A child whose APIPath carries two or more template vars was deferred outright, and the deferral
+  CASCADED: not just `/a/{aId}/b/{bId}/d` itself but every descendant of it got no sampling at all —
+  no custom columns, no observed widths, and an object with no declared primary key was dropped
+  entirely, since sampling was its only route to one.
+
+  Real multi-var paths are overwhelmingly NESTED (`/campaigns/{cid}/funds/{fid}/gifts`, where funds is
+  itself a child of campaigns), and a streamed record of that innermost parent already carries the
+  whole tuple — its own id natively, its ancestor's tagged on by the recursion one level down. The new
+  sampler resolves every var, streams the innermost candidate parent, and substitutes ALL vars from
+  each record's own fields. A record that cannot fill every var is skipped; a candidate that proves
+  barren over a bounded probe is abandoned for the next; when no candidate covers, the child adjourns
+  to declared-only fields exactly as before.
+
+  The old deferral's constraint still holds absolutely: no partial substitution ever leaves the
+  process, and genuinely independent parents (neither knows the other's key) still adjourn — valid
+  pairs are unknowable from data, and guessing them is the malformed-request bug the deferral existed
+  to prevent. The difference is that a subtree now only dies when its tuple is genuinely unknowable,
+  not whenever an ancestor merely had two parents.
+
+- e3a1425: An object the account cannot serve no longer fails loudly on every sync.
+
+  A vendor catalog lists record types a given account has not enabled. Asking for one returns the same
+  error every run, forever, and treated as a fetch failure it costs an error event and a retry ladder
+  per object per run — 71 such objects on one live connection produced 71 hard failures every sync,
+  burying the real ones.
+
+  The engine now recognises the signal as its own kind: `ObjectUnavailableError`, or any error carrying
+  `code === 'OBJECT_UNAVAILABLE'` so a connector can classify one without a peer version bump. The map
+  ends cleanly with a single warning — no retry ladder, no `FETCH_INCOMPLETE`, watermark untouched.
+
+  The verdict is deliberately NOT persisted between runs. Remembering it would save one probe per
+  object per run, and the object count in any real system is small enough that the trade is bad: a
+  stored verdict is wrong from the moment the account changes, and every scheme for noticing that — a
+  recheck clock, a full-sync override, a manual-run override — is another thing to keep correct.
+  Re-asking every run is self-healing by construction, with nothing to configure and no staleness.
+
+  It is also deliberately not modelled by disabling the entity map. `SyncEnabled`/`Status` are the
+  user's levers; writing to them would conflate "this account cannot serve the object" with "the user
+  does not want it".
+
+- 427fa8b: Type and nullability overlays now respect a silent source, like every other attribute already does.
+
+  The per-attribute rule in this file is that discovered metadata wins where the source states
+  something and the declaration fills the silence. Descriptions, booleans and lengths all follow it.
+  `Type` and `AllowsNull` did not:
+  - `MapSourceType` answers every input, including `''` and `undefined`, because its fallback has to
+    produce something for a genuinely unknown column. The caller used that answer either way, so a
+    describe with no type opinion rewrote a curated `datetimeoffset` or `bit` to `nvarchar` — and a
+    declared `nvarchar(MAX)` to a bounded `nvarchar`, which drops records at sync time.
+  - `AllowsNull ?? !IsRequired` computed `true` when the source stated neither, because `!undefined` is
+    `true` — so a describe with no opinion silently turned a declared NOT NULL column optional.
+
+  Types are hard constraints backed by real DDL, so a wrong one is a migration rather than a cosmetic
+  drift. `decideTypeOverlay` and `decideNullabilityOverlay` now make both decisions explicitly, in the
+  same shape as `decideBooleanOverlay`. A source that states something still wins; `IsRequired` still
+  derives nullability, since that is a statement made indirectly; and a field with no declaration still
+  takes the mapped value, fallback included, because there is nothing curated to protect.
+
+- 8e469c3: Writes for different entity maps no longer queue behind each other.
+
+  Every engine write went through one provider-wide chain. That was necessary but too broad: the
+  provider holds a single transaction on a single connection, so a write issued while that transaction
+  is open joins it — and the chain was the only thing preventing one batch's transaction from
+  swallowing an unrelated map's watermark save. The cost was that maps syncing concurrently also
+  serialized all their bookkeeping, including when no transaction existed at all.
+
+  `WriteSerializer` replaces the chain with a two-mode lock. Work that opens the provider transaction
+  runs exclusively, exactly as before. Work scoped to one entity map that opens no transaction —
+  watermark bookkeeping, match resolution, and the post-batch flushes of a batched apply — runs keyed
+  by entity map: different maps overlap, the same map stays ordered.
+
+  Waits are acyclic by construction: an exclusive section snapshots the in-flight keyed work at call
+  time, and a keyed call captures the barrier at call time, so nothing ever waits on work created
+  after it. Chains continue past rejections, so one errored batch cannot wedge later writers.
+
+- d10f112: Column deactivation now requires a source that DECLARED its field list complete.
+
+  A source describes its objects in one of three shapes, and only it knows which: it names no columns
+  at all, it returns only the account's CUSTOM columns, or it returns the full mapping. Only the third
+  can prove a column is gone.
+
+  That distinction was inferred from "the discovered field list came back non-empty", which cannot
+  tell the second shape from the third. A source returning only custom columns therefore looked
+  complete, and every standard column it did not restate became a deactivation candidate on a
+  comprehensive refresh.
+
+  `SourceObjectInfo` gains `FieldsAreAuthoritative`, and `decideAbsentDeactivations` deactivates
+  columns only for objects that declared it `true`. An object that declares nothing is left alone —
+  absence of evidence is not evidence of absence, the same rule the primary-key search already
+  follows. Object-level deactivation is unchanged.
+
+  The same rule now governs OBJECT deactivation, which was passing a hardcoded `IsAuthoritative: true`
+  and so overrode every connector that declares its discovery partial — a refresh that did not return
+  an object disabled it even for a source that cannot prove absence. It now reads the connector's own
+  claim, like the field level does.
+
+- f52be10: Fix a duplicate-record defect in the create-path prefetch elision.
+
+  `extractMappedPrimaryKey` returns the primary key value(s) already `'|'`-joined — the same shape
+  `PrefetchContentHashes` keys its `Present` set with. Two call sites instead treated that string as a
+  field map and re-derived a key from it (`mappedPK[f.Name]`), which evaluates to `''` for every
+  record. `provablyAbsent` was therefore unconditionally true whenever the prefetch covered the batch,
+  `existed` was permanently false, and any existing row reaching the create path was blind-INSERTed
+  instead of loaded and updated — a silent duplicate row on soft-primary-key tables, a duplicate-key
+  error on hard ones. It also made both content-hash skips on that path unreachable, since they sit
+  behind `existed`.
+
+  Reachable whenever an existing row reaches `CreateRecord`: a cleared record map, a new
+  CompanyIntegration over pre-existing rows, a `Create` verdict from matching, or `UpdateRecord`'s
+  unmatched fallback.
+
+  Both sites now use `mappedPK` directly. The decision moves into `isProvablyAbsent` so it can be
+  tested against the real extractor's output rather than a re-implementation of it, and `CreateRecord`
+  now records a key it creates into `Present` — a mid-batch flush commits part of a batch, and the
+  per-record fallback re-applies that batch against the same precheck, where an already-inserted row
+  would otherwise still "prove" absent.
+
+  The regression was invisible to its own tests: they stubbed `extractMappedPrimaryKey` with an
+  object-returning fake while the real method returns a string, and asserted the buggy expression's
+  source text rather than its behaviour. The suite now drives the real extractor, the real prefetch and
+  the real decision end to end, including the duplicate scenario and composite keys.
+
+- 4f7f929: Pipelined page prefetch for cursor-paged connectors. The fetch loop was strictly serial — fetch page, process page, fetch next — even though the next cursor is known the moment a page arrives. The next page now starts downloading while the current one is mapped and written, hiding the shorter leg under the longer (~20-30% cycle reduction measured at a ~6s fetch / ~1-2s process split). Cursor mode only; offset/page modes interact with gap-skip resume and stay serial. The prefetch runs through the same governed envelope as a loop-top fetch (rate limiter, adaptive fetch gate, timeout, transient-only retry, once-per-episode throttle reporting), it is built from the fully advanced position (NextPage/NextOffset/NextCursor/NextAfterKeyValue — a stale AfterKeyValue would make a keyset connector re-run the previous seek and stop at exactly two server pages), and a drifted cursor discards it rather than consuming the wrong page. Kill switch: MJ_INTEGRATION_PREFETCH=off.
+- 87aa62a: A batch that already proved a row absent no longer re-checks it per record.
+
+  Each apply batch queries the destination for the rows it is about to touch. `CreateRecord` then
+  asked again, one record at a time, with an `InnerLoad` — a `SELECT *` returning every column
+  including any `NVARCHAR(MAX)` — usually to discover the row is not there. On a first full sync that
+  is one wasted round trip per record.
+
+  The prefetch now also asks about create-path keys (the key the mapped fields carry, which is exactly
+  what `CreateRecord` was about to probe) and returns three separate facts: the stored content hashes,
+  the set of keys proven to EXIST, and whether the query covered every record in the batch. Presence is
+  tracked separately from hashes on purpose — a row can exist while carrying no hash, and conflating
+  the two would turn an update into a duplicate insert.
+
+  `CreateRecord` skips its existence load only when absence is proven: the batch covered every record
+  AND this key was missing from the result. A partial prefetch, a failed query, or a
+  destination-generated key all mean "unknown", and fall through to the load exactly as before.
+
+- 595c945: The absence-proof prefetch now passes `IgnoreMaxRows`, so a row-limit default can never truncate it.
+
+  A plain `RunView` is not unbounded — it falls back to the entity's `UserViewMaxRows`, which defaults
+  to 1000. The prefetch's result is what `CoversWholeBatch` absence proofs are judged against, and
+  coverage is computed from the request side, never reconciled with the response length: a silently
+  truncated response would mark every existing row beyond the cap "provably absent" and re-INSERT each
+  as a duplicate on every sync. Today the apply batch (500) happens to sit under the default cap, so
+  nothing fires — a 2× margin defended by nothing. This engine already documents the identical trap on
+  its push side and fixes it the same way.
+
+- 64915b9: Discovery samples ~50 records per table by default, not 500.
+
+  Sampling exists to answer three questions, and 50 rows fully answers two of them: a statistically
+  significant primary key (50 IS the classifier's significance floor — more rows change no verdict) and
+  which custom columns exist in the data. Only the third, the largest observed string, benefits from
+  more rows, and it has its own safety nets: the width bucket pads to twice the observed maximum, the
+  overlay only ever grows a width, and a value that overflows at sync time is recorded as a widening
+  candidate rather than lost.
+
+  Paying ten times the discovery time on every object of every connection to sharpen one answer in
+  three is the wrong default. On a large catalog that difference is the difference between a discovery
+  a person will wait for and one they won't.
+
+  The default is now sourced from `PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE` rather than restated, so the
+  sample target and the floor it is chosen to match cannot drift apart. The precedence chain is
+  unchanged — explicit options, then per-connection `discoveryMaxRecords`, then
+  `MJ_INTEGRATION_DISCOVERY_MAX_RECORDS`, then this default — so a connection that wants deeper width
+  fidelity raises it.
+
+- 5c1d762: A row whose content hash goes stale is repaired once, instead of losing its fast path forever.
+
+  When a source stops sending a column, the mapper OMITS the absent key rather than mapping it to null
+  — a missing value is not a null value. The recomputed content hash therefore differs from the stored
+  one, so the hash fast path correctly does not skip. But `SetEntityFields` never touches that column
+  either, so the entity is not dirty and the unchanged-record skip fires instead — and that path never
+  refreshes the stored hash.
+
+  The mismatch was permanent. That row lost the content-hash fast path for good, paying a full load and
+  a field-by-field compare on every sync from then on, until some other field happened to change.
+
+  A stale hash now counts as sync state needing repair, alongside a tombstone or an error status: one
+  write brings the stored hash back in line with what is actually being mapped, and every later sync
+  skips the row cheaply again. It deliberately does not conclude the column is gone — absence in the
+  data is not evidence of absence in the schema, and the column's value is left exactly as it is.
+
+- 905820a: Sync-scoped write-side-effect suppression. Record Changes and geocoding are per-write side effects, but the only way to relieve a high-volume writer of them was turning the entity flags off — which also turns them off for every human and API writer of the same entities, permanently. New `EntitySaveOptions.SkipRecordChanges` / `SkipGeoCoding` (and `EntityDeleteOptions.SkipRecordChanges`) scope the suppression to the individual save: providers omit the audit-row wrap and the geocode side trip for saves that carry the options, and only those. The sync engine sets them on its own writes when the connection asks via `Configuration.writeSideEffects === 'suppressed'` — fail-closed: absent or malformed configuration keeps the side effects on, and a save outside a suppressing sync run can never carry them. Materially identical to flags-off for the sync's writes; invisible to every other writer. The delete option is mirrored onto the GraphQL `DeleteOptionsInput` because the schema-sync gate requires every `EntityDeleteOptions` field to appear there, but it is **not honoured over the wire**: every wire entry point sanitizes it back to false and logs the attempt, because suppressing an audit row is a higher privilege than `entity:delete` — the only authorization a delete mutation performs. That keeps delete at exact parity with save, whose options have no GraphQL input type at all.
+- cc474d5: A sync batch can send its writes together instead of one at a time.
+
+  The apply loop already made a batch atomic — `BeginTransaction`, apply each record, `Commit`. But atomicity is not batching: each record's `Save()` still sent its own statement, so N records cost N round trips, and on a high-latency link the round trip is the write ceiling.
+
+  A `TransactionGroup` closes exactly that gap. Enrolling an entity in one makes `Save()` defer its **write** to `Submit()` while still doing everything else it does — validation, row-scope checks, `GenerateSaveSQL` producing the generated CRUD procedure call, Record Changes, and `OnAfterSaveExecute` when the result returns. The statements then travel together.
+
+  This is the distinction that matters: the speed comes from _how the SQL travels_, not from skipping what the SQL does. Writing rows directly reaches similar numbers by not calling the procedures at all, and pays for it with every stored-procedure side effect, every Record Changes row, and every save event — including the cache-invalidation events that `TrustLocalCacheCompletely` is justified on.
+
+  Opt-in per connection via `Configuration.writeMode === 'batched'`, and it fails closed: absent, unparseable, wrongly-typed or unrecognised configuration keeps the proven per-record path, so the default never changes underneath an existing tenant. A group that fails to commit routes into the same handler a thrown error does, so the existing degradation is reached by both shapes — counters restored from the batch snapshot, queued record maps discarded, and the batch re-applied record-by-record so one poison record cannot cost its healthy siblings.
+
+  The group rides the run's `AsyncLocalStorage` context rather than a threaded parameter, for the reason that context already exists: the entity is constructed several frames below the code that owns the batch.
+
+  Requires the batched submit in `@memberjunction/sqlserver-dataprovider` and `@memberjunction/postgresql-dataprovider` to be the thing that makes it one round trip; without those a group is atomic but still serial, which is today's behaviour.
+
+  Batched writes no longer force concurrency 1.
+
+  The write mutex existed because the shared provider connection holds one transaction at a time, and it wrapped the whole apply block. For `BeginTransaction` + per-record `Save()` that is right — the transaction is open across the batch. For a batched batch it is not: a `TransactionGroup` is an in-memory list until `Submit()`, so enrolling an entity validates, checks row scope, renders the CRUD procedure call and parks it without a statement travelling or a transaction opening. Only `Submit` touches the connection.
+
+  So the whole apply block was being serialized on account of work that never needed it, and the cost was the thing batching exists for: maps could not overlap on fetching, paging, transforming or enrolling, because they were queued behind each other's writes.
+
+  The batched path now takes the mutex only around the writes — the group's `Submit`, the reconciled-skip touch, and the record-map flush. One transaction is still in flight at a time, so the invariant is unchanged; what changes is that everything which never touched the connection now runs in parallel.
+
+  Each batch keeps its OWN group, in its own `AsyncLocalStorage` scope. Assigning onto the shared run context would be a single slot, and the moment two maps overlap the second would overwrite the first's group and enrol its records into the wrong batch. Per-batch scoping also keeps failures isolated: a poison record fails the group its own map owns, and a map applying alongside it is untouched — no shared transaction means no way for one map to make another fail.
+
+  Nesting the mutex is deliberately avoided rather than merely unused: the inner call waits on a chain that already contains the outer one, so it would hang instead of erroring. Under the outer mutex the writes are already serialized and run inline; the batched path takes it per write. That hazard is covered by a test, because a deadlock leaves nothing to read.
+
+  Batching follows `writeMode`, not concurrency.
+
+  Gating the decision on `useTransaction` — which is `getSyncConcurrency(config) <= 1` — would have meant batching only ever engaged at concurrency 1, the exact tradeoff this change exists to remove. Raising concurrency would silently drop every record back onto the per-record pool, and nothing in the sync reports that: throughput simply fails to improve, which is indistinguishable from the feature not helping.
+
+  Batching is a property of how the writes travel; concurrency is a property of how many maps fetch at once. They are independent, so the decision follows `writeMode` alone and the batch-atomic branch is entered whenever writes are batched. A batched batch is atomic by construction — the group is one transaction — so entering that branch is what it already meant; at concurrency above 1 the atomicity is per entity map, and a group failure still degrades to the record-by-record retry.
+
+  The per-record fallback no longer opens a provider transaction when writes are batched.
+
+  With batching decoupled from concurrency, the degradation path became reachable with more than one entity map in flight — and it was the one piece of the batched path still reaching for the provider's transaction. That state is not per-caller: `_transactionDepth`, the active transaction and the savepoint counter are single fields on the one shared provider instance. A second concurrent caller therefore reads a depth of 2, treats itself as nested and issues `SAVE TRANSACTION` against a transaction the first caller may already have committed; the depth it leaks then fails every later query on that connection with "Transaction has not begun. Call begin() first." The corruption outlives the sync, because the provider is shared with everything else reading through it.
+
+  The transaction was not buying anything to begin with. `ApplySingleRecord` performs exactly one write — a create, an update or a delete; record maps are queued into `RecordMapBatch` and flushed set-based afterwards — so there is no multi-statement unit for a transaction to make atomic. A single statement either commits or it does not, and the retry's next attempt starts clean whether or not a rollback was issued against a transaction that never held anything.
+
+  So when writes are batched the fallback now applies each record on auto-commit. The write itself is unchanged — the same `ApplySingleRecord`, the same `Save()`, the same generated CRUD procedure, the same Record Changes — it simply stops opening a transaction around one statement. This is what the concurrent non-batched path has always done, through the same call, which is the evidence that the shape is sound rather than merely smaller.
+
+  The sequential path keeps the per-record transaction exactly as before: there the engine owns the provider on its own, so the shared counter cannot be raced, and a deadlock or momentary timeout still rolls back and retries clean. The behaviour is selected by the caller rather than inferred, and the default is the sequential one, so a path that has not been considered keeps today's semantics.
+
+  Worth recording for anyone reading the concurrency story: the batch itself was never the hazard. Both dialects' `TransactionGroup` acquire their own dedicated pooled connection — `new sql.Transaction(pool)` on SQL Server, `pool.connect()` then `BEGIN` on Postgres — and neither reads the provider's transaction fields. Submitting groups concurrently was already safe; the fallback was the only place the shared state was touched, and therefore the only thing standing between batched writes and concurrency.
+
+  Two behavioural consequences worth stating plainly, because both are invisible from throughput alone.
+
+  **Per-record failure attribution moves to the group.** An enrolled `Save()` returns true immediately and subscribes to `TransactionNotifications$` for finalization, so the `if (!saved)` check and its dead-letter attribution in `CreateRecord` / `UpdateRecord` / `DeleteRecord` do not run under batching. Every server-side rejection surfaces instead as a whole-group failure and costs a full batch re-apply through the record-by-record fallback. That is the designed degradation and it is correct — but the steady-state cost is real: a batch containing a persistently poisonous row does roughly twice the work on every run, indefinitely, and the only signal is that throughput never improves. A connection seeing no gain from `writeMode: 'batched'` should be read as "something in these batches fails every time", not as "batching does not help here".
+
+  **Entities whose identity is a single auto-increment column are never enrolled.** A batched `Save()` returns before the row exists, and the caller reads the primary key immediately afterwards to build the record map. That is safe for the shapes sync produces — `NewRecord()` client-generates the UUID for a single `uniqueidentifier` key, and a composite or soft key takes its values from the mapped fields before the save — but an identity column has no value until the insert executes, which would write a blank `EntityRecordID` and reintroduce exactly the duplicate-on-every-sync failure the record-map code documents. Such an entity is therefore left out of the group and saves immediately: one round trip slower for that entity, and impossible to get silently wrong.
+
+  Now that the providers can honour it (MJ#4087), the engine arms `BatchedSubmit` on the group it creates — so a batched batch travels as ONE round trip rather than one per item. Without that flag the group is atomic but still serial, which is the pre-existing behaviour and why this could land in either order.
+
+  Batching is decided per ENTITY MAP, not only per connection. A map whose target's whole identity is server-assigned (a single auto-increment primary key) can never enrol a record, so batching it would create a group that stays empty — and because the batched branch skips `BeginTransaction` on the strength of a group existing, that batch would run non-atomically while an empty `Submit()` reported success. Such a map takes the transactional path instead and gets real atomicity. The per-record enrolment guard stays as well: it is total at the seam, which is where an entity whose metadata could not be resolved gets its answer.
+
+- 2c8fbc7: Report per-object progress during discovery sampling
+
+  Sampling is the expensive half of discovery — one read-path fetch per object — and it emitted
+  nothing between the stage's start and its completion. A 23-object source looked exactly like a
+  5-object one: a stage that had started, for an unbounded stretch, with no way to tell slow
+  progress from a wedged run.
+
+  `StageIntrospect` now emits a heartbeat per object it samples, carrying `processed` / `totalKnown`
+  / `skipped` and a message that stands on its own (`Sampling "Invoice" (3 of 23)`), so a consumer
+  that renders only the text still reads correctly.
+
+  Two details that make the number trustworthy rather than merely present:
+  - The denominator is the union both sampling passes will walk — in-scope runtime objects plus
+    in-scope declared ones — computed before the first sample. Counting per-loop would show
+    "1 of 2" and then restart when the declared-only pass began, revising the total upward under a
+    user who is watching it.
+  - Announcements are keyed by object name, so a connector that surfaces the same object twice
+    cannot walk the count past its own denominator ("3 of 2").
+
+  An exhausted sampling budget still walks the count to the end and reports the passed-over objects
+  as `skipped`; freezing the count where sampling stopped would leave a completing stage looking
+  identical to a wedged one.
+
+  No new event type — `heartbeat` and its counts already exist, and readers already derive the
+  latest counts from the stream.
+
+- 4f20e10: An object the account cannot serve no longer advances its watermark.
+
+  The `OBJECT_UNAVAILABLE` branch broke out of the fetch loop leaving `fetchCompletedCleanly` true, so
+  control fell into the clean-fetch branch and treated a map that fetched **zero records** as one that
+  had seen the complete set. On a full sync — and on a first encounter, where no watermark row exists
+  yet — that minted a wall-clock `Timestamp` watermark. When the account later enabled the object, the
+  next incremental filtered `modified > <the moment of the failed fetch>` and permanently missed every
+  record that already existed, destroying the self-healing this path exists to provide. The same fall-
+  through also ran orphan detection on an empty result and, under partition reconcile, overwrote the
+  stored rollup snapshot with an empty map.
+
+  The map still ends successfully with its single warning and no retry ladder — only the consequences
+  of "we saw everything" are withheld. The warning is also now filed under the object name rather than
+  the literal `'sync'`, matching every sibling warning, so per-object filtering works.
+
+- 1f66f31: A completed sync's watermark is stored as a Timestamp again, not left typed as a Cursor.
+
+  The watermark row is shared with the keyset resume position, which flips `WatermarkType` to
+  `'Cursor'` mid-run. Creating a watermark stamps `'Timestamp'`, but updating one set only the value
+  and `LastSyncAt` — so an entity map that saved a keyset cursor mid-run and then completed cleanly
+  was left holding a timestamp value still typed as a cursor. `Load`'s consumers read the type to
+  decide what the value means, so the next run could hand that timestamp back to the connector as a
+  seek key.
+
+  `UpdateExistingWatermark` now restores `WatermarkType='Timestamp'`, matching what creation already
+  did. `RestoreValue` stays type-preserving on purpose: it undoes a mid-run durability floor, it does
+  not declare a run complete.
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/integration-engine-base@6.1.0-edge.5
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.5
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.5
+
 ## 6.1.0-edge.4
 
 ### Minor Changes

@@ -20,6 +20,7 @@ import sql from 'mssql';
 import { LocalCacheManager, InMemoryLocalStorageProvider, Metadata, SetProvider } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
+import { DiscoverMJConfig, LoadDynamicPackages } from '@memberjunction/dynamic-packages';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { InstrumentedLocalStorageProvider } from './instrumented-cache';
 import { LoadEnv, LoadDbConfig } from './config';
@@ -62,6 +63,9 @@ function resolveContextUser(email?: string): UserInfo {
  * The instrumented-cache-first ordering is identical on both backends — the cache
  * singleton is platform-agnostic. Only the provider setup differs, behind db.Platform.
  */
+/** Process ID the integration bootstrap identifies itself with to the dynamic-package loader. */
+export const INTEGRATION_TESTS_PROCESS_ID = 'integration-tests';
+
 export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = {}): Promise<IntegrationBootstrapContext> {
     const existing = getActiveIntegrationBootstrap();
     if (existing) {
@@ -71,6 +75,12 @@ export async function bootstrapIntegrationServer(opts: BootstrapServerOptions = 
     // Fail fast on mis-host BEFORE reading config — never wedge instrumentation into a live cache.
     assertOwnsProcess();
     const db = await LoadDbConfig();
+
+    // Installed Open App server packages (mj.config.cjs dynamicPackages.server[]) register their
+    // entity subclasses here, AFTER the lite manifest imported above and BEFORE the provider —
+    // the same ordering MJAPI uses — so checks exercise the apps' real classes, not BaseEntity.
+    const raw = DiscoverMJConfig(undefined, { searchStrategy: 'none' }); // same cwd-only search as LoadDbConfig()
+    await LoadDynamicPackages({ processId: INTEGRATION_TESTS_PROCESS_ID, tier: 'server', config: raw.config, configFilePath: raw.configFilePath });
 
     // FIRST-CALLER cache init — MUST precede any provider setup (load-bearing on both backends).
     const storage = new InstrumentedLocalStorageProvider(new InMemoryLocalStorageProvider());

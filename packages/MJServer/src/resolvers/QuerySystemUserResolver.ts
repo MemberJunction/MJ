@@ -590,14 +590,15 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             }
 
             const provider = GetReadWriteProvider(context.providers);    
-            const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+            const key = CompositeKey.FromID(ID); // first-pk-ok: deletes from MJ: Queries (core entity keyed by ID) — see DeleteRecord below
             
             // Provide default options if none provided
             const deleteOptions = options || {
                 SkipEntityAIActions: false,
                 SkipEntityActions: false,
                 ReplayOnly: false,
-                IsParentEntityDelete: false
+                IsParentEntityDelete: false,
+                SkipRecordChanges: false
             };
             
             // Use inherited DeleteRecord method from ResolverBase

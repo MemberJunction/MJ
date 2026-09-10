@@ -26,6 +26,7 @@ import {
     discoverFromStream,
     pickKeyFromStats,
     pickPrimaryKeyFromStats,
+    PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE,
     type StreamDiscoveryOptions,
     type PkPickOptions,
 } from './StreamingDiscovery.js';
@@ -375,6 +376,17 @@ export interface RateLimitPolicy {
      */
     MinTokensPerSec?: number;
 }
+
+/**
+ * Records sampled per table during discovery, by default.
+ *
+ * Deliberately equal to the classifier's significance floor
+ * ({@link PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE}): sampling exists to answer three questions, and 50 rows
+ * fully answers two of them. Raising it only sharpens the third (largest observed string), which has
+ * its own safety nets, so the extra rows are paid on every object of every connection to improve one
+ * answer in three. Per-connection `discoveryMaxRecords` raises it where that trade is worth making.
+ */
+const DEFAULT_DISCOVERY_SAMPLE_TARGET = PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
 
 export abstract class BaseIntegrationConnector {
 
@@ -738,7 +750,18 @@ export abstract class BaseIntegrationConnector {
         companyIntegration: MJCompanyIntegrationEntity,
         objectName: string,
         contextUser: UserInfo,
-        opts: { TimeBudgetMs?: number; BatchSize?: number; MaxRecords?: number } = {}
+        opts: {
+            TimeBudgetMs?: number;
+            BatchSize?: number;
+            MaxRecords?: number;
+            /**
+             * Called when streaming fails and this method degrades to single-sample `DiscoverFields`.
+             * The degradation is silent otherwise, and it is not a small one: the fallback returns
+             * the catalog's own description, which carries no observed widths — so the caller
+             * believes it sampled, and the object keeps whatever width the catalog guessed.
+             */
+            OnFallback?: (err: unknown) => void;
+        } = {}
     ): Promise<ExternalFieldSchema[]> {
         // Discovery budgets are operator-tunable via env (time- or record-count-based — either bounds it);
         // explicit opts win, then env, then the sensible defaults. The record cap usually hits before time.
@@ -770,7 +793,20 @@ export abstract class BaseIntegrationConnector {
         // discovery budget an operator actually wants to lower for a slow source the ONLY one that needed
         // an app setting and a process restart. Same precedence as the others now:
         // explicit opts > per-connection Configuration > operator env > default.
-        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', 500);
+        // The DEFAULT is the per-table sample target: ~50 records, the same figure the value-statistic
+        // classifier treats as significant (PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE). It was 500, which is
+        // 10x what any of the three questions sampling answers actually needs:
+        //   - a significant primary key — 50 rows IS the significance floor; more changes no verdict,
+        //   - custom-discoverable columns — a column present in the data shows up almost immediately,
+        //   - the largest string — the only one that genuinely benefits from more rows.
+        // That last one is why this is a KNOB and not a constant. Width has real safety nets (the
+        // bucket pads to 2x the observed max, the overlay only ever GROWS a width, and a value that
+        // overflows at sync time is recorded as a widening candidate rather than lost), so paying 10x
+        // the discovery time on every object by default to sharpen one of three answers is the wrong
+        // trade. A connection that needs deeper width fidelity raises `discoveryMaxRecords`.
+        //
+        // Precedence unchanged: explicit opts > per-connection Configuration > operator env > default.
+        const maxRecords = opts.MaxRecords ?? cfgInt(cfg.discoveryMaxRecords) ?? envInt('MJ_INTEGRATION_DISCOVERY_MAX_RECORDS', DEFAULT_DISCOVERY_SAMPLE_TARGET);
         // Announce intent AND cost. Until now only the FAILURE branch below said anything, so a
         // healthy-but-slow object, an object grinding out its whole time budget, and one that will
         // never return were indistinguishable from outside the process. The watchdog names whatever
@@ -806,6 +842,11 @@ export abstract class BaseIntegrationConnector {
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             console.warn(`[DiscoverFieldsViaFetch] <- FAILED "${objectName}" after ${Date.now() - startedMs}ms (${msg}); falling back to single-sample DiscoverFields.`);
+            // Tell the caller BEFORE returning: from the outside a fallback is indistinguishable
+            // from a successful sample, so a discovery that learned nothing about real widths
+            // reports as a discovery that did. A throwing notifier must not turn a degraded
+            // discovery into a failed one.
+            try { opts.OnFallback?.(err); } catch { /* a notifier is never allowed to break discovery */ }
             return this.DiscoverFields(companyIntegration, objectName, contextUser);
         } finally {
             watchdog.End(watchKey);

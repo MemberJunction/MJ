@@ -1,4 +1,5 @@
 import { logError } from "./status_logging";
+import { ordinalCompare } from "@memberjunction/global";
 import fs, { unlinkSync } from "fs";
 import fsExtra from 'fs-extra';
 import { globSync } from 'glob';
@@ -69,7 +70,7 @@ export function combineFiles(directory: string, combinedFileName: string, patter
         } else if (!isAPermissions && isBPermissions) {
             return -1;
         } else {
-            return a.localeCompare(b);
+            return ordinalCompare(a, b);
         }
     });
 
@@ -126,26 +127,26 @@ export function sortBySequenceAndCreatedAt<T extends { Sequence: number; __mj_Cr
         // Alphabetical tiebreakers — try type-appropriate name fields in order
         // Value (EntityFieldValueInfo)
         if (a.Value != null && b.Value != null) {
-            const cmp = a.Value.localeCompare(b.Value);
+            const cmp = ordinalCompare(a.Value, b.Value);
             if (cmp !== 0) return cmp;
         } else if (a.Value != null && b.Value == null) return -1;
         else if (a.Value == null && b.Value != null) return 1;
 
         // Name (EntityFieldInfo)
         if (a.Name != null && b.Name != null) {
-            const cmp = a.Name.localeCompare(b.Name);
+            const cmp = ordinalCompare(a.Name, b.Name);
             if (cmp !== 0) return cmp;
         }
 
         // RelatedEntityJoinField (EntityRelationshipInfo)
         if (a.RelatedEntityJoinField != null && b.RelatedEntityJoinField != null) {
-            const cmp = a.RelatedEntityJoinField.localeCompare(b.RelatedEntityJoinField);
+            const cmp = ordinalCompare(a.RelatedEntityJoinField, b.RelatedEntityJoinField);
             if (cmp !== 0) return cmp;
         }
 
         // Last resort: sort by ID for absolute determinism
         if (a.ID != null && b.ID != null) {
-            return a.ID.localeCompare(b.ID);
+            return ordinalCompare(a.ID, b.ID);
         }
         return 0;
     });
@@ -170,20 +171,77 @@ export function sortRelatedEntities<T extends { Sequence: number; __mj_CreatedAt
 
         // Tiebreaker: RelatedEntity name (the display name of the related entity)
         if (a.RelatedEntity != null && b.RelatedEntity != null) {
-            const cmp = a.RelatedEntity.localeCompare(b.RelatedEntity);
+            const cmp = ordinalCompare(a.RelatedEntity, b.RelatedEntity);
             if (cmp !== 0) return cmp;
         }
 
         // Tiebreaker: RelatedEntityJoinField (FK column name)
         if (a.RelatedEntityJoinField != null && b.RelatedEntityJoinField != null) {
-            const cmp = a.RelatedEntityJoinField.localeCompare(b.RelatedEntityJoinField);
+            const cmp = ordinalCompare(a.RelatedEntityJoinField, b.RelatedEntityJoinField);
             if (cmp !== 0) return cmp;
         }
 
         // Last resort: ID
         if (a.ID != null && b.ID != null) {
-            return a.ID.localeCompare(b.ID);
+            return ordinalCompare(a.ID, b.ID);
         }
         return 0;
     });
+}
+
+/**
+ * Serializes a value to JSON with recursively sorted object keys, ensuring deterministic
+ * string representations across runs regardless of property insertion order.
+ *
+ * @param value - Value to serialize
+ * @param space - Optional indentation (e.g. 2 for pretty-printed JSON)
+ */
+export function canonicalJSONStringify(value: unknown, space?: number | string): string {
+    return JSON.stringify(sortKeysRecursively(value), null, space);
+}
+
+function sortKeysRecursively(value: unknown): unknown {
+    if (value === null || typeof value !== 'object') {
+        return value;
+    }
+    if (Array.isArray(value)) {
+        return value.map(sortKeysRecursively);
+    }
+    const obj = value as Record<string, unknown>;
+    const sortedKeys = Object.keys(obj).sort(ordinalCompare);
+    const result: Record<string, unknown> = {};
+    for (const key of sortedKeys) {
+        result[key] = sortKeysRecursively(obj[key]);
+    }
+    return result;
+}
+
+/**
+ * Deep structural equality comparison for JSON-serializable objects and primitives.
+ */
+export function deepEqualJSON(a: unknown, b: unknown): boolean {
+    if (a === b) return true;
+    if (a == null || b == null) return false;
+    if (typeof a !== typeof b) return false;
+    if (typeof a !== 'object') return false;
+    if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+    if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return false;
+        for (let i = 0; i < a.length; i++) {
+            if (!deepEqualJSON(a[i], b[i])) return false;
+        }
+        return true;
+    }
+
+    const objA = a as Record<string, unknown>;
+    const objB = b as Record<string, unknown>;
+    const keysA = Object.keys(objA);
+    const keysB = Object.keys(objB);
+    if (keysA.length !== keysB.length) return false;
+    for (const key of keysA) {
+        if (!Object.prototype.hasOwnProperty.call(objB, key)) return false;
+        if (!deepEqualJSON(objA[key], objB[key])) return false;
+    }
+    return true;
 }
