@@ -5622,19 +5622,19 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             const start = Date.now();
 
-            // Save timestamps as a JSON string. The metadata snapshot path intentionally uses
-            // string storage so the compressed (gzip+base64) format below can round-trip cleanly
-            // through providers that don't support binary natively.
-            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
-
-            // Persist the metadata-member entity set beside the snapshot it belongs to, so the
-            // event-driven refresh survives a warm boot (see LoadLocalMetadataFromStorage).
-            if (this._metadataDatasetEntityNames?.size) {
-                await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageDatasetMembershipKey, JSON.stringify([...this._metadataDatasetEntityNames]));
-            }
-
-            // Serialize the AllMetadata object
+            // Serialize the AllMetadata object FIRST. If this throws (or the payload write below
+            // fails), nothing else has been written yet, so the previously stored timestamps still
+            // describe the previously stored payload and LocalMetadataObsolete() will report
+            // obsolete on the next boot — which is what makes the save retry. Writing timestamps
+            // before the payload left the cache claiming freshness with no payload behind it, and
+            // that state was never retried.
             const jsonString = JSON.stringify(this._localMetadata);
+
+            // The metadata snapshot path intentionally uses string storage so the compressed
+            // (gzip+base64) format can round-trip cleanly through providers that don't support
+            // binary natively.
+            let compressed = false;
+            let storedLength = jsonString.length;
 
             // Attempt compressed storage using native CompressionStream (available in modern browsers and Node 18+)
             if (typeof CompressionStream !== 'undefined') {
@@ -5647,14 +5647,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
                     await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, base64);
                     await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'gzip');
-
-                    const elapsed = Date.now() - start;
-                    const ratio = jsonString.length > 0 ? (base64.length / jsonString.length * 100).toFixed(1) : '?';
-                    LogStatusEx({
-                        message: `[Metadata Cache] Save complete: ${elapsed}ms, raw=${(jsonString.length / 1024 / 1024).toFixed(1)}MB, compressed=${(base64.length / 1024 / 1024).toFixed(1)}MB (${ratio}%)`,
-                        verboseOnly: true
-                    });
-                    return;
+                    compressed = true;
+                    storedLength = base64.length;
                 }
                 catch (compressErr) {
                     // Compression failed — fall through to uncompressed save
@@ -5662,15 +5656,36 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
             }
 
-            // Fallback: uncompressed save (older environments without CompressionStream)
-            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, jsonString);
-            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'json');
+            if (!compressed) {
+                // Fallback: uncompressed save (older environments without CompressionStream)
+                await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, jsonString);
+                await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'json');
+            }
+
+            // Persist the metadata-member entity set beside the snapshot it belongs to, so the
+            // event-driven refresh survives a warm boot (see LoadLocalMetadataFromStorage).
+            if (this._metadataDatasetEntityNames?.size) {
+                await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageDatasetMembershipKey, JSON.stringify([...this._metadataDatasetEntityNames]));
+            }
+
+            // Timestamps LAST: they are the freshness claim for everything written above, so they
+            // must be the final thing to land.
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
 
             const elapsed = Date.now() - start;
-            LogStatusEx({
-                message: `[Metadata Cache] Save complete (uncompressed): ${elapsed}ms, size=${(jsonString.length / 1024 / 1024).toFixed(1)}MB`,
-                verboseOnly: true
-            });
+            if (compressed) {
+                const ratio = jsonString.length > 0 ? (storedLength / jsonString.length * 100).toFixed(1) : '?';
+                LogStatusEx({
+                    message: `[Metadata Cache] Save complete: ${elapsed}ms, raw=${(jsonString.length / 1024 / 1024).toFixed(1)}MB, compressed=${(storedLength / 1024 / 1024).toFixed(1)}MB (${ratio}%)`,
+                    verboseOnly: true
+                });
+            }
+            else {
+                LogStatusEx({
+                    message: `[Metadata Cache] Save complete (uncompressed): ${elapsed}ms, size=${(jsonString.length / 1024 / 1024).toFixed(1)}MB`,
+                    verboseOnly: true
+                });
+            }
         }
         catch (e) {
             LogError(`[Metadata Cache] SaveLocalMetadataToStorage failed: ${e instanceof Error ? e.message : String(e)}`);

@@ -93,7 +93,19 @@ export abstract class BaseInfo {
                 const targetKey = Object.prototype.hasOwnProperty.call(proto, pascalKey) ? pascalKey : lowerKey;
                 const desc = Object.getOwnPropertyDescriptor(proto, targetKey);
                 if (desc && typeof desc.get === 'function') {
-                    result[targetKey] = self[targetKey];
+                    // A getter reached through a backing field must not abort the whole
+                    // serialization. The contract above already says computed getters can throw
+                    // when their sources are not ready; a `_`-backed getter can too — e.g.
+                    // QueryInfo.CategoryPath walks Metadata.Provider.QueryCategories, which does
+                    // not exist yet during the initial metadata load. Omitting one key is strictly
+                    // better than losing the entire snapshot: the value is recomputed lazily on
+                    // the next access, and the local metadata cache still gets written.
+                    try {
+                        result[targetKey] = self[targetKey];
+                    }
+                    catch {
+                        // intentionally omitted from the serialized shape
+                    }
                     break;
                 }
                 proto = Object.getPrototypeOf(proto);
