@@ -12,7 +12,7 @@ import { UUIDsEqual } from '@memberjunction/global';
 import { MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity } from '@memberjunction/core-entities';
 import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
-import { SkillMarkdownConverter } from './SkillMarkdownConverter';
+import { SkillMarkdownConverter, type SkillMarkdownFrontmatter } from './SkillMarkdownConverter';
 
 /**
  * Options for {@link SkillImportExportService.ImportSkill}.
@@ -80,8 +80,14 @@ export class SkillImportExportService {
             }
         ], contextUser);
 
-        const actionNames = (actionRows.Success ? actionRows.Results : [])
-            .map(row => ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, (row as MJAISkillActionEntity).ActionID))?.Name)
+        const actionNameOf = (row: MJAISkillActionEntity): string | undefined =>
+            ActionEngineServer.Instance.Actions.find(a => UUIDsEqual(a.ID, row.ActionID))?.Name;
+        const actionRowsTyped = (actionRows.Success ? actionRows.Results : []) as MJAISkillActionEntity[];
+        const actionNames = actionRowsTyped.map(actionNameOf).filter((name): name is string => !!name);
+        // ExposeToModel = 0 rows travel as `codeOnlyActions`, so the flag survives a cross-instance import.
+        const codeOnlyActionNames = actionRowsTyped
+            .filter(row => row.ExposeToModel === false)
+            .map(actionNameOf)
             .filter((name): name is string => !!name);
 
         const subAgentNames = (subAgentRows.Success ? subAgentRows.Results : [])
@@ -93,6 +99,7 @@ export class SkillImportExportService {
             description: skill.Description ?? undefined,
             category: skill.Category ?? undefined,
             actionNames,
+            codeOnlyActionNames,
             subAgentNames,
             instructions: skill.Instructions
         });
@@ -131,6 +138,7 @@ export class SkillImportExportService {
             warnings,
             'Sub-agent'
         );
+        const exposeToModel = this.resolveExposeToModel(parsed.frontmatter, resolvedActionIDs, warnings);
 
         const skill = await md.GetEntityObject<MJAISkillEntity>('MJ: AI Skills', contextUser);
         if (options?.updateSkillId) {
@@ -153,7 +161,7 @@ export class SkillImportExportService {
             throw new Error(`Failed to save imported skill: ${skill.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
 
-        await this.resyncJunction(skill.ID, 'MJ: AI Skill Actions', resolvedActionIDs, 'ActionID', contextUser, md);
+        await this.resyncJunction(skill.ID, 'MJ: AI Skill Actions', resolvedActionIDs, 'ActionID', contextUser, md, exposeToModel);
         await this.resyncJunction(skill.ID, 'MJ: AI Skill Sub Agents', resolvedSubAgentIDs, 'SubAgentID', contextUser, md);
 
         return { skill, warnings };
@@ -189,15 +197,41 @@ export class SkillImportExportService {
     }
 
     /**
+     * Turns the frontmatter's `codeOnlyActions` into a per-ActionID `ExposeToModel` map, or `undefined`
+     * when the file has no such key — then the file expresses no opinion and {@link resyncJunction}
+     * keeps each surviving row's flag as it was. A name listed as code-only but not bundled under
+     * `actions` is a warning, not a row.
+     */
+    private static resolveExposeToModel(
+        frontmatter: SkillMarkdownFrontmatter,
+        resolvedActionIDs: string[],
+        warnings: string[]
+    ): Map<string, boolean> | undefined {
+        if (frontmatter.codeOnlyActions === undefined) {
+            return undefined;
+        }
+        const codeOnlyIDs = new Set(
+            this.resolveNames(frontmatter.codeOnlyActions, ActionEngineServer.Instance.Actions, warnings, 'Code-only action')
+                .map(id => id.toUpperCase())
+        );
+        const bundled = new Set(resolvedActionIDs.map(id => id.toUpperCase()));
+        for (const id of codeOnlyIDs) {
+            if (!bundled.has(id)) {
+                warnings.push(`codeOnlyActions names an action that is not listed under actions (${id}); ignored`);
+            }
+        }
+        return new Map(resolvedActionIDs.map(id => [id.toUpperCase(), !codeOnlyIDs.has(id.toUpperCase())]));
+    }
+
+    /**
      * Deletes existing junction rows for the skill and recreates them from the resolved ID set — the
      * simplest correct resync for a small bounded set of rows.
      *
-     * Delete-and-recreate must not lose what the SKILL.md cannot express. The frontmatter carries
-     * action NAMES only, so a per-row setting like `AISkillAction.ExposeToModel` (#4226) would be
-     * reset to its default on every re-import — a skill whose "Create exam" button was deliberately
-     * hidden from the model would silently become model-callable again the next time someone saved
-     * its SKILL.md. Rows that survive the resync (same action before and after) keep their setting;
-     * only genuinely new rows take the default.
+     * Delete-and-recreate must not lose `AISkillAction.ExposeToModel` (#4226). When the SKILL.md says
+     * (`codeOnlyActions`, → `exposeToModel`), the file is authoritative. When it does not — a file
+     * exported before the key existed, or hand-written without it — rows that survive the resync (same
+     * action before and after) keep the flag they had, so re-saving a skill's SKILL.md never turns a
+     * code-only action model-callable; only a genuinely new row takes the column default.
      */
     private static async resyncJunction(
         skillId: string,
@@ -205,7 +239,8 @@ export class SkillImportExportService {
         resolvedIDs: string[],
         idFieldName: 'ActionID' | 'SubAgentID',
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        exposeToModel?: Map<string, boolean>
     ): Promise<void> {
         const rv = new RunView();
         const existing = await rv.RunView<MJAISkillActionEntity | MJAISkillSubAgentEntity>({
@@ -233,9 +268,9 @@ export class SkillImportExportService {
             junctionRow.NewRecord();
             junctionRow.SkillID = skillId;
             (junctionRow as unknown as Record<string, string>)[idFieldName] = id;
-            const kept = carried.get(id.toUpperCase());
-            if (entityName === 'MJ: AI Skill Actions' && kept !== undefined) {
-                (junctionRow as MJAISkillActionEntity).ExposeToModel = kept;
+            const flag = exposeToModel?.get(id.toUpperCase()) ?? carried.get(id.toUpperCase());
+            if (flag !== undefined) {
+                (junctionRow as MJAISkillActionEntity).ExposeToModel = flag;
             }
             const saved = await junctionRow.Save();
             if (!saved) {

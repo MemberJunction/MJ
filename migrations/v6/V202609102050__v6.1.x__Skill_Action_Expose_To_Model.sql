@@ -1,27 +1,28 @@
 -- ============================================================================
 -- v6.1.x — AISkillAction.ExposeToModel: a skill can bundle an action without handing it to the model
 --
--- WHY. Bundling an action into a skill (an `MJ: AI Skill Actions` row) does two things at once today:
--- it grants the activating agent permission to run the action, AND it puts the action in front of the
--- model as a callable tool for the rest of the run (BaseAgent.enableSkillCapabilities pushes every
--- bundled ActionID into `params.actionChanges`). Those are not the same decision. A skill whose reply
--- carries a menu — buttons the application wires to an action, pressed by the person on the next turn
--- — needs the grant so the action runs under the skill's authority, and needs the model NOT to see the
--- action, or the model calls it on its own in the middle of the conversation. First-adopter feedback
--- (Betty: exam-creation skills whose "Create exam" / "Download" buttons are application-invoked
--- actions). GitHub issue #4226.
+-- WHY. Bundling an action into a skill (an `MJ: AI Skill Actions` row) puts the action into the
+-- activating agent's run: BaseAgent.enableSkillCapabilities pushes every bundled ActionID into
+-- `params.actionChanges`, and from there it is described to the model AND executable for the rest of
+-- the run. A skill whose reply carries a menu — buttons the application wires to an action, pressed by
+-- the person on the next turn — wants the association (SKILL.md export, tooling) without the model
+-- ever being able to call the action on its own in the middle of the conversation. First-adopter
+-- feedback (Betty: exam-creation skills whose "Create exam" / "Download" buttons are
+-- application-invoked actions). GitHub issue #4226.
 --
 -- WHAT. One additive, defaulted column, so nothing existing changes behaviour:
 --
 --   AISkillAction.ExposeToModel   BIT NOT NULL DEFAULT 1
---       1 (default) — today's behaviour: on activation the action is added to the model's tools.
---       0           — the action stays bundled (grant, attribution, SKILL.md export) but is never
---                     offered to the model; only code — the application, a menu button, a sub-agent
---                     the app runs — invokes it.
+--       1 (default) — today's behaviour: on activation the action joins the agent's run.
+--       0           — the action stays bundled (SKILL.md export, tooling) but is left out of the run
+--                     entirely: not described to the model and not executable by the agent. Only
+--                     application code invokes it, through the Actions API.
 --
 -- Runtime: BaseAIEngine.GetSkillExposedActionIDs (the ExposeToModel subset) is what
--- enableSkillCapabilities now hands the model; GetSkillActionIDs (all rows) is unchanged and still
--- what attribution and the integration checks use.
+-- enableSkillCapabilities hands the run; GetSkillActionIDs (all rows) is unchanged and still what the
+-- integration checks and SKILL.md export use. Deliberately NOT "hide from the prompt only": the run's
+-- action set is one list that serves as both the prompt's tool surface and the execution allow-list,
+-- and a prompt-only hide would still let the model call the action by name.
 -- ============================================================================
 
 ALTER TABLE ${flyway:defaultSchema}.AISkillAction
@@ -29,7 +30,7 @@ ALTER TABLE ${flyway:defaultSchema}.AISkillAction
         CONSTRAINT DF_AISkillAction_ExposeToModel DEFAULT (1);
 GO
 EXEC sp_addextendedproperty @name = N'MS_Description',
-    @value = N'Whether activating the skill offers this action to the model as a callable tool. 1 (default): yes, today''s behaviour. 0: the action is bundled with the skill for permission and attribution but is never put in front of the model; only application code (a menu button in the skill''s reply, a routine, a sub-agent the app runs) invokes it. Use 0 for actions a person triggers through the UI on a later turn, so the model does not call them on its own.',
+    @value = N'Whether activating the skill puts this action into the agent''s run. 1 (default): the action is described to the model and callable during the run, today''s behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill''s reply.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AISkillAction', @level2type = N'COLUMN', @level2name = N'ExposeToModel';
 GO
@@ -104,7 +105,7 @@ GO
  * The PostgreSQL counterpart is deferred to the release build (see migrations/CLAUDE.md).
  ******************************************************************************************************/
 
-/* SQL text to insert 2 new entity field(s) */
+/* SQL text to insert 1 new entity field */
 UPDATE [${flyway:defaultSchema}].[EntityField]
          SET [Sequence] = [Sequence] + 100000
        WHERE [EntityID] = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A'
@@ -158,7 +159,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
               WHERE [EntityID] = '5E3EA927-BEFA-417E-8FD9-6C114C1C0A2A'),
             'ExposeToModel',
             'Expose To Model',
-            'Whether activating the skill offers this action to the model as a callable tool. 1 (default): yes, today''s behaviour. 0: the action is bundled with the skill for permission and attribution but is never put in front of the model; only application code (a menu button in the skill''s reply, a routine, a sub-agent the app runs) invokes it. Use 0 for actions a person triggers through the UI on a later turn, so the model does not call them on its own.',
+            'Whether activating the skill puts this action into the agent''s run. 1 (default): the action is described to the model and callable during the run, today''s behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill''s reply.',
             'bit',
             1,
             1,

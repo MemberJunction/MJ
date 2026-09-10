@@ -1,9 +1,9 @@
 /**
  * SkillImportExportService.resyncJunction — a SKILL.md re-import must not reset AISkillAction.ExposeToModel.
  *
- * The frontmatter carries action NAMES only, and the resync deletes and recreates every junction row,
- * so without carrying the flag across, every re-import would silently make a code-only action
- * model-callable again (#4226). `RunView.prototype.RunView` is spied to return the existing rows and a
+ * The resync deletes and recreates every junction row. When the file carries `codeOnlyActions` that
+ * intent is applied; when it does not, the flag is carried across for surviving rows — otherwise every
+ * re-import would silently make a code-only action model-callable again (#4226). `RunView.prototype.RunView` is spied to return the existing rows and a
  * fake provider hands back plain objects that record what the resync sets on them.
  */
 
@@ -64,6 +64,16 @@ describe('SkillImportExportService.resyncJunction carries ExposeToModel across a
         expect(c.ExposeToModel).toBeUndefined();   // new row: the column default (1) applies
         expect(created.some((r) => r.ActionID === ACTION_B)).toBe(false);
         for (const r of created) expect(r.SkillID).toBe(SKILL);
+    });
+
+    it('applies the SKILL.md intent when the file carries codeOnlyActions, even for a surviving row', async () => {
+        // The file says A is exposed and C is code-only — that outranks A's previous hidden flag.
+        const intent = new Map<string, boolean>([[ACTION_A, true], [ACTION_C, false]]);
+        const resync = (SkillImportExportService as unknown as { resyncJunction: (...a: unknown[]) => Promise<void> }).resyncJunction;
+        await resync(SKILL, 'MJ: AI Skill Actions', [ACTION_A, ACTION_C], 'ActionID', user, provider, intent);
+        const [a, c] = created;
+        expect(a.ExposeToModel).toBe(true);
+        expect(c.ExposeToModel).toBe(false);
     });
 
     it('leaves sub-agent rows alone (no flag to carry)', async () => {

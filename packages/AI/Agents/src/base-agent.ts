@@ -12058,9 +12058,11 @@ The context is now within limits. Please retry your request with the recovered c
      * turn's `gatherPromptTemplateData()` call picks up the change automatically — no extra plumbing.
      *
      * Which actions: the skill's `ExposeToModel` rows only ({@link AIEngine.GetSkillExposedActionIDs}).
-     * A bundled action with the flag off keeps its grant and its attribution
-     * ({@link getSkillAttributionForAction} uses the full bundle) but is never put in front of the
-     * model — it is for application code to invoke.
+     * A bundled action with the flag off is left OUT of the run: the effective action set is both the
+     * prompt's tool surface and the execution allow-list, so the model neither sees it nor can call it
+     * by name, and no agent path (PreProcessActionStep, a loop's action lookup) can reach it either.
+     * It stays bundled for SKILL.md export and tooling; application code invokes it through the
+     * Actions API. Skill attribution therefore never applies to it — the agent never runs it.
      *
      * Override to change propagation scope (e.g. a subclass that wants skill-granted capabilities
      * to cascade to sub-agents could push `scope: 'all-subagents'` instead).
@@ -12070,9 +12072,9 @@ The context is now within limits. Please retry your request with the recovered c
     protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
         const activatingAgentIds = [params.agent.ID];
 
-        // Only the actions the skill exposes to the model become tools (AISkillAction.ExposeToModel).
-        // A bundled action with the flag off is still granted and attributed — the application
-        // invokes it (a menu button in the skill's reply) — but the model is never offered it.
+        // Only the actions the skill exposes (AISkillAction.ExposeToModel) join the run. A bundled
+        // action with the flag off is not described to the model and not executable by the agent;
+        // the application invokes it (a menu button in the skill's reply) through the Actions API.
         const actionIds = AIEngine.Instance.GetSkillExposedActionIDs(skill.ID);
         if (actionIds.length > 0) {
             if (!params.actionChanges) {

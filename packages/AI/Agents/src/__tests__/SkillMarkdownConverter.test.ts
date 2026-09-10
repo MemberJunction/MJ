@@ -52,6 +52,22 @@ Second line.
             expect(result.frontmatter.name).toBe('Skill: With Colon');
         });
 
+        it('parses codeOnlyActions as a list, and leaves it undefined when the key is absent', () => {
+            const withKey = SkillMarkdownConverter.Parse(['---', 'name: X', 'actions:', '  - Run Query', '  - Generate PDF', 'codeOnlyActions:', '  - Generate PDF', '---', 'Body'].join('\n'));
+            expect(withKey.frontmatter.actions).toEqual(['Run Query', 'Generate PDF']);
+            expect(withKey.frontmatter.codeOnlyActions).toEqual(['Generate PDF']);
+            const without = SkillMarkdownConverter.Parse(['---', 'name: X', 'actions:', '  - Run Query', '---', 'Body'].join('\n'));
+            expect(without.frontmatter.codeOnlyActions).toBeUndefined();
+            const emptyInline = SkillMarkdownConverter.Parse(['---', 'name: X', 'codeOnlyActions: []', '---', 'Body'].join('\n'));
+            expect(emptyInline.frontmatter.codeOnlyActions).toEqual([]);
+        });
+
+        it('skips the items of an unknown list key instead of rejecting the file', () => {
+            const parsed = SkillMarkdownConverter.Parse(['---', 'name: X', 'futureList:', '  - one', '  - two', 'actions:', '  - Run Query', '---', 'Body'].join('\n'));
+            expect(parsed.frontmatter.actions).toEqual(['Run Query']);
+            expect((parsed.frontmatter as Record<string, unknown>)['futureList']).toBeUndefined();
+        });
+
         it('ignores unknown frontmatter keys for forward compatibility', () => {
             const md = `---\nname: Future Skill\nfutureField: some value\n---\n\nBody.\n`;
             const result = SkillMarkdownConverter.Parse(md);
@@ -86,6 +102,16 @@ Second line.
     });
 
     describe('Serialize', () => {
+        it('emits codeOnlyActions only when there are code-only rows, so older files stay byte-identical', () => {
+            const base = { name: 'X', actionNames: ['Run Query', 'Generate PDF'], instructions: 'Body' };
+            expect(SkillMarkdownConverter.Serialize(base)).not.toContain('codeOnlyActions');
+            const md = SkillMarkdownConverter.Serialize({ ...base, codeOnlyActionNames: ['Generate PDF'] });
+            expect(md).toContain('codeOnlyActions:\n  - Generate PDF');
+            const round = SkillMarkdownConverter.Parse(md);
+            expect(round.frontmatter.codeOnlyActions).toEqual(['Generate PDF']);
+            expect(round.frontmatter.actions).toEqual(['Run Query', 'Generate PDF']);
+        });
+
         it('serializes full skill data', () => {
             const result = SkillMarkdownConverter.Serialize({
                 name: 'Report Builder',

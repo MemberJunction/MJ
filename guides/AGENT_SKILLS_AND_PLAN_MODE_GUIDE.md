@@ -17,7 +17,7 @@ A **Skill** (`MJ: AI Skills`) is a bundle of three things:
 | Piece | Column / table | Effect when the skill activates |
 |---|---|---|
 | **Instructions** | `AISkill.Instructions` (NVARCHAR MAX) | Appended to the agent's context for the rest of the run |
-| **Actions** | `MJ: AI Skill Actions` (junction → `Action`) | Granted to the agent; added to its tool surface when the row's `ExposeToModel` is set (the default). With it off, the action stays bundled — permission, attribution, SKILL.md export — but is never offered to the model; only application code invokes it (see §1.3) |
+| **Actions** | `MJ: AI Skill Actions` (junction → `Action`) | Added to the agent's run — described to the model and executable — when the row's `ExposeToModel` is set (the default). With it off, the action stays bundled for SKILL.md export and tooling but is left out of the run entirely; application code invokes it through the Actions API (see §1.3) |
 | **Sub-agents** | `MJ: AI Skill Sub Agents` (junction → `AIAgent`) | Added to the agent's available sub-agents |
 
 The point is **write-once, grant-to-many**: instead of copy-pasting the same instruction block + action set into every agent's system prompt, you author it once as a Skill and grant it to any agent that should have it. Skills are also **shareable** and **portable** (see §1.6, §1.7).
@@ -118,7 +118,7 @@ executePromptStep  ── loop continues; next turn's gatherPromptTemplateData p
 Key implementation notes (all in [`base-agent.ts`](../packages/AI/Agents/src/base-agent.ts)):
 
 - **`'Skill'` is a non-terminal step.** Like `'ClientTools'`, it is deliberately **not** part of the generated `AIAgentRun.FinalStep` union (that column is DB-CHECK-constrained to terminal outcomes). `BaseAgentNextStep.step` is typed off `FinalStep`, so the switch sites use an explicit `'Skill' as typeof …step` cast. It **is** in the `AIAgentRunStep.StepType` CHECK — that column records what executed, a different concern from a run's final outcome.
-- **Grant and exposure are two decisions** (v6.1.x, #4226). Bundling an action into a skill grants the activating agent permission to run it; whether the model is also *offered* it as a tool is `AISkillAction.ExposeToModel` (default 1). An action the person triggers through the application on a later turn — a menu button in the skill's reply — is bundled with `ExposeToModel = 0`, so the model never calls it on its own. `enableSkillCapabilities` hands the model `GetSkillExposedActionIDs(skill.ID)`; attribution (`getSkillAttributionForAction`) keeps using the full `GetSkillActionIDs`, so a code-invoked action under an active skill is still recorded against that skill.
+- **`ExposeToModel` decides whether a bundled action joins the run at all** (v6.1.x, #4226). `enableSkillCapabilities` pushes `GetSkillExposedActionIDs(skill.ID)` — the rows with the flag set (default) — onto `params.actionChanges`. The run's effective action set is one list that is both the prompt's tool surface and the execution allow-list, so a row with the flag **off** is not described to the model *and* cannot be executed by the agent through any path (`Actions` step, a `PreProcessActionStep`, a loop's action lookup all resolve against that set and reject it). That is deliberate: hiding it from the prompt alone would still let the model call it by name the moment a skill's Instructions mention it. The row keeps the action associated with the skill for SKILL.md export and tooling; application code — a menu button in the skill's reply — invokes it directly through the Actions API, whose authorization is its own (bundling grants nothing there). Because the agent never runs such an action, skill attribution on the Actions step does not apply to it.
 - **Tool-surface widening uses `scope: 'specific'` targeting the activating agent's own ID** (`agentIds: [agent.ID]`), pushed onto `params.actionChanges` / `params.subAgentChanges`. This applies to the activating agent **at any depth** (a sub-agent that activates a skill still gets its tools — a `'root'` scope would only apply at depth 0) and never cascades to that agent's own sub-agents (via `filterActionChangesForSubAgent`). Because `params` is the same object for the whole run, every later turn's `gatherPromptTemplateData()` re-applies it automatically.
 - **Idempotent re-activation.** `_activatedSkillIDs` tracks what's already active; re-requesting an active skill is a harmless no-op (no duplicate instructions, no duplicate change entries).
 - **`_effectiveSubAgents`** mirrors `_effectiveActions` so a runtime-added sub-agent (from a skill) validates correctly in `validateSubAgentNextStep`. (This closed a pre-existing gap in the `subAgentChanges` mechanism that affected any consumer, not just Skills.)
@@ -252,6 +252,8 @@ category: Reporting
 actions:
   - Run Query
   - Generate PDF
+codeOnlyActions:
+  - Generate PDF
 subAgents:
   - Report Formatter Agent
 ---
@@ -260,12 +262,14 @@ Instructions body — plain markdown, appended to an accepting agent's system
 prompt when the skill is activated.
 ```
 
+`codeOnlyActions` (optional) names the `actions` bundled with `ExposeToModel = 0` — see §1.3.
+
 **Why names, not IDs**: Action/sub-agent references in the frontmatter are **names**, because names are the only stable cross-instance reference. On import, names are resolved against the target instance's catalog; anything that doesn't resolve becomes a **non-fatal warning** (the skill still imports with whatever did resolve) — a skill authored elsewhere may reference actions this instance doesn't have.
 
 Two layers, in `@memberjunction/ai-agents`:
 
 - **`SkillMarkdownConverter`** — pure, dependency-free `Parse` / `Serialize`. Fully unit-tested in isolation. Hand-rolled parser (the frontmatter shape is small and fixed) rather than a YAML dependency.
-- **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, creates/updates the `MJ: AI Skills` row, and resyncs the two junction sets. The resync is delete-and-recreate, but it carries `AISkillAction.ExposeToModel` across for actions that survive it, so re-importing a skill's SKILL.md does not make its code-only actions model-callable again; only a genuinely new action row takes the default. The frontmatter itself carries action names only — a per-action key for the flag is a small follow-up.
+- **`SkillImportExportService`** — orchestrates against the DB: `Config()`s the AI + Action engines (idempotent) for name↔ID resolution, creates/updates the `MJ: AI Skills` row, and resyncs the two junction sets. `AISkillAction.ExposeToModel` round-trips through the optional `codeOnlyActions` frontmatter list (names, a subset of `actions`): export writes it only when the skill has rows with the flag off, so older files are byte-identical; import applies it when present. A file without the key expresses no opinion, and the resync — which is delete-and-recreate — then carries each surviving row's flag across, so re-saving a skill's SKILL.md never turns a code-only action model-callable; only a genuinely new row takes the column default.
 
 Both are exposed as typed, provider-routed **Remote Operations** — `AISkill.ExportMarkdown` / `AISkill.ImportMarkdown` (see [REMOTE_OPERATIONS_GUIDE](REMOTE_OPERATIONS_GUIDE.md)) — so the browser calls `new AISkillExportMarkdownOperation().Execute(input, { provider })` with no bespoke resolver/GraphQL client.
 
@@ -340,7 +344,8 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 
 **v6.1.x** — Migration [`V202609102050__v6.1.x__Skill_Action_Expose_To_Model.sql`](../migrations/v6).
 Additive: `AISkillAction.ExposeToModel` (BIT NOT NULL, default 1). `1` = today's behaviour; `0` keeps the
-action bundled (grant, attribution, SKILL.md export) but never offers it to the model. See §1.3.
+action bundled (SKILL.md export, tooling) but out of the agent's run — not described to the model, not
+executable by the agent. See §1.3; SKILL.md carries it as `codeOnlyActions` (§1.7).
 
 **v6.1.x** — Migration [`V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation.sql`](../migrations/v6).
 Additive: `AISkill.ActivationScope` (`'Run'`/`'Conversation'`, default `'Run'`) and the

@@ -980,13 +980,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * The subset of {@link GetSkillActionIDs} the model may see: rows with `ExposeToModel` set.
-     * Bundling an action into a skill grants the activating agent permission to run it; whether the
-     * model is also OFFERED it as a tool is this second decision. An action a person triggers through
-     * the application on a later turn (a menu button in the skill's reply) is bundled with
-     * `ExposeToModel = 0` so the model never calls it on its own. This is what
-     * `BaseAgent.enableSkillCapabilities` hands the model; attribution keeps using the full list, so a
-     * code-invoked action under an active skill is still recorded against that skill.
+     * The subset of {@link GetSkillActionIDs} that joins the activating agent's run: rows with
+     * `ExposeToModel` set. A bundled action with the flag off stays associated with the skill (SKILL.md
+     * export, tooling) but is left out of the run — not described to the model and not executable by
+     * the agent; application code invokes it through the Actions API. An action a person triggers
+     * through the UI on a later turn (a menu button in the skill's reply) is the case. This is what
+     * `BaseAgent.enableSkillCapabilities` pushes onto the run; {@link GetSkillActionIDs} (every bundled
+     * row) is unchanged for export and the integration checks.
      */
     public GetSkillExposedActionIDs(skillID: string): string[] {
         return this._skillActions

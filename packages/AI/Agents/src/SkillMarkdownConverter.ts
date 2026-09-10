@@ -12,6 +12,8 @@
  * actions:
  *   - Run Query
  *   - Generate PDF
+ * codeOnlyActions:
+ *   - Generate PDF
  * subAgents:
  *   - Report Formatter Agent
  * ---
@@ -20,9 +22,16 @@
  * prompt when the skill is activated.
  * ```
  *
+ * `codeOnlyActions` (optional) names the subset of `actions` bundled with `AISkillAction.ExposeToModel = 0`:
+ * kept with the skill for export and tooling, but left out of the agent's run — not described to the
+ * model, not executable by the agent; application code invokes them. Written on export only when the
+ * skill has such rows, so files exported before the key existed are byte-identical. A file without the
+ * key expresses no opinion about the flag (the importer keeps surviving rows' flags as they were).
+ *
  * Deliberately NOT a general-purpose YAML parser — the frontmatter shape is fixed and small
  * (flat scalar keys + simple string-list keys), so a hand-rolled parser avoids taking on a new
- * dependency for a narrow, fully-controlled need.
+ * dependency for a narrow, fully-controlled need. Unknown keys — scalar or list — are skipped, so a
+ * file written by a newer MJ still parses here.
  *
  * @module @memberjunction/ai-agents
  */
@@ -38,6 +47,8 @@ export interface SkillMarkdownFrontmatter {
     category?: string;
     actions?: string[];
     subAgents?: string[];
+    /** Names within `actions` whose `AISkillAction.ExposeToModel` is 0. Absent = the file expresses no opinion. */
+    codeOnlyActions?: string[];
 }
 
 /**
@@ -57,11 +68,17 @@ export interface SerializeSkillMarkdownParams {
     description?: string;
     category?: string;
     actionNames?: string[];
+    /** Subset of `actionNames` bundled with `ExposeToModel = 0`; emitted as `codeOnlyActions` when non-empty. */
+    codeOnlyActionNames?: string[];
     subAgentNames?: string[];
     instructions: string;
 }
 
 const FRONTMATTER_DELIMITER = '---';
+
+/** The frontmatter keys whose value is a list of names. */
+type SkillListKey = 'actions' | 'subAgents' | 'codeOnlyActions';
+const LIST_KEYS: ReadonlySet<string> = new Set<SkillListKey>(['actions', 'subAgents', 'codeOnlyActions']);
 
 export class SkillMarkdownConverter {
     /**
@@ -113,6 +130,12 @@ export class SkillMarkdownConverter {
                 lines.push(`  - ${this.escapeScalar(name)}`);
             }
         }
+        if (params.codeOnlyActionNames && params.codeOnlyActionNames.length > 0) {
+            lines.push('codeOnlyActions:');
+            for (const name of params.codeOnlyActionNames) {
+                lines.push(`  - ${this.escapeScalar(name)}`);
+            }
+        }
         if (params.subAgentNames && params.subAgentNames.length > 0) {
             lines.push('subAgents:');
             for (const name of params.subAgentNames) {
@@ -135,7 +158,9 @@ export class SkillMarkdownConverter {
      */
     private static parseFrontmatterLines(lines: string[]): SkillMarkdownFrontmatter {
         const result: SkillMarkdownFrontmatter = { name: '' };
-        let currentListKey: 'actions' | 'subAgents' | null = null;
+        // The list key whose items follow; 'ignore' = an unknown list key, whose items are skipped rather
+        // than rejected, so a file written by a newer MJ (a key this parser has never heard of) still parses.
+        let currentListKey: SkillListKey | 'ignore' | null = null;
 
         for (const rawLine of lines) {
             if (rawLine.trim().length === 0) {
@@ -144,8 +169,10 @@ export class SkillMarkdownConverter {
 
             const listItemMatch = rawLine.match(/^\s*-\s+(.*)$/);
             if (listItemMatch && currentListKey) {
-                const value = this.unescapeScalar(listItemMatch[1]);
-                (result[currentListKey] ??= []).push(value);
+                if (currentListKey !== 'ignore') {
+                    const value = this.unescapeScalar(listItemMatch[1]);
+                    (result[currentListKey] ??= []).push(value);
+                }
                 continue;
             }
 
@@ -157,7 +184,7 @@ export class SkillMarkdownConverter {
             const [, key, rawValue] = keyValueMatch;
             const value = rawValue.trim();
 
-            if (key === 'actions' || key === 'subAgents') {
+            if (this.isListKey(key)) {
                 currentListKey = key;
                 if (value.length > 0) {
                     // Inline list form, e.g. "actions: [Run Query, Generate PDF]" — split on commas.
@@ -168,7 +195,8 @@ export class SkillMarkdownConverter {
                 continue;
             }
 
-            currentListKey = null;
+            // A `key:` with nothing after it opens a list this parser does not know — skip its items.
+            currentListKey = value.length === 0 ? 'ignore' : null;
             if (key === 'name' || key === 'description' || key === 'category') {
                 result[key] = this.unescapeScalar(value);
             }
@@ -176,6 +204,10 @@ export class SkillMarkdownConverter {
         }
 
         return result;
+    }
+
+    private static isListKey(key: string): key is SkillListKey {
+        return LIST_KEYS.has(key);
     }
 
     /** Quotes a scalar value if it contains a colon or leading/trailing whitespace that would otherwise break the simple parser. */
