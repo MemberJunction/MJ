@@ -1,0 +1,5 @@
+---
+"@memberjunction/ng-base-forms": patch
+---
+
+feat(ng-base-forms): form sections now say WHICH one holds unsaved edits or invalid input. Every `mj-collapsible-panel` derives live section indicators from the `mj-form-field`s it projects — an amber dot when a field on a saved record is modified (the same dot the field shows after its label) and a red count when a field is invalid or required-and-empty in edit mode (the same conditions that paint the field's underline red) — and the left-nav rail, the More folder, the collapsed rail spine, and accordion headers render them. Failed-save errors with a graph-path `Source` (`Lines[2].Amount`) route to the panel that owns the collection (declare `ValidationSources` when the path name differs from the `SectionKey`) and are never matched on the trailing field name, so a child failure cannot land on the header; errors no section claims stay in the whole-form total. Custom sections supply counts for non-field content through the new `[Indicators]` input, or implement `FormSectionIndicatorSource` and register with the new container-provided `FormSectionIndicatorCoordinator`. Closes #3962.

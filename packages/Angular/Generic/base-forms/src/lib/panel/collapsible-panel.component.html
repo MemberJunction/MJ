@@ -26,6 +26,30 @@
       <i [class]="Icon" class="mj-forms-panel-icon"></i>
       <h3 class="mj-forms-panel-title">
         <span [innerHTML]="DisplayName"></span>
+        <!-- Section indicators: unsaved-changes dot (same idiom as an edited field's
+             label dot) and invalid-field count (same colour as the field's red underline).
+             Derived from the projected fields — see SectionIndicators. -->
+        @if (SectionDirtyCount > 0) {
+          <span class="mj-forms-panel-dirty"
+                role="img"
+                [title]="SectionDirtyTitle"
+                [attr.aria-label]="SectionDirtyTitle"></span>
+        }
+        @if (SectionErrorCount > 0) {
+          <span class="mj-forms-panel-error-badge"
+                role="status"
+                [title]="SectionErrorTitle"
+                [attr.aria-label]="SectionErrorTitle">
+            <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ SectionErrorCount }}
+          </span>
+        } @else if (SectionWarningCount > 0) {
+          <span class="mj-forms-panel-warning-badge"
+                role="status"
+                [title]="SectionWarningTitle"
+                [attr.aria-label]="SectionWarningTitle">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ SectionWarningCount }}
+          </span>
+        }
         <!-- Row count badge for related entities -->
         @if (BadgeCount !== undefined) {
           <span class="mj-forms-row-count-badge" [class.mj-forms-row-count-badge--zero]="BadgeCount === 0">

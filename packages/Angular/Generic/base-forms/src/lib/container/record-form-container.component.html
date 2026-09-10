@@ -103,6 +103,25 @@
               <i [class]="ChromeActiveIcon"></i>
               <span class="mj-forms-chrome-rail-spine-label"
                     (mouseenter)="OnRailLabelHover($event, ChromeActiveTitle)">{{ ChromeActiveTitle }}</span>
+              <!-- Whole-form section indicators: no rail item is visible while collapsed -->
+              @let formIndicators = FormIndicators;
+              @if (formIndicators.ErrorCount > 0) {
+                <span class="mj-forms-chrome-rail-error is-spine"
+                      role="status"
+                      [title]="RailErrorTitle(formIndicators.ErrorCount, 'this record')"
+                      [attr.aria-label]="RailErrorTitle(formIndicators.ErrorCount, 'this record')">{{ formIndicators.ErrorCount }}</span>
+              } @else if (formIndicators.WarningCount > 0) {
+                <span class="mj-forms-chrome-rail-warning is-spine"
+                      role="status"
+                      [title]="RailWarningTitle(formIndicators.WarningCount, 'this record')"
+                      [attr.aria-label]="RailWarningTitle(formIndicators.WarningCount, 'this record')">{{ formIndicators.WarningCount }}</span>
+              }
+              @if (formIndicators.DirtyCount > 0) {
+                <span class="mj-forms-chrome-rail-dirty is-spine"
+                      role="img"
+                      [title]="RailDirtyTitle(formIndicators.DirtyCount, 'this record')"
+                      [attr.aria-label]="RailDirtyTitle(formIndicators.DirtyCount, 'this record')"></span>
+              }
             </button>
           } @else {
             <div class="mj-forms-chrome-rail-resizer"
@@ -143,6 +162,8 @@
                  [class.is-active]="ChromeActiveGroupKey === group.Key"
                  [attr.aria-current]="ChromeActiveGroupKey === group.Key ? 'page' : null"
                  [class.is-drag-over]="RailDragOverKey === group.Key"
+                 [class.has-errors]="ChromeGroupIndicators(group).ErrorCount > 0"
+                 [class.is-dirty]="ChromeGroupIndicators(group).DirtyCount > 0"
                  (click)="OnChromeGroupActivate(group.Key)"
                  (keydown.enter)="OnChromeGroupActivate(group.Key)"
                  (keydown.space)="$event.preventDefault(); OnChromeGroupActivate(group.Key)"
@@ -162,10 +183,31 @@
               <i [class]="group.Icon"></i>
               <span class="mj-forms-chrome-rail-label"
                     (mouseenter)="OnRailLabelHover($event, group.Title)">{{ group.Title }}</span>
+              @let groupIndicators = ChromeGroupIndicators(group);
+              @if (groupIndicators.DirtyCount > 0) {
+                <span class="mj-forms-chrome-rail-dirty"
+                      role="img"
+                      [title]="RailDirtyTitle(groupIndicators.DirtyCount, group.Title)"
+                      [attr.aria-label]="RailDirtyTitle(groupIndicators.DirtyCount, group.Title)"></span>
+              }
+              @if (groupIndicators.ErrorCount > 0) {
+                <span class="mj-forms-chrome-rail-error"
+                      role="status"
+                      [title]="RailErrorTitle(groupIndicators.ErrorCount, group.Title)"
+                      [attr.aria-label]="RailErrorTitle(groupIndicators.ErrorCount, group.Title)">
+                  <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ groupIndicators.ErrorCount }}
+                </span>
+              } @else if (groupIndicators.WarningCount > 0) {
+                <span class="mj-forms-chrome-rail-warning"
+                      role="status"
+                      [title]="RailWarningTitle(groupIndicators.WarningCount, group.Title)"
+                      [attr.aria-label]="RailWarningTitle(groupIndicators.WarningCount, group.Title)">
+                  <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ groupIndicators.WarningCount }}
+                </span>
+              }
               @let rowCount = ChromeGroupRowCount(group);
-              @if (rowCount != null) {
-                <span class="mj-forms-chrome-rail-count"
-                      [class.is-zero]="rowCount === 0">{{ rowCount }}</span>
+              @if (rowCount != null && rowCount > 0) {
+                <span class="mj-forms-chrome-rail-count">{{ rowCount }}</span>
               }
             </div>
           }
@@ -174,6 +216,7 @@
                  role="button"
                  tabindex="0"
                  [class.is-expanded]="MoreExpanded"
+                 [class.has-errors]="ChromeGroupIndicators(more).ErrorCount > 0"
                  (click)="OnMoreFolderToggle()"
                  (keydown.enter)="OnMoreFolderToggle()"
                  (keydown.space)="$event.preventDefault(); OnMoreFolderToggle()">
@@ -181,6 +224,28 @@
               <i [class]="MoreExpanded ? 'fa-solid fa-folder-open' : 'fa-solid fa-folder'"></i>
               <span class="mj-forms-chrome-rail-label"
                     (mouseenter)="OnRailLabelHover($event, more.Title)">{{ more.Title }}</span>
+              @let moreIndicators = ChromeGroupIndicators(more);
+              @if (moreIndicators.DirtyCount > 0) {
+                <span class="mj-forms-chrome-rail-dirty"
+                      role="img"
+                      [title]="RailDirtyTitle(moreIndicators.DirtyCount, more.Title)"
+                      [attr.aria-label]="RailDirtyTitle(moreIndicators.DirtyCount, more.Title)"></span>
+              }
+              @if (moreIndicators.ErrorCount > 0) {
+                <span class="mj-forms-chrome-rail-error"
+                      role="status"
+                      [title]="RailErrorTitle(moreIndicators.ErrorCount, more.Title)"
+                      [attr.aria-label]="RailErrorTitle(moreIndicators.ErrorCount, more.Title)">
+                  <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ moreIndicators.ErrorCount }}
+                </span>
+              } @else if (moreIndicators.WarningCount > 0) {
+                <span class="mj-forms-chrome-rail-warning"
+                      role="status"
+                      [title]="RailWarningTitle(moreIndicators.WarningCount, more.Title)"
+                      [attr.aria-label]="RailWarningTitle(moreIndicators.WarningCount, more.Title)">
+                  <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ moreIndicators.WarningCount }}
+                </span>
+              }
               <i class="fa-solid mj-forms-chrome-rail-more-toggle"
                  [class.fa-minus]="MoreExpanded"
                  [class.fa-plus]="!MoreExpanded"
@@ -195,6 +260,8 @@
                      [class.is-active]="ChromeActiveGroupKey === child.Key"
                      [attr.aria-current]="ChromeActiveGroupKey === child.Key ? 'page' : null"
                      [class.is-drag-over]="RailDragOverKey === child.Key"
+                     [class.has-errors]="ChromeGroupIndicators(child).ErrorCount > 0"
+                     [class.is-dirty]="ChromeGroupIndicators(child).DirtyCount > 0"
                      (click)="OnChromeGroupActivate(child.Key)"
                      (keydown.enter)="OnChromeGroupActivate(child.Key)"
                      (keydown.space)="$event.preventDefault(); OnChromeGroupActivate(child.Key)"
@@ -214,10 +281,31 @@
                   <i [class]="child.Icon"></i>
                   <span class="mj-forms-chrome-rail-label"
                         (mouseenter)="OnRailLabelHover($event, child.Title)">{{ child.Title }}</span>
+                  @let childIndicators = ChromeGroupIndicators(child);
+                  @if (childIndicators.DirtyCount > 0) {
+                    <span class="mj-forms-chrome-rail-dirty"
+                          role="img"
+                          [title]="RailDirtyTitle(childIndicators.DirtyCount, child.Title)"
+                          [attr.aria-label]="RailDirtyTitle(childIndicators.DirtyCount, child.Title)"></span>
+                  }
+                  @if (childIndicators.ErrorCount > 0) {
+                    <span class="mj-forms-chrome-rail-error"
+                          role="status"
+                          [title]="RailErrorTitle(childIndicators.ErrorCount, child.Title)"
+                          [attr.aria-label]="RailErrorTitle(childIndicators.ErrorCount, child.Title)">
+                      <i class="fa-solid fa-circle-exclamation" aria-hidden="true"></i>{{ childIndicators.ErrorCount }}
+                    </span>
+                  } @else if (childIndicators.WarningCount > 0) {
+                    <span class="mj-forms-chrome-rail-warning"
+                          role="status"
+                          [title]="RailWarningTitle(childIndicators.WarningCount, child.Title)"
+                          [attr.aria-label]="RailWarningTitle(childIndicators.WarningCount, child.Title)">
+                      <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>{{ childIndicators.WarningCount }}
+                    </span>
+                  }
                   @let childCount = ChromeGroupRowCount(child);
-                  @if (childCount != null) {
-                    <span class="mj-forms-chrome-rail-count"
-                          [class.is-zero]="childCount === 0">{{ childCount }}</span>
+                  @if (childCount != null && childCount > 0) {
+                    <span class="mj-forms-chrome-rail-count">{{ childCount }}</span>
                   }
                 </div>
               }

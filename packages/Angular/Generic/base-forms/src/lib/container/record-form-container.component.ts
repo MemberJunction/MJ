@@ -5,7 +5,7 @@ import {
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
 import { BaseEntity, CompositeKey, EntityInfo, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
@@ -59,6 +59,15 @@ import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-pane
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
+import {
+  DescribeSectionDirty,
+  DescribeSectionErrors,
+  DescribeSectionWarnings,
+  SumSectionIndicators,
+  TallyValidationErrors,
+  type FormSectionIndicators,
+} from '../section-indicators/form-section-indicators';
 
 /**
  * Display shape for the variant picker. Kept minimal so the Generic
@@ -109,16 +118,18 @@ export interface VariantPickerItem {
   encapsulation: ViewEncapsulation.None,
   templateUrl: './record-form-container.component.html',
   styleUrls: ['./record-form-container.component.css'],
-  // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator
-  // scoped per-container. `providers` (not viewProviders) so projected
-  // related-entity grids and slot-mounted panels can inject them.
-  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator],
+  // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator +
+  // FormSectionIndicatorCoordinator scoped per-container. `providers` (not
+  // viewProviders) so projected related-entity grids and slot-mounted panels
+  // can inject them.
+  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator, FormSectionIndicatorCoordinator],
 })
 export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, DoCheck, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
   private notificationService = inject(MJNotificationService);
   private chrome = inject(FormChromeCoordinator);
+  private sectionIndicators = inject(FormSectionIndicatorCoordinator);
   private slots = inject(FormSlotCoordinator);
   private recordRefresh = inject(FormRecordRefreshCoordinator);
   private host = inject(ElementRef<HTMLElement>);
@@ -662,6 +673,13 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.scheduleChromeResolve();
     });
 
+    // A section registering / leaving, or reporting an edit, changes what the rail
+    // shows; the container is OnPush, so re-read on the next pass rather than on the
+    // 200ms dirty poll below.
+    this.sectionIndicators.Changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cdr.markForCheck();
+    });
+
     this.RestoreChromePrefs();
     this.scheduleChromeResolve();
 
@@ -714,6 +732,57 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.chrome.ToggleMoreFolder();
     this.PersistChromePrefs();
     this.cdr.detectChanges();
+  }
+
+  // ---- Section indicators on the rail ----
+
+  /**
+   * Unsaved-edit / invalid-field / warning counts for a rail group — summed over the
+   * section keys it fronts, since one group (notably `Details`) fronts many panels.
+   * Read live from each panel through {@link FormSectionIndicatorCoordinator}, so the
+   * rail can never disagree with the fields' own dot and underline.
+   */
+  public ChromeGroupIndicators(group: FormChromeGroup): FormSectionIndicators {
+    return this.sectionIndicators.IndicatorsForKeys(group.SectionKeys);
+  }
+
+  /**
+   * Whole-form totals — what the COLLAPSED rail spine shows, since no individual
+   * rail item is visible there. Summed over the RAIL GROUPS (first-class + More), not
+   * over every registered panel: a panel the chrome dropped from the rail (System
+   * Metadata in left-nav, a claimed baked grid) is not something the user can reach
+   * from the rail, so the spine must add up to exactly what the expanded rail shows.
+   * Includes form-level validation failures no section claims, so a rejected save
+   * never leaves the user with a clean-looking rail.
+   */
+  public get FormIndicators(): FormSectionIndicators {
+    return SumSectionIndicators(
+      ...this.ChromeGroups.map((group) => this.ChromeGroupIndicators(group)),
+      TallyValidationErrors(this.unroutedValidationErrors()),
+    );
+  }
+
+  /** Failures no registered section claims — kept visible on the spine total. */
+  public get UnroutedValidationErrorCount(): number {
+    return TallyValidationErrors(this.unroutedValidationErrors()).ErrorCount;
+  }
+
+  private unroutedValidationErrors(): ValidationErrorInfo[] {
+    const ctx = this.fc?.formContext;
+    if (!ctx?.showValidation || !ctx.validationErrors?.length) return [];
+    return this.sectionIndicators.UnroutedValidationErrors(ctx.validationErrors);
+  }
+
+  public RailDirtyTitle(count: number, where: string): string {
+    return DescribeSectionDirty(count, where);
+  }
+
+  public RailErrorTitle(count: number, where: string): string {
+    return DescribeSectionErrors(count, where);
+  }
+
+  public RailWarningTitle(count: number, where: string): string {
+    return DescribeSectionWarnings(count, where);
   }
 
   public ChromeGroupRowCount(group: FormChromeGroup): number | undefined {
