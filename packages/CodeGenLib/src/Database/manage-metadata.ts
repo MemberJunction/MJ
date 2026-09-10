@@ -5471,6 +5471,15 @@ export class ManageMetadataBase {
          const generationPromises = [];
          const ag = new AdvancedGeneration();
 
+         // `skipDBUpdate` means load-only: `runValidationGeneration` is called below with
+         // `generateNewCode = false`, and `generateValidatorFunctionFromCheckConstraint` only reaches an
+         // LLM when that flag is true. Reading a validator back out of an Approved `GeneratedCode` record
+         // is therefore a plain database read — gating it on the AI feature flag is what made
+         // `mj codegen --no-ai` DELETE every committed `Validate()` override rather than preserve it, and
+         // the `codegen-drift` gate (which runs `--no-ai`) then demanded that lossy output. Generation
+         // stays gated; only the read is unconditional.
+         const emitValidators = skipDBUpdate || ag.featureEnabled('ParseCheckConstraints');
+
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
          for (const r of columnLevelResults) {
@@ -5507,8 +5516,8 @@ export class ManageMetadataBase {
                else {
                   // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
                   // attempt to use an LLM to do things fancier now
-                  if (ag.featureEnabled('ParseCheckConstraints')) {
-                     // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+                  if (emitValidators) {
+                     // either we are loading persisted validators, or the feature is on and we may generate new ones
                      // run this in parallel
                      generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
                   }
@@ -5518,8 +5527,8 @@ export class ManageMetadataBase {
 
          // now for the table level constraints run the process for advanced generation
          for (const r of tableLevelResults) {
-            if (ag.featureEnabled('ParseCheckConstraints')) {
-               // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+            if (emitValidators) {
+               // either we are loading persisted validators, or the feature is on and we may generate new ones
                // run this in parallel
                generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
             }
