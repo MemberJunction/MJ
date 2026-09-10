@@ -210,7 +210,7 @@ function main() {
     let head = args[1];
 
     if (isCi) {
-        const diffFiles = git(['diff', '--name-only', '--diff-filter=ACMR', `${base}...${head}`], { cwd: root })
+        const diffFiles = git(['diff', '--name-only', '--diff-filter=ACMR', base, ...(head ? [head] : [])], { cwd: root })
             .split('\n')
             .map((f) => f.trim())
             .filter((f) => f && inScope(f));
@@ -246,7 +246,7 @@ function main() {
 
         let addedLines = null;
         if (isCi) {
-            const fileDiff = git(['diff', '-U0', `${base}...${head}`, '--', file], { cwd: root });
+            const fileDiff = git(['diff', '-U0', base, ...(head ? [head] : []), '--', file], { cwd: root });
             addedLines = addedLinesFromDiff(fileDiff);
         }
 
