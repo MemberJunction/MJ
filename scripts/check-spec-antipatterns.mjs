@@ -120,6 +120,12 @@ export function walk(dir, acc = []) {
  *
  * `${ ... }` inside a template literal is kept: that is code, and `` `${x as any}` `` is a real
  * violation. Line count and order are preserved, so reported line numbers stay accurate.
+ *
+ * KNOWN LIMITATION: a template literal legitimately spans lines, so an unpaired backtick carries
+ * the "inside a literal" state to the end of the file and can mask findings after it. Single and
+ * double quotes get the opposite treatment — see skipQuoted — because those cannot span a line, so
+ * an unterminated one is an apostrophe rather than an opening. Erring toward a false NEGATIVE only
+ * where the language forces it.
  */
 export function stripCommentsAndStrings(lines) {
   let inBlock = false;
@@ -144,7 +150,15 @@ export function stripCommentsAndStrings(lines) {
         inBlock = true;
         i += 2;
       } else if (line[i] === "'" || line[i] === '"') {
-        i = skipQuoted(line, i + 1, line[i]);
+        const close = skipQuoted(line, i + 1, line[i]);
+        if (close === -1) {
+          // Never closed on this line, so it was not a string literal — an apostrophe in a
+          // regex (/don't/) or in an identifier reads this way. Emit it and keep scanning, or
+          // one stray quote would blank the rest of the line and hide a real violation.
+          out += line[i++];
+        } else {
+          i = close;
+        }
       } else if (line[i] === '`') {
         const scan = scanTemplate(line, i + 1);
         out += scan.out;
@@ -159,8 +173,13 @@ export function stripCommentsAndStrings(lines) {
 }
 
 /**
- * Index just past the closing `quote`, or end of line when the literal never closes.
- * A backslash escapes the next character, so `'it\'s as any'` is one string, not two.
+ * Index just past the closing `quote`, or -1 when it never closes on this line.
+ *
+ * A backslash escapes the next character, so `'it\'s as any'` is one string, not two. The -1 case
+ * matters as much as the success case: a single-quoted or double-quoted literal cannot span a line
+ * in practice, so an unterminated quote is an apostrophe in something else — a regex, a word — and
+ * treating it as a string opening would blank the remainder of the line and hide any real
+ * violation after it. The caller emits the character instead and carries on.
  */
 function skipQuoted(line, start, quote) {
   let i = start;
@@ -172,7 +191,7 @@ function skipQuoted(line, start, quote) {
     if (line[i] === quote) return i + 1;
     i++;
   }
-  return i;
+  return -1;
 }
 
 /**

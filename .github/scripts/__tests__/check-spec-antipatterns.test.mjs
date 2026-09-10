@@ -49,6 +49,26 @@ describe('stripCommentsAndStrings — string literals are prose too', () => {
         expect(stripped[2]).toContain('as any');
     });
 
+    it('does not let an unterminated quote hide a real violation after it', () => {
+        // An apostrophe inside a regex is not a string opening — a single-quoted literal cannot
+        // span a line, so treating it as one would blank the rest and swallow the `as any`.
+        expect(whys(String.raw`const re = /don't/; const x = y as any;`, 'node')).toContain(
+            '`as any` — banned repo-wide (CLAUDE.md)'
+        );
+    });
+
+    it('an escaped backslash still closes the literal, so what follows is scanned', () => {
+        expect(whys(String.raw`const s = 'a\\'; const x = y as any;`, 'node')).toContain(
+            '`as any` — banned repo-wide (CLAUDE.md)'
+        );
+    });
+
+    it('a comment marker inside a string does not start a comment', () => {
+        expect(whys(`const s = '// as any'; const x = y as any;`, 'node')).toContain(
+            '`as any` — banned repo-wide (CLAUDE.md)'
+        );
+    });
+
     it('preserves line count and order so reported line numbers stay accurate', () => {
         const src = `const a = 1;\nit('as any', () => {});\nconst b = c as any;\n`;
         expect(lintText(src, 'node').map((f) => f.line)).toEqual([3]);
