@@ -923,6 +923,40 @@ class OperationProgressOutput {
     @Field({ nullable: true }) StartedAt?: string;
 }
 
+@ObjectType()
+class ActiveOperationOutput {
+    /** 'sync' | 'rsu' | 'discovery' | 'maintenance' */
+    @Field() Kind: string;
+    /**
+     * 'connection' when this operation provably belongs to the requested connection;
+     * 'workspace' when it is process-wide and cannot be attributed to one. The UI must not claim a
+     * workspace-scoped RSU belongs to the connector being viewed - that mislabelling is why an
+     * unrelated schema update read as "your connector is building".
+     */
+    @Field() Scope: string;
+    @Field() Label: string;
+    @Field({ nullable: true }) RunID?: string;
+    @Field({ nullable: true }) StartedAt?: Date;
+    @Field({ nullable: true }) StepLabel?: string;
+    @Field(() => Int, { nullable: true }) StepIndex?: number;
+    @Field(() => Int, { nullable: true }) StepTotal?: number;
+    @Field(() => Int, { nullable: true }) RecordsCreated?: number;
+    @Field(() => Int, { nullable: true }) RecordsUpdated?: number;
+    @Field(() => Int, { nullable: true }) RecordsSkipped?: number;
+    @Field(() => Int, { nullable: true }) RecordsErrored?: number;
+    /** Only a sync can be cancelled, and only from the process running it. */
+    @Field() Cancellable: boolean;
+}
+
+@ObjectType()
+class ActiveOperationsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ActiveOperationOutput], { nullable: true }) Operations?: ActiveOperationOutput[];
+    /** What holds this connection's maintenance lock, if anything. */
+    @Field({ nullable: true }) MaintenanceLockReason?: string;
+}
+
 // ── STRUCTURED RUN ARTIFACTS (durable JSONL progress streams) ─────────
 // These expose the IntegrationProgressReader over GraphQL so a tenant can ask,
 // at any time, "what exactly happened (or is happening) on this run?" — backed
@@ -5279,6 +5313,108 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * `offset` maps to RunView's StartRow. TotalKnown comes from a separate count so a pager can
      * size itself without fetching every row.
      */
+    /**
+     * Everything running for a connection, in one call.
+     *
+     * plan.md: "In the UI for the integration ... there shouldbe an area that shows thigns that are
+     * running actively, this can be syncs, rsu, discovery, etc." and "Let us say i clear browser
+     * cache and then i go to that integration page, i should see the same steps i mentioned
+     * hapepning there to". Every field here is derived SERVER-side, so a cleared browser sees the
+     * same thing — nothing depends on client state.
+     *
+     * Previously a surface had to fan out to four queries and stitch them, and each got the
+     * attribution wrong in its own way. The two rules that fan-out kept breaking are encoded here:
+     *
+     *  - RSU status from GetStatus is PROCESS-WIDE. It is only attributed to this connection when
+     *    an RSU run artifact actually names it; otherwise it is reported Scope='workspace'.
+     *  - A ConnectorCreation run is discovery, never a sync. Narrating it as a sync is what made a
+     *    first-time setup claim it was syncing records it had not fetched.
+     */
+    @Query(() => ActiveOperationsOutput)
+    async IntegrationGetActiveOperations(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ActiveOperationsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const authCache = new Map<string, boolean>();
+            if (!(await this.userCanReadCompanyIntegration(companyIntegrationID, user, authCache))) {
+                return { Success: false, Message: this.notAuthorizedForCompanyIntegrationMessage(companyIntegrationID) };
+            }
+
+            const ops: ActiveOperationOutput[] = [];
+
+            // ── the sync, from the DURABLE snapshot so any process can answer ──
+            // GetSyncProgressAsync prefers the durable run-row snapshot and falls back to this
+            // process's own — necessary because the ProgressJSON column arrives in MJ 6.1.x and
+            // every tenant here is 5.51, where the durable read silently finds nothing.
+            const syncProgress = await IntegrationEngine.GetSyncProgressAsync(companyIntegrationID, user);
+            if (syncProgress) {
+                ops.push({
+                    Kind: 'sync',
+                    Scope: 'connection',
+                    Label: `Syncing ${syncProgress.CurrentEntity || 'data'}`,
+                    StartedAt: syncProgress.StartedAt,
+                    StepLabel: syncProgress.CurrentEntity || undefined,
+                    StepIndex: syncProgress.EntityMapsCompleted,
+                    StepTotal: syncProgress.EntityMapsTotal,
+                    RecordsCreated: syncProgress.RecordsCreated,
+                    RecordsUpdated: syncProgress.RecordsUpdated,
+                    RecordsSkipped: syncProgress.RecordsSkipped,
+                    RecordsErrored: syncProgress.RecordsErrored,
+                    Cancellable: true,
+                });
+            }
+
+            // ── in-flight run artifacts for THIS connection ──
+            const reader = new IntegrationProgressReader();
+            const inFlight = await reader.ListRuns({ companyIntegrationID, inFlightOnly: true }, 25);
+            let rsuNamesThisConnection = false;
+            for (const snap of inFlight) {
+                const kind = snap.manifest.runKind;
+                // 'SyncRun' is already reported above from the durable snapshot. Everything else
+                // that is not RSU is a discovery-shaped run - ConnectorCreation especially, which
+                // must NEVER be narrated as a sync: it fetches nothing.
+                if (kind === 'SyncRun') continue;
+                if (kind === 'RSU') rsuNamesThisConnection = true;
+                ops.push({
+                    Kind: kind === 'RSU' ? 'rsu' : 'discovery',
+                    Scope: 'connection',
+                    Label: kind === 'RSU' ? 'Updating your workspace schema' : 'Discovering tables and columns',
+                    RunID: snap.manifest.runID,
+                    StartedAt: new Date(snap.manifest.startedAt),
+                    StepLabel: snap.latestEvent?.message ?? undefined,
+                    Cancellable: false,
+                });
+            }
+
+            // ── RSU reported by the process, when no artifact tied it to this connection ──
+            const rsu = RuntimeSchemaManager.Instance.GetStatus();
+            if (rsu?.Running && !rsuNamesThisConnection) {
+                ops.push({
+                    Kind: 'rsu',
+                    Scope: 'workspace',
+                    Label: 'Your workspace is updating',
+                    StepLabel: rsu.CurrentStepName ?? undefined,
+                    StepIndex: rsu.CurrentStepIndex ?? undefined,
+                    StepTotal: rsu.StepTotal ?? undefined,
+                    Cancellable: false,
+                });
+            }
+
+            const lock = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+            return {
+                Success: true,
+                Message: `${ops.length} active operation(s)`,
+                Operations: ops,
+                MaintenanceLockReason: lock?.Reason,
+            };
+        } catch (e) {
+            LogError(`IntegrationGetActiveOperations error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
     @Query(() => SyncHistoryOutput)
     async IntegrationGetSyncHistory(
         @Arg("companyIntegrationID") companyIntegrationID: string,
