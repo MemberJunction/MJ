@@ -52,6 +52,15 @@ on:
       # script itself lives in scripts/ — without this entry a detector-only PR never
       # runs its tests.
       - 'scripts/check-pg-migration-content.mjs'
+      # The repo-wide source scanners and their standalone vitest project (#4369). They live
+      # outside packages/ precisely so turbo cannot cache them, which also puts them outside
+      # the 'packages/**' entry above: without these, a PR that WEAKENS a scanner — deletes a
+      # rule, widens KNOWN_EXCEPTIONS, drops a whole suite — triggers no run at all. That is
+      # the same trap the neighbouring entries exist to close, on the guards that were just
+      # rescued from a silent one.
+      - '.github/guards/**'
+      # And the placement guard that keeps a new scanner from being written as a package test.
+      - '.github/scripts/check-scanner-placement.mjs'
       # Same trap, same fix, for the CodeGen-tail guard: its unit suite lives in __tests__
       # above, but a PR touching only the guard would never run the tests that prove its
       # parsing is sane. Those extractors are pinned to CodeGen's exact emitted shape, so
@@ -188,27 +197,36 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
 
-      # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
-      # reasons but scan `packages/**` off disk and assert about every package, so they belong here
-      # rather than in MJGlobal's per-package `test` task: turbo caches that task on MJGlobal's own
-      # `src/**`, which means a violation introduced in ANY other package left the cached pass valid
-      # and the scan never re-ran. #4317's MetadataSync violations rode `next` from 2026-09-09 that
-      # way, surfacing only when #4343 happened to edit MJGlobal and bust its cache. Run here they
-      # are uncached and unconditional, so a violation fails the PR that introduces it.
-      # They import only vitest/fs/path — no build, no MJGlobal source.
+      # Repo-wide source scanners (#4369). These assert about the WHOLE packages/ tree — UUID
+      # comparison compliance, global-provider references, primary-key compliance — so they can
+      # never be a turbo task: turbo hashes `<pkg>#test` from that package's own files only, and
+      # a scanner's cache key therefore cannot contain the code it checks. They previously lived
+      # in packages/MJGlobal and packages/MJCore, where `next` replayed a cached green over nine
+      # real MetadataSync violations for two days while the affected-package PR filter
+      # (`--filter=...[base]`, dependents-only) never selected MJGlobal for a MetadataSync change.
       #
-      # Uses the SHARED vitest config on purpose: MJGlobal's own config excludes these two files
-      # (that is the other half of this fix), so pointing at it here would match nothing. And
-      # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
-      # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
-      - name: Repo-wide compliance scans (UUID + multi-provider)
+      # Here they are plain workflow steps: no hash, no cache, executed on every run. They read
+      # source text and need no dist/, which is why they belong in this job and not behind the build.
+      #
+      # #4371 fixed the same defect by excluding the two MJGlobal scanners from that package's
+      # vitest config and running them from their old path. This supersedes it: the scanners are
+      # OUT of packages/ entirely, so there is no per-package config to keep in sync and no way to
+      # reintroduce them to a cached task by accident. It also covers MJCore's PrimaryKeyCompliance,
+      # which has the same shape and the same defect. The config sets passWithNoTests: false — that
+      # guard is #4371's, and it is worth keeping: a future rename must fail loudly, not pass with
+      # zero tests and silently disable the gate.
+      - name: Repo-wide source scanners
         if: ${{ !cancelled() }}
-        run: >-
-          pnpm --filter @memberjunction/global exec vitest run
-          --config ../../vitest.shared.ts
-          --passWithNoTests=false
-          src/__tests__/UUIDCompliance.test.ts
-          src/__tests__/MultiProviderCompliance.test.ts
+        run: npx vitest run --config .github/guards/vitest.config.mts
+
+      # ...and the guard that keeps them there. Fails when any test inside a package reads a path
+      # outside its own package without either a $TURBO_ROOT$ input widening that package's cache
+      # key or an explicit annotation. Without this, the next repo-wide scanner gets written as a
+      # package test and silently rots exactly the same way — the failure mode is invisible, so
+      # nothing else would catch it.
+      - name: Scanner placement guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-scanner-placement.mjs packages
 
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}

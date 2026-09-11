@@ -15,7 +15,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 /** Directories that should never contain UUID comparison anti-patterns */
-const SCAN_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
+// This suite lives in .github/guards (NOT in a package) so it runs uncached, outside
+// turbo's per-package cache key. See .github/guards/vitest.config.mts for why.
+const SCAN_ROOT = path.resolve(__dirname, '..', '..', 'packages');
 
 /** Patterns that indicate direct UUID comparison (anti-patterns) */
 const ANTI_PATTERNS = [

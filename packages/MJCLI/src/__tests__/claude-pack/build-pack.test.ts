@@ -25,7 +25,7 @@ import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
-const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..');
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..', '..'); // scanner-placement-ok: reads templates/claude-pack, declared on @memberjunction/cli#test in turbo.json
 const PACK_SRC = path.join(REPO_ROOT, 'templates', 'claude-pack');
 
 function copyPackSource(toDir: string): void {

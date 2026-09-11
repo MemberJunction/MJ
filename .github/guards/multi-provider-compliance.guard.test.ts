@@ -43,7 +43,9 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const SCAN_ROOT = path.resolve(__dirname, '..', '..', '..'); // packages/
+// This suite lives in .github/guards (NOT in a package) so it runs uncached, outside
+// turbo's per-package cache key. See .github/guards/vitest.config.mts for why.
+const SCAN_ROOT = path.resolve(__dirname, '..', '..', 'packages');
 
 /** Anti-pattern regexes — match a global-provider reference. */
 const PATTERNS = [

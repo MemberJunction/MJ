@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..'); // scanner-placement-ok: reads metadata-optional/integration-test, declared on @memberjunction/integration-test-suite#test in turbo.json
 const SEEDS = join(REPO_ROOT, 'metadata-optional', 'integration-test');
 
 const read = (...parts: string[]): unknown[] => {
