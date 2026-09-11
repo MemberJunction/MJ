@@ -6051,8 +6051,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Arg("skipGitCommit", { defaultValue: false }) skipGitCommit: boolean,
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
-        @Arg("autoEnableNewObjects", { defaultValue: true, description: 'newly-appeared objects get their entity maps created ENABLED — a refresh is an explicit request to bring the source\'s current shape in. Pass false to create them disabled and enable them by hand instead.' }) autoEnableNewObjects: boolean,
-        @Arg("autoEnableNewColumns", { defaultValue: true, description: 'newly-appeared COLUMNS on an enabled object get their field maps created ENABLED, matching autoEnableNewObjects. Pass false to create them disabled instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
+        // CONTRACT: new arrivals are DISCOVERED, not adopted. everything.txt is explicit — "we
+        // create entity maps for all objects that are determined as things that should be now
+        // added but arent, we enable nothing (because the user needs to, after the refresh, then
+        // go turn them on)".
+        //
+        // This defaulted TRUE for a while on the claim that a disabled new object "is absent from
+        // IntrospectSchema — so it never reached key inference and never reached a migration".
+        // That claim is wrong, and the code says so plainly:
+        //   - `CreateDisabled` governs ONLY the entity/field map Status and SyncEnabled
+        //     (index.ts:1833-1834, :1880). It never touches IntegrationObject.Status.
+        //   - New IntegrationObject rows are written Status='Active' unconditionally
+        //     (IntegrationSchemaSync.ts:852), so they are returned by GetActiveIntegrationObjects.
+        //   - Phase 4 builds over `evolveNames = continuingMaps + newObjects`, and newObjects is
+        //     included regardless of this flag — so the table IS created either way.
+        // The only thing this flag decides is whether the new object starts SYNCING unasked.
+        @Arg("autoEnableNewObjects", { defaultValue: false, description: 'newly-appeared objects get their entity maps created DISABLED — their tables are still created, they simply do not start syncing until the user enables them. Pass true to auto-enable instead.' }) autoEnableNewObjects: boolean,
+        @Arg("autoEnableNewColumns", { defaultValue: false, description: 'newly-appeared COLUMNS on an enabled object get their field maps created DISABLED, matching autoEnableNewObjects. Pass true to auto-enable instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Arg("cascadeRemoveDependents", { defaultValue: false, description: 'When a removed object has still-active dependents (DAG parent edges), also disable the transitive dependent closure ("force remove those too"). Default false: dependents stay active and each broken edge is surfaced as a warning.' }) cascadeRemoveDependents: boolean,
         @Ctx() ctx: AppContext
