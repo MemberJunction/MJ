@@ -404,6 +404,16 @@ export class EntityPermissionInfo extends BaseInfo{
      * materialized before the column existed.
      */
     Type: string = 'Allow'
+
+    /**
+     * True when this row is a Deny row (`Type = 'Deny'`, compared case- and whitespace-insensitively;
+     * a null/blank Type — rows created before the column existed — is Allow). On a Deny row a set
+     * `Can*` flag means "deny that operation", so nothing that reads a `Can*` flag as a GRANT may
+     * look at a Deny row: `GetUserPermisions` subtracts these, and the RLS readers skip them.
+     */
+    public get IsDeny(): boolean {
+        return (this.Type || 'Allow').trim().toLowerCase() === 'deny';
+    }
     CanCreate: boolean = null
     CanRead: boolean = null
     CanUpdate: boolean = null
@@ -2952,7 +2962,7 @@ export class EntityInfo extends BaseInfo {
             const allow = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             const deny = { CanCreate: false, CanRead: false, CanUpdate: false, CanDelete: false };
             for (const ep of permissionList) {
-                const isDeny = (ep.Type || 'Allow').trim().toLowerCase() === 'deny';
+                const isDeny = ep.IsDeny;
                 const bucket = isDeny ? deny : allow;
                 bucket.CanCreate = bucket.CanCreate || !!ep.CanCreate;
                 bucket.CanRead   = bucket.CanRead   || !!ep.CanRead;
@@ -2997,6 +3007,9 @@ export class EntityInfo extends BaseInfo {
     public UserExemptFromRowLevelSecurity(user: UserInfo, type: EntityPermissionType): boolean {
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
+            if (ep.IsDeny) {
+                continue; // a Deny row's Can* flags are denials, never grants — it cannot exempt anyone
+            }
             const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role 
                 switch (type) {
@@ -3026,8 +3039,11 @@ export class EntityInfo extends BaseInfo {
     /**
      * Returns RLS security info attributes for a given user and permission type.
      *
-     * Only permission rows that GRANT the operation (the matching `Can*` flag is true) contribute a
-     * filter. The filters of a user's roles are OR'd together by the caller, so a filter collected
+     * Only permission rows that GRANT the operation contribute a filter: an Allow row whose matching
+     * `Can*` flag is true. Deny rows are skipped outright — on a Deny row a set `Can*` flag means
+     * "deny that operation", and a user carrying one fails the permission gate before this runs
+     * (`GetUserPermisions` subtracts Deny from Allow), so reading it as a grant would be wrong even
+     * though it is unreachable. The filters of a user's roles are OR'd together by the caller, so a filter collected
      * from a row that does not grant the operation would WIDEN the clause: a user granted Create by
      * role A (bound to filter F1) would create against `F1 OR F2` when role B keeps a leftover
      * `CreateRLSFilterID = F2` beside `CanCreate = false`. `GetUserPermisions` aggregates the flags
@@ -3041,6 +3057,9 @@ export class EntityInfo extends BaseInfo {
         const rlsList: RowLevelSecurityFilterInfo[] = [];
         for (let j: number = 0; j < this.Permissions.length; j++) {
             const ep: EntityPermissionInfo = this.Permissions[j];
+            if (ep.IsDeny) {
+                continue; // never a grant — see the doc comment
+            }
             const roleMatch: UserRoleInfo = user.UserRoles?.find((r) => UUIDsEqual(r.RoleID, ep.RoleID))
             if (roleMatch) { // user has this role
                 let matchObject: RowLevelSecurityFilterInfo = null;

@@ -6609,7 +6609,10 @@ export class ManageMetadataBase {
    }
 
    /** Pure form of the role-RLS layer (see {@link entityHasRowLevelSecurity}). IO-free so it can be reused
-    *  verbatim by the runtime refresher's equivalent gate. */
+    *  verbatim by the runtime refresher's equivalent gate. Deliberately WIDER than the runtime's own reader
+    *  (`EntityInfo.GetUserRowLevelSecurityInfo` collects a filter only from an Allow row whose `CanRead` is
+    *  set, since #4358): a leftover filter beside a cleared flag still counts as "protected" here, which errs
+    *  conservative for a leak gate. */
    public static EntityHasRoleReadRLS(entity: EntityInfo): boolean {
       return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
    }
