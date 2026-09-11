@@ -2824,7 +2824,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const ctx: FetchContext = {
                 CompanyIntegration: config.companyIntegration,
                 ObjectName: entityMap.ExternalObjectName,
-                WatermarkValue: currentWatermark,
+                // The fetch filter is the RUN's start boundary, never the running max.
+                //
+                // `currentWatermark` advances every page for connectors that emit a per-page running
+                // max (netsuite@1.4.1+ does, for resume-friendliness); feeding it back into the next
+                // page's query ratchets the incremental predicate forward MID-SCAN, so every row whose
+                // modstamp trails the max seen so far is silently excluded even though the walk never
+                // visited it. Observed live (ACR dev, 2026-09-07): a Vendor Bill full scan collapsed
+                // to 707 of 23,558 rows — an id-ascending-AND-modstamp-ascending subsequence — with
+                // the run still reporting success. `currentWatermark` remains persistence bookkeeping.
+                WatermarkValue: initialWatermark,
                 BatchSize: this.MaxBatchSize,
                 ContextUser: contextUser,
                 CurrentPage: currentPage,
