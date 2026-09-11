@@ -33,7 +33,8 @@ import {
     IntegrationSchemaSync,
     decideSchemaLimitViolations,
     IntegrationConnectorCreationPipeline,
-    IntegrationActionGenerator
+    IntegrationActionGenerator,
+    BuildCatalogWriter
 } from "@memberjunction/integration-engine";
 import type {
     IntegrationActionVerb,
@@ -4104,16 +4105,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         const limit = IntegrationEngine.Instance.MaxColumnsPerTable;
         const overLimit = objects.filter(o => colCount(o) > limit);
         if (overLimit.length > 0) {
+            // THE SHARPEST CROSS-CONNECTION COLLISION, and the clearest thing the per-connection
+            // catalog fixes. Disabling an over-wide object used to write the SHARED row, so one
+            // customer's column selection silently disabled that object for every other customer
+            // on the same connector — with no error and nothing in either workspace to explain it.
+            // Through the writer, a per-connection connection disables only its own row.
+            const writer = BuildCatalogWriter(md, companyIntegration, user);
             const ioIDByName = new Map(
-                IntegrationEngineBase.Instance.GetActiveIntegrationObjects(companyIntegration.IntegrationID)
+                (await writer.ObjectsInScope())
+                    .filter(io => io.Status === 'Active')
                     .map(io => [io.Name.toLowerCase(), io.ID] as [string, string])
             );
             for (const o of overLimit) {
                 warnings.push(`Disabled "${o.SourceObjectName}" (${colCount(o)} columns > limit ${limit}) — too wide to materialize as one table; reduce its columns or it stays disabled.`);
                 const ioID = ioIDByName.get(o.SourceObjectName.toLowerCase());
                 if (ioID) {
-                    const io = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', user);
-                    if (await io.Load(ioID)) {
+                    const io = await writer.LoadObject(ioID);
+                    if (io) {
                         io.Status = 'Disabled';
                         if (!await io.Save()) {
                             LogError(`enforceSchemaLimits: failed to disable over-wide IO '${o.SourceObjectName}': ${io.LatestResult?.CompleteMessage ?? 'unknown error'}`);
