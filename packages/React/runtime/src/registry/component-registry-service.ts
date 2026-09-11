@@ -580,8 +580,9 @@ export class ComponentRegistryService {
     }
     
     const response = await fetch(url, { headers });
-    
+
     if (!response.ok) {
+      await response.body?.cancel().catch(() => { /* nothing to drain */ });
       throw new Error(`Registry fetch failed: ${response.status} ${response.statusText}`);
     }
     

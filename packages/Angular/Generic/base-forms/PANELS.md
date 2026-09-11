@@ -218,6 +218,29 @@ public get IsWebsiteSourceType(): boolean {
 
 The panel still mounts and pays the registration cost, but renders nothing — cheap. Conditional registration ("only register if record.SomeField === X") doesn't work because the slot host queries by entity name, not by per-record state.
 
+## Section indicators (unsaved dot + invalid count) on your panel
+
+Wrap your content in `<mj-collapsible-panel>` and the section gets the same marks a
+generated section gets — an amber dot when one of its `mj-form-field`s is edited, a red
+count when one is invalid or required-and-empty — on the accordion header and on the
+left-nav rail item, with no code. The panel derives them from its projected fields
+and registers itself with the container's `FormSectionIndicatorCoordinator`.
+
+Content that is not `mj-form-field` (a grid editor, a designer) reports through the
+`[Indicators]` input; counts are added to the derived ones:
+
+```html
+<mj-collapsible-panel SectionKey="lineItems" SectionName="Line Items" [Form]="FormComponent" [FormContext]="FormContext"
+    [Indicators]="{ DirtyCount: EditedRows, ErrorCount: InvalidRows }">
+```
+
+Failed-save errors whose `Source` is a graph path (`Lines[2].Amount`) route to the panel
+whose `SectionKey` matches the leading segment; declare `ValidationSources="Lines"` when
+the names differ. A hero that is not a collapsible panel is not a rail item and needs
+nothing; a custom rail section that is not a collapsible panel can implement
+`FormSectionIndicatorSource` and register with the coordinator directly. See
+[Forms Architecture §7d — Section indicators](../../../../guides/FORMS_ARCHITECTURE_GUIDE.md#7d-form-chrome--accordion-left-nav-and-more).
+
 ## Reusing panels outside the slot system (composition)
 
 `BaseFormPanel` subclasses are plain Angular components. You can embed them directly anywhere you want — they don't have to be discovered via the slot host:

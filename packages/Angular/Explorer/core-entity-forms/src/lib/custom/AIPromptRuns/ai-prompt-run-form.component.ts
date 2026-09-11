@@ -462,7 +462,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     navigateToEntity(entityName: string, recordId: string | null) {
         if (!recordId) return;
         
-        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
     }
     
     navigateToOriginalRun() {

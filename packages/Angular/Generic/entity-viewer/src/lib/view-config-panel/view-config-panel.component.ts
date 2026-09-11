@@ -18,7 +18,7 @@ import {
   CompositeFilterDescriptor,
   FilterFieldInfo,
   FilterFieldType,
-  createEmptyFilter
+  CreateEmptyFilter
 } from '@memberjunction/ng-filter-builder';
 import { ViewConfigSummary } from '../types';
 
@@ -204,7 +204,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public SmartFilterExplanation: string = '';
 
   // Traditional Filter state
-  public FilterState: CompositeFilterDescriptor = createEmptyFilter();
+  public FilterState: CompositeFilterDescriptor = CreateEmptyFilter();
   public FilterFields: FilterFieldInfo[] = [];
 
   // Filter mode: 'smart' or 'traditional' (mutually exclusive)
@@ -217,7 +217,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   // Saved filter state for mode switching (BUG-006: preserve both modes' data)
   private savedSmartFilterPrompt: string = '';
-  private savedTraditionalFilter: CompositeFilterDescriptor = createEmptyFilter();
+  private savedTraditionalFilter: CompositeFilterDescriptor = CreateEmptyFilter();
 
   // Filter mode switch confirmation (BUG-006)
   public ShowFilterModeSwitchConfirm: boolean = false;
@@ -519,7 +519,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
       this.SmartFilterPrompt = '';
       this.SmartFilterExplanation = '';
-      this.FilterState = createEmptyFilter();
+      this.FilterState = CreateEmptyFilter();
       // Default to smart mode (promote AI filtering)
       this.FilterMode = 'smart';
       this.SmartFilterEnabled = true;
@@ -584,7 +584,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   private parseFilterState(filterStateJson: string | null | undefined): CompositeFilterDescriptor {
     if (!filterStateJson) {
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     }
     try {
       const parsed = JSON.parse(filterStateJson);
@@ -592,9 +592,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       if (parsed && typeof parsed === 'object' && 'logic' in parsed && 'filters' in parsed) {
         return parsed as CompositeFilterDescriptor;
       }
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     } catch {
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     }
   }
 
@@ -653,7 +653,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Clear all filters
    */
   ClearFilters(): void {
-    this.FilterState = createEmptyFilter();
+    this.FilterState = CreateEmptyFilter();
     this.cdr.detectChanges();
   }
 
@@ -1590,7 +1590,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (mode === 'smart') {
       this.SmartFilterEnabled = true;
       this.SmartFilterPrompt = this.savedSmartFilterPrompt;
-      this.FilterState = createEmptyFilter();
+      this.FilterState = CreateEmptyFilter();
     } else {
       this.SmartFilterEnabled = false;
       this.SmartFilterPrompt = '';

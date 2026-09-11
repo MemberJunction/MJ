@@ -44,6 +44,7 @@ import { ClaudePackDoctor } from './diagnostics/ClaudePackDoctor.js';
 import { InstallPlan, type CreatePlanInput, type RunOptions, type DoctorOptions, type InstallResult } from './models/InstallPlan.js';
 import { InstallState } from './models/InstallState.js';
 import { InstallConfigDefaults, resolveFromEnvironment, loadConfigFile, mergeConfigs, type PartialInstallConfig } from './models/InstallConfig.js';
+import { PackageManagerCommands } from './models/PackageManager.js';
 import { EventLogger } from './logging/EventLogger.js';
 import { ReportGenerator, type ReportData, type ServiceLogCapture } from './logging/ReportGenerator.js';
 import { FileSystemAdapter } from './adapters/FileSystemAdapter.js';
@@ -117,6 +118,11 @@ export class InstallerEngine {
    * then consumed by all subsequent phases (database, migrate, smoke test, etc.).
    */
   private resolvedConfig: PartialInstallConfig = {};
+
+  /** Package-manager commands derived from the resolved config (pnpm default). */
+  private get packageManager(): PackageManagerCommands {
+    return PackageManagerCommands.For(this.resolvedConfig.PackageManager);
+  }
 
   /**
    * Concrete release tag resolved by the scaffold phase this run. Pinned into
@@ -673,6 +679,7 @@ export class InstallerEngine {
     await this.migrate.Run({
       Dir: plan.Dir,
       Config: this.resolvedConfig,
+      PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
       VersionTag: plan.Tag,
     });
@@ -696,11 +703,12 @@ export class InstallerEngine {
     return { Warnings: warnings };
   }
 
-  /** Run `npm install` and `npm run build` to install and compile all packages. */
+  /** Run the configured package manager's install and build to compile all packages. */
   private async executeDependencies(plan: InstallPlan): Promise<PhaseExecutionResult> {
     const result = await this.dependency.Run({
       Dir: plan.Dir,
       Tag: plan.Tag,
+      PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
     });
 
@@ -714,6 +722,7 @@ export class InstallerEngine {
       Emitter: this.emitter,
       Fast: fast,
       VersionTag: plan.Tag,
+      PackageManager: this.packageManager.Name,
     });
 
     const warnings: string[] = [];
@@ -729,6 +738,7 @@ export class InstallerEngine {
     const result = await this.smokeTest.Run({
       Dir: plan.Dir,
       Config: this.resolvedConfig,
+      PackageManager: this.packageManager.Name,
       Emitter: this.emitter,
     });
 
@@ -1104,7 +1114,10 @@ export class InstallerEngine {
   // -------------------------------------------------------------------------
 
   /** Readiness patterns for MJAPI startup detection. */
-  private static readonly API_READY_PATTERNS: RegExp[] = [/Server ready at/i];
+  private static readonly API_READY_PATTERNS: RegExp[] = [
+    /\bReady\s+https?:\/\//,   // current server: `🚀 Ready  <url>` / `   Ready     <url>`
+    /Server ready at/i,          // legacy marker (older installed tags)
+  ];
 
   /** Readiness patterns for Explorer startup detection. */
   private static readonly EXPLORER_READY_PATTERNS: RegExp[] = [
@@ -1129,7 +1142,7 @@ export class InstallerEngine {
    * Kills processes after capture. Used by `mj doctor --report` to detect
    * runtime errors like missing modules, auth failures, or DB connectivity.
    *
-   * @param targetDir - Install directory where `npm run start:api` is valid.
+   * @param targetDir - Install directory where the `start:api` script is valid.
    * @param config - Current config (for port detection).
    * @returns Array of service log captures.
    */
@@ -1149,14 +1162,14 @@ export class InstallerEngine {
 
     // Capture MJAPI startup
     results.push(await this.captureServiceStartup(
-      runner, targetDir, 'MJAPI', ['run', 'start:api'],
+      runner, targetDir, 'MJAPI', 'start:api',
       InstallerEngine.API_READY_PATTERNS,
       config.APIPort ?? 4000
     ));
 
     // Capture Explorer startup
     results.push(await this.captureServiceStartup(
-      runner, targetDir, 'Explorer', ['run', 'start:explorer'],
+      runner, targetDir, 'Explorer', 'start:explorer',
       InstallerEngine.EXPLORER_READY_PATTERNS,
       config.ExplorerPort ?? 4200
     ));
@@ -1171,7 +1184,7 @@ export class InstallerEngine {
     runner: ProcessRunner,
     dir: string,
     label: string,
-    args: string[],
+    script: string,
     readyPatterns: RegExp[],
     port: number
   ): Promise<ServiceLogCapture> {
@@ -1194,7 +1207,8 @@ export class InstallerEngine {
       const timer = setTimeout(() => resolveCapture!(), captureTimeoutMs);
       let childPid: number | undefined;
 
-      const processPromise = runner.Run('npm', args, {
+      const start = this.packageManager.RunScript(script);
+      const processPromise = runner.Run(start.Cmd, start.Args, {
         Cwd: dir,
         TimeoutMs: captureTimeoutMs + 10_000, // Process timeout slightly longer than capture
         OnSpawn: (pid: number) => { childPid = pid; },
@@ -1225,7 +1239,7 @@ export class InstallerEngine {
       clearTimeout(timer);
 
       // Kill the server process on the port, then kill the entire spawned
-      // process tree (npm → turbo → node). Both are needed because killByPort
+      // process tree (npm/pnpm → turbo → node). Both are needed because killByPort
       // targets the listening server while killTree targets the parent wrapper.
       runner.killByPort(port);
       runner.killTree(childPid);

@@ -170,6 +170,29 @@ Uses [cosmiconfig](https://github.com/davidtheclark/cosmiconfig) to find configu
 
 These can also be set in `mj.config.cjs` as `dbHost`, `dbPort`, `dbDatabase`, `codeGenLogin`, `codeGenPassword`, `dbEncrypt`, and `dbTrustServerCertificate`.
 
+### Open App packages and `--no-app-packages`
+
+Every heavy command (anything that is not `version`, `help`, `migrate`, `clean`, `bump`, `install`,
+`dbdoc *` or `* usage`) imports, before it opens a database, the host's generated packages and the
+installed Open Apps' server packages named in `mj.config.cjs` — so `mj sync push`, `mj app …`,
+`mj test` and `mj ai` construct an app's real entity subclasses rather than a generic `BaseEntity`.
+The command's process ID is `cli:<command>` (`cli:sync:push`), which entries can be scoped to with
+`Processes` / `ExcludeProcesses` and `dynamicPackages.policy`:
+
+```javascript
+// mj.config.cjs
+dynamicPackages: {
+  server: [
+    { PackageName: '@acme/seed-hooks', StartupExport: 'LoadSeedHooks', Processes: ['cli:sync'] },
+  ],
+  policy: { 'cli:codegen': 'none' },
+}
+```
+
+`--no-app-packages` (global, any command) or `MJ_DYNAMIC_PACKAGES=none` skips them for one run;
+`--verbose` prints what loaded on stderr. Full model:
+[`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
+
 ## Commands
 
 ### mj install

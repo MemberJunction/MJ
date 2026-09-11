@@ -203,6 +203,7 @@ export class RunCodeGenBase {
   protected async executeCodeGenPipeline(dataSource: DataSourceResult, skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false): Promise<boolean> {
       const { provider, connection: conn, currentUser } = dataSource;
       const startTime = new Date();
+      ManageMetadataBase.clearFieldTracking();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
       reporter.mark('platform', dbPlatform());
@@ -467,17 +468,41 @@ export class RunCodeGenBase {
         }
       } else {
         warnSpinner('Skipping database generation (skip_database_generation = true)');
+      }
 
-        const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
-        startSpinner('Checking/Loading AI Generated Code from Metadata...');
-        const metadataSuccess = await reporter.phase('loadGeneratedCode', () => manageMD.loadGeneratedCode(conn, currentUser));
-        if (!metadataSuccess) {
-          failSpinner('ERROR checking/loading AI Generated Code from Metadata');
-          pipelineSuccess = false;
-          return false;
-        } else {
-          succeedSpinner('AI Generated Code loaded from Metadata');
-        }
+      // Persisted validators must reach file generation on EVERY path, not just the skip-DB one.
+      //
+      // File generation below runs for both branches, but `ManageMetadataBase.generatedValidators`
+      // — which `GenerateValidateFunction` reads to emit each entity's `Validate()` override — was
+      // only populated here, inside the `else`. On the database-generation path the sole source was
+      // `runValidationGeneration`, which needs AI. So a FULL `mj codegen --no-ai` emitted the entity
+      // subclasses as though no validators existed and silently DELETED every committed
+      // `Validate()` override — not "declined to add new ones", removed the existing ones.
+      //
+      // That is not hypothetical: it is how v6.1.0-edge.5's 56 overrides disappeared in 197fdf8376
+      // ("100% CodeGen idempotency, field change tracking, and churn elimination"), a full
+      // regeneration whose commit message and changeset mention validation nowhere. The
+      // `codegen-drift` CI gate then locked the loss in, because it runs `codegen --no-ai` and
+      // requires the committed file to match that lossy output.
+      //
+      // Loading unconditionally is safe on the AI path too: `GenerateValidateFunction` already
+      // deduplicates by `functionName` over a deterministic sort, so a validator both freshly
+      // generated and read back from `GeneratedCode` yields one emission, not two.
+      const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
+      startSpinner('Checking/Loading AI Generated Code from Metadata...');
+      const metadataSuccess = await reporter.phase('loadGeneratedCode', () => manageMD.loadGeneratedCode(conn, currentUser));
+      if (!metadataSuccess) {
+        failSpinner('ERROR checking/loading AI Generated Code from Metadata');
+        pipelineSuccess = false;
+        return false;
+      } else {
+        // Report the COUNT, not just success. Loading zero validators is a legitimate state for a
+        // database that has none, and an invisible catastrophe for one that has plenty: file
+        // generation emits each entity as though it had no `Validate()` override, silently deleting
+        // whatever was committed. Both times that regression shipped, the log said exactly this
+        // line and nothing else. A number here makes the next one visible in CI output.
+        const loadedValidators = ManageMetadataBase.generatedValidators.length;
+        succeedSpinner(`AI Generated Code loaded from Metadata (${loadedValidators} validator${loadedValidators === 1 ? '' : 's'})`);
       }
 
       const skipFiles = skipFileGeneration || getSettingValue('skip_file_generation', false);
@@ -534,6 +559,8 @@ export class RunCodeGenBase {
          reporter.counter('entitiesProcessed', new MJ.Metadata().Entities.length);
          reporter.counter('entitiesNew', ManageMetadataBase.newEntityList.length);
          reporter.counter('entitiesModified', ManageMetadataBase.modifiedEntityList.length);
+         reporter.counter('fieldsNew', ManageMetadataBase.newFieldCount);
+         reporter.counter('fieldsChanged', ManageMetadataBase.changedFieldCount);
          // EntitiesRequiringViewRegen is only defined on newer ManageMetadataBase
          // (added in search-geo-phase-3). Read defensively via property descriptor
          // so this compiles and runs against older versions too.
@@ -731,7 +758,7 @@ export class RunCodeGenBase {
         if (isVerbose) startSpinner('Generating Angular CORE Entities Code...');
         const angularGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<AngularClientGeneratorBase>(AngularClientGeneratorBase)!;
         const ok = await reporter.phase('generateAngularCore', () =>
-          angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser),
+          angularGenerator.generateAngularCode(coreEntities, angularCoreEntitiesOutputDir, 'Core', currentUser, 'AngularCoreEntities'),
         );
         if (!ok) {
           failSpinner('Error generating Angular CORE Entities code');
@@ -751,7 +778,7 @@ export class RunCodeGenBase {
         );
         const ok = await reporter.phase('generateAngular', async () => {
           for (const [dir, group] of angularGroups) {
-            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser);
+            const groupOk = angularGenerator.generateAngularCode(group, dir, '', currentUser, 'Angular');
             if (!groupOk) {
               return false;
             }

@@ -309,7 +309,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
     // Navigation
     navigateToEntity(entityName: string, recordId: string | null) {
         if (!recordId) return;
-        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+        SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
     }
 
     navigateToAction() {

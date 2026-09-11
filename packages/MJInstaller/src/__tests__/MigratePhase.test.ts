@@ -41,6 +41,7 @@ function makeContext(overrides?: Partial<MigrateContext>): MigrateContext {
   return {
     Dir: '/test/install',
     Config: samplePartialConfig(),
+    PackageManager: 'npm',
     Emitter: emitter,
     ...overrides,
   };
@@ -319,5 +320,26 @@ describe('MigratePhase', () => {
       const verboseLogs = logs.filter((l) => l.Level === 'verbose');
       expect(verboseLogs.some((l) => l.Message.includes('flyway warning: pending migrations'))).toBe(true);
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Package-manager awareness
+// ---------------------------------------------------------------------------
+
+describe('MigratePhase package-manager awareness (pnpm)', () => {
+  it('falls back to pnpm dlx with a version-pinned CLI when no local binary exists', async () => {
+    mockFs.FileExists.mockResolvedValue(false);
+    mockRunner.Run.mockResolvedValue({ ExitCode: 0, Stdout: '', Stderr: '', TimedOut: false });
+
+    const phase = new MigratePhase();
+    const ctx = makeContext({ Dir: '/some/dir', VersionTag: 'v6.1.0', PackageManager: 'pnpm' });
+    await phase.Run(ctx);
+
+    const dlxCall = mockRunner.Run.mock.calls.find(
+      (c: [string, string[]]) =>
+        c[0] === 'pnpm' && c[1]?.[0] === 'dlx' && c[1]?.[1] === '@memberjunction/cli@6.1.0'
+    );
+    expect(dlxCall).toBeDefined();
   });
 });

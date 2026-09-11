@@ -513,11 +513,13 @@ mj-timeline {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
 }
 
 .mj-timeline__card-image--left.mj-timeline__card-image--small {
-  width: 48px;
-  height: 48px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
 }
 
 .mj-timeline__card-image--left.mj-timeline__card-image--medium {

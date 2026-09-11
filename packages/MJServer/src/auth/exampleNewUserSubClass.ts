@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, RunView, LogError, EntitySaveOptions } from '@memberjunction/core';
 import { NewUserBase } from './newUsers.js';
-import { UserCache } from '@memberjunction/generic-database-provider';
+import { ResolveConfiguredPrincipal } from './principals.js';
 import { configInfo } from '../config.js';
 import { MJUserEntity } from '@memberjunction/core-entities';
 
@@ -18,12 +18,15 @@ export class ExampleNewUserSubClass extends NewUserBase {
     try {
       const md = new Metadata(); // global-provider-ok: new-user creation runs in the JWT auth flow, before AppContext.providers is built
 
-      const contextUser = UserCache.Instance.Users.find(
-        (u) => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase()
-      );
+      // Resolve through the shared ladder (`auth/principals.ts`) rather than matching a single
+      // column here. This example previously matched `Email` only, which meant that copying it —
+      // which is what the note above tells you to do — reproduced issue #4209 from the other
+      // direction: MJ's default names the system user by `Name` ('System'), and an Email-only
+      // lookup can never reach it.
+      const contextUser = ResolveConfiguredPrincipal(configInfo?.userHandling?.contextUserForNewUserCreation, 'NewUser');
       if (!contextUser) {
         LogError(
-          `Failed to load context user ${configInfo?.userHandling?.contextUserForNewUserCreation}, if you've not specified this on your config.json you must do so. This is the user that is contextually used for creating a new user record dynamically.`
+          'Failed to resolve a context user for new-user creation: userHandling.contextUserForNewUserCreation matched no user, and this deployment has neither a system user nor an active Owner to fall back to. This is the user whose context creates new user records dynamically.'
         );
         return undefined;
       }
@@ -61,7 +64,7 @@ export class ExampleNewUserSubClass extends NewUserBase {
         //p.Email = email;
         //p.Status = 'active';
         if (await p.Save()) {
-          personId = p.FirstPrimaryKey.Value; // if we had a strongly typed sub-class above, we could use this code p.ID;
+          personId = p.FirstPrimaryKey.Value; // first-pk-ok: sample code for a hypothetical ID-keyed Persons entity (see row['ID'] above); personId feeds User.LinkedEntityRecordID, a single-value link. With a strongly typed sub-class this would be p.ID
         } else {
           LogError(`Failed to create new person ${firstName} ${lastName} ${email}`);
         }

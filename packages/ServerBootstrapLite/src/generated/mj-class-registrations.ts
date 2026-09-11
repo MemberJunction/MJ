@@ -188,13 +188,14 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (408 classes)
+// @memberjunction/core-entities (410 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -358,6 +359,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -1010,7 +1012,7 @@ import {
     UserRoutineDispatcherDriver,
 } from '@memberjunction/scheduling-engine';
 
-// @memberjunction/core-entities-server (42 classes)
+// @memberjunction/core-entities-server (45 classes)
 import {
     MJAIAgentCoAgentEntityServer,
     MJAIAgentEntityServer,
@@ -1045,11 +1047,14 @@ import {
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -1285,6 +1290,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -1430,11 +1436,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentItemEntity,
     MJContentItemTagEntity,
     MJContentProcessRunDetailEntity,
-    MJContentProcessRunEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
     MJContentSourceParamEntity,
@@ -1452,6 +1458,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -1633,12 +1640,12 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
     MJSignatureRequestLogEntity,
-    MJSignatureRequestRecipientEntity,
-    MJSkillEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureRequestRecipientEntity,
+    MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
@@ -1837,12 +1844,12 @@ const CLASS_REGISTRATIONS_2: any[] = [
     InstagramCreateStoryAction,
     InstagramGetAccountInsightsAction,
     InstagramGetBusinessPostsAction,
-    InstagramGetCommentsAction,
-    InstagramGetPostInsightsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    InstagramGetCommentsAction,
+    InstagramGetPostInsightsAction,
     InstagramSchedulePostAction,
     InstagramSearchPostsAction,
     LinkedInCreateArticleAction,
@@ -2019,11 +2026,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJQuerySQLEntityServer,
     MJRecordProcessEntityServer,
     MJRemoteOperationEntityServer,
+    MJRoleEntityServer,
     MJRowLevelSecurityFilterEntityServer,
     MJSearchScopeEntityServer,
     MJTagEntityServer,
     MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
+    MJUserEntityServer,
+    MJUserRoleEntityServer,
     MJUserRoutineEntityServer,
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
@@ -2038,15 +2048,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AssignUserRolesAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     CSVParserAction,
     CalculateExpressionAction,
     CensusDataLookupAction,
     CheckUserPermissionAction,
     ColorConverterAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     ComposeListsAction,
     ConditionalAction,
     CopyObjectAction,
@@ -2201,7 +2211,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 939;
+export const CLASS_REGISTRATIONS_COUNT = 944;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

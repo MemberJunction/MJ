@@ -234,7 +234,19 @@ export interface FileOutputRef {
     fileId?: string;
     /** File size in bytes */
     sizeBytes?: number;
+    /**
+     * How the artifact MJ creates for this file is shown. `Always` (default): a normal artifact, with a
+     * card on the message and the viewer. `System Only`: the artifact, its version and its download URL
+     * exist, but the chat keeps it out of the message cards (a host opts in with `showSystemArtifacts`).
+     * An action whose file is a DOWNLOAD — an export the user asked for and will open elsewhere — says
+     * so here, instead of the host having to hide a card that opens an empty viewer.
+     * @since 6.1.0
+     */
+    visibility?: FileOutputVisibility;
 }
+
+/** The visibility an action can ask for on the artifact made from its file output. */
+export type FileOutputVisibility = 'Always' | 'System Only';
 
 /**
  * Attempts to parse an unknown value as a FileOutputRef by checking its shape.
@@ -263,12 +275,17 @@ export function ParseFileOutputRef(raw: unknown): FileOutputRef | null {
     const fileId = typeof fo['fileId'] === 'string' ? fo['fileId'] : undefined;
     if (!fileData && !fileId) return null;
 
+    const rawVisibility = fo['visibility'];
+    const visibility: FileOutputVisibility | undefined =
+        rawVisibility === 'Always' || rawVisibility === 'System Only' ? rawVisibility : undefined;
+
     return {
         fileName,
         mimeType,
         fileData,
         fileId,
-        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined
+        sizeBytes: typeof fo['sizeBytes'] === 'number' ? fo['sizeBytes'] : undefined,
+        visibility
     };
 }
 
@@ -420,6 +437,14 @@ export type AgentSubAgentRequest<TContext = any> = {
 }
 
 /**
+ * Why BaseAgent's `filterAvailableSkills` hook is being asked. `catalog` is the set the model is
+ * OFFERED (the auto-activatable skills rendered into the prompt); `auto-activation` is a
+ * model-initiated Skill step being validated or executed; `requested` is a user's explicit
+ * `/skill` request arriving through `ExecuteAgentParams.requestedSkillIDs`.
+ */
+export type SkillAvailabilityPurpose = 'catalog' | 'auto-activation' | 'requested';
+
+/**
  * A skill the agent's response requested be activated (by catalog name — the agent only
  * ever sees name + description in its prompt, per progressive disclosure).
  */
@@ -480,6 +505,56 @@ export type AgentSkillInvocationProvenance = {
     /** Who pulled the trigger: the user's /skill request or the agent's own decision */
     RequestedBy: 'user-request' | 'agent-decision';
 }
+
+/**
+ * How the framework should persist a step's payload as an artifact. Set by the agent — the only
+ * party that knows whether the payload is a finished deliverable, a draft awaiting feedback, or a
+ * plan proposal. When absent, `AgentRunner.ProcessAgentArtifacts` applies its legacy priority chain
+ * (run's sourceArtifactId → previous artifact on the message → new artifact), so existing agents are
+ * unaffected.
+ *
+ * Precedence: caller `createArtifacts=false` → agent `ArtifactCreationMode='Never'` → this directive
+ * → legacy chain. The two vetoes still win.
+ * @since 6.1.0
+ */
+export type ArtifactDirective = {
+    /**
+     * - 'create-new': create a new artifact (version 1) even when the run carries a sourceArtifactId.
+     * - 'version-source': add a version to `targetArtifactId`, else to the run's sourceArtifactId,
+     *   else fall back to the legacy chain.
+     * - 'suppress': create or version nothing for this step — not the payload artifact, and not the
+     *   artifacts that would wrap the step's generated files or media. (The run's media audit rows
+     *   are still written; suppression governs what the user is shown, not lineage.)
+     *
+     * An unrecognized value is treated as no directive at all — not merely as no targeting — and
+     * logged. `name` and `description` are discarded with it: a `behavior` this consumer cannot
+     * parse means the producer disagrees with it about the wire format, which is no basis for
+     * trusting the object's other fields.
+     */
+    behavior: 'create-new' | 'version-source' | 'suppress';
+    /**
+     * Artifact to version when behavior is 'version-source' and it differs from the run's sourceArtifactId.
+     *
+     * This is model output, so the framework does not take it on trust. It is honored only if it is
+     * a UUID-shaped string naming an artifact that exists AND that the run's user either owns or
+     * holds an explicit `CanEdit` grant on. Any of those failing logs and falls back to the run's
+     * `sourceArtifactId`, then to the legacy chain — a named target can never widen what the user
+     * is already allowed to write.
+     */
+    targetArtifactId?: string;
+    /**
+     * Name for an artifact this step CREATES. Applies whenever the step creates a new artifact
+     * header — 'create-new', and equally the legacy fallback when no previous artifact was found —
+     * and is ignored when an existing artifact is versioned, which keeps the name it already has.
+     *
+     * Trimmed, and clamped to the column's 255 characters rather than rejected, so an over-long
+     * model-written title costs a truncation instead of the whole artifact. When supplied, it also
+     * takes precedence over the name attribute extracted from the first version's content.
+     */
+    name?: string;
+    /** Description for an artifact this step creates. Same applicability as {@link name}. */
+    description?: string;
+};
 
 /**
  * Represents the next step determination from an agent type.
@@ -569,6 +644,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      * @since 2.116.0
      */
     automaticCommands?: AutomaticCommand[];
+    /**
+     * Optional per-step artifact handling for `newPayload`. See {@link ArtifactDirective}.
+     * Absent ⇒ AgentRunner's legacy artifact priority chain.
+     * @since 6.1.0
+     */
+    artifactDirective?: ArtifactDirective;
     /** Index of the message to expand when step is 'expand-message' */
     messageIndex?: number;
     /** Reason for expanding the message when step is 'expand-message' */
@@ -729,6 +810,12 @@ export type ExecuteAgentResult<P = any> = {
      * @since 2.116.0
      */
     automaticCommands?: AutomaticCommand[];
+    /**
+     * Artifact handling requested by the agent's final step. See {@link ArtifactDirective}.
+     * Populated from the agent's final step.
+     * @since 6.1.0
+     */
+    artifactDirective?: ArtifactDirective;
     /**
      * Optional memory context that was injected into the agent execution.
      * Includes the notes and examples that were retrieved and used for context.
@@ -1018,6 +1105,13 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
     parentStepCounts?: number[];
     /** Optional parent agent run entity for nested sub-agent execution */
     parentRun?: MJAIAgentRunEntityExtended;
+    /**
+     * The skills active in the PARENT run when this sub-agent was invoked. Skills activate on the root
+     * agent only, so a sub-agent's own activated set is always empty; this is how the root's active
+     * skills reach the actions a sub-agent runs (`Context.ActiveSkillIDs`), e.g. a retrieval sub-agent's
+     * Scoped Search binding its skill principal to the run. Set by `ExecuteSubAgent`; hosts need not.
+     */
+    parentActivatedSkillIDs?: readonly string[];
     /** Optional data for template rendering and prompt execution, passed to the agent's prompt as well as all sub-agents */
     data?: Record<string, any>;
     /**

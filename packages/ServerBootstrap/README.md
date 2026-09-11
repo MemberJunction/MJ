@@ -95,7 +95,7 @@ createMJServer({
 The `createMJServer()` function handles:
 
 1. **Configuration Loading** - Automatically finds and loads `mj.config.cjs` or `.mjrc`
-2. **Generated Package Discovery** - Auto-imports generated entities, actions, forms, and resolvers
+2. **Generated + Open App Package Discovery** - Auto-imports generated entities, actions and resolvers (`codeGeneration.packages`) and the installed Open Apps' server packages (`dynamicPackages.server[]`) through [`@memberjunction/dynamic-packages`](../DynamicPackages/README.md) — the same loader the `mj` CLI, MCP/A2A servers and test bootstraps use, with per-process `Processes`/`ExcludeProcesses` scoping (MJAPI's process ID is `mjapi`) and the `MJ_DYNAMIC_PACKAGES=none` kill switch
 3. **Database Connection** - Sets up connection pooling with configured credentials
 4. **GraphQL Schema Building** - Discovers resolvers and builds the GraphQL schema
 5. **WebSocket Setup** - Configures WebSocket support for GraphQL subscriptions

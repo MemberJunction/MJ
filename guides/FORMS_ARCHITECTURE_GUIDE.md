@@ -498,7 +498,13 @@ container.
 #### Left-nav
 
 The rail picks one group; the body shows only that group. Selected content
-has **no accordion chrome** (the rail is the header). Related grids fill the
+has **no accordion chrome** (the rail is the header). **Details** shows every
+field panel under one rail item, so the container renders those panels as
+**one card** (`.mj-chrome-details`, with `-first` / `-last` on the visual
+edges — CSS order, not DOM order): no per-section headers, one surface. The
+field rows would otherwise float on the page background. A related grid pinned
+into Details with `ChromeGroup: 'details'` is not part of that card: it keeps
+the chrome-less grid treatment and sits as its own block. Related grids fill the
 **leftover column height** — the selected panel is `flex: 1 1 auto` in the
 column, not a pinned pixel height. Accordion-persisted heights are not
 applied while the rail is showing the panel.
@@ -517,6 +523,51 @@ More. Rail items use the same icon as the accordion header (entity `Icon`
 when present). Users reorder first-class items by dragging the rail grip
 (or Manage Sections / reset in the toolbar). The centered / full-width
 toolbar toggle still applies.
+
+#### Section indicators — unsaved edits and invalid fields, per section
+
+A multi-section form says **which** section holds an edit or a failure, so a user does
+not have to open every rail item to find the red field. Two marks, on the rail item,
+the accordion header, the More folder, and the collapsed rail spine:
+
+- an **amber dot** — the section has a field modified since the last save (the same
+  6px dot an edited field shows after its label; only on saved records, like the field);
+- a **red count pill** with `fa-circle-exclamation` — how many fields in the section
+  are invalid: a failing validation rule, or a required field left empty in edit mode
+  (the same two conditions that paint a field's underline red). A warning-only section
+  gets an amber pill instead.
+
+**Derived, not declared.** Every `<mj-collapsible-panel>` computes its
+`SectionIndicators` live from the `mj-form-field`s it projects — the same `IsDirty` /
+`ShowErrors` / `IsRequiredEmpty` getters the fields use for their own dot and underline
+— so the section can never disagree with its fields, and generated forms, custom
+`*Extended` forms, and slot-mounted `BaseFormPanel`s that wrap a collapsible panel all
+get the marks with no code. Failed-save errors whose `Source` is a graph path
+(`Lines[2].Amount`) route to the panel that owns the collection: a `SectionKey` that
+matches the leading segment claims it automatically; declare
+`ValidationSources="Modifications"` when the names differ. Graph errors are never
+matched on their trailing field name, so a child failure cannot land on the header.
+
+**Custom content.** A section whose content is not `mj-form-field` (an inline grid, a
+designer) supplies its own counts through the panel's `[Indicators]` input — they are
+added to whatever the panel derives:
+
+```html
+<mj-collapsible-panel SectionKey="lines" SectionName="Lines" [Form]="this" [FormContext]="formContext"
+    [Indicators]="{ DirtyCount: LineEditor.EditedRows, ErrorCount: LineEditor.InvalidRows }">
+```
+
+A custom section that is not a collapsible panel at all can implement
+`FormSectionIndicatorSource` and register with the container-provided
+`FormSectionIndicatorCoordinator` (`inject(FormSectionIndicatorCoordinator, { optional: true })`);
+the rail reads it like any other section. Both are exported from `@memberjunction/ng-base-forms`.
+
+The rail reads the coordinator on every pass (pull, not push), and each panel nudges it
+on a field `ValueChange`, so the marks follow the keystroke rather than the container's
+dirty poll. Form-level errors no section claims stay in the spine's whole-form total, so
+a rejected save never leaves the rail looking clean. Host hooks for CSS / tests:
+`data-dirty-count`, `data-error-count`, `.mj-panel-dirty`, `.mj-panel-has-errors`,
+`.mj-panel-has-warnings` on the panel; `.is-dirty` / `.has-errors` on a rail item.
 
 #### Section search
 

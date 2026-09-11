@@ -8,7 +8,7 @@ import { TypeScriptTypeFromSQLType, SQLFullType, SQLMaxLength, FormatValue, Code
 import { IsFixedWidthStringSQLType } from "@memberjunction/sql-dialect"
 import { LogError } from "./logging"
 import { CompositeKey } from "./compositeKey"
-import { WarningManager, SafeJSONParse, UUIDsEqual } from "@memberjunction/global"
+import { WarningManager, SafeJSONParse, UUIDsEqual, ordinalCompare } from "@memberjunction/global"
 import {
     ParseEntityConfiguration,
     ParseEntityRelationshipConfiguration,
@@ -18,17 +18,28 @@ import {
     type IEntityRelationshipConfiguration,
     type IEntityFieldConfiguration,
 } from "./entityConfiguration"
+import type { IEntitySubtypeSelectorConfig } from "./JSONType-interfaces/IEntitySubtypeSelectorConfig"
 
 /**
- * Valid values for EntityField.ExtendedType.
- * Defines semantic meaning beyond the SQL data type (e.g., a string field that holds an email, URL, or geo address).
+ * Runtime domain for {@link EntityFieldInfo.ExtendedType}. This array is the single source of
+ * truth; {@link EntityFieldExtendedType} is derived from it. CodeGen validates LLM suggestions
+ * against {@link EntityFieldInfo.ExtendedTypes} rather than duplicating the list.
+ *
+ * `Image` — the value is an image URL, a `data:image/...` URI, or raw image base64. UI surfaces
+ * render a thumbnail and (in edit mode) allow replacing it with an upload capped at the field's
+ * MaxLength.
+ * `Color` — the value is a CSS color (hex / rgb / hsl).
+ * `JSON` — the value is a JSON document; validated on save and pretty-printed in forms.
  */
-export type EntityFieldExtendedType =
-    | 'Code' | 'Email' | 'FaceTime' | 'Geo'
-    | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince'
-    | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress'
-    | 'HTML' | 'Icon' | 'Markdown'
-    | 'MSTeams' | 'Other' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg';
+export const EntityFieldExtendedTypes = [
+    'Code', 'Color', 'Email', 'FaceTime', 'Geo',
+    'GeoLatitude', 'GeoLongitude', 'GeoCountry', 'GeoStateProvince',
+    'GeoCity', 'GeoPostalCode', 'GeoAddress',
+    'HTML', 'Icon', 'Image', 'JSON', 'Markdown',
+    'MSTeams', 'Other', 'SIP', 'SMS', 'Skype', 'Tel', 'URL', 'WhatsApp', 'ZoomMtg',
+] as const;
+
+export type EntityFieldExtendedType = typeof EntityFieldExtendedTypes[number];
 
 /**
  * The possible status values for a record change
@@ -259,7 +270,7 @@ export class EntityOrganicKeyInfo extends BaseInfo {
                 sorted.sort((a, b) => {
                     const aSeq = (a.Sequence as number) ?? 999999;
                     const bSeq = (b.Sequence as number) ?? 999999;
-                    return aSeq - bSeq;
+                    return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity as string, b.RelatedEntity as string) || ordinalCompare(a.ID as string, b.ID as string);
                 });
                 for (const item of sorted) {
                     this._RelatedEntities.push(new EntityOrganicKeyRelatedEntityInfo(item));
@@ -623,6 +634,10 @@ export class EntityFieldInfo extends BaseInfo {
     DefaultValue: string = null
     AutoIncrement: boolean = null
     ValueListType: string = null
+    /**
+     * Runtime domain for {@link ExtendedType}. Same array as {@link EntityFieldExtendedTypes}.
+     */
+    static readonly ExtendedTypes: readonly EntityFieldExtendedType[] = EntityFieldExtendedTypes
     ExtendedType: EntityFieldExtendedType | null = null
     DefaultInView: boolean = null 
     ViewCellTemplate: string = null
@@ -1485,6 +1500,42 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * True when {@link ExtendedType} is any Geo* tag (`Geo`, `GeoLatitude`, `GeoAddress`, …).
+     * Used by maps, distance, and GeoCodeSyncService. Display-only virtuals still count.
+     */
+    get IsGeoExtendedType(): boolean {
+        const t = this.ExtendedType;
+        return typeof t === 'string' && t.startsWith('Geo');
+    }
+
+    /**
+     * A Geo* field that can be written on Save. GeoCodeSyncService only runs when the
+     * entity has at least one of these. Virtual / AllowUpdateAPI=0 fields (PrimaryAddress*,
+     * `__mj_Latitude`, embedded `__mj_Latitude_{FK}`) are display-only — maps still use them.
+     */
+    get IsWritableGeoField(): boolean {
+        return this.IsGeoExtendedType && !this.IsVirtual && !!this.AllowUpdateAPI;
+    }
+
+    /**
+     * Native (table) latitude column — `ExtendedType=GeoLatitude`, or legacy `Geo` named Latitude.
+     */
+    get IsNativeLatitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLatitude') return true;
+        return this.ExtendedType === 'Geo' && /^lat(itude)?$/i.test(this.Name);
+    }
+
+    /**
+     * Native (table) longitude column — `ExtendedType=GeoLongitude`, or legacy `Geo` named Long*.
+     */
+    get IsNativeLongitudeField(): boolean {
+        if (this.IsVirtual) return false;
+        if (this.ExtendedType === 'GeoLongitude') return true;
+        return this.ExtendedType === 'Geo' && /^(lng|lon|long|longitude)$/i.test(this.Name);
+    }
+
+    /**
      * Helper method that returns true if the field is one of the special reserved MJ date fields for tracking CreatedAt and UpdatedAt timestamps as well as the DeletedAt timestamp used for entities that
      * have DeleteType=Soft. This is only used when the entity has TrackRecordChanges=1 or for entities where DeleteType=Soft
      */
@@ -1979,6 +2030,38 @@ export class EntityInfo extends BaseInfo {
      */
     AllowMultipleSubtypes: boolean = false
     /**
+     * Optional JSON configuration specifying declarative prospective subtype resolution on an entity.
+     * Stored in the SubtypeSelector column of Entity (shape = IEntitySubtypeSelectorConfig).
+     */
+    SubtypeSelector: string = null
+
+    private _subtypeSelectorConfig: IEntitySubtypeSelectorConfig | null | undefined = undefined;
+
+    /**
+     * Parsed SubtypeSelector configuration, if configured.
+     */
+    get SubtypeSelectorConfig(): IEntitySubtypeSelectorConfig | null {
+        if (this._subtypeSelectorConfig === undefined) {
+            if (this.SubtypeSelector && typeof this.SubtypeSelector === 'string') {
+                try {
+                    const parsed = JSON.parse(this.SubtypeSelector) as Record<string, unknown>;
+                    if (parsed && typeof parsed['Path'] === 'string' && parsed['Path'].trim().length > 0) {
+                        this._subtypeSelectorConfig = { Path: parsed['Path'].trim() };
+                    } else {
+                        LogError(`EntityInfo '${this.Name}': SubtypeSelector JSON must contain a non-empty 'Path' string property. Found: ${this.SubtypeSelector}`);
+                        this._subtypeSelectorConfig = null;
+                    }
+                } catch (err) {
+                    LogError(`EntityInfo '${this.Name}': failed to parse SubtypeSelector JSON '${this.SubtypeSelector}': ${err instanceof Error ? err.message : String(err)}`);
+                    this._subtypeSelectorConfig = null;
+                }
+            } else {
+                this._subtypeSelectorConfig = null;
+            }
+        }
+        return this._subtypeSelectorConfig;
+    }
+    /**
      * Whether to audit when users access records from this entity
      */
     AuditRecordAccess: boolean = null
@@ -2112,11 +2195,19 @@ export class EntityInfo extends BaseInfo {
      */
     FullTextSearchFunctionGenerated: boolean = true
     /**
-     * When true, this entity supports geocoding — CodeGen generates geo-aware subclass code,
-     * adds __mj_Latitude/__mj_Longitude virtual fields to the base view, and the UI shows
-     * a map view toggle. Auto-set by CodeGen when LLM detects geo-capable fields.
+     * When true, this entity participates in geo **read** features: map view, distance
+     * calculations, and similar. That is independent of whether GeoCodeSyncService runs
+     * on Save — the service only fires when {@link HasWritableGeoSourceFields} is true.
+     * Auto-set by CodeGen when LLM detects geo-capable fields.
      */
     SupportsGeoCoding: boolean = false
+    /**
+     * True when at least one field is a writable Geo* source (street and/or native lat/lng).
+     * Person/Org PrimaryAddress* are virtual display fields and do **not** count.
+     */
+    get HasWritableGeoSourceFields(): boolean {
+        return (this.Fields ?? []).some(f => f.IsWritableGeoField);
+    }
     /**
      * When true (default), CodeGen can automatically set SupportsGeoCoding based on
      * LLM analysis of entity fields. Set to false to lock the value.
@@ -2391,8 +2482,14 @@ export class EntityInfo extends BaseInfo {
     /**
      * Returns the primary key field for the entity. For entities with a composite primary key, use the PrimaryKeys property which returns all.
      * In the case of a composite primary key, the PrimaryKey property will return the first field in the sequence of the primary key fields.
+     *
+     * This is a single-column convenience for the places MJ is single-column *by design* — foreign-key
+     * targets, keyset `ORDER BY`, IS-A shared keys, and the bare-value shorthand `CompositeKey.LoadFromURLSegment`
+     * accepts. Do not use it to *construct* a load key for an arbitrary entity: that silently drops every
+     * column but the first on a composite key. Build keys with `CompositeKey.FromURLSegment(entityInfo, recordId)`
+     * or `CompositeKey.FromEntityRecord(entityInfo, row)`, which honor all of `PrimaryKeys`.
      */
-    get FirstPrimaryKey(): EntityFieldInfo {
+    get FirstPrimaryKey(): EntityFieldInfo { // first-pk-ok: the accessor itself
         if (this._firstPrimaryKeyCache === undefined) {
             this._firstPrimaryKeyCache = this.Fields.find((f) => f.IsPrimaryKey);
         }
@@ -2884,7 +2981,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not
+     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not.
+     *
+     * A permission row confers an exemption only for an operation it GRANTS (the matching `Can*`
+     * flag is true) and leaves unfiltered. A row that does not grant the operation has no filter
+     * for it either, and that absence means "not applicable", not "unrestricted" — so it must not
+     * lift a filter that another of the user's roles binds. Without the `Can*` check, a role that
+     * grants only reads (CanCreate=false, hence CreateRLSFilterID=null) made every holder of that
+     * role exempt from CREATE row-level security, which is the shape of the 'UI' role every
+     * authenticated user holds on nearly every entity.
      * @param user 
      * @param type 
      * @returns 
@@ -2896,19 +3001,19 @@ export class EntityInfo extends BaseInfo {
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
-                        if (!ep.CreateRLSFilterID)
+                        if (ep.CanCreate && !ep.CreateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Read:
-                        if (!ep.ReadRLSFilterID)
+                        if (ep.CanRead && !ep.ReadRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Update:
-                        if (!ep.UpdateRLSFilterID)
+                        if (ep.CanUpdate && !ep.UpdateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Delete:
-                        if (!ep.DeleteRLSFilterID)
+                        if (ep.CanDelete && !ep.DeleteRLSFilterID)
                             return true;
                         break;
                 }
@@ -3085,7 +3190,7 @@ export class EntityInfo extends BaseInfo {
         }
         else {
             // currently we only support a single value for FOREIGN KEYS, so we can just grab the first value in the primary key
-            const firstKey = record.FirstPrimaryKey;
+            const firstKey = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
             keyValue = firstKey.Value;
             //When creating a new record, the keyValue is null and the quotes are not needed
             quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
@@ -3135,7 +3240,7 @@ export class EntityInfo extends BaseInfo {
             if (rel) return EntityInfo.BuildRelationshipViewParams(record, rel);
         }
 
-        const firstKey = record.FirstPrimaryKey;
+        const firstKey = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
         const keyValue = firstKey.Value;
         const quotes = keyValue && firstKey.NeedsQuotes ? "'" : '';
         const clauses = fields.map((field) => `[${field}] = ${quotes}${keyValue}${quotes}`);
@@ -3186,7 +3291,7 @@ export class EntityInfo extends BaseInfo {
     private static resolveRelationshipKeyValue(record: BaseEntity, relationship?: EntityRelationshipInfo): unknown {
         const explicit = relationship?.EntityKeyField?.trim();
         if (explicit) return record.Get(explicit);
-        const first = record.FirstPrimaryKey;
+        const first = record.FirstPrimaryKey; // first-pk-ok: FK target — a relationship's join field references one parent key column
         if (first?.Name) return record.Get(first.Name);
         return first?.Value;
     }
@@ -3483,7 +3588,7 @@ export class EntityInfo extends BaseInfo {
                     er.sort((a, b) => {
                         const aSeq = a.Sequence !== null && a.Sequence !== undefined ? a.Sequence : 999999;
                         const bSeq = b.Sequence !== null && b.Sequence !== undefined ? b.Sequence : 999999;
-                        return aSeq - bSeq
+                        return (aSeq - bSeq) || ordinalCompare(a.RelatedEntity, b.RelatedEntity) || ordinalCompare(a.ID, b.ID);
                     }); 
                 }
 
@@ -3620,6 +3725,26 @@ export class RecordDependency {
      * The value of the primary key field in the parent record. MemberJunction supports composite(multi-field) primary keys. However, foreign keys only support links to single-valued primary keys in their linked entity.
      */
     PrimaryKey: CompositeKey
+    /**
+     * True when this dependency is a **polymorphic (soft) link** rather than a hard foreign key -
+     * that is, when `FieldName` is the `RecordID`-shaped payload column of an `EntityID`/`RecordID`
+     * pair declared via {@link EntityFieldInfo.EntityIDFieldName}.
+     *
+     * The distinction matters because the two kinds of link store the target differently: a hard
+     * foreign key holds the bare primary key value, while a polymorphic link holds the canonical
+     * `CompositeKey.ToRecordID()` encoding (`ID|<guid>`). Anything that *rewrites* the link - record
+     * merge, most importantly - has to write the right one, so this flag is what tells it which.
+     *
+     * Optional, and absent/false means "hard foreign key", so callers written before polymorphic
+     * links were detected keep their existing behavior.
+     */
+    IsSoftLink?: boolean
+    /**
+     * For a soft link ({@link IsSoftLink}), the name of the sibling discriminator column that says
+     * which entity `FieldName` points at - the value of `EntityIDFieldName` on the payload field.
+     * Undefined for hard foreign keys.
+     */
+    EntityIDFieldName?: string
 }
 
 /**

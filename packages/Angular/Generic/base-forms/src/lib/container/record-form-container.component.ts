@@ -1,13 +1,13 @@
 import {
   Component, Input, Output, EventEmitter,
   ChangeDetectionStrategy, ChangeDetectorRef, inject, NgZone,
-  ContentChildren, QueryList, AfterContentInit, OnDestroy,
+  ContentChildren, QueryList, AfterContentInit, DoCheck, OnDestroy,
   ViewChild, ViewEncapsulation, ElementRef
 } from '@angular/core';
-import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, CompositeKey, EntityInfo, RunView, type FormChromeRule, type FormInclusion } from '@memberjunction/core';
+import { UUIDsEqual, type ValidationErrorInfo } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfoEngine, FileStorageEngineBase } from '@memberjunction/core-entities';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { FormToolbarConfig, DEFAULT_TOOLBAR_CONFIG } from '../types/toolbar-config';
@@ -38,7 +38,7 @@ import { FormSlotCoordinator } from '../panel-slot/form-slot-coordinator.service
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
 import { ResolveFormChrome, OrderChromeGroups, OrderMoreSectionKeys, MoveChromeGroupInSectionOrder, OverlayChromeSectionOrder } from '../chrome/resolve-form-chrome';
 import { LoadFormChromeRules } from '../chrome/load-form-chrome-rules';
-import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection } from '../chrome/form-chrome';
+import { MORE_SECTION_KEY, HumanizeEntityTitle, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges } from '../chrome/form-chrome';
 import type { FormChromeGroup, FormChromePanelSnapshot } from '../chrome/form-chrome';
 import {
   ClampRailWidth,
@@ -51,6 +51,7 @@ import {
   SerializeRailPinnedSetting,
   SerializeRailWidthSetting,
   ShouldPersistChromeActiveGroup,
+  UnsavedLeadGroupKey,
 } from '../chrome/form-chrome-rail-pref';
 import { ApplyClippedTitle } from '../chrome/clipped-title';
 import { CollectFormPanelRegistrations } from '../panel-slot/collect-form-panel-registrations';
@@ -58,6 +59,15 @@ import type { FormPanelRegistrationMetadata } from '../panel-slot/base-form-pane
 import { ContributionHiddenSectionKeys, ResolveFormContributions } from '../panel-slot/form-contribution';
 import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormRecordRefreshCoordinator } from '../form-record-refresh.coordinator';
+import { FormSectionIndicatorCoordinator } from '../section-indicators/form-section-indicator-coordinator.service';
+import {
+  DescribeSectionDirty,
+  DescribeSectionErrors,
+  DescribeSectionWarnings,
+  SumSectionIndicators,
+  TallyValidationErrors,
+  type FormSectionIndicators,
+} from '../section-indicators/form-section-indicators';
 
 /**
  * Display shape for the variant picker. Kept minimal so the Generic
@@ -108,22 +118,28 @@ export interface VariantPickerItem {
   encapsulation: ViewEncapsulation.None,
   templateUrl: './record-form-container.component.html',
   styleUrls: ['./record-form-container.component.css'],
-  // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator
-  // scoped per-container. `providers` (not viewProviders) so projected
-  // related-entity grids and slot-mounted panels can inject them.
-  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator],
+  // FormSlotCoordinator + FormChromeCoordinator + FormRecordRefreshCoordinator +
+  // FormSectionIndicatorCoordinator scoped per-container. `providers` (not
+  // viewProviders) so projected related-entity grids and slot-mounted panels
+  // can inject them.
+  providers: [FormSlotCoordinator, FormChromeCoordinator, FormRecordRefreshCoordinator, FormSectionIndicatorCoordinator],
 })
-export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, OnDestroy  {
+export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, DoCheck, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
   private notificationService = inject(MJNotificationService);
   private chrome = inject(FormChromeCoordinator);
+  private sectionIndicators = inject(FormSectionIndicatorCoordinator);
   private slots = inject(FormSlotCoordinator);
   private recordRefresh = inject(FormRecordRefreshCoordinator);
   private host = inject(ElementRef<HTMLElement>);
   private destroy$ = new Subject<void>();
   private panelNavReset$ = new Subject<void>();
   private chromeResolveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Last values `ngDoCheck` resolved the rail for — see that method. */
+  private lastRailEditMode = false;
+  private lastRailShowEmptyFields = false;
+  private lastRailSearchFilter = '';
   private chromeRules: FormChromeRule[] = [];
   private chromeRulesForEntityId: string | null = null;
 
@@ -657,11 +673,48 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       this.scheduleChromeResolve();
     });
 
+    // A section registering / leaving, or reporting an edit, changes what the rail
+    // shows; the container is OnPush, so re-read on the next pass rather than on the
+    // 200ms dirty poll below.
+    this.sectionIndicators.Changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
+      this.cdr.markForCheck();
+    });
+
     this.RestoreChromePrefs();
     this.scheduleChromeResolve();
 
     // Watch for changes to record dirty state
     this.watchRecordChanges();
+  }
+
+  /**
+   * Edit mode and Show Empty Fields both flip `mj-panel-empty` on a panel whose
+   * fields are all blank (see `MjFormFieldComponent.ShouldHideField`), and
+   * `domPanelSnapshots()` drops those panels from the rail. The panel itself
+   * recomputes live, but the rail is only resolved on structural changes — so
+   * without this the nav entry never comes back on switching to edit.
+   *
+   * Watched here rather than in `OnEditModeChange` because the toolbar is not
+   * the only writer: `SaveRecord()` and `CancelEdit()` call `EndEditMode()` on
+   * the form component directly, bypassing that handler entirely.
+   */
+  ngDoCheck(): void {
+    const editMode = this.EffectiveEditMode;
+    const showEmptyFields = this.EffectiveShowEmptyFields;
+    // The section filter hides panels through their own host class, which is
+    // applied during change detection — after OnFilterChange's synchronous
+    // re-apply. Watching it here re-runs the chrome pass (setTimeout 0) once
+    // those classes are current, so the Details card edges skip hidden panels.
+    const searchFilter = this.EffectiveSearchFilter;
+    if (
+      editMode === this.lastRailEditMode
+      && showEmptyFields === this.lastRailShowEmptyFields
+      && searchFilter === this.lastRailSearchFilter
+    ) return;
+    this.lastRailEditMode = editMode;
+    this.lastRailShowEmptyFields = showEmptyFields;
+    this.lastRailSearchFilter = searchFilter;
+    this.scheduleChromeResolve();
   }
 
   ngOnDestroy(): void {
@@ -679,6 +732,76 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     this.chrome.ToggleMoreFolder();
     this.PersistChromePrefs();
     this.cdr.detectChanges();
+  }
+
+  // ---- Section indicators on the rail ----
+
+  /**
+   * Unsaved-edit / invalid-field / warning counts for a rail group — summed over the
+   * section keys it fronts, since one group (notably `Details`) fronts many panels.
+   * Read live from each panel through {@link FormSectionIndicatorCoordinator}, so the
+   * rail can never disagree with the fields' own dot and underline.
+   */
+  public ChromeGroupIndicators(group: FormChromeGroup): FormSectionIndicators {
+    return this.sectionIndicators.IndicatorsForKeys(group.SectionKeys);
+  }
+
+  /**
+   * Whole-form totals — what the COLLAPSED rail spine shows, since no individual
+   * rail item is visible there. Summed over the RAIL GROUPS (first-class + More), not
+   * over every registered panel: a panel the chrome dropped from the rail (System
+   * Metadata in left-nav, a claimed baked grid) is not something the user can reach
+   * from the rail, so the spine must add up to exactly what the expanded rail shows.
+   * Includes form-level validation failures no section claims, so a rejected save
+   * never leaves the user with a clean-looking rail.
+   */
+  public get FormIndicators(): FormSectionIndicators {
+    return SumSectionIndicators(
+      ...this.ChromeGroups.map((group) => this.ChromeGroupIndicators(group)),
+      TallyValidationErrors(this.unroutedValidationErrors()),
+    );
+  }
+
+  /** Failures no registered section claims — kept visible on the spine total. */
+  public get UnroutedValidationErrorCount(): number {
+    return TallyValidationErrors(this.unroutedValidationErrors()).ErrorCount;
+  }
+
+  private unroutedValidationErrors(): ValidationErrorInfo[] {
+    const ctx = this.fc?.formContext;
+    if (!ctx?.showValidation || !ctx.validationErrors?.length) return [];
+    // Only a section with a rail item may claim: a registered section the chrome dropped
+    // (hidden by config, in no group) has no badge anywhere, so its failures must stay
+    // in the whole-form total rather than disappear.
+    const reachable = new Set(this.ChromeGroups.flatMap((group) => group.SectionKeys));
+    return this.sectionIndicators.UnroutedValidationErrors(ctx.validationErrors, reachable);
+  }
+
+  /**
+   * One sentence for the persistent polite live region. The badges themselves are
+   * plain indicators (`role="img"`): they are inserted together with their text, which
+   * screen readers announce unreliably, and one edit can add three at once. A single
+   * region that exists from the start and changes its text announces once, reliably.
+   */
+  public get FormIndicatorsAnnouncement(): string {
+    const totals = this.FormIndicators;
+    const parts: string[] = [];
+    if (totals.ErrorCount > 0) parts.push(DescribeSectionErrors(totals.ErrorCount, 'this record'));
+    else if (totals.WarningCount > 0) parts.push(DescribeSectionWarnings(totals.WarningCount, 'this record'));
+    if (totals.DirtyCount > 0) parts.push(DescribeSectionDirty(totals.DirtyCount, 'this record'));
+    return parts.join('. ');
+  }
+
+  public RailDirtyTitle(count: number, where: string): string {
+    return DescribeSectionDirty(count, where);
+  }
+
+  public RailErrorTitle(count: number, where: string): string {
+    return DescribeSectionErrors(count, where);
+  }
+
+  public RailWarningTitle(count: number, where: string): string {
+    return DescribeSectionWarnings(count, where);
   }
 
   public ChromeGroupRowCount(group: FormChromeGroup): number | undefined {
@@ -1007,6 +1130,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     const host = this.host.nativeElement;
     if (!host) return;
     const layout = this.chrome.Spec.Layout;
+    const detailsKeys: string[] = [];
     host.querySelectorAll('mj-collapsible-panel').forEach((node: Element) => {
       const key = node.getAttribute('data-section-key') ?? '';
       const variant = node.getAttribute('data-variant') ?? 'default';
@@ -1015,6 +1139,31 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
       node.classList.toggle('mj-chrome-show', layout === 'left-nav' && visible);
       node.classList.toggle('mj-chrome-hidden', !visible);
       node.classList.toggle('mj-form-role-more', inMore);
+      // Details shows several panels under one rail item; its FIELD panels
+      // render as ONE card (see the left-nav rules in the component CSS). A
+      // related grid pinned into Details (`ChromeGroup: 'details'`) keeps the
+      // chrome-less grid treatment and sits outside the card — the segment
+      // padding is sized for field rows, not for AG Grid.
+      const isDetails = layout === 'left-nav' && visible
+        && variant !== 'related-entity'
+        && IsDetailsSectionKey(this.chrome.Spec, key);
+      node.classList.toggle('mj-chrome-details', isDetails);
+      // A panel that hid ITSELF (`mj-search-hidden`: the section filter
+      // excludes it, or it has no renderable content while empty fields are
+      // hidden) is display: none — it must not hold a card edge, or the
+      // visible card loses that border, radius and edge padding.
+      if (isDetails && !node.classList.contains('mj-search-hidden')) detailsKeys.push(key);
+    });
+    // The card's top and bottom edges follow the VISUAL order (CSS `order`
+    // = the form's section display order), not DOM order.
+    const edges = DetailsCardEdges(detailsKeys, (k) => this.FormComponent?.getSectionDisplayOrder(k) ?? 0);
+    host.querySelectorAll('mj-collapsible-panel.mj-chrome-details').forEach((node: Element) => {
+      const key = node.getAttribute('data-section-key') ?? '';
+      node.classList.toggle('mj-chrome-details-first', key === edges.First);
+      node.classList.toggle('mj-chrome-details-last', key === edges.Last);
+    });
+    host.querySelectorAll('mj-collapsible-panel:not(.mj-chrome-details)').forEach((node: Element) => {
+      node.classList.remove('mj-chrome-details-first', 'mj-chrome-details-last');
     });
   }
 
@@ -1191,10 +1340,25 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
     return `mj.formChrome.${name}.${suffix}`;
   }
 
+  /** Delegates to the pure decision in `form-chrome-rail-pref`, supplying this form's registrations. */
+  private UnsavedLeadGroupKey(): string | null {
+    return UnsavedLeadGroupKey(
+      this.EffectiveEntityInfo?.Name,
+      CollectFormPanelRegistrations(),
+      contributionRailKey,
+    );
+  }
+
   private RestoreChromePrefs(): void {
     if (ShouldPersistChromeActiveGroup(this.EffectiveRecord?.IsSaved)) {
       const group = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('activeGroup'));
       if (group) this.chrome.ActiveGroupKey = group;
+    } else {
+      // A new record has no stored position to restore, so without this it opens on the lead
+      // group -- which is usually a summary, and a summary of a record with no data is a page of
+      // blanks. A contribution can opt out of that by declaring `leadsWhenUnsaved`.
+      const lead = this.UnsavedLeadGroupKey();
+      if (lead) this.chrome.ActiveGroupKey = lead;
     }
     const more = UserInfoEngine.Instance.GetSetting(this.chromePrefKey('moreExpanded'));
     if (more === '1') this.chrome.MoreExpanded = true;
@@ -1587,13 +1751,7 @@ export class MjRecordFormContainerComponent extends BaseAngularComponent impleme
 
   OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {
     const md = this.ProviderToUse;
-    const entityInfo = md.Entities.find(e => e.Name === event.EntityName);
-    const pkey = new CompositeKey();
-    if (entityInfo) {
-      pkey.LoadFromURLSegment(entityInfo, event.RecordID);
-    } else {
-      pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.RecordID }];
-    }
+    const pkey = CompositeKey.FromURLSegment(md.EntityByName(event.EntityName), event.RecordID);
     this.Navigate.emit({ Kind: 'record', EntityName: event.EntityName, PrimaryKey: pkey });
   }
 

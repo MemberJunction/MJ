@@ -70,6 +70,12 @@ export abstract class BaseInfo {
      * without a backing field (display-name formatters, derived flags) are intentionally skipped —
      * they can throw when source fields are null and don't belong on the wire anyway.
      *
+     * A `_`-backed getter that throws is omitted from the output rather than aborting the whole
+     * serialization. That omission is safe ONLY because such getters are recomputable: the backing
+     * field is a lazy cache over other serialized state (e.g. QueryInfo.CategoryPath over CategoryID),
+     * so the value is rebuilt on the next access after a warm boot. Do not add a `_`-backed getter
+     * whose value cannot be recomputed from the serialized fields — a throw would silently drop it.
+     *
      * Nested BaseInfo instances and arrays of them unwrap automatically via JSON.stringify's
      * native toJSON() protocol.
      *
@@ -93,7 +99,19 @@ export abstract class BaseInfo {
                 const targetKey = Object.prototype.hasOwnProperty.call(proto, pascalKey) ? pascalKey : lowerKey;
                 const desc = Object.getOwnPropertyDescriptor(proto, targetKey);
                 if (desc && typeof desc.get === 'function') {
-                    result[targetKey] = self[targetKey];
+                    // A getter reached through a backing field must not abort the whole
+                    // serialization. The contract above already says computed getters can throw
+                    // when their sources are not ready; a `_`-backed getter can too — e.g.
+                    // QueryInfo.CategoryPath walks Metadata.Provider.QueryCategories, which does
+                    // not exist yet during the initial metadata load. Omitting one key is strictly
+                    // better than losing the entire snapshot: the value is recomputed lazily on
+                    // the next access, and the local metadata cache still gets written.
+                    try {
+                        result[targetKey] = self[targetKey];
+                    }
+                    catch {
+                        // intentionally omitted from the serialized shape
+                    }
                     break;
                 }
                 proto = Object.getPrototypeOf(proto);

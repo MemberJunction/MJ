@@ -62,6 +62,7 @@
     "@memberjunction/core": "6.1.0-edge.5",
     "@memberjunction/generic-database-provider": "6.1.0-edge.5",
     "@memberjunction/installer": "6.1.0-edge.5",
+    "@memberjunction/dynamic-packages": "6.1.0-edge.5",
     "@memberjunction/db-auto-doc": "6.1.0-edge.5",
     "@memberjunction/metadata-sync": "6.1.0-edge.5",
     "@memberjunction/open-app-engine": "6.1.0-edge.5",
