@@ -641,9 +641,10 @@ import {
     RingCentralBridge,
 } from '@memberjunction/ai-bridge-ringcentral';
 
-// @memberjunction/ai-bridge-server (1 classes)
+// @memberjunction/ai-bridge-server (2 classes)
 import {
     LoopbackBridge,
+    OpenAISipBridge,
 } from '@memberjunction/ai-bridge-server';
 
 // @memberjunction/ai-bridge-teams (1 classes)
@@ -1984,6 +1985,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     LiveKitBridge,
     RingCentralBridge,
     LoopbackBridge,
+    OpenAISipBridge,
     TeamsBridge,
     TwilioBridge,
     VonageBridge,
@@ -2104,11 +2106,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferSearchPostsAction,
     CreateVideoPostAction,
     FacebookBoostPostAction,
-    FacebookCreateAlbumAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FacebookCreateAlbumAction,
     FacebookCreatePostAction,
     FacebookGetPageInsightsAction,
     FacebookGetPagePostsAction,
@@ -2308,11 +2310,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
-    TaskGraphForceCompleteTaskServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
@@ -2512,11 +2514,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
     SendSingleMessageAction,
-    SendToAudienceAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SendToAudienceAction,
     ShareListAction,
     SlackWebhookAction,
     SummarizeContentAction,
@@ -2570,7 +2572,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1037;
+export const CLASS_REGISTRATIONS_COUNT = 1038;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

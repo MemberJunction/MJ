@@ -11,12 +11,13 @@
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 
-// @memberjunction/ai-realtime-client (6 classes)
+// @memberjunction/ai-realtime-client (7 classes)
 import {
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
+    OpenAILiveClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
 } from '@memberjunction/ai-realtime-client';
@@ -771,6 +772,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
     HuggingFaceRealtimeClient,
+    OpenAILiveClient,
     OpenAIRealtimeClient,
     xAIRealtimeClient,
     SaveEntityGraphOperation,
@@ -966,11 +968,11 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardUserPreferenceEntity,
     MJDashboardUserStateEntity,
     MJDataContextEntity,
-    MJDataContextItemEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJDataContextItemEntity,
     MJDatasetEntity,
     MJDatasetItemEntity,
     MJDuplicateRunDetailEntity,
@@ -1170,11 +1172,11 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJUserApplicationEntityEntity,
     MJUserEntity,
     MJUserFavoriteEntity,
-    MJUserNotificationEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
@@ -1374,11 +1376,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ListsCategoriesResource,
     ListsMyListsResource,
     ListsOperationsResource,
-    ListsSharedWithMeResource,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    ListsSharedWithMeResource,
     MCPDashboardComponent,
     MCPResourceComponent,
     MappingWorkspaceComponent,
@@ -1452,7 +1454,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 659;
+export const CLASS_REGISTRATIONS_COUNT = 660;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
