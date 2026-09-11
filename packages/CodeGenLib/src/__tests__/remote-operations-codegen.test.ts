@@ -242,8 +242,18 @@ describe('RemoteOperationGeneratorBase', () => {
         const schemas = ['__mj', '__mj_BizAppsOrders', '__mj_BizAppsSales', 'app_custom'];
 
         it('returns explicit SchemaName if present on the entity', () => {
-            const op = makeOp({ OperationKey: 'Orders.PreviewPrice', SchemaName: 'custom_orders' });
+            const op = Object.assign(makeOp({ OperationKey: 'Orders.PreviewPrice' }), { SchemaName: 'custom_orders' });
             expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('custom_orders');
+        });
+
+        it('prioritizes entity match over fuzzy schema name match', () => {
+            // Suppose an entity 'RecordProcess' lives in __mj, even if a schema '__mj_bizappsrecordprocess' existed
+            const entitiesWithCore = [
+                { Name: 'MJ: Record Processes', BaseTable: 'RecordProcess', SchemaName: '__mj' },
+            ];
+            const testSchemas = ['__mj', '__mj_bizappsrecordprocess'];
+            const op = makeOp({ OperationKey: 'RecordProcess.RunNow' });
+            expect(resolveRemoteOperationSchema(op, entitiesWithCore, testSchemas, '__mj')).toBe('__mj');
         });
 
         it('resolves schema matching OpenApp namespace (e.g. Orders -> __mj_BizAppsOrders)', () => {
@@ -266,9 +276,15 @@ describe('RemoteOperationGeneratorBase', () => {
             expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
         });
 
-        it('falls back to mjCoreSchema when no non-core schema or entity matches', () => {
+        it('core ops without a same-named entity reach core via fallback', () => {
             const op = makeOp({ OperationKey: 'PredictiveStudio.TrainModel' });
             expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
+        });
+
+        it('non-core op with resolvable schema does not fall back to core', () => {
+            const op = makeOp({ OperationKey: 'Orders.RefundPayment' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).not.toBe('__mj');
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
         });
 
         it('generator method delegates to resolveRemoteOperationSchema', () => {

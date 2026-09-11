@@ -28,20 +28,19 @@ export interface RemoteOperationEntityDescriptor {
  *
  * Precedence:
  * 1. An explicit SchemaName property if present on the entity object (forward compatibility).
- * 2. An OpenApp schema matching the OperationKey's namespace (e.g. key 'Orders.PreviewPrice' -> schema '__mj_BizAppsOrders' or 'Orders').
- * 3. An entity in the entities list matching the OperationKey's namespace (e.g. key 'RecordProcess.RunNow' -> entity 'Record Process' in schema '__mj').
+ * 2. An entity in the entities list matching the OperationKey's namespace (authoritative entity declaration).
+ * 3. An OpenApp schema matching the OperationKey's namespace (anchored heuristic).
  * 4. Fallback to mjCoreSchema ('__mj').
  */
 export function resolveRemoteOperationSchema(
-    op: MJRemoteOperationEntity,
+    op: MJRemoteOperationEntity & { SchemaName?: string },
     entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
     allSchemas: string[],
     mjCoreSchema: string = '__mj',
 ): string {
     // 1. Explicit SchemaName property if present
-    const rawSchema = (op as unknown as { SchemaName?: string }).SchemaName;
-    if (rawSchema && typeof rawSchema === 'string' && rawSchema.trim().length > 0) {
-        return rawSchema.trim();
+    if (op.SchemaName && typeof op.SchemaName === 'string' && op.SchemaName.trim().length > 0) {
+        return op.SchemaName.trim();
     }
 
     // OperationKey is namespaced by convention: <Namespace>.<OperationName>
@@ -52,21 +51,7 @@ export function resolveRemoteOperationSchema(
         return mjCoreSchema;
     }
 
-    // 2. Direct schema name match (e.g. namespace "orders" matching "__mj_BizAppsOrders", "orders", etc.)
-    const schemaMatch = allSchemas.find((s) => {
-        const sLower = s.trim().toLowerCase();
-        return (
-            sLower === namespace ||
-            sLower === `__mj_bizapps${namespace}` ||
-            sLower.endsWith(`_${namespace}`) ||
-            sLower.endsWith(namespace)
-        );
-    });
-    if (schemaMatch && schemaMatch.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()) {
-        return schemaMatch.trim();
-    }
-
-    // 3. Entity match: check if any entity has BaseTable, CodeName, or Name matching namespace
+    // 2. Entity match: an entity row authoritatively declares its schema (e.g. key 'RecordProcess.RunNow' -> entity 'Record Process' in schema '__mj')
     const entityMatch = entities.find((e) => {
         const bt = (e.BaseTable || '').trim().toLowerCase();
         const cn = (e.CodeName || '').trim().toLowerCase();
@@ -84,7 +69,20 @@ export function resolveRemoteOperationSchema(
         return entityMatch.SchemaName.trim();
     }
 
-    // 4. Fallback to core schema
+    // 3. Direct schema name match: anchored to exact namespace, '__mj_bizapps' + namespace, or suffix '_<namespace>'
+    const schemaMatch = allSchemas.find((s) => {
+        const sLower = s.trim().toLowerCase();
+        return (
+            sLower === namespace ||
+            sLower === `__mj_bizapps${namespace}` ||
+            sLower.endsWith(`_${namespace}`)
+        );
+    });
+    if (schemaMatch && schemaMatch.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()) {
+        return schemaMatch.trim();
+    }
+
+    // 4. Fallback to core schema (e.g. PredictiveStudio, TaskGraph, Workflow, RecordComparison ops without dedicated entity rows)
     return mjCoreSchema;
 }
 
@@ -109,7 +107,7 @@ export class RemoteOperationGeneratorBase {
      * Resolves the logical schema that an operation belongs to.
      */
     public resolveOperationSchema(
-        op: MJRemoteOperationEntity,
+        op: MJRemoteOperationEntity & { SchemaName?: string },
         entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
         allSchemas: string[],
         mjCoreSchema: string = '__mj',
