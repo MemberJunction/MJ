@@ -1,5 +1,165 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 2c826f7: AI model metadata refresh — week of 2026-09-07
+
+  Weekly AI model/vendor research pass over `metadata/ai-models/` and `metadata/ai-vendors/`. Four new
+  models, one new vendor, one rate card resolved, one retirement recorded.
+
+  **New models**
+  - **Claude Fable 5.1** (Anthropic, 2026-09-01) — `claude-fable-5-1`, 1M context / 128K output,
+    $10/$50 per 1M unchanged from Fable 5, but cache reads cut 75% to $0.25/1M. Anthropic direct,
+    Amazon Bedrock and OpenRouter routes.
+  - **GPT-6 Astra** (OpenAI, 2026-09-03) — `gpt-6-astra`, 1.05M context / 128K output, $10/$50 at the
+    short-context tier. Requests above 272K input tokens are rebilled entirely at $20/$75; that second
+    tier is documented in the cost record's Comments rather than given its own row. OpenAI direct plus
+    a Microsoft Foundry/Azure route (Limited Access Program). No Bedrock or OpenRouter row — neither
+    was serving it at the time of research.
+  - **Gemini 3.8 Flash** (Google, 2026-09-02) — `gemini-3.8-flash`, 1M context / 64K output, holding
+    3.7 Flash's $0.75/$3.75 introductory rate through 2026-12-31 before stepping to $1.50/$7.50.
+    Google, Vertex AI and OpenRouter routes.
+  - **Muse Spark 1.3** (Meta, 2026-09-02) — 1,048,576-token context, $1.25/$4.25 Standard tier.
+
+  **New vendor**
+  - **Meta**, credential type `API Key`, added as a Model Developer only. Muse Spark 1.3 reaches
+    inference through OpenRouter (`meta/muse-spark-1.3`, `OpenRouterLLM`), so no new driver class is
+    required. The cheaper Contributor tier is intentionally not recorded — it grants Meta training
+    rights over submitted data.
+
+  **Pricing**
+  - **GLM 5.3** gains a Z.AI Inference Provider row (`glm-5.3`, 1M context / 128K output) and its
+    first cost record at $1.40/$4.40 per 1M with $0.26/1M cached input, resolving the "pricing TBD"
+    placeholder left when the model was added on 2026-08-24.
+
+  **Deprecation**
+  - **Claude Opus 4.1** was retired on the Anthropic API on 2026-08-05. Its Anthropic Inference
+    Provider row moves to `Inactive` and its Anthropic cost row to `Expired` with
+    `EndedAt: 2026-08-05`. The Model Developer row stays `Active`, and the Amazon Bedrock and
+    OpenRouter rows are untouched — those platforms set their own retirement schedules and still serve
+    the model.
+
+  The full report, including everything flagged for human review rather than applied, is in
+  `reports/ai-model-research/2026-09-07-weekly-report.md`.
+
+### Patch Changes
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/storage@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- b1b24d7: Weekly AI model & vendor intelligence report (2026-08-31) + four metadata edits.
+  - **New model** `GLM-5.3-Flash` (Z.AI, released 2026-08-26). Z.AI as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Z.AI direct ($0.15/$0.50 per 1M) and OpenRouter ($0.05/$0.1667 reflecting a 50% Z.AI promo through 2026-09-09; a follow-up row should be added when the promo expires so the historical rate is preserved).
+  - **New model** `Qwen3.8-Flash` (Alibaba Cloud, released 2026-08-26). Alibaba Cloud as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Alibaba direct and OpenRouter at $0.15/$0.47 per 1M.
+  - **New inference provider** on `Grok 4.6`: Amazon Bedrock vendor row (`xai.grok-4-6-v1:0`) and matching cost record (2026-08-25 start, $2/$6 sub-200K tier at vendor parity with x.ai direct).
+  - **Deprecation** `Kimi K2.5` on Moonshot AI direct — the Moonshot Inference Provider vendor row and cost record are now `Status: "Inactive"` per Moonshot's 2026-08-31 sunset of `moonshotai/Kimi-K2.5` and the `moonshot-v1-*` series. Fireworks.ai and OpenRouter vendor rows remain Active (weights are MIT-licensed and both providers may continue to serve the model).
+  - Full report at `reports/ai-model-research/2026-08-31-weekly-report.md`, including 5 items flagged for human review (DeepSeek V4 Flash Vision Experimental, OpenAI Daybreak Red/Blue on Bedrock, OpenAI Astra, Azure OpenAI cache-write charges on GPT-5.6 family, plus prior-week open items).
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- e533ce5: Weekly AI model & vendor intelligence report (2026-08-24) + two metadata edits.
+  - **New model** `GLM 5.3` (Zhipu, released 2026-08-14). Placeholder record with Z.AI as Model Developer and OpenRouter as Inference Provider; no `MJ: AI Model Costs` rows populated because Zhipu has not posted a per-token API rate.
+  - **Deprecation** `GLM 4.7` on Cerebras — the Cerebras vendor row and matching cost record are now `Status: "Inactive"` per Cerebras' 2026-08-17 retirement of GLM-4.7 from its inference cloud. OpenRouter and Fireworks.ai vendor rows for GLM 4.7 remain Active.
+  - Full report at `reports/ai-model-research/2026-08-24-weekly-report.md`, including 4 items flagged for human review (DeepSeek V4 Pro Aug-16 cost record, GPT-5.6 Sol pricing conflict, FLUX.2 family refresh, redundant Sonnet 5 Sep-1 cost row).
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

@@ -1,5 +1,184 @@
 # @memberjunction/open-app-engine
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 23c2521: Close silent-failure gaps in Open App config writes, class registration, and update checks — and
+  fix the first real collision the new class-registration diagnostic found.
+
+  `dynamicPackages` idempotency matched the whole config file rather than the target array, so a
+  `shared` package — which must be written to both `server` and `client` — had its client insert
+  skipped by the server entry written moments earlier. The package never reached
+  `dynamicPackages.client`, so its `@RegisterClass` components were tree-shaken out of the browser
+  bundle with no error raised anywhere. The check is now scoped to the target array's body.
+
+  Upgrades were add-only, so `mj.config.cjs` converged on the union of every version ever installed
+  and a package dropped in v2 kept being bootstrapped. `PruneDynamicPackagesNotInManifest` now runs
+  on the upgrade path, after the adds; surviving entries are left byte-identical so an operator's
+  `Enabled: false` is not silently reset, keep-sets are per-array, and an entry shape that cannot be
+  parsed is a no-op rather than a guess. A renamed `startupExport` is retargeted in place — keying
+  only on package name left the old export name in the config forever, and ServerBootstrap then reads
+  `mod[StartupExport]`, gets `undefined`, skips it because it is not a function, and still logs
+  `(ran <old name>)`. The add-then-prune order is chosen for the failure case: these are two writes
+  to the same files with no rollback between them, and adding first leaves that window holding
+  (old ∪ new), so a server that restarts mid-upgrade still finds every entry it needs. Pruning first
+  would leave a subset of both versions and the app's registrations would vanish.
+
+  `@RegisterClass` passes `priority = 0`, which routes to the auto-increment branch, so a later
+  registration always wins — correct for an inheritance chain, silently wrong for two unrelated
+  classes colliding on a key. Only `priority > 0` ever warned, so in practice nothing warned.
+  `ClassFactory.Register` now warns naming every prior unrelated registration for that
+  `(base class, key)` pair, using a new `AreClassesRelated` that compares by name as well as identity
+  so a module loaded through two paths does not read as a collision. Registration behavior is
+  unchanged; the warning is diagnostic only. Measured over a realistic MJAPI load — 1,318 real
+  registrations across 697 `(base, key)` groups — it fires on exactly one pair, with no false
+  positives.
+
+  That one pair was a real bug, fixed here. `MJConversationDetailEntityServer` and
+  `MJConversationDetailEntityExtended` both registered for `BaseEntity` under
+  `'MJ: Conversation Details'` as siblings, each extending the generated entity directly. The server
+  package loads last, so it won outright and the Extended class's `Save`/`Delete` permission gate —
+  the check that only a conversation's owner may set `UserRating`/`UserFeedback`, and that a
+  non-owner without a resource grant cannot write at all — never ran. The gate is explicitly written
+  to run server-side (`ProviderType === 'Database'`), which is exactly where it was being shadowed
+  out. `MJConversationDetailEntityServer` now extends `MJConversationDetailEntityExtended`, so the
+  edit-flag logic and the permission gate compose instead of one replacing the other. The resolved
+  class is unchanged; only its base is.
+
+  `mj app check-updates` dropped the per-repo `TokenMap` that `install` and `upgrade` both use, so
+  private repos reported "up to date" forever; dropped each app's `Subpath`, so a multi-app repo
+  reported a **sibling app's** version as this app's latest; and let one throwing app kill the sweep
+  or vanish from a report that still concluded "All apps are up to date". The loop moved into a
+  testable `CheckAppsForUpdates` helper with the version lookup injected, and failures are collected
+  per app and reported.
+
+  A lookup that returns no version at all is now reported as `Unresolved` — a third outcome, distinct
+  from both an update and a failure — and the green "All apps are up to date" line is printed only
+  when every app actually produced an answer. Every app in the list is installed, so it resolved from
+  a real ref once; finding no version now means the resolver and the repository disagree. This matters
+  because `ListGitHubTags` reads a single page of the GitHub tags API: against
+  `MemberJunction/Integrations` (374 tags), the scoped `<subpath>@<semver>` tag line for every
+  installed connector sits past page 1, so all nine apps resolve to nothing. Without this, scoping the
+  lookup by `Subpath` would have traded a wrong-but-obvious answer for a confident false green.
+  Pagination itself is fixed separately in #3353, which should land with or before this.
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 8643a3d: `DownloadMigrations` fetches what skyway will actually run, and an empty download fails instead of passing.
+
+  Two defects in the same function. It listed the migrations directory **non-recursively**, while the local scanner (`RuntimeSchemaManager.collectFilesRecursively`) walks the tree — so a migration in a subdirectory applied correctly under a local `mj migrate`, was never downloaded to a host, and both sides reported success. The walk now mirrors the scanner, preserves each file's path relative to the migrations root (flattening `file.name` would let two same-named migrations in different subdirectories overwrite each other), and is bounded to 6 levels so a pathological tree cannot be walked forever.
+
+  Second, zero `.sql` files returned `Success: true, Files: []`. This function is only reached because a manifest declared a migrations directory, so an empty download is a defect — and treating it as success let an install proceed past the migration phase, record the app as installed, and leave the host with an empty schema and a green result. It now fails with a message naming `migrations.directory` in `mj-app.json` and the ref that was searched.
+
+- 50860ad: Fix `spRebindLayeredOuterView` on PostgreSQL, which could never restar a layered outer view. It shipped with an undeclared `v_starred` variable — PL/pgSQL compiles the whole body on first call, so every invocation failed, including the `spRebindLayeredOuterViewsInSchema` call Open App's metadata refresh issues first in its batch (aborting the field-heal statements behind it). Removing that dead write exposed a second defect: single-argument `btrim()` strips spaces but not newlines, and `pg_get_viewdef` pretty-prints, so the SELECT-item scan stopped after one column and rebuilt the view as `SELECT g.*, <every inner column again>` — rejected as `column ... specified more than once`. Both are corrected in a new pg-only migration. Also makes integration checks LBV2–LBV5 run on PostgreSQL instead of silently skipping while still scoring as passed.
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

@@ -1,4 +1,5 @@
 import { IMetadataProvider, UserInfo, LogError, RunView } from '@memberjunction/core';
+import { MJLruCache } from '@memberjunction/global';
 import {
     MJAIAgentSessionEntity,
     MJAIAgentSessionChannelEntity,
@@ -78,9 +79,10 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
  * `contextUser` and request-scoped `IMetadataProvider` so all entity operations run under the
  * correct identity/provider and never pin the process-global provider.
  *
- * The only in-memory state it holds is a small per-session last-heartbeat-write timestamp map used
- * purely to coalesce {@link Heartbeat} writes, plus the injected {@link RealtimeClientSessionService}
- * used by {@link finalizeObservabilityRuns}; it carries no user or provider state across calls.
+ * The only in-memory state it holds is a small per-session last-heartbeat-write timestamp cache used
+ * purely to coalesce {@link Heartbeat} writes (see {@link heartbeatLastWrite} for why it's bounded),
+ * plus the injected {@link RealtimeClientSessionService} used by {@link finalizeObservabilityRuns}; it
+ * carries no user or provider state across calls.
  *
  * Responsibilities:
  * - **Create** — authorize (`CanRun`), optionally mint a Conversation, persist an `Active` session.
@@ -94,8 +96,24 @@ const HEARTBEAT_MIN_WRITE_INTERVAL_MS = 3_000;
  * this layer, so close here only reconciles the durable record + channel rows.
  */
 export class SessionManager {
-    /** session ID (lowercased) → epoch ms of its last persisted `LastActiveAt` write. */
-    private heartbeatLastWrite = new Map<string, number>();
+    /**
+     * session ID (lowercased) → epoch ms of its last persisted `LastActiveAt` write. Written by
+     * {@link persistHeartbeat}, read by {@link heartbeatWriteDue}/{@link shouldForceWrite}, and
+     * normally deleted by {@link CloseSession}. Bounded with `MJLruCache` (rather than a plain `Map`)
+     * for the same reason as `RealtimeClientSessionService.promptRunWriteChains`: `SessionManager` is
+     * constructed fresh by every resolver that needs one (`AgentSessionResolver`,
+     * `RealtimeClientSessionResolver`, `RealtimeBridgeResolver`) plus `SessionJanitor`'s own instance,
+     * so each is itself a process-lifetime singleton with its own copy of this map. A session's
+     * heartbeats land through one resolver's instance, but the overwhelmingly common close path — a
+     * crashed tab, a dropped connection, any disconnect that never round-trips an explicit close
+     * mutation — is reconciled by `SessionJanitor`'s staleness/shutdown sweeps through ITS OWN
+     * `SessionManager`, which never touches the originating instance's map. The TTL/maxSize eviction
+     * here is what keeps that scenario bounded instead of an unbounded per-instance leak.
+     */
+    private readonly heartbeatLastWrite = new MJLruCache<string, number>({
+        maxSize: 5_000,
+        ttlMs: 4 * 60 * 60 * 1000, // 4h backstop — generous vs. the janitor's 15m staleness threshold
+    });
 
     /**
      * The {@link RealtimeClientSessionService} used to finalize a closing session's co-agent
@@ -169,7 +187,7 @@ export class SessionManager {
         if (!session) {
             return false;
         }
-        this.heartbeatLastWrite.delete(agentSessionID.toLowerCase());
+        this.heartbeatLastWrite.Delete(agentSessionID.toLowerCase());
 
         if (session.Status === 'Closed') {
             // Idempotent — already terminal. Still notify the channel-plugin host so a session
@@ -517,7 +535,7 @@ export class SessionManager {
 
     /** True once the per-session coalescing window has elapsed since the last persisted write. */
     private heartbeatWriteDue(key: string): boolean {
-        const last = this.heartbeatLastWrite.get(key);
+        const last = this.heartbeatLastWrite.Get(key);
         return last == null || (Date.now() - last) >= HEARTBEAT_MIN_WRITE_INTERVAL_MS;
     }
 
@@ -527,7 +545,7 @@ export class SessionManager {
      * swallowed by coalescing.
      */
     private shouldForceWrite(key: string, _provider: IMetadataProvider): boolean {
-        return !this.heartbeatLastWrite.has(key);
+        return !this.heartbeatLastWrite.Has(key);
     }
 
     /** Loads, bumps `LastActiveAt`, reactivates `Idle → Active`, saves, and records the write time. */
@@ -546,7 +564,7 @@ export class SessionManager {
         }
         const saved = await this.saveOrLog(session, 'Heartbeat');
         if (saved) {
-            this.heartbeatLastWrite.set(agentSessionID.toLowerCase(), Date.now());
+            this.heartbeatLastWrite.Set(agentSessionID.toLowerCase(), Date.now());
         }
         return saved;
     }

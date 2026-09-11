@@ -1,5 +1,204 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- a8ba8b7: fix(ng-base-forms): when a date field holds a value the date editor cannot display, show a warning beside the empty input instead of a blank box that reads as "no date". Previously an unreadable stored value looked identical to an empty field, and saving the record silently wrote NULL over it.
+- 2d14c62: Add Image, Color, and JSON to EntityField.ExtendedType. Forms render an image thumbnail (including inline base64 / data URIs) with an edit-mode upload capped at the field's MaxLength, a color swatch + hex editor, and a pretty-printed JSON textarea. Entity-viewer grid/cards/timeline key image cells off ExtendedType rather than field-name heuristics. PhotoURL, LogoURL, and ImageURL are reclassified to Image with AutoUpdateExtendedType locked so CodeGen cannot overwrite them.
+- 2e4786e: feat(ng-base-forms): a form contribution can declare `leadsWhenUnsaved` so a NEW record opens on it rather than on the first first-class group. An unsaved record already declines to restore a stored rail position; without this it falls through to the lead group, which is usually a summary — and a summary of a record with no data is a page of blanks the user must look past to find where typing starts. Opt-in per form: any form that declares nothing behaves exactly as before.
+- de66f54: fix(ng-base-forms): a `date` column is a calendar day, not an instant. Read mode formatted date-only fields with a local-time formatter, so a stored 2026-11-20 rendered as 11/19/2026 for anyone west of Greenwich while edit mode showed the 20th. Date-only fields now render the stored day in the reader's locale format; `datetime` / `datetimeoffset` fields are unchanged and still render as local time.
+- 48ae81e: feat(ng-base-forms): form sections now say WHICH one holds unsaved edits or invalid input. Every `mj-collapsible-panel` derives live section indicators from the `mj-form-field`s it projects — an amber dot when a field on a saved record is modified (the same dot the field shows after its label) and a red count when a field is invalid or required-and-empty in edit mode (the same conditions that paint the field's underline red) — and the left-nav rail, the More folder, the collapsed rail spine, and accordion headers render them. Failed-save errors with a graph-path `Source` (`Lines[2].Amount`) route to the panel that owns the collection (declare `ValidationSources` when the path name differs from the `SectionKey`) and are never matched on the trailing field name, so a child failure cannot land on the header; errors no section claims stay in the whole-form total. Custom sections supply counts for non-field content through the new `[Indicators]` input, or implement `FormSectionIndicatorSource` and register with the new container-provided `FormSectionIndicatorCoordinator`. Closes #3962.
+- aff9886: Left-nav record forms: render the **Details** rail item's field panels as one card instead of loose label/value rows floating on the page background. The left-nav "no accordion chrome" rules were written for a single related grid (the rail label is its header); Details shows every field panel under one rail item, so the container now tags them `mj-chrome-details` (+ `-first` / `-last` on the visual edges, following section display order) and the CSS draws them as segments of a single surface with no per-section headers.
+
+  Also: the left-nav rail's items now scroll on their own when a form has more rail items than fit the viewport (they sit in a `.mj-forms-chrome-rail-items` wrapper with `overflow-y: auto`); before, the overflow was clipped by the panels container and the bottom items were unreachable. The pin / collapse toolbar above them stays fixed.
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 14bc0b2: Forms: the section rail now refreshes when Edit mode or Show Empty Fields changes.
+
+  A panel whose fields are all blank gets the `mj-panel-empty` host class in read-only mode, and `domPanelSnapshots()` deliberately skips those panels so the rail doesn't advertise an empty section. The panel itself recomputes live, but `scheduleChromeResolve()` only ran on structural changes (content children, slot remounts, chrome rules, section reorder) — never when field visibility changed. So once a section dropped out of the rail while read-only, switching to Edit brought the panel back but left its nav entry missing until something else forced a resolve.
+
+  `MjRecordFormContainerComponent` now watches the effective Edit-mode and Show-Empty-Fields values in `ngDoCheck` and re-resolves the rail when either flips. Watching the values rather than hooking `OnEditModeChange` matters because the toolbar is not the only writer: `SaveRecord()` and `CancelEdit()` call `EndEditMode()` straight on the form component and never reach that handler, so a save used to leave the reverse staleness behind. The existing resolve is already debounced through a zero-delay timer, so a change to both flags in one tick still costs one resolve.
+
+- 7a98676: Related-entity grid heights now budget the real rendered chrome: a reserve for AG Grid's horizontal scrollbar (which was clipping the last row mid-glyph whenever columns overflowed), the measured 49px toolbar and header rows, and the 4px of wrapper borders. Fixes both the clipped row and the needless vertical scrollbar on grids whose rows all fit.
+- 75ca6f8: Fix a `fit-content` / related-entity grid clipping its last row when its columns are wider than the container (#4223).
+
+  `RelatedGridHeightPx` budgets toolbar + header + rows + pad and hands that height to AG Grid, which lays its horizontal scrollbar out _inside_ the box — so whenever the columns overflow, the scrollbar (15px on classic-scrollbar platforms) is taken out of the row area and the last row is sliced. With one row the data row lost roughly half its height.
+  - `RelatedGridHeightPx(rowCount, maxHeight, scrollbarPx?)` gains a third parameter for the measured scrollbar height. A measurement replaces the fixed `RELATED_GRID_HSCROLLBAR_PX` reserve that #4245 introduced (0 releases it entirely; a real bar is budgeted exactly), never past `maxHeight`. A caller that omits it keeps #4245's fixed reserve, so every existing call site's result is unchanged.
+  - `<mj-explorer-entity-data-grid>` measures the allowance from the DOM instead of assuming it: the height AG Grid's fake horizontal scroller (`.ag-body-horizontal-scroll`) takes in the flow, and 0 when it is collapsed or absolutely positioned (overlay scrollbars, which draw over the rows and take no space). The measurement runs two frames after each data load (after AG Grid's own layout frame) and again whenever the host or the scroller resizes, so a scrollbar that appears or disappears as the panel narrows or widens is budgeted or released without a reload.
+  - The chrome constants are the live-measured set #4245 landed (toolbar 49, header 49, wrapper borders 4, bottom pad 2, empty body 56); this change adds the measured scrollbar on top rather than a second set of numbers.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b915983]
+- Updated dependencies [b7819d2]
+- Updated dependencies [c1fea88]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [51017a5]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [10cbc60]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ng-base-types@6.1.0-edge.6
+  - @memberjunction/ng-code-editor@6.1.0-edge.6
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.6
+  - @memberjunction/ng-file-storage@6.1.0-edge.6
+  - @memberjunction/ng-list-management@6.1.0-edge.6
+  - @memberjunction/ng-markdown@6.1.0-edge.6
+  - @memberjunction/ng-notifications@6.1.0-edge.6
+  - @memberjunction/ng-react@6.1.0-edge.6
+  - @memberjunction/ng-record-changes@6.1.0-edge.6
+  - @memberjunction/ng-record-tags@6.1.0-edge.6
+  - @memberjunction/ng-shared-generic@6.1.0-edge.6
+  - @memberjunction/ng-ui-components@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/interactive-component-types@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [4273317]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [d66a26a]
+- Updated dependencies [e93f221]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/ng-shared-generic@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ng-ui-components@6.1.0-edge.5
+  - @memberjunction/ng-markdown@6.1.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.5
+  - @memberjunction/ng-file-storage@6.1.0-edge.5
+  - @memberjunction/ng-list-management@6.1.0-edge.5
+  - @memberjunction/ng-record-changes@6.1.0-edge.5
+  - @memberjunction/ng-record-tags@6.1.0-edge.5
+  - @memberjunction/ng-base-types@6.1.0-edge.5
+  - @memberjunction/ng-code-editor@6.1.0-edge.5
+  - @memberjunction/ng-notifications@6.1.0-edge.5
+  - @memberjunction/ng-react@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ng-base-types@6.1.0-edge.4
+  - @memberjunction/ng-code-editor@6.1.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.4
+  - @memberjunction/ng-file-storage@6.1.0-edge.4
+  - @memberjunction/ng-list-management@6.1.0-edge.4
+  - @memberjunction/ng-notifications@6.1.0-edge.4
+  - @memberjunction/ng-react@6.1.0-edge.4
+  - @memberjunction/ng-record-changes@6.1.0-edge.4
+  - @memberjunction/ng-record-tags@6.1.0-edge.4
+  - @memberjunction/ng-shared-generic@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/ng-markdown@6.1.0-edge.4
+  - @memberjunction/ng-ui-components@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

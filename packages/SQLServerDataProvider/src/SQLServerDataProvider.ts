@@ -54,6 +54,7 @@ import {
   SaveContext,
   RestoreContext,
   RecordChangePayload,
+  EntityDeleteOptions,
 } from '@memberjunction/core';
 import { NodeFileSystemProvider } from './NodeFileSystemProvider';
 
@@ -270,6 +271,10 @@ async function executeSQLCore(
  * await provider.Config();
  * ```
  */
+interface InternalMSSQLTransaction extends sql.Transaction {
+  _activeRequest?: sql.Request | null;
+}
+
 export class SQLServerDataProvider
   extends GenericDatabaseProvider
   implements IEntityDataProvider, IMetadataProvider, IColocatedVectorHost
@@ -311,17 +316,10 @@ export class SQLServerDataProvider
 
   private _pool: sql.ConnectionPool;
   
-  // Instance transaction properties
+  // Instance transaction properties. Nesting depth and savepoints live on
+  // GenericDatabaseProvider; this handle is the mssql Transaction those
+  // savepoints run against.
   private _transaction: sql.Transaction;
-  private _transactionDepth: number = 0;
-  /**
-   * Set while an OUTERMOST `BeginTransaction` is awaiting `sql.Transaction.begin()`. Concurrent
-   * `BeginTransaction` callers await this first so they cannot take the nested-savepoint branch
-   * before `_transaction` exists. Null whenever no begin is in flight.
-   */
-  private _beginInFlight: Promise<void> | null = null;
-  private _savepointCounter: number = 0;
-  private _savepointStack: string[] = [];
 
   // Removed _transactionRequest - creating new Request objects for each query to avoid concurrency issues
   private _fileSystemProvider: IFileSystemProvider;
@@ -396,43 +394,27 @@ export class SQLServerDataProvider
   }
   
   /**
-   * Gets the current transaction nesting depth
-   * 0 = no transaction, 1 = first level, 2+ = nested transactions
-   */
-  public get transactionDepth(): number {
-    // Request-specific depth should be accessed via getTransactionContext
-    return this._transactionDepth;
-  }
-
-  /**
-   * Feeds real nesting depth to the entity-transaction machinery (`IsNested`, out-of-order settle
-   * detection). Deliberately separate from `IsInTransaction`, which this provider leaves `false`
-   * so `RunMaybeSerial` keeps fanning out — see the note in `packages/MJCore/src/generic/util.ts`.
-   */
-  protected override get CurrentTransactionDepth(): number {
-    return this._transactionDepth;
-  }
-  
-  /**
    * Checks if we're currently in a transaction (at any depth)
    */
-  public get inTransaction(): boolean {
-    return this.transactionDepth > 0;
+  public get InTransaction(): boolean {
+    return this.TransactionDepth > 0;
   }
   
   /**
    * Checks if we're currently in a nested transaction (depth > 1)
    */
-  public get inNestedTransaction(): boolean {
-    return this.transactionDepth > 1;
+  public get InNestedTransaction(): boolean {
+    return this.TransactionDepth > 1;
   }
-  
-  /**
-   * Gets the current savepoint names in the stack (for debugging)
-   * Returns a copy to prevent external modification
-   */
-  public get savepointStack(): string[] {
-    return [...this._savepointStack];
+
+  /** @deprecated Use {@link InTransaction}. */
+  public get inTransaction(): boolean {
+    return this.InTransaction;
+  }
+
+  /** @deprecated Use {@link InNestedTransaction}. */
+  public get inNestedTransaction(): boolean {
+    return this.InNestedTransaction;
   }
   
   /**
@@ -449,6 +431,25 @@ export class SQLServerDataProvider
    */
   public get ConfigData(): SQLServerProviderConfigData {
     return <SQLServerProviderConfigData>super.ConfigData;
+  }
+
+  /**
+   * Share this instance's pool + metadata; own transaction stack.
+   * Used by mj sync push parallelism (MJAPI per-request pattern).
+   */
+  public override async CreateIndependentInstance(): Promise<SQLServerDataProvider> {
+    const child = new SQLServerDataProvider();
+    const parent = this.ConfigData;
+    const cfg = new SQLServerProviderConfigData(
+      this._pool,
+      parent.MJCoreSchemaName,
+      0,
+      parent.IncludeSchemas,
+      parent.ExcludeSchemas,
+      false,
+    );
+    await child.Config(cfg, this);
+    return child;
   }
 
   /**
@@ -607,15 +608,20 @@ export class SQLServerDataProvider
    * instanceName is only inserted if it is provided in the options
    */
   public get InstanceConnectionString(): string {
-    // For mssql, we need to access the pool's internal connection options
-    // Since mssql v11 doesn't expose config directly, we'll construct from what we know
+    // mssql exposes the pool's connection options as the public `config` property.
+    // Do NOT read the private `_config` member — in mssql v11+ it is a method, so
+    // every `_config?.x` access silently returned undefined and this getter
+    // degenerated to 'mssql://localhost:1433/' for every connection. Anything
+    // keyed by this string (e.g. shared Redis result caches) then collided
+    // across processes connected to entirely different databases.
     const pool = this._pool as any;
+    const config = pool.config;
     const options = {
       type: 'mssql',
-      host: pool._config?.server || 'localhost',
-      port: pool._config?.port || 1433,
-      instanceName: pool._config?.options?.instanceName ? '/' + pool._config.options.instanceName : '',
-      database: pool._config?.database || '',
+      host: config?.server || 'localhost',
+      port: config?.port || 1433,
+      instanceName: config?.options?.instanceName ? '/' + config.options.instanceName : '',
+      database: config?.database || '',
     };
     return options.type + '://' + options.host + ':' + options.port + options.instanceName + '/' + options.database;
   }
@@ -809,14 +815,20 @@ export class SQLServerDataProvider
     // entityInfo + effectiveBaseView are passed in (no reverse-lookup by base-view name) so the logged
     // read honors DataSource:'Materialized' — effectiveBaseView is the materialized wrapper view then,
     // and the entity's live base view otherwise.
+    //
+    // UserViewRunDetail.RecordID is a single NVARCHAR(255) holding ONE bare key value per row, and the
+    // read-back below is `<pk> IN (SELECT RecordID ...)` — a one-column predicate. A composite key has
+    // no single column to log or match on, so refuse rather than record (and re-read) a truncated key.
+    this.assertSingleColumnPrimaryKey(entityInfo, 'SaveViewResults (user view run logging)');
+    const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: guarded above — view-run RecordID holds one bare key value, PrimaryKeys.length === 1 enforced
     const sSQL = `
             DECLARE @ViewIDList TABLE ( ID NVARCHAR(255) );
-            INSERT INTO @ViewIDList (ID) (SELECT ${entityInfo.FirstPrimaryKey.Name} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
+            INSERT INTO @ViewIDList (ID) (SELECT ${pkName} FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE (${whereSQL}))
             EXEC [${this.MJCoreSchemaName}].spCreateUserViewRunWithDetail(${viewId},${user.Email}, @ViewIDLIst)
             `;
     const runIDResult = await this.ExecuteSQL(sSQL, undefined, undefined, user);
     const runID: string = runIDResult[0].UserViewRunID;
-    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${entityInfo.FirstPrimaryKey.Name} IN
+    const sRetSQL: string = `SELECT * FROM [${entityInfo.SchemaName}].${effectiveBaseView} WHERE ${pkName} IN
                                     (SELECT RecordID FROM [${this.MJCoreSchemaName}].vwUserViewRunDetails WHERE UserViewRunID=${runID})
                                  ${orderBySQL && orderBySQL.length > 0 ? ` ORDER BY ${orderBySQL}` : ''}`;
     return { executeViewSQL: sRetSQL, runID };
@@ -843,12 +855,23 @@ export class SQLServerDataProvider
   protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
+    //
+    // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+    // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+    // link (e.g. `MJ: Task Links`), which is a different thing entirely.
+    const targetEntity = this.EntityByName(entityName);
+    if (!targetEntity) {
+      throw new Error(`Entity ${entityName} not found in metadata`);
+    }
+    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+    // A RecordID column holds this, not the bare primary key value.
+    const targetRecordID = compositeKey.ToRecordID();
+
     let sSQL = '';
     this.Entities.forEach((entity) => {
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
       const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
@@ -859,26 +882,41 @@ export class SQLServerDataProvider
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
         // based on that.
+        //
+        // Both literals are always quoted regardless of any primary key type: the discriminator column
+        // is a uniqueidentifier FK to __mj.Entity, and the payload column is nvarchar. Deriving quoting
+        // from the holder's primary key type emitted unquoted literals for an integer-keyed holder.
         sSQL += `SELECT
                             '${entityName}' AS EntityName,
                             '${entity.Name}' AS RelatedEntityName,
                             ${primaryKeySelectString} AS PrimaryKeyValue,
-                            '${f.Name}' AS FieldName
+                            '${f.Name}' AS FieldName,
+                            1 AS IsSoftLink,
+                            '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
                             [${entity.SchemaName}].[${entity.BaseView}]
                         WHERE
-                            [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND
-                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}`; // we only use the first primary key value, this is because we don't yet support composite primary keys
+                            [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
+                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
       });
     });
     return sSQL;
+  }
+
+  /**
+   * Escapes a value for interpolation into a single-quoted T-SQL string literal. The soft-link and
+   * hard-link dependency queries are assembled as SQL text rather than parameterized, so a value
+   * carrying an apostrophe has to be doubled or it terminates the literal.
+   */
+  protected escapeSQLLiteral(value: string): string {
+    return value.replace(/'/g, "''");
   }
 
   protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
     let sSQL = '';
     for (const entityDependency of entityDependencies) {
       const entityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.EntityName?.trim().toLowerCase());
-      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+      const quotes = entityInfo.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
       const relatedEntityInfo = this.Entities.find((e) => e.Name.trim().toLowerCase() === entityDependency.RelatedEntityName?.trim().toLowerCase());
       const primaryKeySelectString = `CONCAT(${entityInfo.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
@@ -887,7 +925,9 @@ export class SQLServerDataProvider
                         '${entityDependency.EntityName}' AS EntityName,
                         '${entityDependency.RelatedEntityName}' AS RelatedEntityName,
                         ${primaryKeySelectString} AS PrimaryKeyValue,
-                        '${entityDependency.FieldName}' AS FieldName
+                        '${entityDependency.FieldName}' AS FieldName,
+                        0 AS IsSoftLink,
+                        NULL AS EntityIDFieldName
                     FROM
                         [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
                     WHERE
@@ -898,7 +938,7 @@ export class SQLServerDataProvider
 
   protected GetRecordDependencyLinkSQL(dep: EntityDependency, entity: EntityInfo, relatedEntity: EntityInfo, CompositeKey: CompositeKey): string {
     const f = relatedEntity.Fields.find((f) => f.Name.trim().toLowerCase() === dep.FieldName?.trim().toLowerCase());
-    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : '';
+    const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a foreign key targets a single column; quoting follows that FK target's type
     if (!f) {
       throw new Error(`Field ${dep.FieldName} not found in Entity ${relatedEntity.Name}`);
     }
@@ -907,11 +947,28 @@ export class SQLServerDataProvider
       // simple link to first primary key, most common scenario for linkages
       return `${quotes}${CompositeKey.GetValueByIndex(0)}${quotes}`;
     } else {
-      // linking to something else, so we need to use that field in a sub-query
-      // NOTICE - we are only using the FIRST primary key in our current implementation, this is because we don't yet support composite foreign keys
-      // if we do start to support composite foreign keys, we'll need to update this code to handle that
-      return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${entity.FirstPrimaryKey.Name}=${quotes}${CompositeKey.GetValueByIndex(0)}${quotes})`;
+      // The FK points at a non-key column of `entity`, so resolve that column for THE record being
+      // checked. The record is identified by its full key — every PK column, not just the first —
+      // otherwise a composite-key entity would match every row sharing the first column's value and
+      // the scalar sub-query would fail (or silently pick the wrong row).
+      return `(SELECT ${f.RelatedEntityFieldName} FROM [${entity.SchemaName}].${entity.BaseView} WHERE ${this.BuildFullPrimaryKeyPredicate(entity, CompositeKey)})`;
     }
+  }
+
+  /**
+   * `pk1=v1 AND pk2=v2 ...` for every primary key column of `entity`, each value taken from the
+   * matching key/value pair (by field name, falling back to position) and quoted per that column's
+   * type. Single-column keys render exactly `ID='v'` — the same shape the pre-composite code emitted.
+   */
+  protected BuildFullPrimaryKeyPredicate(entity: EntityInfo, compositeKey: CompositeKey): string {
+    return entity.PrimaryKeys
+      .map((pk, index) => {
+        const q = pk.NeedsQuotes ? "'" : '';
+        const byName = compositeKey.KeyValuePairs.find((kv) => kv.FieldName?.trim().toLowerCase() === pk.Name.trim().toLowerCase());
+        const value = byName ? byName.Value : compositeKey.GetValueByIndex(index);
+        return `${pk.Name}=${q}${value}${q}`;
+      })
+      .join(' AND ');
   }
 
   /**
@@ -1125,8 +1182,8 @@ export class SQLServerDataProvider
 
   /**
    * Renders the SQL Server DECLARE/SET/EXEC binding for a save call.
-   * Emits per-field uuid-suffixed variables to keep batched saves
-   * (`SQLServerTransactionGroup`) collision-free. PKs on UPDATE are
+   * Suffixes come from GenericDatabaseProvider.allocateSaveCallSuffix
+   * (PK hash, not uuidv4). PKs on UPDATE are
    * tail-appended from `entity.PrimaryKey.KeyValuePairs`.
    *
    * Emits `_Clear` companion args when a nullable column carrying a
@@ -1141,7 +1198,7 @@ export class SQLServerDataProvider
     isUpdate: boolean,
     _spName: string,
   ): SaveCallBinding {
-    const uniqueSuffix = '_' + uuidv4().substring(0, 8).replace(/-/g, '');
+    const uniqueSuffix = this.allocateSaveCallSuffix(entity);
     const declarations: string[] = [];
     const setStatements: string[] = [];
     const execParams: string[] = [];
@@ -1488,7 +1545,7 @@ export class SQLServerDataProvider
    * This function generates both the full SQL (with record change metadata) and the simple stored procedure call for delete
    * @returns Object with fullSQL and simpleSQL properties
    */
-  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo): { fullSQL: string; simpleSQL: string } {
+  private GetDeleteSQLWithDetails(entity: BaseEntity, user: UserInfo, skipRecordChanges = false): { fullSQL: string; simpleSQL: string } {
     let sSQL: string = '';
     const spName: string = entity.EntityInfo.spDelete ? entity.EntityInfo.spDelete : `spDelete${entity.EntityInfo.BaseTableCodeName}`;
     const sParams = entity.PrimaryKey.KeyValuePairs.map((kv) => {
@@ -1499,7 +1556,7 @@ export class SQLServerDataProvider
     const sSimpleSQL: string = `EXEC [${entity.EntityInfo.SchemaName}].[${spName}] ${sParams}`;
     const recordChangesEntityInfo = this.Entities.find((e) => e.Name === 'MJ: Record Changes');
 
-    if (entity.EntityInfo.TrackRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
+    if (entity.EntityInfo.TrackRecordChanges && !skipRecordChanges && entity.EntityInfo.Name.trim().toLowerCase() !== 'record changes') {
       // don't track changes for the record changes entity
       const oldData = entity.GetAll(true); // get all the OLD values
       const sTableDeclare: string = entity.PrimaryKeys.map((pk) => {
@@ -1562,8 +1619,8 @@ export class SQLServerDataProvider
   // WrapSaveCallWithRecordChange (see this file's "Save Grammar" section
   // above). See plans/sp-save-builder-generic-layer-refactor.md (rev 4).
 
-  protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo): DeleteSQLResult {
-    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user);
+  protected override GenerateDeleteSQL(entity: BaseEntity, user: UserInfo, options?: EntityDeleteOptions): DeleteSQLResult {
+    const sqlDetails = this.GetDeleteSQLWithDetails(entity, user, options?.SkipRecordChanges === true);
     return {
       fullSQL: sqlDetails.fullSQL,
       simpleSQL: sqlDetails.simpleSQL,
@@ -1788,7 +1845,7 @@ export class SQLServerDataProvider
     if (connectionSource instanceof sql.Transaction) {
       transaction = connectionSource;
     } else if (!connectionSource) {
-      // Use instance transaction
+      this.AssertAmbientTransactionUsable();
       transaction = this._transaction;
     }
     
@@ -2053,6 +2110,7 @@ export class SQLServerDataProvider
     contextUser?: UserInfo,
   ): Promise<any[][]> {
     try {
+      this.AssertAmbientTransactionUsable();
       // Build combined batch SQL and parameters (same as static method)
       let batchSQL = '';
       const batchParameters: Record<string, any> = {};
@@ -2248,7 +2306,7 @@ export class SQLServerDataProvider
       .map(child => {
         const schema = child.SchemaName || '__mj';
         const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
-        const pkRef = dialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+        const pkRef = dialect.QuoteIdentifier(child.FirstPrimaryKey.Name); // first-pk-ok: IS-A child shares its parent's single-column key by design
         const nameLit = dialect.QuoteStringLiteral(child.Name);
         return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
       });
@@ -2294,7 +2352,7 @@ export class SQLServerDataProvider
   ): string {
     const schema = entityInfo.SchemaName || '__mj';
     const view = entityInfo.BaseView;
-    const pkName = entityInfo.PrimaryKeys[0]?.Name ?? 'ID';
+    const pkName = entityInfo.FirstPrimaryKey.Name; // first-pk-ok: IS-A sibling shares the parent's single-column key; safePKValue is that one value
     const safeEntityName = entityInfo.Name.replace(/'/g, "''");
 
     const recordID = entityInfo.PrimaryKeys
@@ -2319,218 +2377,102 @@ IF ${varName} IS NOT NULL
         @Comments=NULL;`;
   }
 
-  public async BeginTransaction() {
-    // Serialize against an outermost begin that is still in flight. Without this, a second caller
-    // arriving during that window takes the depth-2 savepoint branch and issues
-    // `SAVE TRANSACTION` while `this._transaction` is still null — which silently runs it on the
-    // POOL, outside the transaction it is supposed to be marking. Swallow the in-flight begin's
-    // own rejection: if it failed, the depth is back to 0 and this caller must try its own begin.
-    while (this._beginInFlight) {
-      await this._beginInFlight.catch(() => undefined);
+  protected override get HasPhysicalTransaction(): boolean {
+    return !!this._transaction;
+  }
+
+  protected override async BeginPhysicalTransaction(): Promise<void> {
+    // Assign `_transaction` only after begin() resolves so concurrent ExecuteSQL
+    // never sees an un-begun handle. Begin/commit/rollback themselves serialize
+    // on GenericDatabaseProvider.WithTransactionLock.
+    if (this._transaction) {
+      throw new Error('Transaction state corrupted: BeginPhysicalTransaction with an existing handle');
     }
-    try {
-      this._transactionDepth++;
+    const transaction = new sql.Transaction(this._pool);
+    await transaction.begin();
+    this._transaction = transaction;
+    this._transactionState$.next(true);
+  }
 
-      if (this._transactionDepth === 1) {
-        // First transaction - actually begin using mssql Transaction object.
-        //
-        // 🚨 BEGIN LOCALLY, PUBLISH AFTER. `this._transaction` is a SHARED provider field that
-        // every ExecuteSQL call with no explicit connectionSource picks up (see ~1768). Assigning
-        // it before `begin()` resolves publishes an UN-BEGUN transaction to the whole process, and
-        // any concurrent query in that window dies with mssql's
-        //   "Transaction has not begun. Call begin() first."
-        // Worse, if `begin()` THROWS, the old code's catch block restored the depth but left the
-        // un-begun object assigned — poisoning the provider PERMANENTLY, so every later save on it
-        // failed with that same message until the process restarted.
-        //
-        // Found during the 6.1 release: it silently destroyed AI agent run persistence. Agent-run,
-        // step, prompt-run and heartbeat saves all failed ("Failed to create agent run record",
-        // "N step record save(s) failed"), leaving IT56/IT57's live checks with no steps to read.
-        // They therefore reported `model-noncompliance:` — byte-identically across every run and
-        // every model tier — for a defect that had nothing to do with the model.
-        const begun = (async () => {
-          const transaction = new sql.Transaction(this._pool);
-          await transaction.begin();
-          this._transaction = transaction;
-
-          // Emit transaction state change
-          this._transactionState$.next(true);
-        })();
-        this._beginInFlight = begun;
-        try {
-          await begun;
-        } finally {
-          this._beginInFlight = null;
-        }
-      } else {
-        // Nested transaction - create a savepoint
-        const savepointName = `SavePoint_${++this._savepointCounter}`;
-        this._savepointStack.push(savepointName);
-        
-        // Create savepoint for nested transaction
-        await this.ExecuteSQL(`SAVE TRANSACTION ${savepointName}`, null, {
-          description: `Creating savepoint ${savepointName} at depth ${this._transactionDepth}`,
-          ignoreLogging: true
-        });
+  /**
+   * Internal mssql transaction interface to safely inspect `_activeRequest` without `any`.
+   */
+  private async waitForActiveRequest(timeoutMs = 2000): Promise<void> {
+    if (!this._transaction) {
+      return;
+    }
+    const tx = this._transaction as InternalMSSQLTransaction;
+    if (!tx._activeRequest) {
+      return;
+    }
+    const start = Date.now();
+    while (tx._activeRequest) {
+      if (Date.now() - start > timeoutMs) {
+        LogError(`waitForActiveRequest: timed out after ${timeoutMs}ms waiting for active request on transaction`);
+        break;
       }
-    } catch (e) {
-      this._transactionDepth--; // Restore depth on error
-      // Never leave a transaction object published once the depth is back to 0 — a non-null
-      // `_transaction` with no live transaction behind it poisons every subsequent ExecuteSQL on
-      // this provider. The publish-after-begin above already prevents the common case; this is the
-      // backstop that keeps the invariant true no matter how the begin failed.
-      if (this._transactionDepth === 0) {
-        this._transaction = null;
-        this._transactionState$.next(false);
-      }
-      LogError(e);
-      throw e; // force caller to handle
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
     }
   }
 
-  public async CommitTransaction() {
+  protected override async CommitPhysicalTransaction(): Promise<void> {
+    if (!this._transaction) {
+      throw new Error('No active transaction to commit');
+    }
     try {
-      if (!this._transaction) {
-        throw new Error('No active transaction to commit');
-      }
-      
-      if (this._transactionDepth === 0) {
-        throw new Error('Transaction depth mismatch - no transaction to commit');
-      }
-      
-      this._transactionDepth--;
-      
-      if (this._transactionDepth === 0) {
-        // Outermost transaction - use mssql Transaction object to commit
-        await this._transaction.commit();
-        this._transaction = null;
-        
-        // Clear savepoint tracking
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        
-        // Emit transaction state change
-        this._transactionState$.next(false);
-        
-        // Process any deferred tasks after successful commit
-        await this.processDeferredTasks();
-      } else {
-        // Nested transaction - just remove the savepoint from stack
-        this._savepointStack.pop();
-      }
-    } catch (e) {
-      // If commit() threw after we already decremented _transactionDepth to 0,
-      // the caller's RollbackTransaction() will see depth===0 and refuse to act,
-      // leaving the mssql transaction permanently open on SQL Server and holding
-      // row locks until the TCP connection drops (requires MJAPI restart).
-      // Detect this state and force a direct rollback to release the locks.
-      if (this._transactionDepth === 0 && this._transaction) {
-        try {
-          await this._transaction.rollback();
-        } catch (rollbackError) {
-          LogError('Rollback after commit failure also failed:', undefined, rollbackError);
-        } finally {
-          this._transaction = null;
-          this._savepointStack = [];
-          this._savepointCounter = 0;
-          this._transactionState$.next(false);
-        }
-      }
-      LogError(e);
-      throw e; // force caller to handle
+      await this.waitForActiveRequest();
+      await this._transaction.commit();
+    } finally {
+      this._transaction = null;
+      this._transactionState$.next(false);
     }
   }
 
-  public async RollbackTransaction() {
-    try {
-      if (!this._transaction) {
-        throw new Error('No active transaction to rollback');
-      }
-      
-      if (this._transactionDepth === 0) {
-        throw new Error('Transaction depth mismatch - no transaction to rollback');
-      }
-      
-      if (this._transactionDepth === 1) {
-        // Outermost transaction - rollback everything
-        await this._transaction.rollback();
-        this._transaction = null;
-        this._transactionDepth = 0;
-        
-        // Clear savepoint tracking
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        
-        // Emit transaction state change
-        this._transactionState$.next(false);
-        
-        // Clear deferred tasks after rollback
-        const deferredCount = this._deferredTasks.length;
-        this._deferredTasks = [];
-        if (deferredCount > 0) {
-          LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
-        }
-      } else {
-        // Nested transaction - rollback to savepoint
-        const savepointName = this._savepointStack[this._savepointStack.length - 1];
-        if (!savepointName) {
-          throw new Error('Savepoint stack mismatch - no savepoint to rollback to');
-        }
+  protected override async AfterPhysicalCommit(): Promise<void> {
+    await this.processDeferredTasks();
+  }
 
-        try {
-          await this.ExecuteSQL(`ROLLBACK TRANSACTION ${savepointName}`, null, {
-            description: `Rolling back to savepoint ${savepointName}`,
-            ignoreLogging: true
-          });
-
-          this._savepointStack.pop();
-          this._transactionDepth--;
-        } catch (savepointError) {
-          // SQL Server dooms the ENTIRE transaction (XACT_STATE() = -1) on deadlock-victim,
-          // batch-aborting and XACT_ABORT errors. In that state `ROLLBACK TRANSACTION <savepoint>`
-          // is illegal (Msg 3931) and throws — and leaving the depth/stack untouched would strand
-          // a dead physical transaction that every subsequent statement on this provider silently
-          // joins, with nested Commit calls "succeeding" against a transaction that can never
-          // commit. The only recovery is a FULL rollback plus a complete state reset; the outer
-          // scopes' own settles then fail loudly against depth 0 instead of pretending to work.
-          // (The old per-chain BeginISATransaction never hit this — sql.Transaction.rollback() is
-          // legal on an aborted transaction — so this hazard is specific to savepoint joining.)
-          LogError(
-            `Savepoint rollback to ${savepointName} failed — the transaction is likely doomed ` +
-            `(XACT_STATE() = -1). Performing a full rollback and resetting transaction state.`
-          );
-          try {
-            await this._transaction.rollback();
-          } catch (fullRollbackError) {
-            LogError('Full rollback after savepoint rollback failure also failed:', undefined, fullRollbackError);
-          } finally {
-            this._transaction = null;
-            this._transactionDepth = 0;
-            this._savepointStack = [];
-            this._savepointCounter = 0;
-            this._transactionState$.next(false);
-            const deferredCount = this._deferredTasks.length;
-            this._deferredTasks = [];
-            if (deferredCount > 0) {
-              LogStatus(`Cleared ${deferredCount} deferred tasks after doomed-transaction recovery`);
-            }
-          }
-          throw savepointError; // the caller's unit of work still failed — report it
+  protected override async AbandonPhysicalTransaction(): Promise<void> {
+    const stale = this._transaction;
+    this._transaction = null;
+    this._transactionState$.next(false);
+    const deferredCount = this._deferredTasks.length;
+    this._deferredTasks = [];
+    if (stale) {
+      try {
+        await stale.rollback();
+      } catch (e) {
+        const code = e && typeof e === 'object' && 'code' in e ? String((e as { code: unknown }).code) : '';
+        if (code !== 'EABORT') {
+          LogError('AbandonPhysicalTransaction: rollback of doomed handle failed', undefined, e);
         }
       }
-    } catch (e) {
-      // On error in outer transaction, reset everything
-      if (this._transactionDepth === 1 || !this._transaction) {
-        this._transaction = null;
-        this._transactionDepth = 0;
-        this._savepointStack = [];
-        this._savepointCounter = 0;
-        this._transactionState$.next(false);
-      }
-
-      LogError(e);
-      throw e; // force caller to handle
     }
+    if (deferredCount > 0) {
+      LogStatus(`Cleared ${deferredCount} deferred tasks after abandoning a doomed transaction`);
+    }
+  }
+
+  protected override async RollbackPhysicalTransaction(): Promise<void> {
+    if (!this._transaction) {
+      throw new Error('No active transaction to rollback');
+    }
+    try {
+      await this.waitForActiveRequest();
+      await this._transaction.rollback();
+    } finally {
+      this._transaction = null;
+      this._transactionState$.next(false);
+      const deferredCount = this._deferredTasks.length;
+      this._deferredTasks = [];
+      if (deferredCount > 0) {
+        LogStatus(`Cleared ${deferredCount} deferred tasks after transaction rollback`);
+      }
+    }
+  }
+
+  protected override async OnBeginFailedAtDepthZero(): Promise<void> {
+    await this.AbandonPhysicalTransaction();
   }
 
   /**

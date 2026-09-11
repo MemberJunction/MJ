@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.server.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "incremental": true,
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "src/__tests__/**", "src/**/*.test.ts", "src/**/*.spec.ts", "vitest.config.ts"]

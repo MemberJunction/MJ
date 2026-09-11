@@ -13,8 +13,8 @@
 
 import { WebClient, type KnownBlock } from '@slack/web-api';
 import { ExecuteAgentResult, MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
-import { LogStatus } from '@memberjunction/core';
-import { BaseMessagingAdapter } from '../base/BaseMessagingAdapter.js';
+import { LogError, LogStatus } from '@memberjunction/core';
+import { BaseMessagingAdapter, type UploadableFile } from '../base/BaseMessagingAdapter.js';
 import { IncomingMessage, FormattedResponse, MessagingAdapterSettings, AgentResponseMetadata } from '../base/types.js';
 import { buildRichResponse, buildErrorBlocks, buildAgentContextBlock, buildDivider } from './slack-block-builder.js';
 import { markdownToBlocks } from './slack-formatter.js';
@@ -46,6 +46,8 @@ export class SlackAdapter extends BaseMessagingAdapter {
 
     /** The bot's own Slack user ID (e.g., `U0123456`). */
     private botUserID: string = '';
+    /** The `B…` id Slack reports for posts made with a username/icon override. */
+    private botID: string = '';
 
     /**
      * Message IDs of "Thinking..." indicators, keyed by `channelId:threadTs`.
@@ -54,11 +56,18 @@ export class SlackAdapter extends BaseMessagingAdapter {
     private thinkingMessageIds = new Map<string, string>();
 
     /**
-     * Slack's maximum message text length. Messages exceeding this cause `msg_too_long`.
-     * The `text` field is the plain-text fallback when blocks are present; the rich
-     * content is in Block Kit blocks (already limited to 50 blocks with "View Full" button).
+     * Maximum length of a message's `text` field.
+     *
+     * Slack rejects `chat.postMessage`/`chat.update` with `msg_too_long` past roughly 4,000
+     * characters — NOT the ~40,000 that applies to a message's total block payload. The higher
+     * figure meant this limit never engaged before Slack refused the call, so streaming updates
+     * failed continuously for any long output: the model streams its raw envelope (which can
+     * include base64 file data), every progress update was rejected, and the placeholder sat
+     * frozen mid-flight while the log filled with `msg_too_long`.
+     *
+     * 3,900 leaves room for the truncation notice appended below.
      */
-    private static readonly MAX_TEXT_LENGTH = 39_000;
+    private static readonly MAX_TEXT_LENGTH = 3_900;
 
     protected get PlatformName(): string { return 'Slack'; }
 
@@ -100,6 +109,41 @@ export class SlackAdapter extends BaseMessagingAdapter {
     protected async onInitialize(): Promise<void> {
         const authResult = await this.client.auth.test();
         this.botUserID = authResult.user_id as string;
+        // Captured alongside user_id because they are NOT interchangeable in history: a reply
+        // posted with a username override (which every agent reply uses) returns `bot_id` and no
+        // `user`, so fetchThreadHistory records the B… id while auth.test() reports the U… one.
+        this.botID = (authResult.bot_id as string) ?? '';
+    }
+
+    /**
+     * Was this history message written by ANY bot, not just this one?
+     *
+     * Slack's Events API marks them three different ways depending on how the message was posted:
+     * a `bot_id`, a `bot_profile`, or the `bot_message` subtype. Kept here rather than on the base
+     * class because these are Slack payload fields; other platforms answer the question their own
+     * way.
+     */
+    protected isBotAuthored(message: IncomingMessage): boolean {
+        const raw = message.RawEvent;
+        if (raw && typeof raw === 'object') {
+            if (raw['bot_id'] || raw['bot_profile']) return true;
+            if (raw['subtype'] === 'bot_message') return true;
+        }
+        return false;
+    }
+
+    /**
+     * Either identifier counts as this bot.
+     *
+     * `chat:write.customize` is required for per-agent identity, and a post made with it comes
+     * back as `subtype: 'bot_message'` with a `bot_id` and no `user`. Comparing only against
+     * `user_id` therefore never matched this adapter's own replies — which silently made the
+     * multi-bot thread gate decline threads this bot was actively holding, and dropped the
+     * agent's own turns from its context.
+     */
+    protected isSelf(senderId: string | null | undefined): boolean {
+        if (!senderId) return false;
+        return senderId === this.botUserID || (!!this.botID && senderId === this.botID);
     }
 
     protected getBotUserId(): string {
@@ -183,6 +227,100 @@ export class SlackAdapter extends BaseMessagingAdapter {
                 ...identityParams
             });
             return result.ts!;
+        }
+    }
+
+    /**
+     * Extensions for MIME types whose subtype is not a usable file extension.
+     *
+     * `mimeType.split('/')[1]` yields "vnd.openxmlformats-officedocument.wordprocessingml.document"
+     * for a .docx, which Slack shows as an unopenable blob.
+     */
+    private static readonly EXTENSION_BY_MIME_TYPE: Readonly<Record<string, string>> = {
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+        'application/msword': 'doc',
+        'application/vnd.ms-excel': 'xls',
+        'application/vnd.ms-powerpoint': 'ppt',
+        'application/pdf': 'pdf',
+        'application/json': 'json',
+        'text/markdown': 'md',
+        'text/plain': 'txt',
+        'text/csv': 'csv',
+        'image/jpeg': 'jpg',
+        'image/svg+xml': 'svg',
+    };
+
+    /** A reply delivers files, it does not become a file dump. Mirrors the media-block limit. */
+    private static readonly MAX_UPLOADS_PER_REPLY = 5;
+
+    /**
+     * Extensions recognised as already present on a filename.
+     *
+     * Derived from the map above so the two cannot drift, plus common types an agent may name
+     * directly without our having a MIME mapping for them.
+     */
+    private static readonly KNOWN_FILE_EXTENSIONS: ReadonlySet<string> = new Set([
+        ...Object.values(SlackAdapter.EXTENSION_BY_MIME_TYPE),
+        'jpeg', 'png', 'gif', 'webp', 'html', 'zip', 'mp3', 'mp4', 'wav', 'xml', 'yaml',
+    ]);
+
+    /**
+     * Upload an agent's binary output as real Slack files, threaded under the reply.
+     *
+     * Slack's `image` blocks can only reference a public https URL, so base64 media — every
+     * generated image, and any file inlined as a `data:` URI — could not be rendered and was
+     * silently dropped: the agent did the work, the artifact existed, and the user saw nothing.
+     * Uploading makes it an ordinary attachment the user can open or download.
+     *
+     * Requires the `files:write` bot scope; without it Slack answers `missing_scope`, which the
+     * caller logs (the text reply has already posted by then).
+     */
+    protected async uploadMediaOutputs(originalMessage: IncomingMessage, files: readonly UploadableFile[]): Promise<void> {
+        const threadTs = originalMessage.ThreadID ?? originalMessage.MessageID;
+        // Capped to mirror the media-block limit — a reply should not become a file dump.
+        // Filtered BEFORE the cap, not inside the loop: an entry carrying only a URL has no bytes
+        // to upload, and counting it against the budget silently shrank how many real files got
+        // through.
+        const deliverable = files.filter(
+            (f): f is UploadableFile & { data: string } => !!f && typeof f.data === 'string' && f.data.length > 0);
+        const batch = deliverable.slice(0, SlackAdapter.MAX_UPLOADS_PER_REPLY);
+        if (deliverable.length > batch.length) {
+            LogStatus(`Slack: delivering ${batch.length} of ${deliverable.length} generated files (per-reply cap)`);
+        }
+
+        for (const file of batch) {
+
+            const mimeType = (file.mimeType ?? 'image/png').toLowerCase();
+            const extension = (Object.hasOwn(SlackAdapter.EXTENSION_BY_MIME_TYPE, mimeType)
+                ? SlackAdapter.EXTENSION_BY_MIME_TYPE[mimeType]
+                : undefined)
+                ?? (mimeType.split('/')[1] ?? 'bin').split('+')[0];
+            const preferredName = (file.fileName?.trim() || file.label || `generated-${file.modality ?? 'media'}`)
+                .replace(/[^\w.-]+/g, '_')
+                .slice(0, 80) || 'generated-file';
+            // Only treat a trailing token as an extension if it IS one: a bare
+            // /\.[A-Za-z0-9]{1,5}$/ reads "Q3 Report v1.2" as already-extensioned and uploads it
+            // without .docx — the unopenable blob the mapping above exists to prevent.
+            const trailing = /\.([A-Za-z0-9]{1,5})$/.exec(preferredName)?.[1]?.toLowerCase();
+            const filename = trailing && SlackAdapter.KNOWN_FILE_EXTENSIONS.has(trailing)
+                ? preferredName
+                : `${preferredName}.${extension}`;
+
+            try {
+                await this.client.files.uploadV2({
+                    channel_id: originalMessage.ChannelID,
+                    thread_ts: threadTs,
+                    file: Buffer.from(file.data, 'base64'),
+                    filename,
+                    title: file.label ?? file.fileName ?? undefined,
+                });
+            } catch (error) {
+                // Per file: one rejected upload (a bad MIME type, a size cap) must not cost the
+                // user the other files in the same reply.
+                LogError(`Failed to upload ${filename} to Slack:`, undefined, error);
+            }
         }
     }
 
@@ -305,9 +443,10 @@ export class SlackAdapter extends BaseMessagingAdapter {
      * the rich content. Keeping it short avoids `msg_too_long` when blocks are large.
      */
     private truncateForSlackFallback(text: string): string {
-        const MAX_FALLBACK = 4000;
-        if (text.length <= MAX_FALLBACK) return text;
-        return text.slice(0, MAX_FALLBACK - 30) + '\n\n(See full response above)';
+        // Same ceiling as the primary path: Slack refuses a `text` field past ~4,000, and this
+        // fallback is what sendFinalMessage/updateFinalMessage actually post.
+        if (text.length <= SlackAdapter.MAX_TEXT_LENGTH) return text;
+        return text.slice(0, SlackAdapter.MAX_TEXT_LENGTH - 30) + '\n\n(See full response above)';
     }
 
     /**

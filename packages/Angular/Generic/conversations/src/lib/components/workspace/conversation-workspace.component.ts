@@ -1077,14 +1077,18 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   onOpenEntityRecord(event: {entityName: string; compositeKey: CompositeKey}): void {
-    // Convert to actionable command and emit
-    const firstKeyValue = event.compositeKey.KeyValuePairs[0]?.Value || '';
+    const pairs = event.compositeKey.KeyValuePairs || [];
+    const keys: Record<string, string | number> = {};
+    for (const p of pairs) {
+      if (p.FieldName) keys[p.FieldName] = p.Value;
+    }
     const command: ActionableCommand = {
       type: 'open:resource',
       label: `Open ${event.entityName}`,
       resourceType: 'Record',
       entityName: event.entityName,
-      resourceId: firstKeyValue,
+      resourceId: event.compositeKey.GetValueByFieldName('ID') ?? pairs[0]?.Value,
+      keys,
       mode: 'view'
     };
     this.actionableCommandExecuted.emit(command);
@@ -1266,6 +1270,11 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    * Bubbles up to host application for handling
    */
   onActionableCommand(command: ActionableCommand): void {
+    if (command.type === 'open:resource' && command.resourceType === 'Record') {
+      // chat-area converts Record commands to openEntityRecord; onOpenEntityRecord
+      // re-emits them as actionableCommandExecuted. Skip the raw command to avoid a double open.
+      return;
+    }
     console.log('📤 Bubbling up actionable command:', command);
     this.actionableCommandExecuted.emit(command);
   }

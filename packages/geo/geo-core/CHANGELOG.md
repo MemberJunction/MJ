@@ -1,5 +1,96 @@
 # @memberjunction/geo-core
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 8d880cc: Split geo **read** (`SupportsGeoCoding`, maps, distance, virtual PrimaryAddress / `__mj_Latitude_{FK}`) from geo **write** (GeoCodeSyncService only when 1+ writable Geo\* fields exist; skip provider when native lat/lng already set). mj-sync `push.skipGeoCoding` per entity. Parallel push default 10 uses `CreateIndependentInstance()` (shared pool, own TX) instead of defaulting to 1. Durable AfterCreate without a queue submitter defers until transaction depth is 0 (fire-and-forget), not nested in the save.
+- 041865c: Fix mixed-provider deadlocks on nested mj sync push (Action + Action Params).
+
+  `GetEntityObject` now always `BindProvider(this)` after construct so a 1-arg subclass (`MJActionEntityServer` et al.) cannot silently drop the graph instance and Save on the global host. Every `BaseEntity` instance RunView uses `ProviderToUse`. MetadataSync isolates one provider per JSON-root graph; it drains a graph when its last level finishes or when TransactionDepth is already 0 (Save settled — a fresh instance at the next level is safe). Leftover depth is committed on success and explicitly rolled back on failure; always release. Fail-fast on the first thrown record error. A non-throwing `status: 'error'` no longer commits. If the first CreateIndependentInstance in a file fails, every graph uses the host; if it fails after independents already exist, the file aborts — never a mix. GeoCodeSyncService writes RecordGeoCode on the owning entity's provider.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- a2c528f: Geocoding no longer re-attempts an address it has already determined has no location.
+
+  `ProcessMapping` skipped only on `Status === 'success'`. A row marked permanently not-geocodable — an address that genuinely has no location, like "Conference Room B" — fell through to a full re-attempt on **every pass**, even with the source hash unchanged: mark pending (a write), geocode (nothing to find), mark failed (another write). Per record, forever, for an answer already on file. On a synced entity with geo-typed columns that is three round trips per record per sync, and CodeGen enables geocoding automatically on address-like columns, so it applies to entities nobody opted in.
+
+  `UpdateNotGeocodable`'s own comment describes the intended behaviour exactly — _"Mark as not_geocodable so the retry job skips it. If the user later edits the address, the hash will change and SyncIfChanged will re-attempt."_ The hash **is** the re-attempt condition; it just was not being honoured for that outcome.
+  - New `IsSettledGeoCode(status, retryCount)` in `geo-core`, plus a named `PERMANENT_SKIP_RETRY_COUNT` for the sentinel that was previously a bare `9999`. Settled means success **or** permanently not-geocodable; a plain `failed` is still transient and still retried, which is the retry job's purpose.
+  - `ExistingGeoCodeInfo` gains `RetryCount` — without it a batch caller cannot tell the two kinds of `failed` apart. The scheduled geocoding job now selects and populates it.
+  - The batch path decides from the map **before** loading anything, so an unchanged settled record costs zero round trips. `FindExistingGeoCode`'s comment already claimed it avoided the load when the hash was unchanged; it never checked, and loaded unconditionally.
+
+  No change for a record whose address changed, whose geocode succeeded, or whose failure was transient.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

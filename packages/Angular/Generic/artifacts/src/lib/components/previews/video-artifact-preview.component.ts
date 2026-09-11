@@ -21,6 +21,8 @@ import { BaseArtifactPreviewComponent } from './base-artifact-preview.component'
                 <i class="fa-solid fa-film"></i>
                 <span>{{ errorMessage }}</span>
             </div>
+        } @else if (isLoading) {
+            <mj-loading text="Loading video..." size="small"></mj-loading>
         } @else if (videoUrl) {
             <mj-media-player
                 class="video-preview__player"
@@ -70,6 +72,7 @@ export class VideoArtifactPreviewComponent extends BaseArtifactPreviewComponent 
 
     /** Resolved URL — data URI (inline) or pre-auth URL (file). Funneled through {@link setVideoUrl}. */
     public videoUrl = '';
+
 
     /** Non-empty hides the player and shows a compact error line. */
     public errorMessage = '';

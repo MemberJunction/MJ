@@ -1,5 +1,173 @@
 # Change Log - @memberjunction/actions-apollo
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f6a4341]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [a77afac]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/actions@6.1.0-edge.6
+  - @memberjunction/credentials@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/network-utils@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 10010b2: Add Apollo's other half to this package: **list management, saved-record search and prospecting**, as seven new actions alongside the two enrichment actions it has always had.
+
+  `ApolloGetListsAction` and `ApolloCreateListAction` read and create labels; `ApolloGetListAccountsAction` and `ApolloGetListContactsAction` page through a list's members; `ApolloSearchPeopleAction` searches Apollo's people database for net-new prospects; `ApolloMoveListAccountsAction` and `ApolloMoveListContactsAction` move records between lists. Together they are the outbound-campaign surface — build a list, drain it through a sequence of stages, and see what is where — which enrichment alone cannot express.
+
+  These go to a **different Apollo base path** from enrichment: `api.apollo.io/api/v1` rather than `api.apollo.io/v1`. They are not interchangeable, and the same path under the wrong prefix 404s, so `ApolloRESTEndpoint` is declared beside the existing `ApolloAPIEndpoint` rather than derived from it.
+
+  Five Apollo behaviours dictate the design, and each is what makes the naive implementation wrong:
+
+  **A PATCH replaces the whole `label_names` array.** There is no add-one-label endpoint, so a move is _two_ writes, each carrying the complete intended set: first `current ∪ {toList}`, then `(current ∪ {toList}) \ {fromList}`. Sending a bare `['Warm']` would silently delete every other list the record was on, and nothing in the response would reveal it. The remove set is computed from the _post-add_ state, not from the pre-add state — deriving it from `current` alone would add the record to the destination and then immediately take it back out. The move actions accept only ids from the caller, never labels, and re-read the source list themselves, so a caller cannot supply a stale label set that quietly destroys memberships the record picked up since they last looked.
+
+  **Roughly 15-17% of removes return success without applying.** Removes are verified by re-reading the destination list, and a record still carrying the source label is reported as `possiblyStuck` rather than retried — an immediate retry flakes the same way, while the next page-1 drain sees it carrying both labels and finishes the job. A possibly-stuck record is deliberately **not** a failure: the write succeeded and Apollo did not honour it, so calling it a failure would send the caller looking for a bug in the request. `PARTIAL_FAILURE` is reserved for a PATCH that actually failed. When the verify read itself fails, or the record is simply not on the destination page, the stuck state is left `null` — unknown, not verified-clean.
+
+  **A list drain must always read page 1**, because removals shift every later page, so advancing to page 2 skips records. Paging therefore defaults to page 1 rather than to a saved position, and the move actions pin it explicitly.
+
+  **Label reads and every write require a MASTER key.** A scoped key authenticates fine and then 403s, which is indistinguishable from a wrong key — so a 403 on a master-key operation is rewritten into a message that names the requirement instead of passing the bare status through. The prospecting search is the one read a scoped key can serve, so it deliberately skips the label fetch the other searches need.
+
+  **Labels are read as `label_ids` but written as `label_names`.** The client fetches the label list once per instance and resolves ids to names on every read; an id with no matching label is dropped rather than passed through, since a raw id inside a `label_names` write would create a label named after a hex string.
+
+  `ApolloCreateListAction` is idempotent — a same-named label is returned as-is with `AlreadyExisted: true`. Apollo will happily create two labels with one name, and once it has, every name-based lookup in this surface becomes ambiguous: half the moves would target one list and half the other. Idempotent create is what keeps name-addressing sound. `ApolloSearchPeopleAction` requires at least one filter; Apollo accepts a request with none and returns an unscoped, rate-limit-burning result set nobody asked for.
+
+  Credentials resolve through `CompanyID` → the company's active `Apollo` **MJ: Company Integrations** row → `CredentialID` → the `apiKey` in **MJ: Credentials** `Values`, falling back to `APOLLO_API_KEY` so existing single-tenant deployments keep working untouched. `CompanyIntegration.APIKey` is deliberately not read: it is not a decrypt-on-read field, so a key written through metadata sync comes back as the literal `$ENC$…` ciphertext and produces a 401 that looks exactly like a wrong key. A credential that exists but will not parse fails with `CONFIGURATION_ERROR` rather than silently borrowing another workspace's key from the environment.
+
+  92 tests cover the surface, driving the client through an injected `fetch` so the request bodies Apollo would receive are asserted directly — which matters more than usual here, because a move that sends the wrong label array is invisible in the response. Nothing in the suite can reach api.apollo.io: a live read would spend credits and a live write would mutate a real account's lists with no undo.
+
+  The two enrichment actions are unchanged.
+
+  `minor` because this branch now ships `metadata/**` — the `MJ: Actions` / `MJ: Action Params` / `MJ: Action Result Codes` records these classes need to be invocable. Metadata becomes a migration at release via the build engineer's `mj sync push`, which is exactly what the `minor` trigger tracks. Without the metadata this would be `patch`.
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/network-utils@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/credentials@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 7857d8e: Add `@memberjunction/network-utils` and remove `axios` from the repository.
+
+  The SSRF guard added for the web/HTTP actions was Actions-specific but the concern is not, so it
+  moves into a new dependency-free, Node-only package (`node:dns` + `node:net` only) that any
+  server-side package can depend on: `AssertPublicUrl`, `SafeFetch`, `IsBlockedIPAddress`, `SSRFError`.
+
+  The same package ships `HttpClient` / `HttpRequest` — a native-`fetch` HTTP client that replaces
+  `axios` across all 11 packages that used it. Consolidating on one client removes the third-party
+  dependency and puts the SSRF guard one option flag (`ValidateUrl`) away from every outbound call
+  site, which was impossible when each package reached for `axios` directly.
+
+  Also fixes an SSRF sink the original pass missed: the `API Rate Limiter` action takes a
+  caller-controlled URL and returns the response body, and is now guarded.
+
+  Public exports use `PascalCase`, per repo convention.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/network-utils@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

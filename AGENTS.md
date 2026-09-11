@@ -2254,7 +2254,7 @@ When a migration creates a new lookup or reference table (e.g., `AIAgentRequestT
    }
    ```
 3. Create the seed data file (e.g., `.agent-request-types.json`) as a JSON array of records. Each record has a `"fields"` object with the column values. **Omit `primaryKey` and `sync`** — these are auto-populated by mj-sync on first push.
-4. Push with: `npx mj sync push --dir=metadata --include="agent-request-types"`
+4. Push with: `pnpm mj sync push --dir=metadata --include="agent-request-types"`
 
 **Why metadata files over SQL INSERTs:**
 

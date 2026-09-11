@@ -2,6 +2,8 @@
  * Shared constants and utilities for the version-history package.
  */
 
+import { EscapeSQLString } from '@memberjunction/global';
+
 // ---------------------------------------------------------------------------
 // Entity name constants
 // ---------------------------------------------------------------------------
@@ -24,32 +26,38 @@ export const ENTITY_RECORD_CHANGES = 'MJ: Record Changes';
 
 /**
  * Escape a string value for safe inclusion in a SQL filter.
- * Doubles single quotes to prevent SQL injection.
+ *
+ * @deprecated Import `EscapeSQLString` from `@memberjunction/global` instead — it is the one
+ * canonical escaper. This alias remains only so external callers do not break; it will be
+ * removed in the next major.
  */
-export function escapeSqlString(value: string): string {
-    if (value == null) return '';
-    return String(value).replace(/'/g, "''");
-}
+export const escapeSqlString = (value: string | null | undefined): string => EscapeSQLString(value);
 
 /**
  * Build a safe SQL equality filter: FieldName = 'escapedValue'
  */
 export function sqlEquals(fieldName: string, value: string): string {
-    return `${fieldName} = '${escapeSqlString(value)}'`;
+    return `${fieldName} = '${EscapeSQLString(value)}'`;
 }
 
 /**
  * Build a safe SQL LIKE filter: FieldName LIKE '%escapedValue%'
+ *
+ * NOTE: `EscapeSQLString` neutralises quotes but NOT LIKE metacharacters — a `value` containing
+ * `%`, `_` or `[` is still interpreted as a wildcard pattern rather than as literal text. That is
+ * the long-standing behaviour of this helper and callers depend on it. If you need a literal
+ * match, escape the metacharacters and add `ESCAPE '\'` (see `escapeLikeValue()` in
+ * `@memberjunction/core`, `generic/runQuerySQLFilterImplementations.ts`).
  */
 export function sqlContains(fieldName: string, value: string): string {
-    return `${fieldName} LIKE '%${escapeSqlString(value)}%'`;
+    return `${fieldName} LIKE '%${EscapeSQLString(value)}%'`;
 }
 
 /**
  * Build a safe SQL IN filter: FieldName IN ('a','b','c')
  */
 export function sqlIn(fieldName: string, values: string[]): string {
-    const escaped = values.map(v => `'${escapeSqlString(v)}'`).join(', ');
+    const escaped = values.map(v => `'${EscapeSQLString(v)}'`).join(', ');
     return `${fieldName} IN (${escaped})`;
 }
 
@@ -57,7 +65,7 @@ export function sqlIn(fieldName: string, values: string[]): string {
  * Build a safe SQL NOT IN filter: FieldName NOT IN ('a','b','c')
  */
 export function sqlNotIn(fieldName: string, values: string[]): string {
-    const escaped = values.map(v => `'${escapeSqlString(v)}'`).join(', ');
+    const escaped = values.map(v => `'${EscapeSQLString(v)}'`).join(', ');
     return `${fieldName} NOT IN (${escaped})`;
 }
 
@@ -75,25 +83,19 @@ export function buildCompositeKeyFromRecord(
     entityInfo: EntityInfo,
     record: Record<string, unknown>
 ): CompositeKey {
-    const pairs = entityInfo.PrimaryKeys.map(pk => ({
-        FieldName: pk.Name,
-        Value: record[pk.Name],
-    }));
-    return new CompositeKey(pairs);
+    return CompositeKey.FromEntityRecord(entityInfo, record);
 }
 
 /**
- * Build a CompositeKey for loading by ID (single-field PK).
- * Uses the entity's actual first primary key name rather than hardcoding 'ID'.
+ * Build a CompositeKey for loading from a stored record id. Accepts the bare value of a
+ * single-column key (any column name) or the `Field1|Value1||Field2|Value2` segment Record
+ * Changes / Version Label Items persist, so composite keys load too.
  */
 export function buildPrimaryKeyForLoad(
     entityInfo: EntityInfo,
     value: string
 ): CompositeKey {
-    return new CompositeKey([{
-        FieldName: entityInfo.FirstPrimaryKey.Name,
-        Value: value,
-    }]);
+    return CompositeKey.FromURLSegment(entityInfo, value);
 }
 
 /**
@@ -102,7 +104,7 @@ export function buildPrimaryKeyForLoad(
  * where we control the schema and know the PK is always 'ID'.
  */
 export function buildIdKey(id: string): CompositeKey {
-    return new CompositeKey([{ FieldName: 'ID', Value: id }]);
+    return CompositeKey.FromID(id); // first-pk-ok: documented for MJ system entities only (Version Labels / Label Items / Restores / Record Changes), whose key is ID
 }
 
 // ---------------------------------------------------------------------------
@@ -124,7 +126,15 @@ export async function loadRecordChangeSnapshot(
     const result = await rv.RunView<Record<string, unknown>>({
         EntityName: ENTITY_RECORD_CHANGES,
         ExtraFilter: sqlEquals('ID', recordChangeId),
-        Fields: ['ID', 'FullRecordJSON'],
+        // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+        // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot be
+        // resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+        //
+        // For a restricted caller on a field-secured entity the snapshot comes back NARROWED, which
+        // is what both consumers want: RestoreEngine skips fields the snapshot omits (so a denied
+        // column keeps its stored value rather than being overwritten), and DiffEngine simply has
+        // nothing to show for them.
+        Fields: ['ID', 'EntityID', 'FullRecordJSON'],
         MaxRows: 1,
         ResultType: 'simple',
     }, contextUser);

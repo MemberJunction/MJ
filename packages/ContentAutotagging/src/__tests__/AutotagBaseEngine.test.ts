@@ -301,10 +301,8 @@ vi.mock('cheerio', () => ({
   ),
 }));
 
-vi.mock('axios', () => ({
-  default: {
-    get: vi.fn().mockResolvedValue({ data: 'downloaded content' }),
-  },
+vi.mock('@memberjunction/network-utils', () => ({
+  HttpGet: vi.fn().mockResolvedValue({ Data: 'downloaded content', Status: 200, Headers: {} }),
 }));
 
 vi.mock('crypto', () => ({
@@ -555,10 +553,10 @@ describe('AutotagBaseEngine', () => {
       expect(typeof result).toBe('string');
     });
 
-    it('should call axios.get with the URL', async () => {
-      const axios = await import('axios');
+    it('should call HttpGet with the URL', async () => {
+      const net = await import('@memberjunction/network-utils');
       await engine.getChecksumFromURL('https://example.com/page');
-      expect(axios.default.get).toHaveBeenCalledWith('https://example.com/page');
+      expect(net.HttpGet).toHaveBeenCalledWith('https://example.com/page', { ResponseType: 'text' });
     });
   });
 

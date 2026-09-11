@@ -45,6 +45,7 @@ import {
     RealtimeChannelServerHost,
     RealtimeCoAgentConfig,
     EvaluateRuntimeOverrideAuthorization,
+    FindIgnoredRealtimeConfigKeys,
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     RealtimeAllowedAgent,
@@ -744,7 +745,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 return { Success: false, ErrorMessage: 'The uploaded recording was empty.' };
             }
 
-            const fileID = await storeRealtimeRecording({
+            const stored = await storeRealtimeRecording({
                 Audio: buffer,
                 MimeType: mimeType,
                 Media: 'Audio',
@@ -758,14 +759,16 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             });
 
             // Canonical consolidated file written — drop the crash-recovery shards (best-effort).
-            if (fileID) {
+            if (stored.FileID) {
                 await deleteRealtimeRecordingSegments(agentSessionId, accountID, runUser);
             }
 
             return {
-                Success: !!fileID,
-                FileID: fileID ?? undefined,
-                ErrorMessage: fileID ? undefined : 'Storage upload failed.',
+                Success: !!stored.FileID,
+                FileID: stored.FileID ?? undefined,
+                // Report the reason the storage layer knew (e.g. Drive's "Service Accounts do not have
+                // storage quota"); the generic sentence is only for when no layer supplied one.
+                ErrorMessage: stored.FileID ? undefined : (stored.ErrorMessage ?? 'Storage upload failed.'),
             };
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -1317,6 +1320,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      * Judgment calls baked in (per the approved product rules): co-agent selection (`coAgentId`)
      * and target selection within a pairing list / for a universal co-agent are NORMAL user flow
      * — they stay behind the existing `CanRun` gate only and are not touched here.
+     *
+     * Also the one place that reports what an ACCEPTED override payload still loses to
+     * normalization (see {@link FindIgnoredRealtimeConfigKeys}) — a gated field implies the payload
+     * matters, so an ignored key is worth a log line rather than silence.
      */
     private async assertRuntimeOverridesAuthorized(
         coAgentID: string,
@@ -1342,6 +1349,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         });
         if (!decision.Allowed) {
             throw new Error(`Not authorized: ${decision.DenialReason}`);
+        }
+
+        // The overrides are ACCEPTED — so say what the cascade will nevertheless throw away. The
+        // effective-config layer keeps only known, correctly-typed keys under `realtime`; every
+        // other key vanishes, and neither side of the wire can observe that (MJ #3854: a downstream
+        // app shipped a whole ignored section for months). Rejecting unknown keys was considered
+        // and deliberately NOT chosen: MJ is a framework with unknown callers, and turning a
+        // previously-accepted payload into a hard error in a patch release would break them — so a
+        // named, greppable warning is what ships.
+        const ignored = FindIgnoredRealtimeConfigKeys(configOverridesJson);
+        if (ignored.length > 0) {
+            LogStatus(
+                `StartRealtimeClientSession: configOverridesJson keys IGNORED by the realtime effective-config layer ` +
+                    `(co-agent ${coAgentID}, user ${contextUser.Email ?? contextUser.ID}): ` +
+                    ignored.map((k) => `${k.path} [${k.reason}]`).join(', ') +
+                    '. Only known, correctly-typed keys under the top-level "realtime" section are applied.',
+            );
         }
     }
 
@@ -2575,6 +2599,27 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         utteranceEndMs?: number,
     ): Promise<boolean> {
         const mappedRole = this.mapTranscriptRole(role);
+        // ── WHY THE CORRECTION IS A SEPARATE CONCERN FROM THE INSERT ──
+        //
+        // Streaming-transcription providers (Grok) deliver ONE spoken utterance as a growing series
+        // of CORRECTIONS, each replacing the last. A refused update therefore truncates a
+        // candidate's answer to its opening words: measured live, a 28-second answer persisted as
+        // `I` and a 114-second answer as `So I think`. The MODEL had the full audio and replied
+        // coherently, so nothing looked wrong during the interview — but the evaluator scores the
+        // TRANSCRIPT, and correctly refused to credit words it could not see. A real candidate was
+        // scored 0.0 and Rejected for a permissions gap.
+        //
+        // The correction runs as the CALLER. They own the row, and the anonymous widget role now
+        // carries UPDATE on `MJ: Conversation Details`; `loadOwnedActiveSession` has already proved
+        // the caller owns THIS session and the filter below is pinned to its id, so the only row
+        // reachable is a turn they just spoke.
+        //
+        // ⚠️ ELEVATING INSTEAD WAS TRIED AND IS A TRAP. `ResolveScopedAnonymousRunUser` returns
+        // `UserCache.GetSystemUser()`, which on this deployment resolves to the unconfigured
+        // placeholder `not.set@nowhere.com` ("Configured provisioning user not found; falling back
+        // to an Owner"). Saving as a user that does not exist returns false with a NULL
+        // `LatestResult` — indistinguishable from a permission denial, and just as silent.
+        const writeUser = contextUser;
         const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJConversationDetailEntity>(
             {
@@ -2584,11 +2629,30 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 MaxRows: 1,
                 ResultType: 'entity_object',
             },
-            contextUser,
+            writeUser,
         );
-        const previous = result.Success ? (result.Results?.[0] ?? null) : null;
-        if (!previous) {
+        const found = result.Success ? (result.Results?.[0] ?? null) : null;
+        if (!found) {
             return this.persistTranscriptTurn(session, role, text, contextUser, provider, utteranceStartMs, utteranceEndMs);
+        }
+        // RE-LOAD through the provider rather than saving the RunView's object.
+        //
+        // `ResultType: 'entity_object'` hands back hydrated entities, but they do not carry the
+        // context user the way `GetEntityObject(entity, user)` does — so `Save()` ran with no
+        // principal and failed with an EMPTY message ("unknown error"), which is what the elevation
+        // fix above looked like when it was still broken. The insert path beside this one has
+        // always used `GetEntityObject`; this now matches it, which is also why they now succeed
+        // and fail for the same reasons.
+        const previous = await provider.GetEntityObject<MJConversationDetailEntity>(
+            CONVERSATION_DETAIL_ENTITY,
+            writeUser,
+        );
+        if (!(await previous.Load(found.ID))) {
+            LogError(
+                `RealtimeClientSessionResolver.replacePreviousTranscriptTurn could not re-load turn `
+                + `${found.ID} for session ${session.ID}; the transcript keeps its shorter text.`,
+            );
+            return false;
         }
         previous.Message = text;
         // The correction extends the existing turn: always refresh the end boundary when provided,
@@ -2601,8 +2665,14 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         }
         const saved = await previous.Save();
         if (!saved) {
+            // Name the CONSEQUENCE, not just the failure: a refused correction silently truncates a
+            // candidate's answer to its opening words, and whoever reads this log is the only person
+            // who can connect a 0.0 score to it.
             LogError(
-                `RealtimeClientSessionResolver.replacePreviousTranscriptTurn save failed: ${previous.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                `RealtimeClientSessionResolver.replacePreviousTranscriptTurn save failed for session `
+                + `${session.ID} — the ${mappedRole} turn keeps its PREVIOUS, shorter text and the `
+                + `transcript now understates what was said: `
+                + `${previous.LatestResult?.CompleteMessage || JSON.stringify(previous.LatestResult ?? null)}`,
             );
         }
         return saved;

@@ -15,7 +15,7 @@ export class MJFormChromeRuleFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'ruleDefinition', sectionName: 'Rule Definition', isExpanded: true },
+            { sectionKey: 'targetConfiguration', sectionName: 'Target Configuration', isExpanded: true },
             { sectionKey: 'displayRules', sectionName: 'Display Rules', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);

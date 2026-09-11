@@ -25,6 +25,33 @@ class-registration manifest system.
 
 4. **Server APIs** (`packages/MJServer/src/generated/generated.ts`)
 
+### Field-level security touches three of the above
+
+CodeGen owns part of the field-level-security (FLS) lifecycle, so a change in any of these areas
+needs [`guides/FIELD_LEVEL_SECURITY_GUIDE.md`](../../guides/FIELD_LEVEL_SECURITY_GUIDE.md) read
+first:
+
+- **Permission reconciliation** (`reconcileFieldLevelSecurity.ts`, phase `reconcileFieldPermissions`)
+  — a column added to an FLS-enabled entity has no permission rows, and on an enabled entity a field
+  with no rows is **denied**. Without this pass a new column is invisible to everyone, including the
+  administrator who added it. Must run **after** the metadata refresh that follows `manageMetadata`,
+  or it computes the delta from a field list that predates the columns it exists to cover. Failures
+  are logged and swallowed on purpose — failing the run after schema, views and procs are already
+  written would trade a recoverable permissions gap for an unrecoverable half-finished build.
+- **Database permissions** — SQL Server emits column-level `DENY SELECT` on base views for explicit
+  `ReadAccess = 'Deny'` rows, restricted to custom roles and skipping any role a service login
+  belongs to (a DENY there beats every sibling GRANT and would break the API for everyone).
+  **PostgreSQL emits nothing** — it has no DENY primitive, so Deny-wins cannot be expressed. Related
+  and not FLS-specific: permission emission is now **wipe-and-reassert** within the managed scope,
+  so deleting a permission row actually revokes the grant instead of leaving it until the view
+  happens to be rebuilt.
+- **GraphQL output types** — non-nullability derives from `EntityFieldInfo.IsUnrestrictableField`
+  (primary keys and `__mj_` columns), **not** from `AllowsNull`. A NOT NULL column says no *row*
+  stores an empty value; a GraphQL `!` says every *response, to every caller* carries one, and the
+  second does not follow from the first once a field can be withheld per user. Input types still
+  derive from `AllowsNull` — they carry the write contract. Every object type also carries the
+  `ReadableFields___` transport field.
+
 ## Base views: generated, custom, or LAYERED
 
 An entity's `BaseView` is its public surface — field discovery, permissions and the generated CRUD
@@ -48,10 +75,10 @@ SELECT g.*, CASE WHEN ... END AS IsOverdue
 FROM   [orders].[vwOrderHeadersGenerated] g;
 ```
 
-**SQL Server only.** `PostgreSQLCodeGenProvider.generateBaseView` throws on a layered entity. PG
-expands `SELECT *` at creation and freezes it, has no `sp_refreshview` equivalent, and CodeGen does
-not own the outer view — so a late-added column would silently never reach it, which is the exact
-failure layering exists to prevent. On PG, use a fully custom base view instead.
+PostgreSQL: CodeGen writes the inner view the same way. The outer view is custom SQL shipped via
+pg-migrate. After inner regeneration, CodeGen restars the outer (`restarLayeredOuterView` /
+`spRebindLayeredOuterView`) so `g.*` re-expands. `CREATE OR REPLACE` of the inner view alone does
+**not** update the outer.
 
 Rules if you touch this:
 
@@ -212,9 +239,23 @@ eliminate.
 - This solves the npm distribution gap: published packages only have `dist/` (no `src/`), so the manifest generator can't scan them externally.
 
 **Key scripts:**
-- `npm run mj:manifest` — regenerates all 4 manifests (server-bootstrap, ng-bootstrap, MJAPI, MJExplorer)
-- `npm run mj:manifest:server-bootstrap` / `mj:manifest:ng-bootstrap` — regenerate bootstrap pre-built manifests
-- `npm run mj:manifest:api` / `mj:manifest:explorer` — regenerate app supplemental manifests
+- `pnpm run mj:manifest` — regenerates all **9** manifests, serially (server-bootstrap,
+  server-bootstrap-lite, ng-bootstrap, ng-bootstrap-lite, MJAPI, MJExplorer, A2AServer,
+  MCPServer, MJCodeGenAPI). Runs automatically from the root `postbuild`.
+- `pnpm run mj:manifest:server-bootstrap` / `:server-bootstrap-lite` / `:ng-bootstrap` /
+  `:ng-bootstrap-lite` — regenerate the pre-built bootstrap manifests
+- `pnpm run mj:manifest:api` / `:explorer` / `:a2a-server` / `:mcp-server` / `:codegen-api` —
+  regenerate the app supplemental manifests
+
+> The two `ng-bootstrap*` manifests ship to the **browser**. Regenerating them can pull a
+> server-only package into the bundle — run `pnpm run check:browser-manifest` afterwards
+> (CI runs it too). See [`packages/Angular/Bootstrap/CLAUDE.md`](../Angular/Bootstrap/CLAUDE.md).
+
+> **Ordering caveat.** These 9 steps are not order-independent: each runs with
+> `syncDependencies` on, so it may rewrite `<appDir>/package.json` while another step is
+> walking it. The current serial order does not fully respect that — see
+> [`plans/manifest-generation-parallelization.md`](../../plans/manifest-generation-parallelization.md)
+> before reordering or parallelizing them.
 
 **See**: [CLASS_MANIFEST_GUIDE.md](../../plans/complete/codegen/CLASS_MANIFEST_GUIDE.md) for comprehensive
 documentation on the manifest system, including how external consumers and MJ distribution users
@@ -224,9 +265,32 @@ should configure their projects.
 > see [`packages/Angular/Bootstrap/CLAUDE.md`](../Angular/Bootstrap/CLAUDE.md) and
 > [`packages/Angular/BootstrapLite/CLAUDE.md`](../Angular/BootstrapLite/CLAUDE.md).
 
+## Idempotency and Churn-Free CodeGen Contract
+
+CodeGen guarantees **100% idempotency relative to database state** and **minimal blast radius** for schema changes:
+
+1. **Idempotency (No-Change Runs)**:
+   - Running CodeGen twice against an unchanged database state produces **0 diffs** across all generated code, schemas, and forms.
+   - Run 2 reports counters: `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`.
+   - Empty SQL capture files (`CodeGen_Run_*.sql`) are automatically removed upon run completion; no empty migration artifacts survive.
+
+2. **Minimal Blast Radius (Single-Column Changes)**:
+   - Adding one column to one table strictly modifies **only** that entity's artifacts (`__mj.ts`, specific entity Zod/schema JSON, `generated.ts` type block, and `mjentity.form.component.*`).
+   - Sibling fields on the entity are untouched: existing `DisplayName`, `Category`, `ExtendedType`, `CodeType`, `GeneratedFormSection`, `DefaultInView`, `IncludeInUserSearchAPI`, and `IsNameField` do not churn.
+   - `generated-forms.module.ts` is not modified by adding a column (only by adding or deleting entire entities).
+
+3. **Field Decision Persistence**:
+   - Field categorization and metadata decisions are persisted to `metadata/entities/decisions/` so clean-room builds match warm builds identically.
+   - Re-runs against an existing schema lock established categories and metadata unless the underlying schema definition materially changes.
+
+4. **Stable Partitioning & Deterministic Ordering**:
+   - Submodule partitioning uses stable hash buckets based on entity names rather than array index-chunking, preventing ripple effects across form submodules.
+   - All sorting (entities, fields, relationships) uses deterministic ordinal comparisons (`OrdinalCompare` / `String_CS_AS`) across SQL Server and PostgreSQL.
+
 ## Related
 
 - **Migration authoring rules** — [`migrations/CLAUDE.md`](../../migrations/CLAUDE.md)
 - **Migration → CodeGen end-to-end workflow** — [`guides/MIGRATION_CODEGEN_WORKFLOW_GUIDE.md`](../../guides/MIGRATION_CODEGEN_WORKFLOW_GUIDE.md)
 - **Generated entity classes** — [`packages/MJCoreEntities/CLAUDE.md`](../MJCoreEntities/CLAUDE.md)
+- **Field-level security** — [`guides/FIELD_LEVEL_SECURITY_GUIDE.md`](../../guides/FIELD_LEVEL_SECURITY_GUIDE.md)
 - **PostgreSQL schema casing** — [`guides/POSTGRES_SCHEMA_CASING_GUIDE.md`](../../guides/POSTGRES_SCHEMA_CASING_GUIDE.md)

@@ -1,5 +1,7 @@
 /**
- * Shared utilities for SchemaEngine — identifier validation and SQL escaping.
+ * Shared utilities for SchemaEngine — identifier validation.
+ *
+ * For SQL string-literal escaping use `EscapeSQLString` from `@memberjunction/global`.
  */
 
 /** Characters allowed in SQL identifiers (schema, table, column names). */
@@ -10,9 +12,4 @@ export function ValidateIdentifier(name: string, kind: string): void {
   if (!IDENTIFIER_RE.test(name)) {
     throw new Error(`Invalid ${kind} name "${name}": must match ${IDENTIFIER_RE.source}`);
   }
-}
-
-/** Escapes single quotes in a string for use in SQL string literals. */
-export function EscapeSqlString(value: string): string {
-  return value.replace(/'/g, "''");
 }

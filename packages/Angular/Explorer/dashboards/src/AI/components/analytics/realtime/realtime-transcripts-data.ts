@@ -8,6 +8,7 @@
  * @module @memberjunction/ng-dashboards
  */
 import { IMetadataProvider, RunView } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
 const CONVERSATION_ENTITY = 'MJ: Conversations';
@@ -36,7 +37,6 @@ export interface TranscriptLine {
     At: Date;
 }
 
-const escapeSql = (v: string): string => v.replace(/'/g, "''");
 const toDate = (v: unknown): Date => (v instanceof Date ? v : new Date(String(v ?? '')));
 
 /**
@@ -88,7 +88,7 @@ export async function LoadRoomTranscript(
     const [detailResult, bridgeResult] = await rv.RunViews([
         {
             EntityName: CONVERSATION_DETAIL_ENTITY,
-            ExtraFilter: `ConversationID='${escapeSql(conversationID)}'`,
+            ExtraFilter: `ConversationID='${EscapeSQLString(conversationID)}'`,
             Fields: ['ID', 'Role', 'Message', 'AgentID', 'ExternalID', 'Error', '__mj_CreatedAt'],
             OrderBy: '__mj_CreatedAt ASC',
             MaxRows: 5000,
@@ -96,7 +96,7 @@ export async function LoadRoomTranscript(
         },
         {
             EntityName: BRIDGE_ENTITY,
-            ExtraFilter: roomKey ? `ExternalConnectionID='${escapeSql(roomKey)}'` : `1=0`,
+            ExtraFilter: roomKey ? `ExternalConnectionID='${EscapeSQLString(roomKey)}'` : `1=0`,
             Fields: ['ID'],
             MaxRows: 100,
             ResultType: 'simple',
@@ -120,7 +120,7 @@ async function loadParticipantNames(
     if (bridgeIds.length === 0) {
         return map;
     }
-    const inClause = bridgeIds.map((id) => `'${escapeSql(id)}'`).join(',');
+    const inClause = bridgeIds.map((id) => `'${EscapeSQLString(id)}'`).join(',');
     const result = await rv.RunView<Record<string, unknown>>(
         {
             EntityName: PARTICIPANT_ENTITY,

@@ -1,6 +1,6 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from "@memberjunction/core";
-import { UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
-import { AIModelConfiguration, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
+import { UUIDsEqual, NormalizeUUID, MJGlobal } from "@memberjunction/global";
+import { AIModelConfiguration, ModelUsage, ModelUsageUnitKind, ParseModelConfiguration, ResolveEffectiveModelConfiguration } from "@memberjunction/ai";
 import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgentNoteTypeEntity, MJScopedPromptPartEntity, MJScopedPromptConfigEntity,
          MJAIModelActionEntity,
          MJAIPromptModelEntity, MJAIPromptTypeEntity, MJAIResultCacheEntity, MJAIVendorTypeDefinitionEntity,
@@ -13,6 +13,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIModelCostEntity,
          MJAIModelPriceTypeEntity,
          MJAIModelPriceUnitTypeEntity,
+         MJAIUsageTypeEntity,
          MJAIConfigurationEntity,
          MJAIConfigurationParamEntity,
          MJAIAgentStepEntity,
@@ -37,6 +38,7 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAIAgentSkillEntity,
          MJAISkillPermissionEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
+import { BasePriceUnitType, NormalizedUsage } from "./PriceUnitTypes";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
 import { AISkillPermissionHelper, EffectiveSkillPermissions } from "./AISkillPermissionHelper";
 import { TemplateEngineBase } from "@memberjunction/templates-base-types";
@@ -140,6 +142,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _modelCosts: MJAIModelCostEntity[] = [];
     private _modelPriceTypes: MJAIModelPriceTypeEntity[] = [];
     private _modelPriceUnitTypes: MJAIModelPriceUnitTypeEntity[] = [];
+    private _usageTypes: MJAIUsageTypeEntity[] = [];
     private _configurations: MJAIConfigurationEntity[] = [];
     private _configurationParams: MJAIConfigurationParamEntity[] = [];
     private _agentSteps: MJAIAgentStepEntity[] = [];
@@ -306,6 +309,11 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_modelPriceUnitTypes',
                 EntityName: 'MJ: AI Model Price Unit Types',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_usageTypes',
+                EntityName: 'MJ: AI Usage Types',
                 CacheLocal: true
             },
             {
@@ -559,13 +567,38 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * Gets the active cost configuration for a specific model and vendor combination
+     * Gets the active cost configuration for a specific model and vendor combination.
+     *
+     * ## Why `usageKind` matters
+     * Without it the effective key is `(Model, Vendor, ProcessingType)`, which structurally cannot
+     * represent a model that bills in two measures — per-image output alongside per-token prompt,
+     * say. The most-recently-started row wins, so which measure you get is a sort-order coin flip,
+     * and the mismatch is only noticed downstream where the run is refused rather than priced.
+     * Passing the measure the run actually recorded makes the choice deterministic.
+     *
+     * The measure is resolved through the cost row's `UnitTypeID` into the cached
+     * `ModelPriceUnitTypes`, whose `UsageType` is the denormalised name CodeGen puts on the view.
+     * `AIModelCost` deliberately carries NO usage-type column of its own: it would be a second copy
+     * of a derivable fact, and nothing would arbitrate a row claiming `Seconds` while its unit type
+     * says `Tokens` — which is precisely the comparison this method exists to make trustworthy.
+     * Both lookups are in-memory over already-loaded caches, so single-sourcing costs nothing.
+     *
      * @param modelID - The ID of the AI model
      * @param vendorID - The ID of the vendor
      * @param processingType - 'Realtime' or 'Batch' (defaults to 'Realtime')
+     * @param usageKind - The base measure the run recorded. When supplied, rows priced in any other
+     *                    measure are excluded outright rather than deprioritised: picking a token
+     *                    row for a run measured in seconds cannot produce an honest cost, so no row
+     *                    (and a logged refusal) is the correct answer. Omit to keep the historical
+     *                    measure-blind behaviour.
      * @returns The active MJAIModelCostEntity or null if none found
      */
-    public GetActiveModelCost(modelID: string, vendorID: string, processingType: 'Realtime' | 'Batch' = 'Realtime'): MJAIModelCostEntity | null {
+    public GetActiveModelCost(
+        modelID: string,
+        vendorID: string,
+        processingType: 'Realtime' | 'Batch' = 'Realtime',
+        usageKind?: ModelUsageUnitKind
+    ): MJAIModelCostEntity | null {
         const now = new Date();
         const activeCosts = this._modelCosts.filter(cost =>
             UUIDsEqual(cost.ModelID, modelID) &&
@@ -573,9 +606,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             cost.ProcessingType === processingType &&
             cost.Status === 'Active' &&
             (!cost.StartedAt || new Date(cost.StartedAt) <= now) &&
-            (!cost.EndedAt || new Date(cost.EndedAt) > now)
+            (!cost.EndedAt || new Date(cost.EndedAt) > now) &&
+            (usageKind === undefined || this.CostRowUsageKind(cost) === usageKind)
         );
-        
+
         // If multiple active costs exist, return the most recently started one
         if (activeCosts.length > 0) {
             return activeCosts.sort((a, b) => {
@@ -584,10 +618,166 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 return bStart - aStart;
             })[0];
         }
-        
+
         return null;
     }
- 
+
+    /**
+     * Prices a model execution from its reported usage, whatever measure that usage is in.
+     *
+     * This is the costing surface for callers that hold a result but no `MJ: AI Prompt Runs` row —
+     * transcription and image actions, downstream applications, anything invoking a provider
+     * directly. Prompt runs get the same math automatically when they save.
+     *
+     * Returns null, having logged why, when the model has no active cost row, when its unit type
+     * has no registered driver, or when the driver prices a different measure than the usage
+     * reports. A null is "we do not know what this cost" — never treat it as zero, which would
+     * quietly report paid work as free.
+     *
+     * @param modelID The model that ran
+     * @param vendorID The vendor that served it — pricing is per model AND vendor
+     * @param usage Usage as reported by the provider
+     * @param processingType 'Realtime' or 'Batch' (defaults to 'Realtime')
+     */
+    public CalculateModelCost(
+        modelID: string,
+        vendorID: string,
+        usage: ModelUsage,
+        processingType: 'Realtime' | 'Batch' = 'Realtime'
+    ): { cost: number; currency: string } | null {
+        // The measure is established BEFORE a cost row is chosen, so the row can be selected by it.
+        // Resolving in the other order lets a model with rows in two measures hand back whichever
+        // sorted first and then refuse it downstream — a coin flip reported as a pricing gap.
+
+        // Units without a kind name nothing to price them in. Falling through would treat them as
+        // Tokens and price the (zero) token counts, returning a cost of 0 for work that was billed.
+        if (usage.unitKind == null && ((usage.inputUnits ?? 0) > 0 || (usage.outputUnits ?? 0) > 0)) {
+            LogError(
+                `Model ${modelID} / Vendor ${vendorID} reported continuous units with no unitKind; refusing to price ` +
+                `them. Build usage with ModelUsage.ForMedia(), which always sets it.`
+            );
+            return null;
+        }
+
+        const usageKind = usage.unitKind ?? 'Tokens';
+
+        // Units declared against the Tokens measure are a contradiction: token counts live in the
+        // token fields, so units here mean the caller measured something else and mislabelled it.
+        // Pricing would select a token row, match measures, and cost the (zero) token buckets — a
+        // confident $0 against billed work. Less reachable than the prompt-run path, which gets
+        // 'Tokens' from a column default rather than from a hand-built ModelUsage, but the same
+        // defect, so it refuses in the same way.
+        if (usageKind === 'Tokens' && ((usage.inputUnits ?? 0) > 0 || (usage.outputUnits ?? 0) > 0)) {
+            LogError(
+                `Model ${modelID} / Vendor ${vendorID} reported ${usage.inputUnits ?? 0} input / ` +
+                `${usage.outputUnits ?? 0} output units against the Tokens measure, which counts tokens; refusing ` +
+                `to price it. Build usage with ModelUsage.ForMedia(kind, ...) so the measure matches the quantity.`
+            );
+            return null;
+        }
+
+        // The mirror of the check above, and the same defect through the other side: a kind with
+        // no quantity. `ShouldCalculateCost` is satisfied by token counts alone, so a run that
+        // names `Seconds` but reports zero seconds passes every check above, normalizes to
+        // {input: 0, output: 0}, and persists Cost = 0 — writing "free" for work that was billed,
+        // which is exactly what the units-without-a-kind guard exists to prevent.
+        if (usageKind !== 'Tokens' && (usage.inputUnits ?? 0) === 0 && (usage.outputUnits ?? 0) === 0) {
+            LogError(
+                `Model ${modelID} / Vendor ${vendorID} reported usage in ${usageKind} but no unit quantity; refusing ` +
+                `to price it rather than record a cost of 0. Set inputUnits/outputUnits, or leave unitKind unset.`
+            );
+            return null;
+        }
+
+        const activeCost = this.GetActiveModelCost(modelID, vendorID, processingType, usageKind);
+        if (!activeCost) {
+            LogError(
+                `No active ${processingType} cost configuration priced in ${usageKind} for Model: ${modelID}, ` +
+                `Vendor: ${vendorID}`
+            );
+            return null;
+        }
+
+        const calculator = this.GetPriceCalculator(activeCost);
+        if (!calculator) {
+            return null;
+        }
+
+        // Belt-and-braces after a kind-filtered selection: the filter reads the cost row's usage
+        // type, this compares the DRIVER's measure, so a unit type whose usage type and driver
+        // disagree is caught here rather than mispriced.
+        if (calculator.UnitKind !== usageKind) {
+            LogError(
+                `Cost row for Model ${modelID} / Vendor ${vendorID} is priced in ${calculator.UnitKind} but the run ` +
+                `reported usage in ${usageKind}; refusing to price it. Correct the cost row's unit type.`
+            );
+            return null;
+        }
+
+        const normalized: NormalizedUsage = usageKind === 'Tokens'
+            ? {
+                input: usage.promptTokens ?? 0,
+                output: usage.completionTokens ?? 0,
+                cacheRead: usage.cacheReadTokens ?? 0,
+                cacheWrite: usage.cacheWriteTokens ?? 0
+              }
+            : { input: usage.inputUnits ?? 0, output: usage.outputUnits ?? 0 };
+
+        return { cost: calculator.CalculateCost(activeCost, normalized), currency: activeCost.Currency };
+    }
+
+    /**
+     * The base measure a cost row prices in, resolved through its price unit type.
+     *
+     * Null when the row's `UnitTypeID` is not in the loaded catalog — a stale cache or a deleted row.
+     * Callers must treat that as "unknown measure" and refuse, never as `Tokens`: a cost row whose
+     * unit type cannot be resolved cannot be priced, and defaulting is how seconds get charged at a
+     * per-million-tokens rate.
+     */
+    public CostRowUsageKind(cost: MJAIModelCostEntity): string | null {
+        const priceUnitType = this.ModelPriceUnitTypes.find(put => UUIDsEqual(put.ID, cost.UnitTypeID));
+        // `UsageType` is the denormalized name CodeGen adds to the view for the UsageTypeID foreign
+        // key, so this needs no third lookup into the usage-type catalog.
+        return priceUnitType?.UsageType ?? null;
+    }
+
+    /**
+     * Resolves the price unit type driver a cost row is priced by, logging and returning null when
+     * the row points at a unit type this deployment has no calculator for.
+     */
+    public GetPriceCalculator(activeCost: MJAIModelCostEntity): BasePriceUnitType | null {
+        const priceUnitType = this.ModelPriceUnitTypes.find(put => UUIDsEqual(put.ID, activeCost.UnitTypeID));
+        if (!priceUnitType) {
+            LogError(`Price unit type not found: ${activeCost.UnitTypeID}`);
+            return null;
+        }
+
+        // TryCreateInstance, never CreateInstance: the latter FALLS BACK to `new BasePriceUnitType()`
+        // for an unregistered key, so `if (!calculator)` was a dead branch that installed a hollow
+        // object whose CalculateNormalizedCost is `undefined` — a TypeError thrown later from inside
+        // the cost math instead of an honest "no driver for this unit type" here. `BasePriceUnitType`
+        // is additionally marked `@RequiresSubclass()`, so the fallback is refused at the factory;
+        // this call site reports it rather than throwing, because a missing driver is a data problem
+        // to be logged and skipped, not an invariant break.
+        // The row is passed as a constructor argument so a driver CAN be configured by data rather
+        // than by code — `LinearPriceUnitType` reads its measure and divisor straight off it, which
+        // is what lets a new linear billing unit ship as one seeded row. Inert for every hardcoded
+        // driver, and for any subclass outside this repo, since extra arguments are ignored.
+        const resolution = MJGlobal.Instance.ClassFactory.TryCreateInstance<BasePriceUnitType>(
+            BasePriceUnitType,
+            priceUnitType.DriverClass,
+            priceUnitType
+        );
+        if (!resolution.Resolved || !resolution.Instance) {
+            LogError(
+                `Price unit type '${priceUnitType.Name}' names driver class '${priceUnitType.DriverClass}', which is ` +
+                `not registered; runs priced by it cannot be costed. ${resolution.Reason ?? ''}`.trim()
+            );
+            return null;
+        }
+        return resolution.Instance;
+    }
+
 
     public get Agents(): MJAIAgentEntityExtended[] {
         return this.GetConfigData<MJAIAgentEntityExtended>('_agents');
@@ -1181,6 +1371,37 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
     public get ModelPriceUnitTypes(): MJAIModelPriceUnitTypeEntity[] {
         return this.GetConfigData<MJAIModelPriceUnitTypeEntity>('_modelPriceUnitTypes');
+    }
+
+    /**
+     * The base-measure catalog: Tokens, Seconds, Characters, Images.
+     *
+     * Distinct from {@link ModelPriceUnitTypes}, which is the BILLING measure and owns the pricing
+     * driver. A usage type says what a quantity counts; a price unit type says how it is charged
+     * for. Audio is recorded in Seconds and billed by TimePerHour.
+     */
+    public get UsageTypes(): MJAIUsageTypeEntity[] {
+        return this.GetConfigData<MJAIUsageTypeEntity>('_usageTypes');
+    }
+
+    /**
+     * The name of a usage type, or null when the id is absent or unknown.
+     *
+     * Returns the NAME rather than the row because every consumer wants the measure, and the
+     * pricing drivers are keyed on the measure name — `ModelUsageUnitKind` — not on a foreign key.
+     * Keeping the id at the storage boundary is what lets the driver layer stay ignorant of how
+     * the catalog happens to be persisted.
+     *
+     * A null for an id that IS set means the catalog does not contain it — a cache that predates the
+     * row, or a row that was deleted. Callers must treat that as "unknown measure" and refuse to
+     * price, never as "Tokens": silently defaulting is what turns a misconfiguration into a
+     * confidently-wrong cost of zero.
+     */
+    public UsageTypeName(usageTypeID: string | null | undefined): string | null {
+        if (!usageTypeID) {
+            return null;
+        }
+        return this.UsageTypes.find((ut) => UUIDsEqual(ut.ID, usageTypeID))?.Name ?? null;
     }
 
     public get Configurations(): MJAIConfigurationEntity[] {

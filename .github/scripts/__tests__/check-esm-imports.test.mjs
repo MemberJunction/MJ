@@ -4,7 +4,15 @@ import { fileURLToPath } from 'node:url';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
-import { resolveEntryPoint, checkPackage, classifyFailure, sweep } from '../check-esm-imports.mjs';
+import {
+    resolveEntryPoint,
+    checkPackage,
+    classifyFailure,
+    sweep,
+    packageDirForFile,
+    changedPackageDirs,
+    changedPackageDirsSince,
+} from '../check-esm-imports.mjs';
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -472,5 +480,151 @@ describe('CLI', () => {
         expect(result.code ?? 0).toBe(0);
         expect(result.stderr).toContain('NOT_BUILT');
         expect(result.stdout).not.toContain('OK — no extensionless-specifier breaks found');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// PR scoping (--changed-since): restrict the sweep to packages whose own source
+// changed, so a PR stops re-importing ~215 packages that provably cannot have
+// gained the break. The safety property under test is that narrowing NEVER
+// happens silently — an unresolvable diff must widen back to the full sweep.
+// ---------------------------------------------------------------------------
+
+describe('packageDirForFile', () => {
+    const root = join(FIXTURES);
+    // A tree where only these directories carry a package.json.
+    const manifests = new Set([join(root, 'a'), join(root, 'a', 'nested'), join(root, 'b')]);
+    const dirHasManifest = (d) => manifests.has(d);
+
+    it('resolves a file to its own package, not an ancestor', () => {
+        expect(packageDirForFile(join(root, 'a', 'nested', 'src', 'x.ts'), root, { dirHasManifest })).toBe(
+            join(root, 'a', 'nested')
+        );
+    });
+
+    it('walks up to the nearest ancestor package when the file sits in a plain folder', () => {
+        expect(packageDirForFile(join(root, 'a', 'src', 'deep', 'y.ts'), root, { dirHasManifest })).toBe(join(root, 'a'));
+    });
+
+    it('returns null for a file under no package', () => {
+        expect(packageDirForFile(join(root, 'loose.txt'), root, { dirHasManifest })).toBeNull();
+    });
+
+    it('returns null for a file outside the sweep root', () => {
+        expect(packageDirForFile(join(root, '..', '..', 'elsewhere', 'z.ts'), root, { dirHasManifest })).toBeNull();
+    });
+
+    // A root-adjacent path must not escape the bound via a prefix match
+    // (".../fixtures-other" starts with ".../fixtures" as a raw string).
+    it('does not treat a sibling directory with a shared name prefix as inside the root', () => {
+        expect(packageDirForFile(`${root}-other/pkg/src/a.ts`, root, { dirHasManifest: () => true })).toBeNull();
+    });
+});
+
+describe('changedPackageDirs', () => {
+    const root = join(FIXTURES);
+    const manifests = new Set([join(root, 'a'), join(root, 'b')]);
+    const dirHasManifest = (d) => manifests.has(d);
+
+    it('maps a diff to the distinct set of owning packages', () => {
+        const diff = [
+            join(root, 'a', 'src', 'one.ts'),
+            join(root, 'a', 'src', 'two.ts'),
+            join(root, 'b', 'index.ts'),
+        ].join('\n');
+        expect([...changedPackageDirs(diff, root, { dirHasManifest })].sort()).toEqual([join(root, 'a'), join(root, 'b')]);
+    });
+
+    it('ignores blank lines and paths outside any package', () => {
+        const diff = ['', '   ', join(root, 'nope.md'), join(root, 'a', 'x.ts'), ''].join('\n');
+        expect([...changedPackageDirs(diff, root, { dirHasManifest })]).toEqual([join(root, 'a')]);
+    });
+
+    it('returns an empty set for an empty diff', () => {
+        expect(changedPackageDirs('', root, { dirHasManifest }).size).toBe(0);
+    });
+});
+
+describe('changedPackageDirsSince — fail-open contract', () => {
+    it('returns the changed set when git succeeds', () => {
+        const root = join(FIXTURES);
+        const run = () => [join(root, 'ok-pkg', 'index.js')].join('\n');
+        const dirs = changedPackageDirsSince('origin/next', root, { run });
+        expect([...dirs]).toEqual([join(root, 'ok-pkg')]);
+    });
+
+    // The whole point: a git failure must widen to the full sweep, never narrow to nothing.
+    // Returning an empty set here would make the guard report a confident pass over code it
+    // never imported.
+    it('returns null (→ FULL sweep) when the diff cannot be computed', () => {
+        const run = () => {
+            throw new Error("fatal: bad revision 'origin/nope'");
+        };
+        expect(changedPackageDirsSince('origin/nope', join(FIXTURES), { run })).toBeNull();
+    });
+});
+
+describe('sweep — onlyDirs', () => {
+    it('checks only the named package directories', async () => {
+        const { results } = await sweep(FIXTURES, { onlyDirs: new Set([join(FIXTURES, 'ok-pkg')]) });
+        expect(results).toHaveLength(1);
+        expect(results[0].pkgDir).toBe(join(FIXTURES, 'ok-pkg'));
+        expect(results[0].status).toBe('OK');
+    });
+
+    it('still gates when a scoped package carries the break', async () => {
+        const { failures } = await sweep(FIXTURES, { onlyDirs: new Set([join(FIXTURES, 'missing-ext-pkg')]) });
+        expect(failures).toHaveLength(1);
+        expect(failures[0].status).toBe('OWN_DIST_MISSING_EXT');
+    });
+
+    it('scoping AWAY from a broken package does not report it (scope is the caller’s contract)', async () => {
+        const { failures } = await sweep(FIXTURES, { onlyDirs: new Set([join(FIXTURES, 'ok-pkg')]) });
+        expect(failures).toHaveLength(0);
+    });
+
+    it('a full sweep is unchanged by the new option', async () => {
+        const full = await sweep(FIXTURES);
+        const explicitNull = await sweep(FIXTURES, { onlyDirs: null });
+        expect(explicitNull.results.length).toBe(full.results.length);
+        expect(full.results.length).toBeGreaterThan(1);
+    });
+});
+
+describe('CLI --changed-since', () => {
+    const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '..', 'check-esm-imports.mjs');
+    const run = promisify(execFile);
+
+    // An unresolvable ref must widen to the FULL sweep — and that sweep must still gate on the
+    // broken fixture. This is the fail-open contract observed end-to-end through the CLI.
+    it('falls back to the full sweep on a bad ref, and still catches the break', async () => {
+        const result = await run(process.execPath, [SCRIPT, FIXTURES, '--changed-since', 'definitely-not-a-ref']).catch((e) => e);
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('falling back to the FULL sweep');
+        expect(result.stderr).toContain('esm-guard: FAIL');
+        expect(result.stdout + result.stderr).toContain('fixture-missing-ext-pkg');
+    });
+
+    it('accepts the --changed-since=<ref> form and still resolves the root positionally', async () => {
+        const result = await run(process.execPath, [SCRIPT, FIXTURES, '--changed-since=definitely-not-a-ref']).catch((e) => e);
+        expect(result.code).toBe(1);
+        expect(result.stderr).toContain('falling back to the FULL sweep');
+        expect(result.stdout + result.stderr).toContain('fixture-missing-ext-pkg');
+    });
+
+    it('exits 2 when --changed-since is given no ref', async () => {
+        const result = await run(process.execPath, [SCRIPT, FIXTURES, '--changed-since']).catch((e) => e);
+        expect(result.code).toBe(2);
+        expect(result.stderr).toContain('needs a git ref');
+    });
+
+    // Scoped to a real, resolvable diff that touches nothing: the guard must exit 0 quickly
+    // and say so, rather than exiting 2 the way an empty UNSCOPED sweep does.
+    it('exits 0 with a clear message when the changed scope is empty', async () => {
+        const result = await run(process.execPath, [SCRIPT, FIXTURES, '--changed-since', 'HEAD'], {
+            cwd: dirname(fileURLToPath(import.meta.url)),
+        }).catch((e) => e);
+        expect(result.code ?? 0).toBe(0);
+        expect(result.stdout).toContain('nothing to check');
     });
 });

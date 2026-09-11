@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
+import { TelemetryEnabledDefault } from './telemetryConfigUnits.js';
 
 const explorer = cosmiconfigSync('mj', { searchStrategy: 'global' });
 
@@ -24,6 +25,14 @@ const userHandlingInfoSchema = z.object({
   newUserRoles: z.array(z.string()).optional().default([]),
   updateCacheWhenNotFound: z.boolean().optional().default(false),
   updateCacheWhenNotFoundDelay: z.number().optional().default(30000),
+  /**
+   * The internal user whose context creates new user records. Matched against `User.Name` FIRST,
+   * then `User.Email` — so either spelling of an existing user resolves. On a stock database the
+   * system user is `Name='System'` / `Email='not.set@nowhere.com'`; both reach it.
+   *
+   * When unset, or when the value matches no user, resolution falls back to the system user and
+   * then to the lowest-ID active Owner. See `src/auth/principals.ts`.
+   */
   contextUserForNewUserCreation: z.string().optional().default(''),
   CreateUserApplicationRecords: z.boolean().optional().default(false),
   UserApplications: z.array(z.string()).optional().default([]),
@@ -191,9 +200,14 @@ const multiTenancySchema = z.object({
 });
 
 const telemetrySchema = z.object({
-  enabled: zodBooleanWithTransforms().default(
-    process.env.MJ_TELEMETRY_ENABLED !== 'false' // Enabled by default unless explicitly disabled
-  ),
+  // NOTE: MJ_TELEMETRY_ENABLED is read in DEFAULT_SERVER_CONFIG, not here.
+  //
+  // A Zod `.default()` only fires when the key is ABSENT from the parsed object, and
+  // DEFAULT_SERVER_CONFIG — the base of the config merge — always supplies `telemetry.enabled`.
+  // The key is therefore never absent, so a `.default(process.env...)` here could never take
+  // effect. Owning it in one place keeps the env var working and stops this line from claiming
+  // a behaviour it does not have.
+  enabled: zodBooleanWithTransforms().default(true),
   level: z.enum(['minimal', 'standard', 'verbose', 'debug']).optional().default('standard'),
 });
 
@@ -322,7 +336,11 @@ const magicLinkSchema = z.object({
    * from attaching a privileged role (e.g. Owner) to an external magic-link user.
    */
   grantableRoleNames: z.array(z.string()).optional().default([]),
-  /** Email of the internal user whose context provisions magic-link users (falls back to userHandling.contextUserForNewUserCreation). */
+  /**
+   * The internal user whose context provisions magic-link users, matched against `User.Name` then
+   * `User.Email` (falls back to `userHandling.contextUserForNewUserCreation`, then to the system
+   * user, then to the lowest-ID active Owner).
+   */
   contextUserForProvisioning: z.string().optional(),
   /**
    * Guard against bolting an external magic-link role/app onto an EXISTING account
@@ -385,7 +403,10 @@ const widgetSchema = z.object({
   rateLimitWindowMs: z.coerce.number().optional().default(60_000),
   /** Server-wide default hard ceiling (minutes) on a voice session when an instance omits one (W4). */
   voiceDefaultMaxSessionMinutes: z.coerce.number().optional().default(10),
-  /** Email/name of the internal user whose context READS widget config at mint time (falls back to system/Owner). */
+  /**
+   * The internal user whose context READS widget config at mint time, matched against `User.Name`
+   * then `User.Email` (falls back to the system user, then the lowest-ID active Owner).
+   */
   contextUserForLookup: z.string().optional(),
   /**
    * Host-identity public keys (PEM), keyed by widget PublicKey, for the `host-identity` auth
@@ -642,10 +663,23 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
     newUserAuthorizedDomains: [],
-    newUserRoles: ['UI', 'Developer'],
+    // 'UI' ONLY, deliberately (issue #4260). Auto-provisioning is on by default above, with no
+    // domain restriction, so this list is the standing authority of anyone the configured IdP will
+    // issue a token for. On the baseline seed 'Developer' and 'Integration' hold unfiltered
+    // CanUpdate on ~439 of the database's ~446 entities, so defaulting every such identity into
+    // either grants broad data-plane access no host should hand out by default. (The MJ: Users
+    // escalation this list also used to guard against — writing your own Type to 'Owner' — is now
+    // closed at the entity layer regardless of role: see MJUserEntityServer in
+    // @memberjunction/core-entities-server.) 'UI' carries the end-user surface (conversations,
+    // views, dashboards, settings) and no write on MJ: Users. Hosts that need more grant it
+    // per-deployment.
+    newUserRoles: ['UI'],
     updateCacheWhenNotFound: true,
     updateCacheWhenNotFoundDelay: 5000,
-    contextUserForNewUserCreation: 'not.set@nowhere.com',
+    // The seeded system user, named by `Name`. Its Email ('not.set@nowhere.com') resolves too —
+    // resolution tries both columns — but naming it this way keeps the default readable as what it
+    // is, rather than as an address nobody can receive mail at.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
     UserApplications: []
   },
@@ -710,9 +744,15 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     maxConcurrentRuns: 3
   },
 
-  // Telemetry defaults
+  // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.
+  //
+  // The env read lives HERE rather than in telemetrySchema for the same reason as
+  // loggingSettings.graphql.logVariables below: this object is the merge BASE, so any key it
+  // supplies is always present by the time Zod parses, and a schema-level `.default()` can never
+  // fire. An unset (or empty) variable leaves telemetry enabled; anything parseBooleanEnv reads as
+  // false ('false', '0', 'no', 'off') disables it.
   telemetry: {
-    enabled: true,
+    enabled: TelemetryEnabledDefault(process.env.MJ_TELEMETRY_ENABLED),
     level: 'standard'
   },
 

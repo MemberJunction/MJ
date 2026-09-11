@@ -7,12 +7,13 @@ import { getValidatedConfig, getSkywayConfig, type MJConfig } from '../../config
 import { fetchMigrationSlice, resolveGitRef, type MigrationFetchResult } from '../../lib/migration-fetch';
 import { verifyDatabaseConnection } from '../../lib/db-preflight';
 import { readCurrentDbVersion } from '../../lib/db-version';
+import { executeOpenAppMetadataRefresh, isOpenAppSchema } from '@memberjunction/open-app-engine';
 
 /** Skyway's default history table — matches `@memberjunction/skyway-core`'s config default. */
 const HISTORY_TABLE = 'flyway_schema_history';
 
 export default class Migrate extends Command {
-  static description = 'Migrate MemberJunction database to latest version';
+  static description = 'Migrate MemberJunction database to latest version. Open App migrates also run the core metadata-heal procs (same work as R__RefreshMetadata) scoped to the app schema, on SQL Server and PostgreSQL.';
 
   static examples = [
     `<%= config.bin %> <%= command.id %>
@@ -199,6 +200,7 @@ export default class Migrate extends Command {
           this.log(`\t${detail.Migration.Version ?? '(R)'} ${detail.Migration.Description} — ${detail.ExecutionTimeMS}ms`);
         }
       }
+      await this.refreshMetadataAfterOpenAppMigrate(config, targetSchema, flags.verbose);
     } else {
       spinner.fail();
       this.logToStderr(`\nMigration failed: ${result.ErrorMessage ?? 'unknown error'}\n`);
@@ -231,6 +233,45 @@ export default class Migrate extends Command {
       }
 
       this.error('Migrations failed');
+    }
+  }
+
+  /**
+   * Core `mj migrate` ends with Flyway running `R__RefreshMetadata` against `__mj`.
+   * An Open App migrate is a different history, so that repeatable never runs.
+   * After a successful Open App migrate, run the same heal (SQL Server: all seven
+   * R__ members with dependency-ordered view refresh; PostgreSQL: field-heal
+   * functions — no view recompile). `mj app install` uses the same helper via
+   * RunAppMigrations.
+   */
+  private async refreshMetadataAfterOpenAppMigrate(config: MJConfig, targetSchema: string, verbose: boolean): Promise<void> {
+    const coreSchema = config.coreSchema ?? '__mj';
+    if (!isOpenAppSchema(targetSchema, coreSchema)) {
+      return;
+    }
+
+    const spinner = ora(`Refreshing metadata for ${targetSchema}...`);
+    spinner.start();
+    try {
+      await executeOpenAppMetadataRefresh({
+        platform: config.dbPlatform === 'postgresql' ? 'postgresql' : 'sqlserver',
+        coreSchema,
+        appSchema: targetSchema,
+        database: {
+          Host: config.dbHost,
+          Port: config.dbPort,
+          Database: config.dbDatabase,
+          User: config.codeGenLogin,
+          Password: config.codeGenPassword,
+          Encrypt: config.dbEncrypt,
+          TrustServerCertificate: config.dbTrustServerCertificate,
+        },
+      });
+      spinner.succeed(`Metadata refreshed for ${targetSchema}`);
+    } catch (err: unknown) {
+      spinner.fail();
+      const message = err instanceof Error ? err.message : String(err);
+      this.error(`Open App metadata refresh failed for ${targetSchema}: ${message}`);
     }
   }
 

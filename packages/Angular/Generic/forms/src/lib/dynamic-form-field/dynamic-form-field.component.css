@@ -30,6 +30,13 @@
   max-width: 100%;
 }
 
+/* A value or placeholder longer than the field reads as truncated rather than
+   chopped mid-word — single-line controls cannot wrap. */
+.question-input,
+.question-dropdown {
+  text-overflow: ellipsis;
+}
+
 .question-dropdown {
   padding: 8px 12px;
   border: 1px solid var(--mj-border-default);
@@ -73,35 +80,19 @@
 
 .question-buttongroup {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent) transparent;
 }
 
-.question-buttongroup::-webkit-scrollbar {
-  height: 6px;
-}
-
-.question-buttongroup::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.question-buttongroup::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
-  border-radius: 3px;
-}
-
-.question-buttongroup::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--mj-brand-primary) 50%, transparent);
-}
-
+/* Wraps rather than scrolls: the previous overflow-x scroller sat inside a vertically
+   scrolling chat column, so overlay scrollbars hid the extra options outright. Matches
+   .footer-choice-button, the sibling button path in this same form. */
 .buttongroup-option {
-  flex: 0 0 auto;
-  white-space: nowrap;
+  flex: 0 1 auto;
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.3;
 }
 
 .buttongroup-option i {
@@ -118,10 +109,21 @@
 .radio-option,
 .checkbox-option {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
-  min-width: 120px;
+  /* Basis is the option's own content width, but it may shrink: short options share a
+     row, while an option too wide for the row takes the row to itself and wraps its
+     label instead of overflowing (and being clipped by .response-form's overflow:hidden). */
+  flex: 0 1 auto;
+  min-width: min(120px, 100%);
+  max-width: 100%;
+}
+
+.radio-option > input,
+.checkbox-option > input {
   flex: 0 0 auto;
+  /* nudge the control onto the first text line now that options are top-aligned */
+  margin-top: 3px;
 }
 
 .radio-label,
@@ -130,13 +132,22 @@
   user-select: none;
   margin: 0;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 6px;
+  /* the only text in the form that had no size of its own — it inherited the host app's
+     body size (~16px) while every sibling control here is 14px */
+  font-size: 14px;
+  /* without this the label is stuck at its content width and cannot wrap */
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .radio-label i,
 .checkbox-label i {
   color: var(--mj-text-secondary);
+  flex: 0 0 auto;
+  margin-top: 2px;
 }
 
 .validation-error {
@@ -220,7 +231,7 @@
 
 /* Medium fields - for names, cities, phone numbers (DEFAULT) */
 .input-container.width-medium {
-  max-width: 450px;
+  max-width: 560px;
 }
 
 .input-container.width-medium .question-input,
@@ -251,13 +262,32 @@
 
 /* Auto-width - for dropdowns, radio, checkbox (sizes to content) */
 .input-container.width-auto {
-  max-width: 350px;
+  max-width: 100%;
   min-width: 150px;
   width: auto;
 }
 
-.input-container.width-auto .question-dropdown {
-  width: 100%;
+/* widthHint: 'auto' is legal on any question type, and this container used to cap
+   every control it held at 350px. Keep that cap as the default so lifting it off the
+   container changes only the controls this fix targets — not sliders, date ranges or
+   the markdown panel, which also live here. */
+.input-container.width-auto > * {
+  max-width: 350px;
+}
+
+/* The select sizes to its widest option rather than to a fixed cap, so a long
+   selected label stays readable; the container is what bounds it. */
+.input-container.width-auto > .question-dropdown {
+  width: auto;
+  max-width: 100%;
+}
+
+/* Choice groups need the full width to lay their options out — that is the whole
+   point of the wrapping rules above. */
+.input-container.width-auto > .question-radio-group,
+.input-container.width-auto > .question-checkbox-group,
+.input-container.width-auto > .question-buttongroup {
+  max-width: 100%;
 }
 
 /* Responsive adjustments for smaller screens */
@@ -266,6 +296,11 @@
   .input-container.width-medium,
   .input-container.width-wide,
   .input-container.width-auto {
+    max-width: 100%;
+  }
+
+  /* release the width-auto child cap too, or it binds where the container no longer does */
+  .input-container.width-auto > * {
     max-width: 100%;
   }
 }

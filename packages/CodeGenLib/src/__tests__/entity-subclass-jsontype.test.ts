@@ -73,7 +73,11 @@ vi.mock('../Database/manage-metadata', () => ({
 
 vi.mock('../Config/config', () => ({
     mj_core_schema: '__mj',
-    configInfo: {}
+    configInfo: {},
+    resolveEntityPackageName: () => 'mj_generatedentities',
+    resolveEntityImportPackage: () => {
+        throw new Error('resolveEntityImportPackage should not be called without peer embeds/collections');
+    },
 }));
 
 vi.mock('./sql_logging', () => ({

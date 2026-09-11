@@ -54,6 +54,27 @@ const entity = md.Entities.find(e => e.Name === params.EntityName);
 
 This rule applies to any code that needs to look up a single entity by name. Use `Entities` (the array) only when you genuinely need to iterate over all entities (e.g. to filter by `SchemaName`).
 
+### 🚨 Primary keys: never assume a column named `ID`
+
+An MJ entity's primary key can be **any column name(s) and type(s)** — `ID`, `individual_id`, or a composite `(OrderID, LineNo)`. Every MJ core entity happens to use `ID`, so code that hardcodes it works on the whole core product and silently breaks on customer entities mapped from external schemas: `Load()` rejects the invented field name (`Primary key ID not found in entity ...`) or a composite key is truncated to its first column. This was #4179 (search click-through) and ~60 files had the same shape. `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts` gates it.
+
+| Situation | Write | Never |
+|---|---|---|
+| Literal MJ core entity (`'MJ: AI Agents'`) | `CompositeKey.FromID(id)` | `{ FieldName: 'ID', Value: id }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)` |
+| Entity is a **variable** (`entityName`, `entityInfo`, an event's `EntityName`) | `CompositeKey.FromURLSegment(entityInfo, recordId)` — reads a bare value (mapped onto the entity's first PK) or a `F1\|v1\|\|F2\|v2` segment | `CompositeKey.FromID(recordId)` |
+| Key from a `ResultType: 'simple'` row | `CompositeKey.FromEntityRecord(entityInfo, row)` | `row.ID`, `row['ID']` |
+| Key from a `BaseEntity` | `entity.PrimaryKey` | `CompositeKey.FromID(entity.ID)` |
+| Persisting a record id as one string (RecordID columns, search results, URLs) | `key.ToCompactURLSegment()` — bare value for a single column, prefixed segment for composite | `key.Values()` (drops field names — composite keys can never be read back) |
+| Filtering a variable entity by key | `${entityInfo.FirstPrimaryKey.Name} IN (...)` for single-column; `key.ToWhereClause()` per record for composite; `Fields: entityInfo.PrimaryKeys.map(pk => pk.Name)` | `` `ID IN (...)` ``, `Fields: ['ID']` |
+
+`FirstPrimaryKey` is for the places MJ is single-column **by design** — foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, the URL shorthand — never for constructing a load key or filter for an arbitrary entity. Use the accessor, never `PrimaryKeys[0]`. The gate is strict: every `FirstPrimaryKey` carries `// first-pk-ok: <reason>` on the same line, and every `CompositeKey.FromID` either has its `'MJ: …'` core-entity literal on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` call) or carries the same annotation. Never write `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` — the fallback is the hardcoded `ID` the rule exists to remove; if the entity can be missing, fail loudly.
+
+Two persisted formats are **sanctioned** and must **not** be unified: Record Changes and Version Label Items store the always-prefixed `ToURLSegment()` form (`ID|abc`); List Details, User Record Logs and search results store the compact form. `FromURLSegment` reads both. Those five are correct as they stand — write new code to whichever matches the column you are writing.
+
+**But those are not the only formats in the estate, and this is the trap.** An audit in [#4321](https://github.com/MemberJunction/MJ/pull/4321) found **90 write sites** setting a polymorphic `EntityID`/`RecordID` column, of which **2** use the canonical prefixed encoding. The rest write a bare single value, a comma-space joined list (`CompositeKey.Values()`), a `||`-joined bare list (`RecordGeoCode`), `Field=Value AND …` (`CompositeKey.ToString()` — `DataContextItem`), or something that is not a record pointer at all (`CompanyIntegrationRunDetail` stores `EntityMap:{id}|Processed:{n}`). A single column can carry several: `ResourcePermission.ResourceRecordID` is written as `ToURLSegment()` in one place, a bare id in another, and the literal `'DataExplorer'` in a third.
+
+So **do not assume an arbitrary `*RecordID` column holds either sanctioned format** — check its actual writers before reading or comparing against it. In particular, never assume it holds "one bare key value"; that assumption is what [#4321](https://github.com/MemberJunction/MJ/pull/4321) fixes in the soft-link dependency query, and what [#4330](https://github.com/MemberJunction/MJ/issues/4330) is auditing across the `first-pk-ok` annotations. Normalising the rest is Layer 0 of the polymorphic-foreign-keys plan (#4084).
+
 ### 🚨 CRITICAL: Don't Reach for the Global `Metadata` Provider in Per-Provider Code Paths
 
 `new Metadata()` and the static `Metadata.Provider` both resolve to the **process-global default provider**. That's fine in single-provider apps, but **wrong** in any code path that may run under a non-default provider — most importantly:
@@ -189,6 +210,33 @@ const results = await rv.RunView<TemplateContentEntity>({
 // results.Results is now properly typed as TemplateContentEntity[]
 const entities = results.Results; // No casting needed!
 ```
+
+### 🚨 SQL Literal Escaping in `ExtraFilter` & SQL Clauses — use `EscapeSQLString`
+
+- **NEVER hand-roll `.replace(/'/g, "''")`** when interpolating a dynamic value into SQL text, `ExtraFilter`, or a query predicate. Import `EscapeSQLString` from `@memberjunction/global` instead.
+- **Why**: ad-hoc inline escaping is error-prone, throws on `null`/`undefined`, leaves null bytes (`\0`) in place, and spawns divergent sanitizers across the codebase. `EscapeSQLString` gives you ANSI quote doubling plus null-byte stripping in one audited place.
+
+```typescript
+import { EscapeSQLString } from '@memberjunction/global';
+
+// ✅ CORRECT — centralized, safe SQL escaping
+const filter = `Email = '${EscapeSQLString(user.Email?.trim().toLowerCase())}'`;
+
+// ❌ WRONG — fragile manual regex
+const filter = `Email = '${user.Email.replace(/'/g, "''")}'`;
+```
+
+#### Three things `EscapeSQLString` does **not** do
+
+It escapes **string literals** and nothing else. Quote doubling is the wrong tool — or an insufficient one — in these three cases:
+
+| Context | Why quote doubling is not enough | Use instead |
+|---|---|---|
+| `LIKE` patterns | `%`, `_` and `[` stay live as wildcards, so a user searching for `%` still matches every row | Escape the wildcards too and pair the clause with `ESCAPE '\'`. Reference implementations: `escapeLikeValue()` in [`packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts`](../../packages/MJCore/src/generic/runQuerySQLFilterImplementations.ts) (platform-aware) and `GenericDatabaseProvider.escapeLikeTerm()` |
+| Identifiers — table, column, schema names | Identifiers are quoted with brackets or double quotes, never single quotes, so escaping `'` protects nothing | `ValidateIdentifier()` from `@memberjunction/schema-engine` |
+| A value that must not be missing | `EscapeSQLString(undefined)` returns `''`, so the predicate silently degrades to `Field = ''` and matches nothing instead of failing loudly | Validate the value before building the filter — the escaper will not fail for you |
+
+This is the standard for **new and changed code**. Ad-hoc escaping still exists in packages that have not been migrated; convert those as you touch them rather than in one sweep.
 
 ### RunView Error Handling
 **Important**: RunView does NOT throw exceptions when it fails. Instead, it returns a result object with `Success` and `ErrorMessage` properties:
@@ -472,7 +520,7 @@ while (true) {
     if (result.Results.length < 500) break;
 
     const last = result.Results[result.Results.length - 1];
-    lastSeenKey = CompositeKey.FromID(last.ID);
+    lastSeenKey = last.PrimaryKey;   // an entity_object row carries its own key — never assume the column is named ID
 }
 ```
 

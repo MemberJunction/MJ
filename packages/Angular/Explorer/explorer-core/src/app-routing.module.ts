@@ -6,6 +6,7 @@ import {
   AppLockGuardService as AppLockGuard
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
+import { ClaimRedeemComponent } from './lib/identity-claims/claim-redeem.component';
 import { LogError, Metadata, StartupManager, IMetadataProvider, IsNewEntityRecordUrlId, NEW_RECORD_VALUES_QUERY_PARAM } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID, RECORDS_RESOURCE_TYPE } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
@@ -664,6 +665,16 @@ const routes: Routes = [
   {
     path: 'oauth/callback',
     component: OAuthCallbackComponent
+  },
+
+  // Identity-claim redemption landing page — the target of claim emails'
+  // /claims/redeem?id=..&token=.. links (IdentityClaimEngineServer.sendClaimEmail).
+  // Same posture as the OAuth callback: no AuthGuard (the component waits for session
+  // restoration itself and tells an unauthenticated visitor to sign in first), and a
+  // direct component rather than a lazy route for the same library-routing reason.
+  {
+    path: 'claims/redeem',
+    component: ClaimRedeemComponent
   },
 
   // App-scoped resource routes (new pattern)

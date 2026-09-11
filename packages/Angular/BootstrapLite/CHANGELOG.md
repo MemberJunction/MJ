@@ -1,5 +1,248 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- ac96bb6: Empty turbo's global hash, and make every in-repo `mj` invocation resolve.
+
+  `hashOfInternalDependencies` — a hash over every non-gitignored file in the root manifest's
+  workspace-dependency closure — is an input to _every_ task hash in the repo. The root
+  `package.json` declared three `workspace:*` devDependencies (`cli`,
+  `integration-test-suite`, `server-bootstrap-lite`) whose combined closure was 154 of 310
+  packages, so editing any file in any of them invalidated all 310, builds and tests alike.
+  Task-level `inputs` cannot reach this; it is upstream of them. Removing the three drops a
+  one-file edit from 310/310 to 37/310 (`AI/Agents`) and 8/310 (Explorer dashboards).
+
+  Removing them also removes the workspace-root `node_modules/.bin/mj` that a number of things
+  quietly resolved through. Every consumer is repaired:
+  - The 15 root scripts, plus `check:ui-layers`, `check:standards` and `test:integration`, now
+    call `node packages/MJCLI/bin/run.js` directly.
+  - `mj.config.cjs`'s `checkModules` used a bare specifier that only worked via the symlink the
+    devDependency created. `check-module-loader.ts` _collects_ load failures rather than
+    throwing, so this would have silently degraded `mj test` to "Unknown integration check
+    bundle". Now an absolute `__dirname`-based path, asserted by `sibling-parity.test.ts`.
+  - Seven `prebuild`/`postbuild` hooks across `ng-bootstrap`, `ng-bootstrap-lite`,
+    `ng-explorer-core`, `server-bootstrap` and `server-bootstrap-lite` ran bare `mj codegen
+manifest` behind `|| echo 'Warning: …'`, so a lost CLI exits 0 and the build proceeds
+    against a stale class-registration manifest — a new `@RegisterClass` class never reaches it
+    and tree-shaking then drops it from bundled apps. Each now calls the workspace entry point
+    by path. Deliberately not a `@memberjunction/cli` devDependency: `ng-explorer-core` has six
+    dependents and `ng-bootstrap` two, so a devDep there would take a CLI edit from 6/310 to
+    12/310 invalidated packages, and `cli` itself depends on `server-bootstrap-lite`, where it
+    would be a build-graph cycle. A path call adds no graph edge.
+  - `a2aserver`, `ai-mcp-server` and `mj_codegen_api` ran bare `mj` in a fallback-less
+    `prestart`, exiting 127 where no global CLI existed and silently resolving a version-skewed
+    one where it did. Each now declares `@memberjunction/cli` — leaf packages only, so
+    `hashOfInternalDependencies` stays `""`.
+  - `pg-migrations.yml` invoked `npx mj` at four sites. With no root bin `npx` falls through to
+    the npm registry, where the package named `mj` is unrelated mongodb-js tooling — in a job
+    holding database credentials, in a workflow that does not trigger on `package.json`, so it
+    would have stayed silent until the next release-time PG run.
+
+  A new `check-mj-cli-resolution.mjs` gate in the `guards` job permits only the two forms that
+  actually resolve, so this cannot regress silently again.
+
+  `@memberjunction/testing-cli` carries a comment-only change to `check-module-loader.ts`
+  documenting why MJ's own root config cannot use a bare specifier while an adopter's can.
+
+  ***
+
+  **On the level:** this is `minor` to satisfy `check:changeset`, not because anything touches
+  the database. The branch adds no migration and edits no declarative metadata. The only file
+  it changes under `metadata/` is `metadata/CLAUDE.md` — an instruction document, part of the
+  repo-wide `npx mj` → `pnpm mj` rewrite — and the gate's trigger is `/^metadata\/.+/`, which
+  matches any path under that directory including Markdown. The rule's own justification for
+  metadata-⇒-minor is that "metadata counts as a migration because it becomes one" via the
+  release-time `mj sync push`; a `CLAUDE.md` never becomes one. Under permanent pre mode a
+  stray `minor` moves no version, so the cost is meaning rather than digits — hence this note,
+  so the next reader does not take it as precedent. Narrowing that pattern to exclude
+  Markdown belongs in its own PR against the gate.
+
+### Patch Changes
+
+- cdd25c0: Regenerate the class-registration manifests for `AuthorizationCheckServerOperation`.
+
+  #4185 added `AuthorizationCheckServerOperation` in `@memberjunction/core-entities`, decorated `@RegisterClass(BaseRemotableOperation, 'Authorization.Check')`, without regenerating the committed class-registration manifests. Every push to `next` since has failed the Build job's manifest freshness gate. The four bootstrap manifests now import and register the class (one more registration each), which is what `pnpm run mj:manifest` produces. Without the entry, tree-shaking can drop the operation from bundled apps and the remotable `Authorization.Check` operation silently never registers.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b915983]
+- Updated dependencies [1bced7c]
+- Updated dependencies [05b4cb5]
+- Updated dependencies [b7819d2]
+- Updated dependencies [c1fea88]
+- Updated dependencies [197fdf8]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [241c2c1]
+- Updated dependencies [0ec1980]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [ceb8e46]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [ea2d1da]
+- Updated dependencies [0db6105]
+- Updated dependencies [938cd9e]
+- Updated dependencies [dbaa967]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [ac96bb6]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ng-conversations@6.1.0-edge.6
+  - @memberjunction/ng-artifacts@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ng-auth-services@6.1.0-edge.6
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.6
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.6
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.6
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.6
+  - @memberjunction/ng-explorer-core@6.1.0-edge.6
+  - @memberjunction/ng-file-storage@6.1.0-edge.6
+  - @memberjunction/ng-shared@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/ai-realtime-client@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/entity-communications-base@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- 8b78695: Regenerate the class-registration manifests so every one of them is on the chunked format.
+
+  The chunked manifest format (`CLASS_REGISTRATIONS_0`, `CLASS_REGISTRATIONS_1`, …) was introduced to keep
+  TypeScript from hitting TS2590 on a single union that had grown too large. Only `server-bootstrap` and
+  `server-bootstrap-lite` were regenerated at the time, so the remaining manifests stayed on the old
+  single-array shape and the `Build` job's manifest gate has been failing on `next` ever since.
+
+  This regenerates all of them from a fully-built workspace. Alongside the format change the sweep picks up
+  registrations that had drifted out: `MJAIUsageTypeEntity` and the `LinearPriceUnitType` /
+  `PerImagePriceUnitType` / `TimePerHourPriceUnitType` / `TimePerMinutePriceUnitType` pricing unit types in the
+  Angular bootstraps, and `MJEntityPermissionEntityServer` / `MJTenantFilterMiddleware` / `RateLimitMiddleware`
+  from `@memberjunction/server` in the server bootstrap.
+
+  Generated output only; no hand edits, no runtime behaviour change.
+
+  One thing worth knowing for anyone regenerating these in future: **the manifest generator is sensitive to
+  build state.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the
+  `.d.ts` each `exports` entry points at, and it `continue`s past any that is missing. Run `mj codegen manifest`
+  against a workspace whose `dist/` folders are absent and the subpaths silently resolve to nothing — the
+  package falls through to the whole-package branch and `lazy-feature-config.ts` collapses its twelve
+  per-dashboard chunks into one eager import, with no warning. Build the workspace first.
+
+- Updated dependencies [4273317]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [3fa1fb8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [34d9501]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [dd6d1f0]
+- Updated dependencies [71ccf29]
+- Updated dependencies [a8710bf]
+- Updated dependencies [e1ebab9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [905820a]
+- Updated dependencies [34d19a9]
+- Updated dependencies [2644a76]
+  - @memberjunction/ng-explorer-core@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ng-conversations@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.5
+  - @memberjunction/ng-artifacts@6.1.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.5
+  - @memberjunction/ng-shared@6.1.0-edge.5
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.5
+  - @memberjunction/ng-file-storage@6.1.0-edge.5
+  - @memberjunction/ai-realtime-client@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/entity-communications-base@6.1.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.5
+  - @memberjunction/ng-auth-services@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.4
+  - @memberjunction/ng-explorer-core@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-realtime-client@6.1.0-edge.4
+  - @memberjunction/ng-conversations@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/ng-shared@6.1.0-edge.4
+  - @memberjunction/ng-artifacts@6.1.0-edge.4
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.4
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.4
+  - @memberjunction/ng-file-storage@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/entity-communications-base@6.1.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.4
+  - @memberjunction/ng-auth-services@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

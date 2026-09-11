@@ -55,25 +55,28 @@ END
 -- ----------------------------------------------------------------------------
 -- Assertion 3: All 17 UNIQUE constraints exist
 -- ----------------------------------------------------------------------------
-DECLARE @ExpectedConstraints TABLE (TableName SYSNAME, ConstraintName SYSNAME);
-INSERT INTO @ExpectedConstraints VALUES
-    ('ActionAuthorization',          'UQ_ActionAuthorization_ActionID_AuthorizationID'),
-    ('ActionContext',                'UQ_ActionContext_ActionID_ContextTypeID'),
-    ('ActionLibrary',                'UQ_ActionLibrary_ActionID_LibraryID'),
-    ('AIAgentArtifactType',          'UQ_AIAgentArtifactType_AgentID_ArtifactTypeID'),
-    ('AIModelAction',                'UQ_AIModelAction_AIActionID_AIModelID'),
-    ('APIKeyApplication',            'UQ_APIKeyApplication_APIKeyID_ApplicationID'),
-    ('ApplicationEntity',            'UQ_ApplicationEntity_ApplicationID_EntityID'),
-    ('AuthorizationRole',            'UQ_AuthorizationRole_AuthorizationID_RoleID'),
-    ('ComponentDependency',          'UQ_ComponentDependency_ComponentID_DependencyComponentID'),
-    ('ComponentLibraryLink',         'UQ_ComponentLibraryLink_ComponentID_LibraryID'),
-    ('EmployeeRole',                 'UQ_EmployeeRole_EmployeeID_RoleID'),
-    ('EmployeeSkill',                'UQ_EmployeeSkill_EmployeeID_SkillID'),
-    ('EntityAction',                 'UQ_EntityAction_ActionID_EntityID'),
-    ('EntityCommunicationMessageType','UQ_EntityCommunicationMessageType_BaseMessageTypeID_EntityID'),
-    ('FileEntityRecordLink',         'UQ_FileEntityRecordLink_EntityID_FileID'),
-    ('QueryPermission',              'UQ_QueryPermission_QueryID_RoleID'),
-    ('UserApplicationEntity',        'UQ_UserApplicationEntity_UserApplicationID_EntityID');
+-- AltConstraintName: a later migration may legitimately have replaced the v5.37 constraint.
+-- Either name satisfies the assertion, so this script is valid both immediately after the
+-- v5.37.x migration and on a database that has since taken later eras' migrations.
+DECLARE @ExpectedConstraints TABLE (TableName SYSNAME, ConstraintName SYSNAME, AltConstraintName SYSNAME NULL);
+INSERT INTO @ExpectedConstraints (TableName, ConstraintName, AltConstraintName) VALUES
+    ('ActionAuthorization',          'UQ_ActionAuthorization_ActionID_AuthorizationID', NULL),
+    ('ActionContext',                'UQ_ActionContext_ActionID_ContextTypeID', NULL),
+    ('ActionLibrary',                'UQ_ActionLibrary_ActionID_LibraryID', NULL),
+    ('AIAgentArtifactType',          'UQ_AIAgentArtifactType_AgentID_ArtifactTypeID', NULL),
+    ('AIModelAction',                'UQ_AIModelAction_AIActionID_AIModelID', NULL),
+    ('APIKeyApplication',            'UQ_APIKeyApplication_APIKeyID_ApplicationID', NULL),
+    ('ApplicationEntity',            'UQ_ApplicationEntity_ApplicationID_EntityID', NULL),
+    ('AuthorizationRole',            'UQ_AuthorizationRole_AuthorizationID_RoleID', NULL),
+    ('ComponentDependency',          'UQ_ComponentDependency_ComponentID_DependencyComponentID', NULL),
+    ('ComponentLibraryLink',         'UQ_ComponentLibraryLink_ComponentID_LibraryID', NULL),
+    ('EmployeeRole',                 'UQ_EmployeeRole_EmployeeID_RoleID', NULL),
+    ('EmployeeSkill',                'UQ_EmployeeSkill_EmployeeID_SkillID', NULL),
+    ('EntityAction',                 'UQ_EntityAction_ActionID_EntityID', NULL),
+    ('EntityCommunicationMessageType','UQ_EntityCommunicationMessageType_BaseMessageTypeID_EntityID', NULL),
+    ('FileEntityRecordLink',         'UQ_FileEntityRecordLink_EntityID_FileID', 'UQ_FileEntityRecordLink_EntityID_RecordID_FileID'),
+    ('QueryPermission',              'UQ_QueryPermission_QueryID_RoleID', NULL),
+    ('UserApplicationEntity',        'UQ_UserApplicationEntity_UserApplicationID_EntityID', NULL);
 
 DECLARE @MissingCount INT = (
     SELECT COUNT(*) FROM @ExpectedConstraints ec
@@ -81,7 +84,7 @@ DECLARE @MissingCount INT = (
         SELECT 1 FROM sys.indexes i
         JOIN sys.objects o ON o.object_id = i.object_id
         WHERE o.name = ec.TableName
-          AND i.name = ec.ConstraintName
+          AND i.name IN (ec.ConstraintName, ec.AltConstraintName)
           AND i.is_unique = 1
     )
 );
@@ -93,7 +96,7 @@ BEGIN
     WHERE NOT EXISTS (
         SELECT 1 FROM sys.indexes i
         JOIN sys.objects o ON o.object_id = i.object_id
-        WHERE o.name = ec.TableName AND i.name = ec.ConstraintName AND i.is_unique = 1
+        WHERE o.name = ec.TableName AND i.name IN (ec.ConstraintName, ec.AltConstraintName) AND i.is_unique = 1
     );
     THROW 50006, 'FAIL: One or more expected UNIQUE constraints are missing (see SELECT output above)', 1;
 END

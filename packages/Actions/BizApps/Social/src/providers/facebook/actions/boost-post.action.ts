@@ -1,9 +1,9 @@
 import { RegisterClass } from '@memberjunction/global';
-import { FacebookBaseAction } from '../facebook-base.action';
+import { FacebookBaseAction, FacebookPost } from '../facebook-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { SocialMediaErrorCode } from '../../../base/base-social.action';
 import { LogStatus, LogError } from '@memberjunction/core';
-import axios from 'axios';
+import { HttpGet } from '@memberjunction/network-utils';
 import { BaseAction } from '@memberjunction/actions';
 
 /**
@@ -240,7 +240,7 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
      * Create a campaign
      */
     private async createCampaign(adAccountId: string, name: string, objective: string): Promise<any> {
-        const response = await this.axiosInstance.post(
+        const response = await this.httpClient.Post<any>(
             `/${adAccountId}/campaigns`,
             {
                 name,
@@ -250,7 +250,7 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
             }
         );
 
-        return response.data;
+        return response.Data;
     }
 
     /**
@@ -273,7 +273,7 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
         // Calculate daily budget
         const dailyBudget = Math.ceil((budget * 100) / durationDays); // Convert to cents
 
-        const response = await this.axiosInstance.post(
+        const response = await this.httpClient.Post<any>(
             `/${adAccountId}/adsets`,
             {
                 name,
@@ -289,7 +289,7 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
             }
         );
 
-        return response.data;
+        return response.Data;
     }
 
     /**
@@ -308,10 +308,10 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
 
         if (callToAction) {
             // Get post details to add CTA
-            const postResponse = await axios.get(
+            const postResponse = await HttpGet<FacebookPost>(
                 `${this.apiBaseUrl}/${postId}`,
                 {
-                    params: {
+                    Query: {
                         access_token: pageToken,
                         fields: 'permalink_url'
                     }
@@ -321,17 +321,17 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
             creativeData.call_to_action = {
                 type: callToAction,
                 value: {
-                    link: postResponse.data.permalink_url
+                    link: postResponse.Data.permalink_url
                 }
             };
         }
 
-        const response = await this.axiosInstance.post(
+        const response = await this.httpClient.Post<any>(
             `/${adAccountId}/adcreatives`,
             creativeData
         );
 
-        return response.data;
+        return response.Data;
     }
 
     /**
@@ -343,7 +343,7 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
         creativeId: string,
         name: string
     ): Promise<any> {
-        const response = await this.axiosInstance.post(
+        const response = await this.httpClient.Post<any>(
             `/${adAccountId}/ads`,
             {
                 name,
@@ -353,7 +353,7 @@ export class FacebookBoostPostAction extends FacebookBaseAction {
             }
         );
 
-        return response.data;
+        return response.Data;
     }
 
     /**

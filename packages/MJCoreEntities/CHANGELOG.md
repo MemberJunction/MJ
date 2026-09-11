@@ -1,5 +1,377 @@
 # Change Log - @memberjunction/core-entities
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 2c826f7: AI model metadata refresh — week of 2026-09-07
+
+  Weekly AI model/vendor research pass over `metadata/ai-models/` and `metadata/ai-vendors/`. Four new
+  models, one new vendor, one rate card resolved, one retirement recorded.
+
+  **New models**
+  - **Claude Fable 5.1** (Anthropic, 2026-09-01) — `claude-fable-5-1`, 1M context / 128K output,
+    $10/$50 per 1M unchanged from Fable 5, but cache reads cut 75% to $0.25/1M. Anthropic direct,
+    Amazon Bedrock and OpenRouter routes.
+  - **GPT-6 Astra** (OpenAI, 2026-09-03) — `gpt-6-astra`, 1.05M context / 128K output, $10/$50 at the
+    short-context tier. Requests above 272K input tokens are rebilled entirely at $20/$75; that second
+    tier is documented in the cost record's Comments rather than given its own row. OpenAI direct plus
+    a Microsoft Foundry/Azure route (Limited Access Program). No Bedrock or OpenRouter row — neither
+    was serving it at the time of research.
+  - **Gemini 3.8 Flash** (Google, 2026-09-02) — `gemini-3.8-flash`, 1M context / 64K output, holding
+    3.7 Flash's $0.75/$3.75 introductory rate through 2026-12-31 before stepping to $1.50/$7.50.
+    Google, Vertex AI and OpenRouter routes.
+  - **Muse Spark 1.3** (Meta, 2026-09-02) — 1,048,576-token context, $1.25/$4.25 Standard tier.
+
+  **New vendor**
+  - **Meta**, credential type `API Key`, added as a Model Developer only. Muse Spark 1.3 reaches
+    inference through OpenRouter (`meta/muse-spark-1.3`, `OpenRouterLLM`), so no new driver class is
+    required. The cheaper Contributor tier is intentionally not recorded — it grants Meta training
+    rights over submitted data.
+
+  **Pricing**
+  - **GLM 5.3** gains a Z.AI Inference Provider row (`glm-5.3`, 1M context / 128K output) and its
+    first cost record at $1.40/$4.40 per 1M with $0.26/1M cached input, resolving the "pricing TBD"
+    placeholder left when the model was added on 2026-08-24.
+
+  **Deprecation**
+  - **Claude Opus 4.1** was retired on the Anthropic API on 2026-08-05. Its Anthropic Inference
+    Provider row moves to `Inactive` and its Anthropic cost row to `Expired` with
+    `EndedAt: 2026-08-05`. The Model Developer row stays `Active`, and the Amazon Bedrock and
+    OpenRouter rows are untouched — those platforms set their own retirement schedules and still serve
+    the model.
+
+  The full report, including everything flagged for human review rather than applied, is in
+  `reports/ai-model-research/2026-09-07-weekly-report.md`.
+
+- 0d3094c: **A skill can stay active for a conversation, not just a run.**
+
+  A skill activates for one run: `requestedSkillIDs` is a per-call input and the activated set dies
+  with the run. That is right for a one-shot capability and wrong for a skill that behaves as a
+  mode — a persona, or an assistant whose reply carries a menu that is pressed on the NEXT turn, when
+  nothing would re-activate it. Every conversational agent with a mode was re-implementing a
+  (conversation, skill) table and merging it into the request by hand.
+
+  Two additive, opt-in pieces (migration `V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation`):
+  - `AISkill.ActivationScope` — `Run` (default, today's behaviour) or `Conversation`.
+  - `MJ: Conversation Skills` — one row per (conversation, skill), `Active` or `Ended`, with the run
+    that activated it as provenance.
+
+  `BaseAgent` does the rest. At the start of every root run that has a `conversationId`, the
+  conversation's Active skills join `requestedSkillIDs` (every availability gate still applies on
+  every run). When a `Conversation`-scoped skill activates — by request or by the agent's own choice —
+  its row is written or re-activated. A persisted skill that a gate refuses this turn is simply not
+  activated and gets no note (the user never mentioned it); its row stays Active, because a gate miss
+  can be transient and ending the row would be silent, permanent loss of a mode. Retiring a mode is an
+  explicit act. An explicitly requested skill that is refused still gets the system note.
+  `BaseAgent.EndConversationSkill(conversationId, skillId, user)` is the app's "leave the mode"
+  gesture. All three steps are protected/public and fail soft: losing a persisted skill means the user
+  re-invokes it, never that the turn fails.
+
+  Precedent: `UserRoutine.RequestedSkillIDs` (v5.45) persists a pre-selection on the owning record and
+  threads it per run; this is the same idea keyed on the conversation. First-adopter feedback (Betty).
+  A composer chip that shows the conversation's active skills and ends one on removal is the natural
+  UI follow-up; the server side works for every client and bridge without it.
+
+  Also: `mj sync pull` now round-trips a skill's `MJ: AI Skill Search Scopes` rows (under
+  `metadata/ai-skills`) and an agent's `MJ: AI Agent Skills` grants (under `metadata/agents`, for the
+  agents that directory pulls) — pull-config additions only; push already accepted both.
+
+- 43f9133: Add `Entity.SubtypeSelector` column, JSONType metadata, and CodeGen artifacts for prospective IsA subtype resolution.
+  - **Schema & Migration**: Migration `V202609081111__v6.1.x__Entity_SubtypeSelector.sql` adds nullable `SubtypeSelector NVARCHAR(MAX)` on `__mj.Entity` with extended property documentation, regenerated CRUD stored procedures, and view refresh.
+  - **Metadata**: Created `IEntitySubtypeSelectorConfig` interface (`metadata/entities/JSONType-interfaces/IEntitySubtypeSelectorConfig.ts`) and configured JSONType metadata on `Entity.SubtypeSelector` via `metadata/entities/.entity-field-jsontype-entity-subtype-selector.json`.
+  - **Generated Code**: Generated `SubtypeSelector` and typed `SubtypeSelectorObject: MJEntityEntity_IEntitySubtypeSelectorConfig | null` accessor on `MJEntityEntity` in `@memberjunction/core-entities`, GraphQL schema definitions in `@memberjunction/server`, and updated Angular entity forms in `@memberjunction/ng-core-entity-forms`.
+
+- 2cc08e1: Migration `V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation` no longer inserts `EntityField` rows with a literal `Sequence`.
+
+  Twelve `EntityField` INSERTs carried literal sequence numbers (1–11 on `MJ: Conversation Skills`, 14 on `MJ: AI Skills`). Each was preceded by the `+100000` sequence park, which is why a from-scratch `mj migrate` still succeeds today — but the park is the mechanism `#4292` removed, and its own changeset records why: it "could be made idempotent within one run but not across two migrations replayed on a fresh database." Its `NOT EXISTS (Sequence >= 100000)` guard makes a _second_ migration's park a silent no-op, and the next literal insert then collides on `UQ_EntityField_EntityID_Sequence` — surfacing as an unrelated foreign-key error against `EntityFieldValue`, and only ever on a fresh install.
+
+  The literals are replaced with the apply-time expression CodeGen now emits, one per INSERT:
+
+  ```sql
+  (SELECT COALESCE(MAX([Sequence]), 0) + 1
+     FROM [${flyway:defaultSchema}].[EntityField]
+    WHERE [EntityID] = '<entity-id>')
+  ```
+
+  The parks are left in place, matching `V202609081111__v6.1.x__Entity_SubtypeSelector`, which already pairs a park with an apply-time expression. Park-plus-expression is safe where park-plus-literal was not: `MAX + 1` avoids a collision whatever the park did.
+
+  This migration merged to `next` on 2026-09-03; the CI gate that detects the pattern landed on 2026-09-08, and it diffs against the PR's base — so on PRs into `next` the file is already present and invisible to it. It surfaces for the first time on a release PR into `main`, which is where it was caught.
+
+  No behaviour change on a fresh install: verified that the resulting sequences are identical, because the repeatable renumber normalises them either way.
+
+- e9e9873: fix(metadata): the retired Kimi K2.5 Moonshot cost record uses a Status its entity actually allows
+
+  `MJ: AI Model Costs.Status` is a value list of `Active | Expired | Invalid | Pending`. The Kimi K2.5 / Moonshot AI cost record was set to `Inactive` — valid on `MJ: AI Model Vendors`, where 34 rows legitimately use it, but not on `MJ: AI Model Costs` — so `mj sync push --ci` failed validation and took the deterministic integration tier red on `next`:
+
+  ```
+  Field "Status" has invalid value "Inactive"
+    → Allowed values are: Pending, Expired, Invalid, Active
+  ```
+
+  This is the same defect as the GLM-4.7 Cerebras record fixed in `1fa6f6b08b`, reintroduced by the AI-model research routine in #4110. The research pass writes `Inactive` for a retired cost row because that is the word a human would reach for, and nothing in the authoring path rejects it — the value list is only enforced at push time, on a branch nobody validates until CI runs.
+
+  The record now reads `Status: "Expired"` and carries `EndedAt: "2026-08-31T00:00:00.000Z"`. `EndedAt` is documented as "when this pricing expired… NULL indicates currently active pricing", so an expired row without it would contradict itself — the same pairing the GLM-4.7 fix used. The date is the one the record's own `Comments` already gave for Moonshot's sunset of `moonshotai/Kimi-K2.5`. That comment said "STATUS FLIPPED TO INACTIVE", which would have described a value the row no longer holds, so it now reads "STATUS SET TO EXPIRED, ENDEDAT".
+
+  The sibling `MJ: AI Model Vendors` rows keep `Inactive`, which is correct there.
+
+- 0677595: Restore the 56 generated `Validate()` overrides on `MJCoreEntities`, absent since `197fdf8376`.
+
+  `v6.1.0-edge.5` shipped `packages/MJCoreEntities/src/generated/entities/__mj.ts` with 56 `public override Validate()` methods, covering 46 entity classes. `197fdf8376` ("100% CodeGen idempotency, field change tracking, and churn elimination") regenerated that file and emitted none, and the follow-up `9ef9321847` did not restore them. Neither commit's message nor its changeset mentions validation, so the removal was silent — no consumer of `@memberjunction/core-entities` had any signal that entity validation had stopped running for those classes.
+
+  Restored by regenerating from a database built only from this repo's own migrations and metadata. The regenerated set is byte-identical in membership to what `v6.1.0-edge.5` shipped — diffing the validator class sets between the tag and the regeneration returns nothing — and the file diff is purely additive: 2,854 insertions, 0 deletions.
+
+  Not included: `MJFormChromeRuleEntity`'s validator, added by `0654f69462` after the edge.5 tag and removed before any release, so it has never shipped. It cannot be regenerated on a fresh install because its `GeneratedCode` record was never seeded by a migration — a separate pre-existing gap, tracked independently rather than hand-patched into generated output.
+
+### Patch Changes
+
+- b7819d2: Add Authorization.Check remotable operation: evaluate named MJ: Authorizations (including ancestor grants) over ExecuteRemoteOperation. Unknown names fail closed. UseAuditLog rows write MJ: Audit Logs.
+- 197fdf8: Achieve 100% CodeGen idempotency relative to database state and eliminate metadata churn across SQL Server and PostgreSQL:
+  - **Idempotency (No-Change Runs)**: Running CodeGen against an unchanged schema produces zero diffs and zero surviving migration artifacts. The run report confirms `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`. Empty capture files are cleaned up automatically.
+  - **Minimal Blast Radius (Single-Column Changes)**: Adding a column to an entity modifies only that entity's artifacts (`__mj.ts`, specific entity zod/schema files, `generated.ts` type block, and `mjentity.form.component.*`). Sibling fields and other entities are strictly untouched.
+  - **Decision Metadata Persistence**: Categorization, display name, and form layout decisions are persisted to `metadata/entities/decisions/` and committed to version control, ensuring clean-room runs match warm runs.
+  - **Stable Form Submodule Partitioning**: Replaced array index-chunking in Angular form submodule generation with stable hash buckets of entity names, preventing unrelated form files from shifting when an entity is added or removed.
+  - **Deterministic Ordering**: Unified entity, field, and relationship sorting around `OrdinalCompare` across TypeScript and SQL, eliminating locale and database collation discrepancies.
+  - **MetadataSync Preservation**: Preserved runtime and CodeGen-managed fields during push synchronization while maintaining deterministic lookup index caching.
+  - **Description Lock Protection**: Corrected inverted `AutoUpdateDescription` logic in `MJEntityFieldEntityExtended` and `MJEntityEntityExtended` so that user edits to `Description` flip `AutoUpdateDescription` to `false`, preventing subsequent CodeGen runs from overwriting customized descriptions.
+
+- 38d4482: Filter JSON can name fields as `Source.Field` (always written when the builder is given `sources`). Read path accepts dotted and bare names. `CompositeFilter` (`FromJSON` / `Evaluate` / `SummaryText`) lives in `@memberjunction/core` for in-memory eval and compact/grid copy. Views still compile to SQL and strip the prefix. Multi-entity field picker is a two-pane UI; single-entity views are unchanged.
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 7fefca2: Fix Smart Filter doing nothing when a User View is first created.
+
+  `MJUserViewEntityExtended.Save()` detected a brand-new view with `!this.ID`. Since `NewRecord()` began pre-assigning a UUID primary key that check is never true, and because the first value written to a fresh field also seeds its `OldValue`, neither `SmartFilterEnabled` nor `SmartFilterPrompt` reads as Dirty on create. The net effect was that the AI Smart Filter pass never ran on create: the prompt was stored but no `WhereClause` was generated. Editing an existing view still worked.
+  - Newness is now detected with `IsSaved`, in both `Save()` and `UpdateWhereClause()`.
+  - On a new record, the empty `FilterState` seeded by `NewRecord()` no longer erases a `WhereClause` that a caller set directly (programmatic view creation without `CustomWhereClause`).
+  - A saved view whose `SmartFilterWhereClause` was never generated (e.g. created while this bug was live) is regenerated on its next `UpdateWhereClause()`.
+  - The `UpdateWhereClause` GraphQL query now awaits and forces the regeneration, uses the read-write provider for its save, and fails clearly if the view cannot be loaded.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/interactive-component-types@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- b1b24d7: Weekly AI model & vendor intelligence report (2026-08-31) + four metadata edits.
+  - **New model** `GLM-5.3-Flash` (Z.AI, released 2026-08-26). Z.AI as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Z.AI direct ($0.15/$0.50 per 1M) and OpenRouter ($0.05/$0.1667 reflecting a 50% Z.AI promo through 2026-09-09; a follow-up row should be added when the promo expires so the historical rate is preserved).
+  - **New model** `Qwen3.8-Flash` (Alibaba Cloud, released 2026-08-26). Alibaba Cloud as Model Developer + Inference Provider, plus OpenRouter and Fireworks.ai as Inference Providers. Cost rows for Alibaba direct and OpenRouter at $0.15/$0.47 per 1M.
+  - **New inference provider** on `Grok 4.6`: Amazon Bedrock vendor row (`xai.grok-4-6-v1:0`) and matching cost record (2026-08-25 start, $2/$6 sub-200K tier at vendor parity with x.ai direct).
+  - **Deprecation** `Kimi K2.5` on Moonshot AI direct — the Moonshot Inference Provider vendor row and cost record are now `Status: "Inactive"` per Moonshot's 2026-08-31 sunset of `moonshotai/Kimi-K2.5` and the `moonshot-v1-*` series. Fireworks.ai and OpenRouter vendor rows remain Active (weights are MIT-licensed and both providers may continue to serve the model).
+  - Full report at `reports/ai-model-research/2026-08-31-weekly-report.md`, including 5 items flagged for human review (DeepSeek V4 Flash Vision Experimental, OpenAI Daybreak Red/Blue on Bedrock, OpenAI Astra, Azure OpenAI cache-write charges on GPT-5.6 family, plus prior-week open items).
+
+- 1a2ce13: Pricing for models that aren't billed by the token, and OpenAI as a second Whisper provider.
+
+  **The problem.** MJ's pricing _schema_ was always general — a cost row names a price unit type, and the unit type names a `DriverClass` the ClassFactory resolves. The _execution layer_ was not: `BasePriceUnitType` took two token counts, only the three token drivers were ever registered, and `MJAIPromptRunEntityServer` refused to cost any run reporting zero tokens. So the three continuous-media unit types that already shipped — `Per Image`, `Per Minute`, `Per Hour` — resolved to nothing, and every run priced by one was silently uncosted. Six ACTIVE image cost rows were in that state. (Bug register B60.)
+
+  Speech-to-text made it concrete: Groq bills Whisper by the audio-hour, the just-landed `GroqAudioGenerator` requested `response_format: 'json'` which discards the duration entirely, and the two Whisper models shipped with no cost rows because there was no honest way to write one.
+
+  **Usage grows a second axis.** `ModelUsage` gains `unitKind` (`'Tokens' | 'Seconds' | 'Characters' | 'Images'`), `inputUnits` and `outputUnits`, plus a `ModelUsage.ForMedia(kind, input, output?)` constructor. Continuous quantities are deliberately _not_ folded into the token fields: a run reporting 90 "tokens" that means 90 minutes corrupts `TokensUsed`, every rollup above it, and every dashboard downstream. `SpeechResult` gains `usage?`, matching `ImageGenerationResult`.
+
+  Quantities are always recorded in the **base** measure, never the billing measure — audio billed per hour is still recorded in seconds, and the driver converts. That is what lets one measured duration be priced against a per-minute row from one vendor and a per-hour row from another.
+
+  **Pricing takes quantities.** `BasePriceUnitType` gains a `UnitKind` getter (defaulting to `'Tokens'`, so external subclasses need no change) and `CalculateCost(activeCost, usage)`, the preferred entry point — its default delegates to the existing cache-aware path, so every current driver behaves identically. `TimePerMinutePriceUnitType`, `TimePerHourPriceUnitType` and `PerImagePriceUnitType` register against the unit types that were already seeded, closing the driver half of B60.
+
+  Each driver also exposes `UnitsPerBillingUnit` — 1,000,000 for a per-million-token rate, 3,600 for per-hour, 1 for per-image — so a divisor exists in exactly one place per driver. `TOKEN_PRICE_UNIT_TYPE_DIVISORS` is _derived_ from the driver instances rather than restated, which makes drift between the exported table and the arithmetic that prices every run impossible instead of merely detectable. The map deliberately covers only the token drivers: a missing key is the signal for a consumer doing token-rate math to SKIP a row priced by audio duration, not to fall back to a per-token divisor.
+
+  `BasePriceUnitType` is marked `@RequiresSubclass()`. `ClassFactory.CreateInstance` has never returned `null` for an unregistered key — it falls back to `new BaseClass(...)` — so `if (!calculator)` was a dead branch that installed a hollow object whose only pricing method is `undefined`, surfacing as a `TypeError` inside cost math rather than "this driver is not registered". The new `UnitKind` default made that hollow instance _more_ convincing, since it answers `'Tokens'` and so passes the measure check before throwing. `GetPriceCalculator` now resolves via `TryCreateInstance` and reports the failure, so its documented `null` return is real.
+
+  `AIEngineBase.CalculateModelCost(modelID, vendorID, usage)` is a new costing surface for callers holding a result but no prompt run — transcription and image actions, downstream apps. It returns `null`, having logged why, when there is no active cost row in the measure the run recorded, no registered driver, or a mismatch between what the run measured and what the row prices. A null means "we don't know what this cost" and must never be read as zero.
+
+  **Cost-row selection is measure-aware.** `GetActiveModelCost` takes an optional `usageKind` and excludes rows priced in any other measure before the most-recently-started tiebreak. Without it the effective key is `(Model, Vendor, ProcessingType)`, which cannot represent a model billing in two measures — per-image output alongside per-token prompt — so which measure you got was a sort-order coin flip that was then refused downstream and reported as a pricing gap. The measure is now established _before_ a row is chosen. Omitting the argument keeps the previous behaviour, and no shipped model+vendor carries two measures today, so nothing changes for existing data.
+
+  **The measure is a first-class row, not a string.** A new `MJ: AI Usage Types` entity (`Tokens`, `Seconds`, `Characters`, `Images`) is what a run and a price unit type point at, so "what does this price buy" is answerable by a join instead of by convention. An earlier revision carried it as `AIPromptRun.UnitsKind NVARCHAR(20)` behind a CHECK constraint, which made the set of measures a property of a constraint on one column: nothing else in the schema could reference a measure, and adding one meant editing a CHECK on a table with nothing to do with pricing.
+
+  Note the usage type and the price unit type answer **different** questions and stay separate: `AIUsageType` is the BASE measure of a quantity, while `AIModelPriceUnitType` is the BILLING unit and its scale. Audio is recorded in `Seconds` and billed `Per Hour`. Collapsing them would force a new usage type per billing granularity.
+
+  **The measure lives on `AIModelPriceUnitType`, and nowhere else.** It gains `UsageTypeID` — so a cost row has exactly one place to look for its measure, reached through its `UnitTypeID`, and the FK there means whatever it finds is a real catalog row rather than a string. `AIModelCost` deliberately carries **no** usage-type column: it would be a second copy of a derivable fact, and nothing would arbitrate a cost row claiming `Seconds` while its unit type says `Tokens` — which is precisely the comparison the safety checks depend on. Single-sourcing makes that contradiction unrepresentable rather than merely unlikely.
+
+  **The divisor becomes data, which closes B60's class rather than its instance.** `AIModelPriceUnitType.UnitsPerBillingUnit` (`CHECK > 0`) holds the number that converts base measure to billed unit — 1,000,000 for per-1M-tokens, 3,600 for per-hour, 1 for per-image. That number previously existed _only_ inside a TypeScript class, and that is the root cause of B60: `Per Image` / `Per Minute` / `Per Hour` were seeded as data by one person while the driver classes were never written by another, and the seam was silent for months. A new `LinearPriceUnitType` (`DriverClass = 'Linear'`) reads both columns off its own row, so a linear billing unit — "Per 1,000 Characters" — now ships as one seeded row with no class, no registration and no build. `DriverClass` remains the escape hatch for genuinely non-linear pricing (tiered rates, per-image-by-resolution, minimum-billing increments like the Groq 10-second floor). An _unregistered_ driver still refuses to price, deliberately: `DriverClass` is NOT NULL, so an unrecognised name is ambiguous between "a new linear unit" and "a non-linear driver whose code is missing", and pricing the second linearly would produce a confident wrong number.
+
+  **`AIModelPriceType` is demoted alongside.** It was a NOT NULL FK that nothing prices, filters or branches on, while `AIModelPriceUnitType` carried the real contract — three vocabularies for one concept, with the _mandatory_ one the one nothing read. Adding a usage type without demoting it would have locked that ambiguity in permanently. Not dropped (NOT NULL, 235 metadata rows, and dropping is on the Forbidden list in `PUBLISH_NO_BREAK_POLICY.md`): the field is flagged `Status = 'Deprecated'`, removed from the generated form (`IncludeInGeneratedForm = 0`, which is the step that actually ends the ambiguity rather than documenting it), and has `AutoUpdateDescription` cleared so CodeGen cannot overwrite the demotion text — all declared in `metadata/entities`, where field-level editorial decisions belong, rather than as EntityField UPDATEs in a migration. The migration keeps only the schema half: a database default of `Tokens`, so new cost rows need not name a value from the vocabulary they are being told to ignore.
+
+  **Prompt runs can record it.** `AIPromptRun` gains `InputUnitsUsed`, `OutputUnitsUsed` (both `CHECK >= 0`) and `UsageTypeID`, where NULL means token-billed — which is what every row written before the column existed IS, since the schema had no way to say anything else. That reading happens at exactly one seam (`MJAIPromptRunEntityServer.RecordedUsage`) rather than in four places, so the rest of the runtime still sees a definite measure. The save-time cost gate passes on units as well as tokens, and refuses — loudly — to price a run whose measure disagrees with its cost row's, rather than dividing seconds by a million and reporting the ~$0 that produces. No units rollup was added: units of different kinds cannot be summed, so cost remains the universal aggregate.
+
+  **The catalog rows are declarative metadata, and that is what makes the new columns nullable.** The four measures live in `metadata/ai-usage-types`, and the measure + divisor for all six shipped billing units in `metadata/ai-model-price-unit-types` — seeded and backfilled by `mj sync push`, not by INSERT and UPDATE statements in the migration, so they are reviewable data in the same form as the rest of the catalog. Metadata is pushed by the release-time consolidated `*__Metadata_Sync.sql`, which by construction carries a later timestamp than any migration a PR can author, so a NOT NULL column defaulted to the Tokens row would fail the from-scratch build on the ADD itself: SQL Server materialises the default into every existing row and the foreign key has nothing to resolve. Nullable + FK is the strongest guarantee available before the seed exists — any non-null value is a real measure — and the runtime is written to that contract rather than around it: a price unit type with no measure refuses to price rather than guessing Tokens. Tightening both `UsageTypeID` columns to NOT NULL is a one-statement follow-up in the release _after_ the one that ships the seed.
+
+  A clean-room bootstrap also found that `sp_updateextendedproperty` throws when the property does not already exist, so the demotion uses drop-then-add — the same fresh-install-only class as the `EntityField.Sequence` trap in `migrations/CLAUDE.md`.
+
+  **`ModelUsageUnitKind` must stay a superset of the `AIUsageType` catalog, and the catalog rows are the source.** `MJAIPromptRunEntityServer` resolves a run's `UsageTypeID` to the catalog row's `Name` and hands that string straight to `ModelUsageUnitKind`. Nothing about that is checked by the compiler — the name arrives as a plain `string` from a database row — so seeding a usage type whose name the union does not carry produces no build error, just a runtime hole on exactly the rows using the new measure. `MODEL_USAGE_UNIT_KINDS` exists so a test can assert the two agree by reading the seed file rather than restating it. `Characters` is present for that reason and has no pricing driver yet, which is not a defect: the costing path refuses to price a measure no driver claims and logs why, which is strictly better than a plausible wrong number. A compile-time assignability pin backs this up (Vitest does not typecheck by default, which is how a narrowing slipped through once).
+
+  **Providers.** Groq now requests `verbose_json` and reports the duration it was already being billed for, summed across split pieces. If any piece fails to report one, usage is left undefined rather than under-reported — a partial sum understates the bill while looking complete. `OpenAIAudioGenerator.SpeechToText` is implemented (it previously threw), with the same 25MB ceiling, the same injected `AudioSplitter`, and the same duration capture. The split-and-join loop moved onto `BaseAudioGenerator.TranscribeWithSplitting` so both providers share one implementation.
+
+  **Cost rows now ship** for Groq Whisper Large v3 ($0.111/audio-hour) and Turbo ($0.04/audio-hour), verified against Groq's published pricing. `Whisper 1` is a **new** model rather than a vendor row on Whisper Large v3: OpenAI's endpoint serves the large-v2 checkpoint, and attaching it to the v3 record would misreport which weights transcribed a given run. It carries a $0.006/minute cost row.
+
+  **Also:** the AC1 integration check flips from warning to hard assert now that every shipped unit type resolves — a future unit type added without a driver reddens the deterministic tier instead of scrolling past. The assert is scoped to unit types an **Active cost row actually references**, since those are the ones whose missing driver silently uncosts real runs; a custom unit type awaiting its driver, referenced by nothing, is reported rather than failed.
+
+  A new **AC7** check is the monitoring counterpart to the whole refusal doctrine. Everything here turns a wrong number into a `NULL`, which is right — but a null plus a `LogError` in a server log is invisible, and that is precisely how B60 survived months with six dormant ACTIVE image cost rows. AC7 asks the question nothing asked: completed runs that did measurable work and carry no cost. It grades the two populations differently — no active cost row in the run's measure is a pricing-coverage gap and is reported; an active cost row in that measure _existing_ while the run is still uncosted means the pipeline had everything it needed and produced nothing, which is asserted.
+
+  The two Explorer cost dashboards no longer carry their own copy of the divisor table. They now resolve a cost row's scale through its unit type's `DriverClass` against the exported `TOKEN_PRICE_UNIT_TYPE_DIVISORS`, and skip rows priced by a non-token unit type rather than defaulting them to the per-1M divisor — which had been dividing an hourly audio rate by a million. Both local tables were keyed by unit-type _display name_ using names (`Per Million Tokens`) that never matched the seeded ones (`Per 1M Tokens`), so every lookup missed and only the per-1M fallback made the numbers come out right; keying off the driver class removes both the miss and the fallback that hid it.
+
+  Pricing also refuses, rather than reporting $0, when a run records continuous units without a resolvable usage type to name their measure — the same "we don't know what this cost" rule the rest of the path follows.
+
+  Both transcription providers request `verbose_json` only for models that accept it. OpenAI's GPT-4o transcription models reject it outright, so they fall back to `json` and report no duration instead of failing the transcription; Groq's STT surface is Whisper-only today, so the guard there is prospective — matched on `includes('whisper')`, because `distil-whisper-large-v3-en` does support `verbose_json` and a `startsWith` test would strip its duration and leave every run through it uncosted. A reported duration of exactly `0` now leaves usage undefined rather than producing a measure with no quantity, which the pricing layer would refuse and log as a fault for genuinely silent audio.
+
+  The PostgreSQL counterpart to the migration is deferred to the release build, per `migrations/CLAUDE.md`.
+
+### Patch Changes
+
+- 5fc861f: CodeGen treats schema as the incremental unit at 2,000+ entities: per-schema emit with write-if-changed and dirty-schema regen, `'schema.table'` exclude strings, schema-parallel file generation, incremental `tsc` on core-entities and server, hydrate-by-schema catalog projections, and `schemaOutput` routing so brownfield/demo schemas do not land in published packages. BigSchemaDemo is the droppable test bed.
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- e533ce5: Weekly AI model & vendor intelligence report (2026-08-24) + two metadata edits.
+  - **New model** `GLM 5.3` (Zhipu, released 2026-08-14). Placeholder record with Z.AI as Model Developer and OpenRouter as Inference Provider; no `MJ: AI Model Costs` rows populated because Zhipu has not posted a per-token API rate.
+  - **Deprecation** `GLM 4.7` on Cerebras — the Cerebras vendor row and matching cost record are now `Status: "Inactive"` per Cerebras' 2026-08-17 retirement of GLM-4.7 from its inference cloud. OpenRouter and Fireworks.ai vendor rows for GLM 4.7 remain Active.
+  - Full report at `reports/ai-model-research/2026-08-24-weekly-report.md`, including 4 items flagged for human review (DeepSeek V4 Pro Aug-16 cost record, GPT-5.6 Sol pricing conflict, FLUX.2 family refresh, redundant Sonnet 5 Sep-1 cost row).
+
+- de6eb14: Fix `__mj.FileEntityRecordLink`'s unique key, which omitted `RecordID` and therefore allowed a
+  given file to be linked to at most ONE record per entity — attaching the same document to two
+  Contracts, two Accounts, or two of anything else failed on a unique-key violation, contradicting
+  the table's purpose. `UQ_FileEntityRecordLink_EntityID_FileID` is replaced by
+  `UQ_FileEntityRecordLink_EntityID_RecordID_FileID`.
+
+  The constraint came from the v5.37 junction-table batch, whose stated scope was pure two-FK-column
+  link tables; `RecordID` is an `nvarchar(750)` soft key, so that heuristic mechanically selected
+  `(EntityID, FileID)` and dropped the column that makes a row unique. This is the second constraint
+  from that batch corrected on the same grounds, after `Drop_EntityAction_Uniqueness`.
+
+  Operators upgrading from a deployment that predates v5.37 should know that the migration which
+  introduced the bad constraint (`V202605221002__v5.37.x__Add_Unique_Constraints_To_MJ_Junction_Tables`)
+  DELETED pre-existing duplicates before adding each constraint, keeping only the earliest
+  `__mj_CreatedAt` row per `(EntityID, FileID)` group. Any deployment that legitimately had one file
+  linked to several records of the same entity lost those link rows at that upgrade, and they are not
+  recoverable from the migration. It logged per-table duplicate and deletion counts, so affected
+  deployments can check their v5.37 upgrade logs. This change stops the loss recurring; it cannot undo it.
+
+  The change is a widening — every row satisfying the old key satisfies the new one — so it needs no
+  de-duplication pass and cannot fail on existing data. The genuine duplicate (same file linked twice
+  to the same record) is still rejected. No CodeGen or generated-ORM change is involved.
+
+- 1fa6f6b: fix(metadata): the retired GLM-4.7 Cerebras cost record uses a Status its entity actually allows
+
+  `MJ: AI Model Costs.Status` is a value list of `Active | Expired | Invalid | Pending`. The GLM-4.7 Cerebras cost record was set to `Inactive` — which is valid on `MJ: AI Model Vendors` (33 rows legitimately use it) but not on `MJ: AI Model Costs` — so `mj sync push --ci` failed validation and took the deterministic integration tier red on `next`.
+
+  The record now reads `Status: "Expired"` (the ORM defines it as "no longer valid", which is what the 2026-08-17 Cerebras retirement means) and carries `EndedAt: "2026-08-17"`. `EndedAt` is documented as "when this pricing expired… NULL indicates currently active pricing", so an expired row without it would contradict itself. The sibling `MJ: AI Model Vendors` row keeps `Inactive`, which is correct there.
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+- 0db4f4f: Remove domain-specific `GuestOrder` and `PersonAccountLink` identity claim types from core MemberJunction metadata. These claim types are specific to BizApps applications (Orders/Common) and are managed in their respective app metadata seed files.
+
+### Patch Changes
+
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- d078c54: Stop `UserInfoEngine`'s debounced settings flush from raising a process-level unhandled rejection.
+
+  `SetSettingDebounced` arms a 500ms timer whose callback called `FlushPendingSettings()` fire-and-forget — unawaited, with no `.catch()` — so any rejection from that flush escaped as an `unhandledRejection` rather than something a caller could handle. The rejection itself came from `SetSetting`, which read `md.CurrentUser?.ID` off `this.ProviderToUse`: the optional chain guarded `CurrentUser` but not the provider, and `ProviderToUse` resolves to `this._provider || Metadata.Provider`, which is `undefined` when no provider is configured or when one has been torn down while the timer was still armed.
+
+  Two changes: `SetSetting` now guards the provider itself (`md?.CurrentUser?.ID`), degrading to its existing "No user context available" path instead of throwing; and the debounce timer attaches a `.catch()` so no failure on that path — from this cause or any future one — can reach the process as an unhandled rejection.
+
+  Impact was mostly felt in CI, where a timer firing after a test environment was torn down failed the whole run with every assertion green: `Test Files 8 passed (8) / Tests 57 passed (57) / Errors 1 error`. Because it depends on where the 500ms timer lands relative to teardown, it was intermittent and reproduced on `next` itself — the same commit failed one scheduled run and passed the next.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [a1a8989]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

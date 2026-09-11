@@ -11,9 +11,9 @@ import {
     DataSourceResult,
 } from '../../codeGenDatabaseProvider';
 import { configInfo, mj_core_schema } from '../../../Config/config';
-import { logError, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
+import { logError, logStatus, logWarning, startSpinner, succeedSpinner } from '../../../Misc/status_logging';
 import { buildMetadataSupportObjectsSQL } from './metadataSupportObjects';
-import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers } from '@memberjunction/sql-dialect';
+import { PostgreSQLDialect, DatabasePlatform, SQLDialect, AutoQuotePostgreSQLIdentifiers, restarLayeredOuterView, buildCreateOrReplaceLayeredOuterViewSQL, LayeredOuterRestarError } from '@memberjunction/sql-dialect';
 import {
     shouldIncludeFieldInParams,
     useJsonArgShape,
@@ -29,6 +29,7 @@ import { PostgreSQLCodeGenConnection } from './PostgreSQLCodeGenConnection';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
+import type { PGQueryable } from './viewDependencyCapture';
 
 const pgDialect = new PostgreSQLDialect();
 
@@ -200,7 +201,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
-        this.assertLayeredBaseViewSupported(entity);
         // The GENERATED view — `GeneratedViewName` is BaseView unless the entity layers a custom view
         // over an inner generated one, in which case CodeGen writes the inner name. The CRUD
         // routines keep using getBaseViewName(): they return rows from the PUBLIC view, so a
@@ -651,12 +651,23 @@ ${trigger}
         const viewName = this.getBaseViewName(entity);
         const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Create);
 
-        const firstKey = entity.FirstPrimaryKey;
+        const isSingleKey = entity.PrimaryKeys.length === 1;
+        const firstKey = entity.FirstPrimaryKey; // first-pk-ok: read only for the UUID auto-generation strategy, which is gated on isSingleKey; every declaration, list and predicate below iterates entity.PrimaryKeys
         const pkType = firstKey.Type.toLowerCase().trim();
-        const pkIsUuidSingle =
-            (pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1;
-        const pkPgType = this.mapSQLType(firstKey.SQLFullType);
-        const pkColQuoted = pgDialect.QuoteIdentifier(firstKey.Name);
+        const pkIsUuidSingle = (pkType === 'uniqueidentifier' || pkType === 'uuid') && isSingleKey;
+
+        // One plpgsql variable per key column. A single-column key keeps the historical `v_id`
+        // name; a composite key gets one variable per column so the INSERT lists every key
+        // column and the returning SELECT binds all of them (not just the first).
+        const pkVars = entity.PrimaryKeys.map((k: EntityFieldInfo) => ({
+            field: k,
+            varName: isSingleKey ? 'v_id' : `v_id_${k.CodeName}`,
+            pgType: this.mapSQLType(k.SQLFullType),
+        }));
+        const pkDeclarations = pkVars.map((v) => `    ${v.varName} ${v.pgType};`).join('\n');
+        const pkColListInit = pkVars.map((v) => `quote_ident('${v.field.Name.replace(/'/g, "''")}')`).join(" || ', ' || ");
+        const pkValListInit = pkVars.map((v) => `quote_literal(${v.varName}) || '::${v.pgType}'`).join(" || ', ' || ");
+        const pkWhere = pkVars.map((v) => `${pgDialect.QuoteIdentifier(v.field.Name)} = ${v.varName}`).join(' AND ');
 
         // Writable fields participating in the INSERT — exclude PK (handled
         // separately so we can supply a generated UUID when key is absent),
@@ -692,17 +703,17 @@ ${trigger}
 
         // ID resolution body: differs by PK strategy. Single-UUID PK is auto-
         // generated when the caller doesn't supply one; everything else (composite,
-        // non-UUID) requires the caller to provide the key explicitly.
+        // non-UUID) requires the caller to provide every key column explicitly.
         const idResolveBody = pkIsUuidSingle
             ? `    IF p_data ? '${firstKey.Name}' THEN
-        v_id := (p_data->>'${firstKey.Name}')::${pkPgType};
+        v_id := (p_data->>'${firstKey.Name}')::${this.mapSQLType(firstKey.SQLFullType)};
     ELSE
         v_id := gen_random_uuid();
     END IF;`
-            : `    IF NOT (p_data ? '${firstKey.Name}') THEN
-        RAISE EXCEPTION '${fnName}: p_data must include "${firstKey.Name}"';
+            : pkVars.map((v) => `    IF NOT (p_data ? '${v.field.Name}') THEN
+        RAISE EXCEPTION '${fnName}: p_data must include "${v.field.Name}"';
     END IF;
-    v_id := (p_data->>'${firstKey.Name}')::${pkPgType};`;
+    ${v.varName} := (p_data->>'${v.field.Name}')::${v.pgType};`).join('\n');
 
         return `
 ------------------------------------------------------------
@@ -713,7 +724,7 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p
 RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
 AS $$
 DECLARE
-    v_id ${pkPgType};
+${pkDeclarations}
     v_field_name TEXT;
     v_cast_expr  TEXT;
     v_col_list   TEXT;
@@ -722,8 +733,8 @@ DECLARE
 BEGIN
 ${idResolveBody}
 
-    v_col_list := quote_ident('${firstKey.Name.replace(/'/g, "''")}');
-    v_val_list := quote_literal(v_id) || '::${pkPgType}';
+    v_col_list := ${pkColListInit};
+    v_val_list := ${pkValListInit};
 
     -- Build column / value lists from keys present in p_data. Absent keys are
     -- omitted entirely so the column's DEFAULT applies (matching the typed-arg
@@ -750,7 +761,7 @@ ${fieldCastEntries}
 
     RETURN QUERY
     SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-    WHERE ${pkColQuoted} = v_id;
+    WHERE ${pkWhere};
 END;
 $$ LANGUAGE plpgsql;
 ${permissions}
@@ -783,7 +794,10 @@ ${permissions}
         const paramString = this.generateCRUDParamString(entity.Fields, false);
         const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Create);
 
-        const firstKey = entity.FirstPrimaryKey;
+        const firstKey = entity.FirstPrimaryKey; // first-pk-ok: drives the single-key UUID strategy (guarded by PrimaryKeys.length === 1 in buildCreateInsertStrategy); identity and composite strategies iterate entity.PrimaryKeys
+        // v_new_id receives the database-generated key: the identity/serial column when there is
+        // one (which on a composite key need not be the first column), else the single UUID key.
+        const generatedKey = entity.PrimaryKeys.find((k: EntityFieldInfo) => k.AutoIncrement) ?? firstKey;
         // For UUID PKs and AutoIncrement PKs, the strategy below adds the PK
         // column manually (with v_new_id or RETURNING). Excluding it from the
         // auto-generated insertColumns/insertValues avoids the column appearing
@@ -814,7 +828,7 @@ CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
 ) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
 DECLARE
-    v_new_id ${this.mapSQLType(firstKey.SQLFullType)};
+    v_new_id ${this.mapSQLType(generatedKey.SQLFullType)};
 BEGIN
     ${strategy.preInsert}INSERT INTO ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
         (
@@ -1022,6 +1036,31 @@ EXECUTE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}();
         );
     }
 
+    protected softPrimaryKeyIndexPrefix(): string {
+        return 'idx_auto_mj_softpk_';
+    }
+
+    /**
+     * PostgreSQL will happily accept an unbounded `text` column in a btree key and then fail at
+     * INSERT time if a value exceeds roughly an eighth of a page — an error that surfaces long
+     * after the index was created, on whichever row happens to be too long. Treating unbounded
+     * columns as unindexable keeps the failure at generation time, where it names the column.
+     */
+    protected isIndexableKeyColumn(f: EntityFieldInfo): boolean {
+        return f.Length !== -1;
+    }
+
+    protected formatCompositeIndexStatement(entity: EntityInfo, fields: EntityFieldInfo[], indexName: string): string {
+        const cols = fields.map(f => pgDialect.QuoteIdentifier(f.Name)).join(', ');
+        return (
+            `-- Index for the soft primary key (${fields.map(f => f.Name).join(', ')}) in table ${entity.BaseTable}.\n` +
+            `-- The key is metadata-only — no PRIMARY KEY constraint — so without this the per-record\n` +
+            `-- existence check on the create path scans the whole table.\n` +
+            `CREATE INDEX IF NOT EXISTS ${pgDialect.QuoteIdentifier(indexName)}\n` +
+            `    ON ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} (${cols});`
+        );
+    }
+
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
     /**
@@ -1124,8 +1163,8 @@ WHERE ${ftsColName} IS NULL;
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType); // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const fieldName = field.Name;
         const fnName = this.getHierarchyMetaFunctionName(entity, field);
 
@@ -1192,8 +1231,8 @@ $$ LANGUAGE sql STABLE;
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType); // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const fieldName = field.Name;
         const fnName = this.getDescendantsFunctionName(entity, field);
 
@@ -1256,8 +1295,8 @@ $$ LANGUAGE sql STABLE;
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType); // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const fieldName = field.Name;
         const fnName = this.getAncestorsFunctionName(entity, field);
 
@@ -1340,7 +1379,7 @@ $$ LANGUAGE sql STABLE;
     generateHierarchyFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
         const fnName = this.getHierarchyMetaFunctionName(entity, field);
         const tableAlias = entity.BaseTableCodeName.charAt(0).toLowerCase();
-        return `LEFT JOIN LATERAL ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(entity.FirstPrimaryKey.Name)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS ${alias} ON true`;
+        return `LEFT JOIN LATERAL ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(entity.FirstPrimaryKey.Name)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS ${alias} ON true`; // first-pk-ok: hierarchy TVF argument; sql_codegen.getHierarchyFKs skips composite-key entities and the TVF generator throws for them
     }
 
     /**
@@ -1351,8 +1390,8 @@ $$ LANGUAGE sql STABLE;
         if (entity.PrimaryKeys.length !== 1) {
             throw new Error(`[Hierarchy] Entity '${entity.Name}' has ${entity.PrimaryKeys.length} primary key fields. MemberJunction hierarchy TVF generation requires a single-column primary key.`);
         }
-        const primaryKey = entity.FirstPrimaryKey.Name;
-        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
+        const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType); // first-pk-ok: guarded by the PrimaryKeys.length !== 1 throw above; hierarchy TVFs are single-column by design
         const fieldName = field.Name;
         const fnName = this.getRootIDFunctionName(entity, field);
 
@@ -1431,8 +1470,9 @@ $$ LANGUAGE sql STABLE;
     generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
         const fnName = this.getRootIDFunctionName(entity, field);
         const tableAlias = entity.BaseTableCodeName.charAt(0).toLowerCase();
+        const primaryKey = entity.FirstPrimaryKey.Name; // first-pk-ok: hierarchy TVF argument; sql_codegen.getHierarchyFKs skips composite-key entities and the TVF generator throws for them
         return `LEFT JOIN LATERAL (
-    SELECT ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(entity.FirstPrimaryKey.Name)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS root_id
+    SELECT ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(primaryKey)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS root_id
 ) AS ${alias} ON true`;
     }
 
@@ -1456,7 +1496,10 @@ $$ LANGUAGE sql STABLE;
     generateCRUDPermissions(entity: EntityInfo, routineName: string, type: CRUDType): string {
         const roles: string[] = [];
         for (const ep of entity.Permissions) {
-            if (!ep.RoleSQLName || ep.RoleSQLName.length === 0) continue;
+            if (!ep.RoleSQLName || ep.RoleSQLName.length === 0) {
+                this.logAppTierOnlyRoleSkip(ep.Role);
+                continue;
+            }
             if (
                 (type === CRUDType.Create && ep.CanCreate) ||
                 (type === CRUDType.Update && ep.CanUpdate) ||
@@ -1747,9 +1790,14 @@ END $$;
     // ─── METADATA MANAGEMENT: STORED PROCEDURE CALLS ─────────────────
 
     /** @inheritdoc */
-    callRoutineSQL(schema: string, routineName: string, params: string[], _paramNames?: string[], discardResult?: boolean): string {
+    callRoutineSQL(schema: string, routineName: string, params: string[], paramNames?: string[], discardResult?: boolean): string {
         const qualifiedName = pgDialect.QuoteSchema(schema, routineName);
-        const paramList = params.join(', ');
+        let paramList: string;
+        if (paramNames && paramNames.length === params.length) {
+            paramList = params.map((p, i) => `p_${paramNames[i]} => ${p}`).join(', ');
+        } else {
+            paramList = params.join(', ');
+        }
         if (discardResult) {
             // `SELECT * FROM routine(...)` is not universally valid on PostgreSQL: a function
             // declared `RETURNS SETOF record` — which spDeleteEntityWithCoreDependencies is — is
@@ -1909,18 +1957,10 @@ ORDER BY ordinal_position`;
     }
 
     /**
-     * PostgreSQL has no view-refresh mechanism, so this always returns `false`.
-     *
-     * NOT because PG views track their source automatically — they do not. PG expands `SELECT *`
-     * into an explicit column list at creation and freezes it; a view gains a new underlying column
-     * only when the view itself is recreated. CodeGen gets away without a refresh step because it
-     * emits every generated view with an explicit column list and re-issues `CREATE OR REPLACE` on
-     * every run, so the definition it controls is always current.
-     *
-     * That holds only for views CodeGen writes. A view CodeGen does not own — such as the
-     * application-owned outer view of a layered entity — has no mechanism here to re-resolve it, and
-     * `generateViewRefreshSQL` returning empty is a genuine no-op rather than a cheap one. This is
-     * why {@link generateBaseView} refuses layered entities outright on PostgreSQL.
+     * PostgreSQL has no `sp_refreshview`. Generated views are re-issued with
+     * `CREATE OR REPLACE` (or the 42P16 capture/DROP CASCADE path) every run, so
+     * they do not need a separate refresh step. Layered *outer* views are rebound
+     * via {@link generateLayeredOuterRebindSQL}, not this flag.
      */
     get NeedsViewRefresh(): boolean {
         return false;
@@ -1931,12 +1971,90 @@ ORDER BY ordinal_position`;
         return '';
     }
 
+    /**
+     * Restar `g.*` on the application-owned outer view. Invokes the catalog
+     * function shipped by the PG layered-views migration; no-op if the function
+     * is not installed yet (bootstrap before that migration).
+     */
+    override generateLayeredOuterRebindSQL(entity: EntityInfo): string {
+        if (!entity.HasLayeredBaseView) {
+            return '';
+        }
+        let core = '__mj';
+        try {
+            core = (mj_core_schema() || '__mj').replace(/"/g, '""');
+        } catch {
+            core = '__mj';
+        }
+        const schema = entity.SchemaName.replace(/'/g, "''");
+        const outer = entity.BaseView.replace(/'/g, "''");
+        const inner = entity.GeneratedViewName.replace(/'/g, "''");
+        return `SELECT "${core}"."spRebindLayeredOuterView"('${schema}', '${outer}', '${inner}');`;
+    }
+
+    /**
+     * After the inner generated view is current, restar the application-owned
+     * outer wrapper so `g.*` re-expands. No-op when the entity is not layered
+     * or the outer view does not exist yet (bootstrap pass).
+     */
+    private async rebindLayeredOuterIfPresent(
+        client: PGQueryable,
+        entity: EntityInfo,
+        willRegenerate?: Set<string>,
+    ): Promise<void> {
+        if (!entity.HasLayeredBaseView) {
+            return;
+        }
+        const schemaLit = entity.SchemaName.replace(/'/g, "''").replace(/"/g, '""');
+        const outerLit = entity.BaseView.replace(/'/g, "''").replace(/"/g, '""');
+        const innerLit = entity.GeneratedViewName.replace(/'/g, "''").replace(/"/g, '""');
+        const existsResult = await client.query(
+            `SELECT to_regclass('"${schemaLit}"."${outerLit}"') IS NOT NULL AS present`,
+        );
+        if (!existsResult.rows?.[0]?.['present']) {
+            return;
+        }
+
+        const defResult = await client.query(this.getViewDefinitionSQL(entity.SchemaName, entity.BaseView));
+        const viewDefinition = String(defResult.rows?.[0]?.['ViewDefinition'] ?? defResult.rows?.[0]?.['viewdefinition'] ?? '');
+        if (!viewDefinition) {
+            throw new LayeredOuterRestarError(
+                `Could not read pg_get_viewdef for layered outer view ${entity.SchemaName}.${entity.BaseView}`,
+            );
+        }
+
+        const colResult = await client.query(
+            `SELECT a.attname AS "Name"
+             FROM pg_attribute a
+             JOIN pg_class c ON c.oid = a.attrelid
+             JOIN pg_namespace n ON n.oid = c.relnamespace
+             WHERE n.nspname = '${schemaLit}'
+               AND c.relname = '${innerLit}'
+               AND a.attnum > 0
+               AND NOT a.attisdropped
+             ORDER BY a.attnum`,
+        );
+        const innerColumns = (colResult.rows ?? []).map((r) => String(r['Name'] ?? r['name'] ?? ''));
+        const restarred = restarLayeredOuterView({
+            viewDefinition,
+            innerViewName: entity.GeneratedViewName,
+            innerColumns,
+        });
+        const createSQL = buildCreateOrReplaceLayeredOuterViewSQL(entity.SchemaName, entity.BaseView, restarred);
+        await executeWithFallback({
+            client,
+            schema: entity.SchemaName,
+            viewName: entity.BaseView,
+            createOrReplaceSQL: createSQL,
+            willRegenerate,
+        });
+    }
+
     /** @inheritdoc */
     generateIfViewExistsSQL(schema: string, viewName: string, innerSQL: string): string {
-        // Reached only if a future change enables layering on PG; today generateBaseView throws
-        // first. Implemented properly regardless, so the guard is not a lie if that day comes.
+        // The outer view of a layered entity does not exist on the bootstrap pass.
         const escaped = innerSQL.replace(/'/g, "''");
-        const regclass = `${schema}.${viewName}`.replace(/'/g, "''");
+        const regclass = `"${schema.replace(/"/g, '""')}"."${viewName.replace(/"/g, '""')}"`.replace(/'/g, "''");
         return `DO $if_view_exists$
 BEGIN
   IF to_regclass('${regclass}') IS NOT NULL THEN
@@ -2009,9 +2127,9 @@ $if_view_exists$;
     // ─── METADATA MANAGEMENT: COMPLEX SQL GENERATION ─────────────────
 
     /** @inheritdoc */
-    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[]): string {
+    getPendingEntityFieldsSQL(mjCoreSchema: string, entityIDs?: string[], excludeSchemas?: string[]): string {
         const qs = pgDialect.QuoteSchema.bind(pgDialect);
-        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs);
+        return this.buildPendingEntityFieldsQuery(mjCoreSchema, qs, entityIDs, excludeSchemas);
     }
 
     /** @inheritdoc */
@@ -2169,7 +2287,7 @@ WHERE p.prokind IN ('f', 'p')
             await executeWithFallback({
                 client,
                 schema: entity.SchemaName,
-                viewName: entity.BaseView,
+                viewName: entity.GeneratedViewName,
                 createOrReplaceSQL: viewSQL,
                 willRegenerate,
                 // Pass the base table so viewFallback can materialize a stub
@@ -2180,6 +2298,7 @@ WHERE p.prokind IN ('f', 'p')
                 // self-reference until a placeholder exists).
                 baseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
+            await this.rebindLayeredOuterIfPresent(client, entity, willRegenerate);
         } finally {
             client.release();
         }
@@ -2235,11 +2354,12 @@ WHERE p.prokind IN ('f', 'p')
                     await executeWithFallback({
                         client,
                         schema: opts.entity.SchemaName,
-                        viewName: opts.entity.BaseView,
+                        viewName: opts.entity.GeneratedViewName,
                         createOrReplaceSQL: opts.viewSQL,
                         willRegenerate: opts.willRegenerate,
                         baseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
                     });
+                    await this.rebindLayeredOuterIfPresent(client, opts.entity, opts.willRegenerate);
                 } catch (e) {
                     return {
                         success: false,
@@ -2353,40 +2473,6 @@ WHERE p.prokind IN ('f', 'p')
         return entity.BaseView || `vw_${this.toSnakeCase(entity.CodeName)}`;
     }
 
-    /**
-     * Refuses layered base views on PostgreSQL, where the arrangement cannot deliver what it
-     * promises.
-     *
-     * Layering exists so an application can add a computed column without inheriting — and then
-     * hand-maintaining — the generated view, the payoff being that a foreign key added later still
-     * shows up on its own. That payoff depends entirely on the application-owned outer view's
-     * `SELECT g.*` being re-resolved after the inner view regenerates. SQL Server does that with
-     * `sp_refreshview`. PostgreSQL expands `*` at creation and freezes it, offers no refresh
-     * equivalent, and CodeGen does not own the outer view, so nothing recreates it.
-     *
-     * The resulting behaviour is worse than plainly broken, it is intermittent: an ADDED column (the
-     * common case) leaves the outer view stale, because `CREATE OR REPLACE` on the inner view
-     * succeeds and never touches dependents. A column RENAME or type change raises 42P16, which
-     * sends CodeGen down the capture/`DROP CASCADE`/replay path — and that incidentally recreates
-     * the outer view, so it picks the new columns up. Same feature, opposite outcomes, decided by
-     * which kind of schema change happened to land that day.
-     *
-     * That is precisely the silent-staleness failure layering was built to eliminate, so this throws
-     * rather than documenting a footgun. Fully custom base views (`BaseViewGenerated = 0` with no
-     * `GeneratedBaseViewName`) are unaffected and keep working on PostgreSQL as before.
-     */
-    private assertLayeredBaseViewSupported(entity: EntityInfo): void {
-        if (!entity.HasLayeredBaseView) return;
-        throw new Error(
-            `Entity "${entity.Name}" sets GeneratedBaseViewName = '${entity.GeneratedBaseViewName}', but layered ` +
-            `base views are not supported on PostgreSQL. PostgreSQL freezes a view's column list at creation and ` +
-            `has no sp_refreshview equivalent, so the application-owned view "${entity.BaseView}" would silently ` +
-            `stop gaining columns that the generated view underneath it picks up. Clear GeneratedBaseViewName and ` +
-            `use a fully custom base view (BaseViewGenerated = 0) instead, accepting that it must be ` +
-            `hand-maintained as the schema changes.`
-        );
-    }
-
     /** Builds the WHERE clause for soft-delete filtering */
     private buildSoftDeleteWhereClause(entity: EntityInfo, alias: string): string {
         if (entity.DeleteType === 'Soft') {
@@ -2453,13 +2539,25 @@ WHERE p.prokind IN ('f', 'p')
         const viewName = this.getBaseViewName(entity);
         const pkCol = pgDialect.QuoteIdentifier(firstKey.Name);
 
-        if (firstKey.AutoIncrement) {
+        const identityKey = entity.PrimaryKeys.find((k: EntityFieldInfo) => k.AutoIncrement);
+        if (identityKey) {
+            // Identity/serial key. On a composite key such as (TenantID, ID serial) the remaining key
+            // columns are caller-supplied: they must be inserted and included in the row lookup. For a
+            // single-column identity key callerSuppliedKeys is empty and nothing is added.
+            const identityCol = pgDialect.QuoteIdentifier(identityKey.Name);
+            const callerSuppliedKeys = entity.PrimaryKeys.filter((k: EntityFieldInfo) => !k.AutoIncrement);
+            const keyColumns = callerSuppliedKeys.map((k: EntityFieldInfo) => pgDialect.QuoteIdentifier(k.Name)).join(',\n            ');
+            const keyValues = callerSuppliedKeys.map((k: EntityFieldInfo) => pgDialect.ParameterRef(k.CodeName)).join(',\n            ');
+            const keyPredicates = callerSuppliedKeys
+                .map((k: EntityFieldInfo) => ` AND ${pgDialect.QuoteIdentifier(k.Name)} = ${pgDialect.ParameterRef(k.CodeName)}`)
+                .join('');
+            const hasNonPkColumns = insertColumns.trim().length > 0;
             return {
                 preInsert: '',
-                returningClause: `RETURNING ${pkCol} INTO v_new_id`,
-                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${pkCol} = v_new_id`,
-                finalColumns: insertColumns,
-                finalValues: insertValues,
+                returningClause: `RETURNING ${identityCol} INTO v_new_id`,
+                selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${identityCol} = v_new_id${keyPredicates}`,
+                finalColumns: callerSuppliedKeys.length === 0 ? insertColumns : (hasNonPkColumns ? `${keyColumns},\n            ${insertColumns}` : keyColumns),
+                finalValues: callerSuppliedKeys.length === 0 ? insertValues : (hasNonPkColumns ? `${keyValues},\n            ${insertValues}` : keyValues),
             };
         }
 
@@ -2568,7 +2666,13 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         const updateFnName = this.getCRUDRoutineName(relatedEntity, CRUDType.Update);
-        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentEntity.FirstPrimaryKey.CodeName)}`;
+        const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
+        if (!parentKey) {
+            const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
+            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, CRUDType.Delete)} generation: ${warning.trim()}`);
+            return warning;
+        }
+        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentKey.CodeName)}`;
 
         return `    -- Cascade: Set ${relatedEntity.Name}.${fkField.Name} to NULL
     FOR v_rec IN
@@ -2591,7 +2695,13 @@ WHERE p.prokind IN ('f', 'p')
         }
 
         const deleteFnName = this.getCRUDRoutineName(relatedEntity, CRUDType.Delete);
-        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentEntity.FirstPrimaryKey.CodeName)}`;
+        const parentKey = this.resolveCascadeParentKeyField(parentEntity, fkField);
+        if (!parentKey) {
+            const warning = this.unresolvedCascadeKeyComment(parentEntity, relatedEntity, fkField);
+            logWarning(`WARNING in ${this.getCRUDRoutineName(parentEntity, CRUDType.Delete)} generation: ${warning.trim()}`);
+            return warning;
+        }
+        const whereClause = `${pgDialect.QuoteIdentifier(fkField.Name)} = ${pgDialect.ParameterRef(parentKey.CodeName)}`;
 
         return `    -- Cascade: Delete ${relatedEntity.Name} records via ${fkField.Name}
     FOR v_rec IN
@@ -2610,9 +2720,25 @@ WHERE p.prokind IN ('f', 'p')
         for (const ep of permissions) {
             if (ep.RoleSQLName && ep.RoleSQLName.length > 0 && !roles.includes(ep.RoleSQLName)) {
                 roles.push(ep.RoleSQLName);
+            } else if (!ep.RoleSQLName || ep.RoleSQLName.length === 0) {
+                this.logAppTierOnlyRoleSkip(ep.Role);
             }
         }
         return roles;
+    }
+
+    /**
+     * B3: roles with a blank `SQLName` are app-tier-only BY DESIGN (decision D3a) — the grant
+     * emitters skip them, and this makes the skip visible: one INFO line per role per run.
+     * (PostgreSQL additionally emits NO field-security DENYs at all, per decision D2 — PG has
+     * no DENY primitive, so MJ's Deny-wins semantics cannot be expressed in its DB tier.)
+     */
+    private _appTierOnlyRolesLogged = new Set<string>();
+    private logAppTierOnlyRoleSkip(roleName: string | null | undefined): void {
+        const name = (roleName ?? '').trim();
+        if (!name || this._appTierOnlyRolesLogged.has(name)) return;
+        this._appTierOnlyRolesLogged.add(name);
+        logStatus(`   ℹ️  Role '${name}' is app-tier-only (no SQLName); no DB grants emitted.`);
     }
 
     // ─── DATABASE INTROSPECTION ──────────────────────────────────────────
@@ -2689,12 +2815,16 @@ WHERE p.prokind IN ('f', 'p')
     private buildPendingEntityFieldsQuery(
         schema: string,
         qs: (schema: string, name: string) => string,
-        entityIDs?: string[]
+        entityIDs?: string[],
+        excludeSchemas?: string[]
     ): string {
         // PG uses lowercase UUIDs; entity IDs from the metadata cache are already
         // normalized so direct string interpolation is safe (internal IDs, not user input).
         const scopeFilter = entityIDs && entityIDs.length > 0
             ? `AND sf."EntityID" IN (${entityIDs.map(id => `'${id}'`).join(',')})`
+            : '';
+        const schemaFilter = excludeSchemas && excludeSchemas.length > 0
+            ? `AND e."SchemaName" NOT IN (${excludeSchemas.map(s => `'${s.replace(/'/g, "''")}'`).join(',')})`
             : '';
         return `
 WITH fk_cache AS (
@@ -2722,9 +2852,9 @@ numbered_rows AS (
    SELECT
       sf."EntityID",
       COALESCE(ms."MaxSequence", 0) + 100000 + sf."Sequence" AS "Sequence",
-      -- The RAW schema ordinal, carried alongside the temporary Sequence above. The INSERT emitter
-      -- adds it to an apply-time MAX(), so the ordering of newly discovered fields is encoded in the
-      -- emitted VALUE rather than depending on the order the INSERT statements happen to execute.
+      -- The RAW schema ordinal. The INSERT emitter uses it for DefaultInView only; the emitted
+      -- Sequence is an apply-time MAX()+1 subquery. (Sequence above is only this query's ORDER BY
+      -- key — never inserted — and the renumber pass overwrites every row from the schema.)
       sf."Sequence" AS "SourceOrdinal",
       sf."FieldName",
       sf."Description",
@@ -2767,6 +2897,7 @@ numbered_rows AS (
    WHERE
       "EntityFieldID" IS NULL
       ${scopeFilter}
+      ${schemaFilter}
 )
 SELECT *
 FROM numbered_rows

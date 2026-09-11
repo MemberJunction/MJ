@@ -125,8 +125,12 @@ module.exports = {
   userHandling: {
     autoCreateNewUsers: true,
     newUserLimitedToAuthorizedDomains: false,
-    newUserRoles: ['UI', 'Developer'],
-    contextUserForNewUserCreation: 'admin@example.com',
+    // 'UI' is the end-user role. Do NOT add 'Developer' or 'Integration' here: on the baseline
+    // seed both hold unfiltered update on MJ: Users, so an auto-provisioned user could set their
+    // own Type to 'Owner' (issue #4260).
+    newUserRoles: ['UI'],
+    // Matched against User.Name first, then User.Email. Defaults to 'System', the seeded system user.
+    contextUserForNewUserCreation: 'System',
     CreateUserApplicationRecords: true,
   },
 
@@ -886,7 +890,7 @@ MJServer supports a plugin architecture that enables auto-discovery and lifecycl
 
 1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core`
 2. Extensions register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`
-3. Configuration in `mj.config.cjs` defines which extensions to load
+3. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass` and is also where host-only extensions (Slack, Teams) live.
 4. MJServer's `ServerExtensionLoader` discovers and initializes all enabled extensions at startup
 
 ### Configuration

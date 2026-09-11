@@ -1,4 +1,6 @@
 import { WhiteboardItem, WhiteboardPageInfo } from './whiteboard-state';
+import type { WhiteboardTool } from './whiteboard-tool-roster';
+import { WhiteboardToolRoster, IsToolAllowed } from './whiteboard-tool-roster';
 
 /**
  * LIVE WHITEBOARD — right-click CONTEXT MENU model (pure, Angular-free).
@@ -56,18 +58,22 @@ const NON_DUPLICABLE_KINDS: ReadonlySet<WhiteboardItem['Kind']> = new Set(['conn
  *    plus "New page" (the same path as the strip's "+" button);
  *  - highlight → Delete only (highlights are transient "pointing" chrome);
  *  - any other item → Edit (same path as dblclick; editable kinds only), Restyle…
- *    (text/sticky), Duplicate (not connectors/highlights), Bring to front / Send to
- *    back, and Delete.
+ *    (text/sticky, and only while the roster offers the `text` tool that renders its
+ *    flyout), Duplicate (not connectors/highlights), Bring to front / Send to back,
+ *    and Delete.
  */
-export function BuildWhiteboardContextMenu(item: WhiteboardItem | null): WhiteboardContextMenuAction[] {
+export function BuildWhiteboardContextMenu(item: WhiteboardItem | null, roster: WhiteboardToolRoster = null): WhiteboardContextMenuAction[] {
   if (item === null) {
-    return [
-      { ID: 'add-sticky', Label: 'Add sticky note here', Icon: 'fa-regular fa-note-sticky' },
-      { ID: 'add-text', Label: 'Add text here', Icon: 'fa-solid fa-font' },
-      { ID: 'add-markdown', Label: 'Add markdown panel here', Icon: 'fa-brands fa-markdown' },
-      { ID: 'add-html', Label: 'Add widget here', Icon: 'fa-solid fa-code' },
-      { ID: 'add-page', Label: 'New page', Icon: 'fa-regular fa-file', SeparatorBefore: true }
+    // Each "add … here" action is the context-menu door to a TOOL, so it follows the roster the
+    // toolbar and the keyboard follow. "New page" is not a tool and is always offered.
+    const canvas: Array<{ Tool: WhiteboardTool; Action: WhiteboardContextMenuAction }> = [
+      { Tool: 'sticky', Action: { ID: 'add-sticky', Label: 'Add sticky note here', Icon: 'fa-regular fa-note-sticky' } },
+      { Tool: 'text', Action: { ID: 'add-text', Label: 'Add text here', Icon: 'fa-solid fa-font' } },
+      { Tool: 'markdown', Action: { ID: 'add-markdown', Label: 'Add markdown panel here', Icon: 'fa-brands fa-markdown' } },
+      { Tool: 'html', Action: { ID: 'add-html', Label: 'Add widget here', Icon: 'fa-solid fa-code' } }
     ];
+    const adds = canvas.filter((c) => IsToolAllowed(roster, c.Tool)).map((c) => c.Action);
+    return [...adds, { ID: 'add-page', Label: 'New page', Icon: 'fa-regular fa-file', SeparatorBefore: adds.length > 0 }];
   }
   if (item.Kind === 'highlight') {
     return [{ ID: 'delete', Label: 'Delete', Icon: 'fa-solid fa-trash-can', Danger: true }];
@@ -76,7 +82,12 @@ export function BuildWhiteboardContextMenu(item: WhiteboardItem | null): Whitebo
   if (EDITABLE_KINDS.has(item.Kind)) {
     actions.push({ ID: 'edit', Label: 'Edit', Icon: 'fa-solid fa-pen' });
   }
-  if (RESTYLABLE_KINDS.has(item.Kind)) {
+  // Restyle is the ONE item action that is also a door to a tool: it opens the toolbar's text
+  // style flyout, which is rendered by the text tool's button. Under a roster without `text`
+  // that button does not exist, so the entry would be visibly present and do nothing. Gate it
+  // on the same predicate everything else reads. (The rest of the item menu stays roster-blind:
+  // Edit / Duplicate / z-order / Delete are authoring on what already exists, not tool selection.)
+  if (RESTYLABLE_KINDS.has(item.Kind) && IsToolAllowed(roster, 'text')) {
     actions.push({ ID: 'restyle', Label: 'Restyle…', Icon: 'fa-solid fa-palette' });
   }
   if (!NON_DUPLICABLE_KINDS.has(item.Kind)) {

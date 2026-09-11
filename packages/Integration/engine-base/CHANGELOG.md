@@ -1,5 +1,88 @@
 # @memberjunction/integration-engine-base
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- e7b4833: Index integration-object fields, and memoise the per-record field view.
+
+  `GetIntegrationObjectFields(objectID)` was `this._integrationObjectFields.filter(f => UUIDsEqual(f.IntegrationObjectID, objectID))` — a full scan of every `IntegrationObjectField` in the process, on a path that runs **per record**: a connector's `RawToExternalRecord`/`TransformRecord` resolves an object's fields for every record it transforms. On a catalog of 364 objects, that scan plus the generated `IntegrationObjectID` getter it invokes per element measured **~46% of process CPU** in a live profile.
+
+  It is now backed by a lazily-built `objectID → fields` index, keyed on the **identity** of `_integrationObjectFields`. The engine replaces that array wholesale on load/refresh (and `SeedForTesting` replaces it directly), so a new array is a new index automatically — there is no invalidation hook to forget. Keys are normalised the same way `UUIDsEqual` compares, so SQL Server's uppercase and PostgreSQL's lowercase land on the same bucket, and the `objectID == null` case keeps the original both-null-matches semantics via the unindexed path rather than inventing a magic key. Callers still receive a fresh array per call, so sorting or splicing the result behaves exactly as before.
+
+  Also adds `RefreshCatalog()`, which re-reads **only** the `IntegrationObject`/`IntegrationObjectField` datasets straight from the database. `RefreshItem` will not do: it reloads through the local dataset cache, which is the very thing that goes stale when the catalog is edited by direct SQL, a sproc-based sync push, or another process — `BaseEngine`'s auto-refresh only observes in-process `BaseEntity` saves. Replacing the arrays is also what invalidates the memoised views, since both the field index and the connectors' `GetCachedFields` memo key on array identity.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

@@ -1520,8 +1520,7 @@ export class FormBuilderResourceComponent
      */
     public OnChatTaskClicked(task: MJTaskEntity): void {
         try {
-            const key = CompositeKey.FromID(task.ID);
-            this.navigationService.OpenEntityRecord('MJ: Tasks', key);
+            this.navigationService.OpenEntityRecord('MJ: Tasks', CompositeKey.FromID(task.ID));
         } catch (err) {
             LogError(`FormBuilderResource.OnChatTaskClicked: ${err instanceof Error ? err.message : String(err)}`);
         }

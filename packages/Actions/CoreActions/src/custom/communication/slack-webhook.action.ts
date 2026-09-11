@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { RegisterClass } from "@memberjunction/global";
 import { BaseAction } from "@memberjunction/actions";
-import axios from "axios";
+import { HttpPost } from "@memberjunction/network-utils";
 import { JSONParamHelper } from "../utilities/json-param-helper";
 
 /**
@@ -169,20 +169,21 @@ export class SlackWebhookAction extends BaseAction {
             }
 
             // Send to Slack
-            const response = await axios.post(webhookURL, payload, {
-                headers: {
+            const response = await HttpPost<string>(webhookURL, payload, {
+                Headers: {
                     'Content-Type': 'application/json'
                 },
-                validateStatus: () => true // Handle all status codes
+                ResponseType: 'text',
+                ThrowOnError: false // Handle all status codes
             });
 
             // Check response
-            if (response.status === 200 && response.data === 'ok') {
+            if (response.Status === 200 && response.Data === 'ok') {
                 // Add output parameters
                 params.Params.push({
                     Name: 'SlackResponse',
                     Type: 'Output',
-                    Value: response.data
+                    Value: response.Data
                 });
 
                 params.Params.push({
@@ -196,7 +197,7 @@ export class SlackWebhookAction extends BaseAction {
                     ResultCode: "MESSAGE_SENT",
                     Message: JSON.stringify({
                         message: "Slack message sent successfully",
-                        response: response.data,
+                        response: response.Data,
                         payload: payload
                     }, null, 2)
                 };
@@ -204,9 +205,9 @@ export class SlackWebhookAction extends BaseAction {
                 // Error response
                 return {
                     Success: false,
-                    Message: `Slack webhook failed: ${response.data || `HTTP ${response.status}`}`,
-                    ResultCode: response.status === 404 ? "WEBHOOK_NOT_FOUND" : 
-                               response.status === 400 ? "INVALID_PAYLOAD" : 
+                    Message: `Slack webhook failed: ${response.Data || `HTTP ${response.Status}`}`,
+                    ResultCode: response.Status === 404 ? "WEBHOOK_NOT_FOUND" : 
+                               response.Status === 400 ? "INVALID_PAYLOAD" : 
                                "WEBHOOK_ERROR"
                 };
             }

@@ -1,5 +1,85 @@
 # @memberjunction/ng-ui-components
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- 4c1de04: Fix all five MJ form controls ignoring later changes to their `Disabled` input.
+
+  `mj-dropdown`, `mj-combobox`, `mj-datepicker`, `mj-switch` and `mj-numeric-input` each derive an internal `IsDisabled` gate, and the **only** thing that ever assigned it was `setDisabledState()` — the ControlValueAccessor hook. The `Disabled` input was a plain field with no setter and no `ngOnChanges`, so it had no recompute path of its own: the gate was frozen at whatever the first compose produced, and every later change to the input was silently dropped. Both directions were broken:
+  - `Disabled` **true** when the gate was last composed → the control stayed unusable forever, even after the binding went false. It still rendered its disabled affordance, so it looked disabled while its own `Disabled` input read `false`.
+  - `Disabled` **false** at that moment → the control could never be locked afterwards, so a read-only / receipt mode silently stayed editable.
+  - **No forms binding at all** → `setDisabledState()` is never called, so `[Disabled]` was completely inert: the control rendered fully enabled and responded to gestures regardless. This is the widest form of the defect — `Disabled` only ever worked as a side effect of a forms binding happening to compose it in.
+
+  The first direction is user-visible wherever a control is gated on "pick X first" (`[Disabled]="!draft.CompanyID"`): once the user picked the company, the control never came back to life. **20 dynamic `[Disabled]` bindings across this repo sit on these five controls** and were affected — including the five in `dynamic-form-field`, the renderer used by every generated entity form, which passes its own CVA-derived disabled state down into the inner controls.
+
+  Each control now keeps the input-driven and forms-driven disabled states as separate backing fields and recomposes `IsDisabled` whenever either one changes. The three overlay controls (`mj-dropdown`, `mj-combobox`, `mj-datepicker`) also close an open panel when they become disabled, and do so without a nested `detectChanges()` — the recompose can run from an `@Input` setter, i.e. during the parent's change-detection pass, where re-entering CD trips NG0100 on the parent's bindings.
+
+  No API change: `Disabled` and `IsDisabled` keep their names, types and meanings — the composed state simply stays correct over the control's lifetime. Note that controls which previously stayed enabled after their binding went true will now correctly disable.
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- c09c818: MJDropdown can finally be given an accessible name (#3860)
+
+  `mj-dropdown` renders a `div[role="combobox"]` with no way to name it, so every one of the ~94 call
+  sites in this repo announced as "combobox, collapsed" with no hint of what it selects — WCAG 2.1
+  4.1.2 (Name, Role, Value). Four optional passthroughs close it, all applied to the popup listbox as
+  well as the trigger so both halves announce the same name:
+  - **`AriaLabelledBy`** — the id of a VISIBLE label, and the preferred wiring when one exists. Not
+    `<label for>`: the trigger is a `div`, which label-for neither names nor focuses.
+  - **`AriaLabel`** — for when no visible label exists.
+  - **`AriaDescribedBy`** — hint and error text.
+  - **`InputId`** — an id on the trigger so other markup can reference it.
+
+  Absent beats empty: none of the four renders an attribute when unset, because `aria-label=""` is
+  worse than no attribute — it overrides every other naming source with an explicitly empty name.
+
+  The filterable panel's filter box is named from the same source rather than being a second unnamed
+  control. Under `AriaLabelledBy` it composes "Filter" with the visible label's own text through an
+  `aria-labelledby` id list, so six filterable dropdowns on one form no longer announce as six
+  identical "Filter options" boxes. A name that already begins with "Filter" (this repo's house habit,
+  e.g. `AriaLabel="Filter roles"`) is not prefixed again.
+
+  Also in the same attribute cluster:
+  - The trigger now points `aria-controls` at a generated listbox id while open — `aria-expanded`
+    alone says something expanded without saying what.
+  - A disabled dropdown renders `aria-disabled` and leaves the tab order. Previously `tabindex` was
+    static, and since the SCSS suppresses the focus ring when disabled, a keyboard user landed on
+    something invisible that then silently ignored Enter.
+
+  **One visible change for existing `Filterable` callers:** the filter box's placeholder is now
+  "Filter..." rather than "Search...". This is deliberate — the accessible name is "Filter <name>", and
+  a visible "Search" that is not in the accessible name breaks WCAG 2.5.3 (Label in Name): a
+  voice-control user says "click Search" and nothing matches.
+
+  `StubDropdownComponent` in `@memberjunction/ng-test-utils` gains the same four inputs, keeping its
+  "mirrors the real inputs" contract true. Without it the first consumer spec binding `[AriaLabel]` on
+  a stubbed dropdown throws NG0303 under `errorOnUnknownProperties`, and a static attribute would land
+  silently as a vacuous pass.
+
+## 6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

@@ -1,5 +1,37 @@
 # @memberjunction/ai-blackforestlabs
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 80fcb61: Memory/resource leak fixes surfaced by the Round 13 audit: drain previously-discarded `fetch()` response bodies at six call sites (BlackForestLabs, IntegrationDiscoveryResolver's webhook sender, WebPageContentAction's content-too-large guard, the React runtime's external component registry client, and RuntimeSchemaManager's restart poll) so undici no longer pins keep-alive connections; bound `RemoteBrowserActionResolver`'s process-lifetime screencast/audio-stream idempotency maps with a TTL sweep so a crashed or disconnected session no longer leaks a permanent entry; add missing SQL connection-pool `'error'` listeners (ComponentRegistry's server, DBAutoDoc's three drivers) and close DBAutoDoc's connection pool on its error path so a failed analysis run no longer leaves it open for the rest of the CLI process.
+- Updated dependencies [2c826f7]
+- Updated dependencies [197fdf8]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [ada8784]
+- Updated dependencies [23c2521]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [a5f92d2]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

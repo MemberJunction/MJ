@@ -1,6 +1,18 @@
 export * from './accounts';
 export * from './contacts';
 
+// List management, saved-record search and prospecting. These talk to a different
+// Apollo base path from enrichment, and every write among them needs a master key
+// — see ./generic/apollo-lists.types.ts for the API behaviours involved.
+export * from './generic/apollo-lists.types';
+export * from './lists/ApolloRESTClient';
+export * from './lists/ApolloRESTBaseAction';
+export * from './lists/ApolloListActions';
+export * from './lists/ApolloSearchActions';
+export * from './lists/ApolloMoveActions';
+export * from './lists/credentials';
+export * from './lists/params';
+
 // ApolloEnrichContact this Action would use the www.apollo.io enrichment service and enrich a "contact" type of record. The parameters to this Action would be:
 // EntityName - entity in question that contacts "contact" types of records
 // EmailField - string - field name in the target entity that contains the email to be used for lookups

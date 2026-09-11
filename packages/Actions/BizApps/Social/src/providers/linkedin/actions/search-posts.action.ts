@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { LinkedInBaseAction, LinkedInShare } from '../linkedin-base.action';
+import { LinkedInAnalytics, LinkedInBaseAction, LinkedInCollectionResponse, LinkedInShare } from '../linkedin-base.action';
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { LogStatus, LogError } from '@memberjunction/core';
 import { SocialPost, SearchParams } from '../../../base/base-social.action';
@@ -225,16 +225,16 @@ export class LinkedInSearchPostsAction extends LinkedInBaseAction {
      */
     private async getPostAnalyticsForSearch(shareId: string, organizationUrn: string): Promise<any> {
         try {
-            const response = await this.axiosInstance.get('/organizationalEntityShareStatistics', {
-                params: {
+            const response = await this.httpClient.Get<LinkedInCollectionResponse<LinkedInAnalytics>>('/organizationalEntityShareStatistics', {
+                Query: {
                     q: 'organizationalEntity',
                     organizationalEntity: organizationUrn,
                     shares: `List(${shareId})`
                 }
             });
 
-            if (response.data.elements && response.data.elements.length > 0) {
-                return response.data.elements[0];
+            if (response.Data.elements && response.Data.elements.length > 0) {
+                return response.Data.elements[0];
             }
 
             return null;

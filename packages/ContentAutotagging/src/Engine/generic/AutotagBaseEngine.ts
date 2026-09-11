@@ -19,7 +19,7 @@ import { ProcessRunParams, JsonObject, ContentItemProcessParams } from './proces
 import { ClassificationContextResolver, IContentSourceClassificationConfiguration } from './ClassificationContextResolver'
 import { FieldPathResolver } from './FieldPathResolver'
 import { toZonedTime } from 'date-fns-tz'
-import axios from 'axios'
+import { HttpGet } from '@memberjunction/network-utils'
 import * as cheerio from 'cheerio'
 import crypto from 'crypto'
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai'
@@ -1408,8 +1408,8 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async getChecksumFromURL(url: string): Promise<string> {
-        const response = await axios.get(url);
-        const content = String(response.data);
+        const response = await HttpGet<string>(url, { ResponseType: 'text' });
+        const content = String(response.Data);
         return crypto.createHash('sha256').update(content).digest('hex');
     }
 

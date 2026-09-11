@@ -1,5 +1,56 @@
 # @memberjunction/ai-bridge-livekit-native
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/ai-bridge-livekit@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-bridge-livekit@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [a1a8989]
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ai-bridge-livekit@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

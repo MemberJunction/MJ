@@ -22,7 +22,7 @@ That keeps the heavy *lazy* Angular feature packages out of the eager bundle —
 
 ## Before committing a dependency change here
 
-1. Regenerate: `npm run mj:manifest:ng-bootstrap-lite` (from repo root).
-2. Grep the regenerated `src/generated/mj-class-registrations.ts` for server packages (`aiengine`, `ai-provider-bundle`, `ai-vectors-pinecone`, `storage`, `templates`, `ai-<provider>`) — any hit means stop and trace the edge.
+1. Regenerate: `pnpm run mj:manifest:ng-bootstrap-lite` (from repo root).
+2. Run `pnpm run check:browser-manifest` — it scans this manifest (and `ng-bootstrap`'s, and both packages' declared dependencies) for `aiengine`, `ai-provider-bundle`, `ai-vectors-pinecone`, `storage`, `templates`, `server`, `ai-agents`, `ai-prompts`, `communication-engine`, `content-autotagging` and every `ai-<provider>` in the bundle. Any hit means stop and trace the edge. CI runs the same command, so this is not an optional courtesy check.
 3. Use browser-safe equivalents: `ai-engine-base` (not `aiengine`), `ai-vectors-memory` (not `ai-vectors-pinecone`), `*-base` packages generally.
 4. Confirm a **cold** MJExplorer `ng serve` prints `Local: http://localhost:4201/` and binds.

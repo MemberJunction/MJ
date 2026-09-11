@@ -1,5 +1,173 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 8d880cc: Split geo **read** (`SupportsGeoCoding`, maps, distance, virtual PrimaryAddress / `__mj_Latitude_{FK}`) from geo **write** (GeoCodeSyncService only when 1+ writable Geo\* fields exist; skip provider when native lat/lng already set). mj-sync `push.skipGeoCoding` per entity. Parallel push default 10 uses `CreateIndependentInstance()` (shared pool, own TX) instead of defaulting to 1. Durable AfterCreate without a queue submitter defers until transaction depth is 0 (fire-and-forget), not nested in the save.
+- 9f73528: Nested transactions live on GenericDatabaseProvider. Depth 1 is a physical BEGIN; depth 2+ is a dialect savepoint. A savepoint error on a published handle (`ENOTBEGUN`/`EABORT`/`25P01`) throws `DoomedTransactionError` instead of opening a second physical TX (torn write). Nested begin with no physical TX is corruption. Physical hooks are abstract; `AbandonPhysicalTransaction` unpublishes on EABORT; `AfterPhysicalCommit` runs after the mutex. `TransactionDepth` moved to `@memberjunction/core` with deprecated camelCase aliases (`transactionDepth`, `savepointStack`, `inTransaction`, `inNestedTransaction`) for one release. `ResetTransactionState()` replaces poking private fields. Upgraders: read `TransactionDepth` (not a duck-typed `transactionDepth` that would be undefined).
+- 63bc733: Fix the polymorphic (`EntityID`/`RecordID`) soft-link dependency path, and add a canonical `RecordID` encoding API.
+
+  MJ models "a pointer to any record" as an `EntityID` + `RecordID` column pair, and `EntityField.EntityIDFieldName` has existed since the v2 baseline to declare one. It is `NULL` on every row in the system, so the code that consumes it has never run — and it did not work. This fixes the mechanism. It does **not** declare any pairs, so nothing changes at runtime until `EntityIDFieldName` is populated (see the caveat at the end).
+
+  **Defects fixed**
+  - `BuildSoftLinkDependencySQL` filtered the discriminator on the **holder** of the link rather than the entity whose dependents were being sought — it looked for `TaskLink` rows whose `EntityID` points at `TaskLink`. Both the SQL Server and PostgreSQL providers had this in the same shape.
+  - `GetRecordDependencies` returned as soon as no _hard_ foreign-key dependents were found, so the soft-link query was never built for an entity whose only dependents are polymorphic — precisely the case it exists to serve.
+  - The soft-link query compared the payload column against the bare first primary key value, but a `RecordID` column stores the field-prefixed form.
+  - String quoting was derived from the **holder's** primary key type and then applied to both the entity-ID and the record-ID literal, so an integer-keyed holder produced malformed SQL. Both literals are now always quoted, and values are escaped.
+  - Record merge repointed every dependency by writing the bare primary key value. That is correct for a foreign key and silently wrong for a `RecordID` column, which holds the field-prefixed form — it would have left pointers that resolve to nothing. The choice is now an explicit, tested seam (`ResolveMergeLinkValue`).
+  - Dependency rows mapped the dependent record's key onto the **parent** entity's primary key columns rather than the entity whose row it actually is.
+
+  **New API on `CompositeKey`**
+  - `ToRecordID()` — the canonical serialization for a polymorphic `RecordID` column. Unlike `ToConcatenatedString()` it **throws** rather than emitting a string that cannot be parsed back (a value containing the delimiter, or a null key component).
+  - `FromRecordID(entity, s)` — parses and **validates the field names and arity against the entity's primary keys**. `LoadFromConcatenatedString` cannot signal failure: given a string with no delimiter it leaves the key empty and returns normally, which is why consumers hand-roll delimiter sniffers today. The name check is also what safely rejects a legacy bare composite (`val1||val2`), which parses cleanly as a shape but names fields the entity does not have.
+  - `FromLegacyRecordID(entity, s)` — the transitional bare-value form, named so it is obviously temporary, so reading a legacy encoding is a decision at the call site rather than a guess inside the parser.
+
+  **Behavior change**
+
+  `GetRecordDependencies` now throws for an entity that is not in metadata, where it previously returned `[]`. Returning "no dependencies" for an entity we cannot resolve is indistinguishable, to a caller about to delete a record, from "this record is safe to delete".
+
+  **Not included, deliberately**
+
+  No `EntityIDFieldName` values are populated, so no polymorphic pair is declared and the soft-link path stays dormant. An audit done alongside this change found **90 write sites** across the repo that set a polymorphic payload column, of which **2** use the canonical encoding — the rest write a bare value, a comma-joined list (`CompositeKey.Values()`), a `||`-joined list, or a `Field=Value AND ...` string (`CompositeKey.ToString()`). Declaring pairs before those writers are normalized would make merge write the canonical form into columns that mostly hold bare values. Normalizing them is Layer 0 of `plans/polymorphic-foreign-keys.md`.
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+  - @memberjunction/query-processor@6.1.0-edge.6
+  - @memberjunction/ai-vectordb@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- c42c0e8: A transaction group can send its items as ONE round trip.
+
+  `TransactionGroupBase` gains an opt-in `BatchedSubmit` flag (default false — existing callers
+  are byte-for-byte unaffected). When set, both providers execute a variable-free group's items
+  as a single multi-statement round trip instead of one round trip per item: the same statements,
+  in the same order, inside the same transaction, with per-item results still returned.
+
+  Why this matters: the sequential submit is ATOMIC but not BATCHED. Each item's generated CRUD
+  procedure call is its own wire hop, and on a measured live sync the server-side execution was
+  ~0.3ms inside a per-statement wall cost two orders of magnitude larger — so a 100-item group
+  spent essentially all of its time waiting on round trips the SQL never needed. Batching the
+  wire is the entire speed of a direct-write path with none of its costs: every statement is
+  still the generated procedure, so validation, Record Changes and save events are untouched.
+
+  Result mapping cannot assume one recordset per item — a statement that returns no rows produces
+  NO recordset, so a positional zip silently drifts and attributes row A's identity to row B.
+  Each item is therefore preceded by a sentinel SELECT of its index; recordsets between sentinel
+  k and k+1 belong to item k. Covered by tests on both providers, including the empty-middle-item
+  case that breaks positional mapping.
+
+  SQL Server renumbers per-item `?` placeholders into one global `@p` namespace (one request
+  carries one parameter namespace; two items both rendering `@p0` would overwrite each other).
+
+  PostgreSQL cannot carry `$N` parameters in multi-statement text (extended-protocol limitation),
+  so parameter values are inlined through the driver's own `escapeLiteral` — never a hand-rolled
+  escaper — and only for values with an unambiguous literal form (string, finite number, boolean,
+  null, Date; plain objects are already serialized by the parameter processor before the gate).
+  If any value falls outside that set, or the client exposes no `escapeLiteral`, the WHOLE group
+  falls back to the sequential path: correctness first, batching second.
+
+  Groups that use `Variables` have cross-item dependencies (a later item's SQL is re-rendered
+  from an earlier item's output) and always run sequentially regardless of the flag — a single
+  round trip cannot feed one statement's output into the next statement's client-side rendering.
+
+  Failure semantics are unchanged: a batch failure rolls back and throws exactly as the serial
+  path's first-error rollback does, and per-item attribution of a poison row remains the caller's
+  degradation path (re-apply individually), as before.
+
+- 905820a: Sync-scoped write-side-effect suppression. Record Changes and geocoding are per-write side effects, but the only way to relieve a high-volume writer of them was turning the entity flags off — which also turns them off for every human and API writer of the same entities, permanently. New `EntitySaveOptions.SkipRecordChanges` / `SkipGeoCoding` (and `EntityDeleteOptions.SkipRecordChanges`) scope the suppression to the individual save: providers omit the audit-row wrap and the geocode side trip for saves that carry the options, and only those. The sync engine sets them on its own writes when the connection asks via `Configuration.writeSideEffects === 'suppressed'` — fail-closed: absent or malformed configuration keeps the side effects on, and a save outside a suppressing sync run can never carry them. Materially identical to flags-off for the sync's writes; invisible to every other writer. The delete option is mirrored onto the GraphQL `DeleteOptionsInput` because the schema-sync gate requires every `EntityDeleteOptions` field to appear there, but it is **not honoured over the wire**: every wire entry point sanitizes it back to false and logs the attempt, because suppressing an audit row is a higher privilege than `entity:delete` — the only authorization a delete mutation performs. That keeps delete at exact parity with save, whose options have no GraphQL input type at all.
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/query-processor@6.1.0-edge.5
+  - @memberjunction/ai-vectordb@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [a1a8989]
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/query-processor@6.1.0-edge.4
+  - @memberjunction/ai-vectordb@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

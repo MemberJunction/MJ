@@ -2,7 +2,7 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -52,6 +52,7 @@ import {
   type DateJumpOutcome
 } from '../../utils/date-jump';
 import { MessageListComponent } from '../message/message-list.component';
+import { decideArtifactPanelAction, snapshotArtifactVersions, ArtifactPanelAction, ArtifactPanelBaseline, ArtifactVersionRef } from '../../utils/artifact-panel-action';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 
 // PR 2c — Widget extension surface
@@ -208,6 +209,20 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * set false.
    */
   @Input() showLoadingState = true;
+
+  /**
+   * Read each reply from its top instead of its bottom.
+   *
+   * Default false (current behaviour): the pane follows the tail, so a run ends with the
+   * reader looking at the END of the answer and scrolling back up to start reading it.
+   *
+   * When true, sending and the run itself behave as before, but when the reply lands and
+   * the reader was following it, the turn — the reader's own message with the reply under
+   * it — is scrolled so it starts at the top of the pane, IF it is taller than the pane. A
+   * turn that fits stays where it is: it is all on screen anyway. A reader who scrolled up
+   * during the run is never moved; the scroll-to-bottom button is their way back.
+   */
+  @Input() readReplyFromTop = false;
 
   // --- Additional host-level feature gates (all default true; false removes the
   //     affordance entirely). Forwarded to the message list / message items / empty
@@ -684,7 +699,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   /** Live draft persistence (store debounces the server write). */
   public OnDraftStateChanged(conversationId: string | null, serialized: string): void {
-    console.log(`[Drafts] chat-area: draft change for '${conversationId ?? 'new'}' (${serialized.length} chars)`);
+    // verboseOnly: fires on every keystroke, same as the store's own SetDraft log below it.
+    LogStatusEx({ message: `[Drafts] chat-area: draft change for '${conversationId ?? 'new'}' (${serialized.length} chars)`, verboseOnly: true });
     this.draftStore.SetDraft(conversationId, serialized);
   }
 
@@ -760,6 +776,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public messages: MJConversationDetailEntity[] = [];
   public showScrollToBottomIcon = false;
   private scrollToBottom = false;
+  /**
+   * Whether the reader was at (within a few px of) the bottom at the last scroll event.
+   * An in-place message update only follows the tail for a reader who is already there;
+   * one who scrolled up to reread history is left alone, whichever mode is on.
+   */
+  private readerAtBottom = true;
+  /** readReplyFromTop: the reader's message that opened the current turn. */
+  private currentTurnStartMessageId: string | null = null;
+  /** readReplyFromTop: set when the reply lands, consumed once it has rendered. */
+  private pendingTurnStartMessageId: string | null = null;
+  /**
+   * readReplyFromTop: while a landing is under way, bottom-follow timers already armed by the
+   * last progress updates must not fire and drag the reader back down.
+   */
+  private bottomFollowSuppressedUntil = 0;
+  private turnStartRetryHandle: ReturnType<typeof setTimeout> | null = null;
+  /** Gap kept between the pane's top edge and the turn's first message. */
+  private static readonly TURN_TOP_GAP_PX = 16;
   private lastLoadedConversationId: string | null = null; // Track which conversation's peripheral data was loaded
   private currentlyLoadingConversationId: string | null = null; // Track which conversation is currently being loaded
   private conversationLoadToken = 0; // Monotonic token to discard stale async conversation loads
@@ -785,6 +819,23 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public showSystemArtifacts: boolean = false; // Toggle for showing system-only artifacts
   public selectedArtifactId: string | null = null;
   public selectedVersionNumber: number | undefined = undefined; // Version to show in artifact viewer
+
+  /**
+   * Bumped whenever artifacts are MERGED into `artifactsByDetailId` by something other than the
+   * turn in flight — today only the scroll-up paging path. A before/after diff spanning such a
+   * merge cannot tell an artifact that arrived from an older page from one a run just created, so
+   * the baseline records this counter and the decision refuses to infer creations when it moved.
+   */
+  private artifactMapGeneration = 0;
+
+  /**
+   * Bumped whenever the USER changes what the artifact panel is showing (clicks a card, opens one
+   * from the modal or a deep link, closes the panel). An agent turn can finish while such a click
+   * is in flight — two completion handlers run per turn, each holding its own pre-turn snapshot —
+   * and without this the slower one would pull the panel back onto the run's artifact and discard
+   * the selection the user just made.
+   */
+  private artifactSelectionEpoch = 0;
   public artifactPaneWidth: number = DEFAULT_ARTIFACT_PANE_WIDTH;
   public isArtifactPaneMaximized: boolean = false; // Track maximize state
   private artifactPaneWidthBeforeMaximize: number = DEFAULT_ARTIFACT_PANE_WIDTH;
@@ -1175,6 +1226,13 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
             return;
           }
           void this.handleCaptureDataSnapshotCommand(command);
+          return;
+        }
+        if (command.type === 'open:resource' && command.resourceType === 'Record' && command.entityName) {
+          if (conversationId && !this.isActiveConversation(conversationId)) {
+            return;
+          }
+          this.emitOpenResourceRecord(command);
         }
       });
 
@@ -1475,10 +1533,19 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.scrollToBottom) {
       this.scrollToBottom = false;
       setTimeout(() => {
+        if (Date.now() < this.bottomFollowSuppressedUntil) {
+          return;
+        }
         this.scrollToBottomNow();
         // Check scroll state after scrolling to bottom
         this.checkScroll();
       }, 100);
+    }
+    if (this.pendingTurnStartMessageId) {
+      const messageId = this.pendingTurnStartMessageId;
+      this.pendingTurnStartMessageId = null;
+      // Deferred for the same reason checkScroll() is not called synchronously below.
+      setTimeout(() => this.scrollTurnToTop(messageId), 0);
     }
     // Removed synchronous checkScroll() from else branch to prevent
     // ExpressionChangedAfterItHasBeenCheckedError. Calling detectChanges()
@@ -1496,6 +1563,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     // Complete destroy subject to cleanup subscriptions
     this.destroy$.next();
     this.destroy$.complete();
+
+    this.clearTurnTracking();
 
     // Remove resize listeners
     window.removeEventListener('mousemove', this.boundOnResizeMove);
@@ -1519,6 +1588,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   private resetConversationScopedViewState(): void {
+    this.clearTurnTracking();
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
     this.selectedVersionNumber = undefined;
@@ -1756,7 +1826,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         }
       }
 
-      this.scrollToBottom = true;
+      this.followTranscript('load');
 
       // Process peripheral data (agent runs, artifacts, ratings, attachments) from engine cache
       await this.loadPeripheralData(conversationId, snapshot, loadToken);
@@ -1920,6 +1990,11 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (sessionMeta.size > 0) {
       this.realtimeSessionMetaMap = new Map([...this.realtimeSessionMetaMap, ...sessionMeta]);
     }
+
+    // A page of OLDER artifacts just entered the map. Any artifact-panel baseline taken before
+    // this point can no longer be diffed against the map for creations — these arrived from
+    // history, not from a run. See snapshotArtifactPanelBaseline.
+    this.artifactMapGeneration++;
 
     // New references so the message list's ngOnChanges sees the extended maps.
     this.agentRunsByDetailId = new Map(this.agentRunsByDetailId);
@@ -2192,8 +2267,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
 
-    // Scroll to bottom when new message is sent
-    this.scrollToBottom = true;
+    // Where the viewport goes: a fresh send follows — an in-place update of a message that
+    // is already on screen must not re-run the send path's scroll.
+    this.followTranscript(existingIndex >= 0 ? 'update' : 'new', message);
 
     // Force change detection — zone.js 0.15 no longer patches graphql-ws WebSocket callbacks,
     // so progress updates that arrive via PubSub run outside Angular's zone. Without this,
@@ -2457,8 +2533,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
       LogStatusEx({message: `🎉 Handling completion for message ${message.ID}`, verboseOnly: true});
 
-      // Snapshot artifact IDs before reload to detect newly created artifacts
-      const artifactIdsBefore = this.collectAllArtifactIds();
+      // Snapshot the artifact population before the reloads below so we can tell a NEW artifact
+      // from a new VERSION of one already on screen (#529).
+      const artifactBaseline = this.snapshotArtifactPanelBaseline();
 
       // Reload message from database to get final content and status
       await message.Load(message.ID);
@@ -2501,12 +2578,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         .filter(m => m.Status === 'In-Progress')
         .map(m => m.ID)];
 
-      // Auto-open artifact panel if NEW artifacts were discovered (not just the triggering message).
+      // Open/refresh the artifact panel from the version diff (not just the triggering message).
       // When Sage delegates to a sub-agent (e.g., Skip), the artifact is on the sub-agent's
       // message, not Sage's. Checking only the triggering message would miss delegated artifacts.
-      if (!this.showArtifactPanel) {
-        await this.autoOpenNewArtifact(artifactIdsBefore, expectedConversationId);
-      }
+      // #529: a delegated build discovered here must surface even with the panel already open on
+      // another artifact, so this is NOT gated on `!this.showArtifactPanel`.
+      await this.decideAndApplyArtifactPanel(artifactBaseline, expectedConversationId);
 
       // Remove task from ActiveTasksService (clears spinner in conversation list)
       const task = this.activeTasks.getByConversationDetailId(message.ID);
@@ -2547,8 +2624,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       this.resetComponentState(this.conversationId);
     }
 
-    // Scroll to bottom when agent responds
-    this.scrollToBottom = true;
+    // Where the viewport goes when the agent responds
+    this.followTranscript('new', event.message);
 
     // CRITICAL FIX: Always refresh the agent run data when agent completes
     // This ensures we get the final status and timestamps, replacing any stale data from when agent started
@@ -2560,8 +2637,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
     }
 
-    // Snapshot artifact IDs before reload to detect newly created artifacts
-    const artifactIdsBefore = this.collectAllArtifactIds();
+    // Snapshot the artifact population before reload so we can tell a NEW artifact from a new
+    // VERSION of one already on screen (#529).
+    const artifactBaseline = this.snapshotArtifactPanelBaseline();
 
     // Reload artifact mapping for this message to pick up newly created artifacts
     await this.reloadArtifactsForMessage(event.message.ID, event.message.ConversationID);
@@ -2569,10 +2647,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // Auto-open artifact panel if NEW artifacts were discovered
-    if (!this.showArtifactPanel) {
-      await this.autoOpenNewArtifact(artifactIdsBefore, event.message.ConversationID);
-    }
+    // #529: open a newly created artifact even with the panel already open on another one, refresh
+    // the shown artifact when it gained a version, and switch to a retargeted one.
+    await this.decideAndApplyArtifactPanel(artifactBaseline, event.message.ConversationID);
 
     // Force change detection to update the UI
     this.cdr.detectChanges();
@@ -2712,43 +2789,115 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   }
 
   /**
-   * Collect all currently known artifact IDs across all messages.
-   * Used as a "before" snapshot to detect newly created artifacts after a reload.
+   * Every (artifactId, versionNumber) pair currently known across all messages, with the version's
+   * creation time so candidates can be ordered by recency rather than by whichever conversation
+   * detail the map happened to iterate last.
    */
-  private collectAllArtifactIds(): Set<string> {
-    const ids = new Set<string>();
+  private allArtifactRefs(): ArtifactVersionRef[] {
+    const refs: ArtifactVersionRef[] = [];
     for (const artifactList of this.artifactsByDetailId.values()) {
       for (const info of artifactList) {
-        ids.add(info.artifactId);
+        refs.push({
+          artifactId: info.artifactId,
+          versionNumber: info.versionNumber,
+          versionCreatedAt: info.versionCreatedAt,
+        });
       }
     }
-    return ids;
+    return refs;
   }
 
   /**
-   * Auto-open the artifact panel for the most recent NEW artifact.
-   * Compares current artifacts against a pre-reload snapshot to find
-   * only artifacts that were just discovered (avoiding re-opening for old artifacts).
-   * Searches artifactsByDetailId directly rather than iterating this.messages,
-   * because reloadMessagesForActiveConversation can temporarily remove messages
-   * from this.messages during concurrent operations.
+   * Captures everything {@link decideAndApplyArtifactPanel} needs to judge, at the START of a turn,
+   * whether the artifact population changed BECAUSE of that turn.
+   *
+   * The version map alone is not enough. `artifactsByDetailId` is rebuilt for reasons unrelated to
+   * any run — `resetConversationScopedViewState` does not clear it on a conversation switch, so it
+   * still holds the previous conversation's artifacts until `loadPeripheralData` lands, and the
+   * missed-completion path in `loadMessages` runs BEFORE that rebuild. A snapshot taken there
+   * describes a different conversation entirely, and every artifact of the conversation being
+   * opened would read as newly created. So the baseline also records which conversation the map
+   * was holding, the paging generation, and the user's selection epoch.
    */
-  private async autoOpenNewArtifact(artifactIdsBefore: Set<string>, expectedConversationId: string | null | undefined = this.conversationId): Promise<void> {
-    if (!this.isActiveConversation(expectedConversationId)) {
-      return;
+  private snapshotArtifactPanelBaseline(): ArtifactPanelBaseline {
+    return {
+      versions: snapshotArtifactVersions(this.allArtifactRefs()),
+      conversationId: this.conversationId,
+      mapConversationId: this.lastLoadedConversationId,
+      mapGeneration: this.artifactMapGeneration,
+      selectionEpoch: this.artifactSelectionEpoch,
+    };
+  }
+
+  /**
+   * Diffs the current artifact population against a baseline and carries out the resulting panel
+   * action. The single entry point for all three completion paths, which previously each carried
+   * their own copy of the snapshot/decide/apply sequence.
+   *
+   * @param baseline - From {@link snapshotArtifactPanelBaseline}, taken before the turn's reloads.
+   * @param conversationId - The conversation this turn belongs to.
+   */
+  private async decideAndApplyArtifactPanel(
+    baseline: ArtifactPanelBaseline,
+    conversationId: string | null | undefined
+  ): Promise<void> {
+    // The baseline is comparable only if the map was holding THIS conversation's artifacts when it
+    // was taken, and nothing merged an older page in since.
+    const baselineComparable =
+      baseline.mapConversationId != null &&
+      UUIDsEqual(baseline.mapConversationId, baseline.conversationId) &&
+      this.artifactMapGeneration === baseline.mapGeneration;
+
+    const action = decideArtifactPanelAction({
+      panelOpen: this.showArtifactPanel,
+      selectedArtifactId: this.selectedArtifactId,
+      before: baseline.versions,
+      after: this.allArtifactRefs(),
+      baselineComparable,
+      userChangedSelection: this.artifactSelectionEpoch !== baseline.selectionEpoch,
+    });
+
+    if (!baselineComparable && action.kind === 'none') {
+      LogStatusEx({
+        message: `🎨 Skipping artifact panel decision: the before/after snapshots describe different artifact populations (map held ${baseline.mapConversationId ?? 'nothing'}, conversation was ${baseline.conversationId})`,
+        verboseOnly: true
+      });
     }
-    for (const [detailId, artifactList] of this.artifactsByDetailId) {
-      const newArtifact = artifactList.find(a => !artifactIdsBefore.has(a.artifactId));
-      if (newArtifact) {
-        this.selectedArtifactId = newArtifact.artifactId;
+    await this.applyArtifactPanelAction(action, conversationId);
+  }
+
+  /**
+   * Carry out the decision from {@link decideArtifactPanelAction}: open the panel on an artifact
+   * version, refresh the already-open viewer, or do nothing.
+   */
+  private async applyArtifactPanelAction(action: ArtifactPanelAction, conversationId: string | null | undefined): Promise<void> {
+    switch (action.kind) {
+      case 'open':
+        this.selectedArtifactId = action.artifactId;
+        this.selectedVersionNumber = action.versionNumber;
         this.showArtifactPanel = true;
-        await this.loadArtifactPermissions(newArtifact.artifactId, expectedConversationId, newArtifact.artifactId);
-        if (!this.isActiveConversation(expectedConversationId) || !UUIDsEqual(this.selectedArtifactId, newArtifact.artifactId)) {
+        await this.loadArtifactPermissions(action.artifactId, conversationId, action.artifactId);
+        // The permission load is async: the user may have switched conversations or picked a
+        // different artifact while it was in flight, so only narrate what is still on screen.
+        if (!this.isActiveConversation(conversationId) || !UUIDsEqual(this.selectedArtifactId, action.artifactId)) {
           return;
         }
-        LogStatusEx({message: `🎨 Auto-opening new artifact ${newArtifact.artifactId} from detail ${detailId}`, verboseOnly: true});
+        LogStatusEx({
+          message: `🎨 Opening artifact ${action.artifactId} v${action.versionNumber} after agent run (decided from the conversation-wide version diff, so no single detail id applies)`,
+          verboseOnly: true
+        });
         return;
-      }
+      case 'refresh':
+        // ONE channel, deliberately. Writing `selectedVersionNumber` as well would change the
+        // viewer's `[versionNumber]` input in the same change-detection pass, and its `ngOnChanges`
+        // would load the version a second time on top of the load this emission already starts —
+        // and that second load runs without a cancellation token, so it can also land after a newer
+        // one. The subject path is the one to keep: it reloads the version list too, which a
+        // brand-new version needs, and it carries a load token.
+        this.artifactViewerRefresh$.next({ artifactId: action.artifactId, versionNumber: action.versionNumber });
+        return;
+      case 'none':
+        return;
     }
   }
 
@@ -2879,6 +3028,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async openArtifactFromModal(artifactId: string, versionNumber?: number): Promise<void> {
     const conversationId = this.conversationId;
+    this.artifactSelectionEpoch++;
     this.selectedArtifactId = artifactId;
     this.selectedVersionNumber = versionNumber;
     this.showArtifactPanel = true;
@@ -3303,6 +3453,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   async onArtifactClicked(data: {artifactId: string; versionId?: string}): Promise<void> {
     const conversationId = this.conversationId;
+    this.artifactSelectionEpoch++;
     this.selectedArtifactId = data.artifactId;
 
     // If versionId is provided, find the version number from display data (no lazy load needed)
@@ -3346,8 +3497,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // Snapshot artifact IDs before reload to detect newly created artifacts
-    const artifactIdsBefore = this.collectAllArtifactIds();
+    // Snapshot the artifact population across the conversation before reload so we can tell a NEW
+    // artifact from a new VERSION of an existing one (the event itself carries placeholder ids).
+    const artifactBaseline = this.snapshotArtifactPanelBaseline();
 
     // Reload artifacts to get full entities (processes ALL messages in the conversation)
     await this.reloadArtifactsForMessage(data.conversationDetailId, data.conversationId);
@@ -3355,33 +3507,16 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // Auto-open artifact panel if no artifact currently shown
-    if (!this.showArtifactPanel) {
-      // Use robust auto-open that checks ALL messages for new artifacts.
-      // When a sub-agent (e.g., Skip) creates an artifact on a different ConversationDetail
-      // than the one specified in the event, checking only data.conversationDetailId would miss it.
-      await this.autoOpenNewArtifact(artifactIdsBefore, data.conversationId);
-    } else if (this.selectedArtifactId) {
-      // Panel is already open - check if new artifact is a new version of currently displayed artifact
-      const artifactList = this.artifactsByDetailId.get(data.conversationDetailId);
-      if (artifactList && artifactList.length > 0) {
-        const currentArtifact = artifactList.find(a => a.artifactId === this.selectedArtifactId);
-        if (currentArtifact) {
-          // New version of the same artifact - refresh to show latest version
-          const latestVersion = artifactList[artifactList.length - 1];
-          this.artifactViewerRefresh$.next({
-            artifactId: latestVersion.artifactId,
-            versionNumber: latestVersion.versionNumber
-          });
-        }
-      }
-    }
+    // #529: a new artifact opens even over an open panel (build); a bumped version of the shown
+    // artifact refreshes; a bumped version of another artifact switches to it (retargeting).
+    await this.decideAndApplyArtifactPanel(artifactBaseline, data.conversationId);
 
     // Force change detection to update the UI immediately
     this.cdr.detectChanges();
   }
 
   onCloseArtifactPanel(): void {
+    this.artifactSelectionEpoch++;
     this.showArtifactPanel = false;
     this.selectedArtifactId = null;
     // Clear permissions
@@ -3669,6 +3804,25 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.openEntityRecord.emit(event);
   }
 
+  /** Record `open:resource` buttons → same openEntityRecord chain as agent-run links. */
+  private emitOpenResourceRecord(command: OpenResourceCommand): void {
+    if (!command.entityName) return;
+    const entity = this.ProviderToUse.EntityByName(command.entityName);
+    if (!entity) {
+      console.warn('open:resource: unknown entity', command.entityName);
+      return;
+    }
+    const compositeKey = ConversationUtility.CompositeKeyFromOpenResource(
+      command,
+      entity.PrimaryKeys.map(pk => pk.Name)
+    );
+    if (!compositeKey) {
+      console.warn('open:resource: incomplete primary key', command.entityName, command);
+      return;
+    }
+    this.openEntityRecord.emit({ entityName: command.entityName, compositeKey });
+  }
+
   onNavigationRequest(event: NavigationRequest): void {
     // Pass the event up to the parent component for app-level navigation
     this.navigationRequest.emit(event);
@@ -3676,11 +3830,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
   viewTestRun(testRunId: string): void {
     // Open the test run record in the entity viewer
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: testRunId });
     this.openEntityRecord.emit({
       entityName: 'MJ: Test Runs',
-      compositeKey
+      compositeKey: CompositeKey.FromID(testRunId)
     });
   }
 
@@ -3692,11 +3844,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * wrapper routes it through `NavigationService.OpenEntityRecord`.
    */
   onRealtimeNavigateRequest(event: RealtimeNavigateRequest): void {
-    const compositeKey = new CompositeKey();
-    compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: event.RecordID });
+    // The overlay can name any entity — resolve its key column(s) from metadata, not a hardcoded ID.
     this.openEntityRecord.emit({
       entityName: event.EntityName,
-      compositeKey
+      compositeKey: CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.EntityName), event.RecordID)
     });
   }
 
@@ -4125,6 +4276,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     // Open the artifact panel so the viewer mounts (if it isn't already).
     if (!panelAlreadyOpen) {
+      this.artifactSelectionEpoch++;
       this.selectedArtifactId = artifactId;
       this.selectedVersionNumber = undefined;
       this.showArtifactPanel = true;
@@ -4409,6 +4561,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     const scrollDifference = element.scrollHeight - (element.scrollTop + element.clientHeight);
     const hasScrollableContent = element.scrollHeight > element.clientHeight + 50;
     const atBottom = scrollDifference <= buffer;
+    this.readerAtBottom = atBottom;
 
     const newValue = !atBottom && hasScrollableContent;
 
@@ -4443,6 +4596,126 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.scrollContainer) {
       const element = this.scrollContainer.nativeElement;
       element.scroll({ top: element.scrollHeight, behavior: 'smooth' });
+    }
+  }
+
+  /**
+   * Decides where the viewport goes after the transcript changed.
+   *
+   * - `load`   — a conversation was opened: the bottom.
+   * - `new`    — a message was appended: follow the tail, as before.
+   * - `update` — a message already on screen changed in place (progress, status, streamed
+   *              text). Never moves a reader who has scrolled away; keeps a reader who is
+   *              at the bottom there as the bubble grows. (Before this, every progress
+   *              update re-ran the send path's scroll — message-input re-emits
+   *              `messageSent` per update — and yanked the reader to the bottom.)
+   *
+   * With `readReplyFromTop`, the reader's own message opens a turn — whether it arrives as
+   * `new` or, on the auto-send path where the chat area already holds it, as `update` — and
+   * every settled AI message of that turn (Complete or Error) lands the turn instead of
+   * following, for a reader who was still following. EVERY settled message, not the first:
+   * the refinement path emits a settled status line ("Continuing with X…") before the reply,
+   * and a turn that landed on the status line alone must land again when the reply arrives
+   * (re-landing is idempotent — the same target, or nothing once the reader has been moved
+   * off the bottom). Completion is also emitted more than once for one message; none of those
+   * emits may fall through to the bottom follow. A `load` does not forget the turn: creating
+   * a conversation from the composer sends the first message while the initial load is still
+   * in flight.
+   */
+  private followTranscript(change: 'load' | 'new' | 'update', message?: MJConversationDetailEntity): void {
+    if (change === 'load') {
+      this.scrollToBottom = true;
+      return;
+    }
+    if (this.readReplyFromTop) {
+      if (message?.Role === 'User' && message.ID && message.ID !== this.currentTurnStartMessageId) {
+        this.currentTurnStartMessageId = message.ID;
+      } else if (this.currentTurnStartMessageId && message?.Role === 'AI' && this.isSettled(message)) {
+        if (this.readerAtBottom) {
+          this.pendingTurnStartMessageId = this.currentTurnStartMessageId;
+          this.scrollToBottom = false;
+          this.bottomFollowSuppressedUntil = Date.now() + 1500;
+        }
+        return;
+      }
+    }
+    if (change === 'new' || this.readerAtBottom) {
+      if (change === 'new' && message?.Role === 'User') {
+        // The reader sending again right after a reply landed must not be swallowed by the
+        // landing's suppression. Only THEIR message lifts it: an AI message arriving new
+        // inside the window belongs to the turn that just landed and must not cancel it.
+        this.bottomFollowSuppressedUntil = 0;
+      }
+      this.scrollToBottom = true;
+    }
+  }
+
+  private isSettled(message: MJConversationDetailEntity): boolean {
+    return message.Status === 'Complete' || message.Status === 'Error';
+  }
+
+  /**
+   * readReplyFromTop: once the reply has rendered, scrolls the turn so its first message
+   * sits at the top of the pane — but only if the turn is taller than the pane. A turn that
+   * fits is already fully on screen at the bottom, and moving it would be motion for nothing.
+   */
+  private scrollTurnToTop(messageId: string, attempt: number = 0): void {
+    if (!this.readReplyFromTop) {
+      return;
+    }
+    const container = this.scrollContainer?.nativeElement as HTMLElement | undefined;
+    // Resolved through the list's timeline, not a `[data-message-id]` query: a far-off item
+    // is unmounted into a spacer and a session-stamped row folds into its session card, and
+    // the list answers with the node that stands for the message in either case.
+    const target = this.messageListComponent?.FindTimelineElement(messageId) ?? null;
+    if (!container || !target) {
+      // The reply's final render lands a tick or two after the array changes — the same
+      // latency the bottom-follow path absorbs with its 100 ms timer.
+      if (attempt < 20) {
+        this.turnStartRetryHandle = setTimeout(() => this.scrollTurnToTop(messageId, attempt + 1), 50);
+      }
+      return;
+    }
+    this.turnStartRetryHandle = null;
+    const turnTop = this.offsetWithinScroller(target) - this.turnTopClearance(container);
+    const turnHeight = container.scrollHeight - turnTop; // the turn is the newest content
+    if (turnHeight > container.clientHeight) {
+      container.scroll({ top: turnTop, behavior: 'smooth' });
+    } else {
+      this.scrollToBottomNow();
+    }
+    this.checkScroll();
+  }
+
+  /**
+   * How far below the pane's top edge the turn's first message lands: the standard gap, plus
+   * room for the list's sticky date header when it is showing — it pins to this scroller's
+   * top and would otherwise sit on the message's first line.
+   */
+  private turnTopClearance(container: HTMLElement): number {
+    const stickyHeader = container.querySelector<HTMLElement>('.sticky-date-header');
+    if (!stickyHeader || !stickyHeader.offsetParent) {
+      return ConversationChatAreaComponent.TURN_TOP_GAP_PX;
+    }
+    // The header's CSS inset (`top: 12px`), NOT `offsetTop`: on a pinned sticky element
+    // `offsetTop` reports the used position, which tracks the scroll offset.
+    const inset = parseFloat(getComputedStyle(stickyHeader).top) || 0;
+    return ConversationChatAreaComponent.TURN_TOP_GAP_PX + stickyHeader.offsetHeight + inset;
+  }
+
+  /** An element's top edge in the scroller's content coordinates — what scrollTop counts in. */
+  private offsetWithinScroller(el: HTMLElement): number {
+    const container = this.scrollContainer.nativeElement as HTMLElement;
+    return el.getBoundingClientRect().top - container.getBoundingClientRect().top + container.scrollTop;
+  }
+
+  private clearTurnTracking(): void {
+    this.currentTurnStartMessageId = null;
+    this.pendingTurnStartMessageId = null;
+    this.bottomFollowSuppressedUntil = 0;
+    if (this.turnStartRetryHandle) {
+      clearTimeout(this.turnStartRetryHandle);
+      this.turnStartRetryHandle = null;
     }
   }
 
@@ -4575,6 +4848,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     }
 
     // Open the artifact panel
+    this.artifactSelectionEpoch++;
     this.selectedArtifactId = artifactIdToOpen;
     this.selectedVersionNumber = versionNumberToOpen ?? undefined;
     this.showArtifactPanel = true;
@@ -4636,7 +4910,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
 
     this.intentCheckMessage = tempMessage;
     this.messages = [...this.messages, tempMessage];
-    this.scrollToBottom = true;
+    this.followTranscript('new', tempMessage);
     this.cdr.detectChanges();
   }
 

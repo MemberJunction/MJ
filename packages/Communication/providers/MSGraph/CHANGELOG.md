@@ -1,5 +1,195 @@
 # Change Log - @memberjunction/communication-ms-graph
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b8c2e33: Communication: calendar retrieval, so a provider can be asked what is on a calendar.
+
+  `BaseCommunicationProvider` could send mail, read mail, reply, forward, draft, move, archive, search
+  and subscribe — and had no way to read a calendar. Any caller needing events had to build its own
+  Graph client, which means duplicating token acquisition, the credential-keyed client cache and paging
+  that this provider already owns.
+
+  **`GetEvents` is concrete on the base, not abstract.** Making it abstract would break every existing
+  provider at compile time for a capability most will never have. Providers that support it override
+  and declare `'GetEvents'` in `getSupportedOperations()`; the rest inherit a refusal that names itself,
+  so a caller learns which provider declined instead of receiving an empty list. That is also why the
+  default returns `Success: false` rather than `{Events: []}` — "this provider cannot look" and "there
+  was nothing in the window" are different facts, and a caller advancing a watermark must not read the
+  first as the second.
+
+  **Separate from `GetMessages` rather than a mode of it.** A calendar read is bounded by a time window,
+  not a count and a folder. "The next 200 messages" is a sensible request; "the next 200 events" is not.
+  Folding it in would have left `NumMessages` meaning different things depending on a flag.
+
+  **The endpoint choice is reported, because it silently changes the answer.** Graph exposes calendar
+  data two ways: `/calendarView` requires a window and expands a recurring series into one entry per
+  OCCURRENCE; `/events` needs no window and returns the series MASTER — a weekly stand-up is one row
+  whose start time is whenever the series began. Supplying both bounds selects the first. Since a master
+  and an occurrence are indistinguishable by inspection, the result carries `RecurrenceExpanded` rather
+  than leaving the caller to infer which it received.
+
+  **Cancelled events are excluded server-side, before `$top`.** Filtering them out after the fetch would
+  return fewer than `NumEvents` and read as a quiet calendar rather than a filtered one.
+  `IncludeCancelled` opts back in.
+
+  **A start Graph cannot express as an instant becomes null, never a guess.** Graph sends a naive local
+  string plus a separate `timeZone`; without a tz database a named zone does not determine an instant,
+  and guessing files a meeting hours from when it happened. An explicit offset is honoured regardless of
+  the named zone.
+
+  20 tests, each mutation-checked: pinning either endpoint unconditionally, accepting one bound as a
+  window, dropping the cancelled filter, omitting `RecurrenceExpanded`, leaving the organizer in the
+  attendee list, guessing at a named zone, and turning a thrown Graph error into a successful empty
+  result are all caught.
+
+- d38845a: feat(communication): `GetMessagesParams.ReceivedAfter` / `ReceivedBefore` push inclusive date bounds down to providers that support them (MS Graph, Gmail). Providers declare support via `MessageRetrieval` and report what they applied in `GetMessagesResult.AppliedFilters`. Also fixes both providers silently discarding `UnreadOnly` when `ContextData.Filter` / `ContextData.query` was also supplied.
+- 770cfca: MS Graph: a stored Azure Service Principal credential could not drive a single operation.
+
+  `azure-service-principal.schema.json` declares three fields and requires all three. `resolveCredentials`
+  validated **four**, demanding an `accountEmail` the credential type has no way to carry — so any
+  credential created through the Credentials engine failed with
+  `Missing required credential: accountEmail` before doing any work.
+
+  It went unnoticed because `resolveCredentialValue` falls back to `AZURE_ACCOUNT_EMAIL`, so a host that
+  sets that variable never sees it. The failure appears exactly when a credential is meant to stand on
+  its own — which is what the Credentials engine is for, and is now reachable deliberately through
+  `disableEnvironmentFallback: true`.
+
+  **The guard was wrong, not the schema.** A mailbox is not part of a service principal: the same
+  credential legitimately drives Azure OpenAI and Blob Storage, where a mailbox means nothing, and the
+  type's own description says so. The provider's own interface already declared `accountEmail?: string`
+  — only the validator forced it. And almost nothing needs it: every read path already treated it as a
+  last-resort fallback behind `params.Identifier` or `ContextData.Email`, so an operation that named
+  its own mailbox was refused over a field it would never have read.
+
+  `accountEmail` is now a DEFAULT, resolved per operation:
+  - `resolveCredentials` validates the three authentication fields, which is what a principal is.
+  - A new `resolveMailbox(operation, creds, ...preferred)` picks the first mailbox the request named and
+    falls back to `accountEmail`, so anything specific to a request outranks the deployment default.
+  - When nothing resolves, it refuses with a message naming the operation and both ways to supply one.
+
+  **It refuses rather than returning `undefined` on purpose.** Every caller interpolates the result into
+  a Graph path, so `undefined` would put the literal string "undefined" in the URL and come back as a
+  404 that reads like "message not found" — a wrong answer wearing the costume of a real one. This
+  package does not enable `strictNullChecks`, so nothing would have caught that: not the compiler, and
+  not a test asserting only on success.
+
+  Three `catch` blocks (`SendSingleMessage`, `ForwardMessage`, `CreateDraft`) discarded the exception's
+  message entirely and now include it. Harmless while nothing inside had anything specific to say; the
+  mailbox guard does.
+
+  Verified against a live tenant with a three-field credential and the environment fallback disabled: an
+  explicit `Identifier` reads mail, no mailbox anywhere refuses with the full message, `accountEmail`
+  alone works as the default, and a request-supplied mailbox beats that default.
+
+- ee85060: MS Graph: Reply can resolve its mailbox from the request, not only from the credential.
+
+  Thirteen of fifteen operations pass a request-level candidate to `resolveMailbox`. Reply passed none,
+  so it could only resolve `accountEmail` on the credential — a property the `Azure Service Principal`
+  type declares nowhere, and whose environment source `disableEnvironmentFallback` removes. Reply was
+  therefore unreachable on exactly the stored credential the mailbox rework exists to support.
+
+  `ReplyToMessageParams` already carries `ContextData`, the same field eleven sibling operations read,
+  so Reply now reads it first and falls back to the credential default as everything else does.
+
+  Forward is untouched and still has the gap: `ForwardMessageParams` carries no `ContextData` and no
+  identifier, so it cannot name a mailbox without a change to that params type.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [5fc861f]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

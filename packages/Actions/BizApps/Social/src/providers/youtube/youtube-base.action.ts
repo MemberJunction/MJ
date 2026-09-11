@@ -1,7 +1,7 @@
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSocialMediaAction } from '../../base/base-social.action';
 import { UserInfo } from '@memberjunction/core';
-import axios, { AxiosInstance, AxiosError } from 'axios';
+import { HttpClient, HttpError, HttpPost, HttpPut, IsHttpError } from '@memberjunction/network-utils';
 import { SocialPost, MediaFile } from '../../base/base-social.action';
 import { BaseAction } from '@memberjunction/actions';
 
@@ -9,6 +9,14 @@ import { BaseAction } from '@memberjunction/actions';
  * Base class for all YouTube actions.
  * Handles YouTube Data API v3 authentication and common functionality.
  */
+/** Google's OAuth2 token-refresh response. */
+interface YouTubeTokenResponse {
+    access_token: string;
+    expires_in?: number;
+    scope?: string;
+    token_type?: string;
+}
+
 @RegisterClass(BaseAction, 'YouTubeBaseAction')
 export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
     protected override get platformName(): string {
@@ -20,17 +28,17 @@ export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
     }
 
     /**
-     * Axios instance for API requests
+     * HTTP client for API requests
      */
-    protected axiosInstance: AxiosInstance;
+    protected httpClient: HttpClient;
 
     /**
-     * Initialize the axios instance with base configuration
+     * Initialize the HTTP client with base configuration
      */
-    protected initializeAxios(): void {
-        this.axiosInstance = axios.create({
-            baseURL: this.apiBaseUrl,
-            headers: {
+    protected initializeHttpClient(): void {
+        this.httpClient = new HttpClient({
+            BaseURL: this.apiBaseUrl,
+            Headers: {
                 'Accept': 'application/json',
                 'Content-Type': 'application/json'
             }
@@ -47,14 +55,14 @@ export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
         }
 
         try {
-            const response = await axios.post('https://oauth2.googleapis.com/token', {
+            const response = await HttpPost<YouTubeTokenResponse>('https://oauth2.googleapis.com/token', {
                 client_id: this.getCustomAttribute(2), // Store client ID in CustomAttribute2
                 client_secret: this.getCustomAttribute(3), // Store client secret in CustomAttribute3
                 refresh_token: refreshToken,
                 grant_type: 'refresh_token'
             });
 
-            const { access_token, expires_in } = response.data;
+            const { access_token, expires_in } = response.Data;
             await this.updateStoredTokens(access_token, undefined, expires_in);
         } catch (error) {
             throw new Error(`Failed to refresh YouTube access token: ${error.message}`);
@@ -71,25 +79,25 @@ export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
         params?: Record<string, any>,
         contextUser?: UserInfo
     ): Promise<T> {
-        if (!this.axiosInstance) {
-            this.initializeAxios();
+        if (!this.httpClient) {
+            this.initializeHttpClient();
         }
 
         return this.makeAuthenticatedRequest(async (token) => {
             try {
-                const response = await this.axiosInstance.request<T>({
-                    url: endpoint,
-                    method,
-                    data,
-                    params,
-                    headers: {
+                const response = await this.httpClient.Request<T>({
+                    Url: endpoint,
+                    Method: method,
+                    Body: data,
+                    Query: params,
+                    Headers: {
                         'Authorization': `Bearer ${token}`
                     }
                 });
 
-                return response.data;
+                return response.Data;
             } catch (error) {
-                if (axios.isAxiosError(error)) {
+                if (IsHttpError(error)) {
                     this.handleYouTubeApiError(error);
                 }
                 throw error;
@@ -100,15 +108,15 @@ export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
     /**
      * Handle YouTube API errors
      */
-    protected handleYouTubeApiError(error: AxiosError): void {
-        const response = error.response;
+    protected handleYouTubeApiError(error: HttpError): void {
+        const response = error.Status ? error : null;
         if (!response) {
             throw new Error('Network error occurred');
         }
 
-        const errorData: any = response.data;
-        const errorMessage = errorData?.error?.message || response.statusText;
-        const errorCode = errorData?.error?.code || response.status;
+        const errorData: any = response.Data;
+        const errorMessage = errorData?.error?.message || response.StatusText;
+        const errorCode = errorData?.error?.code || response.Status;
 
         // Check for quota exceeded
         if (errorCode === 403 && errorMessage.includes('quota')) {
@@ -117,7 +125,7 @@ export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
 
         // Check for rate limiting
         if (errorCode === 429) {
-            const retryAfter = response.headers['retry-after'];
+            const retryAfter = response.Headers['retry-after'];
             throw new Error(`Rate limit exceeded. Retry after ${retryAfter || '60'} seconds`);
         }
 
@@ -167,7 +175,7 @@ export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
             }
         );
 
-        return response.headers.location;
+        return response.Headers.location;
     }
 
     /**
@@ -178,15 +186,15 @@ export abstract class YouTubeBaseAction extends BaseSocialMediaAction {
             ? videoFile.data 
             : Buffer.from(videoFile.data, 'base64');
 
-        const response = await axios.put(uploadUrl, videoData, {
-            headers: {
+        const response = await HttpPut<{ id: string }>(uploadUrl, videoData, {
+            Headers: {
                 'Content-Type': videoFile.mimeType,
                 'Content-Length': videoData.length.toString(),
                 'Authorization': `Bearer ${this.getAccessToken()}`
             }
         });
 
-        return response.data.id;
+        return response.Data.id;
     }
 
     /**

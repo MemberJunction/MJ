@@ -1,5 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewEncapsulation, ViewChild, ChangeDetectorRef, inject } from '@angular/core';
-import { EntityInfo, RunViewParams, LogError } from '@memberjunction/core';
+import { EntityInfo, RunViewParams, LogError, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
@@ -121,6 +121,7 @@ export interface GridViewConfig {
       [AllowLoad]="false"
       [AutoLoadEntityActions]="AutoLoadEntityActions"
       [ShowToolbar]="effectiveShowToolbar"
+      [ShowSearch]="effectiveShowSearch"
       [ToolbarConfig]="config.toolbarConfig ?? {}"
       [SelectionMode]="effectiveSelectionMode"
       [ShowAddToListButton]="effectiveShowAddToListButton"
@@ -311,6 +312,14 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   /** Effective toolbar visibility — defaults to `true` when not set in config. */
   get effectiveShowToolbar(): boolean {
     return this.config.showToolbar ?? true;
+  }
+
+  /**
+   * Grid search defaults OFF when hosted in entity-viewer. The container already owns
+   * `filterText` ("Filter records..."). Opt in with `toolbarConfig.showSearch: true`.
+   */
+  get effectiveShowSearch(): boolean {
+    return this.config.toolbarConfig?.showSearch ?? false;
   }
 
   /** Effective selection mode — defaults to `'checkbox'` when not set in config. */
@@ -519,20 +528,17 @@ export class GridViewRendererComponent extends BaseAngularComponent implements I
   }
 
   /**
-   * Build the list of RAW primary-key values (not concatenated composite-key strings) used by list
-   * membership matching. Mirrors the legacy host, which deliberately extracts the first PK field's
-   * raw value so it matches how List Details store records.
+   * Build the record-id strings used by list membership matching, in the compact form `MJ: List Details`
+   * stores in `RecordID`: the bare value for a single-column primary key (whatever the column is called),
+   * or the full `Field1|Value1||Field2|Value2` segment for a composite key. The entity is arbitrary, so the
+   * key is built from all of its primary-key columns rather than assuming a single `ID`.
    */
   private buildRawRecordIds(records: Record<string, unknown>[], entity: EntityInfo): string[] {
-    const pkFieldName = entity.PrimaryKeys[0]?.Name;
-    if (!pkFieldName) {
+    if (entity.PrimaryKeys.length === 0) {
       return [];
     }
     return records
-      .map((record) => {
-        const value = record[pkFieldName];
-        return value == null ? '' : String(value);
-      })
+      .map((record) => CompositeKey.FromEntityRecord(entity, record).ToCompactURLSegment())
       .filter((id) => id !== '');
   }
 

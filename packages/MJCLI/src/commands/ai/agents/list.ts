@@ -1,5 +1,6 @@
 import { Command, Flags } from '@oclif/core';
 import ora from 'ora-classic';
+import { AI_FORMAT_MAP, CANONICAL_FORMAT_FLAG, resolveLegacyFormat } from '../../../lib/format-compat.js';
 
 export default class AgentsList extends Command {
   static description = 'List available AI agents';
@@ -11,9 +12,12 @@ export default class AgentsList extends Command {
   ];
 
   static flags = {
+    format: CANONICAL_FORMAT_FLAG,
     output: Flags.string({
       char: 'o',
-      description: 'Output format',
+      description:
+        "Output format (legacy alias for --format in the 'mj ai' family; elsewhere -o is an output FILE path). "
+        + 'Prefer --format.',
       options: ['compact', 'json', 'table'],
       default: 'compact',
     }),
@@ -22,7 +26,7 @@ export default class AgentsList extends Command {
   async run(): Promise<void> {
     const { AgentService, OutputFormatter } = await import('@memberjunction/ai-cli');
 
-    const { flags } = await this.parse(AgentsList);
+    const { flags, metadata } = await this.parse(AgentsList);
     const spinner = ora();
 
     try {
@@ -31,7 +35,13 @@ export default class AgentsList extends Command {
       const agents = await service.listAgents();
       spinner.stop();
 
-      const formatter = new OutputFormatter(flags.output as 'compact' | 'json' | 'table');
+      const formatter = new OutputFormatter(resolveLegacyFormat({
+        format: flags.format,
+        legacy: flags.output as 'compact' | 'json' | 'table',
+        legacyDefault: 'compact' as const,
+        legacyWasExplicit: metadata.flags.output?.setFromDefault === false,
+        map: AI_FORMAT_MAP,
+      }));
       this.log(formatter.formatAgentList(agents));
       
       // Force exit after completion

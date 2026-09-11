@@ -1,5 +1,27 @@
 # @memberjunction/sql-parser
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 806e7f2: Replace the GraphQL ExtraFilter SELECT/EXISTS keyword ban with an AST screen that allows `IN (SELECT … FROM <entity BaseView>)` and still rejects base tables (`__mj.User`). Uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`). SQLParser now walks `expr.value` so `IN (SELECT …)` subqueries are visible to ExtractTableRefs.
+- Updated dependencies [9f73528]
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [4eb87c5]
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [647bd71]
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

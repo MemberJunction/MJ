@@ -1,40 +1,46 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { HttpClient } from '@memberjunction/network-utils';
 
 /**
  * Per-action tests for the SurveyMonkey provider.
  *
  * Credentials resolve from the BIZAPPS_SURVEYMONKEY_API_TOKEN environment
- * variable, so no database access occurs. The HTTP boundary is the axios
- * module mock — requests use an axios instance created with a bearer token.
+ * variable, so no database access occurs. The HTTP boundary is the @memberjunction/network-utils
+ * module mock — requests use an HttpClient created with a bearer token.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => ({
@@ -98,10 +104,10 @@ async function runWithoutUser(action: object, params: ActionParam[]): Promise<Ac
 
 beforeEach(() => {
   process.env[ENV_KEY] = 'env-token';
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
-  http.instance.patch.mockReset();
-  http.axiosDefault.create.mockClear();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
+  http.instance.Patch.mockReset();
+  vi.mocked(HttpClient).mockClear();
 });
 
 afterEach(() => {
@@ -132,8 +138,8 @@ describe('GetSurveyMonkeyDetailsAction', () => {
   });
 
   it('should GET /surveys/{id}/details with the bearer token', async () => {
-    http.instance.get.mockResolvedValue({
-      data: {
+    http.instance.Get.mockResolvedValue({
+      Data: {
         id: 's-1',
         title: 'Customer Survey',
         question_count: 2,
@@ -143,18 +149,18 @@ describe('GetSurveyMonkeyDetailsAction', () => {
         date_modified: '2024-06-02T00:00:00Z',
         pages: [],
       },
-      headers: {},
+      Headers: {},
     });
 
     const result = await run(action, inputs({ SurveyID: 's-1' }));
 
-    expect(http.axiosDefault.create).toHaveBeenCalledWith(
+    expect(HttpClient).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseURL: 'https://api.surveymonkey.com/v3',
-        headers: expect.objectContaining({ Authorization: 'Bearer env-token' }),
+        BaseURL: 'https://api.surveymonkey.com/v3',
+        Headers: expect.objectContaining({ Authorization: 'Bearer env-token' }),
       }),
     );
-    expect(http.instance.get).toHaveBeenCalledWith('/surveys/s-1/details');
+    expect(http.instance.Get).toHaveBeenCalledWith('/surveys/s-1/details');
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully retrieved survey "Customer Survey" with 2 questions across 1 pages');
@@ -209,7 +215,7 @@ describe('ExportSurveyMonkeyCSVAction', () => {
   });
 
   it('should return NO_DATA (Success true) for a survey with no responses', async () => {
-    http.instance.get.mockResolvedValue({ data: { data: [], per_page: 100, page: 1, total: 0 }, headers: {} });
+    http.instance.Get.mockResolvedValue({ Data: { data: [], per_page: 100, page: 1, total: 0 }, Headers: {}, Status: 200 });
 
     const result = await run(action, inputs({ SurveyID: 's-1' }));
 

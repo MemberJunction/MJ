@@ -1,5 +1,260 @@
 # @memberjunction/search-engine
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 1748491: Search results open for entities whose primary key is not named `ID`, and round-trip composite primary keys end to end.
+
+  Clicking a universal-search result failed with `InnerLoad returned false for key ID=<value>` for any entity whose key column has another name (`individual_id`, `organization_id`, …). Every search navigation site built the key as `{ FieldName: 'ID', Value: RecordID }` or `CompositeKey.FromID(RecordID)`, and `Load()` correctly rejects a field that is not one of the entity's primary keys. MJ supports primary keys with any column name(s) and type(s), so the fix uses the entity's metadata everywhere instead of a literal.
+
+  **The contract.** A search result's `RecordID` is a _compact_ `CompositeKey` segment: the bare value for a single-column key (so `IN (...)` filters, dedup keys and persisted ids are unchanged), the full `Field1|Value1||Field2|Value2` segment for a composite key. `CompositeKey.LoadFromURLSegment(entity, s)` already reads both forms; two new statics make it the one-liner every consumer calls, and one new serializer produces it:
+  - `CompositeKey.FromURLSegment(entityInfo, recordId)` — the inverse of the compact form; falls back to an `ID` key only when the entity cannot be resolved.
+  - `CompositeKey.FromEntityRecord(entityInfo, row)` — the key from a RunView row using the entity's real primary key column(s).
+  - `FieldValueCollection.ToCompactURLSegment()` — bare value for one column, prefixed segment for several (or when a lone value itself contains `|`).
+  - `ToWhereClause()` now doubles embedded quotes, since it builds SQL from record ids that can come from an external index.
+
+  **Consumers** (`ng-explorer-core`, `ng-search`): the shell dropdown, the "See all results" page, the omnibar palette (the default search surface — not named in the report), the FK-cell "open related record" path in views and single-search-result, and the two recents name lookups all resolve the key with `FromURLSegment` against the entity's metadata.
+
+  **Producers** (`core`, `search-engine`, `ai-vectors-memory`): `EntitySearchProvider` read `record.ID`, which is `''` for these entities — `SearchFusion` drops empty ids, so the entity lane silently contributed nothing for them; it now builds the key from `PrimaryKeys`. The full-text lane, `SearchEntity`'s lexical pass and its permission filter (`ID IN (...)`, `Fields: ['ID']`), and the in-process `SimpleVectorDatabase` (`row['ID']`, `` `ID|…` ``) do the same. `VectorSearchProvider` no longer flattens a composite key to bare values joined by `||`, which nothing could parse.
+
+  **Permission filter** (`search-engine`): `verifyOwnershipAndRowFilters` verified results with `FirstPrimaryKey IN (...)`. Once composite entities emit real segments that check could never match and — it fails closed — every composite-key result would be dropped as unauthorized. Composite keys now verify with one `(F1=… AND F2=…)` term per record; single-column keys keep the `IN` fast path. Matching is on primary-key values in metadata order, UUID-normalized, so an externally indexed id still matches the row the database returns.
+
+  **Recents** (`ng-shared-generic`): `RecentAccessService` persisted `Values(',')`, which drops field names; composite keys written there could never be reopened. It now writes the compact segment. Existing single-value rows are unchanged and read back as before.
+
+  Also fixed in `core`: `EmbeddedRecord` built its parent-load key with `FromID` for a single-column key, which fails for any embedded entity whose key isn't named `ID`.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/storage@6.1.0-edge.6
+  - @memberjunction/ai-vectordb@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 88d751d: **Scoped Search now carries the skill principal — and judges it.**
+
+  `ScopeDimensionResolver` binds `Principals.SkillID` into a dimension's expansion query, and
+  `principalsFrom()` sources that from `SearchParams.AISkillID`. `SearchParams` declares the field and
+  `ScopeExplanation.test.ts` asserts on it — but the `Scoped Search` action never set it. The string
+  "skill" did not appear in that file. So the slot existed, was typed, was tested, and no caller could
+  reach it: a scope whose bound depends on the active skill resolved `SkillID` as null forever.
+
+  Adds an optional `AISkillID` input, threaded onto `SearchParams.AISkillID` the way `AIAgentID`
+  already is. Omit it and the skill principal stays null, so no caller gains a skill it did not ask for.
+
+  **Three behaviour changes to note, none of which is the skill threading itself.** First, the
+  `AgentUnscopedAll` fallback is now gated on wieldability, so an install where an agent is
+  `SearchScopeAccess='All'` _and_ the user holds no direct or role grant previously got `Allowed:
+Search` and now additionally requires the agent to be in the metadata cache and runnable by that
+  user. This reaches `SearchKnowledge` and `StreamScopedSearch` as well as the action. Second, a
+  supplied skill is judged wherever it is named, not only at its `All` fallback: a skill binds into
+  the expansion query, whose output _is_ the bound for a `restricts: true` dimension, so judging it
+  only where it grants would let a user holding their own grant widen with any skill they named.
+  The agent is deliberately NOT judged that way — `AIAgentID` is also attribution, and gating it at
+  the point of supply turns an analytics field into a retrieval outage. The skill check does NOT judge the agent —
+  `GetSkillsForAgent` filters the user's rights on the SKILL (`AISkillPermissionHelper`), never on
+  the agent — so the agent is judged at the fallbacks instead, where it widens. Both `'All'` arms
+  consult it, including the skill's: a skill widens through the agent it would activate on, so
+  naming a skill must not buy access to an agent the caller may not run. A stale metadata cache is
+  distinguished from a denial in the MESSAGE, but it does not buy access: an agent that
+  cannot be evaluated cannot back a widening fallback either. (An earlier revision let it through on
+  the reasoning that a cache blip should not refuse a user whose own grant covered the scope — which is
+  impossible, since a direct or role grant returns before any fallback is reached. What it actually did
+  was grant `Search` to users with no grant at all whenever an agent was missing from the cache.)
+
+  Third: **a skill supplied with NO agent is now refused outright**. At base, step 4b granted
+  `SkillUnscopedAll` with no agent at all — an agent-free skill id was a standalone grant, so
+  'refused' replaces an actual widening, not a no-op. A skill is judged relative to the agent it would activate on, so there is nothing to
+  judge it against. The `Scoped Search` action always has an agent, so this is reachable only
+  through `ExplainScope({ AISkillID })` with no `AIAgentID` — most likely a preview UI that lets
+  a skill be picked before an agent. Such a call now returns `PrincipalNotActivatable` rather
+  than quietly resolving on the user's own grant.
+
+  Also at the same call sites: the caller's tenant (`PrimaryScopeRecordID`) now reaches the
+  permission decision everywhere it is available — previously every tenant-scoped grant,
+  including a tenant-scoped `None` (an explicit per-tenant deny), was discarded before the
+  verdict. Denial messages no longer echo principal names back to the caller (ids + `Source`
+  only; audit rows and server logs keep the full reason). The GraphQL resolvers refuse a
+  supplied-but-unloadable `agentID` instead of silently proceeding with an unjudged principal,
+  and the `SearchScopes` listing hides scopes under the same rule (it takes no searchContext, so
+  no tenant applies there). The resolver's `ExtraFilter` interpolations now use `EscapeSQLString`.
+
+  **The skill is a principal, so it is also permission-checked.** `SearchScopePermissionResolver`
+  already had three rules that only fire when `Skill` is supplied — `SkillNone` and
+  `SkillAssignedNotListed` reject a scope the user's own roles allow, and `SkillUnscopedAll` grants one
+  they do not. The action never passed it. Threading the ID without the gate would have enabled the
+  widening half of a two-part mechanism and left the deciding half unwired, and would have put the
+  search at odds with `ExplainScope`, which does pass it — the preview/enforcement drift this code has
+  already been bitten by once. So the skill is resolved _before_ the permission check, handed to
+  `ResolveEffectivePermission`, and attributed on every denial row.
+
+  A value that is not a UUID, or that will not load, is refused with `INVALID_PARAM` rather than
+  dropped: continuing with a null skill would bind an unjudged ID into the expansion query.
+
+  **A principal may only WIDEN if the caller may wield it — checked where it widens.**
+
+  `AgentUnscopedAll` and `SkillUnscopedAll` are the only places a principal changes an outcome: by the
+  time they are reached the user has no grant of their own, and `SearchScopeAccess='All'` is about to
+  supply one. Both permission models are open by default — no permission rows means anyone may run it —
+  so an id a caller merely NAMED could grant `Search` on any scope.
+
+  Two checks do this, split because they answer different questions.
+  `skillIsActivatable()` runs wherever a skill is NAMED (step 1e) and asks
+  `GetSkillsForAgent(agent, user)` — the same call `BaseAgent.preActivateRequestedSkills` gates real
+  activation on. `agentIsWieldable()` runs at the WIDENING fallbacks and asks for Run on the agent.
+  Both fallbacks consult it, the skill's included: `GetSkillsForAgent` filters SKILL permissions
+  (`AISkillPermissionHelper`) and never `AIAgentPermission`, so vouching for a skill says nothing about
+  whether the caller may run the agent it would activate on. Failing either check REFUSES, with
+  `PrincipalNotActivatable` — a widening fallback needs the principal positively confirmed, not merely
+  un-denied.
+
+  **Deliberately NOT gated at the point the id is supplied.** `AIAgentID` is attribution far more often
+  than it is authorization — `agent-pre-execution-rag` threads it purely so `SearchExecutionLog` can
+  attribute the search — and gating supply rather than grant turns an analytics field into a retrieval
+  outage on any install with explicit `AI Agent Permission` rows. A test pins that a non-`'All'` agent
+  supplied WITHOUT a skill never reaches the check — which is the RAG path's shape today. Note a
+  non-`'All'` agent DOES reach it when an `'All'` skill is supplied, because that skill widens through
+  it; if the RAG path ever starts threading `AISkillID`, this is the interaction to re-examine.
+
+  A stale metadata cache is reported as itself. `GetUserAgentPermissions` throws when the agent is
+  absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created after the
+  cache loaded would otherwise read as "not permitted" — a metadata-load problem wearing an
+  authorization message.
+
+  Because the policy sits in the resolver, `ExplainScope` inherits it: preview and search reach the same
+  verdict by running the same code rather than by two copies agreeing.
+
+  **`ExplainScope` inherits the same judgement** (`@memberjunction/search-engine`). It already loaded the skill
+  principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant
+  while the real search refused — the preview-vs-enforcement drift that file already carries a regression
+  test about. Both paths now judge both principals on identical terms, and on the explain path a principal refused
+  for a PRINCIPAL-SIDE reason — `PrincipalNotActivatable`, `AgentNone`, `AgentAssignedNotListed`,
+  `SkillNone`, `SkillAssignedNotListed` — is no longer bound into dimension resolution;
+  `deriveServerValue` parameterises server-authored SQL with it, which is the thing the action refuses
+  outright rather than continuing with. A refusal for a USER-side reason (no grant) still binds them,
+  deliberately: dropping them there drives the expansion query with nulls, which makes a required
+  dimension throw and the explanation announce a dimension failure that does not exist.
+
+  On containment, stated accurately: an expansion query is server-authored SQL, but MJ renders query
+  parameters through Nunjucks with `autoescape: false` and escaping is opt-in (`| sqlString`, or a
+  declared validation chain). So MJ does not itself guarantee that naming a skill cannot widen or
+  inject — the query author does, and the permission gate above is what MJ enforces. Scopes that never
+  reference `SkillID` are unaffected in either direction.
+
+### Patch Changes
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/ai-vectordb@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/ai-vectordb@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

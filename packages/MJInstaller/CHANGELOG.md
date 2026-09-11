@@ -1,5 +1,18 @@
 # @memberjunction/installer
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- d6e854b: MJInstaller is now package-manager-aware, defaulting to pnpm (the era-6 platform manifest's package manager) with an explicit npm override via `PackageManager` in the install config or `MJ_INSTALL_PACKAGE_MANAGER`. Preflight hard-fails with instructions when the configured package manager is missing — no silent fallback, so installs stay deterministic. The dependency, codegen, migrate, and smoke-test phases route every shell-out through a single `PackageManagerCommands` table; the npm `--legacy-peer-deps` ERESOLVE retry is npm-only; the `ng-auth-services` root-hoist workaround is skipped under pnpm's isolated linker. Installs patch the scaffolded root manifest (packageManager pin, PM-neutral `mj*` scripts) and write a `pnpm-workspace.yaml` (with the load-bearing `linkWorkspacePackages` and `onlyBuiltDependencies` settings) into bundles that predate the flip. Also fixes the stale MJAPI readiness pattern recorded in the 5.51.0 certification findings (`/Server ready at/` matched nothing current servers print) and makes the generated-entities pre-checks layout-aware (pnpm does not create the root `node_modules/mj_generatedentities` symlink).
+- 956f0e0: Installer: refuse archive entries that resolve outside the extraction directory (zip slip, CWE-22).
+
+  `FileSystemAdapter.ExtractZip` joined each archive entry name onto the target directory without checking the result, so a release archive carrying an entry such as `../../.bashrc` or an absolute path would have been written wherever it pointed, with the installer's privileges. Entries are now resolved against the target root and any that land outside it abort the extraction with a clear error. Well-formed archives, including GitHub zipballs with their single wrapper folder, extract exactly as before.
+
+## 6.1.0-edge.5
+
+## 6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

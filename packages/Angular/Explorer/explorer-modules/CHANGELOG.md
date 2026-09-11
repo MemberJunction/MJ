@@ -1,5 +1,80 @@
 # @memberjunction/ng-explorer-modules
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- Updated dependencies [b915983]
+- Updated dependencies [0d3094c]
+- Updated dependencies [43f9133]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [ceb8e46]
+- Updated dependencies [512bb53]
+- Updated dependencies [1748491]
+- Updated dependencies [ea2d1da]
+- Updated dependencies [ac96bb6]
+- Updated dependencies [d0eab88]
+  - @memberjunction/ng-container-directives@6.1.0-edge.6
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.6
+  - @memberjunction/ng-explorer-core@6.1.0-edge.6
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.6
+  - @memberjunction/ng-link-directives@6.1.0-edge.6
+  - @memberjunction/ng-shared@6.1.0-edge.6
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- Updated dependencies [4273317]
+- Updated dependencies [22ec804]
+- Updated dependencies [3fa1fb8]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [34d9501]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [34d19a9]
+- Updated dependencies [2644a76]
+  - @memberjunction/ng-explorer-core@6.1.0-edge.5
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.5
+  - @memberjunction/ng-shared@6.1.0-edge.5
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.5
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.5
+  - @memberjunction/ng-link-directives@6.1.0-edge.5
+  - @memberjunction/ng-container-directives@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.4
+  - @memberjunction/ng-explorer-core@6.1.0-edge.4
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.4
+  - @memberjunction/ng-shared@6.1.0-edge.4
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.4
+  - @memberjunction/ng-container-directives@6.1.0-edge.4
+  - @memberjunction/ng-link-directives@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

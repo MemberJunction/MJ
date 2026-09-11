@@ -133,8 +133,8 @@ export class HootSuiteGetSocialProfilesAction extends HootSuiteBaseAction {
      */
     private async getProfileDetails(profileId: string): Promise<any> {
         try {
-            const response = await this.axiosInstance.get(`/socialProfiles/${profileId}`);
-            return response.data;
+            const response = await this.httpClient.Get<any>(`/socialProfiles/${profileId}`);
+            return response.Data;
         } catch (error) {
             // Details endpoint might not be available for all profiles
             return null;

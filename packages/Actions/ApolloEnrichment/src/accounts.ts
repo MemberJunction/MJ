@@ -2,8 +2,8 @@ import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import * as Config from './config';
 import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from "@memberjunction/core";
-import axios, { AxiosResponse } from "axios";
-import { AccountEntityFields, AccountTechnologyEntityFields, ContactEducationHistoryEntityFields, ContactEntityFields, OrganizationEnrichmentOrganization, ProcessSingleDomainParams, SearchPeopleResponse, SearchPeopleResponsePerson, TechnologyCategoryEntityFields, TechnologyMap } from "./generic/apollo.types";
+import { HttpError, HttpGet, HttpPost, HttpRequestConfig, HttpResponse, IsHttpError } from '@memberjunction/network-utils';
+import { AccountEntityFields, AccountTechnologyEntityFields, ContactEducationHistoryEntityFields, ContactEntityFields, OrganizationEnrichmentOrganization, OrganizationEnrichmentResponse, ProcessSingleDomainParams, SearchPeopleResponse, SearchPeopleResponsePerson, TechnologyCategoryEntityFields, TechnologyMap } from "./generic/apollo.types";
 import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 
 /**
@@ -385,13 +385,13 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
             };
 
             // Get the organization enrichment data
-            const orgResponse = await this.WrapApolloCall('get', 'organizations/enrich', null, { params: orgQueryString, headers: headers });
+            const orgResponse = await this.WrapApolloCall<OrganizationEnrichmentResponse>('get', 'organizations/enrich', null, { Query: orgQueryString, Headers: headers });
             
-            if (!orgResponse || orgResponse.status !== 200) {
+            if (!orgResponse || orgResponse.Status !== 200) {
                 return false;
             }
 
-            const result = orgResponse.data;
+            const result = orgResponse.Data;
             let bSuccess = true;
             
             if (result && result.organization) {
@@ -433,7 +433,8 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
-            const accountEntity = await md.GetEntityObject(params.AccountEntity.EntityName, CompositeKey.FromID(record.ID), currentUser);
+            // The account entity is configured, not fixed — build the key from its real primary key column(s).
+            const accountEntity = await md.GetEntityObject(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
 
             // Set organization data fields
             this.setFieldIfExists(accountEntity, params.AccountEntity.AddressField, organization.street_address);
@@ -478,7 +479,8 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
-            const accountEntity = await md.GetEntityObject<BaseEntity>('Accounts', CompositeKey.FromID(record.ID), currentUser);
+            // The account entity is configured, not fixed — build the key from its real primary key column(s), as updateAccountWithOrganizationData does.
+            const accountEntity = await md.GetEntityObject<BaseEntity>(params.AccountEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(params.AccountEntity.EntityName)!, record), currentUser);
             accountEntity.Set(params.AccountEntity.EnrichedAtField, new Date());
             
             const saveResult = await accountEntity.Save();
@@ -564,7 +566,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
                 // Mark unmatched technologies as ended
                 for (const record of runViewResult.Results) {
                     if (!record.matchFound) {
-                        const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromID(record.ID), currentUser);
+                        const entity = await md.GetEntityObject<BaseEntity>(ATEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(ATEntity.EntityName)!, record), currentUser);
                         entity.Set(ATEntity.EndedUseAtField, new Date());
                         
                         const saveResult = await entity.Save();
@@ -711,27 +713,27 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
                 'Content-Type': 'application/json' 
             }; 
 
-            const response = await this.WrapApolloCall('post', 'mixed_people/search', APIparams, { headers: headers });
+            const response = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', APIparams, { Headers: headers });
 
-            if (!response || response.status !== 200) {
-                LogError(`Error fetching data from Apollo.io: ${response?.statusText}`);
+            if (!response || response.Status !== 200) {
+                LogError(`Error fetching data from Apollo.io: ${response?.StatusText}`);
                 return false;
             }
 
-            const data: SearchPeopleResponse = response.data;
+            const data: SearchPeopleResponse = response.Data;
             const allPeople: SearchPeopleResponsePerson[] = data.people;
 
             // Fetch additional pages
             for (let i = 1; i < data.pagination.total_pages && i < (Config.MaxPeopleToEnrichPerOrg / 10); i++) {
                 APIparams.page = i + 1;
-                const nextResponse = await this.WrapApolloCall('post', 'mixed_people/search', APIparams, { headers: headers });
+                const nextResponse = await this.WrapApolloCall<SearchPeopleResponse>('post', 'mixed_people/search', APIparams, { Headers: headers });
                 
-                if (nextResponse.status !== 200) {
-                    console.error(`Error fetching data from Apollo.io: ${nextResponse.statusText}`);
+                if (nextResponse.Status !== 200) {
+                    console.error(`Error fetching data from Apollo.io: ${nextResponse.StatusText}`);
                     return false;
                 }
                 
-                const nextResult: SearchPeopleResponse = nextResponse.data;
+                const nextResult: SearchPeopleResponse = nextResponse.Data;
                 allPeople.push(...nextResult.people);
             }
 
@@ -965,7 +967,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
                     let historyEntity: BaseEntity | null = null;
                     
                     if (EHRunViewResult.Results.length > 0) {
-                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromID(EHRunViewResult.Results[0].ID), currentUser);
+                        historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, CompositeKey.FromEntityRecord(md.EntityByName(CEntity.EntityName)!, EHRunViewResult.Results[0]), currentUser);
                     } else {
                         historyEntity = await md.GetEntityObject<BaseEntity>(CEntity.EntityName, currentUser);
                         historyEntity.NewRecord();
@@ -1052,21 +1054,23 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param method - HTTP method ('get' or 'post')
      * @param endpoint - Apollo API endpoint path
      * @param data - Request payload for POST requests
-     * @param config - Axios configuration object
+     * @param config - request configuration (headers / query params)
      * @param retryAttempts - Number of retry attempts remaining (default: 1)
-     * @returns Promise<AxiosResponse> - Apollo API response
+     * @returns Promise<HttpResponse> - Apollo API response
      * @throws Error if rate limit exceeded or other API errors
      */
-    protected async WrapApolloCall(method: 'get' | 'post', endpoint: string, data: any, config: any, retryAttempts: number = 1): Promise<AxiosResponse> {
+    protected async WrapApolloCall<T = unknown>(method: 'get' | 'post', endpoint: string, data: unknown, config: Omit<HttpRequestConfig, 'Url' | 'Method' | 'Body'>, retryAttempts: number = 1): Promise<HttpResponse<T>> {
         try {
             const url = `${Config.ApolloAPIEndpoint}/${endpoint}`;  
             
-            let response: AxiosResponse = method === 'get' ? await axios.get(url, config) : await axios.post(url, data, config);
-            if (response.status === 429) {
+            // ThrowOnError stays on by default, so a 429 surfaces in the catch below;
+            // the explicit status check here mirrors the original belt-and-braces handling.
+            const response: HttpResponse<T> = method === 'get' ? await HttpGet<T>(url, config) : await HttpPost<T>(url, data, config);
+            if (response.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
                     await this.Timeout(60000); // wait 1 minute
-                    return await this.WrapApolloCall(method, endpoint, data, config, retryAttempts - 1);
+                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else{
                     throw {message: 'Too many requests to Apollo.io API', code: 429};
@@ -1075,13 +1079,13 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
 
             return response;    
         }
-        catch (apolloError: any) {
-            // axios could throw an exception for a 429 instead of a response, so we need to handle that here
-            if (apolloError && apolloError.response && apolloError.response.status === 429) {
+        catch (apolloError: unknown) {
+            // A 429 arrives as a thrown HttpError rather than a returned response, so handle it here too
+            if (IsHttpError(apolloError) && apolloError.Status === 429) {
                 if (retryAttempts > 0) {
                     LogStatus('   >>> Too many requests to Apollo.io API, waiting 1 minute and trying again...')
                     await this.Timeout(60000); // wait 1 minute
-                    return await this.WrapApolloCall(method, endpoint, data, config, retryAttempts - 1);
+                    return await this.WrapApolloCall<T>(method, endpoint, data, config, retryAttempts - 1);
                 }
                 else {
                     throw {message: 'Too many requests to Apollo.io API', code: 429};

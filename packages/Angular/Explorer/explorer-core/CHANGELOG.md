@@ -1,5 +1,578 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- ac96bb6: Empty turbo's global hash, and make every in-repo `mj` invocation resolve.
+
+  `hashOfInternalDependencies` — a hash over every non-gitignored file in the root manifest's
+  workspace-dependency closure — is an input to _every_ task hash in the repo. The root
+  `package.json` declared three `workspace:*` devDependencies (`cli`,
+  `integration-test-suite`, `server-bootstrap-lite`) whose combined closure was 154 of 310
+  packages, so editing any file in any of them invalidated all 310, builds and tests alike.
+  Task-level `inputs` cannot reach this; it is upstream of them. Removing the three drops a
+  one-file edit from 310/310 to 37/310 (`AI/Agents`) and 8/310 (Explorer dashboards).
+
+  Removing them also removes the workspace-root `node_modules/.bin/mj` that a number of things
+  quietly resolved through. Every consumer is repaired:
+  - The 15 root scripts, plus `check:ui-layers`, `check:standards` and `test:integration`, now
+    call `node packages/MJCLI/bin/run.js` directly.
+  - `mj.config.cjs`'s `checkModules` used a bare specifier that only worked via the symlink the
+    devDependency created. `check-module-loader.ts` _collects_ load failures rather than
+    throwing, so this would have silently degraded `mj test` to "Unknown integration check
+    bundle". Now an absolute `__dirname`-based path, asserted by `sibling-parity.test.ts`.
+  - Seven `prebuild`/`postbuild` hooks across `ng-bootstrap`, `ng-bootstrap-lite`,
+    `ng-explorer-core`, `server-bootstrap` and `server-bootstrap-lite` ran bare `mj codegen
+manifest` behind `|| echo 'Warning: …'`, so a lost CLI exits 0 and the build proceeds
+    against a stale class-registration manifest — a new `@RegisterClass` class never reaches it
+    and tree-shaking then drops it from bundled apps. Each now calls the workspace entry point
+    by path. Deliberately not a `@memberjunction/cli` devDependency: `ng-explorer-core` has six
+    dependents and `ng-bootstrap` two, so a devDep there would take a CLI edit from 6/310 to
+    12/310 invalidated packages, and `cli` itself depends on `server-bootstrap-lite`, where it
+    would be a build-graph cycle. A path call adds no graph edge.
+  - `a2aserver`, `ai-mcp-server` and `mj_codegen_api` ran bare `mj` in a fallback-less
+    `prestart`, exiting 127 where no global CLI existed and silently resolving a version-skewed
+    one where it did. Each now declares `@memberjunction/cli` — leaf packages only, so
+    `hashOfInternalDependencies` stays `""`.
+  - `pg-migrations.yml` invoked `npx mj` at four sites. With no root bin `npx` falls through to
+    the npm registry, where the package named `mj` is unrelated mongodb-js tooling — in a job
+    holding database credentials, in a workflow that does not trigger on `package.json`, so it
+    would have stayed silent until the next release-time PG run.
+
+  A new `check-mj-cli-resolution.mjs` gate in the `guards` job permits only the two forms that
+  actually resolve, so this cannot regress silently again.
+
+  `@memberjunction/testing-cli` carries a comment-only change to `check-module-loader.ts`
+  documenting why MJ's own root config cannot use a bare specifier while an adopter's can.
+
+  ***
+
+  **On the level:** this is `minor` to satisfy `check:changeset`, not because anything touches
+  the database. The branch adds no migration and edits no declarative metadata. The only file
+  it changes under `metadata/` is `metadata/CLAUDE.md` — an instruction document, part of the
+  repo-wide `npx mj` → `pnpm mj` rewrite — and the gate's trigger is `/^metadata\/.+/`, which
+  matches any path under that directory including Markdown. The rule's own justification for
+  metadata-⇒-minor is that "metadata counts as a migration because it becomes one" via the
+  release-time `mj sync push`; a `CLAUDE.md` never becomes one. Under permanent pre mode a
+  stray `minor` moves no version, so the cost is meaning rather than digits — hence this note,
+  so the next reader does not take it as precedent. Narrowing that pattern to exclude
+  Markdown belongs in its own PR against the gate.
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- ceb8e46: Records region gets VS Code preview-tab behavior, matching the main Golden Layout tabset.
+
+  Record tabs were born unpinned — and therefore italic, the shell's visual vocabulary for
+  "temporary" — but the temp-tab machinery was switched off for them when the region shipped, so
+  every record open minted a tab that nothing could replace or promote. Italic was inherited; the
+  behavior never was. Browsing records in an Open App produced a tab per click with no way out.
+  - **A second temp-tab pool.** `TabRequest.TempScope` (`'main' | 'records'`, default `'main'`)
+    scopes both consumption in `OpenTab` and the pin cascade in `OpenTabForced`, selected by a new
+    settable `WorkspaceStateManager.RecordsRegionTabFilter` predicate. The pools are disjoint in both
+    directions: a nav click still can never consume an open record (the pre-existing protection is
+    untouched), and a record open no longer disturbs the nav tab's temp status. This replaces the
+    blunt `PreservePinState` opt-out that record opens used to pass; the flag remains for callers
+    that genuinely want no cascade.
+  - **Gestures.** A plain record click reuses the region's single temporary tab; shift-click (or an
+    explicit `forceNewTab`, which finally makes single-record's "Open in New Tab" do something) adds
+    a tab and promotes the previous one. Double-click and right-click → Pin already worked.
+  - **Content follows the tab.** Consumption reuses the tab id — which is what keeps saved split
+    layouts covering the exact tab set — so the records sync path gained the main path's
+    `needsReload` treatment: detect the Entity/record change on a reused id, detach the outgoing
+    record into the component cache, reload, re-capture the origin crumb.
+  - **Edits are never silently destroyed.** A record whose form is in edit mode leaves the pool, so
+    the next plain open lands in its own tab instead of replacing it. New (unsaved) records open
+    pinned for the same reason. `BaseResourceComponent.IsEditing()` is the new hook, default `false`.
+  - Deep-link and URL-driven record opens are scoped the same way, closing an asymmetry where a
+    deep link could consume the nav temp tab and convert it into a records tab.
+  - Fixes `updateTabTitleFromResource` writing records-tab titles to the main layout manager, which
+    no longer owned that tab id. Previously masked by the next configuration emission re-applying
+    the title; replacement retitles a records tab on every plain click, so it stopped being cosmetic.
+
+  Open Apps inherit all of this through the shell with no changes on their side.
+
+- 1748491: Search results open for entities whose primary key is not named `ID`, and round-trip composite primary keys end to end.
+
+  Clicking a universal-search result failed with `InnerLoad returned false for key ID=<value>` for any entity whose key column has another name (`individual_id`, `organization_id`, …). Every search navigation site built the key as `{ FieldName: 'ID', Value: RecordID }` or `CompositeKey.FromID(RecordID)`, and `Load()` correctly rejects a field that is not one of the entity's primary keys. MJ supports primary keys with any column name(s) and type(s), so the fix uses the entity's metadata everywhere instead of a literal.
+
+  **The contract.** A search result's `RecordID` is a _compact_ `CompositeKey` segment: the bare value for a single-column key (so `IN (...)` filters, dedup keys and persisted ids are unchanged), the full `Field1|Value1||Field2|Value2` segment for a composite key. `CompositeKey.LoadFromURLSegment(entity, s)` already reads both forms; two new statics make it the one-liner every consumer calls, and one new serializer produces it:
+  - `CompositeKey.FromURLSegment(entityInfo, recordId)` — the inverse of the compact form; falls back to an `ID` key only when the entity cannot be resolved.
+  - `CompositeKey.FromEntityRecord(entityInfo, row)` — the key from a RunView row using the entity's real primary key column(s).
+  - `FieldValueCollection.ToCompactURLSegment()` — bare value for one column, prefixed segment for several (or when a lone value itself contains `|`).
+  - `ToWhereClause()` now doubles embedded quotes, since it builds SQL from record ids that can come from an external index.
+
+  **Consumers** (`ng-explorer-core`, `ng-search`): the shell dropdown, the "See all results" page, the omnibar palette (the default search surface — not named in the report), the FK-cell "open related record" path in views and single-search-result, and the two recents name lookups all resolve the key with `FromURLSegment` against the entity's metadata.
+
+  **Producers** (`core`, `search-engine`, `ai-vectors-memory`): `EntitySearchProvider` read `record.ID`, which is `''` for these entities — `SearchFusion` drops empty ids, so the entity lane silently contributed nothing for them; it now builds the key from `PrimaryKeys`. The full-text lane, `SearchEntity`'s lexical pass and its permission filter (`ID IN (...)`, `Fields: ['ID']`), and the in-process `SimpleVectorDatabase` (`row['ID']`, `` `ID|…` ``) do the same. `VectorSearchProvider` no longer flattens a composite key to bare values joined by `||`, which nothing could parse.
+
+  **Permission filter** (`search-engine`): `verifyOwnershipAndRowFilters` verified results with `FirstPrimaryKey IN (...)`. Once composite entities emit real segments that check could never match and — it fails closed — every composite-key result would be dropped as unauthorized. Composite keys now verify with one `(F1=… AND F2=…)` term per record; single-column keys keep the `IN` fast path. Matching is on primary-key values in metadata order, UUID-normalized, so an externally indexed id still matches the row the database returns.
+
+  **Recents** (`ng-shared-generic`): `RecentAccessService` persisted `Values(',')`, which drops field names; composite keys written there could never be reopened. It now writes the compact segment. Existing single-value rows are unchanged and read back as before.
+
+  Also fixed in `core`: `EmbeddedRecord` built its parent-load key with `FromID` for a single-column key, which fails for any embedded entity whose key isn't named `ID`.
+
+- ea2d1da: Shell: the user menu fits the viewport (capped below the header and scrolls instead of clipping, never wider than the window), and a new `BaseShellChromePolicy` lets a host narrow the shell chrome — search bar, notifications, app switcher, app nav — per user or tenant on top of the Instance Config ceiling, re-resolving when the policy fires `Changed`.
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b915983]
+- Updated dependencies [1bced7c]
+- Updated dependencies [05b4cb5]
+- Updated dependencies [b7819d2]
+- Updated dependencies [c1fea88]
+- Updated dependencies [197fdf8]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [241c2c1]
+- Updated dependencies [0ec1980]
+- Updated dependencies [a8ba8b7]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [2e4786e]
+- Updated dependencies [de66f54]
+- Updated dependencies [48ae81e]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [aff9886]
+- Updated dependencies [10cbc60]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [14bc0b2]
+- Updated dependencies [ceb8e46]
+- Updated dependencies [7a98676]
+- Updated dependencies [75ca6f8]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [938cd9e]
+- Updated dependencies [dbaa967]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [d0eab88]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ng-conversations@6.1.0-edge.6
+  - @memberjunction/ng-artifacts@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.6
+  - @memberjunction/ng-auth-services@6.1.0-edge.6
+  - @memberjunction/ng-base-application@6.1.0-edge.6
+  - @memberjunction/ng-base-forms@6.1.0-edge.6
+  - @memberjunction/ng-base-types@6.1.0-edge.6
+  - @memberjunction/ng-composer@6.1.0-edge.6
+  - @memberjunction/ng-container-directives@6.1.0-edge.6
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.6
+  - @memberjunction/ng-dashboards@6.1.0-edge.6
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.6
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.6
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.6
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.6
+  - @memberjunction/ng-export-service@6.1.0-edge.6
+  - @memberjunction/ng-feedback@6.1.0-edge.6
+  - @memberjunction/ng-file-storage@6.1.0-edge.6
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.6
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.6
+  - @memberjunction/ng-list-management@6.1.0-edge.6
+  - @memberjunction/ng-markdown@6.1.0-edge.6
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.6
+  - @memberjunction/ng-notifications@6.1.0-edge.6
+  - @memberjunction/ng-pagination@6.1.0-edge.6
+  - @memberjunction/ng-query-viewer@6.1.0-edge.6
+  - @memberjunction/ng-react@6.1.0-edge.6
+  - @memberjunction/ng-record-changes@6.1.0-edge.6
+  - @memberjunction/ng-record-selector@6.1.0-edge.6
+  - @memberjunction/ng-record-tags@6.1.0-edge.6
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.6
+  - @memberjunction/ng-search@6.1.0-edge.6
+  - @memberjunction/ng-shared@6.1.0-edge.6
+  - @memberjunction/ng-shared-generic@6.1.0-edge.6
+  - @memberjunction/ng-ui-components@6.1.0-edge.6
+  - @memberjunction/ng-user-avatar@6.1.0-edge.6
+  - @memberjunction/ng-word-cloud@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/entity-communications-client@6.1.0-edge.6
+  - @memberjunction/templates-base-types@6.1.0-edge.6
+  - @memberjunction/interactive-component-types@6.1.0-edge.6
+  - @memberjunction/lists-base@6.1.0-edge.6
+  - @memberjunction/export-engine@6.1.0-edge.6
+  - @memberjunction/theme-engine@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- 22ec804: Clickable record-link tokens in Chat messages (`type: "record"`). Agents emit `@{…}` JSON; the renderer turns it into a pill that opens the row via OpenEntityRecord, including composite primary keys. `name` is optional — omit it for an icon-only pill when surrounding prose already names the record. Loop prompt teaches the grammar and asks for world-class UX: prefer icon-only, one citation per record per section.
+
+### Patch Changes
+
+- 4273317: Accessibility: shell landmarks + skip link, focus containment, and focus-ring token safety.
+
+  Fixes eight WCAG 2.1 A/AA findings raised against the Explorer shell and shared primitives. A ninth — `mj-dropdown` having no way to be given an accessible name — was fixed independently on this line by #3860 and its follow-ups while this work was in flight, so it is not part of this changeset.
+
+  **Shell (`ng-explorer-core`)**
+  - Adds a "Skip to main content" link as the first focusable element in the shell, and marks the routed content region as the `main` landmark (`role="main"`, focusable target). **Consuming apps that added their own skip link should remove it on upgrade** — the shell's now comes first in DOM order, and two stacked skip links is worse than none.
+  - The global search input, the account/avatar button and the mobile-nav toggle now carry real accessible names. The avatar's name lives on the button, so it survives the icon-fallback path when the avatar image fails to load.
+  - The closed mobile nav drawer and the closed search popup are now `inert` and `visibility: hidden` (transitioned so the slide-out still animates). They previously kept every control inside them in the tab order while closed. When the drawer closes with focus inside it, focus returns to the toggle instead of dropping to `<body>`.
+  - The command palette already had `role="dialog"`/`aria-modal`; it now also traps Tab while open and returns focus to whatever was focused when it opened. `aria-modal` never stopped Tab on its own.
+
+  **Focus-ring tokens (`ng-shared-generic`)**
+  - New `--mj-focus-ring-color` companion to `--mj-focus-ring`. `--mj-focus-ring` is a two-part box-shadow value: `outline: 2px solid var(--mj-focus-ring)` looks correct, parses, and renders nothing. Use `--mj-focus-ring` in `box-shadow` and `--mj-focus-ring-color` in `outline`. A new `check:focus-ring` gate fails on the broken form.
+
+  **Whiteboard (`ng-whiteboard`)**
+  - The eleven bare single-character tool shortcuts (`v h p r s t m w i c e`) listened on `document` and fired anywhere on the page, failing WCAG 2.1.4. They are now scoped to focus being inside the whiteboard host, which is made click-focusable for that purpose. Scoping covers the host's whole keydown handler, so undo/redo (`Cmd/Ctrl+Z`, `+Y`), `Escape` and `Delete`/`Backspace` are focus-gated too — a board that swallows the document's `Cmd+Z` from anywhere on the page is its own bug. **Behavior change**: none of these fire while focus is elsewhere on the page. `EnableGlobalShortcuts` restores the old behavior for surfaces that accept the exposure.
+
+- 3fa1fb8: The connectivity banner no longer throws NG0100 when the socket drops mid-render
+
+  `ServerConnectivityBannerComponent` held its visibility in a plain property assigned from an
+  `IsConnected$` subscription. That observable is driven by graphql-ws, which reports "socket closed"
+  from whatever callback happens to be running — and during Explorer startup that lands _inside_ an
+  in-flight change-detection pass, after the banner's own view has already been checked. The
+  assignment then contradicts the `@if` Angular just evaluated, and the dev-mode check-no-changes pass
+  reports it:
+
+      NG0100: ExpressionChangedAfterItHasBeenCheckedError ... Previous value: '-1'. Current value: '0'.
+
+  `-1` and `0` are not the connectivity state; they are `@if`'s branch index, where `-1` means "no
+  branch rendered". So the error is precisely the banner appearing a fraction of a pass too late. It
+  fired once per socket drop or refresh during load, four times on a cold start.
+
+  The state is now a signal (`toSignal(IsConnected$)`) read as `IsConnected()` in the template.
+  Reading a signal from a template registers the view as its consumer, so a write marks that view
+  dirty and Angular re-refreshes it inside the same pass — the DOM and the expression can no longer
+  disagree, whenever the write arrives. That is a structural fix rather than a deferral: nothing is
+  pushed to a later tick, and no error is suppressed.
+
+  `toSignal` also owns the subscription through `DestroyRef`, which retires the manual `Subscription`
+  field and the `OnInit` hook; `ngOnDestroy` stays, because it still has to clear the
+  `--mj-connectivity-banner-height` custom property it publishes on `<html>`.
+
+  The DOM spec gains a host component that drops the connection from `ngAfterViewInit` — a hook that
+  runs inside the pass, after child views are refreshed — which reproduced the reported error verbatim
+  against the old code. The existing specs drop the `detectChanges(false)` + `markForCheck` nursing
+  they needed to work around the bug, and now assert through the strict check-no-changes path.
+
+- 34d9501: Regenerate the lazy-feature manifest for the archiving dashboards subpath (#3988 follow-up)
+
+  #3988 added the `./archiving-dashboards.module` subpath export to `@memberjunction/ng-dashboards` —
+  that was the fix, the module had been unreachable. Making it reachable moves its two registered
+  classes into their own lazy chunk, so `lazy-feature-config.ts` had to be regenerated and was not.
+
+  `ArchiveConfigResource` and `ArchiveRunsResource` now resolve through
+  `archiving-dashboards.module` instead of the catch-all `./module`; the total entry count is
+  unchanged at 118 because this is a relocation, not an addition. Without it the committed manifest
+  points those two at a chunk that no longer declares them, which is precisely the shape that lets
+  tree-shaking drop a registered class from a bundled app.
+
+  The PR-scoped CI path does not regenerate manifests (`npx turbo run build` skips the root
+  postbuild), so this class of staleness is caught by the post-merge full run on `next` by design.
+
+- 5f33ca8: Slack and Teams adapters: first production bring-up
+
+  Defects found running the adapters against a real MJ app — one Slack app per agent
+  (Socket Mode) plus Teams via Bot Framework.
+
+  **Startup and identity**
+  - Users are resolved via `UserCache.Instance`. `new UserCache()` returned the shared
+    singleton and then re-initialized it empty, so no messaging extension could start
+    and the whole server lost its user cache until the next refresh.
+  - Running one platform app per agent no longer causes bots to cross-talk in shared
+    channels: thread replies are answered only by the addressed bot, bot-authored
+    messages are excluded from history and thread affinity, and a new
+    `DisableDelegation` setting stops a pinned bot from handing off.
+  - A bot recognises its own replies. Slack publishes two identifiers for one bot and
+    returns the `bot_id` (with no `user`) for any message posted with a username
+    override — which every agent reply uses, since per-agent identity is the point of
+    one app per agent. Comparing only against `auth.test()`'s `user_id` therefore never
+    matched, so the thread gate above declined threads the bot was actively holding and
+    the agent lost its own turns from context.
+
+  **Delivery**
+  - Generated files and images are delivered as real attachments. Adapters may
+    implement `uploadMediaOutputs` (Slack does, and needs the `files:write` scope);
+    inlined `data:` URIs are decoded; and the run's canonical `fileOutputs` are used
+    rather than depending on the model to inline them.
+  - A non-public button URL no longer fails the entire Slack message — it degrades to
+    a link, so a localhost `ExplorerBaseURL` stops suppressing replies outright.
+  - The artifact link points at the file the agent produced rather than its internal
+    payload, and `System Only` artifacts are no longer linked. Callers relying on
+    `artifactInfo` being the payload artifact now receive the file artifact when a run
+    produced one.
+  - `ng-artifacts`: downloading a file artifact returns real bytes under its own MIME
+    type and filename, instead of a `.txt` file full of base64.
+  - `ng-explorer-core`: a conversation deep link opened cold now honours the URL rather
+    than restoring the previously-viewed conversation.
+
+  **Slack**
+  - Interactivity works in Socket Mode; previously every button and modal was inert, so
+    human-in-the-loop form flows dead-ended.
+  - Message text is capped at the real `text` limit rather than the block-payload limit,
+    which was failing long responses with `msg_too_long`.
+  - Modal placeholders are truncated to 150 characters; an over-long one failed the whole
+    `views.open` and left a button that looked dead.
+
+  **Teams**
+  - `MentionedAgentNames` is populated, so a named agent is reachable at all — previously
+    every Teams turn ran the default agent.
+  - Response forms route the answer back to the agent that asked, via `mj_agent`.
+  - Buttons are built only over `http:`/`https:` URLs. Teams silently ignores `data:`/`blob:`/`file:`
+    (so "Download document" was dead by construction whenever MJ inlined the artifact) and hands
+    unknown schemes such as `javascript:` or `ms-msdt:` to the OS URI handler, so the check is an
+    allow-list. Dropped buttons become a note pointing at the artifact link; localhost stays allowed.
+  - A response form's submitted agent name is validated against the known agents before it is used
+    to route, rather than trusted from the client-controlled submit payload.
+  - Deep links no longer assume `resourceId` is present, now that a Record can be
+    addressed by `keys`.
+
+- 34d19a9: Fix cross-tab URL corruption: a dashboard in a background tab could rewrite the URL of the tab the user was actually viewing.
+
+  `BaseResourceComponent.UpdateQueryParams` fell back to `NavigationService.UpdateActiveTabQueryParams` whenever the component had no tab id, so its query-param writes landed in whichever tab happened to be active. Code dashboards resolved through `ClassFactory` (Open App dashboards, `MCPDashboard`, `DataExplorer`) are exactly the components that have no tab id, so a background dashboard finishing an async load silently replaced the visible tab's deep link with its own params.
+  - `BaseResourceComponent.UpdateQueryParams` no longer has an active-tab fallback. A component that cannot identify its own tab drops the write and logs which component did it and what was dropped.
+  - `DashboardResource` and `BaseAdminContainer` now pass their tab id to the child dashboards they instantiate (`ParentTabId`), so those dashboards keep working — scoped to their own tab.
+  - `NavigationService.UpdateActiveTabQueryParams` is deprecated; components must use `UpdateTabQueryParams` with their own tab id.
+
+  The stamp a host puts on a child is a snapshot of where the host was when it created it, so it has to
+  move when the host does. `tab-container` re-homes a _cached_ resource component to a different tab
+  (`RebindTabId`) without recreating anything inside it, which would otherwise leave the child reading
+  and writing the tab it was born in from inside a tab it no longer belongs to — the same cross-tab
+  corruption, arriving by a slower route. `RebindTabId` now calls an `onTabIdRebound` hook, and both
+  hosts re-home their children through it (the admin container re-homes every cached section, not only
+  the visible one — a detached section is invisible, still subscribed, and exactly the case that
+  matters). The re-home clears the stale `ParentTabId` first, because `getTabId()` prefers it and a
+  rebind that layered over it would be a silent no-op.
+
+- Updated dependencies [4273317]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [d66a26a]
+- Updated dependencies [e93f221]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [23c2521]
+- Updated dependencies [dd6d1f0]
+- Updated dependencies [71ccf29]
+- Updated dependencies [a8710bf]
+- Updated dependencies [e1ebab9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [905820a]
+- Updated dependencies [34d19a9]
+  - @memberjunction/ng-shared-generic@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ng-conversations@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/ng-dashboards@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ng-ui-components@6.1.0-edge.5
+  - @memberjunction/ng-markdown@6.1.0-edge.5
+  - @memberjunction/ng-artifacts@6.1.0-edge.5
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.5
+  - @memberjunction/ng-shared@6.1.0-edge.5
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.5
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.5
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.5
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.5
+  - @memberjunction/ng-base-forms@6.1.0-edge.5
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.5
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.5
+  - @memberjunction/ng-feedback@6.1.0-edge.5
+  - @memberjunction/ng-file-storage@6.1.0-edge.5
+  - @memberjunction/ng-list-management@6.1.0-edge.5
+  - @memberjunction/ng-query-viewer@6.1.0-edge.5
+  - @memberjunction/ng-record-changes@6.1.0-edge.5
+  - @memberjunction/ng-record-tags@6.1.0-edge.5
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.5
+  - @memberjunction/ng-search@6.1.0-edge.5
+  - @memberjunction/ng-base-application@6.1.0-edge.5
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.5
+  - @memberjunction/ng-base-types@6.1.0-edge.5
+  - @memberjunction/ng-notifications@6.1.0-edge.5
+  - @memberjunction/ng-react@6.1.0-edge.5
+  - @memberjunction/ng-record-selector@6.1.0-edge.5
+  - @memberjunction/ng-user-avatar@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/entity-communications-client@6.1.0-edge.5
+  - @memberjunction/templates-base-types@6.1.0-edge.5
+  - @memberjunction/ng-auth-services@6.1.0-edge.5
+  - @memberjunction/ng-composer@6.1.0-edge.5
+  - @memberjunction/ng-container-directives@6.1.0-edge.5
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.5
+  - @memberjunction/ng-export-service@6.1.0-edge.5
+  - @memberjunction/ng-word-cloud@6.1.0-edge.5
+  - @memberjunction/ng-pagination@6.1.0-edge.5
+  - @memberjunction/lists-base@6.1.0-edge.5
+  - @memberjunction/export-engine@6.1.0-edge.5
+  - @memberjunction/theme-engine@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- 8f199e2: Identity Claims: ship the redemption surface and close the trust gaps.
+  - New `IdentityClaimRedemptionResolver` (MJServer): `RedeemIdentityClaim` /
+    `AutoClaimPendingIdentityClaims` mutations and `GetMyPendingIdentityClaims` query, with an
+    in-memory per-user rate limit on redemption attempts.
+  - New Explorer `/claims/redeem` page (explorer-core) — the landing target of claim emails'
+    `?id=..&token=..` links, previously a dead URL.
+  - Automatic claim-on-login: `getUserPayload` now fires `AutoClaimForUser` once per issued
+    token (deduped alongside the session audit), so pending claims addressed to a user's email
+    attach at sign-in.
+  - Email-verification gate: the OIDC `email_verified` claim is read off the verified JWT onto
+    `UserPayload.emailVerified` and threaded into redemption — an IdP that explicitly asserts
+    an unverified email can no longer redeem by email match (the token path still works).
+  - `IdentityClaimType.Configuration` is now read: `RequireVerifiedEmail`, `RequireToken`, and
+    `AutoClaim` gates (typed as `IdentityClaimTypeConfiguration` on the client engine).
+  - `IdentityClaimType.IsActive` is now enforced on both create and redeem.
+  - `GetPendingClaimsForEmail` uses `EscapeSQLString` and a platform-neutral expiry literal
+    (was `GETUTCDATE()`, SQL Server-only); `RevokeClaim` checks its save result and skips the
+    driver's `OnRevoke` when the revocation did not persist.
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [647bd71]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.4
+  - @memberjunction/ng-conversations@6.1.0-edge.4
+  - @memberjunction/ng-base-application@6.1.0-edge.4
+  - @memberjunction/ng-dashboards@6.1.0-edge.4
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.4
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.4
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.4
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.4
+  - @memberjunction/ng-shared@6.1.0-edge.4
+  - @memberjunction/ng-artifacts@6.1.0-edge.4
+  - @memberjunction/ng-base-forms@6.1.0-edge.4
+  - @memberjunction/ng-base-types@6.1.0-edge.4
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.4
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.4
+  - @memberjunction/ng-file-storage@6.1.0-edge.4
+  - @memberjunction/ng-list-management@6.1.0-edge.4
+  - @memberjunction/ng-notifications@6.1.0-edge.4
+  - @memberjunction/ng-query-viewer@6.1.0-edge.4
+  - @memberjunction/ng-react@6.1.0-edge.4
+  - @memberjunction/ng-record-changes@6.1.0-edge.4
+  - @memberjunction/ng-record-selector@6.1.0-edge.4
+  - @memberjunction/ng-record-tags@6.1.0-edge.4
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.4
+  - @memberjunction/ng-search@6.1.0-edge.4
+  - @memberjunction/ng-shared-generic@6.1.0-edge.4
+  - @memberjunction/ng-user-avatar@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/entity-communications-client@6.1.0-edge.4
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.4
+  - @memberjunction/templates-base-types@6.1.0-edge.4
+  - @memberjunction/ng-auth-services@6.1.0-edge.4
+  - @memberjunction/ng-composer@6.1.0-edge.4
+  - @memberjunction/ng-container-directives@6.1.0-edge.4
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.4
+  - @memberjunction/ng-feedback@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/ng-export-service@6.1.0-edge.4
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.4
+  - @memberjunction/ng-markdown@6.1.0-edge.4
+  - @memberjunction/ng-ui-components@6.1.0-edge.4
+  - @memberjunction/ng-word-cloud@6.1.0-edge.4
+  - @memberjunction/ng-pagination@6.1.0-edge.4
+  - @memberjunction/lists-base@6.1.0-edge.4
+  - @memberjunction/export-engine@6.1.0-edge.4
+  - @memberjunction/theme-engine@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

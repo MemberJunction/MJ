@@ -1,5 +1,249 @@
 # @memberjunction/ai-cli
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 41b0d28: Load Open App server packages in every MJ process, not only MJAPI (#4199).
+
+  `mj sync push` (and `mj app …`, `mj test`, the MCP/A2A servers, the integration-test bootstrap)
+  never imported an installed app's server package, so `Metadata.GetEntityObject` handed back a
+  generic `BaseEntity` for the app's entities and every custom `Save()`, validation rule and
+  lifecycle hook was silently skipped — while MJ core's own server subclasses, loaded through the
+  lite manifest, did run. New `@memberjunction/dynamic-packages` extracts the loader (and the
+  host-anchored import) out of `server-bootstrap` into a package with no MJ runtime dependencies,
+  and each host is now one `LoadDynamicPackages({ processId })` call. ServerBootstrap consumes it
+  with two deliberate behaviour changes: it no longer attempts to import the Angular forms package
+  into Node, and when an `mj-app.json` sits beside its `mj.config.cjs` (an Open App repo running its
+  own dev host) it now loads that app's server packages and resolver paths too.
+
+  `dynamicPackages.server[]` stays the single list `mj app install` writes; when both it and an
+  `mj-app.json` name a package, the config entry decides `Enabled` and scoping while the manifest's
+  on-disk location remains the resolution fallback. Entries gain optional
+  `Processes` / `ExcludeProcesses` (process IDs or prefixes: `cli`, `cli:sync`, `cli:sync:push`,
+  `mjapi`, `mcp`, …) and the section gains an optional `policy` map, so a package can be scoped to
+  just `mj sync` or switched off for `mj migrate`. `MJ_DYNAMIC_PACKAGES=none` and the global CLI
+  flag `--no-app-packages` (declared in `--help`) disable loading for one run — for app packages AND the
+  host's own generated packages; MJ core's classes still load from the manifest. The `mj` prerun hook
+  publishes its process id through `MJ_DYNAMIC_PACKAGES_PROCESS` so the nested `ai-cli` /
+  `testing-cli` bootstraps apply the same scoping and policy. A package already loaded in the process
+  is handed back from cache without re-running its startup export. New guide:
+  `guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`. `mj sync push` now warns, once per entity,
+  when it is about to write with a `BaseEntity` because no subclass is registered.
+
+- fd0a019: Follow-ups to the dynamic-package loader (#4199) from testing it end to end:
+  - The `mj` CLI's config schema no longer requires `AppName` on hand-authored `dynamicPackages.server[]` entries and accepts every `policy` value the loader accepts, so the README's own examples no longer make `mj migrate` / `mj clean` / `mj app check-updates` abort with a misleading "Database credentials are missing" error.
+  - A workspace member found on disk via `mj-app.json` but not yet built is reported as not-found (with the missing entry file named) instead of as a load failure that warned on every command.
+  - The standalone `mj-ai` / `mj-testing` provider bootstraps log through a new `StderrDynamicPackagesLogger`, so `--format=json` / `--output=json` stdout is no longer prefixed with loader progress lines.
+  - README: scoping examples use `cli:codegen` instead of `cli:migrate` (migrate is a light command that never loads app packages), and mode `none` is documented as skipping the host's generated packages too.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [2a14c26]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f6a4341]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [41b0d28]
+- Updated dependencies [fd0a019]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [a723521]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [80fcb61]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [c11f8c6]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [d0eab88]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai-agents@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ai-cerebras@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/actions@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/dynamic-packages@6.1.0-edge.6
+  - @memberjunction/core-actions@6.1.0-edge.6
+  - @memberjunction/core-entities-server@6.1.0-edge.6
+  - @memberjunction/ai-prompts@6.1.0-edge.6
+  - @memberjunction/ai-anthropic@6.1.0-edge.6
+  - @memberjunction/ai-betty-bot@6.1.0-edge.6
+  - @memberjunction/ai-groq@6.1.0-edge.6
+  - @memberjunction/ai-mistral@6.1.0-edge.6
+  - @memberjunction/ai-openai@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- cffd286: Fix five gaps in the agent-first CLI work, found in review.
+
+  **`-f` works again on `mj test *`.** Widening `--format` to the canonical vocabulary had
+  swapped in a flag with no short form, so `mj test run -f json` — and the same on `list`,
+  `history`, `compare`, `validate`, `suite`, and `regression compare` — started failing with
+  "Nonexistent flag". Widening the accepted _values_ must not narrow the accepted
+  _spellings_; `-f` is restored on all seven. The `mj ai` family deliberately keeps no `-f`:
+  `--format` is new there, and `mj ai audit agent-run` already spends `-f` on `--file`.
+
+  **`mj ai agents run --chat` no longer hangs when spawned.** It went straight into an stdin
+  REPL without passing through the interactivity guard. It now refuses up front — before
+  loading the AI services — and points at `--prompt`, which does work headlessly.
+
+  **`mj install` fails before it writes anything.** The guard lived in the prompt handler, so
+  a non-interactive install got as far as scaffolding files and only then hit the version
+  picker it could not answer. A preflight check now refuses at the start, leaving the target
+  directory untouched. Relatedly, the CLI no longer registers its interactive prompt bridge
+  under `--yes`: it was racing the engine's own auto-resolver safety net and could turn a
+  working headless install into an exit(1).
+
+  **Machine output stays machine-readable.** `mj ai actions run --dry-run` printed coloured
+  prose regardless of `--format`, and an empty `mj ai agents list` / `actions list` returned
+  the sentence "No agents found." even under `--format=json`, which no JSON parser accepts.
+  The dry run now renders through the resolved formatter, and an empty list is `[]` in json
+  mode while keeping the readable sentence for humans.
+
+  **`mj sync file-reset` validates before it connects.** It opened a database connection and
+  loaded the sync engine before checking whether `--sections` or `--all` was supplied, so a
+  run missing them paid for a full connection just to be told which flag to pass. All input
+  resolution now happens first.
+
+- 574008d: Make the `mj` CLI agent-first, following the model the ElevenLabs CLI adopted.
+
+  **Prompting now follows the terminal.** A command prompts when stdin and stdout are both
+  TTYs — so nothing changes for a human — and does not when either is piped, when a CI
+  environment variable is set, or when `TERM=dumb`. In those cases a command that needs a
+  value it wasn't given fails immediately naming the flag that supplies it, instead of
+  blocking on stdin forever. Previously `mj sync init` had four prompts and no escape flags
+  at all, and `mj install --legacy` had two dozen; both hung an agent indefinitely. Override
+  the detection with the global `--interactive` / `--no-interactive`, or pin it for a session
+  with `MJ_CLI_INTERACTIVE`.
+
+  **Output follows the pipe.** With no explicit `--format`, a non-TTY stdout resolves to
+  `json` and all decorative chrome (banner, spinners, color) is suppressed — no flag
+  required. `MJ_CLI_FORMAT` pins the format for a shell session.
+
+  **One `--format` spelling CLI-wide.** `mj test *` (`console|json|markdown`) and `mj ai *`
+  (`compact|json|table`) now also accept the canonical `--format text|json|md`. Every
+  existing value keeps working, and an explicit legacy value still wins over inference.
+
+  **`mj usage` covers the whole CLI.** The tier-1 domain map went from 3 domains to 23, and
+  every domain now has a `mj <domain> usage` page. Entries for commands that aren't
+  `BaseCLIPlugin` plugins are derived from oclif's own manifest at runtime, so they cannot
+  drift; only the per-domain runtime budget is hand-maintained.
+
+  **Richer result envelope.** `MJCLIResult` now carries a `version` field (stamped on every
+  serialized result) and `MJCLIResultError` gains machine-readable `code` and actionable
+  `suggestion` fields. JSON output is compact when piped and pretty on a terminal.
+
+  Behavioral change: a command that used to prompt when spawned or piped now fails with an
+  actionable error instead of hanging. Interactive use at a terminal is unchanged.
+  `mj sync init` gains `--setup-entity`, `--entity`, `--dir`, and `--overwrite` to make it
+  fully scriptable.
+
+- Updated dependencies [b1b24d7]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [79483bf]
+- Updated dependencies [22ec804]
+- Updated dependencies [8206993]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [e63ac04]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [23c2521]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-agents@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/ai-groq@6.1.0-edge.5
+  - @memberjunction/ai-openai@6.1.0-edge.5
+  - @memberjunction/core-actions@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/ai-anthropic@6.1.0-edge.5
+  - @memberjunction/ai-betty-bot@6.1.0-edge.5
+  - @memberjunction/ai-cerebras@6.1.0-edge.5
+  - @memberjunction/ai-mistral@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [de6eb14]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [faac5b5]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/core-actions@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/ai-betty-bot@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-anthropic@6.1.0-edge.4
+  - @memberjunction/ai-cerebras@6.1.0-edge.4
+  - @memberjunction/ai-groq@6.1.0-edge.4
+  - @memberjunction/ai-mistral@6.1.0-edge.4
+  - @memberjunction/ai-openai@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

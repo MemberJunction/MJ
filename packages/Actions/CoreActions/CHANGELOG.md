@@ -1,5 +1,484 @@
 # Change Log - @memberjunction/core-actions
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 80fcb61: Memory/resource leak fixes surfaced by the Round 13 audit: drain previously-discarded `fetch()` response bodies at six call sites (BlackForestLabs, IntegrationDiscoveryResolver's webhook sender, WebPageContentAction's content-too-large guard, the React runtime's external component registry client, and RuntimeSchemaManager's restart poll) so undici no longer pins keep-alive connections; bound `RemoteBrowserActionResolver`'s process-lifetime screencast/audio-stream idempotency maps with a TTL sweep so a crashed or disconnected session no longer leaks a permanent entry; add missing SQL connection-pool `'error'` listeners (ComponentRegistry's server, DBAutoDoc's three drivers) and close DBAutoDoc's connection pool on its error path so a failed analysis run no longer leaves it open for the rest of the CLI process.
+- 512bb53: Security: close the role-elevation path on `MJ: Roles` and `MJ: User Roles` (issue #4282).
+
+  Issue #4260 closed the `User.Type` route to elevated capability. Role assignment is the platform's other authority mechanism and was unguarded: no server-side entity subclass existed for either entity, so `ClassFactory` resolved the generated classes, whose `Validate()` knows nothing about who is calling. On a baseline seed — and verified against a live database — the `Developer` and `Integration` roles hold unfiltered `CanCreate`/`CanUpdate`/`CanDelete` on both entities. Reproduced end to end on the real stack before the fix: a caller whose `Type` is `'User'`, holding only `Developer` and `UI`, inserted a row granting itself `Integration` (`Validate()` passed, `Save()` returned `true`), and separately created a brand-new role.
+
+  **`MJUserRoleEntityServer`** — a non-Owner may only grant, move or revoke a role they themselves hold. That subset rule is a ceiling: whatever a non-Owner does through this entity, the authority they hand out is authority they already had, so no sequence of calls lets a caller exceed their own grant. Delegated administration, IdP/group sync and onboarding automation — the legitimate non-Owner uses `User.Type` does not have — all keep working. On an update the pre-save `RoleID` is checked as well as the new one, so an assignment cannot be repointed to strip someone of a role the caller does not hold. `UserID` is deliberately not frozen: moving a grant between users stays inside the same ceiling. One consequence of that is chosen knowingly rather than incidental — because revocation shares the granting ceiling, a non-Owner may repoint or delete **any** user's assignment of a role the caller also holds, including an Owner's. That is not escalation: Owner authority lives in `User.Type`, which #4260 froze, and not in a role. It does let one non-Owner strip peers of a role they share, which is deprivation rather than elevation — reversible by an Owner and recorded in Record Changes. Narrowing revocation to the caller's own row would close it only by breaking delegated administration, the legitimate non-Owner use this rule exists to preserve.
+
+  **`MJRoleEntityServer`** — a non-Owner may not create, change or delete a role. Every field on this entity is authority-bearing: `Name` is what user/role synchronization matches on, `DirectoryID` maps an external directory group to the role, and `SQLName` decides which database role CodeGen grants object rights to.
+
+  Both guards override `Save()` and `Delete()` alongside `Validate()`, so the rules hold on every write path — GraphQL resolvers, Remote Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and cannot be switched off by the `ReplayOnly` save option, which skips `Validate()` while still performing the write. Both are pure: they read only the record's own field state and the caller's already-cached roles, so they cost nothing per save and are unit-testable without a database.
+
+  **Upgrade notes.**
+  - **Explorer's role-management screen stops working for non-Owner administrators.** It has no Owner gate of its own today, so a Developer-role non-Owner reaches it in practice; creating, renaming and deleting roles from it are now refused with a message naming the rule. This is the same trade-off #4260 accepted for the user-management screen.
+  - **Explorer's bulk role assignment now checks each `Save()` return.** `executeBulkRoleAssign` enrols each row in a transaction group, where `Save()` reports only _enrolment_ — the provider queues the item locally and returns `true` without a round trip. A row refused **client-side** (a `CheckPermissions` denial or a field-rule failure) does return `false` and is never enrolled; that return was ignored, so an all-refused batch left the group empty, and an empty group's `Submit()` returns `true` for having nothing to do — the screen reported success having assigned nothing. It now collects each such refusal with the user it applies to and surfaces them.
+
+    To be precise about what this does **not** cover: the role-elevation guard added here is server-side only (`@memberjunction/core-entities-server` is not a browser dependency), so it refuses during `Submit()`, not during `Save()` — and that refusal currently reaches the user nowhere at all. `ExecuteTransactionGroup` on the server discards its own `Save()`/`Delete()` return values, so a refused row never enrols in the server's group either; an all-refused batch submits an empty group, whose `Submit()` returns `true` for having nothing to do, and the screen closes with no message. Verified end to end against a live server: a non-Owner assigning a role they do not hold is correctly **refused** — no row is written, the guard works — but is **reported as success**. This is a pre-existing gap in that resolver (it predates this PR and equally affects `MJ: Users` via issue #4260), tracked as issue #4309 and deliberately not closed here.
+
+  - **`AssignUserRolesAction` now fails the whole batch when the caller does not hold the role.** The core action (`CoreActions/src/custom/user-management/assign-user-roles.action.ts`) builds its `MJ: User Roles` object with `params.ContextUser` and assigns atomically, so a refused `Save()` rolls the transaction back and the action returns `Success: false` with `ResultCode: 'FAILED'` carrying the guard's message. Nothing is partially assigned and nothing is swallowed — unlike the transaction-group paths above, this one already reports its refusal. The "onboarding automation" the subset rule preserves is therefore preserved exactly where the automation's context user holds the role being granted: an automation running as a non-Owner that grants roles its own context user does not hold must be given those roles, or an Owner context user.
+  - **`SyncRoles` / `SyncUsers` / `SyncRolesAndUsers` are unaffected on a default install** — all three carry `@RequireSystemUser()`, and `getSystemUser()` resolves the seeded `Type='Owner'` system user. A deployment whose system user is **not** an Owner will see those sync paths fail closed at the save, loudly rather than silently, for the same reason #4260 documented.
+  - **Not closed by this change:** `MJ: Entity Permissions` carries the same unfiltered `Developer`/`Integration` grant, so a holder of either role can still widen a role's permissions directly. That is an independent route with its own decision to make about the invariant, so it is deliberately out of scope here rather than fixed in passing; this changeset does not claim to close it.
+
+  New unit coverage in MJCoreEntitiesServer (41 tests across both guards, including the pre-fix reproduction) and a new deterministic integration bundle, **IT89 — Role Privilege Elevation Guard** (`role-elevation`, RE1–RE6), which proves the ClassFactory wiring and both guards against a real provider the way IT88 does for `MJ: Users`.
+
+- c11f8c6: **The skill principal of a Scoped Search is bound to the agent run, not to a model-authored parameter.**
+
+  `BaseAgent.ExecuteSingleAction` now stamps `Context.ActiveSkillIDs` — the skills the run has actually
+  activated so far — onto every action call, alongside the existing `AgentID`. An empty array means
+  "inside an agent run, with no skill active", which is a different fact from having no agent context.
+
+  `Scoped Search` reads it. Inside a run, a named `AISkillID` that the run never activated is refused with
+  `INVALID_PARAM`, and when exactly one skill is active and none is named, that skill becomes the
+  principal. Outside a run the explicit input is unchanged. The reason is the one the BC-SaaS
+  capability resolver already states for the active skill: it "must be server-derived, never
+  caller-supplied — a model naming a skill would let it widen its own reach". Since a skill's
+  `SearchScopeAccess` and its scope grants can widen a bound, and inside a Loop agent the `AISkillID`
+  input is filled by the model, the run has to be the authority. With several skills active and none
+  named, no default is picked and the search proceeds with no skill principal (logged as verbose).
+
+  Also: `_activatedSkillIDs` and `_skillInvocations` on `BaseAgent` are now `protected` (with a
+  read-only `ActivatedSkillIDs` getter), so a subclass that layers its own activation policy — a
+  tenant licensing check, an entitlement model — can see what actually activated without intercepting
+  `enableSkillCapabilities`. First-adopter feedback from Betty, where the search sub-agent's principal
+  was being set by hand from a re-derived copy of this state.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f6a4341]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [a723521]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [c11f8c6]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [d0eab88]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai-agents@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/actions@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/geo-core@6.1.0-edge.6
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+  - @memberjunction/ai-mcp-client@6.1.0-edge.6
+  - @memberjunction/external-change-detection@6.1.0-edge.6
+  - @memberjunction/integration-engine@6.1.0-edge.6
+  - @memberjunction/lists@6.1.0-edge.6
+  - @memberjunction/record-set-processor@6.1.0-edge.6
+  - @memberjunction/record-set-processor-base@6.1.0-edge.6
+  - @memberjunction/ai-vector-sync@6.1.0-edge.6
+  - @memberjunction/content-autotagging@6.1.0-edge.6
+  - @memberjunction/search-engine@6.1.0-edge.6
+  - @memberjunction/core-entities-server@6.1.0-edge.6
+  - @memberjunction/ai-agent-manager@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/clustering-engine@6.1.0-edge.6
+  - @memberjunction/ai-prompts@6.1.0-edge.6
+  - @memberjunction/ai-betty-bot@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/communication-engine@6.1.0-edge.6
+  - @memberjunction/storage@6.1.0-edge.6
+  - @memberjunction/react-linter@6.1.0-edge.6
+  - @memberjunction/esignature@6.1.0-edge.6
+  - @memberjunction/code-execution@6.1.0-edge.6
+  - @memberjunction/interactive-component-types@6.1.0-edge.6
+  - @memberjunction/lists-base@6.1.0-edge.6
+  - @memberjunction/export-engine@6.1.0-edge.6
+  - @memberjunction/network-utils@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Minor Changes
+
+- e63ac04: Add two web-read actions — **Tavily Search** and **Read RSS Feed** — and fix an environment-variable fallback that never worked.
+
+  **Tavily Search** (`custom/web/tavily-search.action.ts`) searches through Tavily, whose results arrive as extracted page content rather than as snippets plus links to go fetch. Two capabilities distinguish it from the other search actions here: `Topic: 'news'` is the only topic that returns a publication date per result and the only one the `Days` window applies to, which is what makes recency-sensitive questions answerable; and `IncludeAnswer` returns a synthesized answer alongside the results, so a caller that only needs the conclusion does not have to run its own summarization pass. Authentication is `Authorization: Bearer <key>` — Tavily still accepts an `api_key` body field, but that form puts the credential in the payload and is not used.
+
+  Deliberate behaviours: `MaxResults` is **clamped** to Tavily's cap of 20 rather than rejected, because a caller asking for 50 wants as many as possible and the vendor rejects the whole request above the cap. `Days` on a non-news topic is **dropped with the reason stated** in a `Warnings` output param, since silently forwarding it would leave the caller believing their window applied. Zero results is `Success: true` — a narrow query has a real, empty answer, and reporting failure would send a caller into retrying a query that will keep returning nothing. Failure modes are separated so a caller can act on them: `INVALID_API_KEY` (401/403), `RATE_LIMITED` (429), `INVALID_REQUEST` (400/422, retrying unchanged is pointless), `API_ERROR`, and `SEARCH_FAILED` for a failure with no HTTP response at all.
+
+  **Read RSS Feed** (`custom/web/rss-feed-read.action.ts`, with the parsing and scoring split out as the dependency-free `custom/web/rss-feed-parsing.ts`) reads any number of RSS 2.0 or Atom feeds, filters by article age, and optionally scores articles for keyword relevance and recency. It needs no credential.
+
+  Parsing is regex-based rather than using a strict XML parser, on purpose: feeds in the wild are frequently malformed, and a strict parser fails the entire document over one unescaped ampersand where the regex costs only the affected item's text. Text extraction decodes entities _before_ stripping tags, because RSS descriptions overwhelmingly arrive with their HTML escaped (`&lt;p&gt;`, not `<p>`) — strip first and those tags survive as literal text in the output. A second decode pass afterward finishes values that were escaped twice.
+
+  One feed failing is a `FeedStatuses` entry, not an action failure, unless `RequireAllFeeds` is set; feed URLs must be http(s) so this cannot become a local file reader. Undated articles are excluded by default and **counted**, as are articles dropped by the age window, and every such count appears in the result message — so an unexpectedly small answer is explained rather than merely small. A single injected clock serves the whole run, so the age filter and the recency score cannot disagree about what "now" is.
+
+  **Fix:** `getCoreActionsConfig()` early-returned an empty parsed config whenever no `mj.config.cjs` was found, so environment variables were ignored entirely — contradicting every schema doc comment and every "or `X_API_KEY` environment variable" error message in the package. A deployment configured only through the environment got a config with no keys and every affected action reported its key as missing. The config build is now hoisted out of that early return, so the documented fallbacks (`PERPLEXITY_API_KEY`, `TAVILY_API_KEY`, `GAMMA_API_KEY`, the Google keys) work as described.
+
+  103 new tests cover both actions and the parsing module.
+
+  `minor` because this branch now ships `metadata/**` — the `MJ: Actions` / `MJ: Action Params` / `MJ: Action Result Codes` records these classes need to be invocable. Metadata becomes a migration at release via the build engineer's `mj sync push`, which is exactly what the `minor` trigger tracks. Without the metadata this would be `patch`.
+
+- 88d751d: **Scoped Search now carries the skill principal — and judges it.**
+
+  `ScopeDimensionResolver` binds `Principals.SkillID` into a dimension's expansion query, and
+  `principalsFrom()` sources that from `SearchParams.AISkillID`. `SearchParams` declares the field and
+  `ScopeExplanation.test.ts` asserts on it — but the `Scoped Search` action never set it. The string
+  "skill" did not appear in that file. So the slot existed, was typed, was tested, and no caller could
+  reach it: a scope whose bound depends on the active skill resolved `SkillID` as null forever.
+
+  Adds an optional `AISkillID` input, threaded onto `SearchParams.AISkillID` the way `AIAgentID`
+  already is. Omit it and the skill principal stays null, so no caller gains a skill it did not ask for.
+
+  **Three behaviour changes to note, none of which is the skill threading itself.** First, the
+  `AgentUnscopedAll` fallback is now gated on wieldability, so an install where an agent is
+  `SearchScopeAccess='All'` _and_ the user holds no direct or role grant previously got `Allowed:
+Search` and now additionally requires the agent to be in the metadata cache and runnable by that
+  user. This reaches `SearchKnowledge` and `StreamScopedSearch` as well as the action. Second, a
+  supplied skill is judged wherever it is named, not only at its `All` fallback: a skill binds into
+  the expansion query, whose output _is_ the bound for a `restricts: true` dimension, so judging it
+  only where it grants would let a user holding their own grant widen with any skill they named.
+  The agent is deliberately NOT judged that way — `AIAgentID` is also attribution, and gating it at
+  the point of supply turns an analytics field into a retrieval outage. The skill check does NOT judge the agent —
+  `GetSkillsForAgent` filters the user's rights on the SKILL (`AISkillPermissionHelper`), never on
+  the agent — so the agent is judged at the fallbacks instead, where it widens. Both `'All'` arms
+  consult it, including the skill's: a skill widens through the agent it would activate on, so
+  naming a skill must not buy access to an agent the caller may not run. A stale metadata cache is
+  distinguished from a denial in the MESSAGE, but it does not buy access: an agent that
+  cannot be evaluated cannot back a widening fallback either. (An earlier revision let it through on
+  the reasoning that a cache blip should not refuse a user whose own grant covered the scope — which is
+  impossible, since a direct or role grant returns before any fallback is reached. What it actually did
+  was grant `Search` to users with no grant at all whenever an agent was missing from the cache.)
+
+  Third: **a skill supplied with NO agent is now refused outright**. At base, step 4b granted
+  `SkillUnscopedAll` with no agent at all — an agent-free skill id was a standalone grant, so
+  'refused' replaces an actual widening, not a no-op. A skill is judged relative to the agent it would activate on, so there is nothing to
+  judge it against. The `Scoped Search` action always has an agent, so this is reachable only
+  through `ExplainScope({ AISkillID })` with no `AIAgentID` — most likely a preview UI that lets
+  a skill be picked before an agent. Such a call now returns `PrincipalNotActivatable` rather
+  than quietly resolving on the user's own grant.
+
+  Also at the same call sites: the caller's tenant (`PrimaryScopeRecordID`) now reaches the
+  permission decision everywhere it is available — previously every tenant-scoped grant,
+  including a tenant-scoped `None` (an explicit per-tenant deny), was discarded before the
+  verdict. Denial messages no longer echo principal names back to the caller (ids + `Source`
+  only; audit rows and server logs keep the full reason). The GraphQL resolvers refuse a
+  supplied-but-unloadable `agentID` instead of silently proceeding with an unjudged principal,
+  and the `SearchScopes` listing hides scopes under the same rule (it takes no searchContext, so
+  no tenant applies there). The resolver's `ExtraFilter` interpolations now use `EscapeSQLString`.
+
+  **The skill is a principal, so it is also permission-checked.** `SearchScopePermissionResolver`
+  already had three rules that only fire when `Skill` is supplied — `SkillNone` and
+  `SkillAssignedNotListed` reject a scope the user's own roles allow, and `SkillUnscopedAll` grants one
+  they do not. The action never passed it. Threading the ID without the gate would have enabled the
+  widening half of a two-part mechanism and left the deciding half unwired, and would have put the
+  search at odds with `ExplainScope`, which does pass it — the preview/enforcement drift this code has
+  already been bitten by once. So the skill is resolved _before_ the permission check, handed to
+  `ResolveEffectivePermission`, and attributed on every denial row.
+
+  A value that is not a UUID, or that will not load, is refused with `INVALID_PARAM` rather than
+  dropped: continuing with a null skill would bind an unjudged ID into the expansion query.
+
+  **A principal may only WIDEN if the caller may wield it — checked where it widens.**
+
+  `AgentUnscopedAll` and `SkillUnscopedAll` are the only places a principal changes an outcome: by the
+  time they are reached the user has no grant of their own, and `SearchScopeAccess='All'` is about to
+  supply one. Both permission models are open by default — no permission rows means anyone may run it —
+  so an id a caller merely NAMED could grant `Search` on any scope.
+
+  Two checks do this, split because they answer different questions.
+  `skillIsActivatable()` runs wherever a skill is NAMED (step 1e) and asks
+  `GetSkillsForAgent(agent, user)` — the same call `BaseAgent.preActivateRequestedSkills` gates real
+  activation on. `agentIsWieldable()` runs at the WIDENING fallbacks and asks for Run on the agent.
+  Both fallbacks consult it, the skill's included: `GetSkillsForAgent` filters SKILL permissions
+  (`AISkillPermissionHelper`) and never `AIAgentPermission`, so vouching for a skill says nothing about
+  whether the caller may run the agent it would activate on. Failing either check REFUSES, with
+  `PrincipalNotActivatable` — a widening fallback needs the principal positively confirmed, not merely
+  un-denied.
+
+  **Deliberately NOT gated at the point the id is supplied.** `AIAgentID` is attribution far more often
+  than it is authorization — `agent-pre-execution-rag` threads it purely so `SearchExecutionLog` can
+  attribute the search — and gating supply rather than grant turns an analytics field into a retrieval
+  outage on any install with explicit `AI Agent Permission` rows. A test pins that a non-`'All'` agent
+  supplied WITHOUT a skill never reaches the check — which is the RAG path's shape today. Note a
+  non-`'All'` agent DOES reach it when an `'All'` skill is supplied, because that skill widens through
+  it; if the RAG path ever starts threading `AISkillID`, this is the interaction to re-examine.
+
+  A stale metadata cache is reported as itself. `GetUserAgentPermissions` throws when the agent is
+  absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created after the
+  cache loaded would otherwise read as "not permitted" — a metadata-load problem wearing an
+  authorization message.
+
+  Because the policy sits in the resolver, `ExplainScope` inherits it: preview and search reach the same
+  verdict by running the same code rather than by two copies agreeing.
+
+  **`ExplainScope` inherits the same judgement** (`@memberjunction/search-engine`). It already loaded the skill
+  principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant
+  while the real search refused — the preview-vs-enforcement drift that file already carries a regression
+  test about. Both paths now judge both principals on identical terms, and on the explain path a principal refused
+  for a PRINCIPAL-SIDE reason — `PrincipalNotActivatable`, `AgentNone`, `AgentAssignedNotListed`,
+  `SkillNone`, `SkillAssignedNotListed` — is no longer bound into dimension resolution;
+  `deriveServerValue` parameterises server-authored SQL with it, which is the thing the action refuses
+  outright rather than continuing with. A refusal for a USER-side reason (no grant) still binds them,
+  deliberately: dropping them there drives the expansion query with nulls, which makes a required
+  dimension throw and the explanation announce a dimension failure that does not exist.
+
+  On containment, stated accurately: an expansion query is server-authored SQL, but MJ renders query
+  parameters through Nunjucks with `autoescape: false` and escaping is opt-in (`| sqlString`, or a
+  declared validation chain). So MJ does not itself guarantee that naming a skill cannot widen or
+  inject — the query author does, and the permission gate above is what MJ enforces. Scopes that never
+  reference `SkillID` are unaffected in either direction.
+
+### Patch Changes
+
+- 9cbe17f: Fix a resource leak introduced by the axios→native-`fetch` migration: several call sites (SharePoint/Box/Dropbox drivers, GraphQL Query, URL Metadata Extractor, Web Page Content, the generic file-URL loader, LearnWorlds, SendGrid Inbound Parse delete) discarded a `fetch`/`SafeFetch` response on an error or retry-discard branch without ever reading or cancelling its body, pinning the underlying connection out of Node's keep-alive pool until GC finalized it. Added `DrainResponseBody` to `@memberjunction/network-utils` and wired it into every affected branch, plus closed the same latent gap in `HttpRequest`'s own `ResponseType: 'stream'` + non-2xx path.
+- Updated dependencies [323df0f]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [405c035]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [79483bf]
+- Updated dependencies [22ec804]
+- Updated dependencies [8206993]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [5c1d762]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-agents@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/network-utils@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/search-engine@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/ai-betty-bot@6.1.0-edge.5
+  - @memberjunction/ai-vector-sync@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/content-autotagging@6.1.0-edge.5
+  - @memberjunction/ai-agent-manager@6.1.0-edge.5
+  - @memberjunction/record-set-processor@6.1.0-edge.5
+  - @memberjunction/clustering-engine@6.1.0-edge.5
+  - @memberjunction/ai-mcp-client@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/communication-engine@6.1.0-edge.5
+  - @memberjunction/external-change-detection@6.1.0-edge.5
+  - @memberjunction/lists@6.1.0-edge.5
+  - @memberjunction/react-linter@6.1.0-edge.5
+  - @memberjunction/esignature@6.1.0-edge.5
+  - @memberjunction/geo-core@6.1.0-edge.5
+  - @memberjunction/code-execution@6.1.0-edge.5
+  - @memberjunction/interactive-component-types@6.1.0-edge.5
+  - @memberjunction/record-set-processor-base@6.1.0-edge.5
+  - @memberjunction/lists-base@6.1.0-edge.5
+  - @memberjunction/export-engine@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Patch Changes
+
+- a2c528f: Geocoding no longer re-attempts an address it has already determined has no location.
+
+  `ProcessMapping` skipped only on `Status === 'success'`. A row marked permanently not-geocodable — an address that genuinely has no location, like "Conference Room B" — fell through to a full re-attempt on **every pass**, even with the source hash unchanged: mark pending (a write), geocode (nothing to find), mark failed (another write). Per record, forever, for an answer already on file. On a synced entity with geo-typed columns that is three round trips per record per sync, and CodeGen enables geocoding automatically on address-like columns, so it applies to entities nobody opted in.
+
+  `UpdateNotGeocodable`'s own comment describes the intended behaviour exactly — _"Mark as not_geocodable so the retry job skips it. If the user later edits the address, the hash will change and SyncIfChanged will re-attempt."_ The hash **is** the re-attempt condition; it just was not being honoured for that outcome.
+  - New `IsSettledGeoCode(status, retryCount)` in `geo-core`, plus a named `PERMANENT_SKIP_RETRY_COUNT` for the sentinel that was previously a bare `9999`. Settled means success **or** permanently not-geocodable; a plain `failed` is still transient and still retried, which is the retry job's purpose.
+  - `ExistingGeoCodeInfo` gains `RetryCount` — without it a batch caller cannot tell the two kinds of `failed` apart. The scheduled geocoding job now selects and populates it.
+  - The batch path decides from the map **before** loading anything, so an unchanged settled record costs zero round trips. `FindExistingGeoCode`'s comment already claimed it avoided the load when the hash was unchanged; it never checked, and loaded unconditionally.
+
+  No change for a record whose address changed, whose geocode succeeded, or whose failure was transient.
+
+- 7857d8e: Add `@memberjunction/network-utils` and remove `axios` from the repository.
+
+  The SSRF guard added for the web/HTTP actions was Actions-specific but the concern is not, so it
+  moves into a new dependency-free, Node-only package (`node:dns` + `node:net` only) that any
+  server-side package can depend on: `AssertPublicUrl`, `SafeFetch`, `IsBlockedIPAddress`, `SSRFError`.
+
+  The same package ships `HttpClient` / `HttpRequest` — a native-`fetch` HTTP client that replaces
+  `axios` across all 11 packages that used it. Consolidating on one client removes the third-party
+  dependency and puts the SSRF guard one option flag (`ValidateUrl`) away from every outbound call
+  site, which was impossible when each package reached for `axios` directly.
+
+  Also fixes an SSRF sink the original pass missed: the `API Rate Limiter` action takes a
+  caller-controlled URL and returns the response body, and is now guarded.
+
+  Public exports use `PascalCase`, per repo convention.
+
+- faac5b5: Add SSRF protection to server-side web/HTTP actions: private, loopback, link-local (incl. cloud metadata 169.254.169.254), and reserved IP ranges are now blocked, and redirects are re-validated per hop.
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [6242df1]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/geo-core@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/network-utils@6.1.0-edge.4
+  - @memberjunction/content-autotagging@6.1.0-edge.4
+  - @memberjunction/ai-betty-bot@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-vector-sync@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/ai-agent-manager@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/record-set-processor@6.1.0-edge.4
+  - @memberjunction/clustering-engine@6.1.0-edge.4
+  - @memberjunction/ai-mcp-client@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/communication-engine@6.1.0-edge.4
+  - @memberjunction/external-change-detection@6.1.0-edge.4
+  - @memberjunction/lists@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/react-linter@6.1.0-edge.4
+  - @memberjunction/esignature@6.1.0-edge.4
+  - @memberjunction/code-execution@6.1.0-edge.4
+  - @memberjunction/record-set-processor-base@6.1.0-edge.4
+  - @memberjunction/interactive-component-types@6.1.0-edge.4
+  - @memberjunction/lists-base@6.1.0-edge.4
+  - @memberjunction/export-engine@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

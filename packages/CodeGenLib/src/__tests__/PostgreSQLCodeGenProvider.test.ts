@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { PostgreSQLCodeGenProvider } from '../Database/providers/postgresql/PostgreSQLCodeGenProvider';
 import { CRUDType, BaseViewGenerationContext } from '../Database/codeGenDatabaseProvider';
+import { SQLCodeGenBase } from '../Database/sql_codegen';
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
 
 /**
@@ -893,21 +894,8 @@ describe('PostgreSQLCodeGenProvider', () => {
 });
 
 /**
- * Layered base views are refused on PostgreSQL.
- *
- * The feature's entire payoff is that a foreign key added later still shows up, which depends on
- * the application-owned outer view's `SELECT g.*` being re-resolved after the inner view
- * regenerates. SQL Server does that with `sp_refreshview`. PostgreSQL expands `*` at creation and
- * freezes it, has no refresh equivalent, and CodeGen does not own the outer view — so nothing
- * recreates it and the promise silently does not hold.
- *
- * Worse, it fails INTERMITTENTLY: an added column leaves the outer view stale (CREATE OR REPLACE on
- * the inner never touches dependents), while a rename or type change raises 42P16 and sends CodeGen
- * down the capture/DROP CASCADE/replay path, which incidentally recreates the outer view and does
- * pick the columns up. Same feature, opposite outcomes, decided by what else changed that day.
- *
- * That is the exact silent-staleness failure layering was built to eliminate, so this is a hard
- * refusal rather than a documented caveat.
+ * Layered base views on PostgreSQL: CodeGen writes the INNER view and restars the
+ * application-owned outer wrapper so `g.*` re-expands (see restarLayeredOuterView).
  */
 describe('PostgreSQLCodeGenProvider layered base views', () => {
     let provider: PostgreSQLCodeGenProvider;
@@ -928,31 +916,57 @@ describe('PostgreSQLCodeGenProvider layered base views', () => {
         };
     }
 
-    it('refuses to generate a layered base view', () => {
-        const entity = createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
-        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/not supported on PostgreSQL/);
+    const layered = () => createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
+
+    it('creates the INNER view, never the application-owned outer', () => {
+        const sql = provider.generateBaseView(contextFor(layered()));
+        expect(sql).toContain('CREATE OR REPLACE VIEW "__mj"."vwTestEntitiesGenerated"');
+        expect(sql).not.toMatch(/CREATE OR REPLACE VIEW "__mj"."vwTestEntities"\s*\nAS/);
     });
 
-    it('names the entity and both views so the error is actionable', () => {
-        const entity = createMockEntity({ BaseViewGenerated: false, GeneratedBaseViewName: 'vwTestEntitiesGenerated' });
-        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/Test Entity/);
-        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/vwTestEntitiesGenerated/);
-        expect(() => provider.generateBaseView(contextFor(entity))).toThrow(/vwTestEntities/);
+    it('still selects from the base table, not from the outer view', () => {
+        const sql = provider.generateBaseView(contextFor(layered()));
+        expect(sql).toContain('"__mj"."TestEntity"');
+        expect(sql).not.toContain('FROM "__mj"."vwTestEntities"');
+    });
+
+    it('emits an outer rebind call naming both views', () => {
+        const sql = provider.generateLayeredOuterRebindSQL(layered());
+        expect(sql).toContain('spRebindLayeredOuterView');
+        expect(sql).toContain("'vwTestEntities'");
+        expect(sql).toContain("'vwTestEntitiesGenerated'");
+    });
+
+    it('does not emit a rebind for a non-layered entity', () => {
+        expect(provider.generateLayeredOuterRebindSQL(createMockEntity())).toBe('');
+        expect(provider.generateLayeredOuterRebindSQL(createMockEntity({ BaseViewGenerated: false }))).toBe('');
+    });
+
+    it('logs an outer rebind guarded on the application-owned view existing', () => {
+        class RefreshProbe extends SQLCodeGenBase {
+            public build(entities: EntityInfo[]): string {
+                return this.buildCustomBaseViewRefreshSQL(entities);
+            }
+        }
+        const probe = new RefreshProbe();
+        probe.DBProvider = provider;
+        const sql = probe.build([layered()]);
+        expect(sql).toContain('spRebindLayeredOuterView');
+        expect(sql).toContain('to_regclass');
+        expect(sql).toContain('vwTestEntitiesGenerated');
     });
 
     it('still generates normally for every non-layered entity', () => {
-        // The refusal must be scoped to layering alone. Fully custom base views and ordinary
-        // generated ones keep working on PostgreSQL exactly as before.
         expect(() => provider.generateBaseView(contextFor(createMockEntity()))).not.toThrow();
         expect(() => provider.generateBaseView(contextFor(createMockEntity({ BaseViewGenerated: false })))).not.toThrow();
         expect(() => provider.generateBaseView(contextFor(createMockEntity({ GeneratedBaseViewName: null })))).not.toThrow();
     });
 
-    it('does not refuse a name that differs from BaseView only by case', () => {
-        // Not a layering — HasLayeredBaseView compares case-insensitively, so there is no second
-        // view and nothing to refuse.
+    it('does not treat a name that differs from BaseView only by case as layered', () => {
         const entity = createMockEntity({ GeneratedBaseViewName: 'VWTESTENTITIES' });
-        expect(() => provider.generateBaseView(contextFor(entity))).not.toThrow();
+        const sql = provider.generateBaseView(contextFor(entity));
+        expect(sql).toContain('CREATE OR REPLACE VIEW "__mj"."vwTestEntities"');
+        expect(provider.generateLayeredOuterRebindSQL(entity)).toBe('');
     });
 });
 
@@ -1058,6 +1072,106 @@ describe('PostgreSQLCodeGenProvider.quoteSQLForExecution', () => {
         it('is idempotent', () => {
             const once = quote('SELECT ID, Name, rc.Type FROM __mj.vwRecordChanges rc');
             expect(quote(once)).toBe(once);
+        });
+    });
+});
+
+describe('PostgreSQLCodeGenProvider — composite primary keys are never truncated to the first column', () => {
+    const provider = new PostgreSQLCodeGenProvider();
+    const pkField = (name: string, type: string, extra: Record<string, unknown> = {}) => ({
+        ID: `pk-${name}`, Name: name, CodeName: name, Type: type, Length: type === 'int' ? 4 : 16,
+        IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '', ...extra,
+    });
+    const dataField = (name: string, allowsNull: boolean) => ({
+        ID: `f-${name}`, Name: name, CodeName: name, Type: 'nvarchar', Length: 100,
+        IsPrimaryKey: false, AllowsNull: allowsNull, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '',
+    });
+    const tenantOrders = { ID: 'parent-composite', Name: 'Tenant Orders', BaseTable: 'TenantOrder', BaseTableCodeName: 'TenantOrder', BaseView: 'vwTenantOrders' };
+
+    describe('generateCRUDCreate (JSON-arg shape)', () => {
+        const wideFields = (pks: Record<string, unknown>[]) => {
+            const fields = [...pks];
+            for (let i = 0; i < 10; i++) fields.push(dataField(`RequiredCol${i}`, false));
+            for (let i = 0; i < 50; i++) fields.push(dataField(`OptionalCol${i}`, true));
+            return fields;
+        };
+
+        it('inserts and returns by EVERY key column of a composite key', () => {
+            const entity = createMockEntity(tenantOrders, wideFields([pkField('TenantID', 'uniqueidentifier'), pkField('OrderNo', 'int')]));
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('JSON-arg shape');
+            // one plpgsql variable per key column, each required in the payload
+            expect(sql).toMatch(/^\s+v_id_TenantID UUID;$/m);
+            expect(sql).toMatch(/^\s+v_id_OrderNo \w+;$/m);
+            expect(sql).toContain(`RAISE EXCEPTION 'spCreateTenantOrder: p_data must include "TenantID"'`);
+            expect(sql).toContain(`RAISE EXCEPTION 'spCreateTenantOrder: p_data must include "OrderNo"'`);
+            // both key columns land in the dynamic INSERT ...
+            expect(sql).toContain(`v_col_list := quote_ident('TenantID') || ', ' || quote_ident('OrderNo');`);
+            expect(sql).toMatch(/v_val_list := quote_literal\(v_id_TenantID\) \|\| '::UUID' \|\| ', ' \|\| quote_literal\(v_id_OrderNo\) \|\| '::\w+';/);
+            // ... and the returning SELECT binds all of them, not just the first
+            expect(sql).toContain('WHERE "TenantID" = v_id_TenantID AND "OrderNo" = v_id_OrderNo;');
+            expect(sql).not.toMatch(/\bv_id\b/);
+        });
+
+        it('keeps the historical single-key v_id shape for a single-column key', () => {
+            const entity = createMockEntity(
+                { BaseTable: 'WideEntity', BaseTableCodeName: 'WideEntity', BaseView: 'vwWideEntities' },
+                wideFields([pkField('ID', 'uniqueidentifier', { AllowUpdateAPI: true, DefaultValue: 'newsequentialid()' })])
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('JSON-arg shape');
+            expect(sql).toMatch(/^\s+v_id UUID;$/m);
+            expect(sql).toContain(`v_col_list := quote_ident('ID');`);
+            expect(sql).toContain(`v_val_list := quote_literal(v_id) || '::UUID';`);
+            expect(sql).toContain('WHERE "ID" = v_id;');
+        });
+    });
+
+    describe('generateCRUDCreate (typed-arg shape) with an identity column inside a composite key', () => {
+        it('inserts the caller-supplied key columns and looks the row up by every key column', () => {
+            const entity = createMockEntity(tenantOrders, [
+                pkField('TenantID', 'uniqueidentifier'),
+                pkField('OrderNo', 'int', { AutoIncrement: true }),
+                dataField('Status', true),
+            ]);
+            const sql = provider.generateCRUDCreate(entity);
+            // v_new_id is typed for the generated column, which is NOT the first key column
+            expect(sql).toMatch(/v_new_id (INTEGER|INT|BIGINT|SERIAL);/i);
+            expect(sql).toContain('RETURNING "OrderNo" INTO v_new_id');
+            expect(sql).toContain('WHERE "OrderNo" = v_new_id AND "TenantID" = p_tenantid');
+            const colList = sql.match(/INSERT INTO[\s\S]*?\(([\s\S]*?)\)\s*VALUES/i)![1];
+            expect((colList.match(/"TenantID"/g) || []).length).toBe(1);
+            expect(colList).not.toContain('"OrderNo"');
+            const valList = sql.match(/VALUES\s*\(([\s\S]*?)\)\s*RETURNING/i)![1];
+            expect(valList).toContain('p_tenantid');
+        });
+    });
+
+    describe('generateSingleCascadeOperation on a composite-key parent', () => {
+        const parent = createMockEntity(tenantOrders, [pkField('TenantID', 'uniqueidentifier'), pkField('OrderNo', 'int'), dataField('Status', true)]);
+        const related = createMockEntity({ ID: 'entity-lines', Name: 'Order Lines', BaseTable: 'OrderLine', BaseTableCodeName: 'OrderLine', BaseView: 'vwOrderLines' });
+
+        it('binds the FK to the parent key column it references — not the first key column', () => {
+            const fk = new EntityFieldInfo({ Name: 'OrderNo', CodeName: 'OrderNo', AllowsNull: false, RelatedEntityID: 'parent-composite', RelatedEntityFieldName: 'OrderNo', Type: 'int', Length: 4 });
+            const sql = provider.generateSingleCascadeOperation({ parentEntity: parent, relatedEntity: related, fkField: fk, operation: 'delete' });
+            expect(sql).toContain('FOR v_rec IN');
+            expect(sql).toContain('WHERE "OrderNo" = p_orderno');
+            expect(sql).not.toContain('p_tenantid');
+        });
+
+        it('emits a warning instead of guessing when the FK does not resolve to a parent key column', () => {
+            const unresolved = new EntityFieldInfo({ Name: 'OrderRef', CodeName: 'OrderRef', AllowsNull: true, RelatedEntityID: 'parent-composite', Type: 'int', Length: 4 });
+            const sql = provider.generateSingleCascadeOperation({ parentEntity: parent, relatedEntity: related, fkField: unresolved, operation: 'update' });
+            expect(sql).toContain('-- WARNING: Cannot cascade to Order Lines.OrderRef');
+            expect(sql).not.toContain('FOR v_rec IN');
+            expect(sql).not.toContain('p_tenantid');
+        });
+
+        it('still binds the sole key column on a single-key parent (RelatedEntityFieldName not required)', () => {
+            const singleParent = createMockEntity();
+            const fk = new EntityFieldInfo({ Name: 'ParentID', CodeName: 'ParentID', AllowsNull: false, RelatedEntityID: 'entity-1', Type: 'uniqueidentifier', Length: 16 });
+            const sql = provider.generateSingleCascadeOperation({ parentEntity: singleParent, relatedEntity: related, fkField: fk, operation: 'delete' });
+            expect(sql).toContain('WHERE "ParentID" = p_id');
         });
     });
 });

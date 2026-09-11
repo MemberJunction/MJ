@@ -1,5 +1,362 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 319a7ed: CodeGen: the SQL log is replayable again when default constraints are rewritten (#4187).
+
+  The drop-default-constraint block CodeGen runs when a `__mj_CreatedAt` / `__mj_UpdatedAt` default does not match `GETUTCDATE()` opens with `DECLARE @constraintName`. CodeGen executes each block as its own query, so nothing fails at CodeGen time — but the SQL log writes the blocks back to back with no `GO`, and a migration built from that log (the documented `cat CodeGen_Run_*.sql >>` step) fails on a clean database with "The variable name '@constraintName' has already been declared". Reported against v6.1.0-edge.4 and edge.5, where `IdentityClaim` and `IdentityClaimType` ship `SYSUTCDATETIME()` defaults and trip the rewrite on every run.
+  - `dropExistingDefaultConstraint` now emits the provider's batch separator after the block, matching the add-column path.
+  - `SQLLogging.appendToSQLLogFile` forces a separator after any logged unit that declares a batch-scoped T-SQL variable (`DECLARE @…` at the start of a line, outside a routine body), so a caller that forgets the separator does not reintroduce the bug. An empty separator (PostgreSQL) no longer produces a stray blank line, and the four materialization emitters now pass the provider's separator instead of a hard-coded `GO`, so a PostgreSQL capture with a materialization no longer contains `GO` lines.
+  - New migration `V202609071727__v6.1.x__IdentityClaim_UTC_Default_Normalization.sql` rewrites the four `IdentityClaim` / `IdentityClaimType` defaults to `GETUTCDATE()` so CodeGen stops churning them. Idempotent on databases where CodeGen already did so.
+
+- 197fdf8: Achieve 100% CodeGen idempotency relative to database state and eliminate metadata churn across SQL Server and PostgreSQL:
+  - **Idempotency (No-Change Runs)**: Running CodeGen against an unchanged schema produces zero diffs and zero surviving migration artifacts. The run report confirms `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`. Empty capture files are cleaned up automatically.
+  - **Minimal Blast Radius (Single-Column Changes)**: Adding a column to an entity modifies only that entity's artifacts (`__mj.ts`, specific entity zod/schema files, `generated.ts` type block, and `mjentity.form.component.*`). Sibling fields and other entities are strictly untouched.
+  - **Decision Metadata Persistence**: Categorization, display name, and form layout decisions are persisted to `metadata/entities/decisions/` and committed to version control, ensuring clean-room runs match warm runs.
+  - **Stable Form Submodule Partitioning**: Replaced array index-chunking in Angular form submodule generation with stable hash buckets of entity names, preventing unrelated form files from shifting when an entity is added or removed.
+  - **Deterministic Ordering**: Unified entity, field, and relationship sorting around `OrdinalCompare` across TypeScript and SQL, eliminating locale and database collation discrepancies.
+  - **MetadataSync Preservation**: Preserved runtime and CodeGen-managed fields during push synchronization while maintaining deterministic lookup index caching.
+  - **Description Lock Protection**: Corrected inverted `AutoUpdateDescription` logic in `MJEntityFieldEntityExtended` and `MJEntityEntityExtended` so that user edits to `Description` flip `AutoUpdateDescription` to `false`, preventing subsequent CodeGen runs from overwriting customized descriptions.
+
+### Patch Changes
+
+- 2f305df: CodeGen: every `EntityField` insert carries an apply-time `Sequence`, and the CI gate catches any literal (#4202).
+
+  #4048 (v6.1.0-edge.4) changed `getPendingEntityFieldINSERTSQL` to write the catalog ordinal as a literal, preceded by a `+100000` "park" `UPDATE` of the entity's existing rows. That is safe within one CodeGen run, where `spUpdateExistingEntityFieldsFromSchema` renumbers everything moments later, but not across two migrations replayed on a fresh database: Flyway runs every versioned migration before the repeatable renumber, so the second migration's park has nothing reliable to move and its INSERT collides on `UQ_EntityField_EntityID_Sequence`. The failure then reports itself as an unrelated FK error against `EntityFieldValue`. Two further emitters (virtual-entity fields and IS-A parent fields) resolved their `Sequence` at run time and wrote it as a literal too.
+  - All three emitters use one helper, `applyTimeEntityFieldSequenceSQL`: `(SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [EntityField] WHERE [EntityID] = '…')`. Unique on any database in any order; the renumber makes the value disposable. The park and the run-time `nextAvailableEntityFieldSequence` lookup are gone. `IncludeFirstNFieldsAsDefaultInView` is honored by schema ordinal again (it compared against the placeholder and could never match).
+  - `.github/scripts/check-migration-entityfield-sequence.mjs` is a positional parser: it finds the `Sequence` column in the INSERT's column list and flags any bare integer in that position of every `VALUES` tuple, either quoting dialect, comments and string literals masked. It reports only lines a PR adds to Flyway versioned migrations (baselines and `tests/` fixtures are out of scope) and works from any directory, on the working tree and untracked files locally. The previous detector matched only the six-digit `100000` band and was never wired into CI; the "Check migrations" workflow now runs its self-test on every PR and the scan, blocking, on PRs that touch `migrations/`.
+
+- 62e0707: CodeGen no longer deletes committed `Validate()` overrides when it runs without AI.
+
+  `ManageMetadataBase.generatedValidators` — the list `GenerateValidateFunction` reads to emit each entity's `Validate()` override — was populated in only one of `runCodeGen`'s two branches. On the skip-database path `loadGeneratedCode` read the persisted `GeneratedCode` records; on the database-generation path the sole source was `runValidationGeneration`, which requires AI. File generation runs on both paths, so a full `mj codegen --no-ai` emitted the entity subclasses as though no validators existed and removed every committed override — not "declined to add new ones", deleted the existing ones.
+
+  That is how v6.1.0-edge.5's 56 overrides disappeared in `197fdf8376`, a full regeneration whose commit message and changeset mention validation nowhere. The `codegen-drift` CI gate then held the loss in place, because it runs `codegen --no-ai` and requires the committed artifacts to match that output.
+
+  Persisted validators are now loaded on every path, before file generation. Safe on the AI path too: `GenerateValidateFunction` already deduplicates by `functionName` over a deterministic sort, so a validator both freshly generated and read back from `GeneratedCode` yields one emission rather than two.
+
+- 6673f51: Scope createNewEntityFieldsFromSchema to excludeSchemas (the compiled includeSchemas allow-list) so an Open App CodeGen run does not INSERT EntityField rows for sibling schemas.
+- d1d74c2: Open App CodeGen writes `CodeGen_Run_*.sql` (EntityField INSERTs) to the app's `migrations/codegen` when cwd has `mj-app.json`. Running from the MJ repo with `includeSchemas` set to an app schema fails instead of dumping metadata SQL into `MJ/migrations/v*`. If SQLOutput is enabled but no log file is open, metadata SQL is not applied. `--sql-output-dir` overrides the folder.
+- 0312b22: CodeGen: reading persisted validators is a database read, not an AI call — stop gating it on the AI feature flag.
+
+  `mj codegen --no-ai` emitted every entity subclass as though it had no `Validate()` override, silently
+  DELETING the ones already committed. `loadGeneratedCode` reached
+  `manageEntityFieldValuesAndValidatorFunctions`, but both call sites that queue a validator sat behind
+  `ag.featureEnabled('ParseCheckConstraints')` — and `--no-ai` sets `enableAdvancedGeneration = false`, so
+  that predicate is false. The method still returned `true` and the spinner still reported success, having
+  loaded nothing.
+
+  The read never needed AI: it is called with `generateNewCode = false`, and
+  `generateValidatorFunctionFromCheckConstraint` only reaches an LLM when that flag is true. The load pass
+  is now unconditional; generation stays gated exactly as before.
+
+  This is the second half of the `v6.1.0-edge.5` regression. The first half (loading only on the `--skipdb`
+  branch) was fixed separately; with the load reachable but inert under `--no-ai`, a full run still dropped
+  all 56 overrides — and the `codegen-drift` gate, which runs `--no-ai`, required that lossy output, so
+  restoring the validators failed CI while deleting them passed.
+
+  Also: the success line now reports how many validators were loaded, so a zero-load run is visible in CI
+  output rather than indistinguishable from a healthy one.
+
+- ddf8621: Flip `omitRecurringScriptsFromLog` Zod default to `true`, aligning the schema default with the fallback config. When omitted, `SQLOutput` now safely suppresses recurring reconciler statements (`spDeleteUnneededEntityFields`, `spUpdateExistingEntityFieldsFromSchema`, etc.) from emitted migration scripts so they remain live-CodeGen-only operations and do not prune valid fields on historical migration replays. Added a blocking CI gate (`check-migration-no-prune.mjs`) rejecting versioned migrations containing `spDeleteUnneededEntityFields`.
+- 2d14c62: Add Image, Color, and JSON to EntityField.ExtendedType. Forms render an image thumbnail (including inline base64 / data URIs) with an edit-mode upload capped at the field's MaxLength, a color swatch + hex editor, and a pretty-printed JSON textarea. Entity-viewer grid/cards/timeline key image cells off ExtendedType rather than field-name heuristics. PhotoURL, LogoURL, and ImageURL are reclassified to Image with AutoUpdateExtendedType locked so CodeGen cannot overwrite them.
+- 8d880cc: Split geo **read** (`SupportsGeoCoding`, maps, distance, virtual PrimaryAddress / `__mj_Latitude_{FK}`) from geo **write** (GeoCodeSyncService only when 1+ writable Geo\* fields exist; skip provider when native lat/lng already set). mj-sync `push.skipGeoCoding` per entity. Parallel push default 10 uses `CreateIndependentInstance()` (shared pool, own TX) instead of defaulting to 1. Durable AfterCreate without a queue submitter defers until transaction depth is 0 (fire-and-forget), not nested in the save.
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [f6a4341]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [806e7f2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [cdd25c0]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [ac96bb6]
+- Updated dependencies [d0eab88]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/actions@6.1.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.6
+  - @memberjunction/sql-parser@6.1.0-edge.6
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+  - @memberjunction/core-entities-server@6.1.0-edge.6
+  - @memberjunction/ai-prompts@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/external-data-sources@6.1.0-edge.6
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.6
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.6
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.6
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.6
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.6
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.6
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.6
+  - @memberjunction/query-processor@6.1.0-edge.6
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.6
+  - @memberjunction/cli-core@6.1.0-edge.6
+  - @memberjunction/config@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- d735407: Class-registration manifests are emitted in chunks, so the array stops being one union away from not compiling.
+
+  `mj codegen manifest` wrote every discovered `@RegisterClass` class into a single array literal. TypeScript computes the best common type of an array literal's elements **even when the declaration is annotated `any[]`**, so that literal produces a union with one member per distinct constructor. Past roughly a thousand members the checker refuses to represent it and the file fails with `TS2590: Expression produces a union type that is too complex to represent`, reported at the `[` with nothing else wrong.
+
+  It is a cliff, not a slope. The manifest compiles fine until the day one package registers one more class, and then every consumer of the bootstrap package stops building at once — with an error that points at generated code and names nothing that changed. `@memberjunction/server-bootstrap` was at 1,009 registrations; five new classes in one branch was enough to cross it.
+
+  The emitter now writes `CLASS_REGISTRATIONS_0…N` at 200 entries each and exports their concatenation, so each inferred union is bounded by the chunk size no matter how large the dependency tree grows. Consumers are unaffected: `CLASS_REGISTRATIONS` is the same `any[]` with the same contents in the same order, and every class reference is still a static code path the bundler cannot tree-shake. Verified against a 1,300-class reproduction: the flat literal fails with TS2590, the chunked form compiles.
+
+- 9fe3019: Keep disambiguating a colliding entity name until it is actually free
+
+  Entity names are generated from the table name with trailing discriminators stripped, so
+  distinct tables routinely generate the same name. When that happened, CodeGen appended the
+  schema name once and assumed the result was unique — but it is not, and nothing re-checked it.
+
+  With a NetSuite catalog, `customlist72`, `customlist74`, `customlist160`, `customlist436`,
+  `customlist534` and `customlist873` all generate "Custom Lists". The first took the plain name,
+  the second took `Custom Lists__netsuite`, and every one after that produced the identical
+  `Custom Lists__netsuite` — a duplicate-key failure on `UQ_Entity_Name`, so those entities were
+  never created. CodeGen carried on and emitted only a repeated identical INSERT error, leaving
+  the install short several entities with no indication of which or why.
+
+  The disambiguation now continues past the schema suffix with a counter until the name is free,
+  bounded so a schema where everything collapses to one name still fails loudly rather than
+  hanging. Name comparison is also now case-insensitive on both sides, matching the collation
+  `UQ_Entity_Name` is enforced under — the in-run check used an exact `===` while the metadata
+  check beside it lowercased, so names differing only in case read as free and then collided on
+  insert.
+
+  The logic is extracted as `ManageMetadataBase.resolveUniqueEntityName` and unit-tested.
+
+- 047a80f: Escape single quotes in generated entity descriptions before interpolating them into SQL. The AI-generated description is free text and routinely contains apostrophes; one unescaped quote aborted the entire CodeGen run with "Unclosed quotation mark" at the end of an otherwise-complete pass. The entity-name literals in the same function are escaped as well. '' doubling is correct on both supported dialects.
+- 887ba9c: Catch entity fields the base view cannot produce
+
+  `validateEntityFieldsResolve()` cross-checks every entity's declared fields against the columns its base view actually produces. It is the read-side counterpart to `validateExpectedCRUDFunctions`: that one asks whether the runtime can write an entity, this asks the prior question of whether it can read it at all. Deliberately not filtered by `excludeSchemas`, because excluded schemas are exactly where nothing else is watching and where the drift is permanent. Reported but non-fatal by default; `MJ_CODEGEN_STRICT_FIELD_RESOLUTION=true` makes it a hard gate.
+
+  The condition it catches has been live on PostgreSQL: the PG port of the v5.45 External Data Sources migration registered `EntityField` rows for `ExternalDataSourceID` and `ExternalObjectName` without rebuilding `__mj.vwEntities`, so the metadata promised two columns the view could not produce and every read of `MJ: Entities` failed — rendered by a grid as "no data" rather than as an error, which is why an install could sit like that for months. That specific drift is repaired by `V202608202230__v6.1.x__PG_CodeGen_Regen.pg-only.sql`, which rebuilds the four affected core views. What was missing was anything that _notices_; this is that.
+
+- The EntityField sequence park is idempotent across CodeGen passes.
+
+  `parkEntityFieldSequencesSQL` lifts an entity's existing `EntityField.Sequence` values into a `+100000` band so a following INSERT can use the real BaseView column ordinal without colliding on `UQ_EntityField_EntityID_Sequence`. It was guarded by `Sequence < 100000`, which does not make it safe to emit twice.
+
+  After the first park, the only rows left below the band are precisely the ones that pass just INSERTED at their catalog ordinals. A second park therefore lifts _those_ into the band — landing on the row the first park moved from the same ordinal — and the migration dies with a duplicate key at `100000 + ordinal`.
+
+  Any entity that gains fields in **both** CodeGen passes reaches that state: the real columns in pass 1, and in pass 2 the denormalized name column that a new foreign key introduces. `AIPromptRun` does exactly that, and a from-scratch `mj migrate` caught it.
+
+  The park now runs only when nothing on the entity is parked yet, so a second emission is a no-op. A regression test pins the guard, because the previous condition looked correct in isolation and only failed on the second pass.
+
+- b42c125: Two silent failures made loud: the manifest generator's unbuilt-package fallback, and UR13's race with the live routine dispatcher.
+
+  **The manifest generator no longer guesses when a lazy package hasn't been built.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the `.d.ts` each `exports` entry's `types` field names, and skips any it cannot find. On an unbuilt workspace it finds none, returns an empty map, and the package falls through to the whole-package branch of `groupClassesIntoChunks()` — which replaces its per-subpath lazy chunks with one eager chunk. The result is valid TypeScript that compiles and passes review with its code splitting quietly removed. Running `mj codegen manifest` against an unbuilt tree collapsed `ng-dashboards`' twelve per-dashboard chunks into a single import and deleted 254 lines from `lazy-feature-config.ts` without a single warning.
+
+  `resolveLazySubpathExports()` now throws instead, naming the package and the directory it searched.
+
+  The guard is deliberately narrow, because "declares subpaths that didn't resolve" is a much weaker signal than it first appears — two innocent cases produce it:
+  - Every ng-packagr output publishes `"./package.json": { "default": "./package.json" }`, an entry with no `types` field that resolution skips by design. Only entries carrying `types` are counted.
+  - A subpath whose `.d.ts` declares no classes is skipped exactly like a missing one. `BootstrapLite`'s `./mj-class-registrations` is a real example — a generated manifest of const arrays, built and present, with nothing to reach.
+
+  So the check fires only for a package that actually **contributes lazy classes**, since that is the only case where an empty map mis-groups anything. A package contributing no classes has nothing to lose to the fallback.
+
+  **UR13 no longer races the product it is testing.** The check asserted an exact global run-row count for a routine that the shipped `User Routine Dispatcher` scheduled job — `Status=Active`, per-minute cron — is equally entitled to claim. `ConcurrencyMode=Skip` cannot prevent the overlap: it serialises _scheduled_ runs against each other, while the check constructs a driver in-process against a fabricated `MJScheduledJobEntity` that is never saved, so the engine cannot see it. The scheduler polls on a timer anchored to MJAPI's boot rather than to the wall clock, so whether a sweep lands inside the bundle's ~3-second window varies run to run — which is why this failed on `next` after a slow boot with no relevant code change.
+
+  It now snapshots the run rows before the pass and asserts on the delta, which is strictly stronger than what it replaced:
+  - `Details.RoutinesRun === 1` states the no-double-run property directly against _our_ sweep, where it is deterministic, rather than inferring it from a row count anyone may write to.
+  - Every new run row must satisfy the OnChange contract, not just the one at index 1 — all of them replay the same expression, so the property has to hold for each regardless of which dispatcher produced it.
+
+  `UR11` and `UR14` share the same exposure and are left alone here; they are not currently failing, and the durable fix for them is a fixture-level decision (pausing the live dispatcher for the bundle) that belongs to the suite's owner.
+
+- 5fc861f: CodeGen treats schema as the incremental unit at 2,000+ entities: per-schema emit with write-if-changed and dirty-schema regen, `'schema.table'` exclude strings, schema-parallel file generation, incremental `tsc` on core-entities and server, hydrate-by-schema catalog projections, and `schemaOutput` routing so brownfield/demo schemas do not land in published packages. BigSchemaDemo is the droppable test bed.
+- Updated dependencies [574008d]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [afd6fd6]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [22ec804]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [1940a4d]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [23c2521]
+- Updated dependencies [4eb87c5]
+- Updated dependencies [8b78695]
+- Updated dependencies [5fc861f]
+- Updated dependencies [d7feeae]
+- Updated dependencies [905820a]
+  - @memberjunction/cli-core@6.1.0-edge.5
+  - @memberjunction/ai@6.1.0-edge.5
+  - @memberjunction/aiengine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/global@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/sql-dialect@6.1.0-edge.5
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.5
+  - @memberjunction/generic-database-provider@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/external-data-sources@6.1.0-edge.5
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.5
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.5
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.5
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.5
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.5
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.5
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.5
+  - @memberjunction/query-processor@6.1.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.5
+  - @memberjunction/sql-parser@6.1.0-edge.5
+  - @memberjunction/config@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- bae672c: CodeGen now emits a composite index over an entity's **soft** primary key, closing a gap where nothing in the stack ever indexed one.
+
+  A soft PK exists only in metadata — `IsPrimaryKey` and `IsSoftPrimaryKey` both set, with no `PRIMARY KEY` constraint and no unique index on the table. Integration tables are built that way deliberately, because their keys are _inferred_ and a constraint would reject valid rows whenever an inference is wrong.
+
+  The cost of that choice landed on MJ's own write path. A create calls `InnerLoad` on the key to check for an existing row; a genuinely new record matches nothing; and a not-found lookup cannot short-circuit, so it scans the entire heap before concluding the row is absent. Every create scans the whole table, the table grows, and the scan grows with it — so a sync decays as it runs. Measured live at 345 → 574 → 864 ms per record across consecutive batches of one connector, with nothing saturated (DB CPU 57%, log write 13%, sessions 0, app CPU 5.7%, memory flat).
+
+  Three mechanisms each declined to cover it: the integration DDL generator emits no index on the key columns; `generateForeignKeyIndexes` skips primary keys on the reasoning that "a primary key is already covered by its own index" (true for a real PK, false by definition for a soft one); and the missing-index probe reads `sys.foreign_keys`, which these tables have none of.
+  - One **non-unique composite** index in ordinal order, since the lookup is an equality match on the whole key and uniqueness is exactly what the soft-PK design refuses to assert.
+  - Idempotent (`IF NOT EXISTS` / `sys.indexes` check), so it **backfills existing tables** on the next codegen pass rather than only covering newly created ones.
+  - A key column the dialect cannot index (an unbounded string — `Length: -1`) produces an explanatory comment in the generated file naming the offending column, never a silently absent index.
+  - New `auto_index_soft_primary_keys` setting, defaulting to `true`. Deliberately separate from `auto_index_foreign_keys`: an opinion about indexing foreign keys for joins and filters is not an opinion about the engine's own per-record existence check.
+
+  No effect on entities with a real primary key, which is nearly all of them.
+
+### Patch Changes
+
+- f5e91a7: A new schema gets its Application on PostgreSQL
+
+  `createNewApplication` named the `Application` columns unquoted, and `conditionalInsert` wraps that statement in PG's `DO $$ ... $$` block — which the identifier auto-quoter skips wholesale, since it cannot know whether a dollar-quoted block holds SQL or literal text. `ID` therefore reached PostgreSQL folded to `id`, and the INSERT failed on every run. It failed silently: the method catches, logs and returns null, and its caller logs and carries on, so CodeGen finished green while the schema got no Application and every one of its entities rendered in the UI's "System & Other" bucket. SQL Server resolves the unquoted identifiers case-insensitively, which is why this survived unnoticed since before 5.49.
+
+  The columns are now quoted through `qi()`, matching the sibling `ApplicationRole` insert a few lines below. `conditionalInsertSQL` now documents the pre-quoting contract that makes it the one exception to this file's usual "write identifiers bare, the auto-quoter handles it" convention.
+
+- 647bd71: Enable layered base views on PostgreSQL. CodeGen writes the inner view and restars the application-owned outer wrapper so `g.*` re-expands after inner regeneration (no more throw). New pg-only migration ships `spRebindLayeredOuterView` plus core MJ inner/outer views. Open App `mj migrate` rebinds layered outers in the app schema before field heal.
+- f4fedab: `mj codegen manifest`: recognize `@RegisterClassEx` alongside `@RegisterClass`. Both AST scan paths (TypeScript source and compiled `__decorate` output) matched the decorator identifier literally, so every options-bag registration was silently absent from the generated manifest — and from the coverage audit built on the same scan, which therefore could not report the gap either (#3944). Both paths now test set membership and share one key extractor handling either argument shape (positional string literal, or the options bag's `key`). `EntityNameScanner.classifyParentContext` gets the same treatment, plus a case for the options bag's `key` property, scoped to a register decorator's own options object. Regenerating MJ's manifests adds 25 previously invisible `BaseFormPanel` contributions from `@memberjunction/ng-core-entity-forms` and removes none.
+- d90a3ea: After each Open App migrate (`mj migrate --schema` and `mj app install`), run the core metadata-heal steps (SQL Server: R\_\_RefreshMetadata members with dependency-ordered view refresh; PostgreSQL: AllowsNull, orphan prune, catalog Sequence). CodeGen inserts new EntityFields at the live BaseView ordinal after parking existing sequences, then `spUpdateExistingEntityFieldsFromSchema` rewrites the entity — Pass 2 after views are current.
+- 53c341c: Add optional `@IncludedSchemaNames` to CodeGen metadata-heal stored procedures so Open App migrations can positively scope heals without photographing sibling apps. Cascade-delete SQL is intra-schema only unless `allowCrossSchemaCascadeDeletes` is set. Custom-view `sp_refreshview` in the migration log honors `excludeSchemas` and, when set, `includeSchemas`.
+- 6b971ab: Stop generating and applying GRANT files for excludeSchemas entities. Open App CodeGen was failing with "Cannot find the object 'vw…'" on sibling-schema permission files, and the entity-field sequence integrity check was querying those same out-of-scope base views.
+- a1a8989: Add `entityImportPackages` so CodeGen imports peer entity classes (embeds and related-record collections) from the npm package that owns them, instead of self-importing string `entityPackageName`. Unmapped foreign schemas fail the run.
+- Updated dependencies [e533ce5]
+- Updated dependencies [4586215]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [de6eb14]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [647bd71]
+- Updated dependencies [6cbed1d]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d078c54]
+  - @memberjunction/ai@6.1.0-edge.4
+  - @memberjunction/aiengine@6.1.0-edge.4
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/global@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.4
+  - @memberjunction/sql-dialect@6.1.0-edge.4
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/generic-database-provider@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/external-data-sources@6.1.0-edge.4
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.4
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.4
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.4
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.4
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.4
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.4
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.4
+  - @memberjunction/query-processor@6.1.0-edge.4
+  - @memberjunction/cli-core@6.1.0-edge.4
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.4
+  - @memberjunction/sql-parser@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+  - @memberjunction/config@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Minor Changes

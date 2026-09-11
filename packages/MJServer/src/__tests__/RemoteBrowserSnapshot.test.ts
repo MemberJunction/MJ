@@ -43,10 +43,19 @@ const liveSession: FakeLiveSession = {
 // The snapshot path is a pure READ: it looks up an existing session via GetSessionForAgentSession and never
 // lazily starts one. `undefined` models "no live browser for this agent session".
 const getSessionMock = vi.fn<[], FakeLiveSession | undefined>(() => liveSession);
+// When a capture throws, the resolver hands the fault to the engine before degrading (#3598) — the engine,
+// not the caller, decides whether the error means "the browser is gone". Mirrors the real signature
+// `(agentSessionID, error, opts?) => Promise<IRemoteBrowserSession | null>`; `null` is the documented
+// outcome for an error that is not a dead handle, a surface with nothing mapped, a spent recovery budget,
+// or a relaunch that itself failed. Defaulting to `null` therefore models "no recovery happened", which is
+// what keeps the pre-existing degrade-to-{} contract under test; a test that wants the healing path scripts
+// a replacement session onto this mock.
+const recoverDeadSessionMock = vi.fn<[], Promise<FakeLiveSession | null>>(async () => null);
 vi.mock('@memberjunction/remote-browser-server', () => ({
   RemoteBrowserEngine: {
     Instance: {
       GetSessionForAgentSession: (...args: unknown[]) => getSessionMock(...(args as [])),
+      RecoverDeadAgentSession: (...args: unknown[]) => recoverDeadSessionMock(...(args as [])),
     },
   },
 }));
@@ -86,6 +95,7 @@ describe('RemoteBrowserActionResolver — snapshot (best-effort perception poll)
     liveSession.CaptureScreenshot.mockReset().mockResolvedValue('QUJD');
     liveSession.GetCurrentUrl.mockReset().mockReturnValue('https://www.wikipedia.org/');
     getSessionMock.mockReset().mockReturnValue(liveSession);
+    recoverDeadSessionMock.mockReset().mockResolvedValue(null);
   });
 
   it('returns the screenshot + URL when the browser is live', async () => {
@@ -104,7 +114,9 @@ describe('RemoteBrowserActionResolver — snapshot (best-effort perception poll)
   // The regression the fix targets: a session handle survives in the live map but its underlying browser
   // adapter has been torn down, so CaptureScreenshot throws "Browser not launched". The ~700ms client poll
   // must NOT surface that as a recurring GraphQL error — the query's documented contract is empty fields,
-  // not an error. So the resolver catches and degrades to {} (the surface keeps its last good frame).
+  // not an error. So the resolver catches, reports the fault to the engine (#3598 — the engine decides
+  // whether it means "gone"), and degrades to {} when no replacement comes back (the surface keeps its
+  // last good frame).
   it('degrades to an empty snapshot — does NOT throw — when the adapter is torn down', async () => {
     liveSession.CaptureScreenshot.mockRejectedValueOnce(
       new Error('Browser not launched. Call Launch() before using the adapter.'),
@@ -112,6 +124,9 @@ describe('RemoteBrowserActionResolver — snapshot (best-effort perception poll)
     const result = await resolver.RemoteBrowserSnapshot('sess-1', ctx);
     expect(result).toEqual({});
     expect(liveSession.CaptureScreenshot).toHaveBeenCalledTimes(1);
+    // Pin the handoff itself: degrading is only correct AFTER the engine has declined to heal. Without
+    // this the test would still pass if the resolver silently stopped reporting the fault at all.
+    expect(recoverDeadSessionMock).toHaveBeenCalledTimes(1);
   });
 
   it('does not read the URL when the capture fails (no half-populated snapshot)', async () => {

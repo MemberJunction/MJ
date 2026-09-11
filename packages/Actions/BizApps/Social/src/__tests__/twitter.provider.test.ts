@@ -6,38 +6,43 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * Boundary mocking strategy (mirrors the LMS per-action pattern):
  * - `@memberjunction/actions` BaseOAuthAction is mocked so `initializeOAuth`
  *   succeeds by default (individual tests spy on it to force failure).
- * - `axios` is mocked at module level; `axios.create` returns a shared mock
+ * - `@memberjunction/network-utils` is mocked at module level; `new HttpClient()` returns a shared mock
  *   instance whose get/post/delete calls capture the exact endpoint + payload
  *   each action sends.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => {
@@ -131,10 +136,10 @@ function outParam(result: ActionResultSimple, name: string): unknown {
 const twitterUser = { id: 'tw-user-1', username: 'mjtester', name: 'MJ Tester', created_at: '2020-01-01T00:00:00Z' };
 
 function mockGetByUrl(routes: Record<string, unknown>): void {
-  http.instance.get.mockImplementation((url: string) => {
+  http.instance.Get.mockImplementation((url: string) => {
     for (const [prefix, data] of Object.entries(routes)) {
       if (url.startsWith(prefix)) {
-        return Promise.resolve({ data, headers: {} });
+        return Promise.resolve({ Data: data, Headers: {} });
       }
     }
     return Promise.reject(new Error(`Unmocked GET ${url}`));
@@ -142,14 +147,14 @@ function mockGetByUrl(routes: Record<string, unknown>): void {
 }
 
 beforeEach(() => {
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
-  http.instance.put.mockReset();
-  http.instance.delete.mockReset();
-  http.instance.request.mockReset();
-  http.axiosDefault.get.mockReset();
-  http.axiosDefault.post.mockReset();
-  http.axiosDefault.put.mockReset();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
+  http.instance.Put.mockReset();
+  http.instance.Delete.mockReset();
+  http.instance.Request.mockReset();
+  http.standalone.HttpGet.mockReset();
+  http.standalone.HttpPost.mockReset();
+  http.standalone.HttpPut.mockReset();
 });
 
 // ─── TwitterCreateTweetAction ───────────────────────────────────────────────
@@ -217,9 +222,9 @@ describe('TwitterCreateTweetAction', () => {
   });
 
   it('should POST /tweets with the exact payload and map outputs on happy path', async () => {
-    http.instance.post.mockResolvedValue({
-      data: { data: { id: 'tweet-9', text: 'Hello world', created_at: '2024-06-15T10:00:00Z' } },
-      headers: {},
+    http.instance.Post.mockResolvedValue({
+      Data: { data: { id: 'tweet-9', text: 'Hello world', created_at: '2024-06-15T10:00:00Z' } },
+      Headers: {},
     });
     mockGetByUrl({ '/users/me': { data: twitterUser } });
 
@@ -231,7 +236,7 @@ describe('TwitterCreateTweetAction', () => {
       ),
     );
 
-    expect(http.instance.post).toHaveBeenCalledWith('/tweets', {
+    expect(http.instance.Post).toHaveBeenCalledWith('/tweets', {
       text: 'Hello world',
       reply: { in_reply_to_tweet_id: 'orig-1' },
       quote_tweet_id: 'quote-1',
@@ -291,11 +296,11 @@ describe('TwitterCreateThreadAction', () => {
 
   it('should chain tweets via reply.in_reply_to_tweet_id and report the thread URL', async () => {
     let counter = 0;
-    http.instance.post.mockImplementation(() => {
+    http.instance.Post.mockImplementation(() => {
       counter += 1;
       return Promise.resolve({
-        data: { data: { id: `t-${counter}`, text: `tweet ${counter}`, created_at: '2024-06-15T10:00:00Z' } },
-        headers: {},
+        Data: { data: { id: `t-${counter}`, text: `tweet ${counter}`, created_at: '2024-06-15T10:00:00Z' } },
+        Headers: {},
       });
     });
     mockGetByUrl({ '/users/me': { data: twitterUser } });
@@ -308,8 +313,8 @@ describe('TwitterCreateThreadAction', () => {
       ),
     );
 
-    expect(http.instance.post).toHaveBeenNthCalledWith(1, '/tweets', { text: 'first' });
-    expect(http.instance.post).toHaveBeenNthCalledWith(2, '/tweets', {
+    expect(http.instance.Post).toHaveBeenNthCalledWith(1, '/tweets', { text: 'first' });
+    expect(http.instance.Post).toHaveBeenNthCalledWith(2, '/tweets', {
       text: 'second',
       reply: { in_reply_to_tweet_id: 't-1' },
     });
@@ -351,14 +356,14 @@ describe('TwitterDeleteTweetAction', () => {
       },
       '/users/me': { data: twitterUser },
     });
-    http.instance.delete.mockResolvedValue({ data: {}, headers: {} });
+    http.instance.Delete.mockResolvedValue({ Data: {}, Headers: {}, Status: 200 });
 
     const result = await run(
       action,
       inputs({ CompanyIntegrationID: 'ci-1', TweetID: 't-9', ConfirmDeletion: true }, ['DeletedTweetDetails', 'DeletionTime']),
     );
 
-    expect(http.instance.delete).toHaveBeenCalledWith('/tweets/t-9');
+    expect(http.instance.Delete).toHaveBeenCalledWith('/tweets/t-9');
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully deleted tweet (ID: t-9)');
@@ -375,7 +380,7 @@ describe('TwitterDeleteTweetAction', () => {
       },
       '/users/me': { data: twitterUser },
     });
-    http.instance.delete.mockResolvedValue({ data: {}, headers: {} });
+    http.instance.Delete.mockResolvedValue({ Data: {}, Headers: {}, Status: 200 });
 
     // NOTE (current behavior): the ownership check throws inside the inner
     // try/catch that also guards detail retrieval, so the error is swallowed
@@ -383,7 +388,7 @@ describe('TwitterDeleteTweetAction', () => {
     // still succeeds — the ownership guard is dead code as written.
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1', TweetID: 't-9', ConfirmDeletion: true }));
     expect(result.Success).toBe(true);
-    expect(http.instance.delete).toHaveBeenCalledWith('/tweets/t-9');
+    expect(http.instance.Delete).toHaveBeenCalledWith('/tweets/t-9');
   });
 });
 
@@ -404,8 +409,8 @@ describe('TwitterGetAnalyticsAction', () => {
   });
 
   it('should GET /tweets with comma-joined ids for tweet analytics', async () => {
-    http.instance.get.mockResolvedValue({
-      data: {
+    http.instance.Get.mockResolvedValue({
+      Data: {
         data: [
           {
             id: 't-1',
@@ -422,7 +427,7 @@ describe('TwitterGetAnalyticsAction', () => {
           },
         ],
       },
-      headers: {},
+      Headers: {},
     });
 
     const result = await run(
@@ -430,8 +435,8 @@ describe('TwitterGetAnalyticsAction', () => {
       inputs({ CompanyIntegrationID: 'ci-1', AnalyticsType: 'tweets', TweetIDs: ['t-1', 't-2'] }, ['Analytics', 'AggregateMetrics']),
     );
 
-    expect(http.instance.get).toHaveBeenCalledWith('/tweets', {
-      params: expect.objectContaining({ ids: 't-1,t-2' }),
+    expect(http.instance.Get).toHaveBeenCalledWith('/tweets', {
+      Query: expect.objectContaining({ ids: 't-1,t-2' }),
     });
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
@@ -479,9 +484,9 @@ describe('TwitterGetMentionsAction', () => {
 
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1' }, ['Mentions', 'Tweets', 'Statistics']));
 
-    expect(http.instance.get).toHaveBeenCalledWith(
+    expect(http.instance.Get).toHaveBeenCalledWith(
       `/users/${twitterUser.id}/mentions`,
-      expect.objectContaining({ params: expect.objectContaining({ max_results: 100 }) }),
+      expect.objectContaining({ Query: expect.objectContaining({ max_results: 100 }) }),
     );
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Successfully retrieved 1 mentions');
@@ -511,7 +516,7 @@ describe('TwitterGetTimelineAction', () => {
 
     const result = await run(action, inputs({ CompanyIntegrationID: 'ci-1' }, ['Posts', 'Tweets', 'Statistics']));
 
-    expect(http.instance.get).toHaveBeenCalledWith(
+    expect(http.instance.Get).toHaveBeenCalledWith(
       `/users/${twitterUser.id}/timelines/reverse_chronological`,
       expect.anything(),
     );
@@ -533,8 +538,8 @@ describe('TwitterGetTimelineAction', () => {
       inputs({ CompanyIntegrationID: 'ci-1', TimelineType: 'user', Username: 'jack' }, ['Posts']),
     );
 
-    expect(http.instance.get).toHaveBeenCalledWith('/users/by/username/jack', { params: { 'user.fields': 'id' } });
-    expect(http.instance.get).toHaveBeenCalledWith('/users/jack-id/tweets', expect.anything());
+    expect(http.instance.Get).toHaveBeenCalledWith('/users/by/username/jack', { Query: { 'user.fields': 'id' } });
+    expect(http.instance.Get).toHaveBeenCalledWith('/users/jack-id/tweets', expect.anything());
     expect(result.Success).toBe(true);
     expect(result.Message).toBe('Successfully retrieved 1 tweets from user timeline');
   });
@@ -619,7 +624,7 @@ describe('TwitterScheduleTweetAction', () => {
     expect(data.tweetData.reply).toEqual({ in_reply_to_tweet_id: 'r-1' });
     expect(data.status).toBe('scheduled');
     // No tweet is actually posted for scheduling
-    expect(http.instance.post).not.toHaveBeenCalled();
+    expect(http.instance.Post).not.toHaveBeenCalled();
   });
 });
 
@@ -647,12 +652,12 @@ describe('TwitterSearchTweetsAction', () => {
   });
 
   it('should GET /tweets/search/recent with the built query', async () => {
-    http.instance.get.mockResolvedValue({
-      data: {
+    http.instance.Get.mockResolvedValue({
+      Data: {
         data: [{ id: 's-1', text: 'hello result', created_at: '2024-06-15T10:00:00Z', author_id: 'a-1' }],
         meta: {},
       },
-      headers: {},
+      Headers: {},
     });
 
     const result = await run(
@@ -660,8 +665,8 @@ describe('TwitterSearchTweetsAction', () => {
       inputs({ CompanyIntegrationID: 'ci-1', Query: 'hello', Hashtags: ['mj'], FromUser: 'mjtester' }, ['Posts', 'ActualQuery']),
     );
 
-    expect(http.instance.get).toHaveBeenCalledWith('/tweets/search/recent', {
-      params: expect.objectContaining({
+    expect(http.instance.Get).toHaveBeenCalledWith('/tweets/search/recent', {
+      Query: expect.objectContaining({
         query: 'hello (#mj) from:mjtester',
         max_results: 100,
         sort_order: 'recency',

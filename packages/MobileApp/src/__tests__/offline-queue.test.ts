@@ -53,8 +53,16 @@ vi.mock('@memberjunction/core', () => {
             state.index += 1;
             return entity as unknown as T;
         }
+        // loadTarget resolves the entity's key column(s) from metadata; the fake has none, so the
+        // key falls back to the queued primary key as-is.
+        EntityByName(_name: string): undefined {
+            return undefined;
+        }
     }
-    const CompositeKey = { FromID: (id: string) => ({ id }) };
+    const CompositeKey = {
+        FromID: (id: string) => ({ id }),
+        FromURLSegment: (_entity: unknown, id: string) => ({ id }),
+    };
     class BaseEntity {}
     return { Metadata, CompositeKey, BaseEntity };
 });

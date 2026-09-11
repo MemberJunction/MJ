@@ -3,7 +3,8 @@ import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@an
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 
 /**
@@ -74,6 +75,8 @@ function makeWidgetEntityInfo(): EntityInfo {
       { ID: 'F3', Name: 'Description', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F4', Name: 'Quantity', Type: 'int', AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F5', Name: 'LaunchDate', Type: 'datetime', AllowsNull: true, AllowUpdateAPI: true },
+      // A DATE-ONLY column, deliberately beside the datetime above: the two must render differently.
+      { ID: 'F9', Name: 'EffectiveDate', Type: 'date', AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F6', Name: 'IsActive', Type: 'bit', AllowsNull: true, AllowUpdateAPI: true },
       {
         ID: 'F7',
@@ -86,6 +89,9 @@ function makeWidgetEntityInfo(): EntityInfo {
       },
       { ID: 'F8', Name: 'Email', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true },
       { ID: 'F9', Name: 'Website', Type: 'nvarchar', Length: 400, AllowsNull: true, AllowUpdateAPI: true },
+      { ID: 'F10', Name: 'PhotoURL', Type: 'nvarchar', Length: 8000, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Image' },
+      { ID: 'F11', Name: 'ThemeColor', Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'Color' },
+      { ID: 'F12', Name: 'ConfigJSON', Type: 'nvarchar', Length: -1, AllowsNull: true, AllowUpdateAPI: true, ExtendedType: 'JSON' },
     ],
   });
 }
@@ -194,6 +200,69 @@ describe('MjFormFieldComponent (DOM)', () => {
         expect(e.Url).toBe('https://example.com');
         expect(e.OpenInNewTab).toBe(true);
       }
+    });
+
+    const PNG_1X1 =
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const PNG_DATA_URI = `data:image/png;base64,${PNG_1X1}`;
+
+    it('Image ExtendedType renders a data URI as a thumbnail and never dumps the base64 as text', () => {
+      const f = render({
+        Record: makeWidget({ PhotoURL: PNG_DATA_URI }),
+        FieldName: 'PhotoURL',
+        Type: 'textbox',
+        LinkType: 'URL',
+      });
+      const img = query(f, 'img.mj-forms-image-preview') as HTMLImageElement;
+      expect(img).not.toBeNull();
+      expect(img.getAttribute('src')).toBe(PNG_DATA_URI);
+      expect(text(f, '.mj-forms-image-meta')).toContain('Inline image');
+      expect(query(f, '.mj-forms-field-link')).toBeNull();
+    });
+
+    it('Image ExtendedType renders a raw base64 payload (no data: prefix) as an image', () => {
+      const f = render({
+        Record: makeWidget({ PhotoURL: PNG_1X1 }),
+        FieldName: 'PhotoURL',
+        Type: 'textbox',
+      });
+      const img = query(f, 'img.mj-forms-image-preview') as HTMLImageElement;
+      expect(img).not.toBeNull();
+      expect(img.getAttribute('src')).toBe(PNG_DATA_URI);
+    });
+
+    it('Image ExtendedType renders an https URL as a thumbnail even when LinkType is URL', () => {
+      const f = render({
+        Record: makeWidget({ PhotoURL: 'https://cdn.example.com/avatar.png' }),
+        FieldName: 'PhotoURL',
+        Type: 'textbox',
+        LinkType: 'URL',
+      });
+      const img = query(f, 'img.mj-forms-image-preview') as HTMLImageElement;
+      expect(img).not.toBeNull();
+      expect(img.getAttribute('src')).toBe('https://cdn.example.com/avatar.png');
+    });
+
+    it('Color ExtendedType renders a swatch and the hex value', () => {
+      const f = render({
+        Record: makeWidget({ ThemeColor: '#aabbcc' }),
+        FieldName: 'ThemeColor',
+        Type: 'textbox',
+      });
+      const swatch = query(f, '.mj-forms-color-swatch') as HTMLElement;
+      expect(swatch).not.toBeNull();
+      expect(swatch.style.backgroundColor).toBe('rgb(170, 187, 204)');
+      expect(text(f, '.mj-forms-color')).toContain('#aabbcc');
+    });
+
+    it('JSON ExtendedType pretty-prints in read mode', () => {
+      const f = render({
+        Record: makeWidget({ ConfigJSON: '{"a":1}' }),
+        FieldName: 'ConfigJSON',
+        Type: 'textarea',
+      });
+      expect(text(f, 'pre.mj-forms-json')).toContain('"a"');
+      expect(text(f, 'pre.mj-forms-json')).toContain('1');
     });
   });
 
@@ -332,6 +401,41 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(hasClass(f, '.mj-forms-field', 'mj-forms-field--required-empty')).toBe(false);
     });
 
+    it('Image ExtendedType edit mode shows upload, hides the data URI from the URL box, and Clear empties the field', () => {
+      const png =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      const record = makeWidget({ PhotoURL: png });
+      const f = render({ Record: record, FieldName: 'PhotoURL', Type: 'textbox', EditMode: true });
+      expect(query(f, 'img.mj-forms-image-preview')).not.toBeNull();
+      expect(query(f, 'input.mj-forms-image-file')).not.toBeNull();
+      expect(text(f, '.mj-forms-image-btn')).toContain('Replace');
+      const urlBox = query(f, 'input.mj-forms-field-input') as HTMLInputElement;
+      expect(urlBox.value).toBe('');
+      click(f, '.mj-forms-image-btn--ghost');
+      f.detectChanges();
+      expect(record.Get('PhotoURL')).toBeNull();
+    });
+
+    it('Color ExtendedType edit mode renders a color picker and hex text', () => {
+      const record = makeWidget({ ThemeColor: '#ff0000' });
+      const f = render({ Record: record, FieldName: 'ThemeColor', Type: 'textbox', EditMode: true });
+      const picker = query(f, 'input.mj-forms-color-picker') as HTMLInputElement;
+      expect(picker).not.toBeNull();
+      expect(picker.value).toBe('#ff0000');
+      typeInto(f, 'input.mj-forms-color-hex', '#00ff00');
+      expect(record.Get('ThemeColor')).toBe('#00ff00');
+    });
+
+    it('JSON ExtendedType edit mode uses a textarea and pretty-prints on blur', () => {
+      const record = makeWidget({ ConfigJSON: '{"a":1}' });
+      const f = render({ Record: record, FieldName: 'ConfigJSON', Type: 'textarea', EditMode: true });
+      const area = query(f, 'textarea.mj-forms-json') as HTMLTextAreaElement;
+      expect(area).not.toBeNull();
+      area.dispatchEvent(new Event('blur'));
+      f.detectChanges();
+      expect(String(record.Get('ConfigJSON'))).toContain('\n');
+    });
+
     it('autocomplete: focus shows all value-list options, typing filters them, and mousedown selects', () => {
       const record = makeWidget({ Status: '' });
       const f = render({ Record: record, FieldName: 'Status', Type: 'autocomplete', EditMode: true });
@@ -350,5 +454,444 @@ describe('MjFormFieldComponent (DOM)', () => {
       expect(record.Get('Status')).toBe('Pending');
       expect(query(f, '.mj-fk-dropdown')).toBeNull();
     });
+  });
+});
+
+describe('date-only fields are a calendar day, not an instant', () => {
+    /**
+     * READ AND EDIT MODE DISAGREED BY A DAY, on ordinary valid data.
+     *
+     * A `date` column arrives as UTC midnight. Read mode ran it through `toLocaleString()`, a
+     * LOCAL-time formatter, which subtracts the reader's offset and lands on the previous day for
+     * everyone west of Greenwich. Edit mode used `toISOString()` and was correct. So a stored
+     * 2026-11-20 showed as 11/19/2026 on the form and 2026-11-20 in the editor, same field.
+     *
+     * These tests PIN A TIMEZONE rather than trusting the runner's. A suite that happens to run in
+     * UTC cannot observe this bug at all, which is how it survived: every assertion passes at
+     * Greenwich and fails in New York.
+     */
+    const AT = (tz: string, fn: () => void) => {
+        const original = process.env.TZ;
+        process.env.TZ = tz;
+        try {
+            fn();
+        } finally {
+            process.env.TZ = original;
+        }
+    };
+
+    it('renders the stored day, not the previous one, west of Greenwich', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ EffectiveDate: new Date('2026-11-20T00:00:00.000Z') });
+            const f = render({ Record: w, FieldName: 'EffectiveDate', Type: 'textbox' });
+            const shown = text(f, '.mj-forms-field-value');
+            expect(shown, `a stored 2026-11-20 must not render as the 19th (got ${shown})`).toContain('20');
+            expect(shown).not.toContain('19');
+        });
+    });
+
+    it('does not roll a January date back into the previous YEAR', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ EffectiveDate: new Date('2026-01-01T00:00:00.000Z') });
+            const f = render({ Record: w, FieldName: 'EffectiveDate', Type: 'textbox' });
+            expect(text(f, '.mj-forms-field-value')).not.toContain('2025');
+        });
+    });
+
+    it('shows no time of day — a calendar day has none', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ EffectiveDate: new Date('2026-11-20T00:00:00.000Z') });
+            const f = render({ Record: w, FieldName: 'EffectiveDate', Type: 'textbox' });
+            expect(text(f, '.mj-forms-field-value')).not.toMatch(/\d{1,2}:\d{2}/);
+        });
+    });
+
+    it('leaves a TIMESTAMP in local time, with its time — that one really is an instant', () => {
+        AT('America/New_York', () => {
+            const w = makeWidget({ LaunchDate: new Date('2026-11-20T22:30:00.000Z') });
+            const f = render({ Record: w, FieldName: 'LaunchDate', Type: 'textbox' });
+            const shown = text(f, '.mj-forms-field-value');
+            expect(shown, 'a datetime must keep local-time rendering').toMatch(/\d{1,2}:\d{2}/);
+        });
+    });
+});
+
+describe('an unreadable stored date is announced, not hidden (bc-aidp-next-golive#185)', () => {
+    /**
+     * THE FAILURE THIS PREVENTS IS DATA LOSS, not an ugly form.
+     *
+     * `DateInputValue` returns '' for a value it cannot render, and `<input type="date">` shows ''
+     * as an empty box - the same box it shows for a field that was never set. So the field reads as
+     * "no date", and the next save writes that emptiness over whatever was actually stored. The
+     * element cannot display the bad value itself; there is no string that makes it show
+     * `not-a-date`. Saying so beside the control is the only option available.
+     */
+    const WARNING = '.mj-forms-field-validation--warning';
+
+    it('warns when the stored value cannot be shown in the date editor', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('not a date') }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        const input = query(f, 'input[type="date"]') as HTMLInputElement | null;
+        expect(input!.value, 'precondition: the editor is blank').toBe('');
+        expect(query(f, WARNING), 'a blank box with no explanation is the defect').not.toBeNull();
+    });
+
+    it('does NOT warn for a field that is simply empty', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: null }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect(query(f, 'input[type="date"]')).not.toBeNull();
+        expect(query(f, WARNING), 'empty means empty and must not be decorated as a fault').toBeNull();
+    });
+
+    it('does NOT warn for a perfectly good date', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('2026-11-20T00:00:00.000Z') }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        const input = query(f, 'input[type="date"]') as HTMLInputElement | null;
+        expect(input!.value).toBe('2026-11-20');
+        expect(query(f, WARNING)).toBeNull();
+    });
+
+    /**
+     * WHICH INGRESS SHAPES ACTUALLY REACH HERE UNREADABLE — measured, not assumed.
+     *
+     * A value LOADED FROM THE DATABASE never triggers this: the API sends dates as epoch
+     * milliseconds (measured on a live server: ExpectedCloseDate came over as 1790726400000), and a
+     * number always parses. So this warning cannot fire by opening a record, and these tests exist
+     * to record what CAN reach it — client-side assignment from an import, an integration or an
+     * Action, where `BaseEntity.Set` takes whatever it is handed.
+     *
+     * The UK/EU case is the one worth caring about: `20/11/2026` is the ordinary way most of the
+     * world writes a date, and it is exactly what a CSV out of a European system contains.
+     */
+    it('a UK / EU formatted string reaches here unreadable and is announced', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: '20/11/2026' }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect((query(f, 'input[type="date"]') as HTMLInputElement).value).toBe('');
+        expect(query(f, WARNING), 'a European date must not read as "no date"').not.toBeNull();
+    });
+
+    it('a dd-MM-yyyy string is announced too', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: '20-11-2026' }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect(query(f, WARNING)).not.toBeNull();
+    });
+
+    it('a whitespace-only value is announced rather than passing as empty', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: '   ' }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect(query(f, WARNING)).not.toBeNull();
+    });
+
+    it('the epoch-millisecond wire format is NOT announced — that is the normal load path', () => {
+        // 1790726400000 is a real value taken off the running API for a `date` column holding
+        // 2026-09-30. If this ever warns, the warning has started firing on ordinary data.
+        const f = render({ Record: makeWidget({ LaunchDate: 1790726400000 }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect((query(f, 'input[type="date"]') as HTMLInputElement).value).toBe('2026-09-30');
+        expect(query(f, WARNING)).toBeNull();
+    });
+
+    /**
+     * NOT CAUGHT, AND THIS TEST SAYS SO RATHER THAN PRETENDING OTHERWISE.
+     *
+     * An Excel date serial (46346 = 20 Nov 2026 in Excel's epoch) is read as 46346 MILLISECONDS and
+     * renders 1970-01-01. It parses, so nothing here can tell it from a real date — the field shows
+     * a confident, wrong day and no warning. Same shape as `2026-02-31` rolling to 3 March.
+     *
+     * Both need the value refused at INGRESS, in the entity's type coercion, before anything is
+     * asked to display it. Recorded here so the limit of this warning is written down next to it.
+     */
+    it('does NOT catch a value that parses to the wrong date — a known limit', () => {
+        const f = render({ Record: makeWidget({ LaunchDate: 46346 }), FieldName: 'LaunchDate', Type: 'datepicker', EditMode: true });
+        expect((query(f, 'input[type="date"]') as HTMLInputElement).value).toBe('1970-01-01');
+        expect(query(f, WARNING), 'documents the gap: a parseable-but-wrong value is invisible here').toBeNull();
+    });
+
+    it('stays out of READ mode, which already surfaces the value itself', () => {
+        // FormatValue() renders 'Invalid Date' / the raw text, so read mode needs no warning and
+        // adding one there would be noise on a surface that is already honest.
+        const f = render({ Record: makeWidget({ LaunchDate: new Date('not a date') }), FieldName: 'LaunchDate', Type: 'datepicker' });
+        expect(query(f, WARNING)).toBeNull();
+        expect(text(f, '.mj-forms-field-value')).toContain('Invalid Date');
+    });
+});
+
+// ─── Field-level security ─────────────────────────────────────────────────
+//
+// BaseEntity.Get() THROWS for a field the current user cannot read, so a form that rendered a
+// denied field would take out the whole form rather than hide a column. These tests pin the
+// gate that prevents that, and pin that it fails open — the server is the real boundary, so a
+// form hiding fields because no user resolved yet would be worse than one showing them.
+
+describe('MjFormFieldComponent — field-level security', () => {
+  const HR_ROLE_ID = 'A0000000-0000-0000-0000-000000000001';
+  const INTERN_ROLE_ID = 'A0000000-0000-0000-0000-000000000003';
+
+  /** Widget metadata with field security ON and `Description` readable only by HR. */
+  function makeSecuredEntityInfo(): EntityInfo {
+    const openTo = (fieldId: string, roles: string[]) =>
+      roles.map((roleId, i) => ({
+        ID: `${fieldId}-open-${i}`,
+        EntityFieldID: fieldId,
+        RoleID: roleId,
+        ReadAccess: 'Allow',
+        UpdateAccess: 'Allow',
+        CreateAccess: 'Allow',
+      }));
+
+    return new EntityInfo({
+      ID: 'E0000001-0000-0000-0000-000000000001',
+      Name: 'Test Widgets',
+      Status: 'Active',
+      BaseTable: 'TestWidget',
+      BaseView: 'vwTestWidgets',
+      EnableFieldLevelSecurity: true,
+      Permissions: [
+        { RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true, CanDelete: true },
+        { RoleID: INTERN_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true, CanDelete: true },
+      ],
+      Fields: [
+        { ID: 'F1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, AllowUpdateAPI: false },
+        { ID: 'F2', Name: 'Name', DisplayName: 'Widget Name', Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true, EntityFieldPermissions: openTo('F2', [HR_ROLE_ID, INTERN_ROLE_ID]) },
+        { ID: 'F3', Name: 'Description', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: openTo('F3', [HR_ROLE_ID]) },
+        // Readable by the intern but NOT updatable or creatable — the see-but-not-touch case.
+        { ID: 'F4', Name: 'Notes', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: [
+            ...openTo('F4', [HR_ROLE_ID]),
+            { ID: 'F4-ro', EntityFieldID: 'F4', RoleID: INTERN_ROLE_ID, ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+        ] },
+      ],
+    });
+  }
+
+  function makeSecuredWidget(user: UserInfo | null): BaseEntity {
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret', Notes: 'jotting' }, true, true);
+    // The ENTITY resolves its own acting user for BaseEntity.Get()'s gate. Set it explicitly so
+    // the component's provider and the entity agree — otherwise the component would allow a
+    // render that the entity then refuses, which is exactly the crash being guarded against.
+    if (user) {
+      entity.ContextCurrentUser = user;
+    }
+    return entity;
+  }
+
+  /**
+   * Stands in for the provider's signed-in user.
+   *
+   * The widening cast lives HERE, once, rather than at each assignment. `satisfies` keeps the
+   * literal honest against the real `UserInfo` members this double claims to stand in for, so a
+   * rename or retype on `UserInfo` still breaks this file — which a blanket cast at the call
+   * sites would have silently swallowed. Only `UserRoles` needs the seam: the aggregation reads
+   * `RoleID` off each entry, and building real `UserRoleInfo` instances would pull in metadata
+   * construction this spec has no use for.
+   */
+  function userWithRoles(roleIds: string[]): UserInfo {
+    const user = {
+      ID: 'C0000000-0000-0000-0000-000000000001',
+      Name: 'Test User',
+      Email: 'test@example.com',
+      IsActive: true,
+      UserRoles: roleIds.map((RoleID) => ({ RoleID, Role: `Role-${RoleID}` })),
+    } satisfies Pick<UserInfo, 'ID' | 'Name' | 'Email' | 'IsActive'> & {
+      UserRoles: ReadonlyArray<{ RoleID: string; Role: string }>;
+    };
+    return user as unknown as UserInfo;
+  }
+
+  function renderAs(fieldName: string, roleIds: string[] | null): ComponentFixture<MjFormFieldComponent> {
+    const user = roleIds ? userWithRoles(roleIds) : null;
+    // Provider is an @Input, so it is bound BEFORE the first change detection — which matters,
+    // because the readability answer is memoized on first read.
+    return render({
+      Record: makeSecuredWidget(user),
+      FieldName: fieldName,
+      Type: 'textbox',
+      Provider: { CurrentUser: user },
+    });
+  }
+
+  it('renders nothing at all for a field the user cannot read', () => {
+    const f = renderAs('Description', [INTERN_ROLE_ID]);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+    expect(query(f, '.mj-forms-field-label')).toBeNull();
+  });
+
+  it('renders normally for a user who may read the field', () => {
+    const f = renderAs('Description', [HR_ROLE_ID]);
+    expect(text(f, '.mj-forms-field-value')).toBe('secret');
+  });
+
+  it('leaves unrestricted fields on the same entity alone', () => {
+    const f = renderAs('Name', [INTERN_ROLE_ID]);
+    expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
+  });
+
+  it('FAILS OPEN when no user has resolved yet', () => {
+    // Asserted on the gate rather than the DOM: with no user on the component's provider the
+    // ENTITY still falls back to the global provider to resolve its own acting user, so a
+    // render would exercise that fallback rather than this decision. The component's answer is
+    // what this test is about — the server is the real boundary, and a form that hid fields
+    // because no user had resolved yet would be worse than one that shows them.
+    const f = render({ Record: makeSecuredWidget(null), FieldName: 'Description', Type: 'textbox', Provider: { CurrentUser: null } });
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+  });
+
+  it('FAILS OPEN on an entity with field security switched off', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Description', Type: 'textbox', Provider: { CurrentUser: userWithRoles([INTERN_ROLE_ID]) } });
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+  });
+
+  it('never calls Get() for a denied field — rendering one would throw', () => {
+    // The whole point of gating in the template rather than catching downstream: a single
+    // denied field must not be able to take out the form it sits in.
+    const f = renderAs('Description', [INTERN_ROLE_ID]);
+    expect(() => f.detectChanges()).not.toThrow();
+  });
+
+  it('ShouldHideField answers for a denied field WITHOUT reading its value', () => {
+    // The template guards rendering behind IsFieldReadableByUser, but ShouldHideField is also
+    // called PROGRAMMATICALLY — MjCollapsiblePanelComponent.hasRenderableContent() sweeps
+    // `FieldComponents.some(f => !f.ShouldHideField)` to decide whether a section has anything
+    // to show. That path skips the template guard entirely, so before this was fixed the getter
+    // fell through to `this.Value` → BaseEntity.Get() → FieldSecurityError, thrown fresh on
+    // EVERY change-detection cycle for as long as the record stayed open.
+    const f = renderAs('Description', [INTERN_ROLE_ID]);
+    expect(() => f.componentInstance.ShouldHideField).not.toThrow();
+    expect(f.componentInstance.ShouldHideField).toBe(true);
+  });
+
+  it('ShouldHideField still reflects emptiness for a READABLE field', () => {
+    // The denied short-circuit must not swallow the ordinary hide-when-empty behaviour.
+    const f = renderAs('Description', [HR_ROLE_ID]);
+    f.componentInstance.HideWhenEmptyInReadOnlyMode = true;
+    expect(f.componentInstance.ShouldHideField).toBe(false); // 'secret' is present
+  });
+
+  // ---- write gate: readable but not writable ----
+
+  it('marks a readable-but-not-updatable field read-only on a SAVED record', () => {
+    // Without this the user types into a control the server will reject on save, and the error
+    // names a field they had every reason to think was editable.
+    const f = renderAs('Notes', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+    expect(f.componentInstance.IsFieldReadOnly).toBe(true);
+  });
+
+  it('leaves the field writable for a role that may update it', () => {
+    const f = renderAs('Notes', [HR_ROLE_ID]);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldReadOnly).toBe(false);
+  });
+
+  it('uses the CREATE verb on an unsaved record, not the update verb', () => {
+    // Create denial does not raise a server error — the value is silently dropped and the column
+    // takes its default. The read-only control is the only signal the user gets.
+    const user = userWithRoles([INTERN_ROLE_ID]);
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.ContextCurrentUser = user;
+    entity.NewRecord();
+    const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
+    expect(f.componentInstance.Record.IsSaved).toBe(false);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+  });
+
+  it('re-evaluates the write gate when a new record becomes saved', () => {
+    // IsSaved flips WITHOUT ngOnChanges firing — the Record input is the same object. A plain
+    // memo would answer with the create-time verb for the rest of the form's life.
+    const user = userWithRoles([HR_ROLE_ID]);
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.ContextCurrentUser = user;
+    entity.NewRecord();
+    const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Notes: 'jotting' }, true, true);
+    expect(f.componentInstance.Record.IsSaved).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
+
+  it('FAILS OPEN on the write gate when no user has resolved', () => {
+    const f = render({ Record: makeSecuredWidget(null), FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: null } });
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
+});
+
+describe('a server-reported validation error paints the field the way a local one does', () => {
+  /**
+   * A `ValidateAsync()` refusal runs on the SERVER; the client cannot recompute it. It reaches the
+   * form as `FormContext.validationErrors` after the failed save — the same channel a local
+   * `Validate()` refusal uses. The gotcha this pins: `FieldErrors` used to return only the field's
+   * own local validation once the field was touched, so an error the server reported for the very
+   * field the user had just typed in never showed. `validationRevision` fixes the tie-break — an edit
+   * made BEFORE the failure must not hide it, an edit made AFTER it addresses it.
+   */
+  const ERROR_CLASS = 'mj-forms-field--has-error';
+  const MESSAGE = '.mj-forms-field-validation--error';
+  const SERVER_MESSAGE = 'Widget Name "Gadget" is already registered to another tenant.';
+  const serverError = () => new ValidationErrorInfo('Name', SERVER_MESSAGE, 'Gadget');
+  const failed = (revision: number, errors: ValidationErrorInfo[] = [serverError()]) => ({ showValidation: true, validationErrors: errors, validationRevision: revision });
+  const clean = { showValidation: false, validationErrors: [] as ValidationErrorInfo[], validationRevision: 0 };
+
+  it('an UNTOUCHED field named by the error shows the red border and the message', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    expect(text(f, MESSAGE)).toContain(SERVER_MESSAGE);
+  });
+
+  it('a field the user edited BEFORE the failed save still shows it (the real gotcha)', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: clean });
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget');
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS), 'precondition: a valid local edit shows nothing').toBe(false);
+
+    // The save fails server-side and the form publishes the refusal under a new revision.
+    f.componentRef.setInput('FormContext', failed(1));
+    f.detectChanges();
+
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    expect(text(f, MESSAGE)).toContain(SERVER_MESSAGE);
+  });
+
+  it('a later valid edit clears it — the user is addressing the error, live validation takes over', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS), 'precondition: shown').toBe(true);
+
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget Mk II');
+    f.detectChanges();
+
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
+    expect(query(f, MESSAGE)).toBeNull();
+  });
+
+  it('a later INVALID edit swaps the server message for the live local one', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    typeInto(f, 'input.mj-forms-field-input', 'x'.repeat(201)); // Name is nvarchar(200) — real BaseEntity.Validate() refuses this
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    expect(text(f, MESSAGE)).toContain('cannot be longer than'); // nvarchar(200) is 100 characters — the number is MJ's, the swap is what is under test
+    expect(text(f, MESSAGE)).not.toContain(SERVER_MESSAGE);
+  });
+
+  it('a NEW failure after the edit shows again — each failed save is a fresh revision', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget');
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS), 'precondition: cleared by the edit').toBe(false);
+
+    f.componentRef.setInput('FormContext', failed(2));
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+  });
+
+  it('an error with no field source paints NO field — it is toast-only', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1, [new ValidationErrorInfo('', 'Record-level refusal', null)]) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
+    expect(query(f, MESSAGE)).toBeNull();
+  });
+
+  it('an error naming a DIFFERENT field does not paint this one', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Description', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
+  });
+
+  it('a FormContext without a revision (older hosts) still behaves: untouched shows, touched-after clears', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: { showValidation: true, validationErrors: [serverError()] } });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget Mk II');
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
   });
 });

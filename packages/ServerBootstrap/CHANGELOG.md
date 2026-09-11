@@ -1,5 +1,657 @@
 # @memberjunction/server-bootstrap
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- ac96bb6: Empty turbo's global hash, and make every in-repo `mj` invocation resolve.
+
+  `hashOfInternalDependencies` — a hash over every non-gitignored file in the root manifest's
+  workspace-dependency closure — is an input to _every_ task hash in the repo. The root
+  `package.json` declared three `workspace:*` devDependencies (`cli`,
+  `integration-test-suite`, `server-bootstrap-lite`) whose combined closure was 154 of 310
+  packages, so editing any file in any of them invalidated all 310, builds and tests alike.
+  Task-level `inputs` cannot reach this; it is upstream of them. Removing the three drops a
+  one-file edit from 310/310 to 37/310 (`AI/Agents`) and 8/310 (Explorer dashboards).
+
+  Removing them also removes the workspace-root `node_modules/.bin/mj` that a number of things
+  quietly resolved through. Every consumer is repaired:
+  - The 15 root scripts, plus `check:ui-layers`, `check:standards` and `test:integration`, now
+    call `node packages/MJCLI/bin/run.js` directly.
+  - `mj.config.cjs`'s `checkModules` used a bare specifier that only worked via the symlink the
+    devDependency created. `check-module-loader.ts` _collects_ load failures rather than
+    throwing, so this would have silently degraded `mj test` to "Unknown integration check
+    bundle". Now an absolute `__dirname`-based path, asserted by `sibling-parity.test.ts`.
+  - Seven `prebuild`/`postbuild` hooks across `ng-bootstrap`, `ng-bootstrap-lite`,
+    `ng-explorer-core`, `server-bootstrap` and `server-bootstrap-lite` ran bare `mj codegen
+manifest` behind `|| echo 'Warning: …'`, so a lost CLI exits 0 and the build proceeds
+    against a stale class-registration manifest — a new `@RegisterClass` class never reaches it
+    and tree-shaking then drops it from bundled apps. Each now calls the workspace entry point
+    by path. Deliberately not a `@memberjunction/cli` devDependency: `ng-explorer-core` has six
+    dependents and `ng-bootstrap` two, so a devDep there would take a CLI edit from 6/310 to
+    12/310 invalidated packages, and `cli` itself depends on `server-bootstrap-lite`, where it
+    would be a build-graph cycle. A path call adds no graph edge.
+  - `a2aserver`, `ai-mcp-server` and `mj_codegen_api` ran bare `mj` in a fallback-less
+    `prestart`, exiting 127 where no global CLI existed and silently resolving a version-skewed
+    one where it did. Each now declares `@memberjunction/cli` — leaf packages only, so
+    `hashOfInternalDependencies` stays `""`.
+  - `pg-migrations.yml` invoked `npx mj` at four sites. With no root bin `npx` falls through to
+    the npm registry, where the package named `mj` is unrelated mongodb-js tooling — in a job
+    holding database credentials, in a workflow that does not trigger on `package.json`, so it
+    would have stayed silent until the next release-time PG run.
+
+  A new `check-mj-cli-resolution.mjs` gate in the `guards` job permits only the two forms that
+  actually resolve, so this cannot regress silently again.
+
+  `@memberjunction/testing-cli` carries a comment-only change to `check-module-loader.ts`
+  documenting why MJ's own root config cannot use a bare specifier while an adopter's can.
+
+  ***
+
+  **On the level:** this is `minor` to satisfy `check:changeset`, not because anything touches
+  the database. The branch adds no migration and edits no declarative metadata. The only file
+  it changes under `metadata/` is `metadata/CLAUDE.md` — an instruction document, part of the
+  repo-wide `npx mj` → `pnpm mj` rewrite — and the gate's trigger is `/^metadata\/.+/`, which
+  matches any path under that directory including Markdown. The rule's own justification for
+  metadata-⇒-minor is that "metadata counts as a migration because it becomes one" via the
+  release-time `mj sync push`; a `CLAUDE.md` never becomes one. Under permanent pre mode a
+  stray `minor` moves no version, so the cost is meaning rather than digits — hence this note,
+  so the next reader does not take it as precedent. Narrowing that pattern to exclude
+  Markdown belongs in its own PR against the gate.
+
+### Patch Changes
+
+- 41b0d28: Load Open App server packages in every MJ process, not only MJAPI (#4199).
+
+  `mj sync push` (and `mj app …`, `mj test`, the MCP/A2A servers, the integration-test bootstrap)
+  never imported an installed app's server package, so `Metadata.GetEntityObject` handed back a
+  generic `BaseEntity` for the app's entities and every custom `Save()`, validation rule and
+  lifecycle hook was silently skipped — while MJ core's own server subclasses, loaded through the
+  lite manifest, did run. New `@memberjunction/dynamic-packages` extracts the loader (and the
+  host-anchored import) out of `server-bootstrap` into a package with no MJ runtime dependencies,
+  and each host is now one `LoadDynamicPackages({ processId })` call. ServerBootstrap consumes it
+  with two deliberate behaviour changes: it no longer attempts to import the Angular forms package
+  into Node, and when an `mj-app.json` sits beside its `mj.config.cjs` (an Open App repo running its
+  own dev host) it now loads that app's server packages and resolver paths too.
+
+  `dynamicPackages.server[]` stays the single list `mj app install` writes; when both it and an
+  `mj-app.json` name a package, the config entry decides `Enabled` and scoping while the manifest's
+  on-disk location remains the resolution fallback. Entries gain optional
+  `Processes` / `ExcludeProcesses` (process IDs or prefixes: `cli`, `cli:sync`, `cli:sync:push`,
+  `mjapi`, `mcp`, …) and the section gains an optional `policy` map, so a package can be scoped to
+  just `mj sync` or switched off for `mj migrate`. `MJ_DYNAMIC_PACKAGES=none` and the global CLI
+  flag `--no-app-packages` (declared in `--help`) disable loading for one run — for app packages AND the
+  host's own generated packages; MJ core's classes still load from the manifest. The `mj` prerun hook
+  publishes its process id through `MJ_DYNAMIC_PACKAGES_PROCESS` so the nested `ai-cli` /
+  `testing-cli` bootstraps apply the same scoping and policy. A package already loaded in the process
+  is handed back from cache without re-running its startup export. New guide:
+  `guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`. `mj sync push` now warns, once per entity,
+  when it is about to write with a `BaseEntity` because no subclass is registered.
+
+- cdd25c0: Regenerate the class-registration manifests for `AuthorizationCheckServerOperation`.
+
+  #4185 added `AuthorizationCheckServerOperation` in `@memberjunction/core-entities`, decorated `@RegisterClass(BaseRemotableOperation, 'Authorization.Check')`, without regenerating the committed class-registration manifests. Every push to `next` since has failed the Build job's manifest freshness gate. The four bootstrap manifests now import and register the class (one more registration each), which is what `pnpm run mj:manifest` produces. Without the entry, tree-shaking can drop the operation from bundled apps and the remotable `Authorization.Check` operation silently never registers.
+
+- 512bb53: Security: close the role-elevation path on `MJ: Roles` and `MJ: User Roles` (issue #4282).
+
+  Issue #4260 closed the `User.Type` route to elevated capability. Role assignment is the platform's other authority mechanism and was unguarded: no server-side entity subclass existed for either entity, so `ClassFactory` resolved the generated classes, whose `Validate()` knows nothing about who is calling. On a baseline seed — and verified against a live database — the `Developer` and `Integration` roles hold unfiltered `CanCreate`/`CanUpdate`/`CanDelete` on both entities. Reproduced end to end on the real stack before the fix: a caller whose `Type` is `'User'`, holding only `Developer` and `UI`, inserted a row granting itself `Integration` (`Validate()` passed, `Save()` returned `true`), and separately created a brand-new role.
+
+  **`MJUserRoleEntityServer`** — a non-Owner may only grant, move or revoke a role they themselves hold. That subset rule is a ceiling: whatever a non-Owner does through this entity, the authority they hand out is authority they already had, so no sequence of calls lets a caller exceed their own grant. Delegated administration, IdP/group sync and onboarding automation — the legitimate non-Owner uses `User.Type` does not have — all keep working. On an update the pre-save `RoleID` is checked as well as the new one, so an assignment cannot be repointed to strip someone of a role the caller does not hold. `UserID` is deliberately not frozen: moving a grant between users stays inside the same ceiling. One consequence of that is chosen knowingly rather than incidental — because revocation shares the granting ceiling, a non-Owner may repoint or delete **any** user's assignment of a role the caller also holds, including an Owner's. That is not escalation: Owner authority lives in `User.Type`, which #4260 froze, and not in a role. It does let one non-Owner strip peers of a role they share, which is deprivation rather than elevation — reversible by an Owner and recorded in Record Changes. Narrowing revocation to the caller's own row would close it only by breaking delegated administration, the legitimate non-Owner use this rule exists to preserve.
+
+  **`MJRoleEntityServer`** — a non-Owner may not create, change or delete a role. Every field on this entity is authority-bearing: `Name` is what user/role synchronization matches on, `DirectoryID` maps an external directory group to the role, and `SQLName` decides which database role CodeGen grants object rights to.
+
+  Both guards override `Save()` and `Delete()` alongside `Validate()`, so the rules hold on every write path — GraphQL resolvers, Remote Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and cannot be switched off by the `ReplayOnly` save option, which skips `Validate()` while still performing the write. Both are pure: they read only the record's own field state and the caller's already-cached roles, so they cost nothing per save and are unit-testable without a database.
+
+  **Upgrade notes.**
+  - **Explorer's role-management screen stops working for non-Owner administrators.** It has no Owner gate of its own today, so a Developer-role non-Owner reaches it in practice; creating, renaming and deleting roles from it are now refused with a message naming the rule. This is the same trade-off #4260 accepted for the user-management screen.
+  - **Explorer's bulk role assignment now checks each `Save()` return.** `executeBulkRoleAssign` enrols each row in a transaction group, where `Save()` reports only _enrolment_ — the provider queues the item locally and returns `true` without a round trip. A row refused **client-side** (a `CheckPermissions` denial or a field-rule failure) does return `false` and is never enrolled; that return was ignored, so an all-refused batch left the group empty, and an empty group's `Submit()` returns `true` for having nothing to do — the screen reported success having assigned nothing. It now collects each such refusal with the user it applies to and surfaces them.
+
+    To be precise about what this does **not** cover: the role-elevation guard added here is server-side only (`@memberjunction/core-entities-server` is not a browser dependency), so it refuses during `Submit()`, not during `Save()` — and that refusal currently reaches the user nowhere at all. `ExecuteTransactionGroup` on the server discards its own `Save()`/`Delete()` return values, so a refused row never enrols in the server's group either; an all-refused batch submits an empty group, whose `Submit()` returns `true` for having nothing to do, and the screen closes with no message. Verified end to end against a live server: a non-Owner assigning a role they do not hold is correctly **refused** — no row is written, the guard works — but is **reported as success**. This is a pre-existing gap in that resolver (it predates this PR and equally affects `MJ: Users` via issue #4260), tracked as issue #4309 and deliberately not closed here.
+
+  - **`AssignUserRolesAction` now fails the whole batch when the caller does not hold the role.** The core action (`CoreActions/src/custom/user-management/assign-user-roles.action.ts`) builds its `MJ: User Roles` object with `params.ContextUser` and assigns atomically, so a refused `Save()` rolls the transaction back and the action returns `Success: false` with `ResultCode: 'FAILED'` carrying the guard's message. Nothing is partially assigned and nothing is swallowed — unlike the transaction-group paths above, this one already reports its refusal. The "onboarding automation" the subset rule preserves is therefore preserved exactly where the automation's context user holds the role being granted: an automation running as a non-Owner that grants roles its own context user does not hold must be given those roles, or an Owner context user.
+  - **`SyncRoles` / `SyncUsers` / `SyncRolesAndUsers` are unaffected on a default install** — all three carry `@RequireSystemUser()`, and `getSystemUser()` resolves the seeded `Type='Owner'` system user. A deployment whose system user is **not** an Owner will see those sync paths fail closed at the save, loudly rather than silently, for the same reason #4260 documented.
+  - **Not closed by this change:** `MJ: Entity Permissions` carries the same unfiltered `Developer`/`Integration` grant, so a holder of either role can still widen a role's permissions directly. That is an independent route with its own decision to make about the invariant, so it is deliberately out of scope here rather than fixed in passing; this changeset does not claim to close it.
+
+  New unit coverage in MJCoreEntitiesServer (41 tests across both guards, including the pre-fix reproduction) and a new deterministic integration bundle, **IT89 — Role Privilege Elevation Guard** (`role-elevation`, RE1–RE6), which proves the ClassFactory wiring and both guards against a real provider the way IT88 does for `MJ: Users`.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [2a14c26]
+- Updated dependencies [319a7ed]
+- Updated dependencies [2f305df]
+- Updated dependencies [197fdf8]
+- Updated dependencies [62e0707]
+- Updated dependencies [6673f51]
+- Updated dependencies [d1d74c2]
+- Updated dependencies [0312b22]
+- Updated dependencies [4d33bc5]
+- Updated dependencies [f6a4341]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [41b0d28]
+- Updated dependencies [fd0a019]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [ddf8621]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [b832d75]
+- Updated dependencies [8d880cc]
+- Updated dependencies [806e7f2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [c679e8d]
+- Updated dependencies [a723521]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [770cfca]
+- Updated dependencies [ee85060]
+- Updated dependencies [9f73528]
+- Updated dependencies [d0eab88]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [80fcb61]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [c11f8c6]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [d0eab88]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai-agents@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ai-cerebras@6.1.0-edge.6
+  - @memberjunction/codegen-lib@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/server@6.1.0-edge.6
+  - @memberjunction/actions@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/communication-ms-graph@6.1.0-edge.6
+  - @memberjunction/dynamic-packages@6.1.0-edge.6
+  - @memberjunction/testing-integration@6.1.0-edge.6
+  - @memberjunction/geo-core@6.1.0-edge.6
+  - @memberjunction/auth-providers@6.1.0-edge.6
+  - @memberjunction/core-actions@6.1.0-edge.6
+  - @memberjunction/actions-apollo@6.1.0-edge.6
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.6
+  - @memberjunction/archiving-engine@6.1.0-edge.6
+  - @memberjunction/integration-engine@6.1.0-edge.6
+  - @memberjunction/record-set-processor@6.1.0-edge.6
+  - @memberjunction/content-autotagging@6.1.0-edge.6
+  - @memberjunction/predictive-studio@6.1.0-edge.6
+  - @memberjunction/search-engine@6.1.0-edge.6
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.6
+  - @memberjunction/core-entities-server@6.1.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.6
+  - @memberjunction/ai-agent-harness@6.1.0-edge.6
+  - @memberjunction/ai-agent-manager@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/database-designer-core@6.1.0-edge.6
+  - @memberjunction/ai-form-builder@6.1.0-edge.6
+  - @memberjunction/computer-use-engine@6.1.0-edge.6
+  - @memberjunction/ai-prompts@6.1.0-edge.6
+  - @memberjunction/ai-reranker@6.1.0-edge.6
+  - @memberjunction/ai-segmentation@6.1.0-edge.6
+  - @memberjunction/action-runtime-host@6.1.0-edge.6
+  - @memberjunction/messaging-adapters@6.1.0-edge.6
+  - @memberjunction/scheduling-engine@6.1.0-edge.6
+  - @memberjunction/task-graph@6.1.0-edge.6
+  - @memberjunction/templates@6.1.0-edge.6
+  - @memberjunction/testing-engine@6.1.0-edge.6
+  - @memberjunction/ai-anthropic@6.1.0-edge.6
+  - @memberjunction/ai-assemblyai@6.1.0-edge.6
+  - @memberjunction/ai-azure@6.1.0-edge.6
+  - @memberjunction/ai-bedrock@6.1.0-edge.6
+  - @memberjunction/ai-betty-bot@6.1.0-edge.6
+  - @memberjunction/ai-cohere@6.1.0-edge.6
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.6
+  - @memberjunction/ai-fireworks@6.1.0-edge.6
+  - @memberjunction/ai-gemini@6.1.0-edge.6
+  - @memberjunction/ai-groq@6.1.0-edge.6
+  - @memberjunction/ai-heygen@6.1.0-edge.6
+  - @memberjunction/ai-huggingface@6.1.0-edge.6
+  - @memberjunction/ai-inception@6.1.0-edge.6
+  - @memberjunction/ai-inworld@6.1.0-edge.6
+  - @memberjunction/ai-lmstudio@6.1.0-edge.6
+  - @memberjunction/ai-llamacpp@6.1.0-edge.6
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.6
+  - @memberjunction/ai-minimax@6.1.0-edge.6
+  - @memberjunction/ai-mistral@6.1.0-edge.6
+  - @memberjunction/ai-ollama@6.1.0-edge.6
+  - @memberjunction/ai-openai@6.1.0-edge.6
+  - @memberjunction/ai-openrouter@6.1.0-edge.6
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.6
+  - @memberjunction/ai-vertex@6.1.0-edge.6
+  - @memberjunction/ai-zhipu@6.1.0-edge.6
+  - @memberjunction/ai-xai@6.1.0-edge.6
+  - @memberjunction/ai-bridge-server@6.1.0-edge.6
+  - @memberjunction/remote-browser-server@6.1.0-edge.6
+  - @memberjunction/queue@6.1.0-edge.6
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.6
+  - @memberjunction/database-designer-actions@6.1.0-edge.6
+  - @memberjunction/tag-engine-base@6.1.0-edge.6
+  - @memberjunction/ai-bridge-livekit@6.1.0-edge.6
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.6
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.6
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.6
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.6
+  - @memberjunction/actions-content-autotag@6.1.0-edge.6
+  - @memberjunction/entity-communications-base@6.1.0-edge.6
+  - @memberjunction/communication-sendgrid@6.1.0-edge.6
+  - @memberjunction/doc-utils@6.1.0-edge.6
+  - @memberjunction/encryption@6.1.0-edge.6
+  - @memberjunction/external-data-sources@6.1.0-edge.6
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.6
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.6
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.6
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.6
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.6
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.6
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.6
+  - @memberjunction/integration-actions@6.1.0-edge.6
+  - @memberjunction/storage@6.1.0-edge.6
+  - @memberjunction/react-linter@6.1.0-edge.6
+  - @memberjunction/record-comparison@6.1.0-edge.6
+  - @memberjunction/scheduling-actions@6.1.0-edge.6
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.6
+  - @memberjunction/esignature@6.1.0-edge.6
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.6
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.6
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.6
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.6
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.6
+  - @memberjunction/archiving-action@6.1.0-edge.6
+  - @memberjunction/data-context-server@6.1.0-edge.6
+  - @memberjunction/server-extensions-core@6.1.0-edge.6
+  - @memberjunction/esignature-docusign@6.1.0-edge.6
+  - @memberjunction/esignature-dropboxsign@6.1.0-edge.6
+  - @memberjunction/esignature-pandadoc@6.1.0-edge.6
+
+## 6.1.0-edge.5
+
+### Patch Changes
+
+- d0568e6: Auto-load Open App `serverExtensions` from packages listed in host `dynamicPackages.server[]`. Packages declare them via the `MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`; `serve()` overlays host `mj.config.cjs` `serverExtensions[]` by DriverClass so operators no longer copy Open App extension blocks into the host config.
+- 8b78695: Regenerate the class-registration manifests so every one of them is on the chunked format.
+
+  The chunked manifest format (`CLASS_REGISTRATIONS_0`, `CLASS_REGISTRATIONS_1`, …) was introduced to keep
+  TypeScript from hitting TS2590 on a single union that had grown too large. Only `server-bootstrap` and
+  `server-bootstrap-lite` were regenerated at the time, so the remaining manifests stayed on the old
+  single-array shape and the `Build` job's manifest gate has been failing on `next` ever since.
+
+  This regenerates all of them from a fully-built workspace. Alongside the format change the sweep picks up
+  registrations that had drifted out: `MJAIUsageTypeEntity` and the `LinearPriceUnitType` /
+  `PerImagePriceUnitType` / `TimePerHourPriceUnitType` / `TimePerMinutePriceUnitType` pricing unit types in the
+  Angular bootstraps, and `MJEntityPermissionEntityServer` / `MJTenantFilterMiddleware` / `RateLimitMiddleware`
+  from `@memberjunction/server` in the server bootstrap.
+
+  Generated output only; no hand edits, no runtime behaviour change.
+
+  One thing worth knowing for anyone regenerating these in future: **the manifest generator is sensitive to
+  build state.** `resolveSubpathExportsDetailed()` resolves a package's lazy-loading subpaths by reading the
+  `.d.ts` each `exports` entry points at, and it `continue`s past any that is missing. Run `mj codegen manifest`
+  against a workspace whose `dist/` folders are absent and the subpaths silently resolve to nothing — the
+  package falls through to the whole-package branch and `lazy-feature-config.ts` collapses its twelve
+  per-dashboard chunks into one eager import, with no warning. Build the workspace first.
+
+- Updated dependencies [6dbe524]
+- Updated dependencies [323df0f]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [10010b2]
+- Updated dependencies [405c035]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [b9a8324]
+- Updated dependencies [ff1b875]
+- Updated dependencies [79483bf]
+- Updated dependencies [6fd0a73]
+- Updated dependencies [d735407]
+- Updated dependencies [22ec804]
+- Updated dependencies [8206993]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [e63ac04]
+- Updated dependencies [1940a4d]
+- Updated dependencies [653c51d]
+- Updated dependencies [716b930]
+- Updated dependencies [fa616d3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [9fe3019]
+- Updated dependencies [eac9819]
+- Updated dependencies [047a80f]
+- Updated dependencies [887ba9c]
+- Updated dependencies
+- Updated dependencies [ada8784]
+- Updated dependencies [d66a26a]
+- Updated dependencies [b42c125]
+- Updated dependencies [5f33ca8]
+- Updated dependencies [79afbff]
+- Updated dependencies [e3a1425]
+- Updated dependencies [d0568e6]
+- Updated dependencies [23c2521]
+- Updated dependencies [427fa8b]
+- Updated dependencies [8e469c3]
+- Updated dependencies [d10f112]
+- Updated dependencies [be99b35]
+- Updated dependencies [f52be10]
+- Updated dependencies [4f7f929]
+- Updated dependencies [87aa62a]
+- Updated dependencies [595c945]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [c3557f8]
+- Updated dependencies [92af88b]
+- Updated dependencies [0d1f748]
+- Updated dependencies [6a06c80]
+- Updated dependencies [e1ebab9]
+- Updated dependencies [3014248]
+- Updated dependencies [64915b9]
+- Updated dependencies [5fc861f]
+- Updated dependencies [88d751d]
+- Updated dependencies [d7feeae]
+- Updated dependencies [5c1d762]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [905820a]
+- Updated dependencies [cc474d5]
+- Updated dependencies [2c8fbc7]
+- Updated dependencies [6d4182d]
+- Updated dependencies [4f20e10]
+- Updated dependencies [1f66f31]
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.5
+  - @memberjunction/integration-engine@6.1.0-edge.5
+  - @memberjunction/core-entities@6.1.0-edge.5
+  - @memberjunction/actions-apollo@6.1.0-edge.5
+  - @memberjunction/core@6.1.0-edge.5
+  - @memberjunction/ai-agents@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.5
+  - @memberjunction/codegen-lib@6.1.0-edge.5
+  - @memberjunction/ai-core-plus@6.1.0-edge.5
+  - @memberjunction/server@6.1.0-edge.5
+  - @memberjunction/ai-engine-base@6.1.0-edge.5
+  - @memberjunction/core-entities-server@6.1.0-edge.5
+  - @memberjunction/ai-groq@6.1.0-edge.5
+  - @memberjunction/ai-openai@6.1.0-edge.5
+  - @memberjunction/core-actions@6.1.0-edge.5
+  - @memberjunction/ai-prompts@6.1.0-edge.5
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.5
+  - @memberjunction/messaging-adapters@6.1.0-edge.5
+  - @memberjunction/server-extensions-core@6.1.0-edge.5
+  - @memberjunction/storage@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.5
+  - @memberjunction/communication-sendgrid@6.1.0-edge.5
+  - @memberjunction/remote-browser-server@6.1.0-edge.5
+  - @memberjunction/search-engine@6.1.0-edge.5
+  - @memberjunction/integration-actions@6.1.0-edge.5
+  - @memberjunction/scheduling-engine@6.1.0-edge.5
+  - @memberjunction/ai-agent-harness@6.1.0-edge.5
+  - @memberjunction/computer-use-engine@6.1.0-edge.5
+  - @memberjunction/predictive-studio@6.1.0-edge.5
+  - @memberjunction/ai-anthropic@6.1.0-edge.5
+  - @memberjunction/ai-assemblyai@6.1.0-edge.5
+  - @memberjunction/ai-azure@6.1.0-edge.5
+  - @memberjunction/ai-bedrock@6.1.0-edge.5
+  - @memberjunction/ai-betty-bot@6.1.0-edge.5
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.5
+  - @memberjunction/ai-cerebras@6.1.0-edge.5
+  - @memberjunction/ai-cohere@6.1.0-edge.5
+  - @memberjunction/ai-fireworks@6.1.0-edge.5
+  - @memberjunction/ai-gemini@6.1.0-edge.5
+  - @memberjunction/ai-heygen@6.1.0-edge.5
+  - @memberjunction/ai-huggingface@6.1.0-edge.5
+  - @memberjunction/ai-inception@6.1.0-edge.5
+  - @memberjunction/ai-inworld@6.1.0-edge.5
+  - @memberjunction/ai-lmstudio@6.1.0-edge.5
+  - @memberjunction/ai-llamacpp@6.1.0-edge.5
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.5
+  - @memberjunction/ai-minimax@6.1.0-edge.5
+  - @memberjunction/ai-mistral@6.1.0-edge.5
+  - @memberjunction/ai-ollama@6.1.0-edge.5
+  - @memberjunction/ai-openrouter@6.1.0-edge.5
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.5
+  - @memberjunction/ai-vertex@6.1.0-edge.5
+  - @memberjunction/ai-zhipu@6.1.0-edge.5
+  - @memberjunction/ai-xai@6.1.0-edge.5
+  - @memberjunction/ai-bridge-server@6.1.0-edge.5
+  - @memberjunction/ai-reranker@6.1.0-edge.5
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.5
+  - @memberjunction/actions@6.1.0-edge.5
+  - @memberjunction/action-runtime-host@6.1.0-edge.5
+  - @memberjunction/communication-ms-graph@6.1.0-edge.5
+  - @memberjunction/content-autotagging@6.1.0-edge.5
+  - @memberjunction/queue@6.1.0-edge.5
+  - @memberjunction/templates@6.1.0-edge.5
+  - @memberjunction/testing-engine@6.1.0-edge.5
+  - @memberjunction/ai-agent-manager@6.1.0-edge.5
+  - @memberjunction/ai-form-builder@6.1.0-edge.5
+  - @memberjunction/ai-segmentation@6.1.0-edge.5
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.5
+  - @memberjunction/record-set-processor@6.1.0-edge.5
+  - @memberjunction/task-graph@6.1.0-edge.5
+  - @memberjunction/database-designer-actions@6.1.0-edge.5
+  - @memberjunction/database-designer-core@6.1.0-edge.5
+  - @memberjunction/tag-engine-base@6.1.0-edge.5
+  - @memberjunction/ai-bridge-livekit@6.1.0-edge.5
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.5
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.5
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.5
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.5
+  - @memberjunction/actions-base@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.5
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.5
+  - @memberjunction/actions-content-autotag@6.1.0-edge.5
+  - @memberjunction/archiving-engine@6.1.0-edge.5
+  - @memberjunction/communication-types@6.1.0-edge.5
+  - @memberjunction/entity-communications-base@6.1.0-edge.5
+  - @memberjunction/doc-utils@6.1.0-edge.5
+  - @memberjunction/encryption@6.1.0-edge.5
+  - @memberjunction/external-data-sources@6.1.0-edge.5
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.5
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.5
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.5
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.5
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.5
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.5
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.5
+  - @memberjunction/react-linter@6.1.0-edge.5
+  - @memberjunction/record-comparison@6.1.0-edge.5
+  - @memberjunction/scheduling-actions@6.1.0-edge.5
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.5
+  - @memberjunction/testing-integration@6.1.0-edge.5
+  - @memberjunction/esignature@6.1.0-edge.5
+  - @memberjunction/geo-core@6.1.0-edge.5
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.5
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.5
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.5
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.5
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.5
+  - @memberjunction/archiving-action@6.1.0-edge.5
+  - @memberjunction/auth-providers@6.1.0-edge.5
+  - @memberjunction/data-context-server@6.1.0-edge.5
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.5
+  - @memberjunction/esignature-docusign@6.1.0-edge.5
+  - @memberjunction/esignature-dropboxsign@6.1.0-edge.5
+  - @memberjunction/esignature-pandadoc@6.1.0-edge.5
+
+## 6.1.0-edge.4
+
+### Minor Changes
+
+- 00a2483: Introduces Identity Claims infrastructure in MemberJunction core for guest record claiming, account linking, and invite verification workflows (#4012).
+  - Schema & Entities: Adds `IdentityClaimType` and `IdentityClaim` entities with lifecycle state transitions (`Pending`, `Claimed`, `Expired`, `Revoked`).
+  - Pluggable Driver Substrate: Supports custom claim handler implementations via `BaseIdentityClaimDriver` and `@RegisterClass`.
+  - Server Engine: `IdentityClaimEngineServer` handles cryptographic claim creation, SHA-256 token hashing at rest, timing-safe token verification, email notifications via MJ Communications framework with HTML escaping, configurable email providers, polymorphic entity resolution, and atomic claim redemption.
+
+### Patch Changes
+
+- Updated dependencies [e533ce5]
+- Updated dependencies [f5e91a7]
+- Updated dependencies [6242df1]
+- Updated dependencies [b08d696]
+- Updated dependencies [d40251e]
+- Updated dependencies [a59e52d]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [29187f8]
+- Updated dependencies [de6eb14]
+- Updated dependencies [78e2667]
+- Updated dependencies [a2c528f]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [f2fa6b3]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [516f4fb]
+- Updated dependencies [e7b4833]
+- Updated dependencies [9cce262]
+- Updated dependencies [647bd71]
+- Updated dependencies [f4fedab]
+- Updated dependencies [7857d8e]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [ebbc4e7]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [53c341c]
+- Updated dependencies [6b971ab]
+- Updated dependencies [0aa2b91]
+- Updated dependencies [74e161d]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [a04d5c9]
+- Updated dependencies [a09bfb5]
+- Updated dependencies [bae672c]
+- Updated dependencies [faac5b5]
+- Updated dependencies [a1a8989]
+- Updated dependencies [d31cba4]
+- Updated dependencies [d078c54]
+- Updated dependencies [ec71199]
+- Updated dependencies [c4e98ce]
+  - @memberjunction/core-entities@6.1.0-edge.4
+  - @memberjunction/codegen-lib@6.1.0-edge.4
+  - @memberjunction/integration-engine@6.1.0-edge.4
+  - @memberjunction/server@6.1.0-edge.4
+  - @memberjunction/core@6.1.0-edge.4
+  - @memberjunction/geo-core@6.1.0-edge.4
+  - @memberjunction/core-actions@6.1.0-edge.4
+  - @memberjunction/core-entities-server@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.4
+  - @memberjunction/actions-apollo@6.1.0-edge.4
+  - @memberjunction/content-autotagging@6.1.0-edge.4
+  - @memberjunction/doc-utils@6.1.0-edge.4
+  - @memberjunction/ai-betty-bot@6.1.0-edge.4
+  - @memberjunction/ai-heygen@6.1.0-edge.4
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.4
+  - @memberjunction/ai-agent-harness@6.1.0-edge.4
+  - @memberjunction/ai-agents@6.1.0-edge.4
+  - @memberjunction/ai-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-core-plus@6.1.0-edge.4
+  - @memberjunction/computer-use-engine@6.1.0-edge.4
+  - @memberjunction/predictive-studio@6.1.0-edge.4
+  - @memberjunction/ai-prompts@6.1.0-edge.4
+  - @memberjunction/ai-anthropic@6.1.0-edge.4
+  - @memberjunction/ai-assemblyai@6.1.0-edge.4
+  - @memberjunction/ai-azure@6.1.0-edge.4
+  - @memberjunction/ai-bedrock@6.1.0-edge.4
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.4
+  - @memberjunction/ai-cerebras@6.1.0-edge.4
+  - @memberjunction/ai-cohere@6.1.0-edge.4
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.4
+  - @memberjunction/ai-fireworks@6.1.0-edge.4
+  - @memberjunction/ai-gemini@6.1.0-edge.4
+  - @memberjunction/ai-groq@6.1.0-edge.4
+  - @memberjunction/ai-huggingface@6.1.0-edge.4
+  - @memberjunction/ai-inception@6.1.0-edge.4
+  - @memberjunction/ai-inworld@6.1.0-edge.4
+  - @memberjunction/ai-lmstudio@6.1.0-edge.4
+  - @memberjunction/ai-llamacpp@6.1.0-edge.4
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.4
+  - @memberjunction/ai-minimax@6.1.0-edge.4
+  - @memberjunction/ai-mistral@6.1.0-edge.4
+  - @memberjunction/ai-ollama@6.1.0-edge.4
+  - @memberjunction/ai-openai@6.1.0-edge.4
+  - @memberjunction/ai-openrouter@6.1.0-edge.4
+  - @memberjunction/ai-vertex@6.1.0-edge.4
+  - @memberjunction/ai-zhipu@6.1.0-edge.4
+  - @memberjunction/ai-xai@6.1.0-edge.4
+  - @memberjunction/ai-bridge-server@6.1.0-edge.4
+  - @memberjunction/remote-browser-server@6.1.0-edge.4
+  - @memberjunction/ai-reranker@6.1.0-edge.4
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.4
+  - @memberjunction/actions@6.1.0-edge.4
+  - @memberjunction/action-runtime-host@6.1.0-edge.4
+  - @memberjunction/communication-ms-graph@6.1.0-edge.4
+  - @memberjunction/queue@6.1.0-edge.4
+  - @memberjunction/messaging-adapters@6.1.0-edge.4
+  - @memberjunction/search-engine@6.1.0-edge.4
+  - @memberjunction/templates@6.1.0-edge.4
+  - @memberjunction/testing-engine@6.1.0-edge.4
+  - @memberjunction/ai-agent-manager@6.1.0-edge.4
+  - @memberjunction/ai-form-builder@6.1.0-edge.4
+  - @memberjunction/ai-segmentation@6.1.0-edge.4
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.4
+  - @memberjunction/record-set-processor@6.1.0-edge.4
+  - @memberjunction/task-graph@6.1.0-edge.4
+  - @memberjunction/database-designer-actions@6.1.0-edge.4
+  - @memberjunction/database-designer-core@6.1.0-edge.4
+  - @memberjunction/tag-engine-base@6.1.0-edge.4
+  - @memberjunction/ai-bridge-livekit@6.1.0-edge.4
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.4
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.4
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.4
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.4
+  - @memberjunction/actions-base@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.4
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.4
+  - @memberjunction/actions-content-autotag@6.1.0-edge.4
+  - @memberjunction/archiving-engine@6.1.0-edge.4
+  - @memberjunction/communication-types@6.1.0-edge.4
+  - @memberjunction/entity-communications-base@6.1.0-edge.4
+  - @memberjunction/communication-sendgrid@6.1.0-edge.4
+  - @memberjunction/encryption@6.1.0-edge.4
+  - @memberjunction/external-data-sources@6.1.0-edge.4
+  - @memberjunction/external-data-source-databricks@6.1.0-edge.4
+  - @memberjunction/external-data-source-mongodb@6.1.0-edge.4
+  - @memberjunction/external-data-source-mysql@6.1.0-edge.4
+  - @memberjunction/external-data-source-oracle@6.1.0-edge.4
+  - @memberjunction/external-data-source-postgres@6.1.0-edge.4
+  - @memberjunction/external-data-source-sqlserver@6.1.0-edge.4
+  - @memberjunction/external-data-source-snowflake@6.1.0-edge.4
+  - @memberjunction/integration-actions@6.1.0-edge.4
+  - @memberjunction/storage@6.1.0-edge.4
+  - @memberjunction/react-linter@6.1.0-edge.4
+  - @memberjunction/record-comparison@6.1.0-edge.4
+  - @memberjunction/scheduling-actions@6.1.0-edge.4
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.4
+  - @memberjunction/scheduling-engine@6.1.0-edge.4
+  - @memberjunction/testing-integration@6.1.0-edge.4
+  - @memberjunction/esignature@6.1.0-edge.4
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.4
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.4
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.4
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.4
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.4
+  - @memberjunction/archiving-action@6.1.0-edge.4
+  - @memberjunction/auth-providers@6.1.0-edge.4
+  - @memberjunction/data-context-server@6.1.0-edge.4
+  - @memberjunction/server-extensions-core@6.1.0-edge.4
+  - @memberjunction/esignature-docusign@6.1.0-edge.4
+  - @memberjunction/esignature-dropboxsign@6.1.0-edge.4
+  - @memberjunction/esignature-pandadoc@6.1.0-edge.4
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.4
+
 ## 6.1.0-edge.3
 
 ### Patch Changes

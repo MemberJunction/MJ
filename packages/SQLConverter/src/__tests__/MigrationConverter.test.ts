@@ -31,6 +31,13 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(true);
     // …and it is surfaced as a gap so the CLI fails the run rather than shipping an empty file.
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
+    // Promoted for the same reason a fully-gapped file is: an empty body must never be written as
+    // a discoverable .pg.sql. Pinned because the two promotions are computed separately — the
+    // hollow check reads `transpiled.unhandled`, which does NOT contain the synthetic row added
+    // just above, so this case cannot ride on that one by accident.
+    expect(r.status).toBe('needs-hand-authoring');
+    // And it is NOT described as a gapped conversion — nothing became a gap here.
+    expect(r.notes.some((n) => n.includes('every translatable statement became a conversion gap'))).toBe(false);
   });
 
   it('does NOT flag a normal conversion; reports source/emitted counts', async () => {
@@ -53,6 +60,61 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.status).toBe('reseed-or-regen-only');
     expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
     expect(r.reconciliation.emittedStatements).toBe(0);
+  });
+
+  it('promotes a FULLY GAPPED conversion to needs-hand-authoring (issue #3840)', async () => {
+    // The real case: bizapps-common's Layered_Base_Views_People_Organizations wraps its entire
+    // body in `IF NOT OBJECT_ID(...)` blocks the dialect cannot emit, so every statement becomes a
+    // gap and the body is a header + banner over nothing. Left as `converted`, the CLI writes a
+    // discoverable .pg.sql that satisfies filename parity, passes a T-SQL scan, applies cleanly,
+    // and does nothing.
+    const allGapped: TSQLToPGTranspiler = {
+      transpile: async () => ({
+        sql: [],
+        unhandled: [
+          { kind: 'IF-BLOCK', snippet: "IF NOT OBJECT_ID('[s].[vwPeople]', 'V') IS NULL BEGIN" },
+          { kind: 'IF-BLOCK', snippet: "IF NOT OBJECT_ID('[s].[vwOrganizations]', 'V') IS NULL BEGIN" },
+        ],
+      }),
+    };
+    // Hand-authored DDL, so the classifier keeps it and it reaches the transpiler. (A `vw*`-named
+    // object would classify as a CodeGen object and take the marker path instead, which is guarded
+    // separately by the empty-marker promotion above.)
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Layered.sql', { transpiler: allGapped });
+    expect(r.status).toBe('needs-hand-authoring');
+    expect(r.reconciliation.emittedStatements).toBe(0);
+    // It is a DIFFERENT finding from the vanish guard: content was reported, not lost.
+    expect(r.reconciliation.suspiciousEmptyOutput).toBe(false);
+    expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(false);
+    expect(r.notes.some((n) => n.includes('every translatable statement became a conversion gap'))).toBe(true);
+  });
+
+  it('does NOT promote when SOME statements survived alongside a gap', async () => {
+    // A partially-gapped migration is the ordinary case `--allow-gaps` exists for: real DDL was
+    // emitted, and the gap is recorded in the banner. Promoting it would route every imperfect
+    // conversion to .needs-hand and make the flag meaningless.
+    const partial: TSQLToPGTranspiler = {
+      transpile: async (tsql) => ({
+        sql: [tsql],
+        unhandled: [{ kind: 'IF-BLOCK', snippet: 'IF EXISTS (...) BEGIN' }],
+      }),
+    };
+    const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: partial });
+    expect(r.status).toBe('converted');
+    expect(r.reconciliation.emittedStatements).toBeGreaterThan(0);
+  });
+
+  it('does NOT promote an all-DROPPED file (empty, but nothing was gapped)', async () => {
+    // Guards the third `emittedStatements === 0` case: the dialect accounted the content as
+    // dropped rather than gapped, which is legitimate and must stay `converted`.
+    const allDropped: TSQLToPGTranspiler = {
+      transpile: async () => ({ sql: [], unhandled: [], dropped: [{ kind: 'ALTER-ACTIONLESS', snippet: 'ALTER TABLE x' }] }),
+    };
+    const sql = 'ALTER TABLE [__mj].[Widget] ADD CONSTRAINT CK CHECK (ISJSON([X]) = 1);';
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: allDropped });
+    expect(r.status).not.toBe('needs-hand-authoring');
   });
 
   it('does NOT flag suspiciousEmptyOutput when the dialect intentionally DROPPED the content', async () => {
@@ -79,6 +141,44 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     expect(r.unhandled.some((u) => u.kind === 'RECONCILIATION-EMPTY-OUTPUT')).toBe(true);
   });
 
+  it('substitutes ${mjSchema} independently of ${flyway:defaultSchema} (issue #3838)', async () => {
+    // An Open App migration names its OWN schema with ${flyway:defaultSchema} and MJ CORE with
+    // ${mjSchema}; for every app those are different values. Only the first was substituted, so
+    // `${mjSchema}` survived into the emitted file AND into the SQL --bake-codegen executes,
+    // failing with: relation "${mjSchema}.Entity" does not exist.
+    const sql = [
+      'CREATE TABLE [${flyway:defaultSchema}].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );',
+      'GO',
+      "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';",
+    ].join('\n');
+    const r = await convertMigration(sql, 'V_Widget.sql', {
+      transpiler: passthrough,
+      schema: '__mj_bizappscommon',
+      coreSchema: '__mj',
+    });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    // The app's own object resolves to the app schema…
+    expect(r.pgSQL).toContain('__mj_bizappscommon');
+    // …and core resolves to core, NOT to the app schema.
+    expect(r.pgSQL).not.toContain('__mj_bizappscommon"."Entity"');
+    expect(r.pgSQL).toMatch(/__mj["\].]*\.?\[?"?Entity/);
+  });
+
+  it('defaults ${mjSchema} to __mj when no coreSchema is supplied', async () => {
+    const sql = "UPDATE [${mjSchema}].[Entity] SET [Name] = 'W' WHERE [ID] = '1';\nGO\nCREATE TABLE [x].[Y] ( [ID] INT );";
+    const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: passthrough, schema: '__mj_app' });
+    expect(r.pgSQL).not.toContain('${mjSchema}');
+    // The app schema is deliberately '__mj_app', which CONTAINS '__mj' as a substring — so
+    // `toContain('__mj')` cannot tell the default apart from the bug this PR fixes, where the
+    // core placeholder falls back to the app schema. pgHeader() emits
+    // `CREATE SCHEMA IF NOT EXISTS __mj;` besides, which satisfies that assertion on its own
+    // whether or not the token was substituted at all. Assert on the qualified reference:
+    // negative on the wrong schema, positive on the right one.
+    expect(r.pgSQL).not.toContain('[__mj_app].[Entity]');
+    expect(r.pgSQL).toContain('[__mj].[Entity]');
+  });
+
   it('reflects a dialect ACCOUNTING-LEAK in reconciliation', async () => {
     const leaky: TSQLToPGTranspiler = {
       transpile: async (t) => ({ sql: [t], unhandled: [{ kind: 'ACCOUNTING-LEAK', snippet: 'parsed=3 but …' }] }),
@@ -86,6 +186,84 @@ describe('convertMigration — reconciliation (issue #3252 Phase 3)', () => {
     const sql = 'CREATE TABLE [__mj].[Widget] ( [ID] UNIQUEIDENTIFIER NOT NULL );';
     const r = await convertMigration(sql, 'V_Widget.sql', { transpiler: leaky });
     expect(r.reconciliation.accountingLeak).toBe(true);
+  });
+});
+
+describe('convertMigration — BIT literals in surviving entity-registration INSERTs', () => {
+  // CodeGen registers a new entity by INSERTing into Entity / EntityField / EntityPermission —
+  // long-lived core-metadata tables that no migration re-creates. The AST dialect therefore never
+  // sees a CREATE TABLE for them, has no column types to infer, and emits a SQL Server BIT literal
+  // as the integer it looks like. PostgreSQL then rejects the INSERT at APPLY time with
+  // `column "IncludeInAPI" is of type boolean but expression is of type integer` — which the
+  // converter's own "0 gaps" summary cannot catch, so every migration registering a new entity
+  // produced a file that failed on its first apply.
+  //
+  // The transpiler stub emits PG-shaped SQL that still carries the Flyway schema macro, because
+  // that is what the real MJPostgresTranspiler hands back — substitution happens in assemblePgSQL.
+  const emitting = (out: string): TSQLToPGTranspiler => ({
+    transpile: async () => ({ sql: [out], unhandled: [] }),
+  });
+
+  const entityInsert = [
+    'INSERT INTO ${flyway:defaultSchema}."Entity" (',
+    '  "ID",',
+    '  "Name",',
+    '  "IncludeInAPI",',
+    '  "AllowCreateAPI",',
+    '  "AuditViewRuns",',
+    '  "UserViewMaxRows"',
+    ')',
+    'VALUES',
+    "  ('0dca1987-4d89-4c8f-81b3-b47a8019af97', 'MJ: AI Usage Types', 1, 1, 0, 1000);",
+  ].join('\n');
+
+  const convert = (emitted: string) =>
+    convertMigration('CREATE TABLE [__mj].[AIUsageType] ( [ID] UNIQUEIDENTIFIER NOT NULL );', 'V_AIUsageType.sql', {
+      transpiler: emitting(emitted),
+    });
+
+  it('rewrites BIT 0/1 to TRUE/FALSE for known-boolean core-metadata columns', async () => {
+    const r = await convert(entityInsert);
+    // IncludeInAPI and AllowCreateAPI were 1; AuditViewRuns was 0.
+    expect(r.pgSQL).toContain('TRUE');
+    expect(r.pgSQL).toContain('FALSE');
+    const values = r.pgSQL.slice(r.pgSQL.indexOf("'MJ: AI Usage Types'"));
+    expect(values).toMatch(/TRUE\s*,\s*TRUE\s*,\s*FALSE/);
+  });
+
+  it('leaves a non-boolean integer column alone', async () => {
+    const r = await convert(entityInsert);
+    // UserViewMaxRows is an integer column that happens to sit in the same tuple. Rewriting by
+    // ordinal position — not by "looks like a bit" — is what keeps it intact.
+    expect(r.pgSQL).toContain('1000');
+    expect(r.pgSQL).not.toMatch(/1000\s*::\s*boolean/i);
+  });
+
+  it('runs AFTER schema substitution, not before', async () => {
+    // The ordering is load-bearing and was wrong in the first cut of this fix. The INSERT matcher
+    // keys on a `schema.Table` reference whose schema is word characters; while the table is still
+    // `${flyway:defaultSchema}."Entity"` that pattern matches nothing, so an earlier call silently
+    // returns the body unchanged and the coercion appears to do nothing at all. Asserting on a
+    // macro-carrying input is what pins the order — a regression would leave the 1s as integers.
+    const r = await convert(entityInsert);
+    expect(r.pgSQL).not.toContain('${flyway:defaultSchema}');
+    expect(r.pgSQL).toContain('__mj."Entity"');
+    expect(r.pgSQL).not.toMatch(/'MJ: AI Usage Types',\s*1,/);
+  });
+
+  it('does not touch a table outside the core-metadata catalog', async () => {
+    // The catalog is an allow-list of tables whose column types are known. An app table with a
+    // column that merely SHARES a name must not be rewritten on that basis.
+    const appInsert = [
+      'INSERT INTO ${flyway:defaultSchema}."WidgetSetting" (',
+      '  "ID",',
+      '  "IncludeInAPI"',
+      ')',
+      'VALUES',
+      "  ('11111111-1111-4111-8111-111111111111', 1);",
+    ].join('\n');
+    const r = await convert(appInsert);
+    expect(r.pgSQL).toMatch(/'11111111-1111-4111-8111-111111111111',\s*1/);
   });
 });
 

@@ -13,7 +13,7 @@ import {
     AfterViewInit,
     inject
 } from '@angular/core';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, ResolveMapLatitudeField, ResolveMapLongitudeField } from '@memberjunction/core';
 import { GeoDataEngine } from '@memberjunction/core-entities';
 import { MapRenderMode, MapDisplayState, MapMarkerClickEvent, MapRegionClickEvent } from './map-view.types';
 import * as MapCore from '@memberjunction/geo-maps';
@@ -114,19 +114,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
      * Resolve a lat/lng field name. Explicit override wins; otherwise picks the
      * field tagged with the matching `ExtendedType` on `Entity`.
      */
-    private resolveGeoField(input: string, defaultName: string, extendedType: 'GeoLatitude' | 'GeoLongitude'): string {
-        if (input && input !== defaultName) return input; // explicit override
-        if (this.Entity) {
-            const tagged = this.Entity.Fields.find(f => f.ExtendedType === extendedType);
-            if (tagged) return tagged.Name;
-        }
-        return input || defaultName;
-    }
     private get effectiveLatitudeField(): string {
-        return this.resolveGeoField(this.LatitudeField, '__mj_Latitude', 'GeoLatitude');
+        if (!this.Entity) return this.LatitudeField || '__mj_Latitude';
+        return ResolveMapLatitudeField(this.Entity, this.LatitudeField);
     }
     private get effectiveLongitudeField(): string {
-        return this.resolveGeoField(this.LongitudeField, '__mj_Longitude', 'GeoLongitude');
+        if (!this.Entity) return this.LongitudeField || '__mj_Longitude';
+        return ResolveMapLongitudeField(this.Entity, this.LongitudeField);
     }
 
     ngOnInit(): void {

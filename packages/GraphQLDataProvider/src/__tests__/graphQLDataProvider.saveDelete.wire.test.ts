@@ -15,6 +15,7 @@ vi.mock('graphql-request', async () => {
 });
 
 import { EntityDeleteOptions, EntitySaveOptions, TransactionItem, UserInfo } from '@memberjunction/core';
+import { ValidationErrorInfo } from '@memberjunction/global';
 import { GraphQLTransactionGroup } from '../graphQLTransactionGroup';
 import { FakeGraphQLResponseError, GraphQLWire } from './support/graphQLWire';
 import {
@@ -347,6 +348,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
                     SkipEntityActions: false,
                     ReplayOnly: false,
                     IsParentEntityDelete: false,
+                    SkipRecordChanges: false,
                 },
             });
             expect(entity.LatestResult.Success).toBe(true);
@@ -369,6 +371,7 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
                     SkipEntityActions: false,
                     ReplayOnly: true,
                     IsParentEntityDelete: false,
+                    SkipRecordChanges: false,
                 },
             });
         });
@@ -404,5 +407,143 @@ describe('GraphQLDataProvider Save/Delete wire behavior', () => {
             expect(entity.LatestResult.Success).toBe(false);
             expect(entity.LatestResult.Message).toBe('Delete blocked by dependency');
         });
+    });
+});
+
+/**
+ * A refusal's STRUCTURE crossing the wire (the message already does — see the failure cases above).
+ *
+ * The server's `ResolverBase` throws a validation refusal as `GraphQLError(CompleteMessage, {
+ * extensions: { code, entityName, validationErrors } })`, where `validationErrors` is
+ * `LatestResult.Errors` flattened to plain `{ Source, Message, Value, Type }` objects. The provider
+ * must put those back on the client entity's `LatestResult.Errors` as real `ValidationErrorInfo`
+ * instances — the form paints fields from that array by `Source === FieldName`, exactly as it does
+ * after a local `Validate()` refusal. Without the extension, `Errors` must stay empty so a plain SQL
+ * or permission failure is not mistaken for a field problem.
+ */
+describe("GraphQLDataProvider rehydrates a refusal's validationErrors extension", () => {
+    let provider: WireTestGraphQLProvider;
+    let user: UserInfo;
+
+    beforeEach(() => {
+        GraphQLWire.Reset();
+        provider = CreateWireTestProvider();
+        provider.RegisterTestEntity(BuildCustomerEntityInfo());
+        user = BuildTestUser(provider);
+    });
+
+    afterEach(() => {
+        expect(GraphQLWire.PendingResponderCount).toBe(0);
+        ResetGraphQLProviderSingleton();
+    });
+
+    function loaded(): TestCustomerEntity {
+        const entity = new TestCustomerEntity(BuildCustomerEntityInfo(), provider);
+        entity.LoadFromData({ ID: 'CUST-0001', Name: 'Old Name', 'First Name': null, Tier: 'Gold', IsActive: true, Age: 42, SignedUpAt: new Date(SIGNED_UP_AT_MS), Photo: null, __mj_CreatedAt: CREATED_AT, __mj_UpdatedAt: UPDATED_AT });
+        return entity;
+    }
+
+    const REFUSAL_PROSE = 'Tier "Platinum" requires an Age of at least 21.';
+    const WIRE_ERRORS = [
+        { Source: 'Tier', Message: REFUSAL_PROSE, Value: 'Platinum', Type: 'Failure' },
+        { Source: '', Message: 'Reviewed by the tier policy', Value: null, Type: 'Warning' },
+    ];
+
+    it('Save: puts each wire entry on LatestResult.Errors as a ValidationErrorInfo, keeping the message', async () => {
+        const entity = loaded();
+        entity.Set('Tier', 'Platinum');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError(REFUSAL_PROSE, 'SAVE_ENTITY_ERROR', { entityName: 'Customers', validationErrors: WIRE_ERRORS }));
+
+        const result = await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(result).toBeNull();
+        expect(entity.LatestResult.Success).toBe(false);
+        expect(entity.LatestResult.Message).toBe(REFUSAL_PROSE);
+        expect(entity.LatestResult.Errors).toHaveLength(2);
+        expect(entity.LatestResult.Errors.every((e: unknown) => e instanceof ValidationErrorInfo)).toBe(true);
+        expect(entity.LatestResult.Errors[0]).toMatchObject({ Source: 'Tier', Message: REFUSAL_PROSE, Value: 'Platinum', Type: 'Failure' });
+        expect(entity.LatestResult.Errors[1]).toMatchObject({ Source: '', Message: 'Reviewed by the tier policy', Type: 'Warning' });
+    });
+
+    it('Save: CompleteMessage carries the refusal text ONCE — Message is the server\'s CompleteMessage, Errors are the same entries', async () => {
+        // The server's Message is empty on a validation refusal, so its CompleteMessage is the errors
+        // joined; that string lands in the client's Message. Rehydrating the same entries into Errors
+        // must not make the client's CompleteMessage say each one twice (143 readers toast it).
+        const entity = loaded();
+        entity.Set('Tier', 'Platinum');
+        const serverComplete = REFUSAL_PROSE + '\nReviewed by the tier policy';
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError(serverComplete, 'SAVE_ENTITY_ERROR', { validationErrors: WIRE_ERRORS, messageIncludesValidationErrors: true }));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        const complete = entity.LatestResult.CompleteMessage;
+        expect(complete).toBe(serverComplete);
+        expect(complete.split(REFUSAL_PROSE).length - 1, 'the prose appears exactly once').toBe(1);
+        expect(complete.split('Reviewed by the tier policy').length - 1).toBe(1);
+    });
+
+    it('Save: the once-only marking is the SERVER\'s statement, never inferred — a server that sends validationErrors without it keeps today\'s behaviour', async () => {
+        // The client cannot know what an arbitrary server put in `message`; only the producer that
+        // threw it can say it is CompleteMessage. Without that statement, nothing is assumed.
+        const entity = loaded();
+        entity.Set('Tier', 'Platinum');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Some other message entirely.', 'SAVE_ENTITY_ERROR', { validationErrors: WIRE_ERRORS }));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(entity.LatestResult.MessageIncludesErrors).toBe(false);
+        expect(entity.LatestResult.Errors).toHaveLength(2);
+        expect(entity.LatestResult.CompleteMessage).toBe('Some other message entirely.\n' + REFUSAL_PROSE + '\nReviewed by the tier policy');
+    });
+
+    it('Save: without the extension nothing is marked — CompleteMessage is just the message, as before', async () => {
+        const entity = loaded();
+        entity.Set('Name', 'New Name');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Timeout expired while saving.', 'SAVE_ENTITY_ERROR'));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(entity.LatestResult.MessageIncludesErrors).toBe(false);
+        expect(entity.LatestResult.CompleteMessage).toBe('Timeout expired while saving.');
+    });
+
+    it('Save: leaves LatestResult.Errors empty when the error carries no validationErrors extension', async () => {
+        const entity = loaded();
+        entity.Set('Name', 'New Name');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Timeout expired while saving.', 'SAVE_ENTITY_ERROR'));
+
+        await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(entity.LatestResult.Success).toBe(false);
+        expect(entity.LatestResult.Message).toBe('Timeout expired while saving.');
+        expect(entity.LatestResult.Errors).toEqual([]);
+    });
+
+    it('Save: tolerates a malformed extension — garbage yields no errors, never a throw', async () => {
+        const entity = loaded();
+        entity.Set('Name', 'New Name');
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('odd', 'SAVE_ENTITY_ERROR', { validationErrors: 'not-an-array' }));
+
+        const result = await provider.Save(entity, user, new EntitySaveOptions());
+
+        expect(result).toBeNull();
+        expect(entity.LatestResult.Errors).toEqual([]);
+    });
+
+    it('Delete: rehydrates the extension the same way', async () => {
+        const entity = loaded();
+        GraphQLWire.EnqueueError(new FakeGraphQLResponseError('Customer has open orders.', 'DELETE_ENTITY_ERROR', {
+            validationErrors: [{ Source: 'ID', Message: 'Customer has open orders.', Value: 'CUST-0001', Type: 'Failure' }],
+            messageIncludesValidationErrors: true,
+        }));
+
+        const ok = await provider.Delete(entity, new EntityDeleteOptions(), user);
+
+        expect(ok).toBe(false);
+        expect(entity.LatestResult.Message).toBe('Customer has open orders.');
+        expect(entity.LatestResult.Errors).toHaveLength(1);
+        expect(entity.LatestResult.Errors[0]).toBeInstanceOf(ValidationErrorInfo);
+        expect(entity.LatestResult.Errors[0]).toMatchObject({ Source: 'ID', Message: 'Customer has open orders.' });
+        expect(entity.LatestResult.CompleteMessage, 'once, not twice').toBe('Customer has open orders.');
     });
 });

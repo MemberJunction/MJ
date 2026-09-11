@@ -15,6 +15,7 @@
  */
 
 import { IMetadataProvider, UserInfo, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
 
 /** The conversation `ApplicationScope` values (mirrors the entity union). `'Application'` hides it from the main chat list. */
@@ -149,7 +150,7 @@ async function resolveOrCreateConversation(
     const rv = new RunView();
     const found = await rv.RunView<{ ID: string }>({
         EntityName: CONVERSATION_ENTITY,
-        ExtraFilter: `ExternalID='${escapeSql(roomKey)}' AND Type='${escapeSql(conversationType)}' AND (IsArchived IS NULL OR IsArchived=0)`,
+        ExtraFilter: `ExternalID='${EscapeSQLString(roomKey)}' AND Type='${EscapeSQLString(conversationType)}' AND (IsArchived IS NULL OR IsArchived=0)`,
         Fields: ['ID'],
         OrderBy: '__mj_CreatedAt DESC',
         MaxRows: 1,
@@ -213,7 +214,7 @@ async function resolveApplicationIdByName(
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string }>({
         EntityName: 'MJ: Applications',
-        ExtraFilter: `Name='${escapeSql(name)}'`,
+        ExtraFilter: `Name='${EscapeSQLString(name)}'`,
         Fields: ['ID'],
         MaxRows: 1,
         ResultType: 'simple',
@@ -223,9 +224,4 @@ async function resolveApplicationIdByName(
     }
     LogStatus(`CreateBridgeRoomTranscriptSink: application '${name}' not found — room transcripts stay unlinked (still scoped out of normal chat).`);
     return null;
-}
-
-/** Escapes single quotes for safe embedding in an `ExtraFilter` literal. */
-function escapeSql(value: string): string {
-    return value.replace(/'/g, "''");
 }

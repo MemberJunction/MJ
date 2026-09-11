@@ -1,41 +1,47 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { HttpClient } from '@memberjunction/network-utils';
 
 /**
  * Per-action tests for the Typeform provider.
  *
  * Credentials resolve from the BIZAPPS_TYPEFORM_API_TOKEN environment variable
  * (set per test), so no database access occurs. The HTTP boundary is the
- * axios module mock (axios.create instance + direct axios.get); the
+ * network-utils module mock (HttpClient instance + direct HttpGet); the
  * `GetTypeformFormsAction` uses global fetch, stubbed via vi.stubGlobal.
  */
 
 const http = vi.hoisted(() => {
   const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    interceptors: { request: { use: vi.fn() }, response: { use: vi.fn() } },
-    defaults: { headers: { common: {} as Record<string, string> } },
+    Get: vi.fn(),
+    Post: vi.fn(),
+    Put: vi.fn(),
+    Patch: vi.fn(),
+    Delete: vi.fn(),
+    Head: vi.fn(),
+    Request: vi.fn(),
   };
-  const axiosDefault = {
-    create: vi.fn(() => instance),
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    request: vi.fn(),
-    isAxiosError: vi.fn(() => false),
+  const standalone = {
+    HttpGet: vi.fn(),
+    HttpPost: vi.fn(),
+    HttpPut: vi.fn(),
+    HttpPatch: vi.fn(),
+    HttpDelete: vi.fn(),
+    HttpHead: vi.fn(),
+    HttpRequest: vi.fn(),
   };
-  return { instance, axiosDefault };
+  return { instance, standalone };
 });
 
-vi.mock('axios', () => ({
-  default: http.axiosDefault,
-  AxiosError: class AxiosError extends Error {},
+vi.mock('@memberjunction/network-utils', () => ({
+  // `new HttpClient(...)` hands back the shared spy instance so assertions can inspect calls.
+  HttpClient: vi.fn(function () { return http.instance; }),
+  HttpError: class HttpError extends Error {
+    Status = 0;
+    Data: unknown = undefined;
+    Headers: Record<string, string> = {};
+  },
+  IsHttpError: vi.fn((e: unknown) => typeof e === 'object' && e !== null && 'Status' in e),
+  ...http.standalone,
 }));
 
 vi.mock('@memberjunction/actions', () => ({
@@ -107,11 +113,11 @@ function paramValue(params: ActionParam[], name: string): unknown {
 
 beforeEach(() => {
   process.env[ENV_KEY] = 'env-token';
-  http.instance.get.mockReset();
-  http.instance.post.mockReset();
-  http.instance.put.mockReset();
-  http.axiosDefault.get.mockReset();
-  http.axiosDefault.create.mockClear();
+  http.instance.Get.mockReset();
+  http.instance.Post.mockReset();
+  http.instance.Put.mockReset();
+  http.standalone.HttpGet.mockReset();
+  vi.mocked(HttpClient).mockClear();
 });
 
 afterEach(() => {
@@ -143,21 +149,21 @@ describe('GetTypeformAction', () => {
   });
 
   it('should GET /forms/{id} with the env-resolved bearer token', async () => {
-    http.instance.get.mockResolvedValue({
-      data: { id: 'f-1', title: 'My Form', fields: [{ id: 'q1', type: 'short_text' }], settings: {}, logic: [], hidden: [] },
-      headers: {},
+    http.instance.Get.mockResolvedValue({
+      Data: { id: 'f-1', title: 'My Form', fields: [{ id: 'q1', type: 'short_text' }], settings: {}, logic: [], hidden: [] },
+      Headers: {},
     });
 
     const params = inputs({ FormID: 'f-1' });
     const result = await run(action, params);
 
-    expect(http.axiosDefault.create).toHaveBeenCalledWith(
+    expect(HttpClient).toHaveBeenCalledWith(
       expect.objectContaining({
-        baseURL: 'https://api.typeform.com',
-        headers: expect.objectContaining({ Authorization: 'Bearer env-token' }),
+        BaseURL: 'https://api.typeform.com',
+        Headers: expect.objectContaining({ Authorization: 'Bearer env-token' }),
       }),
     );
-    expect(http.instance.get).toHaveBeenCalledWith('/forms/f-1');
+    expect(http.instance.Get).toHaveBeenCalledWith('/forms/f-1');
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully retrieved form "My Form" with 1 fields');
@@ -212,14 +218,14 @@ describe('ExportTypeformCSVAction', () => {
   });
 
   it('should GET /forms/{id}/responses and return NO_DATA for empty results', async () => {
-    http.instance.get.mockResolvedValue({
-      data: { total_items: 0, page_count: 0, items: [] },
-      headers: {},
+    http.instance.Get.mockResolvedValue({
+      Data: { total_items: 0, page_count: 0, items: [] },
+      Headers: {},
     });
 
     const result = await run(action, inputs({ FormID: 'f-1' }));
 
-    expect(http.instance.get).toHaveBeenCalledWith('/forms/f-1/responses', expect.anything());
+    expect(http.instance.Get).toHaveBeenCalledWith('/forms/f-1/responses', expect.anything());
     // NOTE (current behavior): the empty-result branch reports Success: true
     // with ResultCode NO_DATA.
     expect(result.Success).toBe(true);
@@ -325,8 +331,8 @@ describe('GetTypeformResponsesAction', () => {
   });
 
   it('should GET /forms/{id}/responses and report retrieved counts', async () => {
-    http.instance.get.mockResolvedValue({
-      data: {
+    http.instance.Get.mockResolvedValue({
+      Data: {
         total_items: 1,
         page_count: 1,
         items: [
@@ -340,12 +346,12 @@ describe('GetTypeformResponsesAction', () => {
           },
         ],
       },
-      headers: {},
+      Headers: {},
     });
 
     const result = await run(action, inputs({ FormID: 'f-1' }));
 
-    expect(http.instance.get).toHaveBeenCalledWith('/forms/f-1/responses', expect.anything());
+    expect(http.instance.Get).toHaveBeenCalledWith('/forms/f-1/responses', expect.anything());
     expect(result.Success).toBe(true);
     expect(result.ResultCode).toBe('SUCCESS');
     expect(result.Message).toBe('Successfully retrieved 1 responses from Typeform (1 total available)');

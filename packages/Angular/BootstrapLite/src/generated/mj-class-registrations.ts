@@ -32,13 +32,14 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (405 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -108,6 +109,7 @@ import {
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -201,6 +203,7 @@ import {
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -246,6 +249,7 @@ import {
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -273,6 +277,8 @@ import {
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -459,12 +465,16 @@ import {
     MJEntityDocumentEntityExtended,
 } from '@memberjunction/ai-core-plus';
 
-// @memberjunction/ai-engine-base (4 classes)
+// @memberjunction/ai-engine-base (8 classes)
 import {
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
 } from '@memberjunction/ai-engine-base';
 
 // @memberjunction/communication-types (1 classes)
@@ -530,9 +540,24 @@ import {
     TimelineViewType,
 } from '@memberjunction/ng-entity-viewer';
 
-// @memberjunction/ng-core-entity-forms (21 classes)
+// @memberjunction/ng-core-entity-forms (46 classes)
 import {
+    AIAgentCategoryHeaderPanel,
+    AIAgentCategoryHierarchyPanel,
+    AIAgentCategoryOverviewPanel,
+    AIPromptCategoryHierarchyPanel,
+    ActionCategoryHierarchyPanel,
+    CompanyHeaderPanel,
+    CompanyOverviewPanel,
+    ContentItemHierarchyPanel,
+    ConversationHeaderPanel,
+    ConversationOverviewPanel,
+    DashboardCategoryHierarchyPanel,
+    EmployeeHeaderPanel,
+    EmployeeOverviewPanel,
+    FileCategoryHierarchyPanel,
     FlowAgentFormSectionComponent,
+    ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
@@ -553,6 +578,16 @@ import {
     MJTestRunFormComponentExtended,
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
+    RecordProcessCategoryHierarchyPanel,
+    SkillHierarchyPanel,
+    TagHierarchyPanel,
+    TemplateCategoryHierarchyPanel,
+    TestSuiteHierarchyPanel,
+    UserHeaderPanel,
+    UserOverviewPanel,
+    UserViewCategoryHierarchyPanel,
 } from '@memberjunction/ng-core-entity-forms';
 
 // @memberjunction/ng-dashboard-viewer (8 classes)
@@ -592,9 +627,12 @@ import {
 /**
  * Runtime references to every @RegisterClass decorated class.
  * This array creates a static code path the bundler cannot tree-shake.
+ *
+ * Split into fixed-size chunks so no single array literal grows a union large
+ * enough to trip TS2590; the exported array is their concatenation.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const CLASS_REGISTRATIONS: any[] = [
+const CLASS_REGISTRATIONS_0: any[] = [
     AssemblyAIRealtimeClient,
     ElevenLabsRealtimeClient,
     GeminiRealtimeClient,
@@ -609,6 +647,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     AccessControlRuleProvider,
     ApplicationRolePermissionProvider,
     ArtifactPermissionProvider,
+    AuthorizationCheckServerOperation,
     CollectionPermissionProvider,
     DashboardPermissionProvider,
     EntityPermissionProvider,
@@ -678,6 +717,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAISkillPermissionEntity,
     MJAISkillSearchScopeEntity,
     MJAISkillSubAgentEntity,
+    MJAIUsageTypeEntity,
     MJAIVendorEntity,
     MJAIVendorTypeDefinitionEntity,
     MJAIVendorTypeEntity,
@@ -771,6 +811,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJConversationDetailEntityExtended,
     MJConversationDetailRatingEntity,
     MJConversationEntity,
+    MJConversationSkillEntity,
     MJConversationWidgetInstanceEntity,
     MJCountryEntity,
     MJCredentialCategoryEntity,
@@ -792,6 +833,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDatasetItemEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJDuplicateRunEntity,
     MJEmployeeCompanyIntegrationEntity,
     MJEmployeeEntity,
@@ -816,6 +861,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -843,6 +889,8 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJFormChromeRuleEntity,
     MJGeneratedCodeCategoryEntity,
     MJGeneratedCodeEntity,
+    MJIdentityClaimEntity,
+    MJIdentityClaimTypeEntity,
     MJInstanceConfigurationEntity,
     MJIntegrationEntity,
     MJIntegrationObjectEntity,
@@ -989,6 +1037,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJUserNotificationTypeEntity,
     MJUserRecordLogEntity,
     MJUserRoleEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJUserRoutineEntity,
     MJUserRoutineRecipientEntity,
     MJUserRoutineRunEntity,
@@ -1019,10 +1071,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIPromptEntityExtended,
     MJAIPromptRunEntityExtended,
     MJEntityDocumentEntityExtended,
+    LinearPriceUnitType,
     MJAICredentialBindingEntityExtended,
     PerHundredThousandTokensPriceUnitType,
+    PerImagePriceUnitType,
     PerMillionTokensPriceUnitType,
     PerThousandTokensPriceUnitType,
+    TimePerHourPriceUnitType,
+    TimePerMinutePriceUnitType,
     MJCommunicationProviderEntityExtended,
     MJEntityCommunicationMessageTypeEntityExtended,
     AudioArtifactViewerComponent,
@@ -1058,7 +1114,22 @@ export const CLASS_REGISTRATIONS: any[] = [
     GridViewType,
     MapViewType,
     TimelineViewType,
+    AIAgentCategoryHeaderPanel,
+    AIAgentCategoryHierarchyPanel,
+    AIAgentCategoryOverviewPanel,
+    AIPromptCategoryHierarchyPanel,
+    ActionCategoryHierarchyPanel,
+    CompanyHeaderPanel,
+    CompanyOverviewPanel,
+    ContentItemHierarchyPanel,
+    ConversationHeaderPanel,
+    ConversationOverviewPanel,
+    DashboardCategoryHierarchyPanel,
+    EmployeeHeaderPanel,
+    EmployeeOverviewPanel,
+    FileCategoryHierarchyPanel,
     FlowAgentFormSectionComponent,
+    ListCategoryHierarchyPanel,
     MJAIAgentChannelFormComponentExtended,
     MJAIAgentFormComponentExtended,
     MJAIAgentRunFormComponentExtended,
@@ -1079,6 +1150,16 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTestRunFormComponentExtended,
     MJTestSuiteFormComponentExtended,
     MJTestSuiteRunFormComponentExtended,
+    ProjectHierarchyPanel,
+    QueryCategoryHierarchyPanel,
+    RecordProcessCategoryHierarchyPanel,
+    SkillHierarchyPanel,
+    TagHierarchyPanel,
+    TemplateCategoryHierarchyPanel,
+    TestSuiteHierarchyPanel,
+    UserHeaderPanel,
+    UserOverviewPanel,
+    UserViewCategoryHierarchyPanel,
     ArtifactConfigPanelComponent,
     ArtifactPartComponent,
     QueryConfigPanelComponent,
@@ -1103,11 +1184,18 @@ export const CLASS_REGISTRATIONS: any[] = [
     UserViewResource,
 ];
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const CLASS_REGISTRATIONS: any[] = [
+    ...CLASS_REGISTRATIONS_0,
+    ...CLASS_REGISTRATIONS_1,
+    ...CLASS_REGISTRATIONS_2,
+];
+
 /** Marker constant indicating the manifest has been loaded. */
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 506;
+export const CLASS_REGISTRATIONS_COUNT = 541;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

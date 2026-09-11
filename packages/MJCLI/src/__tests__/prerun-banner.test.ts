@@ -1,10 +1,14 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import hook from '../hooks/prerun';
+import { FORMAT_ENV, INTERACTIVE_ENV } from '@memberjunction/cli-core';
 
 /**
- * The agent-facing banner-suppression fix: `--format=json|md`, `--no-banner`,
- * and the usage commands must not print the figlet banner OR the userAgent line,
- * so machine-readable stdout stays clean.
+ * The agent-facing banner-suppression contract: `--format=json|md`, `--no-banner`,
+ * a piped stdout, and the usage commands must not print the figlet banner OR the
+ * userAgent line, so machine-readable stdout stays clean.
+ *
+ * Also covers the global flags the hook consumes out of argv on behalf of the ~80
+ * commands that don't declare them (`--no-banner`, `--interactive`/`--no-interactive`).
  *
  * We pass LIGHT command ids only (no bootstrap import) so the hook's
  * maybeLoadBootstrap() stays a no-op during the test.
@@ -18,10 +22,32 @@ function runHook(argv: string[], commandId: string) {
     context: { log: (m: string) => logs.push(m) },
   };
   // The hook only reads `options`; `this` is unused.
-  return { promise: (hook as unknown as (o: unknown) => Promise<void>)(options), logs };
+  return { promise: (hook as unknown as (o: unknown) => Promise<void>)(options), logs, argv };
+}
+
+/** vitest runs without a TTY, so the human path has to be simulated explicitly. */
+function setTTY(isTTY: boolean): void {
+  Object.defineProperty(process.stdout, 'isTTY', { value: isTTY, configurable: true });
+  Object.defineProperty(process.stdout, 'columns', { value: 120, configurable: true });
 }
 
 describe('prerun banner suppression', () => {
+  const originalTTY = process.stdout.isTTY;
+
+  beforeEach(() => {
+    setTTY(true);
+    delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
+    delete process.env.MJ_CLI_NO_BANNER;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: originalTTY, configurable: true });
+    delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
+    delete process.env.MJ_CLI_NO_BANNER;
+  });
+
   it('suppresses banner + userAgent for --format=json (split form)', async () => {
     const { promise, logs } = runHook(['--format', 'json'], 'usage');
     await promise;
@@ -30,6 +56,12 @@ describe('prerun banner suppression', () => {
 
   it('suppresses banner + userAgent for --format=md (equals form)', async () => {
     const { promise, logs } = runHook(['--format=md'], 'usage');
+    await promise;
+    expect(logs).toEqual([]);
+  });
+
+  it('suppresses for the markdown alias too', async () => {
+    const { promise, logs } = runHook(['--format=markdown'], 'bump');
     await promise;
     expect(logs).toEqual([]);
   });
@@ -54,9 +86,123 @@ describe('prerun banner suppression', () => {
     expect(logs).toEqual([]);
   });
 
-  it('prints userAgent for a normal light command in text mode', async () => {
+  it('prints userAgent for a normal light command on a terminal', async () => {
     const { promise, logs } = runHook([], 'bump');
     await promise;
     expect(logs.some((l) => l.includes('mj/test'))).toBe(true);
+  });
+
+  it('suppresses all chrome when stdout is piped, with no flag required', async () => {
+    setTTY(false);
+    const { promise, logs } = runHook([], 'bump');
+    await promise;
+    expect(logs).toEqual([]);
+  });
+
+  // Regression: the hook used to scan argv for `--format` itself, so the env var the
+  // COMMANDS honour was invisible to it. On a TTY (where the pipe check does not fire)
+  // that printed a figlet banner and then a JSON envelope — breaking the format's whole
+  // contract. Both sides now go through ResolveOutputFormat.
+  it('suppresses chrome for a machine format selected by MJ_CLI_FORMAT, not just by flag', async () => {
+    process.env[FORMAT_ENV] = 'json';
+    const { promise, logs } = runHook([], 'bump');
+    await promise;
+    expect(logs).toEqual([]);
+  });
+
+  it('still shows chrome when MJ_CLI_FORMAT pins a human format', async () => {
+    process.env[FORMAT_ENV] = 'text';
+    const { promise, logs } = runHook([], 'bump');
+    await promise;
+    expect(logs.some((l) => l.includes('mj/test'))).toBe(true);
+  });
+
+  it('lets an explicit --format=text beat MJ_CLI_FORMAT=json, chrome included', async () => {
+    process.env[FORMAT_ENV] = 'json';
+    const { promise, logs } = runHook(['--format=text'], 'bump');
+    await promise;
+    expect(logs.some((l) => l.includes('mj/test'))).toBe(true);
+  });
+
+  it('suppresses chrome for oclif\'s own --json boolean', async () => {
+    const { promise, logs } = runHook(['--json'], 'bump');
+    await promise;
+    expect(logs).toEqual([]);
+  });
+});
+
+describe('prerun global flag consumption', () => {
+  const originalTTY = process.stdout.isTTY;
+
+  beforeEach(() => {
+    setTTY(true);
+    delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
+    delete process.env.MJ_CLI_NO_BANNER;
+  });
+
+  afterEach(() => {
+    Object.defineProperty(process.stdout, 'isTTY', { value: originalTTY, configurable: true });
+    delete process.env[INTERACTIVE_ENV];
+    delete process.env[FORMAT_ENV];
+    delete process.env.MJ_CLI_NO_BANNER;
+  });
+
+  it('strips --interactive from argv so strict-parser commands do not reject it', async () => {
+    const { promise, argv } = runHook(['--interactive', '--dir', 'x'], 'bump');
+    await promise;
+    expect(argv).toEqual(['--dir', 'x']);
+  });
+
+  it('strips --no-interactive too', async () => {
+    const { promise, argv } = runHook(['--no-interactive', '--dir', 'x'], 'bump');
+    await promise;
+    expect(argv).toEqual(['--dir', 'x']);
+  });
+
+  it('forwards --interactive to the interactivity layer via env', async () => {
+    const { promise } = runHook(['--interactive'], 'bump');
+    await promise;
+    expect(process.env[INTERACTIVE_ENV]).toBe('1');
+  });
+
+  it('forwards --no-interactive as the off signal', async () => {
+    const { promise } = runHook(['--no-interactive'], 'bump');
+    await promise;
+    expect(process.env[INTERACTIVE_ENV]).toBe('0');
+  });
+
+  it('resolves to off when both flags are passed — the safe answer wins', async () => {
+    const { promise, argv } = runHook(['--interactive', '--no-interactive'], 'bump');
+    await promise;
+    expect(process.env[INTERACTIVE_ENV]).toBe('0');
+    expect(argv).toEqual([]);
+  });
+
+  it('leaves the env unset when neither flag was passed, so detection decides', async () => {
+    const { promise } = runHook([], 'bump');
+    await promise;
+    expect(process.env[INTERACTIVE_ENV]).toBeUndefined();
+  });
+
+  it('strips --no-banner from argv and signals it via env', async () => {
+    const { promise, argv } = runHook(['--no-banner', 'foo'], 'bump');
+    await promise;
+    expect(argv).toEqual(['foo']);
+    expect(process.env.MJ_CLI_NO_BANNER).toBe('1');
+  });
+
+  it('strips repeated occurrences of a global flag', async () => {
+    const { promise, argv } = runHook(['--no-banner', 'a', '--no-banner', 'b'], 'bump');
+    await promise;
+    expect(argv).toEqual(['a', 'b']);
+  });
+
+  it('handles both global flags in one invocation', async () => {
+    const { promise, argv } = runHook(['--interactive', '--no-banner', 'x'], 'bump');
+    await promise;
+    expect(argv).toEqual(['x']);
+    expect(process.env[INTERACTIVE_ENV]).toBe('1');
+    expect(process.env.MJ_CLI_NO_BANNER).toBe('1');
   });
 });
