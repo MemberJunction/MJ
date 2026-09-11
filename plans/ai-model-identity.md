@@ -1,0 +1,265 @@
+# Model identity: personas across modalities, and fixing the modality inheritance that never ran
+
+**Status:** proposed, not started. Companion: [`plans/realtime/gpt-live-1.md`](realtime/gpt-live-1.md),
+which depends on this for voice selection but does not block on it.
+
+Two problems with one shape. **Modalities** were normalized properly and then never wired up.
+**Voices, avatars and personas** were never normalized at all. Fix the first, then build the second
+on the pattern the first was supposed to establish — this time with the resolver and the seed data
+shipping in the same release as the schema.
+
+---
+
+## Part A — `MJ: AI Modalities`: fix the inheritance and the seed
+
+### A.1 What is wrong
+
+Three entities exist and are correct: `MJ: AI Modalities` (6 seeded rows, extensible by INSERT),
+`MJ: AI Model Modalities` (`ModelID`, `ModalityID`, `Direction`, `IsSupported`, limits), and
+`MJ: AI Agent Modalities` (`AgentID`, `ModalityID`, `Direction`, `IsAllowed`, limits). The documented
+precedence chain is **Agent → Model → System → Default** (`BaseAIEngine.ts:48-64`).
+
+**Defect 1 — the inheritance is declared and never executed.** `AIModel.InheritTypeModalities` and
+`AIModelType.DefaultInputModalityID` / `DefaultOutputModalityID` are read by **zero** lines of code.
+The only grep hit outside generated files is a boolean-column list in the PG converter:
+
+```
+$ grep -rn "InheritTypeModalities|DefaultInputModalityID|DefaultOutputModalityID" packages \
+    --include=*.ts | grep -v "/generated/" | grep -v graphql-schemas
+packages/SQLConverter/src/rules/CoreMetadataBooleanColumns.ts:71:  AIModel: ['IsActive', 'InheritTypeModalities', 'SupportsPrefill'],
+```
+
+`GetModelModalities` (`packages/AI/BaseAIEngine/src/BaseAIEngine.ts:1648`) reads the junction only;
+`ModelSupportsModality` (`:1686`) falls back to a hardcoded `'text'`; `AgentSupportsModality`
+(`:1666`) does the same. So every model reports text-only regardless of its type, and a Realtime
+model — whose type declares Audio in *and* Audio out — reports no audio support at all.
+
+**Defect 2 — the junction is never seeded and the vocabulary ships as a migration `INSERT`.**
+`grep -rln "AI Model Modalities" metadata/` returns nothing. There is no `metadata/ai-modalities/`
+folder either, breaking the convention every other lookup table follows (`ai-model-types`,
+`ai-usage-types`, `ai-model-price-unit-types` all have one).
+
+### A.2 The fix
+
+**Resolver.** Implement the documented semantics in `BaseAIEngine`:
+
+```
+effective(model, direction) =
+    InheritTypeModalities
+        ? (type default for direction) ∪ junction(IsSupported = 1)  \  junction(IsSupported = 0)
+        : junction(IsSupported = 1)
+```
+
+- `GetModelModalities` consults `AIModelType.DefaultInput/OutputModalityID` when
+  `InheritTypeModalities = 1`, and honours `IsSupported = 0` as the explicit disable the field
+  description promises.
+- `ModelSupportsModality` — delete the hardcoded `'text'` fallback; the type default is the fallback.
+- `AgentSupportsModality` — when an agent has no explicit rows, fall through to the **model's**
+  effective set rather than hardcoded text. That is what `Agent → Model → System → Default` means.
+- `AIAgentModality.IsAllowed = 0` stays a hard veto at the agent layer.
+
+Add unit tests for each branch: inherit-on with no junction, inherit-on with an additive junction
+row, inherit-on with an `IsSupported = 0` veto, inherit-off, and agent-level `IsAllowed = 0`.
+
+**Seed.** Create `metadata/ai-modalities/` with `.mj-sync.json` + `.ai-modalities.json`, **reusing the
+existing hardcoded IDs** so the rows reconcile rather than duplicate:
+
+| ID | Name |
+|---|---|
+| `EA43F4CF-EC26-41D7-B2AC-CF928AF63E46` | Text |
+| `AAD386E4-D6ED-4E6E-8960-B56AC1D2783B` | Image |
+| `FC3CAE20-6FA8-4ABF-B02E-62CEA920313E` | Audio |
+| `9AAD272B-A1C8-4498-ACFC-0C6D50D82B96` | Video |
+| `3E930454-29AE-48B9-8888-10FD74BC67B9` | File |
+| `BB0C8564-E79C-4AF9-82B0-26D6EAB4BC01` | Embedding |
+
+Then seed `metadata/ai-model-modalities/` only where a model genuinely *extends* its type default
+(e.g. a vision LLM adding Image input) — inheritance covers the rest, which is the point of fixing it.
+
+Changeset `minor` (touches `metadata/`).
+
+> **This is the cautionary tale for Part B.** A correct schema with no resolver and no seed is a dead
+> normalization that reads as a working feature. Personas must not repeat it: **schema, seed and
+> resolver ship together or not at all.**
+
+---
+
+## Part B — personas
+
+### B.1 What exists today
+
+**No `Voice`, `Avatar`, `Persona`, `Speaker` or `Character` entity exists.** Confirmed against every
+`@RegisterClass(BaseEntity, …)` registration, all of `metadata/`, and every `CREATE TABLE` in
+`migrations/`.
+
+**Five separate declarations of "a voice has an id and a name":**
+
+| Type | Where | Shape |
+|---|---|---|
+| `RealtimeVoiceOption` | `AI/Core/src/generic/baseRealtime.ts:222` | `ID`/`Name` — PascalCase |
+| `VoiceInfo` | `AI/Core/src/generic/baseAudio.ts:245` | `id`/`name` — camelCase, **plus 8 ElevenLabs tuning fields leaked into the generic base** |
+| `RealtimeVoiceOptionResult` | `MJServer/src/resolvers/RealtimeBridgeResolver.ts:186` | GraphQL copy |
+| `RealtimeVoiceOption` | `GraphQLDataProvider/src/graphQLLiveKitClient.ts:81` | hand-written client duplicate |
+| `AvatarInfo` | `AI/Core/src/generic/baseVideo.ts:27` | `id`/`name`/`gender`/preview URLs |
+
+**Four persona shapes**, two using different casing for the same two fields:
+`RealtimeVoicePersona{tone, speakingStyle, voice, firstMessage}` (`realtime-coagent-config.ts:62`),
+its JSON-schema twin, `IAgentSettings.Realtime.Persona{Tone, SpeakingStyle}` (`__mj.ts:59806`), and
+`RealtimeAgentPick.PreferredVoice` (a flat string).
+
+**The catalog is worse than the type sprawl suggests:**
+
+- **6 of 7 realtime drivers return `[]` from `SupportedVoices`.** Only `OpenAIRealtime` has a list —
+  8 hardcoded strings. Gemini, ElevenLabs, AssemblyAI and Inworld never override it.
+- **ElevenLabs — the one vendor whose product is user-authored voices — returns `[]` on the realtime
+  side**, while its TTS driver fetches them live via `voices.getAll()`. Two drivers, same vendor, one
+  blind.
+- **The same vendor publishes two divergent lists.** OpenAI Realtime: `alloy, ash, ballad, coral,
+  echo, sage, shimmer, verse`. OpenAI TTS: `alloy, echo, fable, onyx, nova, shimmer`. Overlap 3.
+- `GetRealtimeModelVoices()` (`bridge-realtime-session-factory.ts:238`) **instantiates every active
+  Realtime model's driver at request time purely to read a hardcoded array.** The picker's own
+  comment says why: *"the cached models carry no voice list."*
+- Persona today is modelled as **a whole extra agent row** (the co-agent chain).
+- Two dead config keys: `voiceId` is documented *"DEPRECATED — never read by any driver"*, and
+  `avatarId` is declared, normalized, and read by nothing.
+
+`gpt-live-1` forces the issue: 22 built-in voices plus `CustomVoice { id }`. Our hardcoded 8 would
+expose under half and make custom voices unreachable.
+
+**Prior art, found.** `plans/audio-agent-architecture.md` (May 2026) proposes a `Voice` table —
+`vendorVoiceId, name, description, gender, accent, voiceSettings, associationId` — plus an
+`AudioSessionConfig` holding `voiceId`. It is in the ERD and the implementation table and was never
+built. Its **Open Design Question #2** is still open and is verbatim the question this plan answers:
+*"Voice Personas: Per-association, per-agent, or user preference?"* Separately,
+`plans/praxis/PRAXIS_BUILD_PLAN.md` defines a `Persona` with `PreferredVoice` — but that is a
+*behavioral* persona in an app schema. See B.5.
+
+### B.2 The entities
+
+Mirror **`AIModel` / `AIModelVendor`** — the precedent that actually *runs* (vendor resolution really
+does filter `Status='Active'`, sort `Priority DESC`, skip null `DriverClass`) — rather than the
+Modalities precedent, which did not.
+
+```
+MJ: AI Personas              abstract, provider-agnostic presentational identity
+  Name · Description · PerceivedGender(null) · Locale · AgeRange
+  Tone · SpeakingStyle · StyleDescriptors
+  PreviewAudioURL · PreviewImageURL · PreviewVideoURL
+  Source: BuiltIn | Custom | Cloned · IsActive
+
+MJ: AI Persona Vendors       the concrete binding — the APIName pattern, exactly
+  PersonaID · VendorID · ModalityID · APIName · Status · Priority · VendorSettings(JSON)
+
+MJ: AI Model Personas        per-model availability where it differs from the vendor default
+  ModelID · PersonaID · IsSupported
+
+MJ: AI Agent Personas        which personas an agent may wear, and which is default
+  AgentID · PersonaID · IsDefault · Sequence · IsAllowed · StyleOverride(JSON)
+```
+
+Three things this gets right that today's code gets wrong:
+
+- **`APIName` on the binding** carries `alloy`, an ElevenLabs `voice_id`, a HeyGen `avatar_id`, or a
+  Live `CustomVoice.id` — one field, every vendor, exactly as `AIModelVendor.APIName` already does
+  for models.
+- **`ModalityID` makes it cross-modality for free**, reusing the vocabulary Part A just fixed. A
+  HeyGen avatar binds at `Video`; an ElevenLabs voice at `Audio`. A future avatar-plus-voice model is
+  one persona with two bindings.
+- **`VendorSettings` JSON** is where ElevenLabs' `stability` / `similarityBoost` / `style` /
+  `useSpeakerBoost` belong. They are currently sitting in `VoiceInfo` in AI/Core — a vendor leak into
+  the generic base.
+
+`MJ: AI Model Personas` exists because availability genuinely differs per model on one vendor:
+OpenAI Realtime's 8, Live's 22, TTS's 6. Follow `AIModelModality`'s semantics — absent means "inherit
+the vendor's full set", `IsSupported = 0` is an explicit disable.
+
+### B.3 `MJ: AI Agent Personas` — yes, and it is load-bearing
+
+Proposed as a "list of supported personas that bubbles up to agent level." Agreed, and it mirrors
+`MJ: AI Agent Modalities` exactly. Three refinements:
+
+**It should be an offering plus a default, not only an allowlist.** `AIAgentModality` is a pure veto
+(`IsAllowed`). An agent needs more: which personas it *ships with*, in what order, and which one it
+uses when nobody chooses. Hence `IsDefault` + `Sequence` alongside `IsAllowed` — the shape
+`MJ: AI Agent Co Agents` already uses.
+
+**The real argument for it: the agent link is what makes a persona a *complete* identity.**
+`RealtimeVoicePersona` today bundles two different things — `voice` and `firstMessage` go to the wire,
+while `tone` and `speakingStyle` are folded into the system prompt by `BuildVoiceMannerSection`. If
+`Tone` and `SpeakingStyle` live on the **Persona** (they describe how *Aria* speaks, not what this
+agent does), then selecting a persona yields both the vendor voice code *and* the prompt fragment in
+one resolution. That is only possible if something binds agent → persona. This entity is that thing.
+
+`firstMessage` stays on the agent — "Hi, you've reached Acme support" is agent-specific, not persona-
+specific. `StyleOverride` on the junction covers "Aria, but more formal" without minting a second
+persona, which is the `AIAgentModality` override pattern again.
+
+**Do not add a fourth place persona can be set — collapse.** `MJ: AI Agent Personas` becomes the
+canonical agent-level binding and **replaces** `realtime.voice.default.voice`.
+`AIAgent.TypeConfiguration` keeps only `firstMessage` plus a raw `voice` escape hatch for the
+un-catalogued case. `Application.AgentSettings.Realtime.Persona` becomes an app-level default
+`PersonaID`, not a second copy of tone/style.
+
+Resolution order, matching the chain Part A repairs:
+
+```
+runtime override → agent (IsDefault, filtered by IsAllowed)
+                 → application default persona
+                 → model/vendor default binding
+                 → driver SupportedVoices fallback
+```
+
+**The payoff:** an agent references a `PersonaID`, not a vendor string. "This agent speaks as *Aria*"
+resolves to `sage` on OpenAI Live, a `voice_id` on ElevenLabs, an `avatar_id` on HeyGen. That is
+genuine provider-agnosticism. It also retires the longest-normalized-prefix matcher in
+`MatchProviderVoiceSettings` (`realtime-coagent-config.ts:1235`) and its documented specificity
+inversion, where `default.voice` in agent metadata outranks a hand-authored runtime
+`providers.<key>.voice` override.
+
+### B.4 Cleanup — breaking changes, approved
+
+| Change | Breaking? | Note |
+|---|---|---|
+| `VoiceInfo`'s 8 ElevenLabs fields → `AIPersonaVendor.VendorSettings` | yes | The vendor leak into AI/Core. `VoiceInfo` keeps `id`/`name`/`description`/`previewUrl` |
+| Collapse 5 voice/avatar types behind one resolved shape | yes | Keep the old exports as deprecated aliases for one minor cycle |
+| Delete `voiceId` from the realtime config schema | no | Already documented dead |
+| Delete `avatarId`, or wire it | yes-ish | Declared, normalized (`realtime-coagent-config.ts:1033`), read by nothing. Prefer deleting — the persona binding replaces it |
+| Add `video` to `realtime-type-config.schema.json` | no | The TS interface declares it; the schema has `additionalProperties: false`, so authoring a `video` block currently **fails validation** |
+| `GetRealtimeModelVoices()` reads metadata first | no | Kills the instantiate-every-driver-per-request pattern; driver lists become the fallback |
+
+**Not doing:** no voice dimension on `MJ: AI Model Costs`. The grain is
+`(ModelID, VendorID, PriceTypeID, UnitTypeID, ProcessingType)` and no vendor prices by voice — Live
+is $0.05/min regardless of which of the 22 speaks.
+
+### B.5 Naming — resolve the collision deliberately
+
+Core `MJ: AI Personas` = **how an agent sounds and looks** (presentational identity).
+Praxis's planned `Persona` = **who it is** (agenda, knowledge scope — behavioral identity). These are
+different concepts that would otherwise collide. The clean layering is for Praxis's `PreferredVoice`
+to become a reference to a core `PersonaID`.
+
+### B.6 Back-compat and seeding
+
+1. **Seed from what exists.** OpenAI's 8 realtime + 6 TTS (deduped into one persona set with
+   per-model bindings), plus a one-time pull of ElevenLabs' and HeyGen's live catalogs. Ship as
+   `metadata/ai-personas/` with `.mj-sync.json` — **not** a migration `INSERT` (Part A, Defect 2).
+2. **Drivers keep their methods.** `SupportedVoices` / `GetVoices()` / `GetAvatars()` stay, demoted
+   from source-of-truth to **fallback and seed source**.
+3. **Raw strings keep working.** `realtime.voice.default.voice` remains a supported escape hatch;
+   `realtime.voice.personaID` is the new canonical path. Explicit `PersonaID` wins.
+4. **One minor cycle of deprecated aliases** before removing the duplicate types.
+
+### B.7 Phasing
+
+| Phase | Work | Gate |
+|---|---|---|
+| **A1** | Modality resolver fix + unit tests | every branch covered |
+| **A2** | `metadata/ai-modalities/` reusing the 6 IDs; junction seeds where models extend | `mj sync validate`; no duplicate rows on an existing DB |
+| **B1** | Four persona entities: migration + CodeGen | builds clean |
+| **B2** | Seed `metadata/ai-personas/` from the hardcoded lists + live pulls | rows resolve on a clean DB |
+| **B3** | Resolver + `GetRealtimeModelVoices()` reads metadata first | picker shows Live's 22 |
+| **B4** | `MJ: AI Agent Personas` binding + `personaID` config path + cascade | an agent switches vendor and keeps its persona |
+| **B5** | Breaking cleanup in B.4 | one minor cycle of aliases first |
+
+**A1 and A2 are independent of everything else** and are worth shipping on their own — the modality
+bug is live today and silently reports every model as text-only.
