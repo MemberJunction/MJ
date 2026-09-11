@@ -541,6 +541,75 @@ export const AiCostChecks: NamedCheck[] = [
                 `failure to apply pricing that exists`
             );
         }
+    },
+    {
+        Id: 'ai-cost.AC8',
+        Name: 'AC8: prompt-run cost precision and basis invariants — sub-cent counts, parallel parent zero own cost, leaf child costs, non-negative agent run totals',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            const totalPromptRuns = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ResultType: 'count_only'
+            }, ctx.User);
+            Assert(totalPromptRuns.Success, `prompt-run count probe failed: ${totalPromptRuns.ErrorMessage}`);
+            if ((totalPromptRuns.TotalRowCount ?? 0) === 0) {
+                skipNote('AC8', 'no MJ: AI Prompt Runs rows exist — precision and basis invariants are unexercised');
+                return;
+            }
+
+            // Query 1: count of rows where sub-cent precision is actually present today
+            const subCentResult = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: 'Cost IS NOT NULL AND TotalCost IS NOT NULL AND ROUND(Cost, 4) != Cost',
+                ResultType: 'count_only'
+            }, ctx.User);
+            Assert(subCentResult.Success, `sub-cent precision query failed: ${subCentResult.ErrorMessage}`);
+            const subCentPrecisionCount = subCentResult.TotalRowCount ?? 0;
+            console.log(`      → sub-cent precision prompt runs (ROUND(Cost, 4) != Cost): ${subCentPrecisionCount}`);
+
+            // Query 2: ParallelParent prompt runs must carry Cost = NULL (assert 0)
+            const parallelParentResult = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: "RunType = 'ParallelParent' AND Cost IS NOT NULL",
+                ResultType: 'count_only'
+            }, ctx.User);
+            Assert(parallelParentResult.Success, `parallel parent cost query failed: ${parallelParentResult.ErrorMessage}`);
+            const parallelParentWithCostCount = parallelParentResult.TotalRowCount ?? 0;
+            AssertEqual(
+                parallelParentWithCostCount,
+                0,
+                `ParallelParent prompt runs must not carry own cost (found ${parallelParentWithCostCount} row(s) with Cost IS NOT NULL)`
+            );
+
+            // Query 3: Sanity check on leaf child runs having cost
+            const promptRunEntity = ctx.Provider.Entities.find(e => e.Name === 'MJ: AI Prompt Runs');
+            const schema = promptRunEntity?.SchemaName ?? '__mj';
+            const view = promptRunEntity?.BaseView ?? 'vwAIPromptRuns';
+
+            const leafChildResult = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: `ParentID IS NOT NULL AND Cost IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${schema}.${view} c WHERE c.ParentID = ${view}.ID)`,
+                ResultType: 'count_only'
+            }, ctx.User);
+            Assert(leafChildResult.Success, `leaf child cost query failed: ${leafChildResult.ErrorMessage}`);
+            const leafChildCount = leafChildResult.TotalRowCount ?? 0;
+            console.log(`      → leaf child prompt runs with cost: ${leafChildCount}`);
+
+            // Query 4: AIAgentRun.TotalCost must be non-negative (assert 0)
+            const negativeAgentRunCostResult = await rv.RunView({
+                EntityName: 'MJ: AI Agent Runs',
+                ExtraFilter: 'TotalCost IS NOT NULL AND TotalCost < 0',
+                ResultType: 'count_only'
+            }, ctx.User);
+            Assert(negativeAgentRunCostResult.Success, `negative agent run cost query failed: ${negativeAgentRunCostResult.ErrorMessage}`);
+            const negativeAgentRunCostCount = negativeAgentRunCostResult.TotalRowCount ?? 0;
+            AssertEqual(
+                negativeAgentRunCostCount,
+                0,
+                `AIAgentRun.TotalCost must be non-negative (found ${negativeAgentRunCostCount} row(s) with TotalCost < 0)`
+            );
+            console.log(`      → verified basis invariants: parallel parents have no own cost, agent run costs non-negative`);
+        }
     }
 ];
 
