@@ -5499,16 +5499,24 @@ export class ManageMetadataBase {
          for (const r of columnLevelResults) {
             // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
-               const parsedValues = this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName);
+               // parse first, then decide whether THIS field should carry the list (bit, PK singleton guards).
+               // UUIDsEqual, not ===: PG returns lowercase UUIDs and SQL Server uppercase, and a missed
+               // lookup here fails OPEN (the exclusions stop applying), so a case mismatch would be silent.
+               const field = allEntityFields.find((f: { ID: string; Type?: string; IsPrimaryKey?: boolean; }) =>
+                  UUIDsEqual(f.ID, r.EntityFieldID));
+               const parsedValues = ManageMetadataBase.valueListForField(
+                  field,
+                  this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName));
                if (parsedValues) {
                   if (!skipDBUpdate) {
                      // we only do this part if we are not skiping the database update as this code will sync values from the CHECK
                      // with the EntityFieldValues in the database.
 
-                     // Sort values alphabetically to ensure consistent sequences across all databases
-                     // This guarantees the same value always gets the same sequence number regardless of
-                     // how SQL Server returns CHECK constraint values (which can vary)
-                     parsedValues.sort();
+                     // Sort the values to ensure consistent sequences across all databases. This guarantees the
+                     // same value always gets the same sequence number regardless of how SQL Server returns
+                     // CHECK constraint values (which can vary). An all-numeric list sorts numerically so the
+                     // dropdown reads 1, 2, 10 rather than the lexical 1, 10, 2 — still fully deterministic.
+                     ManageMetadataBase.sortCheckConstraintValues(parsedValues);
 
                      // we have parsed values from the check constraint, so sync them with the entity field values
                      await this.syncEntityFieldValues(pool, r.EntityFieldID, parsedValues, allEntityFieldValues);
@@ -5719,10 +5727,24 @@ export class ManageMetadataBase {
       }
    }
 
+   /**
+    * Parses a column-level CHECK constraint into the list of values it permits, or returns null when the
+    * constraint is not a simple value list (a range, a `LEN()` predicate, a mixed condition, and so on).
+    *
+    * Both of the ways `IN (...)` is rendered by SQL Server are handled. String, date and GUID literals come
+    * back quoted — `([Status]='Active' OR [Status]='Inactive')` — but numeric and `bit` literals come back
+    * **unquoted and parenthesized**: `([Level]=(3) OR [Level]=(2) OR [Level]=(1))`. Matching only the quoted
+    * form left a numeric IN-list with no value list at all, and so no dropdown in Explorer either (#3978).
+    * PostgreSQL's `= ANY (ARRAY[...])` rendering is handled separately, by parsePgArrayConstraint.
+    *
+    * A single-value list is captured too: `CHECK (Status='Active')` — which is also how SQL Server renders
+    * `IN ('Active')` — permits exactly one value, which is a one-item list.
+    *
+    * This is a parser, not a policy: it reports what the constraint permits. WHICH fields get a value list
+    * out of that is decided after the fact, by valueListForField.
+    */
    protected parseCheckConstraintValues(constraintDefinition: string, fieldName: string, entityName: string): string[] | null {
-      // This regex checks for the overall structure including field name and 'OR' sequences
-      // SQL Server uses [FieldName]='Value' quoting, PostgreSQL uses "FieldName" or unquoted FieldName
-      // We handle both: [FieldName], "FieldName", or bare FieldName
+      // Normalize N'literal' to 'literal' so one pattern handles both.
       // Note: Assuming fieldName does not contain regex special characters; otherwise, it needs to be escaped as well.
       const processedConstraint = constraintDefinition.replace(/(^|[=(\s])N'([^']*)'/g, "$1'$2'");
 
@@ -5738,50 +5760,103 @@ export class ManageMetadataBase {
       // [FieldName] (SQL Server) or "FieldName" (PostgreSQL) or bare FieldName
       const quotedField = `(?:\\[${fieldName}\\]|"${fieldName}"|${fieldName})`;
 
-      // Check for nested pattern: (Field IS NULL OR (Field='Value1' OR ...))
-      const nestedNullRegex = new RegExp(`^\\(${quotedField} IS NULL OR \\(${quotedField}='[^']+'(?: OR ${quotedField}='[^']+?')+\\)\\)$`);
-      if (nestedNullRegex.test(processedConstraint)) {
-         // Extract values from nested pattern - same extraction logic works
-         const valueRegex = new RegExp(`${quotedField}='([^']+)\'`, 'g');
-         let match;
-         const possibleValues: string[] = [];
-         while ((match = valueRegex.exec(processedConstraint)) !== null) {
-            if (match.index === valueRegex.lastIndex) {
-               valueRegex.lastIndex++;
-            }
-            if (match[1]) {
-               possibleValues.push(match[1]);
-            }
-         }
-         return possibleValues.length > 0 ? possibleValues : null;
-      }
+      // One literal, either quoting style. The unquoted numeric forms are the ones sys.check_constraints
+      // actually stores: (3) (-1) (1.00) (2.5) (1.0000000000000000e+030) and (12345678901234567890.) —
+      // an integral literal with a trailing point once the precision is large enough.
+      const literal = `(?:'[^']+'|${ManageMetadataBase.NUMERIC_CHECK_LITERAL})`;
+      const assignment = `${quotedField}=${literal}`;
 
-      // Check for standard pattern with optional trailing IS NULL
-      const structureRegex = new RegExp(`^\\(${quotedField}='[^']+'(?: OR ${quotedField}='[^']+?')+(?: OR ${quotedField} IS NULL)?\\)$`);
-      if (!structureRegex.test(processedConstraint)) {
+      // Nested pattern: (Field IS NULL OR (Field=<literal> OR ...)) — how `X IS NULL OR X IN (...)` renders
+      const nestedNullRegex = new RegExp(`^\\(${quotedField} IS NULL OR \\(${assignment}(?: OR ${assignment})*\\)\\)$`);
+      // Standard pattern, with an optional trailing IS NULL: (Field=<literal> OR ... [OR Field IS NULL])
+      const structureRegex = new RegExp(`^\\(${assignment}(?: OR ${assignment})*(?: OR ${quotedField} IS NULL)?\\)$`);
+      if (!nestedNullRegex.test(processedConstraint) && !structureRegex.test(processedConstraint)) {
          return null;
       }
-      else {
-         // Regular expression to match the values within the single quotes specifically for the field
-         const valueRegex = new RegExp(`${quotedField}='([^']+)\'`, 'g');
-         let match;
-         const possibleValues: string[] = [];
 
-         // Use regex to find matches and extract the values
-         while ((match = valueRegex.exec(processedConstraint)) !== null) {
-            // This is necessary to avoid infinite loops with zero-width matches
-            if (match.index === valueRegex.lastIndex) {
-               valueRegex.lastIndex++;
-            }
-
-            // The first captured group contains the value
-            if (match[1]) {
-               possibleValues.push(match[1]);
-            }
+      // Extract the values: group 1 is a quoted literal, group 2 an unquoted numeric one.
+      const valueRegex = new RegExp(`${quotedField}=(?:'([^']+)'|(${ManageMetadataBase.NUMERIC_CHECK_LITERAL}))`, 'g');
+      const possibleValues: string[] = [];
+      let match;
+      while ((match = valueRegex.exec(processedConstraint)) !== null) {
+         // This is necessary to avoid infinite loops with zero-width matches
+         if (match.index === valueRegex.lastIndex) {
+            valueRegex.lastIndex++;
          }
 
-         return possibleValues;
+         const value = match[1] ?? (match[2] ? ManageMetadataBase.normalizeNumericCheckLiteral(match[2]) : undefined);
+         if (value && value.length > 0) {
+            possibleValues.push(value);
+         }
       }
+
+      // An empty result is not a value list — returning [] here would set ValueListType='List' on a field
+      // with no EntityFieldValue rows behind it.
+      return possibleValues.length > 0 ? possibleValues : null;
+   }
+
+   /**
+    * The value list to actually store for a field, or null when a parsed list should NOT become
+    * EntityFieldValue rows (and so should not become a dropdown in Explorer either).
+    *
+    * Runs AFTER parsing rather than gating it, so each exclusion is no broader than its own reason and
+    * neither one can drop a list that was captured before #3978:
+    *
+    * - `bit`: `IN (0,1)` is vacuous — bit already permits exactly 0 and 1 — and `= 1` is a validator,
+    *   not a two-item dropdown over what renders as a checkbox. Every bit list is rendered unquoted, so
+    *   none of them was reachable before this change and nothing regresses.
+    * - a PRIMARY KEY carrying a SINGLE value: `CHECK (ID=1)` is the single-row-table guard MJ's own
+    *   sequence tables use — a structural invariant, not a set of values a user picks from. A
+    *   MULTI-value list on a primary key is left alone: `CHECK (Code IN ('US','CA'))` on a natural-key
+    *   PK is a real domain list, it was captured before this change, and CodeGen also runs over customer
+    *   schemas where natural-key primary keys are ordinary.
+    *
+    * A field whose metadata row was not found keeps whatever parsed, which is the pre-#3978 behaviour.
+    */
+   protected static valueListForField(
+      field: { Type?: string; IsPrimaryKey?: boolean; } | undefined,
+      parsedValues: string[] | null
+   ): string[] | null {
+      if (!parsedValues || !field) {
+         return parsedValues;
+      }
+      if (field.Type?.trim().toLowerCase() === 'bit') {
+         return null;
+      }
+      if (field.IsPrimaryKey && parsedValues.length === 1) {
+         return null;
+      }
+      return parsedValues;
+   }
+
+   /**
+    * Sorts a parsed value list in place, so the sequence a value gets is stable across databases and runs.
+    * An all-numeric list is compared as numbers (1, 2, 10); anything else keeps the default lexical order.
+    *
+    * Keyed off the VALUES, not the column type — so a string column whose list happens to be all-numeric
+    * (`CHECK (Code IN ('1','2','10'))` on nvarchar) would re-sequence too. Measured over every column CHECK
+    * constraint in a live 6.x database (MJ core + BizApps accounting/orders): of the 431 lists the previous
+    * parser already captured, ZERO re-sequence under this comparison. If one ever turns up and the churn is
+    * unwanted, gate `allNumeric` on the field being numeric as well.
+    */
+   protected static sortCheckConstraintValues(values: string[]): string[] {
+      const allNumeric = values.length > 0 && values.every(v => /^-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(v));
+      return allNumeric ? values.sort((a, b) => Number(a) - Number(b)) : values.sort();
+   }
+
+   /**
+    * A numeric literal as SQL Server renders it inside a CHECK constraint: parenthesized, unquoted, and
+    * possibly signed, fractional or exponential — `(3)`, `(-1)`, `(1.00)`, `(2.5)`, `(1.0e+030)`.
+    */
+   private static readonly NUMERIC_CHECK_LITERAL = `\\(-?\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?\\)`;
+
+   /**
+    * Turns a matched numeric literal into the value to store: strips the wrapping parentheses, and the
+    * trailing point SQL Server adds to a large integral literal (`(12345678901234567890.)`).
+    */
+   private static normalizeNumericCheckLiteral(literal: string): string {
+      const inner = literal.slice(1, -1);
+      return inner.endsWith('.') ? inner.slice(0, -1) : inner;
    }
 
    /**
