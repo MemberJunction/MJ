@@ -1,0 +1,152 @@
+# One-shot diagnostic for the release automation's GitHub App credential.
+#
+# WHY THIS EXISTS
+# ---------------
+# On 2026-09-03 the `next-protect` ruleset (id 905656) swapped its bypass actor from
+# `RepositoryRole 5` (repository admin) to the `break-glass` team. `MJ-GH-bot` — the
+# account behind `MJ_GH_BOT_GITHUB_TOKEN`, which publish.yml uses to push to `next` — is
+# a repository admin but an OUTSIDE COLLABORATOR, so it lost its bypass and cannot be
+# added to a team (that needs org membership, and the org is at 42/42 seats).
+#
+# v6.1.0-edge.6 published fine and then died on step 22 `Merge main into next`:
+#
+#     remote: error: GH013: Repository rule violations found for refs/heads/next.
+#     - Changes must be made through a pull request.
+#     - Required status check "Check migrations" is expected.
+#
+# Recovered by hand in #4382. It will recur on EVERY release until a bypass exists, and
+# it affects four push sites, not just that one — publish.yml lines 728, 775, 1407 and
+# 1599/1643 all end in `git push origin HEAD:next`.
+#
+# A GitHub App can be a ruleset bypass actor (`actor_type: Integration`) and consumes no
+# org seat, which makes it the only no-cost fix that does not re-widen direct push to
+# `next` for every repo admin. `blue-cypress-ci-bot` (app_id 4705146, installation
+# 156297321) is already installed org-wide with exactly `contents: write` +
+# `pull_requests: write` — strictly narrower than the admin PAT it would replace.
+#
+# WHAT IS NOT YET PROVEN is that the org secret `APP_PRIVATE_KEY` is actually THAT app's
+# key. The secret was created 2026-08-24T23:29, eight hours after the installation, and
+# no workflow in this repo references it — suggestive, not conclusive, and the secret
+# cannot be read outside Actions. This workflow proves it or disproves it before anyone
+# edits a ruleset or rewires the release path.
+#
+# RUN IT TWICE:
+#   1. NOW — confirms the key decodes, names the app, and can write to this repo.
+#      `can_bypass` is expected to report `never` at this point.
+#   2. AFTER the bypass actor is added to ruleset 905656 — `can_bypass` must flip to
+#      `always`. That is the signal the next release will get past step 22.
+#
+# Read-only against the repo: it mints a token and asks questions. It pushes nothing,
+# opens nothing, and edits no ruleset. Delete it once the release path is on App tokens,
+# or keep it as a pre-release smoke test.
+name: Verify the release App token
+
+on:
+  workflow_dispatch:
+
+# The job's own GITHUB_TOKEN needs nothing — every call below uses the minted App token.
+permissions: {}
+
+jobs:
+  verify:
+    name: Verify blue-cypress-ci-bot credentials
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    env:
+      # The identity we expect to be handed. Asserted, not assumed: if `APP_PRIVATE_KEY`
+      # belongs to some OTHER installed app, the token mint would still succeed and every
+      # check below would still pass — against the wrong app. The whole point of this run
+      # is settling which app the key belongs to, so the answer gets compared, not printed.
+      EXPECTED_APP_SLUG: blue-cypress-ci-bot
+      EXPECTED_APP_ID: '4705146'
+      EXPECTED_INSTALLATION_ID: '156297321'
+      RULESET_ID: '905656'
+    steps:
+      # `app-id` accepts a client ID as well as a numeric app id, which is what the org
+      # variable holds. Pulling it from `vars` rather than hardcoding keeps this honest:
+      # it tests the SAME pair of values a rewired publish.yml would use.
+      - name: Mint an installation token
+        id: token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # No `owner:` — default scoping mints a token for THIS repository only. Setting
+          # owner would widen it to every repo the installation can reach, which the
+          # release path never needs.
+
+      - name: The key belongs to the app we think it does
+        env:
+          GOT_SLUG: ${{ steps.token.outputs.app-slug }}
+          GOT_INSTALLATION: ${{ steps.token.outputs.installation-id }}
+        run: |
+          set -euo pipefail
+          echo "app-slug        = $GOT_SLUG"
+          echo "installation-id = $GOT_INSTALLATION"
+          rc=0
+          if [ "$GOT_SLUG" != "$EXPECTED_APP_SLUG" ]; then
+            echo "::error::APP_PRIVATE_KEY belongs to '$GOT_SLUG', not '$EXPECTED_APP_SLUG'."
+            echo "::error::Do NOT add app_id $EXPECTED_APP_ID as a ruleset bypass actor — it is the wrong app."
+            rc=1
+          fi
+          if [ "$GOT_INSTALLATION" != "$EXPECTED_INSTALLATION_ID" ]; then
+            echo "::error::installation is $GOT_INSTALLATION, expected $EXPECTED_INSTALLATION_ID."
+            rc=1
+          fi
+          if [ $rc -eq 0 ]; then
+            echo "::notice::Identity confirmed: $GOT_SLUG (installation $GOT_INSTALLATION)"
+          fi
+          exit $rc
+
+      # `contents: write` on the INSTALLATION is not the same as write on THIS repo — the
+      # installation could be scoped to a subset that excludes MJ. This asks about the repo.
+      - name: The token can actually write to this repo
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          set -euo pipefail
+          PERMS=$(gh api "repos/${{ github.repository }}" --jq '.permissions | tojson')
+          echo "repo permissions = $PERMS"
+          if [ "$(echo "$PERMS" | jq -r .push)" != "true" ]; then
+            echo "::error::The App token cannot push to ${{ github.repository }}."
+            exit 1
+          fi
+          echo "::notice::push=true on ${{ github.repository }}"
+
+      # The load-bearing question, and the reason to run this a second time. For an
+      # installation token `current_user_can_bypass` reports the APP's standing against
+      # the ruleset. `never` before the bypass actor is added, `always` after. Never
+      # fails the job: on run 1 `never` is the expected, correct answer.
+      - name: Report the App's bypass standing on next-protect
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          set -euo pipefail
+          CAN=$(gh api "repos/${{ github.repository }}/rulesets/$RULESET_ID" \
+                  --jq '.current_user_can_bypass // "null"' 2>/dev/null || echo 'unreadable')
+          echo "current_user_can_bypass = $CAN"
+          {
+            echo "### next-protect bypass standing"
+            echo
+            echo '| field | value |'
+            echo '|---|---|'
+            echo "| app | \`${{ steps.token.outputs.app-slug }}\` (app_id \`$EXPECTED_APP_ID\`) |"
+            echo "| ruleset | \`$RULESET_ID\` (next-protect) |"
+            echo "| can_bypass | \`$CAN\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          case "$CAN" in
+            always)
+              echo "::notice::Bypass is live. publish.yml can push to next as this App."
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "Bypass is live — the release path is clear." >> "$GITHUB_STEP_SUMMARY" ;;
+            unreadable|null)
+              # `metadata: read` does not cover the rulesets endpoint; a 404 here is about
+              # the App's ability to READ the rule, not its ability to bypass it.
+              echo "::warning::Bypass standing not determinable with the App token — inconclusive, check as an admin."
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "Not determinable by this token — inconclusive, not a failure." >> "$GITHUB_STEP_SUMMARY" ;;
+            *)
+              echo "::warning::No bypass yet (can_bypass=$CAN). Expected on the first run, before the ruleset edit."
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "No bypass yet — add app_id \`$EXPECTED_APP_ID\` as an \`Integration\` bypass actor, then re-run." >> "$GITHUB_STEP_SUMMARY" ;;
+          esac
