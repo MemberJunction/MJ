@@ -14060,7 +14060,7 @@ importers:
         specifier: 6.1.0-edge.6
         version: link:../ExternalDataSources/Engine
       '@memberjunction/generic-database-provider':
-        specifier: 6.1.0-edge.5
+        specifier: 6.1.0-edge.6
         version: link:../GenericDatabaseProvider
       '@memberjunction/geo-core':
         specifier: 6.1.0-edge.6
@@ -14325,7 +14325,7 @@ importers:
         specifier: 6.1.0-edge.6
         version: link:../Encryption
       '@memberjunction/generic-database-provider':
-        specifier: 6.1.0-edge.5
+        specifier: 6.1.0-edge.6
         version: link:../GenericDatabaseProvider
       '@memberjunction/geo-core':
         specifier: 6.1.0-edge.6
