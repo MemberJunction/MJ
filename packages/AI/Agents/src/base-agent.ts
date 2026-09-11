@@ -7272,6 +7272,7 @@ The context is now within limits. Please retry your request with the recovered c
                 subAgentChanges: subAgentSubAgentChanges, // propagate filtered sub-agent changes to sub-agent
                 PrimaryScopeEntityName: params.PrimaryScopeEntityName, // propagate scope to sub-agent
                 PrimaryScopeRecordID: params.PrimaryScopeRecordID,
+                companyId: params.companyId,
                 SecondaryScopes: params.SecondaryScopes,
                 onAgentRunCreated: async (agentRunId: string) => {
                     stepEntity.TargetLogID = agentRunId;
