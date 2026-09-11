@@ -388,6 +388,88 @@ export interface RateLimitPolicy {
  */
 const DEFAULT_DISCOVERY_SAMPLE_TARGET = PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE;
 
+/**
+ * One tunable setting, described by the connector rather than hardcoded in a UI.
+ *
+ * Every knob a connection has was an untyped key inside `CompanyIntegration.Configuration`, known
+ * only to whoever wrote the code that read it. A surface wanting to offer them had to hardcode a
+ * list, guess each one's type and range, and invent a default — which is exactly how a default of
+ * 500 got shipped against an engine whose real default is 50, silently sampling ten times more
+ * than intended on six connectors.
+ *
+ * Declaring them here makes the connector the single source of truth for what is tunable, what it
+ * means, and what happens if you leave it alone. `Tier` is how one schema serves both surfaces:
+ * a simplified surface renders `basic`, a full one renders everything, and neither has to know
+ * which connector it is talking to.
+ */
+export interface ConnectorSettingDescriptor {
+    /** The `Configuration` key, lower-camel, exactly as the engine reads it. */
+    Key: string;
+    /** Short human label. */
+    Label: string;
+    /** Grouping hint for the renderer ('Sync', 'Discovery', 'Rate limits', ...). */
+    Group: string;
+    Type: 'number' | 'boolean' | 'string' | 'enum';
+    /** Allowed values when Type is 'enum'. */
+    Options?: string[];
+    /**
+     * What the engine does when this key is ABSENT. Must be the engine's real default — a
+     * descriptor that lies here is worse than no descriptor, because a surface will now show the
+     * wrong number as the current behaviour.
+     */
+    Default?: string | number | boolean | null;
+    Min?: number;
+    Max?: number;
+    /**
+     * `basic` is safe for anyone to change. `advanced` needs some understanding of the
+     * connector. `expert` can make a sync slower, noisier or rate-limited if set wrong.
+     */
+    Tier: 'basic' | 'advanced' | 'expert';
+    /** Whether the key lives on the connection or on an individual object's Configuration. */
+    AppliesTo: 'connection' | 'object';
+    Description: string;
+    /** Never true for anything here — credentials are not settings and never round-trip. */
+    Sensitive: boolean;
+}
+
+/**
+ * The settings EVERY connector has, because the engine reads them for every connector.
+ *
+ * Defaults are stated as the engine's own, deliberately: see ConnectorSettingDescriptor.Default.
+ */
+const FRAMEWORK_SETTINGS: ReadonlyArray<ConnectorSettingDescriptor> = [
+    { Key: 'syncConcurrency', Label: 'Parallel objects', Group: 'Sync', Type: 'number', Default: 8, Min: 1, Max: 32, Tier: 'advanced', AppliesTo: 'connection', Sensitive: false,
+      Description: 'How many objects sync at once. Higher finishes sooner and asks more of both the source API and the database.' },
+    { Key: 'maxConcurrency', Label: 'Parallel requests', Group: 'Sync', Type: 'number', Default: 8, Min: 1, Max: 32, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Ceiling on in-flight requests to the source. Lower this first when the source starts throttling.' },
+    { Key: 'rateLimitTokensPerSec', Label: 'Requests per second', Group: 'Rate limits', Type: 'number', Default: 25, Min: 1, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Sustained request rate allowed against the source.' },
+    { Key: 'rateLimitBurst', Label: 'Burst allowance', Group: 'Rate limits', Type: 'number', Default: 25, Min: 1, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'How far above the sustained rate a short burst may go.' },
+    { Key: 'crossLayerPipeline', Label: 'Overlap dependent objects', Group: 'Sync', Type: 'boolean', Default: true, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Start an object before every object it depends on has fully finished. Faster; harder to reason about when something fails.' },
+    { Key: 'partitionReconcile', Label: 'Partition reconcile', Group: 'Sync', Type: 'boolean', Default: false, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Compare rolled-up fingerprints per partition and deep-apply only the parts that moved. Only helps on sources that return stable, well-distributed keys.' },
+    { Key: 'fetchTimeoutMs', Label: 'Fetch timeout', Group: 'Sync', Type: 'number', Default: null, Min: 1000, Tier: 'advanced', AppliesTo: 'connection', Sensitive: false,
+      Description: 'How long one fetch may take before it is abandoned. Unset means the connector\'s own declared timeout, then the framework default.' },
+    { Key: 'writeMode', Label: 'Write mode', Group: 'Sync', Type: 'enum', Options: ['batched', 'individual'], Default: 'batched', Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Whether records are written in batches or one at a time. Individual is slower and only useful when diagnosing a specific row failure.' },
+    { Key: 'discoveryMaxRecords', Label: 'Records sampled per table', Group: 'Discovery', Type: 'number', Default: DEFAULT_DISCOVERY_SAMPLE_TARGET, Min: 10, Max: 5000, Tier: 'advanced', AppliesTo: 'connection', Sensitive: false,
+      Description: 'How many records discovery reads from each table to work out its columns, widths and keys. The default is the point where the key statistics become significant; more records mainly buys a better estimate of the widest text value.' },
+    { Key: 'discoveryTimeBudgetMs', Label: 'Discovery time budget', Group: 'Discovery', Type: 'number', Default: 300000, Min: 10000, Tier: 'advanced', AppliesTo: 'connection', Sensitive: false,
+      Description: 'How long discovery may spend sampling before it stops and reports what it found.' },
+    { Key: 'discoveryBatchSize', Label: 'Discovery page size', Group: 'Discovery', Type: 'number', Default: 500, Min: 1, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Page size discovery requests while sampling.' },
+    { Key: 'discoverySampleMaxDepth', Label: 'Nested sampling depth', Group: 'Discovery', Type: 'number', Default: 3, Min: 1, Max: 10, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'How far discovery follows parent-to-child links to reach a table that can only be read through its parent.' },
+    { Key: 'discoveryParentKeySampleRows', Label: 'Parent rows buffered', Group: 'Discovery', Type: 'number', Default: PK_STAT_MIN_ROWS_FOR_SIGNIFICANCE, Min: 10, Tier: 'expert', AppliesTo: 'connection', Sensitive: false,
+      Description: 'How many rows of a key-less parent are read before its children can be sampled. Sized for the key classifier, not for the child.' },
+    { Key: 'deactivateAbsent', Label: 'Disable what the source stopped returning', Group: 'Discovery', Type: 'boolean', Default: true, Tier: 'basic', AppliesTo: 'connection', Sensitive: false,
+      Description: 'After a full refresh, tables and columns the source no longer exposes are disabled. They are never deleted and come back if the source returns them.' },
+    { Key: 'autoPromoteCustomColumns', Label: 'Adopt new columns automatically', Group: 'Discovery', Type: 'boolean', Default: false, Tier: 'basic', AppliesTo: 'connection', Sensitive: false,
+      Description: 'Off: extra columns the source sends are captured and offered for you to accept. On: they are turned into real columns without asking, which changes your schema on a schedule.' },
+] as const;
+
 export abstract class BaseIntegrationConnector {
 
     // ─── Capability Getters ──────────────────────────────────────────
@@ -417,6 +499,23 @@ export abstract class BaseIntegrationConnector {
 
     /** Whether this connector supports paginated listing of records. */
     public get SupportsListing(): boolean { return false; }
+
+    /**
+     * Every setting this connection exposes, described well enough for a surface to render it
+     * without knowing which connector it is.
+     *
+     * Subclasses APPEND their own rather than replacing these — the framework settings are read by
+     * the engine for every connector, so a connector that dropped them would be describing a
+     * connection that does not exist. Override as:
+     *
+     *   public get SettingsSchema() { return [...super.SettingsSchema, MY_SETTING]; }
+     *
+     * Returns a copy: a caller sorting or filtering this must not be able to reorder the shared
+     * definition for every other connection in the process.
+     */
+    public get SettingsSchema(): ConnectorSettingDescriptor[] {
+        return FRAMEWORK_SETTINGS.map(s => ({ ...s }));
+    }
 
     // ─── Standard CRUD Operations ────────────────────────────────────
     // Default implementations throw if not supported. Subclasses override
