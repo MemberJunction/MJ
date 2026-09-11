@@ -109,7 +109,7 @@ gates the one-process catalog can't provide, and they are **not** dispatched by 
 
 | Rig | Needs |
 |---|---|
-| `cross-server-invalidation-tests.ts` | TWO MJAPI processes + shared Redis (`RUN_CROSS_SERVER=1`, `MJAPI_A_URL`/`MJAPI_B_URL`) |
+| `cross-server-invalidation-tests.ts` | TWO MJAPI processes + shared Redis (`RUN_CROSS_SERVER=1`, `MJAPI_A_URL`/`MJAPI_B_URL`, `MJ_API_KEY`) — XS1/XS2 cover cache **invalidation**, XS3–XS5 cover **payload materialization** (that cross-server rows arrive as real BaseEntity instances, not prototype-less JSON); **mutates** (touches a query's `Description`, always restored) |
 | `cache-payload-materialization-tests.ts` | one process + real Redis (`REDIS_URL`) — captures a real cache publish off the wire and replays it as a foreign server; **mutates** (seeds/deletes agent notes) |
 | `agent-memory-tests.ts` | live-model gate (`RUN_AGENT_TESTS=1`) |
 | `runview-matrix-tests.ts` | running MJAPI + `MJ_API_KEY` — client-first RunView sweep across every entity |
