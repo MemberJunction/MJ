@@ -7,6 +7,9 @@
 // branch or a duplicate PR on a re-run would make a bad moment worse.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { backmergeBranchName, planFallback, prBody, main } from './backmerge-fallback.mjs';
 
 test('branch name is version-stamped so re-runs reuse it', () => {
@@ -56,14 +59,46 @@ test('PR body survives an empty reason', () => {
   assert.match(prBody({ version: 'v1', branch: 'b', base: 'next', reason: '' }), /no failure detail/);
 });
 
-/** Records every command so a test can assert on what the script actually did. */
-function fakeRun({ branchExists = false, existingPr = '', createdPr = 'https://github.com/o/r/pull/9' } = {}) {
+
+/**
+ * An env whose RUNNER_TEMP is a throwaway directory. main() writes the PR body to a file,
+ * and without this the suite drops /tmp/backmerge-fallback-body.md on the developer's
+ * machine on every run.
+ */
+function withTmpEnv(extra = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmf-'));
+  return { env: { RUNNER_TEMP: dir, ...extra }, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+}
+
+/**
+ * Records every command so a test can assert on what the script actually did.
+ *
+ * Exit CODES matter here, not just success/failure: the script distinguishes `ls-remote`
+ * 2 (ref absent) from 128 (remote unreachable), and `merge-base --is-ancestor` 1 (work to
+ * do) from anything else. A fake that threw a bare Error for every failure would pass
+ * whether or not that logic exists, which is the opposite of useful.
+ */
+function fakeRun({
+  branchExists = false,
+  existingPr = '',
+  createdPr = 'https://github.com/o/r/pull/9',
+  lsRemoteStatus = 2,
+  alreadyMerged = false,
+  mergeBaseStatus = 1,
+} = {}) {
   const calls = [];
+  const fail = (status) => { const e = new Error(`exit ${status}`); e.status = status; throw e; };
   const run = (file, args) => {
     calls.push([file, ...args]);
-    if (file === 'git' && args[0] === 'rev-parse') return 'abc123def456';
+    if (file === 'git' && args[0] === 'rev-parse') {
+      // main and the base branch must differ, or every run looks already-merged.
+      return calls.filter((c) => c[1] === 'rev-parse').length === 1 ? 'abc123def456' : 'base9999';
+    }
+    if (file === 'git' && args[0] === 'merge-base') {
+      return alreadyMerged ? '' : fail(mergeBaseStatus);
+    }
     if (file === 'git' && args[0] === 'ls-remote') {
-      if (!branchExists) throw new Error('exit 2');
+      if (!branchExists) return fail(lsRemoteStatus);
       return 'abc123 refs/heads/x';
     }
     if (file === 'gh' && args[1] === 'list') return existingPr;
@@ -75,7 +110,8 @@ function fakeRun({ branchExists = false, existingPr = '', createdPr = 'https://g
 
 test('fresh failure pushes main\'s tip to the versioned ref and opens one PR', async () => {
   const { calls, run } = fakeRun();
-  const url = await main(['--version', 'v6.1.0-edge.6', '--remote', 'next-push'], { run, env: {}, log: () => {} });
+  const t = withTmpEnv();
+  const url = await main(['--version', 'v6.1.0-edge.6', '--remote', 'next-push'], { run, env: t.env, log: () => {} }).finally(t.cleanup);
   assert.equal(url, 'https://github.com/o/r/pull/9');
 
   const push = calls.find((c) => c[0] === 'git' && c[1] === 'push');
@@ -97,7 +133,8 @@ test('main reads from origin even when pushing through another remote', async ()
   // The push remote exists only to satisfy the protection on `next`; it is not guaranteed
   // to have been fetched, so `main` must be read from origin.
   const { calls, run } = fakeRun();
-  await main(['--version', 'v1.0.0', '--remote', 'next-push'], { run, env: {}, log: () => {} });
+  const t = withTmpEnv();
+  await main(['--version', 'v1.0.0', '--remote', 'next-push'], { run, env: t.env, log: () => {} }).finally(t.cleanup);
   assert.deepEqual(calls[0], ['git', 'fetch', '--no-tags', 'origin', 'main']);
 });
 
@@ -108,7 +145,8 @@ test('a missing version fails loudly instead of guessing', async () => {
 
 test('gh is pinned to the repo when the runner provides one', async () => {
   const { calls, run } = fakeRun();
-  await main(['--version', 'v1.0.0'], { run, env: { GITHUB_REPOSITORY: 'o/r' }, log: () => {} });
+  const t = withTmpEnv({ GITHUB_REPOSITORY: 'o/r' });
+  await main(['--version', 'v1.0.0'], { run, env: t.env, log: () => {} }).finally(t.cleanup);
   for (const c of calls.filter((c) => c[0] === 'gh')) {
     assert.ok(c.includes('--repo') && c[c.indexOf('--repo') + 1] === 'o/r', `missing --repo: ${c.join(' ')}`);
   }
@@ -116,6 +154,49 @@ test('gh is pinned to the repo when the runner provides one', async () => {
 
 test('gh omits --repo when the runner provides none, rather than passing an empty one', async () => {
   const { calls, run } = fakeRun();
-  await main(['--version', 'v1.0.0'], { run, env: {}, log: () => {} });
+  const t = withTmpEnv();
+  await main(['--version', 'v1.0.0'], { run, env: t.env, log: () => {} }).finally(t.cleanup);
   assert.equal(calls.filter((c) => c[0] === 'gh').some((c) => c.includes('--repo')), false);
+});
+
+// --- the failures that only show up when something else has already gone wrong ----------
+
+test('an unreachable remote is not reported as "the branch does not exist"', async () => {
+  // ls-remote --exit-code returns 2 for "no matching ref" and 128 for a dead remote. Reading
+  // 128 as "absent" would attempt a push that cannot succeed and bury the real cause.
+  const { run } = fakeRun({ lsRemoteStatus: 128 });
+  await assert.rejects(() => main(['--version', 'v1.0.0'], { run, env: {}, log: () => {} }),
+    (e) => e.status === 128);
+});
+
+test('main already merged: report nothing to do instead of opening an empty PR', async () => {
+  // gh would fail this with "No commits between ...", the fallback would die, and the
+  // operator would be told to `git merge origin/main` by hand — advice that is wrong,
+  // because there is nothing to merge.
+  const { calls, run } = fakeRun({ alreadyMerged: true });
+  const url = await main(['--version', 'v1.0.0'], { run, env: {}, log: () => {} });
+  assert.equal(url, null);
+  assert.equal(calls.some((c) => c[0] === 'gh'), false, 'must not touch gh at all');
+  assert.equal(calls.some((c) => c[1] === 'push'), false);
+});
+
+test('nothing_to_merge is reported to the workflow, not just logged', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bmf-'));
+  const out = path.join(dir, 'out');
+  fs.writeFileSync(out, '');
+  try {
+    const { run } = fakeRun({ alreadyMerged: true });
+    await main(['--version', 'v1.0.0'], { run, env: { GITHUB_OUTPUT: out }, log: () => {} });
+    assert.match(fs.readFileSync(out, 'utf8'), /nothing_to_merge=true/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a broken merge-base is not silently read as "there is work to do"', async () => {
+  // Exit 1 means "not an ancestor". Any other status is a broken repo state, and treating
+  // it as "not merged" would push a branch off a sha nothing has verified.
+  const { run } = fakeRun({ mergeBaseStatus: 129 });
+  await assert.rejects(() => main(['--version', 'v1.0.0'], { run, env: {}, log: () => {} }),
+    (e) => e.status === 129);
 });

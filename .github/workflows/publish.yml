@@ -785,22 +785,46 @@ jobs:
           pnpm run mergemain:update-lock 2>&1 | tee "$RUNNER_TEMP/backmerge.log"
           exit "${PIPESTATUS[0]}"
 
-      # The recovery that #4382 had to do by hand. Two different failures land here — a
-      # genuine merge conflict (ci/back-merge.mjs refuses to guess at anything but the
-      # lockfile) and a rejected push (the bypass is configuration outside this repo and
-      # can be revoked, exactly as it was on 2026-09-03). A PR answers both.
+      # A SECOND mint, not a reuse of steps.next_token.
       #
-      # It does NOT make the release done: the back-merge is outstanding until someone
-      # merges that PR, which is why the job still fails below.
+      # That token was minted before the back-merge, and an installation token lives one
+      # hour. The back-merge is a merge plus `pnpm install --lockfile-only` over ~300
+      # packages; on a bad day it can run long enough for the token to expire. The fallback
+      # would then fail on an expired credential and produce exactly the state it exists to
+      # prevent: released, not merged, and no PR to show for it. A fresh token costs one
+      # step and removes the dependency on how long the step that just failed took to fail.
+      - name: Re-mint the App token for the fallback
+        if: ${{ env.BRANCH == 'main' && steps.backmerge.outcome == 'failure' }}
+        id: fallback_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      # The recovery that #4382 had to do by hand. Three outcomes land here — a genuine
+      # merge conflict (ci/back-merge.mjs refuses to guess at anything but the lockfile), a
+      # rejected push (the bypass is configuration outside this repo and can be revoked,
+      # exactly as it was on 2026-09-03), and "the merge actually landed before the step
+      # reported failure", which the script detects by ancestry and reports as
+      # nothing_to_merge rather than opening an empty PR.
+      #
+      # A PR does NOT make the release done: the back-merge is outstanding until someone
+      # merges it, which is why the job still fails below.
       - name: Fallback - open a back-merge PR
         if: ${{ env.BRANCH == 'main' && steps.backmerge.outcome == 'failure' }}
         id: backmerge_pr
         continue-on-error: true
         env:
-          GH_TOKEN: ${{ steps.next_token.outputs.token }}
+          GH_TOKEN: ${{ steps.fallback_token.outputs.token }}
+          APP_TOKEN: ${{ steps.fallback_token.outputs.token }}
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           set -euo pipefail
+          # The next-push remote still carries the OLD token in its URL — repoint it, or the
+          # re-mint above buys nothing for the push.
+          git remote set-url next-push "https://x-access-token:$APP_TOKEN@github.com/${GITHUB_REPOSITORY}"
           REASON=$(tail -c 2000 "$RUNNER_TEMP/backmerge.log" 2>/dev/null || echo 'back-merge step produced no log')
           node ci/backmerge-fallback.mjs \
             --version "$VERSION" \
@@ -865,11 +889,24 @@ jobs:
       # merged the repo is "published, not merged", and a green run would say otherwise.
       # Same doctrine the ledger step has always had, just reported at the end instead of
       # by stopping the job halfway.
+      #
+      # `always()` is load-bearing: a step `if:` carries an implicit success(), so without it
+      # a failure in the ledger step above would SKIP this one — losing the pointer to the
+      # fallback PR at precisely the moment two things have gone wrong.
       - name: Fail the run if the back-merge did not land
-        if: ${{ env.BRANCH == 'main' && steps.backmerge.outcome == 'failure' }}
+        if: ${{ always() && env.BRANCH == 'main' && steps.backmerge.outcome == 'failure' }}
         env:
           PR_URL: ${{ steps.backmerge_pr.outputs.pr_url }}
+          NOTHING_TO_MERGE: ${{ steps.backmerge_pr.outputs.nothing_to_merge }}
         run: |
+          # The back-merge step can fail with main already merged (e.g. the lockfile
+          # regeneration died after the merge commit had landed and pushed). There is then
+          # nothing outstanding and nothing to fail the release over.
+          if [ "${NOTHING_TO_MERGE:-}" = "true" ]; then
+            echo "::warning::The back-merge step failed, but main is already an ancestor of next — nothing to back-merge."
+            echo "::warning::Treating the release as complete. Check the back-merge step's log for why it reported failure."
+            exit 0
+          fi
           echo "::error::The release published, but the main -> next back-merge did not land."
           if [ -n "${PR_URL:-}" ]; then
             echo "::error::Resolve and merge ${PR_URL} to finish the release."

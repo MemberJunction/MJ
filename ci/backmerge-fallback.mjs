@@ -121,10 +121,48 @@ export async function main(argv, { run = defaultRun, env = process.env, log = co
     run('git', ['fetch', '--no-tags', 'origin', 'main']);
     const mainSha = run('git', ['rev-parse', 'FETCH_HEAD']);
 
+    // Is there anything to back-merge at all?
+    //
+    // The back-merge step can fail for reasons that leave main already merged — a lockfile
+    // regeneration that died after the merge commit landed and pushed, say. Opening a PR
+    // then produces "No commits between next and <branch>", the fallback dies, and the
+    // operator is told to run `git merge origin/main` by hand — advice that is actively
+    // wrong, because there is nothing to merge.
+    //
+    // Tested by ANCESTRY rather than by matching that error string: a message-based check
+    // silently stops working the day GitHub rewords it, and this is the branch of the code
+    // nobody exercises until it matters.
+    run('git', ['fetch', '--no-tags', 'origin', args.base]);
+    const baseSha = run('git', ['rev-parse', 'FETCH_HEAD']);
+    let alreadyMerged = true;
+    try {
+        run('git', ['merge-base', '--is-ancestor', mainSha, baseSha]);
+    } catch (e) {
+        // 1 = "not an ancestor", i.e. a real back-merge is outstanding. Anything else is a
+        // broken repo state and must not be read as "there is work to do".
+        if (e.status !== 1) throw e;
+        alreadyMerged = false;
+    }
+    if (alreadyMerged) {
+        log(`::notice::main (${mainSha}) is already an ancestor of ${args.base} — nothing to back-merge.`);
+        if (env.GITHUB_OUTPUT) fs.appendFileSync(env.GITHUB_OUTPUT, 'nothing_to_merge=true\n');
+        if (env.GITHUB_STEP_SUMMARY) {
+            fs.appendFileSync(env.GITHUB_STEP_SUMMARY,
+                `### Back-merge step failed, but there is nothing to back-merge\n\n\`main\` is already an ancestor of \`${args.base}\`.\n`);
+        }
+        return null;
+    }
+
     let branchExists = true;
     try {
         run('git', ['ls-remote', '--exit-code', args.remote, `refs/heads/${branch}`]);
-    } catch {
+    } catch (e) {
+        // `--exit-code` returns 2 for "no matching ref" and 128 for "cannot reach the
+        // remote" (bad credential, network, wrong URL). Swallowing both would report a
+        // dead remote as "the branch does not exist yet" and then attempt a push that
+        // cannot succeed — a misleading error from the one script whose whole job is to
+        // diagnose a failure. Only 2 means absent.
+        if (e.status !== 2) throw e;
         branchExists = false;
     }
 
