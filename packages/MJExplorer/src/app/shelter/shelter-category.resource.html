@@ -25,7 +25,7 @@
            columns built into `_columns`, `agColumnDefs.length === 0`, and the grid state still
            holding [Name, Species, IntakeDate, Status, Breed, Housing] -- Animal's columns. Breeds
            hid the bug because it shares Name + Species with Animal, so two columns survived. -->
-      @for (page of ActivePageAsList; track page.id) {
+      @for (page of ActivePageAsList; track PageTrackKey(page)) {
         @switch (page.kind) {
           @case ('entity') {
             <mj-entity-viewer
@@ -52,6 +52,24 @@
                  Everything here is stock MJ — the chat, the artifact rendering that turns the
                  agent's payload into a linkable grid of animals, and the run details. -->
             @if (AgentIds[page.agentName!] && CurrentUser) {
+              <div class="shelter-chat__host">
+              <!-- Kiosk control. The chat fills the pane, so the reset lives in a thin bar above it
+                   rather than floating over the conversation. It only appears once there IS a
+                   conversation to clear -- an empty chat has nothing to reset, and a button that
+                   does nothing is worse than no button. -->
+              @if (ChatConversation) {
+                <div class="shelter-chat__reset-bar">
+                  <button type="button"
+                          class="shelter-chat__reset"
+                          [class.shelter-chat__reset--armed]="ChatResetArmed"
+                          (click)="OnResetChatClicked()">
+                    <i class="fa-solid" [class.fa-rotate-left]="!ChatResetArmed"
+                                        [class.fa-triangle-exclamation]="ChatResetArmed"
+                       aria-hidden="true"></i>
+                    {{ ChatResetArmed ? 'Tap again to clear this conversation' : 'Start over for the next visitor' }}
+                  </button>
+                </div>
+              }
               <mj-conversation-chat-area
                   [Provider]="ProviderToUse"
                   [environmentId]="EnvironmentId"
@@ -67,7 +85,9 @@
                   [pendingMessageConversationId]="ChatPendingConversationId"
                   (conversationCreated)="OnChatConversationCreated($event)"
                   (pendingMessageConsumed)="OnChatPendingMessageConsumed()"
-                  style="display:block; width:100%; height:100%;"></mj-conversation-chat-area>
+                  (openEntityRecord)="onOpenEntityRecordFromAgent($event)"
+                  style="display:block; width:100%;"></mj-conversation-chat-area>
+              </div>
             } @else {
               <p class="shelter-cat__note">Loading “{{ page.agentName }}”…</p>
             }

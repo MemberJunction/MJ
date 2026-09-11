@@ -122,6 +122,76 @@ export abstract class ShelterCategoryBase extends BaseResourceComponent {
         this.cdr.markForCheck();
     }
 
+    // ── Resetting the chat between visitors ────────────────────────────────────────────────
+    //
+    // This page is a KIOSK. The next person to pick up the iPad must not find the last visitor's
+    // conversation on screen -- which by then contains their name, their email, and which animals
+    // they liked. Clearing it is a privacy requirement, not a convenience.
+    //
+    // Nulling the inputs is NOT enough on its own: the chat area caches a message-input component
+    // per conversation it has visited and holds its own `messages` array, so a reset that only
+    // rebinds leaves fragments of the old conversation behind. The reliable move is to destroy the
+    // component and build a new one -- which the `@for ... track` around the page body already
+    // does for free. Bumping this token changes the tracked key, so Angular tears the whole body
+    // down and constructs it fresh, with no reset path inside the component to trust.
+
+    /** Bumped by {@link ResetChat}; part of the `@for` track key. See {@link PageTrackKey}. */
+    public ChatResetToken = 0;
+
+    /** True once "Start over" has been tapped once and is waiting for the confirming tap. */
+    public ChatResetArmed = false;
+    private chatResetTimer?: ReturnType<typeof setTimeout>;
+
+    /**
+     * The `@for` key for the page body. For an agent page it folds in {@link ChatResetToken}, so a
+     * reset recreates the chat; every other page keeps its plain id and is unaffected.
+     */
+    public PageTrackKey = (page: ShelterCategoryPage): string =>
+        page.kind === 'agent' ? `${page.id}#${this.ChatResetToken}` : page.id;
+
+    /**
+     * Two taps, on purpose. One stray thumb on a shared iPad should not throw away a conversation
+     * someone is in the middle of -- but a modal confirm is the wrong instrument for a kiosk, and
+     * would pull in a dialog dependency this page does not otherwise need. So the button arms
+     * itself for four seconds and disarms on its own if nobody follows through.
+     */
+    public OnResetChatClicked(): void {
+        if (!this.ChatResetArmed) {
+            this.ChatResetArmed = true;
+            this.chatResetTimer = setTimeout(() => {
+                this.ChatResetArmed = false;
+                this.cdr.markForCheck();
+            }, 4000);
+            return;
+        }
+        this.clearChatResetTimer();
+        this.ResetChat();
+    }
+
+    /** Drop every trace of the current visitor and rebuild the chat. */
+    public ResetChat(): void {
+        this.ChatConversation = null;
+        this.ChatConversationId = null;
+        this.ChatIsNew = true;
+        this.ChatPendingMessage = null;
+        this.ChatPendingConversationId = null;
+        this.ChatResetArmed = false;
+        this.ChatResetToken++;
+        this.cdr.markForCheck();
+    }
+
+    private clearChatResetTimer(): void {
+        if (this.chatResetTimer) {
+            clearTimeout(this.chatResetTimer);
+            this.chatResetTimer = undefined;
+        }
+    }
+
+    public override ngOnDestroy(): void {
+        this.clearChatResetTimer();
+        super.ngOnDestroy?.();
+    }
+
     public override ngOnInit(): void {
         super.ngOnInit();
         this.ActivePageId = this.Pages[0]?.id ?? '';
@@ -237,6 +307,22 @@ export abstract class ShelterCategoryBase extends BaseResourceComponent {
     public onOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
         if (nav?.entityName && nav.recordKey != null) {
             this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromID(String(nav.recordKey)));
+        }
+    }
+
+    /**
+     * A row in the AGENT's data artifact was clicked. Same destination as a grid row, a THIRD
+     * output to wire: the artifact viewer emits its own `openEntityRecord`, which the chat area
+     * re-emits, and a host that binds only the grid's events leaves the agent's rows dead.
+     *
+     * The link only renders in the first place when the agent's payload gives each column its
+     * entity lineage (`sourceEntityName` + `sourceFieldName`) and the field resolves to a primary
+     * or foreign key -- see `resolveTargetEntity` in ng-query-viewer. `metadata.entityName` alone
+     * does NOT make rows clickable; the column descriptors do.
+     */
+    public onOpenEntityRecordFromAgent(event: { entityName: string; compositeKey: CompositeKey }): void {
+        if (event?.entityName && event.compositeKey) {
+            this.navigationService.OpenEntityRecord(event.entityName, event.compositeKey);
         }
     }
 

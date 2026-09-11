@@ -15,3 +15,37 @@
 .shelter-cat__pending i { font-size: 30px; opacity: 0.5; }
 .shelter-cat__pending h2 { margin: 0; font-size: 16px; color: var(--mj-text-secondary); }
 .shelter-cat__pending p { margin: 0; font-size: 12.5px; max-width: 46ch; }
+
+/* Kiosk reset. A thin bar above the chat rather than an overlay: the conversation is the page,
+   and a floating control would sit on top of the message someone is reading. */
+.shelter-chat__reset-bar {
+  flex: 0 0 auto;
+  display: flex; justify-content: flex-end;
+  padding: var(--mj-space-2, 0.5rem) var(--mj-space-4, 1rem);
+  border-bottom: 1px solid var(--mj-border-subtle, rgba(128, 128, 128, 0.2));
+}
+
+.shelter-chat__reset {
+  display: inline-flex; align-items: center; gap: var(--mj-space-2, 0.5rem);
+  padding: var(--mj-space-2, 0.5rem) var(--mj-space-3, 0.75rem);
+  font: inherit; font-size: 12.5px;
+  color: var(--mj-text-secondary); background: transparent;
+  border: 1px solid var(--mj-border-subtle, rgba(128, 128, 128, 0.25));
+  border-radius: var(--mj-radius-md, 6px);
+  cursor: pointer;
+}
+
+.shelter-chat__reset:hover { color: var(--mj-text-primary); }
+.shelter-chat__reset:focus-visible { outline: 2px solid var(--mj-primary); outline-offset: 2px; }
+
+/* Armed: the second tap destroys the conversation, so it stops looking like a quiet secondary
+   control and says what it is about to do. */
+.shelter-chat__reset--armed {
+  color: var(--mj-warning-text, var(--mj-text-primary));
+  border-color: var(--mj-warning, currentColor);
+  font-weight: 600;
+}
+
+/* The bar and the chat share the pane, so the agent case is a column and the chat takes the rest. */
+.shelter-chat__host { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.shelter-chat__host mj-conversation-chat-area { flex: 1 1 auto; min-height: 0; }
