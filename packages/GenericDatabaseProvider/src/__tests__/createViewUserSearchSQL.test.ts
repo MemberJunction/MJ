@@ -8,6 +8,7 @@
  *   - UserSearchParamFormatAPI overrides the predicate path
  *   - LIKE metacharacters (%, _, [, ], \) are escaped with ESCAPE '\'
  *   - Single-quote escaping is preserved on Exact (which doesn't use LIKE escaping)
+ *   - SQL keywords in the search text are ordinary literal content, never a refusal (#4392)
  *   - Non-text fields are skipped
  *   - Unbounded text fields (nvarchar(MAX)) are skipped on non-FTX entities
  *   - Multiple eligible fields produce an OR'd predicate wrapped in parentheses
@@ -234,6 +235,53 @@ describe('createViewUserSearchSQL — escaping', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Code', predicate: 'Exact' })] });
         const sql = provider.buildSQL(e, '50%');
         expect(sql).toBe(`(([Code]  = N'50%'))`);
+    });
+});
+
+describe('createViewUserSearchSQL — SQL keywords are ordinary search text (#4392)', () => {
+    // UserSearchString used to be screened by ValidateUserProvidedSQLClause, a denylist meant for
+    // caller-supplied SQL FRAGMENTS. Word-boundary-matched against free search-box text it refused
+    // real searches — "Union Pacific", "Update Request", "drop shipment" — and the grid showed a
+    // null error message. The screen is gone; these tests pin what replaces it: the term lands
+    // INSIDE a quoted literal with every quote doubled, where no keyword it contains can be parsed
+    // as SQL. That is the correct protection for a literal, and it never rejects a real search.
+
+    const keywordTerms = [
+        'Union Pacific',
+        'Update Request',
+        'drop shipment',
+        'delete',
+        'insert',
+        'exec',
+        'execute',
+        'waitfor',
+    ];
+
+    it.each(keywordTerms)('%j is emitted as a literal, not refused', (term) => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, term);
+        // The term appears verbatim inside the LIKE literal (no metacharacters in these terms).
+        expect(sql).toBe(`(([Name]  LIKE N'%${term}%' ESCAPE '\\'))`);
+    });
+
+    it("xp_ prefixed text searches normally (the _ is LIKE-escaped, as any literal underscore is)", () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, 'xp_test');
+        expect(sql).toBe(`(([Name]  LIKE N'%xp\\_test%' ESCAPE '\\'))`);
+    });
+
+    it('a term carrying a statement terminator stays inside the literal', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, "a; DROP TABLE Users--");
+        expect(sql).toBe(`(([Name]  LIKE N'%a; DROP TABLE Users--%' ESCAPE '\\'))`);
+        // Exactly two unescaped quotes: the literal's own delimiters. Nothing escaped out.
+        expect(sql.replace(/''/g, '').match(/'/g)?.length).toBe(4); // 2 for the literal + 2 for ESCAPE '\'
+    });
+
+    it("a quote-breaking payload is neutralized by doubling, not by refusal", () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, "x' OR '1'='1");
+        expect(sql).toBe(`(([Name]  LIKE N'%x'' OR ''1''=''1%' ESCAPE '\\'))`);
     });
 });
 

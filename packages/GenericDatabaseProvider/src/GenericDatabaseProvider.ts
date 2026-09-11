@@ -1870,9 +1870,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             }
 
             // 3. User search string
+            //
+            // 🚨 NOT screened by ValidateUserProvidedSQLClause (#4392). That denylist exists for
+            // caller-supplied SQL FRAGMENTS (ExtraFilter / OrderBy / OverrideExcludeFilter, both
+            // still screened above and below). UserSearchString is not a fragment — it is the free
+            // text a person typed into a search box, and createViewUserSearchSQL never splices it
+            // into SQL as one: it builds every predicate itself from IncludeInUserSearchAPI
+            // metadata and lands the text only INSIDE a string literal, with single quotes doubled
+            // and LIKE metacharacters escaped under an explicit ESCAPE.
+            //
+            // Screening it as SQL rejected ordinary searches. The denylist word-boundary-matches
+            // keywords against the raw text, so "Union Pacific", "Update Request" and "drop
+            // shipment" were all refused — and the grid surfaced a null error message, so the
+            // search box simply appeared broken.
+            //
+            // Quote-doubling, not keyword matching, is the correct protection for a value landing
+            // in a literal: it is what keeps the text inside the quotes, where no keyword it
+            // contains can mean anything to the parser.
             if (userSearchString.length > 0) {
-                if (!this.ValidateUserProvidedSQLClause(userSearchString))
-                    throw new Error(`Invalid User Search SQL clause: ${userSearchString}, contains one more for forbidden keywords`);
                 const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, userSearchString);
                 if (sUserSearchSQL.length > 0) {
                     whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;
@@ -1893,8 +1908,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     sExcludeSQL += ` UserViewID=${viewEntity?.ID})`;
                 else {
                     // SECURITY: excludeUserViewRunID is user-supplied (GraphQL input) and is
-                    // interpolated directly into SQL here. Unlike ExtraFilter/UserSearchString/
-                    // OverrideExcludeFilter (all passed through ValidateUserProvidedSQLClause),
+                    // interpolated directly into SQL here. Unlike ExtraFilter/OrderBy/
+                    // OverrideExcludeFilter (all passed through ValidateUserProvidedSQLClause —
+                    // UserSearchString is free text and is escaped into a literal instead, #4392),
                     // this value historically had NO validation — allowing SQL injection into the
                     // view WHERE clause. It is only ever a UserViewRun.ID (a GUID), so reject
                     // anything that is not a well-formed GUID before it reaches the query.
@@ -2740,9 +2756,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             bHasWhere = true;
         }
 
+        // Free text, not a SQL fragment — deliberately NOT run through
+        // ValidateUserProvidedSQLClause. See the equivalent note on the view path above (#4392).
         if (params.UserSearchString && params.UserSearchString.length > 0) {
-            if (!this.ValidateUserProvidedSQLClause(params.UserSearchString))
-                throw new Error(`Invalid User Search SQL clause: ${params.UserSearchString}`);
             const sUserSearchSQL = this.createViewUserSearchSQL(entityInfo, params.UserSearchString);
             if (sUserSearchSQL.length > 0) {
                 whereSQL = bHasWhere ? `${whereSQL} AND (${sUserSearchSQL})` : `(${sUserSearchSQL})`;

@@ -861,8 +861,22 @@ export class ResolverBase {
 
   /**
    * Applies {@link assertClientClauseUsesEntityBaseViews} to every client-supplied clause
-   * a view request can carry. GraphQL entry points (RunViewByName, RunViewByID,
-   * RunDynamicView, RunViews) funnel through RunViewGenericInternal / RunViewsGenericInternal.
+   * a view request can carry that is actually a SQL fragment. GraphQL entry points
+   * (RunViewByName, RunViewByID, RunDynamicView, RunViews) funnel through
+   * RunViewGenericInternal / RunViewsGenericInternal.
+   *
+   * 🚨 `UserSearchString` is deliberately NOT screened here (#4392). It is not a clause — it is
+   * the free text a person typed into a search box, and it never reaches SQL as a fragment.
+   * `GenericDatabaseProvider.createViewUserSearchSQL` builds the predicate itself from
+   * `IncludeInUserSearchAPI` metadata and lands the text only as a literal, doubling single
+   * quotes and escaping LIKE metacharacters with an explicit `ESCAPE`. Running it through a
+   * screen that parses its argument as SQL and fails closed rejected every term that is not
+   * coincidentally valid SQL: `Marcus Chen` parses as nothing, `O'Leary` as an unterminated
+   * literal — so essentially every real name search returned 0 rows.
+   *
+   * The provider-level denylist still covers it: `ValidateUserProvidedSQLClause` is applied to
+   * `UserSearchString` in `GenericDatabaseProvider` on both the view and the count paths, which
+   * keeps the stacked-statement / DML / comment / UNION / WAITFOR screen on the value.
    */
   protected screenClientViewClauses(
     clauses: {
@@ -875,7 +889,6 @@ export class ResolverBase {
   ): void {
     this.assertClientClauseUsesEntityBaseViews(clauses.extraFilter, 'ExtraFilter', provider);
     this.assertClientClauseUsesEntityBaseViews(clauses.orderBy, 'OrderBy', provider);
-    this.assertClientClauseUsesEntityBaseViews(clauses.userSearchString, 'UserSearchString', provider);
     this.assertClientClauseUsesEntityBaseViews(clauses.overrideExcludeFilter, 'OverrideExcludeFilter', provider);
   }
 
