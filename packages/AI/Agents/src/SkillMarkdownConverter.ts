@@ -26,7 +26,9 @@
  * kept with the skill for export and tooling, but left out of the agent's run — not described to the
  * model, not executable by the agent; application code invokes them. Written on export only when the
  * skill has such rows, so files exported before the key existed are byte-identical. A file without the
- * key expresses no opinion about the flag (the importer keeps surviving rows' flags as they were).
+ * key expresses no opinion about the flag (the importer keeps surviving rows' flags as they were); a
+ * file with the key but no names under it says "nothing is code-only", which is how an author puts the
+ * last code-only action back into the run — delete its line, keep the key.
  *
  * Deliberately NOT a general-purpose YAML parser — the frontmatter shape is fixed and small
  * (flat scalar keys + simple string-list keys), so a hand-rolled parser avoids taking on a new
@@ -191,6 +193,14 @@ export class SkillMarkdownConverter {
                     const inline = value.replace(/^\[/, '').replace(/\]$/, '');
                     result[key] = inline.split(',').map(s => this.unescapeScalar(s.trim())).filter(s => s.length > 0);
                     currentListKey = null;
+                } else {
+                    // Block form. The key is present, so the list exists from here even if no `- item`
+                    // follows: "present but empty" is an explicit empty list, distinct from an absent
+                    // key. That distinction matters for `codeOnlyActions`, where absent means "no
+                    // opinion, keep each row's flag" and empty means "nothing is code-only" — without
+                    // it, deleting the last name from the list would silently keep that action
+                    // code-only on re-import.
+                    result[key] ??= [];
                 }
                 continue;
             }

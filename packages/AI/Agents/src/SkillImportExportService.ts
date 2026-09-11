@@ -210,15 +210,20 @@ export class SkillImportExportService {
         if (frontmatter.codeOnlyActions === undefined) {
             return undefined;
         }
-        const codeOnlyIDs = new Set(
-            this.resolveNames(frontmatter.codeOnlyActions, ActionEngineServer.Instance.Actions, warnings, 'Code-only action')
-                .map(id => id.toUpperCase())
-        );
         const bundled = new Set(resolvedActionIDs.map(id => id.toUpperCase()));
-        for (const id of codeOnlyIDs) {
-            if (!bundled.has(id)) {
-                warnings.push(`codeOnlyActions names an action that is not listed under actions (${id}); ignored`);
+        const codeOnlyIDs = new Set<string>();
+        // Resolve one name at a time so a warning can quote the name the author typed — the resolved
+        // GUID is not something they can find in their file.
+        for (const name of frontmatter.codeOnlyActions) {
+            const [id] = this.resolveNames([name], ActionEngineServer.Instance.Actions, warnings, 'Code-only action');
+            if (id === undefined) {
+                continue; // resolveNames already warned that the name is unknown here
             }
+            if (!bundled.has(id.toUpperCase())) {
+                warnings.push(`codeOnlyActions names '${name}', which is not listed under actions; ignored`);
+                continue;
+            }
+            codeOnlyIDs.add(id.toUpperCase());
         }
         return new Map(resolvedActionIDs.map(id => [id.toUpperCase(), !codeOnlyIDs.has(id.toUpperCase())]));
     }

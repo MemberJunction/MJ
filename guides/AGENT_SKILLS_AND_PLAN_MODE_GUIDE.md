@@ -262,7 +262,9 @@ Instructions body — plain markdown, appended to an accepting agent's system
 prompt when the skill is activated.
 ```
 
-`codeOnlyActions` (optional) names the `actions` bundled with `ExposeToModel = 0` — see §1.3.
+`codeOnlyActions` (optional) names the `actions` bundled with `ExposeToModel = 0` — see §1.3. Absent key: no
+opinion, surviving rows keep their flag. Present but empty (`codeOnlyActions:` with no items, or `[]`): nothing is
+code-only — delete the last name and keep the key to put that action back into the run.
 
 **Why names, not IDs**: Action/sub-agent references in the frontmatter are **names**, because names are the only stable cross-instance reference. On import, names are resolved against the target instance's catalog; anything that doesn't resolve becomes a **non-fatal warning** (the skill still imports with whatever did resolve) — a skill authored elsewhere may reference actions this instance doesn't have.
 

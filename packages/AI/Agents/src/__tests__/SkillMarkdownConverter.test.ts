@@ -62,6 +62,37 @@ Second line.
             expect(emptyInline.frontmatter.codeOnlyActions).toEqual([]);
         });
 
+        it('treats a known list key in block form with no items as an explicit empty list, not an absent key', () => {
+            // The natural edit for "make my last code-only action model-callable again" is to delete
+            // its `- name` line and leave `codeOnlyActions:` standing. That must read as [] (an
+            // opinion: nothing is code-only), not undefined (no opinion → the old flag is carried).
+            const emptyBlock = SkillMarkdownConverter.Parse(['---', 'name: X', 'actions:', '  - Run Query', 'codeOnlyActions:', '---', 'Body'].join('\n'));
+            expect(emptyBlock.frontmatter.codeOnlyActions).toEqual([]);
+            expect(emptyBlock.frontmatter.actions).toEqual(['Run Query']);
+
+            // Same for the other list keys, and regardless of what follows the empty block.
+            const trailing = SkillMarkdownConverter.Parse(['---', 'name: X', 'codeOnlyActions:', 'actions:', '  - Run Query', 'subAgents:', 'category: Ops', '---', 'Body'].join('\n'));
+            expect(trailing.frontmatter.codeOnlyActions).toEqual([]);
+            expect(trailing.frontmatter.actions).toEqual(['Run Query']);
+            expect(trailing.frontmatter.subAgents).toEqual([]);
+            expect(trailing.frontmatter.category).toBe('Ops');
+
+            // An unknown list key in block form is still ignored, not materialised.
+            const unknown = SkillMarkdownConverter.Parse(['---', 'name: X', 'futureList:', '---', 'Body'].join('\n'));
+            expect((unknown.frontmatter as Record<string, unknown>)['futureList']).toBeUndefined();
+        });
+
+        it('round-trips an exported file whose only code-only name was deleted by hand', () => {
+            const md = SkillMarkdownConverter.Serialize({
+                name: 'X', actionNames: ['Run Query', 'Generate PDF'], codeOnlyActionNames: ['Generate PDF'], instructions: 'Body',
+            });
+            expect(md).toContain('codeOnlyActions:\n  - Generate PDF');
+            const edited = md.replace('codeOnlyActions:\n  - Generate PDF', 'codeOnlyActions:');
+            expect(edited).toContain('actions:\n  - Run Query\n  - Generate PDF'); // the bundle line is untouched
+            expect(edited).toMatch(/codeOnlyActions:\n(?!  - )/);                   // the key stands, its one item is gone
+            expect(SkillMarkdownConverter.Parse(edited).frontmatter.codeOnlyActions).toEqual([]);
+        });
+
         it('skips the items of an unknown list key instead of rejecting the file', () => {
             const parsed = SkillMarkdownConverter.Parse(['---', 'name: X', 'futureList:', '  - one', '  - two', 'actions:', '  - Run Query', '---', 'Body'].join('\n'));
             expect(parsed.frontmatter.actions).toEqual(['Run Query']);
