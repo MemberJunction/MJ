@@ -7,6 +7,7 @@ import {
     buildPlayDigitsTwiML,
     parseTwilioMediaFrame,
     encodeTwilioMediaFrame,
+    encodeTwilioClearFrame,
     ITwilioRestLike,
     ITwilioMediaPump,
     TwilioCreateCallParams,
@@ -230,5 +231,25 @@ describe('RealTwilioBindings — Media Streams mapping', () => {
         await bindings.acceptInbound('CA-inbound-1');
         expect(rest.Updates.length).toBe(0);
         expect(rest.Created).toBeUndefined();
+    });
+
+    it('flushOutbound encodes and sends a clear frame addressed to the stream SID', () => {
+        const { bindings, pump } = makeBindings();
+        pump.SetStreamSid('CA9', 'MZ-clear-123');
+        bindings.flushOutbound('CA9');
+        expect(pump.Sent.length).toBe(1);
+        expect(pump.Sent[0].callSid).toBe('CA9');
+        expect(pump.Sent[0].frame).toEqual({
+            event: 'clear',
+            streamSid: 'MZ-clear-123',
+        });
+    });
+
+    it('encodeTwilioClearFrame creates an event=clear frame with streamSid', () => {
+        const frame = encodeTwilioClearFrame('MZ-xyz');
+        expect(frame).toEqual({
+            event: 'clear',
+            streamSid: 'MZ-xyz',
+        });
     });
 });

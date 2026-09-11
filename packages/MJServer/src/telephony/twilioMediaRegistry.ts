@@ -56,12 +56,15 @@ export class TwilioCallMediaRegistry implements ITwilioMediaPump {
 
     // ── ITwilioMediaPump ─────────────────────────────────────────────────────────
 
-    /** @inheritdoc — buffers when the socket has not yet connected; sends immediately once it has. */
+    /** @inheritdoc — buffers when the socket has not yet connected; sends immediately once it has. Flushes buffer on 'clear'. */
     public Send(callSid: string, frame: TwilioMediaFrame): void {
         const channel = this.ensureChannel(callSid);
+        if (frame.event === 'clear') {
+            channel.outboundBuffer.length = 0;
+        }
         if (channel.socket) {
             channel.socket.send(JSON.stringify(frame));
-        } else {
+        } else if (frame.event !== 'clear') {
             channel.outboundBuffer.push(frame);
         }
     }

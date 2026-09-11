@@ -16,6 +16,7 @@
  */
 
 import { RunView, UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
+import { EscapeSQLString } from '@memberjunction/global';
 import type { MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderEntity } from '@memberjunction/core-entities';
 import { AIBridgeEngine } from '@memberjunction/ai-bridge-server';
 import { CreateBridgeRealtimeSession } from '@memberjunction/ai-agents';
@@ -94,7 +95,9 @@ export class TwilioTelephonyService {
      */
     public async HandleInboundCall(input: InboundCallInput, contextUser: UserInfo, provider: IMetadataProvider): Promise<InboundCallResult> {
         try {
-            const identity = await this.resolveAgentIdentityByPhone(input.to, contextUser);
+            await this.engine.Config(false, contextUser, provider);
+            const twilioProvider = this.resolveProvider();
+            const identity = await this.resolveAgentIdentityByPhone(input.to, twilioProvider.ID, contextUser);
             if (!identity) {
                 return { accepted: false, reason: `No active agent identity for dialed number '${input.to}'.` };
             }
@@ -225,8 +228,8 @@ export class TwilioTelephonyService {
         return config;
     }
 
-    /** Finds the active agent identity whose phone number matches the dialed DID. */
-    private async resolveAgentIdentityByPhone(dialedNumber: string, contextUser: UserInfo): Promise<MJAIBridgeAgentIdentityEntity | null> {
+    /** Finds the active agent identity whose phone number matches the dialed DID and Twilio provider. */
+    private async resolveAgentIdentityByPhone(dialedNumber: string, providerId: string, contextUser: UserInfo): Promise<MJAIBridgeAgentIdentityEntity | null> {
         const normalized = (dialedNumber ?? '').trim();
         if (!normalized) {
             return null;
@@ -235,7 +238,7 @@ export class TwilioTelephonyService {
         const result = await rv.RunView<MJAIBridgeAgentIdentityEntity>(
             {
                 EntityName: AGENT_IDENTITY_ENTITY,
-                ExtraFilter: `IdentityType='${PHONE_IDENTITY_TYPE}' AND IdentityValue='${normalized.replace(/'/g, "''")}' AND IsActive=1`,
+                ExtraFilter: `IdentityType='${PHONE_IDENTITY_TYPE}' AND IdentityValue='${EscapeSQLString(normalized)}' AND ProviderID='${EscapeSQLString(providerId)}' AND IsActive=1`,
                 MaxRows: 1,
                 ResultType: 'entity_object',
             },

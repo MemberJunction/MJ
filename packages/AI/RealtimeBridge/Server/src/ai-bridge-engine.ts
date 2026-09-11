@@ -23,6 +23,7 @@ import {
 import {
     AIBridgeEngineBase,
     BaseRealtimeBridge,
+    BaseTelephonyBridge,
     BridgeMediaFrame,
     BridgeMediaTrackKind,
     BridgeParticipantInfo,
@@ -898,6 +899,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             }
             this.wireTransportSeam(active);
             this.wireParticipantTracking(active);
+            this.wireTelephonyLifecycle(active);
             this.wireTurnTaking(active);
             await this.wireChannelPlane(active);
 
@@ -974,6 +976,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
         // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
+            active.LastActivityMs = Date.now();
             // DIARIZATION: the inbound frame carries the speaking participant's identity (when the provider
             // supports it). The realtime model's transcript has no speaker label, so we remember the
             // most-recent inbound audio speaker here and attribute the next 'user' transcript to them — a
@@ -993,6 +996,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
 
         // Outbound: the agent speaks → into the meeting/call.
         RealtimeSession.OnOutput((chunk: ArrayBuffer) => {
+            active.LastActivityMs = Date.now();
             if (!this.diagOutbound.has(active.SessionBridgeID)) {
                 this.diagOutbound.add(active.SessionBridgeID);
                 LogStatusEx({ message: `[AIBridgeEngine][diag] FIRST outbound audio from the agent (bridge ${active.SessionBridgeID}). The agent is SPEAKING into the room.`, verboseOnly: true });
@@ -1005,6 +1009,7 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
         // audio-only sessions don't implement OnVideoOutput, so call it null-safely. The bridge driver
         // gates the actual publish on its `VideoOut` capability.
         RealtimeSession.OnVideoOutput?.((chunk: ArrayBuffer) => {
+            active.LastActivityMs = Date.now();
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
         });
@@ -1111,6 +1116,15 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
                 `[AIBridgeEngine] Participant tracking unavailable for bridge ${active.SessionBridgeID}: ` +
                     `${err instanceof Error ? err.message : String(err)}`,
             );
+        }
+    }
+
+    private wireTelephonyLifecycle(active: ActiveBridgeSession): void {
+        if (active.Bridge instanceof BaseTelephonyBridge) {
+            active.Bridge.OnCallEnded(() => {
+                LogStatus(`[AIBridgeEngine] Telephony call ended for bridge ${active.SessionBridgeID} — stopping bridge session.`);
+                void this.StopBridgeSession(active.SessionBridgeID, 'HostEnded', active.ContextUser, active.MetadataProvider);
+            });
         }
     }
 

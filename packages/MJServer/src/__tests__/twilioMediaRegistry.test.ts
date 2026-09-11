@@ -43,6 +43,28 @@ describe('TwilioCallMediaRegistry', () => {
             expect(sock.sent).toHaveLength(1);
             expect(JSON.parse(sock.sent[0]).media.payload).toBe('c');
         });
+
+        it('discards buffered frames when a clear event arrives before socket connects', () => {
+            const reg = new TwilioCallMediaRegistry();
+            reg.RegisterCall('CA1');
+            reg.Send('CA1', mediaFrame('pre-clear'));
+            reg.Send('CA1', { event: 'clear', streamSid: 'MZ1' });
+
+            const sock = fakeSocket();
+            reg.AttachSocket('CA1', sock, 'MZ1');
+
+            expect(sock.sent).toHaveLength(0);
+        });
+
+        it('sends clear frame immediately when socket is attached', () => {
+            const reg = new TwilioCallMediaRegistry();
+            const sock = fakeSocket();
+            reg.AttachSocket('CA1', sock, 'MZ1');
+            reg.Send('CA1', { event: 'clear', streamSid: 'MZ1' });
+
+            expect(sock.sent).toHaveLength(1);
+            expect(JSON.parse(sock.sent[0])).toEqual({ event: 'clear', streamSid: 'MZ1' });
+        });
     });
 
     describe('inbound dispatch', () => {
