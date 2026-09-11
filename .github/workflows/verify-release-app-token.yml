@@ -36,9 +36,12 @@
 #   2. AFTER the bypass actor is added to ruleset 905656 — `can_bypass` must flip to
 #      `always`. That is the signal the next release will get past step 22.
 #
-# Read-only against the repo: it mints a token and asks questions. It pushes nothing,
-# opens nothing, and edits no ruleset. Delete it once the release path is on App tokens,
-# or keep it as a pre-release smoke test.
+# Near-read-only: it mints a token, asks questions, and makes exactly ONE mutation — a
+# throwaway ref created at next's existing tip and deleted again in cleanup, which is the
+# only unambiguous way to prove `contents: write` (see the write step for why the repo
+# `permissions` block cannot be used for this). It never touches `next`, `main` or any
+# lts/** branch, opens no PR, and edits no ruleset. Delete it once the release path is on
+# App tokens, or keep it as a pre-release smoke test.
 name: Verify the release App token
 
 on:
@@ -98,20 +101,40 @@ jobs:
           fi
           exit $rc
 
-      # `contents: write` on the INSTALLATION is not the same as write on THIS repo — the
-      # installation could be scoped to a subset that excludes MJ. This asks about the repo.
+      # DO NOT test write access with `gh api repos/OWNER/REPO --jq .permissions`.
+      #
+      # That block is computed for an authenticated USER. An installation token has no user
+      # behind it, so GitHub returns every field false — `admin`, `maintain`, `pull`, `push`,
+      # `triage` — even when the installation holds `contents: write`. The first version of
+      # this workflow asserted `.push == true` and failed a perfectly good credential.
+      #
+      # The giveaway is `pull: false` on a request that RETURNED 200: a token with no access
+      # to the repo gets a 404, not a permissions block. The successful read already proves
+      # access; the block just isn't populated for app tokens.
+      #
+      # So prove write the only way that is not ambiguous — perform one. Creating a ref is a
+      # `contents: write` operation and is exactly the capability publish.yml needs. The
+      # throwaway branch is deleted in the cleanup step below, and no workflow in this repo
+      # triggers on it: every `push:` trigger here is branch-filtered to next/main/lts/**
+      # or feature/mj-install-v2, so this starts no CI.
       - name: The token can actually write to this repo
         env:
           GH_TOKEN: ${{ steps.token.outputs.token }}
         run: |
           set -euo pipefail
-          PERMS=$(gh api "repos/${{ github.repository }}" --jq '.permissions | tojson')
-          echo "repo permissions = $PERMS"
-          if [ "$(echo "$PERMS" | jq -r .push)" != "true" ]; then
-            echo "::error::The App token cannot push to ${{ github.repository }}."
+          BRANCH="apptoken-writecheck-${{ github.run_id }}"
+          # Branch off next's current tip: creating a ref AT an existing commit adds no
+          # objects and changes no branch anyone uses.
+          SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/next" --jq '.object.sha')
+          echo "creating refs/heads/$BRANCH at $SHA"
+          # Record the name BEFORE the attempt, so cleanup still runs if creation half-succeeds.
+          echo "CLEANUP_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+          if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
+                 -f ref="refs/heads/$BRANCH" -f sha="$SHA" --silent; then
+            echo "::error::The App token cannot create a ref in ${{ github.repository }} — no contents:write."
             exit 1
           fi
-          echo "::notice::push=true on ${{ github.repository }}"
+          echo "::notice::contents:write confirmed (created refs/heads/$BRANCH)"
 
       # The load-bearing question, and the reason to run this a second time. For an
       # installation token `current_user_can_bypass` reports the APP's standing against
@@ -150,3 +173,21 @@ jobs:
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "No bypass yet — add app_id \`$EXPECTED_APP_ID\` as an \`Integration\` bypass actor, then re-run." >> "$GITHUB_STEP_SUMMARY" ;;
           esac
+
+      # always(): the write check exports CLEANUP_BRANCH before it creates the ref, so a
+      # partial failure still gets tidied. No-op when the variable was never set.
+      - name: Remove the throwaway branch
+        if: always()
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+        run: |
+          set -uo pipefail
+          if [ -z "${CLEANUP_BRANCH:-}" ]; then
+            echo "nothing to clean up"
+            exit 0
+          fi
+          if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$CLEANUP_BRANCH" --silent 2>/dev/null; then
+            echo "::notice::deleted refs/heads/$CLEANUP_BRANCH"
+          else
+            echo "::warning::could not delete refs/heads/$CLEANUP_BRANCH — remove it by hand."
+          fi
