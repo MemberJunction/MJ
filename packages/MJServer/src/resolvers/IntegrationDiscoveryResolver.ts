@@ -256,6 +256,17 @@ class SchemaEvolutionOutput {
      * "what was here could not be reconciled with the source and has been rebuilt from it".
      */
     @Field(() => [String], { nullable: true }) RekeyedObjects?: string[];
+    /**
+     * Custom columns the source has been sending that are still sitting in the overflow JSON,
+     * offered here so a schema refresh is where you see them.
+     *
+     * everything.txt: promoting one "requires that the user accepts" it, so this is REPORT-ONLY.
+     * Pass the column names back in `acceptCustomColumns` to actually materialise them — in the
+     * same migration and the same restart as the refresh's own DDL.
+     */
+    @Field(() => [CustomColumnCandidate], { nullable: true }) CustomColumnCandidates?: CustomColumnCandidate[];
+    /** The accepted columns that were folded into this run's migration. */
+    @Field(() => [PromotedColumn], { nullable: true }) PromotedColumns?: PromotedColumn[];
 }
 
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
@@ -6943,6 +6954,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("autoEnableNewColumns", { defaultValue: false, description: 'newly-appeared COLUMNS on an enabled object get their field maps created DISABLED, matching autoEnableNewObjects. Pass true to auto-enable instead. NOTE: this governs the REFRESH only — a column discovered mid-SYNC is never auto-created; it is captured as a candidate and needs acceptance (Configuration.autoPromoteCustomColumns, default false).' }) autoEnableNewColumns: boolean,
         @Arg("deactivateAbsent", { nullable: true, description: 'Deactivate IO/IOF absent from this re-discovery (default true — comprehensive refresh; gated on the connector\'s authoritative-discovery getter).' }) deactivateAbsent: boolean | undefined,
         @Arg("cascadeRemoveDependents", { defaultValue: false, description: 'When a removed object has still-active dependents (DAG parent edges), also disable the transitive dependent closure ("force remove those too"). Default false: dependents stay active and each broken edge is surfaced as a warning.' }) cascadeRemoveDependents: boolean,
+        // everything.txt: a custom column the source started sending is CAPTURED automatically but
+        // materialising it "requires that the user accepts" it. So candidates are always REPORTED
+        // (CustomColumnCandidates on the output) and this list is how they come back accepted.
+        // Empty default = report and promote nothing, which is the contract.
+        //
+        // Accepted columns ride THIS run's migration rather than starting their own. Promoting in a
+        // second batch would restart the workspace twice for one user action, and back-to-back RSU
+        // restarts are their own incident class here.
+        @Arg("acceptCustomColumns", () => [String], { defaultValue: [], description: 'Column names from a previous run\'s CustomColumnCandidates to materialise as part of THIS refresh — one migration, one restart. Default empty: candidates are reported and nothing is promoted.' }) acceptCustomColumns: string[],
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
         return WithCatalogScope(companyIntegrationID, async () => {
@@ -7237,6 +7257,46 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             let pipelineSteps: RSUStepOutput[] | undefined;
             let gitCommitSuccess: boolean | undefined;
             let apiRestarted: boolean | undefined;
+            // ── Overflow columns: always report, promote only what came back accepted. ──
+            //
+            // A refresh is where an operator asks "what has changed on the source?", and columns
+            // the connector has been quietly capturing into the overflow JSON are part of that
+            // answer. Reporting is free and read-only. Promoting is not, so it needs the explicit
+            // acceptance everything.txt asks for.
+            let customColumnCandidates: CustomColumnCandidate[] = [];
+            let promotionInputs: RSUPipelineInput[] = [];
+            let promotedColumns: PromotedColumn[] = [];
+            try {
+                const promoter = new IntegrationCustomColumnPromoter(user, md);
+                const mapped = await this.getMappedEntityNames(companyIntegrationID, user);
+                for (const en of mapped) {
+                    customColumnCandidates.push(...await promoter.ListCandidates(companyIntegrationID, en));
+                }
+                const accepted = new Set((acceptCustomColumns ?? []).map(c => c.toLowerCase()));
+                if (accepted.size > 0) {
+                    // Only entities that actually own an accepted column — planning an entity with
+                    // nothing accepted would promote its OTHER candidates too, which is precisely
+                    // the un-asked-for materialisation the acceptance gate exists to prevent.
+                    const entitiesWithAccepted = Array.from(new Set(
+                        customColumnCandidates.filter(c => accepted.has(c.ColumnName.toLowerCase())).map(c => c.EntityName)
+                    ));
+                    if (entitiesWithAccepted.length > 0) {
+                        const plan = await promoter.PlanPromotion(companyIntegrationID, entitiesWithAccepted);
+                        if (plan) {
+                            promotionInputs = plan.BatchInputs;
+                            promotedColumns = plan.Plans.flatMap(p => p.work.map(w => ({ EntityName: p.entityName, ColumnName: w.columnName })));
+                        }
+                    }
+                }
+            } catch (candErr) {
+                // Neither reporting nor promoting overflow columns is what a refresh is FOR. A
+                // failure here must not fail the refresh — it costs the offer, not the evolution.
+                LogError(`IntegrationSchemaEvolution: custom-column candidates unavailable — ${candErr}`);
+                customColumnCandidates = [];
+                promotionInputs = [];
+                promotedColumns = [];
+            }
+
             if (hasDDLChanges) {
                 const rsuInput = builder.BuildRSUInput(schemaOutput, schemaInput, {
                     SkipGitCommit: skipGitCommit,
@@ -7272,7 +7332,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
 
                 const rsm = RuntimeSchemaManager.Instance;
-                const batchResult = await rsm.RunPipelineBatch([rsuInput]);
+                // ONE batch: the refresh's own DDL plus any accepted overflow columns. RSU
+                // registers PendingWork from EVERY input, so the promoter's post-restart
+                // completion survives being appended here rather than run as its own batch.
+                const batchResult = await rsm.RunPipelineBatch([rsuInput, ...promotionInputs]);
                 const pipelineResult = batchResult.Results[0];
                 pipelineSteps = pipelineResult?.Steps.map((s: RSUPipelineStep) => ({
                     Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
@@ -7308,19 +7371,48 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         }
                     }
                 }
+            } else if (promotionInputs.length > 0) {
+                // The source's own shape is unchanged, but the operator accepted overflow columns.
+                // They still need a migration; there is simply no evolution DDL to share it with.
+                const rsm = RuntimeSchemaManager.Instance;
+                const batchResult = await rsm.RunPipelineBatch(promotionInputs);
+                const first = batchResult.Results[0];
+                pipelineSteps = first?.Steps.map((s: RSUPipelineStep) => ({
+                    Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,
+                }));
+                gitCommitSuccess = first?.GitCommitSuccess;
+                apiRestarted = first?.APIRestarted;
+                if (!first?.Success) {
+                    return {
+                        Success: false,
+                        Message: `Column promotion failed: ${first?.ErrorMessage ?? 'unknown error'}`,
+                        HasChanges: false,
+                        Steps: pipelineSteps,
+                        CustomColumnCandidates: customColumnCandidates.length > 0 ? customColumnCandidates : undefined,
+                    };
+                }
             }
+
+            // Report only what is STILL outstanding: a column accepted this run is being created
+            // right now, so leaving it in the offer would invite the operator to accept it twice.
+            const acceptedNames = new Set(promotedColumns.map(c => c.ColumnName.toLowerCase()));
+            const outstandingCandidates = customColumnCandidates.filter(c => !acceptedNames.has(c.ColumnName.toLowerCase()));
 
             const summary = [
                 newObjects.length > 0 ? `${newObjects.length} new object(s) (${autoEnableNewObjects ? 'enabled' : 'created disabled'})` : null,
                 removedObjects.length > 0 ? `${removedObjects.length} removed object(s) disabled` : null,
                 changedObjects.length > 0 ? `${changedObjects.length} changed object(s), ${addedColumns} column(s) added (${autoEnableNewColumns ? 'enabled' : 'created disabled'}), ${modifiedColumns} modified` : null,
                 watermarksReset.length > 0 ? `${watermarksReset.length} watermark(s) reset for backfill` : null,
+                promotedColumns.length > 0 ? `${promotedColumns.length} accepted custom column(s) materialised` : null,
+                outstandingCandidates.length > 0 ? `${outstandingCandidates.length} custom column(s) awaiting your acceptance` : null,
             ].filter(Boolean).join('; ');
 
             return {
                 Success: true,
                 Message: `Schema evolution applied — ${summary || 'no per-object deltas'}`,
                 HasChanges: true,
+                CustomColumnCandidates: outstandingCandidates.length > 0 ? outstandingCandidates : undefined,
+                PromotedColumns: promotedColumns.length > 0 ? promotedColumns : undefined,
                 AddedColumns: addedColumns,
                 ModifiedColumns: modifiedColumns,
                 Steps: pipelineSteps,

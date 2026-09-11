@@ -176,6 +176,27 @@ async function readAutoPromoteFlag(companyIntegrationID: string, user: UserInfo,
     } catch { return false; }
 }
 
+interface EntityPlan {
+    entityName: string;
+    entityInfo: EntityInfo;
+    entityMap: { ID: string; ExternalObjectName: string };
+    work: WorkItem[];
+    /** Index of this entity's input in the RSU batch; -1 when it needs no DDL. */
+    batchIndex: number;
+}
+
+/** What {@link IntegrationCustomColumnPromoter.PlanPromotion} worked out, before anything runs. */
+export interface PromotionPlan {
+    IntegrationID: string;
+    Plans: EntityPlan[];
+    /**
+     * The ADD COLUMN migrations, ready to run. The FIRST entry carries the durable post-restart
+     * PendingWork for the whole plan — RSU registers PendingWork from every input in a batch, so
+     * these can be appended to someone else's batch without losing it.
+     */
+    BatchInputs: RSUPipelineInput[];
+}
+
 const NOT_PROMOTED: SchemaPromotionResult = { Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
 
 /**
@@ -196,30 +217,38 @@ export class IntegrationCustomColumnPromoter {
         return this.provider as unknown as DatabaseProviderBase;
     }
 
-    /** Entry point: promote custom columns for every entity touched by the sync. */
-    public async PromoteForSync(
+    /**
+     * PHASE 1 only: work out what WOULD be promoted, and the ADD COLUMN migrations that would do
+     * it, without running a pipeline.
+     *
+     * Split out so a caller that is ALREADY running an RSU batch can fold these migrations into
+     * it. A schema refresh that offers the accumulated overflow columns and then promotes them in
+     * its own second batch would restart the workspace twice in a row for one user action, and a
+     * restart storm is its own incident class here. One batch, one migration, one restart.
+     *
+     * Side effects are deliberate and belong to planning, not to promotion: stale already-promoted
+     * keys are purged from the staging JSON here, BEFORE any column is created and before the RSU
+     * pass that would restart this process. That runs even when nothing new is promoted, which is
+     * the only way residue on rows a sync never rewrites gets cleaned rather than endlessly
+     * re-detected as a phantom "new column".
+     *
+     * Returns null when there is nothing to do.
+     */
+    public async PlanPromotion(
         companyIntegrationID: string,
-        syncedEntityNames: string[],
+        entityNames: string[],
         customKeyStats?: Record<string, CustomKeyStat[]>,
-    ): Promise<SchemaPromotionResult> {
+    ): Promise<PromotionPlan | null> {
         const integrationID = await this.resolveIntegrationID(companyIntegrationID);
-        if (!integrationID) return NOT_PROMOTED;
+        if (!integrationID) return null;
 
         // ── PHASE 1: PLAN — build every entity's work list + its RSU input; run NO pipeline. ──
         // The old shape ran the FULL RSU pipeline per entity — a sync touching N entities with
         // candidates paid N CodeGen + compile passes where the batch API exists precisely to pay
         // one. Plan everything first, then promote once.
-        interface EntityPlan {
-            entityName: string;
-            entityInfo: EntityInfo;
-            entityMap: { ID: string; ExternalObjectName: string };
-            work: WorkItem[];
-            /** Index of this entity's input in the RSU batch; -1 when it needs no DDL. */
-            batchIndex: number;
-        }
         const plans: EntityPlan[] = [];
         const batchInputs: RSUPipelineInput[] = [];
-        for (const entityName of syncedEntityNames) {
+        for (const entityName of entityNames) {
             try {
                 const planned = await this.planWorkForEntity(companyIntegrationID, entityName, customKeyStats?.[entityName]);
                 if (!planned) continue; // no overflow column / no captured customs / no entity map
@@ -253,7 +282,7 @@ export class IntegrationCustomColumnPromoter {
                 LogError(`[CustomColumnPromoter] Planning failed for entity '${entityName}': ${this.msg(err)}`);
             }
         }
-        if (plans.length === 0) return NOT_PROMOTED;
+        if (plans.length === 0) return null;
 
         // Register the follow-up DURABLY before the restart, the way the apply-objects path does
         // (IntegrationDiscoveryResolver: `rsuInput.PendingWork = [pendingPayload]`). The restart is
@@ -287,6 +316,19 @@ export class IntegrationCustomColumnPromoter {
             }];
             batchInputs[0].ContextUser = this.user;
         }
+        return { IntegrationID: integrationID, Plans: plans, BatchInputs: batchInputs };
+    }
+
+    /** Entry point: promote custom columns for every entity touched by the sync. */
+    public async PromoteForSync(
+        companyIntegrationID: string,
+        syncedEntityNames: string[],
+        customKeyStats?: Record<string, CustomKeyStat[]>,
+    ): Promise<SchemaPromotionResult> {
+        const promotionPlan = await this.PlanPromotion(companyIntegrationID, syncedEntityNames, customKeyStats);
+        if (!promotionPlan) return NOT_PROMOTED;
+        const plans = promotionPlan.Plans;
+        const batchInputs = promotionPlan.BatchInputs;
 
         // ── PHASE 2: ONE batched RSU pass for ALL entities' ADD COLUMN migrations. ──
         // RunPipelineBatch runs every migration under one lock, then ONE CodeGen + compile +
@@ -347,7 +389,7 @@ export class IntegrationCustomColumnPromoter {
                     EntityName: plan.entityName,
                     EntityMapID: plan.entityMap.ID,
                     ExternalObjectName: plan.entityMap.ExternalObjectName,
-                    IntegrationID: integrationID,
+                    IntegrationID: promotionPlan.IntegrationID,
                     Columns: plan.work.map(w => ({
                         SourceKey: w.sourceKey,
                         ColumnName: w.columnName,
