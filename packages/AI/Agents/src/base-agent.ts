@@ -4823,7 +4823,7 @@ export class BaseAgent {
         }
 
         // Check cost limit
-        if (agent.MaxCostPerRun && agentRun.TotalCost) {
+        if (agent.MaxCostPerRun != null && agentRun.TotalCost != null) {
             if (agentRun.TotalCost >= agent.MaxCostPerRun) {
                 return {
                     exceeded: true,
@@ -4836,7 +4836,7 @@ export class BaseAgent {
         }
         
         // Check token limit
-        if (agent.MaxTokensPerRun && agentRun.TotalTokensUsed) {
+        if (agent.MaxTokensPerRun != null && agentRun.TotalTokensUsed != null) {
             if (agentRun.TotalTokensUsed >= agent.MaxTokensPerRun) {
                 return {
                     exceeded: true,
