@@ -907,6 +907,8 @@ class OperationProgressOutput {
     @Field({ nullable: true }) RecordsCreated?: number;
     @Field({ nullable: true }) RecordsUpdated?: number;
     @Field({ nullable: true }) RecordsErrored?: number;
+    /** Records the sync chose not to write because the content hash matched. */
+    @Field({ nullable: true }) RecordsSkipped?: number;
     @Field({ nullable: true }) RSUStep?: string;
     @Field({ nullable: true }) RSURunning?: boolean;
     /** U11 — 1-based index of the current RSU step (determinate stepper). */
@@ -5178,6 +5180,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     RecordsCreated: syncProgress.RecordsCreated,
                     RecordsUpdated: syncProgress.RecordsUpdated,
                     RecordsErrored: syncProgress.RecordsErrored,
+                    RecordsSkipped: syncProgress.RecordsSkipped,
                     StartedAt: syncProgress.StartedAt.toISOString(),
                     ElapsedMs: Date.now() - syncProgress.StartedAt.getTime(),
                 };
