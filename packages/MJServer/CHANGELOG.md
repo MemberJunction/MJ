@@ -1,5 +1,338 @@
 # Change Log - @memberjunction/server
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 0d3094c: **A skill can stay active for a conversation, not just a run.**
+
+  A skill activates for one run: `requestedSkillIDs` is a per-call input and the activated set dies
+  with the run. That is right for a one-shot capability and wrong for a skill that behaves as a
+  mode — a persona, or an assistant whose reply carries a menu that is pressed on the NEXT turn, when
+  nothing would re-activate it. Every conversational agent with a mode was re-implementing a
+  (conversation, skill) table and merging it into the request by hand.
+
+  Two additive, opt-in pieces (migration `V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation`):
+  - `AISkill.ActivationScope` — `Run` (default, today's behaviour) or `Conversation`.
+  - `MJ: Conversation Skills` — one row per (conversation, skill), `Active` or `Ended`, with the run
+    that activated it as provenance.
+
+  `BaseAgent` does the rest. At the start of every root run that has a `conversationId`, the
+  conversation's Active skills join `requestedSkillIDs` (every availability gate still applies on
+  every run). When a `Conversation`-scoped skill activates — by request or by the agent's own choice —
+  its row is written or re-activated. A persisted skill that a gate refuses this turn is simply not
+  activated and gets no note (the user never mentioned it); its row stays Active, because a gate miss
+  can be transient and ending the row would be silent, permanent loss of a mode. Retiring a mode is an
+  explicit act. An explicitly requested skill that is refused still gets the system note.
+  `BaseAgent.EndConversationSkill(conversationId, skillId, user)` is the app's "leave the mode"
+  gesture. All three steps are protected/public and fail soft: losing a persisted skill means the user
+  re-invokes it, never that the turn fails.
+
+  Precedent: `UserRoutine.RequestedSkillIDs` (v5.45) persists a pre-selection on the owning record and
+  threads it per run; this is the same idea keyed on the conversation. First-adopter feedback (Betty).
+  A composer chip that shows the conversation's active skills and ends one on removal is the natural
+  UI follow-up; the server side works for every client and bridge without it.
+
+  Also: `mj sync pull` now round-trips a skill's `MJ: AI Skill Search Scopes` rows (under
+  `metadata/ai-skills`) and an agent's `MJ: AI Agent Skills` grants (under `metadata/agents`, for the
+  agents that directory pulls) — pull-config additions only; push already accepted both.
+
+- 43f9133: Add `Entity.SubtypeSelector` column, JSONType metadata, and CodeGen artifacts for prospective IsA subtype resolution.
+  - **Schema & Migration**: Migration `V202609081111__v6.1.x__Entity_SubtypeSelector.sql` adds nullable `SubtypeSelector NVARCHAR(MAX)` on `__mj.Entity` with extended property documentation, regenerated CRUD stored procedures, and view refresh.
+  - **Metadata**: Created `IEntitySubtypeSelectorConfig` interface (`metadata/entities/JSONType-interfaces/IEntitySubtypeSelectorConfig.ts`) and configured JSONType metadata on `Entity.SubtypeSelector` via `metadata/entities/.entity-field-jsontype-entity-subtype-selector.json`.
+  - **Generated Code**: Generated `SubtypeSelector` and typed `SubtypeSelectorObject: MJEntityEntity_IEntitySubtypeSelectorConfig | null` accessor on `MJEntityEntity` in `@memberjunction/core-entities`, GraphQL schema definitions in `@memberjunction/server`, and updated Angular entity forms in `@memberjunction/ng-core-entity-forms`.
+
+### Patch Changes
+
+- 4d33bc5: Security hardening from the first full CodeQL scan of the security-critical packages. None of these changes alter behavior for well-formed requests.
+
+  **`@memberjunction/server`**
+  - The Teams meetings Graph webhook rejects a `validationToken` that is not bounded-length printable ASCII with 400 before echoing anything, and sets `X-Content-Type-Options: nosniff` on the echo. Graph's real token is a short ASCII sentence plus a request id and is unaffected.
+
+  **`@memberjunction/ai-mcp-server`**
+  - **Open redirect closed** in the OAuth proxy's `/oauth/authorize`. Errors raised before the client was known and the `redirect_uri` registered for it (missing or unknown `client_id`, unregistered `redirect_uri`, unsupported `response_type`) were redirected to the caller-supplied `redirect_uri`, so any URL could be used as a bounce. Those errors now render the proxy's error page; errors after validation still redirect per RFC 6749.
+  - **Rate limiting** on every OAuth proxy route (authorize, callback, token, registration, login, consent, metadata), per client IP, 60 requests per minute by default and configurable through `OAuthProxyConfig.rateLimit`. Same `express-rate-limit` pattern as the server's magic-link and provider-catalog routers.
+  - Log lines that include caller-supplied values (`client_id`, upstream `error` / `error_description`) quote them so a newline in a parameter cannot forge a log entry.
+  - The OAuth proxy reads query-string parameters, and the form fields of the token and consent endpoints, through a helper that keeps only plain strings. A repeated parameter (`?code=a&code=b`, `code_verifier[]=…`), which Express parses to an array, is now treated as missing and takes each handler's existing error path instead of reaching string operations or the PKCE hash as an array (which previously produced a 500).
+  - The upstream token-exchange error log no longer prints the last eight characters of the authorization code or the first eight of the PKCE verifier. The remaining lines (status, endpoint, redirect URI, client id, verifier presence, provider error) are what diagnosing a failed exchange needs.
+
+- 67e4c9e: `BaseEntityResult.CompleteMessage` now renders a `ValidationErrorInfo` as its prose instead of as a JSON blob.
+
+  The getter mapped its `Errors` array with `err.message || JSON.stringify(err)` — **lowercase** `message` — while MJ's own `ValidationErrorInfo` carries **`Message`**. Every validation error therefore fell through to the JSON fallback, and `CompleteMessage` is what the server hands the client on a failed save (`ResolverBase`'s write-refusal throws put it in the `GraphQLError`; `SaveEntityGraphOperation` puts it in `ErrorMessage`). So a carefully-worded refusal written in a subclass's `ValidateAsync()` — or MJ core's own `EntityField.Validate()` — reached the user as `{"Source":"Name","Message":"Name cannot be longer than 50 characters…","Value":"…the entire rejected value…","Type":"Failure"}`.
+
+  Both readers are fixed through one shared helper, `BaseEntityResult.ErrorText()` (`Message` → `message` → JSON): the `Errors` array and the single `Error` property, which carried the same lowercase-only assumption. The JSON fallback is kept for a shape with neither field, so nothing that used to say something now says nothing.
+
+  A second, independent half of the same user-visible failure is fixed alongside it: only `ResolverBase.CreateRecord` read `CompleteMessage`. `UpdateRecord` and `DeleteRecord` read the bare `Message`, which a validation refusal leaves `null` — so the `?? 'Unknown error'` fallback fired and the reason was discarded entirely. The same rule on the same entity therefore explained itself on a create and said "Unknown error" on an update. Both now read `CompleteMessage`, which is a strict superset of `Message` and still yields `undefined` when there is nothing to say, so the fallback still fires rather than showing a blank error.
+
+- b832d75: Fix: the default magic-link provisioning user could never resolve (#4209)
+
+  `userHandling.contextUserForNewUserCreation` shipped as `'not.set@nowhere.com'` — the seeded system
+  user's **Email** — but was resolved with `UserCache.UserByName`, which matches **Name** (`'System'`).
+  On a stock database the default named the very user it was aiming at and could not reach it. Every
+  magic-link redeem, and every JWT auto-provisioned user, therefore logged at error level:
+
+  ```
+  [MagicLink] Configured provisioning user 'not.set@nowhere.com' not found; falling back to an Owner.
+  ```
+
+  and was attributed to whichever user happened to sort first as an Owner — a value that changes with
+  the order `SELECT * FROM vwUsers` returns, so any audit over `CreatedByUserID` for these users was
+  reading noise.
+
+  **What changed.** Resolution moved into one shared module (`src/auth/principals.ts`) used by
+  `MagicLinkService`, `NewUserBase` and `WidgetSessionService`, which previously hand-rolled three
+  mutually inconsistent versions of the same ladder. It now resolves in this order:
+  1. `User.Name` — tried first, so **every host that resolves today resolves to the same user**
+  2. `User.Email` — the identity column used everywhere else in MJServer, and the only one the schema
+     makes unique (`UQ_User_Email`). This is the rung that fixes MJ's own default
+  3. the system user, by ID — so it survives the system user being renamed (active only)
+  4. the lowest-ID **active** Owner — a last resort, but a deterministic one
+
+  An unresolvable candidate is now reported **once per distinct setting + value** rather than once per
+  request, so a misconfiguration is still visible without burying real errors underneath it.
+
+  **Behaviour changes to be aware of** (all limited to hosts that were already falling back — a host
+  whose configured user resolves is unaffected):
+  - Provisioning that previously landed on an arbitrary Owner now lands on the system user, so
+    `CreatedByUserID` for newly provisioned users changes — to a stable value. Historical rows are
+    untouched.
+  - **No rung returns an inactive user** — the two configured rungs as well as the system rung and
+    the Owner fallback. Two cases follow. A setting naming a user who has since been **deactivated**
+    no longer resolves to them: it falls through to the system user and says so, naming the account
+    as inactive rather than as missing, because the remedy (reactivate it, or name someone else) is
+    the opposite of the one a "not found" message implies. And a deployment whose system user (or
+    whose only Owner) is deactivated now resolves to no principal at all, failing loudly instead of
+    silently provisioning under that disabled account.
+  - **Every rung breaks ties by lowest ID**, not by array position. `User.Name` has no unique
+    constraint, so two rows can share one; resolving that by whatever order
+    `SELECT * FROM vwUsers` returned would be the same attribution drift one rung further down.
+
+  The shipped default is now `'System'`, and the config comments, `MJServer/README.md`,
+  `guides/MAGIC_LINK_GUIDE.md` and the `mj.config.cjs` / docker templates say which columns the
+  setting is matched against — the previous wording described it purely in email terms, so an
+  operator following it reproduced the bug.
+
+  `auth/exampleNewUserSubClass.ts` — the template the docs tell you to copy — resolved the same
+  setting against `Email` alone, so with the default now naming the system user it could no longer
+  reach it. It goes through the shared ladder too, and a new source-scanning test
+  (`principals.callSites.test.ts`) fails if a fourth hand-rolled variant ever appears.
+
+  The misconfiguration report is de-duplicated with a bounded LRU rather than a capped `Set`: a
+  capped set stops admitting once full, so every candidate first seen after that logged on _every_
+  call — this bug's own symptom, reintroduced for exactly the dynamic caller the cap existed to
+  defend against.
+
+- 806e7f2: Replace the GraphQL ExtraFilter SELECT/EXISTS keyword ban with an AST screen that allows `IN (SELECT … FROM <entity BaseView>)` and still rejects base tables (`__mj.User`). Uses `@memberjunction/sql-parser` (same wrap as EDS `assertReadOnlyClause`). SQLParser now walks `expr.value` so `IN (SELECT …)` subqueries are visible to ExtractTableRefs.
+- d0eab88: Security: auto-provisioned users no longer get the `Developer` role by default (#4260)
+
+  `DEFAULT_SERVER_CONFIG.userHandling.newUserRoles` shipped as `['UI', 'Developer']`. On the baseline seed the `Developer` role holds unfiltered `CanUpdate` on 439 of the database's 446 entities, `MJ: Users` among them — where `AllowUpdateAPI` is true and both `Type` and `Name` are updatable fields, with no row-level filter scoping the grant to the caller's own row.
+
+  Every gate in the chain passed: the config default assigned the role, `EntityPermission` granted Update, the entity and field `AllowUpdateAPI` flags allowed it, `BaseEntity.CheckPermissions` passed, and CodeGen had already issued `GRANT EXECUTE ON __mj.spUpdateUser TO cdp_Developer`. So anyone who obtained an account through JWT auto-provisioning or a magic-link redeem could write **any** row of `MJ: Users`, including setting their own `Type` to `'Owner'` — the column MJ's superuser checks read. That is privilege escalation from "can obtain a token from the configured IdP" to "platform Owner".
+
+  This mattered on more than a bare install. `loadConfig()` deep-merges via `mergeConfigs`, so a host writing a _partial_ `userHandling` block inherited this array — the Zod `.default([])` never fired, because the key was never absent after the merge. The shipped default was the effective posture of every deployment that did not name `newUserRoles` explicitly.
+
+  **The default is now `['UI']`**, the seeded end-user role: conversations, views, dashboards, artifacts, settings — and no write on `MJ: Users`. The same correction is applied to the `README` example and the in-repo `MJCLI` reference config, both of which are copied into real deployments.
+
+  **Upgrade impact.** No migration, and no change for a host that sets `newUserRoles` explicitly. If you relied on the default to give new users developer-level access, set it yourself:
+
+  ```js
+  userHandling: {
+    newUserRoles: ["UI", "Developer"];
+  }
+  ```
+
+  Do that only where you're comfortable granting every such identity broad data-plane write across ~439 entities — the guard described below stops it from making them a platform Owner, but the underlying `Developer`/`Integration` update grant is otherwise unfiltered.
+
+  **Re-adding `Developer` is no longer an escalation risk, but is still inadvisable.** It does not reopen the `MJ: Users` privilege escalation described above: `@memberjunction/core-entities-server` ships a server-side guard on `MJ: Users` in this same release (see the `user-elevation-guard` changeset) that refuses privilege-elevating writes — create, delete, and changing `Type`, `Name`, or another user's row — for **any** caller whose `Type` is not `'Owner'`. That guard is role-blind: it holds whatever `newUserRoles` names, `Developer` and `Integration` included, and for custom roles this changeset never anticipated.
+
+  What it does still hand out is broad data-plane access. `Developer` and `Integration` hold unfiltered `CanUpdate` on 439 of the database's 446 entities. That grant is unchanged here — narrowing it is a behavioural change for existing hosts, needs its own migration, and is tracked separately. It is the real reason not to give either role to every auto-provisioned user.
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 80fcb61: Memory/resource leak fixes surfaced by the Round 13 audit: drain previously-discarded `fetch()` response bodies at six call sites (BlackForestLabs, IntegrationDiscoveryResolver's webhook sender, WebPageContentAction's content-too-large guard, the React runtime's external component registry client, and RuntimeSchemaManager's restart poll) so undici no longer pins keep-alive connections; bound `RemoteBrowserActionResolver`'s process-lifetime screencast/audio-stream idempotency maps with a TTL sweep so a crashed or disconnected session no longer leaks a permanent entry; add missing SQL connection-pool `'error'` listeners (ComponentRegistry's server, DBAutoDoc's three drivers) and close DBAutoDoc's connection pool on its error path so a failed analysis run no longer leaves it open for the rest of the CLI process.
+- 7fefca2: Fix Smart Filter doing nothing when a User View is first created.
+
+  `MJUserViewEntityExtended.Save()` detected a brand-new view with `!this.ID`. Since `NewRecord()` began pre-assigning a UUID primary key that check is never true, and because the first value written to a fresh field also seeds its `OldValue`, neither `SmartFilterEnabled` nor `SmartFilterPrompt` reads as Dirty on create. The net effect was that the AI Smart Filter pass never ran on create: the prompt was stored but no `WhereClause` was generated. Editing an existing view still worked.
+  - Newness is now detected with `IsSaved`, in both `Save()` and `UpdateWhereClause()`.
+  - On a new record, the empty `FilterState` seeded by `NewRecord()` no longer erases a `WhereClause` that a caller set directly (programmatic view creation without `CustomWhereClause`).
+  - A saved view whose `SmartFilterWhereClause` was never generated (e.g. created while this bug was live) is regenerated on its next `UpdateWhereClause()`.
+  - The `UpdateWhereClause` GraphQL query now awaits and forces the regeneration, uses the read-write provider for its save, and fails clearly if the view cannot be loaded.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [319a7ed]
+- Updated dependencies [2f305df]
+- Updated dependencies [197fdf8]
+- Updated dependencies [62e0707]
+- Updated dependencies [6673f51]
+- Updated dependencies [d1d74c2]
+- Updated dependencies [0312b22]
+- Updated dependencies [f6a4341]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [ddf8621]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [806e7f2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [c679e8d]
+- Updated dependencies [a723521]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [770cfca]
+- Updated dependencies [ee85060]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [a77afac]
+- Updated dependencies [98841bb]
+- Updated dependencies [80fcb61]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [c11f8c6]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [d0eab88]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai-agents@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/codegen-lib@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/actions@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/communication-ms-graph@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/postgresql-dataprovider@6.1.0-edge.6
+  - @memberjunction/sql-parser@6.1.0-edge.6
+  - @memberjunction/auth-providers@6.1.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.6
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+  - @memberjunction/core-actions@6.1.0-edge.6
+  - @memberjunction/actions-apollo@6.1.0-edge.6
+  - @memberjunction/ai-mcp-client@6.1.0-edge.6
+  - @memberjunction/external-change-detection@6.1.0-edge.6
+  - @memberjunction/integration-engine@6.1.0-edge.6
+  - @memberjunction/lists@6.1.0-edge.6
+  - @memberjunction/version-history@6.1.0-edge.6
+  - @memberjunction/ai-vector-sync@6.1.0-edge.6
+  - @memberjunction/entity-communications-server@6.1.0-edge.6
+  - @memberjunction/search-engine@6.1.0-edge.6
+  - @memberjunction/credentials@6.1.0-edge.6
+  - @memberjunction/schema-engine@6.1.0-edge.6
+  - @memberjunction/core-entities-server@6.1.0-edge.6
+  - @memberjunction/ai-agent-manager-actions@6.1.0-edge.6
+  - @memberjunction/ai-agent-manager@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/clustering-engine@6.1.0-edge.6
+  - @memberjunction/tag-engine@6.1.0-edge.6
+  - @memberjunction/computer-use-engine@6.1.0-edge.6
+  - @memberjunction/ai-prompts@6.1.0-edge.6
+  - @memberjunction/scheduling-engine@6.1.0-edge.6
+  - @memberjunction/task-graph@6.1.0-edge.6
+  - @memberjunction/templates@6.1.0-edge.6
+  - @memberjunction/testing-engine@6.1.0-edge.6
+  - @memberjunction/computer-use@6.1.0-edge.6
+  - @memberjunction/ai-bridge-server@6.1.0-edge.6
+  - @memberjunction/remote-browser-server@6.1.0-edge.6
+  - @memberjunction/livekit-room-server@6.1.0-edge.6
+  - @memberjunction/queue@6.1.0-edge.6
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.6
+  - @memberjunction/tag-engine-base@6.1.0-edge.6
+  - @memberjunction/ai-bridge-base@6.1.0-edge.6
+  - @memberjunction/ai-bridge-ringcentral@6.1.0-edge.6
+  - @memberjunction/ai-bridge-teams@6.1.0-edge.6
+  - @memberjunction/ai-bridge-twilio@6.1.0-edge.6
+  - @memberjunction/ai-bridge-vonage@6.1.0-edge.6
+  - @memberjunction/remote-browser-base@6.1.0-edge.6
+  - @memberjunction/api-keys@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.6
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.6
+  - @memberjunction/communication-engine@6.1.0-edge.6
+  - @memberjunction/entity-communications-base@6.1.0-edge.6
+  - @memberjunction/notifications@6.1.0-edge.6
+  - @memberjunction/communication-sendgrid@6.1.0-edge.6
+  - @memberjunction/doc-utils@6.1.0-edge.6
+  - @memberjunction/encryption@6.1.0-edge.6
+  - @memberjunction/integration-engine-base@6.1.0-edge.6
+  - @memberjunction/data-context@6.1.0-edge.6
+  - @memberjunction/storage@6.1.0-edge.6
+  - @memberjunction/record-comparison@6.1.0-edge.6
+  - @memberjunction/scheduling-actions@6.1.0-edge.6
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.6
+  - @memberjunction/testing-engine-base@6.1.0-edge.6
+  - @memberjunction/esignature@6.1.0-edge.6
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.6
+  - @memberjunction/remote-browser-cdp@6.1.0-edge.6
+  - @memberjunction/remote-browser-selfhost@6.1.0-edge.6
+  - @memberjunction/ai-vectordb@6.1.0-edge.6
+  - @memberjunction/component-registry-client-sdk@6.1.0-edge.6
+  - @memberjunction/integration-schema-builder@6.1.0-edge.6
+  - @memberjunction/interactive-component-types@6.1.0-edge.6
+  - @memberjunction/data-context-server@6.1.0-edge.6
+  - @memberjunction/redis-provider@6.1.0-edge.6
+  - @memberjunction/server-extensions-core@6.1.0-edge.6
+  - @memberjunction/integration-progress-artifacts@6.1.0-edge.6
+  - @memberjunction/scheduling-base-types@6.1.0-edge.6
+  - @memberjunction/config@6.1.0-edge.6
+  - @memberjunction/lists-base@6.1.0-edge.6
+  - @memberjunction/network-utils@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Minor Changes

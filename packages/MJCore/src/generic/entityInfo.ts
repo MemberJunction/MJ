@@ -2981,7 +2981,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not
+     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not.
+     *
+     * A permission row confers an exemption only for an operation it GRANTS (the matching `Can*`
+     * flag is true) and leaves unfiltered. A row that does not grant the operation has no filter
+     * for it either, and that absence means "not applicable", not "unrestricted" — so it must not
+     * lift a filter that another of the user's roles binds. Without the `Can*` check, a role that
+     * grants only reads (CanCreate=false, hence CreateRLSFilterID=null) made every holder of that
+     * role exempt from CREATE row-level security, which is the shape of the 'UI' role every
+     * authenticated user holds on nearly every entity.
      * @param user 
      * @param type 
      * @returns 
@@ -2993,19 +3001,19 @@ export class EntityInfo extends BaseInfo {
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
-                        if (!ep.CreateRLSFilterID)
+                        if (ep.CanCreate && !ep.CreateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Read:
-                        if (!ep.ReadRLSFilterID)
+                        if (ep.CanRead && !ep.ReadRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Update:
-                        if (!ep.UpdateRLSFilterID)
+                        if (ep.CanUpdate && !ep.UpdateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Delete:
-                        if (!ep.DeleteRLSFilterID)
+                        if (ep.CanDelete && !ep.DeleteRLSFilterID)
                             return true;
                         break;
                 }
