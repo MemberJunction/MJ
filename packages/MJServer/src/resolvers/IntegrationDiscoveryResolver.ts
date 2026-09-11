@@ -1409,6 +1409,192 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Tests credentials that have NOT been saved anywhere.
+     *
+     * ── Why this exists ───────────────────────────────────────────────────────
+     *
+     * `IntegrationTestConnection` takes a `companyIntegrationID`, so it can only test a
+     * connection that already exists. That forces every setup wizard into create-then-test:
+     * the workspace writes a Credential and a CompanyIntegration, THEN finds out the
+     * password was wrong, and something has to go back and delete them. Two cases escape
+     * that cleanup — a credential test that outlives the caller's gateway (most likely
+     * precisely when a host or tenant id is wrong, because that is what makes a vendor call
+     * hang rather than refuse), and a test that passes before a later step fails. Both leave
+     * a connection that answers every listing and syncs nothing.
+     *
+     * This inverts the order. Nothing is written, so there is nothing to clean up.
+     *
+     * ── How it can work without persisting ────────────────────────────────────
+     *
+     * The connector is resolved from the INTEGRATION row, not from a connection —
+     * `ConnectorFactory.Resolve` already only needs the former. The credentials then ride in
+     * on a transient CompanyIntegration that is constructed with `NewRecord()` and
+     * DELIBERATELY NEVER SAVED, carrying the values in `Configuration`.
+     *
+     * That works because every connector resolves its auth material the same way: prefer the
+     * linked Credential when `CredentialID` is set, otherwise fall back to the
+     * `Configuration` JSON. It is a de-facto framework convention rather than a documented
+     * one — verified across all seven connectors this was written for (NetSuite, Totara,
+     * Nimble AMS, OpenWater, PheedLoop, PropFuel, Elevate), each of which reads
+     * `CredentialID` first and `Configuration` second. A connector that reads ONLY
+     * `CredentialID` would report missing credentials here rather than misbehave, which is
+     * the safe direction to fail: the caller learns the probe cannot help and falls back to
+     * create-then-test, exactly as before.
+     *
+     * ── Rules this endpoint holds itself to ───────────────────────────────────
+     *
+     *  - NOTHING IS PERSISTED. No Credential, no CompanyIntegration, no Company. The
+     *    transient entity is a local and never leaves this method.
+     *  - THE VALUES ARE NEVER LOGGED. Not on success, not on failure, not inside an error
+     *    message. Only the integration id and the outcome are ever written down.
+     *  - IT CANNOT HANG. A hard deadline applies regardless of what the connector does,
+     *    because a probe that inherits the gateway-timeout problem solves nothing. A
+     *    timeout is reported as a timeout, which is itself the diagnosis for an unreachable
+     *    host.
+     *  - IT IS RATE LIMITED per (user, integration). The endpoint turns caller-supplied
+     *    input into an outbound vendor request, so an unbounded one is a request amplifier.
+     */
+    @Query(() => ConnectionTestOutput)
+    async IntegrationProbeCredentials(
+        @Arg("integrationID") integrationID: string,
+        @Arg("credentialValues") credentialValues: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ConnectionTestOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+
+            const limited = IntegrationDiscoveryResolver.probeRateLimited(user.ID, integrationID, Date.now());
+            if (limited) {
+                return { Success: false, Message: limited };
+            }
+
+            // Must be a JSON OBJECT. A connector's parser is entitled to assume that much, and
+            // handing it a bare string or an array is a way to reach a parse path nobody tests.
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(credentialValues);
+            } catch {
+                return { Success: false, Message: 'The credentials could not be read as JSON.' };
+            }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return { Success: false, Message: 'The credentials must be a JSON object of field names to values.' };
+            }
+
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+
+            const integration = await provider.GetEntityObject<MJIntegrationEntity>('MJ: Integrations', user);
+            if (!(await integration.Load(integrationID))) {
+                return { Success: false, Message: `Integration with ID "${integrationID}" not found` };
+            }
+            const connector = ConnectorFactory.Resolve(integration);
+
+            // The transient carrier. NewRecord() and never Save() — see the header.
+            const probeCI = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            probeCI.NewRecord();
+            probeCI.Set('IntegrationID', integrationID);
+            probeCI.Set('Configuration', credentialValues);
+
+            const testConnection = connector.TestConnection.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<ConnectionTestResult>;
+
+            const result = await IntegrationDiscoveryResolver.withProbeDeadline(
+                testConnection(probeCI, user),
+                integration.Name
+            );
+
+            return {
+                Success: result.Success,
+                Message: result.Message,
+                ServerVersion: result.ServerVersion
+            };
+        } catch (e) {
+            // formatError only ever sees the thrown message. The credential values are not in
+            // scope of anything logged here, and must never be added to it.
+            LogError(`IntegrationProbeCredentials error for integration ${integrationID}: ${this.formatError(e)}`);
+            return {
+                Success: false,
+                Message: `Error: ${this.formatError(e)}`
+            };
+        }
+    }
+
+    /**
+     * The probe's hard deadline.
+     *
+     * `TestConnectionMs` exists on the connector config but is advisory — an implementation
+     * that does not consult it can block for as long as the vendor's socket does, which is
+     * the whole failure this endpoint exists to avoid. So the bound is applied here, where it
+     * cannot be opted out of.
+     *
+     * 20 seconds: comfortably longer than any healthy handshake, comfortably shorter than the
+     * ~240s gateway ceiling that create-then-test keeps running into.
+     */
+    private static readonly PROBE_DEADLINE_MS = 20_000;
+
+    private static withProbeDeadline(
+        work: Promise<ConnectionTestResult>,
+        vendorName: string
+    ): Promise<ConnectionTestResult> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const deadline = new Promise<ConnectionTestResult>(resolve => {
+            timer = setTimeout(
+                () =>
+                    resolve({
+                        Success: false,
+                        // A timeout IS the diagnosis for an unreachable host or a wrong
+                        // tenant path, so it says that rather than "unknown error".
+                        Message:
+                            `${vendorName} did not respond within ` +
+                            `${Math.round(IntegrationDiscoveryResolver.PROBE_DEADLINE_MS / 1000)} seconds. ` +
+                            `Check the host and any account or organization identifier in the values above.`
+                    }),
+                IntegrationDiscoveryResolver.PROBE_DEADLINE_MS
+            );
+            timer.unref?.();
+        });
+        return Promise.race([work, deadline]).finally(() => {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        });
+    }
+
+    /**
+     * Per (user, integration) rate limit.
+     *
+     * This endpoint converts caller-supplied input into an outbound request to a third party,
+     * which makes an unbounded version a request amplifier pointed at somebody else's API —
+     * and the fastest way to get a tenant's key rate-limited by its own vendor. In-process
+     * and per-instance on purpose: it is a courtesy bound on a human typing into a form, not
+     * a security boundary, and giving it a durable store would buy nothing a form's own pace
+     * does not already provide.
+     */
+    private static readonly PROBE_WINDOW_MS = 60_000;
+    private static readonly PROBE_MAX_PER_WINDOW = 10;
+    private static readonly probeHits = new Map<string, number[]>();
+
+    private static probeRateLimited(userID: string, integrationID: string, now: number): string | null {
+        const key = `${userID}:${integrationID}`.toLowerCase();
+        const window = now - IntegrationDiscoveryResolver.PROBE_WINDOW_MS;
+        const hits = (IntegrationDiscoveryResolver.probeHits.get(key) ?? []).filter(t => t > window);
+        if (hits.length >= IntegrationDiscoveryResolver.PROBE_MAX_PER_WINDOW) {
+            return 'Too many credential checks in the last minute — wait a moment and try again.';
+        }
+        hits.push(now);
+        IntegrationDiscoveryResolver.probeHits.set(key, hits);
+        // Bound the map so a long-lived process cannot accumulate a key per (user, integration)
+        // pair forever. Anything with no hits inside the window is already spent.
+        if (IntegrationDiscoveryResolver.probeHits.size > 500) {
+            for (const [k, v] of IntegrationDiscoveryResolver.probeHits) {
+                if (!v.some(t => t > window)) {
+                    IntegrationDiscoveryResolver.probeHits.delete(k);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Tests connectivity to the external system.
      */
     @Query(() => ConnectionTestOutput)
