@@ -1592,7 +1592,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             });
             // A cancelled run returns normally (no throw) with abortSignal.aborted set — finalize it as
             // 'cancelled' (exitReason='aborted'), NOT 'completed', so a stopped run is distinguishable.
-            await this.finalizeSyncProgress(progress, abortSignal?.aborted ? 'cancelled' : 'completed', result.ErrorMessage);
+            //
+            // MJ-RUN-4: a run that abandoned objects must not read as an unqualified success. It is
+            // still 'completed' — the watermark is held and the unfetched window retries next run,
+            // so this is not a failure — but the message has to name what did not finish, or a
+            // nightly sync that dies on its first page every night looks like an unbroken run of
+            // clean Successes with TotalRecords=0.
+            const incomplete = result.IncompleteObjects ?? [];
+            const completionMessage = (!abortSignal?.aborted && incomplete.length > 0)
+                ? `Sync run complete — ${incomplete.length} object(s) INCOMPLETE: ` +
+                  `${incomplete.slice(0, 10).join(', ')}${incomplete.length > 10 ? ', …' : ''}`
+                : result.ErrorMessage;
+            await this.finalizeSyncProgress(progress, abortSignal?.aborted ? 'cancelled' : 'completed', completionMessage);
             console.log(`[IntegrationEngine] Sync complete:\n${summary}`);
             return result;
         } catch (err) {
@@ -2423,6 +2434,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     `FetchChanges(${objectName})`,
                 ),
                 undefined,
+                // A timeout is NOT retryable here, deliberately: WithTimeout abandons the attempt
+                // without CANCELLING it, so a retry stacks a second full page of vendor requests on
+                // a source already too slow to finish the first. A transport error IS retryable — a
+                // reset socket is worth another go.
+                //
+                // The fleet carries a patch (MJ-MEM-2) that inverts this, because the same rule
+                // abandoned sixteen NetSuite objects for a whole run on ACR dev. That divergence
+                // stays IN THE PATCH and must not be ported here — it contradicts this decision and
+                // the two tests that pin it. The fix that satisfies both is to SUSPEND a timed-out
+                // object and resume from its persisted keyset next run, which neither side has yet.
                 (err) => !(err instanceof OperationTimeoutError) && IsRetryableError(ClassifyError(err).Code),
                 (attempt, err, delayMs) => {
                     // Report a throttle NOW, not after the retries are spent. ReportThrottle
@@ -3019,6 +3040,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     ErrorCode: 'CONNECTOR_ERROR',
                     Severity: 'Warning',
                 });
+                // MJ-RUN-4: an abandoned object must also reach the RUN-level result, not only the
+                // per-object warning above. A caller reading the run summary otherwise sees a clean
+                // completion and has to go mining the event stream to discover that sixteen objects
+                // ended INCOMPLETE.
+                (result.IncompleteObjects ??= []).push(entityMap.ExternalObjectName ?? entityMap.ID);
                 break;
             }
             logger?.emit('sync.fetch.batch.complete', {
