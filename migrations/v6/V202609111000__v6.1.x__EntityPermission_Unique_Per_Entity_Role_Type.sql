@@ -43,8 +43,9 @@
 
     ORDERING
     --------
-    This migration must run BEFORE the field-level-security migrations (V202609091700 /
-    V202609091701), which is why it carries an earlier version number despite being authored later.
+    This migration must run BEFORE the field-level-security migrations (V202609111001 /
+    V202609111002): the uniqueness it establishes is what lets a field permission be tied to the one
+    entity permission it refines, so the duplicates have to be gone before those tables exist.
 
     No foreign keys reference `EntityPermission`, so removing the duplicate rows has no cascade.
 */
