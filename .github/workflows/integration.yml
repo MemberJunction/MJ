@@ -603,8 +603,7 @@ jobs:
   # output generated from a CLEAN migrated+synced DB will differ from artifacts committed
   # from a stale one; (2) the c31d487cb class — schema changed, nobody re-ran CodeGen, the
   # column is absent rather than wrong, so nothing errors and no test notices.
-  # REPORT-FIRST (continue-on-error): the first runs establish whether the committed
-  # artifacts are currently in sync; flip to blocking once green.
+  # Blocking gate: committed generated artifacts must match output from a clean DB.
   codegen-drift:
     name: CodeGen drift gate
     needs: [changes]
@@ -716,6 +715,16 @@ jobs:
           if [ -s /tmp/drift.txt ]; then
             echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
             cat /tmp/drift.txt
+            # A filename alone does not say WHAT moved, and these artifacts are megabytes — so the
+            # only way to act on this failure used to be reproducing the whole job locally. Emit the
+            # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
+            # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
+            git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
+            echo "--- change shape ---"
+            cat /tmp/drift-stat.txt
+            echo "--- first 100KB of diff ---"
+            cat /tmp/drift-diff.txt
             exit 1
           fi
           echo "No drift — committed generated artifacts match a clean-DB CodeGen run."
@@ -735,6 +744,16 @@ jobs:
               echo '```'
               cat /tmp/drift.txt
               echo '```'
+            fi
+            if [ -s /tmp/drift-stat.txt ]; then
+              echo ''
+              echo '<details><summary>What changed</summary>'
+              echo ''
+              echo '```'
+              cat /tmp/drift-stat.txt
+              echo '```'
+              echo ''
+              echo '</details>'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -840,6 +859,16 @@ jobs:
           if [ -s /tmp/drift.txt ]; then
             echo "::error::CodeGen output DIFFERS from committed artifacts (drift). Files:"
             cat /tmp/drift.txt
+            # A filename alone does not say WHAT moved, and these artifacts are megabytes — so the
+            # only way to act on this failure used to be reproducing the whole job locally. Emit the
+            # shape of the change (per-file +/-) and a bounded excerpt instead. Bounded because a
+            # full regeneration of __mj.ts is ~100k lines and would bury the log.
+            git diff --stat -- packages/ metadata/ migrations/ > /tmp/drift-stat.txt || true
+            git diff -- packages/ metadata/ migrations/ | head -c 100000 > /tmp/drift-diff.txt || true
+            echo "--- change shape ---"
+            cat /tmp/drift-stat.txt
+            echo "--- first 100KB of diff ---"
+            cat /tmp/drift-diff.txt
             exit 1
           fi
           echo "No drift — committed generated artifacts match a clean-DB CodeGen run."
@@ -859,5 +888,15 @@ jobs:
               echo '```'
               cat /tmp/drift.txt
               echo '```'
+            fi
+            if [ -s /tmp/drift-stat.txt ]; then
+              echo ''
+              echo '<details><summary>What changed</summary>'
+              echo ''
+              echo '```'
+              cat /tmp/drift-stat.txt
+              echo '```'
+              echo ''
+              echo '</details>'
             fi
           } >> "$GITHUB_STEP_SUMMARY"

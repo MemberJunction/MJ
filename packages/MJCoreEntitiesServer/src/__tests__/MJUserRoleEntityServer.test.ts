@@ -29,6 +29,22 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     };
 });
 
+// `MJUserRoleEntityServer` carries a SECOND, unrelated guard (system-user field access), whose
+// imports pull in the real provider package and, through it, the AI engine — which reads exports
+// off `@memberjunction/core-entities` that the stub below deliberately does not define. Stubbing the
+// provider keeps that chain out of this file AND holds the second guard inert: `GetSystemUser()`
+// returns null, so both of its entry points short-circuit and only the role-elevation rule under
+// test here decides anything. The system-user guard has its own coverage in
+// `fieldSecurity.systemUserGuard.test.ts`.
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    UserCache: {
+        get Instance() {
+            return { GetSystemUser: () => null };
+        },
+    },
+    FindSystemUserFieldAccessViolations: () => [],
+}));
+
 interface StubField {
     Name: string;
     Dirty: boolean;

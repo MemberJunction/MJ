@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-react",
-  "version": "6.1.0-edge.5",
+  "version": "6.1.0-edge.6",
   "description": "Angular components for hosting React components in MemberJunction applications",
   "scripts": {
     "build": "ngc -p tsconfig.json",
@@ -42,21 +42,21 @@
     "styles"
   ],
   "dependencies": {
-    "@memberjunction/ai-vectors-memory": "6.1.0-edge.5",
-    "@memberjunction/core": "6.1.0-edge.5",
-    "@memberjunction/core-entities": "6.1.0-edge.5",
-    "@memberjunction/global": "6.1.0-edge.5",
-    "@memberjunction/graphql-dataprovider": "6.1.0-edge.5",
-    "@memberjunction/interactive-component-types": "6.1.0-edge.5",
-    "@memberjunction/ng-notifications": "6.1.0-edge.5",
-    "@memberjunction/react-runtime": "6.1.0-edge.5",
+    "@memberjunction/ai-vectors-memory": "6.1.0-edge.6",
+    "@memberjunction/core": "6.1.0-edge.6",
+    "@memberjunction/core-entities": "6.1.0-edge.6",
+    "@memberjunction/global": "6.1.0-edge.6",
+    "@memberjunction/graphql-dataprovider": "6.1.0-edge.6",
+    "@memberjunction/interactive-component-types": "6.1.0-edge.6",
+    "@memberjunction/ng-notifications": "6.1.0-edge.6",
+    "@memberjunction/react-runtime": "6.1.0-edge.6",
     "@babel/standalone": "^7.29.1",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "rxjs": "^7.8.2",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
-    "@memberjunction/ng-base-types": "6.1.0-edge.5"
+    "@memberjunction/ng-base-types": "6.1.0-edge.6"
   },
   "devDependencies": {
     "@angular/compiler": "21.2.22",

@@ -1,5 +1,14 @@
 # Change Log - @memberjunction/ai-groq
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [197fdf8]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Minor Changes
