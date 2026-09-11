@@ -247,6 +247,7 @@ BUILDER: after `mj codegen --skipfiles`, paste the full CodeGen log section arou
 - `AIModelRunner.ts` `createRunRecord` (`:281`): `UserID = params.ContextUser.ID`; add `AgentRunID?` to `EmbeddingRunParams` (`:30-51`) — and fix the misleading `ParentRunID` doc at `:41` (it is a *prompt-run* parent).
 - `base-agent.ts`: every `new AIPromptParams()` site sets `agentRunId = this._agentRun?.ID` and `userId = params.userId ?? params.contextUser?.ID`: `:3616` (main), `:6045` (summary tool), `:14587` (compaction). Realtime `createRealtimePromptRun` (`:2181`): set both directly on the entity. Co-agent run in `realtime-client-session-service.ts:944-961` and harness run in `HarnessAgentBase.ts:362-394`: set what is in scope.
 - The step link (`base-agent.ts:9064-9069`, `TargetLogID`) stays; it is the audit trail for non-prompt steps.
+- `metadata/queries/SQL/get-agent-run-tree.sql`: explicit `CAST(... AS DECIMAL(19,8))` on `Cost` in every CTE member (anchor and all recursive members) to match widened `AIAgentRun.TotalCost decimal(19,8)` precision while preserving own-cost semantics.
 
 ### 6.4 Tests
 - Unit: `createPromptRun` writes `AgentRunID`/`UserID` from params; `base-agent` main prompt params carry `agentRunId`.
