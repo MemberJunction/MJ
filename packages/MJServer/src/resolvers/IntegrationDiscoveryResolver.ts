@@ -177,7 +177,11 @@ class ApplyAllBatchConnectorInput {
 class ApplyAllBatchInput {
     @Field(() => [ApplyAllBatchConnectorInput]) Connectors: ApplyAllBatchConnectorInput[];
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
-    @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
+    // NO defaultValue. It must stay UNDEFINED when the caller says nothing, so the resolver can
+    // tell "not specified" from "explicitly incremental" and apply the first-apply rule
+    // (everything.txt: "always full generally as the default" for a connector's first RSU).
+    // A defaultValue of false made that determination dead code on this path for its whole life.
+    @Field(() => Boolean, { nullable: true, description: 'Ignore watermarks and do a full re-fetch. Omit to let the server choose: FULL on a connection first apply, incremental after.' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
     @Field({ nullable: true, description: 'Override sync direction for the initial sync: Pull | Push | Bidirectional. Defaults to entity map SyncDirection.' }) SyncDirection?: string;
     @Field({ nullable: true, description: 'Override sync direction stored in the created schedule: Pull | Push | Bidirectional.' }) ScheduleSyncDirection?: string;
@@ -5622,6 +5626,22 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     }
 
                     // Inject post-restart pending work payload
+                    // everything.txt: "for the very first RSU of a connector, the sync afterwards
+                    // should be chosen to be full/incremental, but always full generally as the
+                    // default." The single-connector path has always done this; the batch path did
+                    // not, and its input default of false made the null-coalesce below dead. So a
+                    // re-apply that the caller left unspecified ran INCREMENTAL against objects
+                    // whose watermark had just been reset by the schema change.
+                    const priorMapsResult = await new RunView().RunView<{ ID: string }>({
+                        EntityName: 'MJ: Company Integration Entity Maps',
+                        ExtraFilter: `CompanyIntegrationID='${connInput.CompanyIntegrationID.replace(/'/g, "''")}'`,
+                        Fields: ['ID'],
+                        MaxRows: 1,
+                        ResultType: 'simple',
+                        BypassCache: true,
+                    }, user);
+                    const hadPriorMaps = priorMapsResult.Success && priorMapsResult.Results.length > 0;
+
                     const pendingPayload: RSUPendingWork = {
                         CompanyIntegrationID: connInput.CompanyIntegrationID,
                         SourceObjectNames: resolvedNames,
@@ -5630,7 +5650,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         CronExpression: connInput.CronExpression,
                         ScheduleTimezone: connInput.ScheduleTimezone,
                         StartSync: input.StartSync,
-                        FullSync: input.FullSync ?? false,
+                        FullSync: input.FullSync ?? !hadPriorMaps,
                         SyncScope: input.SyncScope === 'all' ? 'all' : 'created',
                         // Unrecognized directions fall back to undefined = "use the entity map's own SyncDirection"
                         SyncDirection: input.SyncDirection && isValidSyncDirection(input.SyncDirection) ? input.SyncDirection : undefined,
@@ -5649,6 +5669,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         objects,
                         schemaOutput,
                         rsuInput,
+                        // carried so the skipRestart branch can apply remove-as-disable
+                        resolvedNames,
                     };
                 }))
             );
@@ -5658,6 +5680,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 connInput: ApplyAllBatchConnectorInput;
                 connector: BaseIntegrationConnector;
                 companyIntegration: MJCompanyIntegrationEntity;
+                resolvedNames: string[];
                 schemaName: string;
                 objects: SchemaPreviewObjectInput[];
                 schemaOutput: SchemaBuilderOutput;
@@ -5737,6 +5760,20 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         build.connInput.DefaultSyncDirection ?? 'Pull'
                     );
                     connResult.EntityMapsCreated = entityMapsCreated;
+
+                    // Remove-as-disable, same rule the single-connector path applies. Without this
+                    // the batch path silently ignored UnselectedAction: a user who deselected a
+                    // table and applied with skipRestart kept syncing it. Not reachable while the
+                    // surfaces used different mutations; it becomes reachable the moment one of
+                    // them moves onto the batch path, which is exactly what the shared adapter does.
+                    if ((input.UnselectedAction ?? 'disable') !== 'ignore') {
+                        const disabledObjects = await DisableUnselectedEntityMaps(
+                            build.connInput.CompanyIntegrationID, build.resolvedNames, user, provider
+                        );
+                        if (disabledObjects.length > 0) {
+                            console.log(`[IntegrationApplyAllBatch] Disabled ${disabledObjects.length} unselected entity map(s): ${disabledObjects.join(', ')}`);
+                        }
+                    }
 
                     const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
                     const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
@@ -6499,7 +6536,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         integrationObjectID: string,
         user: UserInfo,
         md: IMetadataProvider,
-        autoEnableNewColumns = true
+        // see decideFieldMapReconcile — an omitted argument must not silently adopt
+        autoEnableNewColumns = false
     ): Promise<{ Added: number; Disabled: number }> {
         const result = { Added: 0, Disabled: 0 };
         const activeFields = IntegrationEngineBase.Instance

@@ -4,28 +4,37 @@ import { join } from 'node:path';
 import { decideFieldMapReconcile } from '../integration/EntityMapLifecycle.js';
 
 /**
- * A REFRESH adopts the source's current shape: new objects and new columns both arrive ENABLED.
+ * A REFRESH REPORTS the source's current shape; it does not adopt it. New objects and new columns
+ * are created but arrive DISABLED, and the user turns them on.
  *
- * That is the deliberate asymmetry with SYNC-discovered columns, which are only ever *suggested* —
- * captured as candidates with their statistics and requiring acceptance before any DDL runs. A
- * refresh is an explicit act; a sync is not, and must not reshape the schema on its own.
+ * everything.txt: "we create entity maps for all objects that are determined as things that should
+ * be now added but arent, we enable nothing (because the user needs to, after the refresh, then go
+ * turn them on)". plan.md says the same for a schema refresh: "New tables are default deselected
+ * during schema refresh, and same with columns."
  *
- * `autoEnableNewColumns: false` (and `autoEnableNewObjects: false`) exist for a connection that
- * wants to review a refresh's additions before they sync.
+ * This file previously asserted the OPPOSITE, and that is how the regression survived: the flip to
+ * auto-adopt was pinned by a test whose own premise contradicted the spec. Its stated reason was
+ * that a disabled new object never reached a migration, which is false — CreateDisabled governs
+ * only the entity/field MAP status, the IntegrationObject row is written Active regardless, and
+ * phase 4 evolves over continuing + new objects either way. The table is always created; the flag
+ * only decides whether it starts SYNCING unasked.
+ *
+ * The asymmetry with SYNC-discovered columns still holds and is sharper now: a sync never creates
+ * anything, it only captures a candidate for acceptance.
  */
 const fm = (SourceFieldName: string, Status: string) => ({ SourceFieldName, Status });
 
-describe('decideFieldMapReconcile — a refresh adopts new columns', () => {
-    it('creates a new column ENABLED on an enabled map, by default', () => {
+describe('decideFieldMapReconcile — a refresh reports new columns, disabled', () => {
+    it('creates a new column DISABLED on an enabled map, by default', () => {
         const plan = decideFieldMapReconcile(['id', 'brand_new_col'], [fm('id', 'Active')], true);
-        expect(plan.Create).toEqual([{ SourceFieldName: 'brand_new_col', Status: 'Active' }]);
+        expect(plan.Create).toEqual([{ SourceFieldName: 'brand_new_col', Status: 'Inactive' }]);
         expect(plan.Enable).toEqual([]);
         expect(plan.Disable).toEqual([]);
     });
 
-    it('autoEnableNewColumns:false gates it for a connection that wants to review first', () => {
-        const plan = decideFieldMapReconcile(['id', 'brand_new_col'], [fm('id', 'Active')], true, false);
-        expect(plan.Create).toEqual([{ SourceFieldName: 'brand_new_col', Status: 'Inactive' }]);
+    it('autoEnableNewColumns:true is the explicit opt-in for a connection that wants adoption', () => {
+        const plan = decideFieldMapReconcile(['id', 'brand_new_col'], [fm('id', 'Active')], true, true);
+        expect(plan.Create).toEqual([{ SourceFieldName: 'brand_new_col', Status: 'Active' }]);
     });
 
     it('a DISABLED map never gets an Active column — the map always bounds the column', () => {
@@ -73,12 +82,12 @@ describe('refresh adopts, sync only suggests — the defaults that encode it', (
     const promoter = readFileSync(
         join(__dirname, '..', 'integration', 'CustomColumnPromoter.ts'), 'utf8');
 
-    it('a REFRESH auto-enables new objects', () => {
-        expect(resolver).toMatch(/@Arg\("autoEnableNewObjects",\s*\{\s*defaultValue:\s*true/);
+    it('a REFRESH creates new objects DISABLED', () => {
+        expect(resolver).toMatch(/@Arg\("autoEnableNewObjects",\s*\{\s*defaultValue:\s*false/);
     });
 
-    it('a REFRESH auto-enables new columns', () => {
-        expect(resolver).toMatch(/@Arg\("autoEnableNewColumns",\s*\{\s*defaultValue:\s*true/);
+    it('a REFRESH creates new columns DISABLED', () => {
+        expect(resolver).toMatch(/@Arg\("autoEnableNewColumns",\s*\{\s*defaultValue:\s*false/);
     });
 
     it('a SYNC never auto-creates a column — it captures a candidate and waits for acceptance', () => {
