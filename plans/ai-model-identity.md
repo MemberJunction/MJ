@@ -140,22 +140,64 @@ Mirror **`AIModel` / `AIModelVendor`** — the precedent that actually *runs* (v
 does filter `Status='Active'`, sort `Priority DESC`, skip null `DriverClass`) — rather than the
 Modalities precedent, which did not.
 
+**As built** in `migrations/v6/V202609111120__v6.1.x__AI_Personas_Schema.sql` — this block tracks the
+migration, not the original sketch:
+
 ```
 MJ: AI Personas              abstract, provider-agnostic presentational identity
-  Name · Description · PerceivedGender(null) · Locale · AgeRange
-  Tone · SpeakingStyle · StyleDescriptors
+  Name(UQ, global) · Description · PerceivedGender(null) · Locale(null)
+  PerceivedAgeRangeMin · PerceivedAgeRangeMax        ← a range, not a vague "AgeRange"
+  Tone(255) · SpeakingStyle(255) · StyleDescriptors(JSON)
   PreviewAudioURL · PreviewImageURL · PreviewVideoURL
   Source: BuiltIn | Custom | Cloned · IsActive
 
 MJ: AI Persona Vendors       the concrete binding — the APIName pattern, exactly
   PersonaID · VendorID · ModalityID · APIName · Status · Priority · VendorSettings(JSON)
+  UQ (PersonaID, VendorID, ModalityID)
 
 MJ: AI Model Personas        per-model availability where it differs from the vendor default
-  ModelID · PersonaID · IsSupported
+  ModelID · PersonaID · Sequence · IsSupported
+  UQ (ModelID, PersonaID)
 
 MJ: AI Agent Personas        which personas an agent may wear, and which is default
   AgentID · PersonaID · IsDefault · Sequence · IsAllowed · StyleOverride(JSON)
+  UQ (AgentID, PersonaID) + filtered UQ on (AgentID) WHERE IsDefault = 1
 ```
+
+**`PerceivedAgeRangeMin`/`Max` is an improvement on the plan's original `AgeRange`** — a bounded
+pair is queryable and unambiguous where a single free-text field was neither.
+
+### B.2a Decisions taken during review of the schema commit
+
+Settled on [PR #4397](https://github.com/MemberJunction/MJ/pull/4397) while reviewing `2ee1ea3`.
+Recorded here because each is the kind of choice a later reader mistakes for an oversight.
+
+| # | Decision | Rationale |
+|---|---|---|
+| 1 | **All three JSON columns get a `metadata/entities/JSONType-interfaces/` binding** | Otherwise CodeGen emits a bare `string` and every consumer hand-parses it — the weak typing the critical rules forbid. Matters most for `VendorSettings`: moving ElevenLabs' tuning out of `VoiceInfo` into an *untyped* bag relocates the vendor leak rather than fixing it |
+| 2 | **`AIAgentPersona.IsDefault` gets a filtered unique index in the DDL**, not a `ValidateAsync` guard | One-default-per-agent is single-table state the schema can express, and `guides/BASE_ENTITY_SERVER_PATTERNS.md:76` reserves `ValidateAsync` for *cross-table* invariants. Needs `SET QUOTED_IDENTIFIER ON`. No CodeGen re-run — a filtered index is neither a column nor an FK, so it yields no `EntityField` row and no `IDX_AUTO_MJ_FKEY_*` |
+| 3 | **`UQ_AIPersona_Name` stays global** | The catalog is curated. Say so in the extended property — an unexplained global unique reads as an oversight and invites a "fix" that breaks reconciliation |
+| 4 | **`StyleDescriptors` stays**, with an interface that is deliberately empty at first | A reserved extension point, not dead weight. Use MJ's existing idiom rather than a bare `{}` — see below |
+
+**The empty-interface idiom.** `packages/AI/Core/src/generic/modelConfiguration.ts` already has one:
+
+```ts
+export interface LLMModelConfigurationSection {
+    /** Open extension point until the first typed knob lands. */
+    [key: string]: unknown;
+}
+```
+
+An index signature says *deliberately open, not yet typed*; a bare `{}` is an open object type that
+accepts anything **and** trips lint. `VendorSettings` is the opposite case — type it properly from the
+start, since ElevenLabs' `stability` / `similarityBoost` / `style` / `useSpeakerBoost` are known today
+and typing them is the entire point of moving them out of `AI/Core`.
+
+**Still open:** `Locale` (Part C.3). Language is a property of the prompt body, not a tag, so
+`Locale = 'es-ES'` on an English-worded persona silently yields an English assistant with a Spanish
+label. Rename to `PromptLanguage`, promote the style fields to a per-language child, or drop it until
+multilingual is a real requirement — but do not leave it ambiguous. Cheapest to settle before another
+migration stacks on this one.
 
 Three things this gets right that today's code gets wrong:
 
