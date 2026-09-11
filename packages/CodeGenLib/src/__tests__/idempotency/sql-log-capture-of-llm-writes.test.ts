@@ -8,7 +8,6 @@ import { SQLLogging } from '../../Misc/sql_logging';
 import { SQLOutputConfig, configInfo } from '../../Config/config';
 import { EntityInfo } from '@memberjunction/core';
 import { CodeGenConnection, CodeGenQueryResult } from '../../Database/codeGenDatabaseProvider';
-import { DecisionMetadataWriter } from '../../Database/decision-metadata-writer';
 import { SmartFieldIdentificationResult } from '../../Misc/advanced_generation';
 
 class TestableManageMetadataForLogging extends ManageMetadataBase {
@@ -56,7 +55,6 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
       SQLLogging.sqlOutputDirFlag = tmpDir;
       SQLLogging.initSQLLogging();
 
-      DecisionMetadataWriter.Instance.clear();
       mm = new TestableManageMetadataForLogging();
    });
 
@@ -67,7 +65,7 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
       vi.restoreAllMocks();
    });
 
-   it('applyFieldCategories batch lands in the capture file and matches DecisionMetadataWriter', async () => {
+   it('applyFieldCategories batch lands in the capture file', async () => {
       const entity = new EntityInfo({ ID: 'entity-1', Name: 'Customer' });
       const fields = [
          {
@@ -93,8 +91,6 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
          }
       ];
 
-      const recordSpy = vi.spyOn(DecisionMetadataWriter.Instance, 'recordFieldDecision');
-
       await mm.callApplyFieldCategories(pool, entity, fields, fieldCategories, new Set(), { isNewEntity: true });
 
       // Verify capture file exists and contains the expected UPDATE
@@ -108,14 +104,9 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
       expect(capturedContent).toContain("DisplayName = 'Special Notes'");
       expect(capturedContent).toContain("ExtendedType = 'JSON'");
       expect(capturedContent).toContain("WHERE \n   ID = 'f-1'");
-
-      // Verify the writer received the identical values
-      expect(recordSpy).toHaveBeenCalledWith('Customer', 'Notes', 'Category', 'Details');
-      expect(recordSpy).toHaveBeenCalledWith('Customer', 'Notes', 'DisplayName', 'Special Notes');
-      expect(recordSpy).toHaveBeenCalledWith('Customer', 'Notes', 'ExtendedType', 'JSON');
    });
 
-   it('applySmartFieldIdentification batch lands in the capture file and matches DecisionMetadataWriter', async () => {
+   it('applySmartFieldIdentification batch lands in the capture file', async () => {
       const entity = {
          ID: 'entity-1',
          Name: 'Customer',
@@ -152,8 +143,6 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
          reasoning: 'Testing search capture',
       };
 
-      const recordSpy = vi.spyOn(DecisionMetadataWriter.Instance, 'recordFieldDecision');
-
       await mm.callApplySmartFieldIdentification(pool, entity, fields, sfiResult, {
          isNewEntity: false,
          newFieldNames: new Set(['Alias']),
@@ -167,10 +156,6 @@ describe('T11 — SQL Log Capture of LLM Writes (C2, D13, §1.2)', () => {
       expect(capturedContent).toContain("IncludeInUserSearchAPI = 1");
       expect(capturedContent).toContain("UserSearchPredicateAPI = 'BeginsWith'");
       expect(capturedContent).toContain("WHERE ID = 'f-alias'");
-
-      expect(recordSpy).toHaveBeenCalledWith('Customer', 'Alias', 'DefaultInView', true);
-      expect(recordSpy).toHaveBeenCalledWith('Customer', 'Alias', 'IncludeInUserSearchAPI', true);
-      expect(recordSpy).toHaveBeenCalledWith('Customer', 'Alias', 'UserSearchPredicateAPI', 'BeginsWith');
    });
 
    it('an empty batch writes nothing to the capture file', async () => {

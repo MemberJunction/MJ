@@ -31,9 +31,13 @@
  */
 
 export { BaseServerExtension } from './BaseServerExtension.js';
-export { ServerExtensionLoader } from './ServerExtensionLoader.js';
+export { ServerExtensionLoader, DefaultServerExtensionServiceRegistry } from './ServerExtensionLoader.js';
+export type { LoadExtensionsOptions } from './ServerExtensionLoader.js';
 export {
     ServerExtensionConfig,
+    ServerExtensionPhase,
+    ServerExtensionServiceRegistry,
+    ServerExtensionInitContext,
     ExtensionInitResult,
     ExtensionHealthResult,
 } from './types.js';

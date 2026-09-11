@@ -10,6 +10,9 @@
 > was wrong (function names, line ranges, mechanisms, example values) this document says so
 > inline rather than silently correcting, so the builder does not go looking for code that does
 > not exist. Appendix A is the claim-by-claim verification record.
+>
+> **Reversion Note (C7 Decision Metadata Store Reverted):**
+> The `metadata/entities/decisions/` store, `DecisionMetadataWriter`, format schema, and export scripts have been removed. The decision metadata store was redundant with the migration's CodeGen capture (`migrations/v5/CodeGen_Run_*.sql`), and it actively weakened the drift gate. The field-metadata lock (`field-metadata-lock.ts`) and database migration capture SQL are the authoritative single source of truth.
 
 ---
 

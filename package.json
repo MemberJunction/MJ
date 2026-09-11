@@ -65,7 +65,7 @@
     "start:mcp-agent": "node agent-run-mcp-server/dist/index.js",
     "mj": "node packages/MJCLI/bin/run.js",
     "mj:migrate": "node packages/MJCLI/bin/run.js migrate",
-    "mj:codegen": "node packages/MJCLI/bin/run.js codegen",
+    "mj:codegen": "turbo run build --filter=@memberjunction/codegen-lib --filter=@memberjunction/cli && node packages/MJCLI/bin/run.js codegen",
     "mj:manifest:server-bootstrap": "node packages/MJCLI/bin/run.js codegen manifest --appDir ./packages/ServerBootstrap --output ./packages/ServerBootstrap/src/generated/mj-class-registrations.ts",
     "mj:manifest:ng-bootstrap": "node packages/MJCLI/bin/run.js codegen manifest --appDir ./packages/Angular/Bootstrap --output ./packages/Angular/Bootstrap/src/generated/mj-class-registrations.ts",
     "mj:manifest:api": "node packages/MJCLI/bin/run.js codegen manifest --exclude-packages @memberjunction --appDir ./packages/MJAPI --output ./packages/MJAPI/src/generated/class-registrations-manifest.ts",

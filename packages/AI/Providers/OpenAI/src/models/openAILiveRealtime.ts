@@ -17,7 +17,7 @@ import {
     JSONObject,
     RealtimeVoiceOption,
     RealtimeProxyRegistry,
-    OPENAI_LIVE_SDP_EXCHANGE_PATH,
+    REALTIME_SDP_EXCHANGE_PATH,
 } from '@memberjunction/ai';
 import { MapUsageModalityDetail } from './openAIRealtime.js';
 
@@ -779,8 +779,10 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             { ID: 'alloy', Name: 'Alloy' },
             { ID: 'ash', Name: 'Ash' },
             { ID: 'ballad', Name: 'Ballad' },
+            { ID: 'cedar', Name: 'Cedar' },
             { ID: 'coral', Name: 'Coral' },
             { ID: 'echo', Name: 'Echo' },
+            { ID: 'marin', Name: 'Marin' },
             { ID: 'sage', Name: 'Sage' },
             { ID: 'shimmer', Name: 'Shimmer' },
             { ID: 'verse', Name: 'Verse' },
@@ -861,7 +863,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         const options: OpenAILiveSessionOptions = {
             reasoningPlane: reasoningConfig?.Plane ?? 'local',
             remoteSettings: reasoningConfig?.Remote,
-            voice: typeof config?.Voice === 'string' ? config.Voice : 'alloy',
+            voice: OpenAILiveRealtime.resolveVoice(config),
             audioCodec,
             sampleRate,
         };
@@ -912,7 +914,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             instructions: params.SystemPrompt,
             audio: {
                 output: {
-                    voice: typeof config?.Voice === 'string' ? config.Voice : 'alloy',
+                    voice: OpenAILiveRealtime.resolveVoice(config),
                 },
             },
             delegation: {
@@ -933,17 +935,19 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
                                         max_output_tokens: reasoningConfig.Remote.MaxOutputTokens,
                                     }
                                   : {}),
-                              ...(hasTools ? { tools: mappedTools } : {}),
                           },
                       }
                     : {}),
             },
+            ...(hasTools ? { tools: mappedTools } : {}),
         };
 
         const ticket = RealtimeProxyRegistry.Instance.Issue({
             UpstreamUrl: this._endpoint,
             UpstreamAuthHeader: this.apiKey,
             DriverClass: 'OpenAILiveRealtime',
+            UserID: params.UserID,
+            SessionConfig: sessionPayload,
             TTLSeconds: 60,
         });
 
@@ -959,6 +963,15 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * Resolves the configured voice name from `params.Config`, accepting either lowercase `voice`
+     * (the driver-neutral standard) or uppercase `Voice`, defaulting to `'alloy'`.
+     */
+    private static resolveVoice(config: Record<string, unknown> | undefined): string {
+        const raw = config?.['voice'] ?? config?.['Voice'];
+        return typeof raw === 'string' && raw.trim().length > 0 ? raw.trim() : 'alloy';
+    }
+
+    /**
      * Resolves the browser-facing HTTP(S) broker URL for the OpenAI Live WebRTC SDP exchange.
      */
     protected resolveBrokerUrl(params: RealtimeSessionParams, ticketId: string): string {
@@ -967,8 +980,12 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
             process.env['MJAPI_PUBLIC_URL'] ||
             `${process.env['GRAPHQL_BASE_URL'] ?? 'http://localhost'}:${process.env['GRAPHQL_PORT'] ?? '4103'}`;
-        const baseUrl = source.replace(/\/+$/, '');
-        return `${baseUrl}${OPENAI_LIVE_SDP_EXCHANGE_PATH}?ticket=${encodeURIComponent(ticketId)}`;
+        let end = source.length;
+        while (end > 0 && source.charCodeAt(end - 1) === 47 /* '/' */) {
+            end--;
+        }
+        const baseUrl = source.slice(0, end);
+        return `${baseUrl}${REALTIME_SDP_EXCHANGE_PATH}?ticket=${encodeURIComponent(ticketId)}`;
     }
 
     /**

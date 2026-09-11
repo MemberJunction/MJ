@@ -8,9 +8,14 @@ import { BaseSingleton } from '@memberjunction/global';
 export const REALTIME_PROXY_PATH = '/realtime-proxy';
 
 /**
- * The URL path MJAPI's OpenAI Live SDP broker listens on for WebRTC offer/answer exchanges.
+ * The URL path MJAPI's realtime WebRTC SDP broker listens on for offer/answer exchanges.
  */
-export const OPENAI_LIVE_SDP_EXCHANGE_PATH = '/realtime/openai-live/sdp-exchange';
+export const REALTIME_SDP_EXCHANGE_PATH = '/realtime/sdp-exchange';
+
+/**
+ * @deprecated Use `REALTIME_SDP_EXCHANGE_PATH`.
+ */
+export const OPENAI_LIVE_SDP_EXCHANGE_PATH = REALTIME_SDP_EXCHANGE_PATH;
 
 /**
  * A short-lived, one-time authorization to open ONE upstream realtime websocket through the
@@ -37,6 +42,11 @@ export interface RealtimeProxyTicketEntry {
     UserID?: string;
     /** The driver class authorizing this ticket (e.g. 'OpenAILiveRealtime'). */
     DriverClass?: string;
+    /**
+     * Authoritative session configuration minted by the server (e.g. for WebRTC SDP exchanges).
+     * Prevents clients from tampering with upstream model, reasoning, or tools.
+     */
+    SessionConfig?: Record<string, unknown>;
     /** Epoch-ms after which the ticket is invalid. Enforced on {@link RealtimeProxyRegistry.Consume}. */
     ExpiresAtMs: number;
 }
@@ -51,6 +61,8 @@ export interface RealtimeProxyIssueParams {
     UserID?: string;
     /** The driver class authorizing this ticket (optional). */
     DriverClass?: string;
+    /** Authoritative session configuration minted by the server (optional). */
+    SessionConfig?: Record<string, unknown>;
     /** Time-to-live, in seconds, for the ONE upstream open this ticket authorizes. */
     TTLSeconds: number;
 }
@@ -101,6 +113,7 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
             UpstreamAuthHeader: params.UpstreamAuthHeader,
             UserID: params.UserID,
             DriverClass: params.DriverClass,
+            SessionConfig: params.SessionConfig,
             ExpiresAtMs: expiresAtMs,
         });
         return { ID: id, ExpiresAt: new Date(expiresAtMs).toISOString() };

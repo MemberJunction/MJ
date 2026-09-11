@@ -46,11 +46,70 @@ describe('coreReservedServerExtensionRoots', () => {
     it('includes the literal pre-auth paths serve() registers without a constant', () => {
         const indexSrc = readFileSync(join(SRC, 'index.ts'), 'utf8');
         for (const path of CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS) {
-            // /health is the prefix for /health/extensions
-            const needle = path === '/health' ? '/health/extensions' : path;
-            expect(indexSrc, `${path} missing from serve()`).toContain(`'${needle}'`);
+            if (path === '/health') {
+                expect(indexSrc, `${path} missing from serve()`).toContain("'/health/extensions'");
+            } else if (path === '/realtime') {
+                expect(indexSrc, `${path} missing from serve()`).toMatch(/REALTIME_SDP_EXCHANGE_PATH|'\/realtime'/);
+            } else if (path === '/realtime-proxy') {
+                expect(indexSrc, `${path} missing from serve()`).toContain('/realtime-proxy');
+            } else {
+                expect(indexSrc, `${path} missing from serve()`).toContain(`'${path}'`);
+            }
         }
         expect(indexContainsLiteralPath('/healthcheck')).toBe(true);
+    });
+
+    it('structurally guarantees every pre-auth app.use / app.get / app.post mount in index.ts is reserved', () => {
+        const indexSrc = readFileSync(join(SRC, 'index.ts'), 'utf8');
+        const authMiddlewareIndex = indexSrc.indexOf('app.use(createUnifiedAuthMiddleware');
+        expect(authMiddlewareIndex).toBeGreaterThan(0);
+        const preAuthSrc = indexSrc.substring(0, authMiddlewareIndex);
+
+        const mountRegex = /app\.(?:use|get|post)\s*\(\s*([^,\s)]+)/g;
+        const reservedRoots = coreReservedServerExtensionRoots('/');
+
+        let match: RegExpExecArray | null;
+        const mountedTokens: string[] = [];
+        while ((match = mountRegex.exec(preAuthSrc)) !== null) {
+            const token = match[1].trim();
+            if (token.startsWith('cors') || token.startsWith('express.') || token.startsWith('create') || token.startsWith('cookieParser')) {
+                continue;
+            }
+            mountedTokens.push(token);
+        }
+
+        expect(mountedTokens.length).toBeGreaterThan(0);
+
+        const knownConstants: Record<string, string> = {
+            REALTIME_SDP_EXCHANGE_PATH: '/realtime',
+            MAGIC_LINK_MOUNT_PATH: '/magic-link',
+            WIDGET_MOUNT_PATH: '/widget',
+            TWILIO_TELEPHONY_MOUNT_PATH: '/telephony/twilio',
+            VONAGE_TELEPHONY_MOUNT_PATH: '/telephony/vonage',
+            TEAMS_MEETINGS_MOUNT_PATH: '/meetings/teams',
+            AUTH_CATALOG_MOUNT_PATH: '/auth',
+        };
+
+        for (const token of mountedTokens) {
+            const isLiteralPath = token.startsWith("'") || token.startsWith('"') || token.startsWith('`');
+            const isPathConstant = /^[A-Z0-9_]+_PATH$/.test(token) || token in knownConstants;
+            if (!isLiteralPath && !isPathConstant) {
+                // Not a path-based route mount (e.g. app.use(mw), app.use(compression(...)))
+                continue;
+            }
+
+            let pathPrefix: string;
+            if (isLiteralPath) {
+                pathPrefix = token.slice(1, -1);
+            } else if (token in knownConstants) {
+                pathPrefix = knownConstants[token];
+            } else {
+                throw new Error(`Unrecognized pre-auth mount constant '${token}' in index.ts. If this is a new pre-auth route, map its constant or reserve its prefix.`);
+            }
+
+            const isCovered = reservedRoots.some(root => pathPrefix === root || pathPrefix.startsWith(`${root}/`));
+            expect(isCovered, `Pre-auth mount '${pathPrefix}' (from token '${token}') must be covered by reserved roots`).toBe(true);
+        }
     });
 
     it('includes graphqlRootPath and every core mount', () => {
@@ -69,6 +128,8 @@ describe('coreReservedServerExtensionRoots', () => {
                 '/media',
                 '/oauth',
                 '/health',
+                '/realtime',
+                '/realtime-proxy',
             ])
         );
     });
@@ -83,6 +144,9 @@ describe('coreReservedServerExtensionRoots', () => {
         expect(validateServerExtensionRootPath('/widget', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/telephony', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/meetings/teams', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/realtime', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/realtime-proxy', extra)).toMatch(/reserved prefix/);
+        expect(validateServerExtensionRootPath('/Realtime', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/checkout', extra)).toBeNull();
         expect(validateServerExtensionRootPath('/healthcare', extra)).toBeNull();
     });

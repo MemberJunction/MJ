@@ -96,8 +96,10 @@ export type JSONObject = { [key: string]: JSONValue };
 export function RealtimeDiagLog(message: string): void {
     const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
     if (v === 'true' || v === '1' || v === 'yes') {
+        // Strip line breaks to prevent log injection (CWE-117)
+        const sanitized = message.replace(/[\r\n]+/g, ' ');
         // eslint-disable-next-line no-console
-        console.log(message);
+        console.log(sanitized);
     }
 }
 
@@ -672,6 +674,12 @@ export interface RealtimeSessionParams {
      * cleanup). This is the default for authenticated/internal sessions, which don't need an abuse cap.
      */
     MaxSessionSeconds?: number;
+
+    /**
+     * Optional ID of the user requesting or owning the realtime session.
+     * Used for auditing, rate limiting, and proxy ticket attribution.
+     */
+    UserID?: string;
 }
 
 /**

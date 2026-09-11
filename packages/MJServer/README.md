@@ -884,14 +884,23 @@ Validated JWT tokens are cached using an LRU cache, avoiding repeated cryptograp
 
 ## Server Extensions
 
-MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, handle their own authentication, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+MJServer supports a plugin architecture that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, WebSocket endpoints, or background workers, publish services, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+
+> **Important**: Server extensions are the **only sanctioned mechanism** for mounting custom HTTP endpoints and external service adapters into MJServer. Do not hardcode new `app.use()` or `app.post()` mounts directly inside `serve()`.
+
+For full architecture details, refer to the **[Server Extensions Guide](../../guides/SERVER_EXTENSIONS_GUIDE.md)**.
 
 ### How It Works
 
-1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core`
-2. Extensions register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`
-3. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass` and is also where host-only extensions (Slack, Teams) live.
-4. MJServer's `ServerExtensionLoader` discovers and initializes all enabled extensions at startup
+1. Extensions implement `BaseServerExtension` from `@memberjunction/server-extensions-core` and register via `@RegisterClass(BaseServerExtension, 'DriverClassName')`.
+2. Extensions declare their lifecycle phase (`'pre-auth'` or `'post-auth'`) via `DefaultPhase`:
+   - **`pre-auth`**: Mounted before MJ authentication middleware. Ideal for external webhooks that carry provider signatures (Slack HMAC, Teams Bot Framework JWT, Twilio signatures).
+   - **`post-auth`**: Mounted after MJ authentication and context middleware (`mwPostAuth`). Guaranteed to run under authenticated `req.user` context.
+3. Extensions can declare services in their `Initialize()` return (`Service: myService`). These are auto-registered into `ServerExtensionServiceRegistry`.
+4. After all extensions across both phases are mounted, `ServerExtensionLoader` awaits `OnAllExtensionsMounted(context)` across all extensions for cross-extension service wiring.
+5. Core integrations (Twilio, Vonage, RingCentral, Teams meetings) register their management services directly into `loader.Services` under `'TwilioTelephonyService'`, `'VonageTelephonyService'`, `'RingCentralTelephonyService'`, and `'TeamsMeetingsService'`.
+6. Open App server packages listed in `dynamicPackages.server[]` declare their extensions (`MJ_SERVER_EXTENSIONS` export or `package.json` `memberjunction.serverExtensions`). The host `mj.config.cjs` `serverExtensions[]` overlays those by `DriverClass`.
+7. Core routes (`/graphql`, `/health`, `/auth`, `/media`, `/schema`, `/mcp`) are protected by a reserved roots registry; extensions attempting to claim a reserved root fail closed during bootstrap.
 
 ### Configuration
 
@@ -900,21 +909,27 @@ MJServer supports a plugin architecture that enables auto-discovery and lifecycl
 module.exports = {
     serverExtensions: [
         {
+            Name: 'SlackIntegration',
             Enabled: true,
             DriverClass: 'SlackMessagingExtension',
             RootPath: '/webhook/slack',
+            Phase: 'pre-auth',
             Settings: {
-                AgentID: 'your-agent-guid',
+                DefaultAgentName: 'Sage',
+                ContextUserEmail: 'bot@company.com',
                 BotToken: process.env.SLACK_BOT_TOKEN,
                 SigningSecret: process.env.SLACK_SIGNING_SECRET,
             }
         },
         {
+            Name: 'TeamsIntegration',
             Enabled: true,
             DriverClass: 'TeamsMessagingExtension',
             RootPath: '/webhook/teams',
+            Phase: 'pre-auth',
             Settings: {
-                AgentID: 'your-agent-guid',
+                DefaultAgentName: 'Sage',
+                ContextUserEmail: 'bot@company.com',
                 MicrosoftAppId: process.env.MICROSOFT_APP_ID,
                 MicrosoftAppPassword: process.env.MICROSOFT_APP_PASSWORD,
             }
@@ -936,12 +951,12 @@ Returns `200` when all extensions are healthy, `503` when any extension reports 
 ### Available Extensions
 
 | Package | Extensions | Description |
-|---------|-----------|-------------|
+|---|---|---|
 | [`@memberjunction/messaging-adapters`](../MessagingAdapters/) | `SlackMessagingExtension`, `TeamsMessagingExtension` | Slack & Teams integration for MJ AI agents |
 
 ### Creating Custom Extensions
 
-See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) for documentation on building custom extensions.
+See [`@memberjunction/server-extensions-core`](../ServerExtensionsCore/) and the **[Server Extensions Guide](../../guides/SERVER_EXTENSIONS_GUIDE.md)** for complete documentation on building custom extensions.
 
 ## Graceful Shutdown
 

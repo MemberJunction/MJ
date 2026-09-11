@@ -7,7 +7,6 @@ import { ManageMetadataBase } from '../../Database/manage-metadata';
 import { configInfo } from '../../Config/config';
 import { SQLLogging } from '../../Misc/sql_logging';
 import { CodeGenConnection, CodeGenQueryResult } from '../../Database/codeGenDatabaseProvider';
-import { DecisionMetadataWriter } from '../../Database/decision-metadata-writer';
 import { canonicalJSONStringify } from '../../Misc/util';
 
 // Subclass exposing protected methods for testing
@@ -59,8 +58,6 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
       SQLLogging.resetForTests();
       SQLLogging.sqlOutputDirFlag = tmpDir;
       SQLLogging.initSQLLogging();
-
-      DecisionMetadataWriter.Instance.clear();
    });
 
    afterEach(async () => {
@@ -392,36 +389,6 @@ describe('T20 — Every-Run Config Writers Compare-First & Captured (C9)', () =>
          const secondUuidMatch = /VALUES \('([0-9a-f-]{36})'/i.exec(secondInserts[0]);
          expect(secondUuidMatch).not.toBeNull();
          expect(secondUuidMatch![1]).toBe(firstMintedId);
-      });
-   });
-
-   describe('decision-metadata writer config column skip', () => {
-      it('skips a column additionalSchemaInfo owns and counts it in decisionRecordsSkipped', () => {
-         const writer = DecisionMetadataWriter.Instance;
-         writer.clear();
-
-         // Load config that owns AllowUserSearchAPI on Organization
-         writer.loadConfigOwnedColumns({
-            Entities: [
-               {
-                  BaseTable: 'Organization',
-                  SchemaName: 'dbo',
-                  AllowUserSearchAPI: true,
-               },
-            ],
-         });
-
-         const initialSkipped = writer.recordsSkippedCount;
-
-         // Attempt to record AllowUserSearchAPI on Organization
-         writer.recordEntityDecision('Organization', 'AllowUserSearchAPI', true);
-
-         // Must be skipped and counted
-         expect(writer.recordsSkippedCount).toBe(initialSkipped + 1);
-
-         // Recording an unowned column succeeds
-         writer.recordEntityDecision('Organization', 'Icon', 'fa-building');
-         expect(writer.recordsSkippedCount).toBe(initialSkipped + 1);
       });
    });
 });
