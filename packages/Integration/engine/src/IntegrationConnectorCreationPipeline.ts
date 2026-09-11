@@ -16,6 +16,7 @@ import {
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import { BuildCatalogWriter, ResolveCatalogSource } from './CatalogSource.js';
+import { WithCatalogScope } from './CatalogScope.js';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
@@ -194,7 +195,19 @@ export class IntegrationConnectorCreationPipeline {
      * a `RunID` and coalescing served a different run, we publish a terminal ALIAS run under the
      * requested ID pointing at the run that actually did the work. See {@link honourRequestedRunID}.
      */
+    /**
+     * Every read a discovery makes — the connector's GetCachedObject/GetCachedFields during
+     * sampling, the dependency graph, the excluded-field resolution — happens with THIS connection
+     * in catalog scope. Scope-aware getters answer from the connection's own rows once it has any
+     * and fall back to the shared declared rows until then, so a first discovery still sees the
+     * connector's declared floor and a re-discovery sees what this connection found last time,
+     * not what some other connection of the same connector found.
+     */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
+        return WithCatalogScope(opts.CompanyIntegration?.ID ?? '', () => this.runWithDedup(opts));
+    }
+
+    private async runWithDedup(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
         const ciID = opts.CompanyIntegration?.ID;
         if (!ciID) return this.runInternal(opts); // no key to de-dup on — run directly
 

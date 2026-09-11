@@ -62,7 +62,7 @@ import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideField
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { decidePauseWrite, decideSchedulesToPause, decideSchedulesToResume, describeCancelOutcome, describeCancelScope, describePauseOutcome, readPausedSchedules, writePausedSchedules } from "../integration/ConnectionPause.js";
 import type { CancelScope, ScheduleJobState } from "../integration/ConnectionPause.js";
-import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
+import { ReadResourcePressure, EvaluatePressure, WithCatalogScope } from "@memberjunction/integration-engine";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -1269,6 +1269,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<DiscoverObjectsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1294,6 +1295,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             return this.handleDiscoveryError(e);
         }
+        });
     }
 
     /**
@@ -1308,6 +1310,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<ListSourceObjectsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1373,6 +1376,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationListSourceObjects error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     private async loadIntegrationObjectsByIntegrationID(
@@ -1459,6 +1463,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("objectName") objectName: string,
         @Ctx() ctx: AppContext
     ): Promise<DiscoverFieldsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1484,6 +1489,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             return this.handleDiscoveryError(e);
         }
+        });
     }
 
     /**
@@ -1595,6 +1601,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("deactivateAbsent", { nullable: true, description: "Comprehensive refresh (default true): objects/fields ABSENT from this discovery are deactivated (Status='Disabled', never deleted, reversible on a later rediscovery). Pass false for a scoped/partial discovery so it never disables what it didn't probe." }) deactivateAbsent: boolean | undefined,
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         // Checked BEFORE the lock is taken, so a refusal owes no release.
         {
             const user = this.getAuthenticatedUser(ctx);
@@ -1673,6 +1680,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } finally {
             IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
         }
+        });
     }
 
     /**
@@ -1819,6 +1827,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("platform", { defaultValue: "sqlserver" }) platform: string,
         @Ctx() ctx: AppContext
     ): Promise<SchemaPreviewOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -1887,6 +1896,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 Message: `Error: ${this.formatError(e)}`
             };
         }
+        });
     }
 
     /**
@@ -3320,6 +3330,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("entityName", { nullable: true }) entityName: string | undefined,
         @Ctx() ctx: AppContext
     ): Promise<CustomColumnCandidatesOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -3334,6 +3345,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationListCustomColumnCandidates error: ${e}`);
             return { Success: false, Message: this.formatError(e), Candidates: [] };
         }
+        });
     }
 
     /**
@@ -3350,6 +3362,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("entityNames", () => [String], { nullable: true }) entityNames: string[] | undefined,
         @Ctx() ctx: AppContext
     ): Promise<PromoteCustomColumnsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
@@ -3370,6 +3383,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationPromoteCustomColumns error: ${e}`);
             return { Success: false, Message: this.formatError(e), Promoted: false, ColumnsAdded: [], SchemaUpdatePending: false };
         }
+        });
     }
 
     /**
@@ -3590,6 +3604,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("entityMaps", () => [EntityMapInput]) entityMaps: EntityMapInput[],
         @Ctx() ctx: AppContext
     ): Promise<CreateEntityMapsOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -3697,6 +3712,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationCreateEntityMaps error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     // ── SCHEMA EXECUTION ────────────────────────────────────────────────
@@ -3719,6 +3735,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Ctx() ctx: AppContext
     ): Promise<ApplySchemaOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -3801,6 +3818,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationApplySchema error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     /**
@@ -3827,9 +3845,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Phase 1: Build schema artifacts for each connector's objects
             for (const item of items) {
                 try {
-                    const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
+                    const { schemaOutput, rsuInput } = await WithCatalogScope(item.CompanyIntegrationID, () => this.buildSchemaForConnector(
                         item.CompanyIntegrationID, item.Objects, validatedPlatform, user, skipGitCommit, skipRestart, provider
-                    );
+                    ));
                     pipelineInputs.push(rsuInput);
                     itemResults.push({
                         CompanyIntegrationID: item.CompanyIntegrationID,
@@ -3890,6 +3908,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("skipRestart", { defaultValue: false }) skipRestart: boolean,
         @Ctx() ctx: AppContext
     ): Promise<ApplyAllOutput> {
+        return WithCatalogScope(input.CompanyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
@@ -4138,6 +4157,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationApplyAll error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     /** Derives a SQL-safe schema name from the integration name (e.g., "HubSpot" → "hubspot"). */
@@ -4585,6 +4605,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("syncDirection", () => String, { nullable: true, description: 'Override sync direction: Pull | Push | Bidirectional. If omitted, each entity map\'s own SyncDirection is used.' }) syncDirection: 'Pull' | 'Push' | 'Bidirectional' | undefined,
         @Ctx() ctx: AppContext
     ): Promise<StartSyncOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             await IntegrationEngine.Instance.Config(false, user);
@@ -4712,6 +4733,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationStartSync error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     /**
@@ -6056,6 +6078,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
     ): Promise<ConnectorCapabilitiesOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
@@ -6074,6 +6097,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             LogError(`IntegrationGetConnectorCapabilities error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
+        });
     }
 
     // ── APPLY ALL BATCH ─────────────────────────────────────────────────
@@ -6104,6 +6128,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Explicitly clearing these entries ensures Config(true) re-queries the DB.
             await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Objects');
             await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Object Fields');
+            // The per-connection catalog too. Absent on a workspace without the migration, hence the guard.
+            for (const perConnection of ['MJ: Company Integration Objects', 'MJ: Company Integration Object Fields']) {
+                try { await LocalCacheManager.Instance.InvalidateEntityCaches(perConnection); } catch { /* not registered here */ }
+            }
 
             // Force-refresh integration metadata cache so IntrospectSchema
             // picks up any IntegrationObject/Field changes made via mj sync push
@@ -6111,7 +6139,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Phase 1: Build schema for each connector in parallel
             const buildResults = await Promise.allSettled(
-                input.Connectors.map(async (connInput) => {
+                // One catalog scope per connection — the innermost wins, so each build resolves its own.
+                input.Connectors.map((connInput) => WithCatalogScope(connInput.CompanyIntegrationID, async () => {
                     const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user, provider);
                     const schemaName = this.deriveSchemaName(companyIntegration.Integration);
                     console.log(
@@ -6304,7 +6333,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         // carried so the skipRestart branch can apply remove-as-disable
                         resolvedNames,
                     };
-                })
+                }))
             );
 
             // Separate successes and failures
@@ -6357,6 +6386,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Phase 3: Post-pipeline — create entity maps, field maps, schedules for each success
             for (let i = 0; i < successfulBuilds.length; i++) {
                 const build = successfulBuilds[i];
+                // Entity maps, the unselected-map pass and the first sync all read this connection's catalog.
+                await WithCatalogScope(build.connInput.CompanyIntegrationID, async () => {
                 const pipelineResult = batchResult.Results[i];
                 const integrationName = build.companyIntegration.Integration;
 
@@ -6370,7 +6401,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     });
                     // No pending-work cleanup needed — rows are registered only for
                     // migrations that succeeded.
-                    continue;
+                    return; // stands in for `continue` — this body is the per-connection scope's arrow
                 }
 
                 const connResult: ApplyAllBatchConnectorResult = {
@@ -6439,6 +6470,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
 
                 connectorResults.push(connResult);
+                });
             }
 
             const pipelineSteps = batchResult.Results[0]?.Steps.map((s: RSUPipelineStep) => ({
@@ -6778,6 +6810,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("acceptCustomColumns", () => [String], { defaultValue: [], description: 'Column names from a previous run\'s CustomColumnCandidates to materialise as part of THIS refresh — one migration, one restart. Default empty: candidates are reported and nothing is promoted.' }) acceptCustomColumns: string[],
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
+        return WithCatalogScope(companyIntegrationID, async () => {
         // Checked BEFORE the lock is taken, so a refusal owes no release.
         {
             const user = this.getAuthenticatedUser(ctx);
@@ -7193,6 +7226,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } finally {
             IntegrationEngine.ReleaseMaintenanceLock(companyIntegrationID);
         }
+        });
     }
 
     /**
