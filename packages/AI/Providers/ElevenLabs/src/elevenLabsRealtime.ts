@@ -456,9 +456,15 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const agentId = await this.ensureAgent(params);
         const signedUrl = await this.mintSignedUrl(agentId);
+        const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        const resolvedModel = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
+            ? reasoning.Remote.Ref
+            : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
         return {
             Provider: 'elevenlabs',
-            Model: params.Model,
+            Model: resolvedModel,
             EphemeralToken: signedUrl,
             ExpiresAt: new Date(Date.now() + ELEVENLABS_SIGNED_URL_TTL_MS).toISOString(),
             SessionConfig: {
@@ -565,7 +571,12 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      *   deliberately NOT per voice, which is a per-session override rather than agent state.
      */
     protected async ensureAgent(params: RealtimeSessionParams): Promise<string> {
-        const model = params.Model;
+        const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        const model = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
+            ? reasoning.Remote.Ref
+            : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
         if (model.startsWith(ELEVENLABS_AGENT_ID_PREFIX)) {
             return model;
         }

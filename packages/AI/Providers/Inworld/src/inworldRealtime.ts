@@ -922,8 +922,14 @@ export class InworldRealtimeSession implements IRealtimeSession {
 
     // ── Shared helpers ──
 
-    /** Resolves the underlying LLM id Inworld brokers (param model, falling back to the default). */
+    /** Resolves the underlying LLM id Inworld brokers (Reasoning.Remote.Ref, param model, falling back to default). */
     private resolveModelId(): string {
+        const reasoning = (this.params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        if (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0) {
+            return reasoning.Remote.Ref;
+        }
         return this.params.Model && this.params.Model.length > 0 ? this.params.Model : INWORLD_DEFAULT_MODEL_ID;
     }
 
