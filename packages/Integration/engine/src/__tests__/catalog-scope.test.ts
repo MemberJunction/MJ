@@ -159,3 +159,32 @@ test('a scope whose connection has NO per-connection catalog reads shared', () =
         });
     });
 });
+
+test('the per-connection datasets are NOT configured when the entities are absent', async () => {
+    // The rollout safety property. A configured dataset whose entity does not exist fails its
+    // RunView, and BaseEngine classifies an unknown entity as a TRANSIENT failure — so the property
+    // stays `loadedSuccessfully: false` and every Config() retries it forever. The integration
+    // engine would sit permanently not-loaded on any workspace that has the code but not the
+    // migration, and the symptom would look like a network fault rather than a missing table.
+    const engine = IntegrationEngineBase.Instance as unknown as {
+        Config(f?: boolean, u?: unknown, p?: unknown): Promise<unknown>;
+        Configs: Array<{ PropertyName: string; EntityName?: string }>;
+        Load(params: Array<{ PropertyName: string }>): Promise<unknown>;
+    };
+    const captured: string[][] = [];
+    const savedLoad = engine.Load;
+    engine.Load = async (params) => { captured.push(params.map(p => p.PropertyName)); return undefined; };
+    try {
+        // A provider that knows nothing about the per-connection entities — the pre-migration state.
+        await engine.Config(false, {}, { EntityByName: () => undefined });
+        expect(captured.at(-1)).not.toContain('_companyIntegrationObjects');
+        expect(captured.at(-1)).toContain('_integrationObjects');
+
+        // And once the migration has run, both appear.
+        await engine.Config(false, {}, { EntityByName: (n: string) => ({ Name: n }) });
+        expect(captured.at(-1)).toContain('_companyIntegrationObjects');
+        expect(captured.at(-1)).toContain('_companyIntegrationObjectFields');
+    } finally {
+        engine.Load = savedLoad;
+    }
+});

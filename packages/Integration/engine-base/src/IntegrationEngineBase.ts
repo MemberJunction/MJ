@@ -137,17 +137,35 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
                 EntityName: 'MJ: Integration Object Fields',
                 CacheLocal: true,
             },
-            {
-                PropertyName: '_companyIntegrationObjects',
-                EntityName: ENTITY_COMPANY_INTEGRATION_OBJECTS,
-                CacheLocal: true,
-            },
-            {
-                PropertyName: '_companyIntegrationObjectFields',
-                EntityName: ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
-                CacheLocal: true,
-            },
         ];
+
+        // The per-connection catalog is loaded ONLY when its entities are actually registered.
+        //
+        // This is not defensive tidiness — without it the engine cannot start on a workspace that
+        // has the code but not the migration. A configured dataset whose entity does not exist
+        // fails its RunView; BaseEngine treats an unknown entity as readable ("let the normal
+        // not-found handling apply"), so the failure is classified TRANSIENT, the property is left
+        // `loadedSuccessfully: false`, and every Config()/EnsureLoaded() retries it forever. The
+        // whole integration engine would sit permanently not-loaded, and the symptom would point
+        // at the network rather than at a missing table.
+        //
+        // Being conditional also removes an ordering constraint from the rollout: the patch is safe
+        // to deploy before the migration, and safe on a workspace that never receives it — those
+        // read the shared catalog exactly as they do today, which is the default anyway.
+        const md = provider ?? this.ProviderToUse;
+        const registered = (name: string): boolean => {
+            try {
+                return !!md?.EntityByName(name);
+            } catch {
+                return false;
+            }
+        };
+        if (registered(ENTITY_COMPANY_INTEGRATION_OBJECTS) && registered(ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS)) {
+            params.push(
+                { PropertyName: '_companyIntegrationObjects', EntityName: ENTITY_COMPANY_INTEGRATION_OBJECTS, CacheLocal: true },
+                { PropertyName: '_companyIntegrationObjectFields', EntityName: ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS, CacheLocal: true },
+            );
+        }
 
         return await this.Load(params, provider, forceRefresh, contextUser);
     }
@@ -166,6 +184,8 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         // catalog mid-run and overlays what the first pass persisted; if the per-connection arrays
         // were left stale the second pass would overlay against rows that no longer exist and the
         // heal would silently regress for every per-connection row.
+        // The per-connection pair is absent from Configs on a workspace without the migration —
+        // the `if (cfg)` below is what makes that a no-op rather than a crash.
         for (const prop of [
             '_integrationObjects',
             '_integrationObjectFields',
