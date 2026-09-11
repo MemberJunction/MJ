@@ -737,6 +737,14 @@ jobs:
         with:
           app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # Least privilege, named explicitly rather than inheriting whatever the App
+          # happens to hold. Two effects: the blast radius of this token is legible at the
+          # call site, and if the App's grants are ever trimmed the mint fails HERE with a
+          # clear error instead of the push failing later with a permissions error that
+          # looks like the protection problem this whole change was about.
+          # contents -> the push to `next`; pull-requests -> the back-merge fallback PR.
+          permission-contents: write
+          permission-pull-requests: write
 
       # A SECOND remote, deliberately, rather than re-pointing `origin`.
       #
@@ -1477,6 +1485,14 @@ jobs:
         with:
           app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # Least privilege, named explicitly rather than inheriting whatever the App
+          # happens to hold. Two effects: the blast radius of this token is legible at the
+          # call site, and if the App's grants are ever trimmed the mint fails HERE with a
+          # clear error instead of the push failing later with a permissions error that
+          # looks like the protection problem this whole change was about.
+          # contents -> the push to `next`; pull-requests -> the back-merge fallback PR.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Add the App-authenticated remote for next
         env:
@@ -1725,6 +1741,14 @@ jobs:
         with:
           app-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # Least privilege, named explicitly rather than inheriting whatever the App
+          # happens to hold. Two effects: the blast radius of this token is legible at the
+          # call site, and if the App's grants are ever trimmed the mint fails HERE with a
+          # clear error instead of the push failing later with a permissions error that
+          # looks like the protection problem this whole change was about.
+          # contents -> the push to `next`; pull-requests -> the back-merge fallback PR.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: Add the App-authenticated remote for next
         env:
