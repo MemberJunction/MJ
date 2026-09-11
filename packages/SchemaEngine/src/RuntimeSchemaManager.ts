@@ -19,6 +19,7 @@ import {
 } from '@memberjunction/core';
 import type { MJRSUPendingWorkEntity } from '@memberjunction/core-entities';
 import { Octokit } from '@octokit/rest';
+import { mintInstallationToken, readGitHubAppCredentials } from './GitHubAppAuth.js';
 import { RSUMetrics } from './RSUMetrics.js';
 import { GetDialect } from './DDLGenerator.js';
 import type { DatabasePlatform } from './interfaces.js';
@@ -2140,7 +2141,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    * For Docker/CI environments without a local `.git` directory.
    */
   private async gitCommitAndPRViaAPI(migrationFilePaths: string[], affectedTables: string[], description: string): Promise<string> {
-    const octokit = this.createOctokit();
+    const octokit = await this.createOctokit();
     const { owner, repo } = this.resolveGitHubOwnerRepo();
     const branchName = this.generateBranchName(affectedTables);
     const baseBranch = rsuConfig.GitTargetBranch;
@@ -2384,13 +2385,30 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     ].join('\n');
   }
 
-  /** Create an authenticated Octokit instance from environment token. */
-  private createOctokit(): Octokit {
+  /**
+   * An authenticated Octokit instance: a plain token when one is set, otherwise a token minted from
+   * the GitHub App the process was deployed with (GITHUB_APP_ID / _INSTALLATION_ID / _PRIVATE_KEY —
+   * the same names the feedback resolver reads), scoped to the one repository this pipeline commits
+   * to. Until this fallback existed every App-deployed workspace ended this step with "GitHub token
+   * not found", and because the step is non-fatal the migration and generated code it had just
+   * produced lived only on the box, where the next deploy discarded them.
+   */
+  private async createOctokit(): Promise<Octokit> {
     const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
-    if (!token) {
-      throw new RSUError('GIT', 'GitHub token not found. Set GITHUB_TOKEN or GH_TOKEN environment variable for PR creation.');
+    if (token) {
+      return new Octokit({ auth: token });
     }
-    return new Octokit({ auth: token });
+    const app = readGitHubAppCredentials();
+    if (!app) {
+      throw new RSUError(
+        'GIT',
+        'GitHub credentials not found. Set GITHUB_TOKEN/GH_TOKEN, or GITHUB_APP_ID + GITHUB_APP_INSTALLATION_ID + GITHUB_APP_PRIVATE_KEY (the App the deploy installs) for PR creation.',
+      );
+    }
+    const { repo } = this.resolveGitHubOwnerRepo();
+    const installationToken = await mintInstallationToken(new Octokit(), app, repo);
+    this.rsuLog(`GitHub App ${app.appId}: minted an installation token scoped to "${repo}"`);
+    return new Octokit({ auth: installationToken });
   }
 
   /**
