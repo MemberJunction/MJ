@@ -32,6 +32,7 @@ import {
 } from '@memberjunction/testing-engine';
 import { Metadata, ProviderType } from '@memberjunction/core';
 import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { SQLServerDataProvider, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import type sql from 'mssql';
 import {
@@ -52,7 +53,7 @@ import { discoverRlsFixture } from './rls-fixture';
 
 const TARGET_TYPE = 'Integration Check Bundle';
 /** Bundles that run against the GraphQL client transport (everything else: SQL server). */
-const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client', 'remote-op-wire-progress']);
+const CLIENT_BUNDLES = new Set(['client-cache', 'rls-isolation-client', 'remote-op-wire-progress', 'fls-enforcement-client']);
 /** Bundles that need the discovered two-user RLS fixture threaded into the context. */
 const RLS_BUNDLES = new Set(['rls-isolation', 'rls-isolation-client']);
 /** Key under SuiteFixtureContext.Data where the discovered RLS fixture is stashed. */
@@ -446,6 +447,16 @@ export class IntegrationTestDriver extends BaseTestDriver {
             pool = ic.Pool;
             schema = ic.Db.Schema;
             provider = ic.Provider;
+        }
+        // The testing-CLI path installs the instrumented cache first-caller and then sets up its
+        // OWN provider (installInstrumentedCacheFirst → initializeMJProvider), so no
+        // IntegrationBootstrapContext is ever published and `pool` is undefined here — which
+        // silently skipped every ctx.Pool-dependent check (metadata-consistency, layered base
+        // views, fls-enforcement fixture SQL) under `mj test`. The provider already owns the
+        // connection: recover its mssql pool from the config it was set up with.
+        if (!pool && provider instanceof SQLServerDataProvider && provider.ConfigData instanceof SQLServerProviderConfigData) {
+            pool = provider.ConfigData.ConnectionPool;
+            schema = schema ?? provider.ConfigData.MJCoreSchemaName;
         }
         // #3251: a server-transport bundle MUST resolve a DATABASE provider. If the process-global
         // provider was rebound to a client (GraphQL/Network) provider — because a client-transport
