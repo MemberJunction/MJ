@@ -30,18 +30,18 @@
 # cannot be read outside Actions. This workflow proves it or disproves it before anyone
 # edits a ruleset or rewires the release path.
 #
-# RUN IT TWICE:
-#   1. NOW — confirms the key decodes, names the app, and can write to this repo.
-#      `can_bypass` is expected to report `never` at this point.
-#   2. AFTER the bypass actor is added to ruleset 905656 — `can_bypass` must flip to
-#      `always`. That is the signal the next release will get past step 22.
+# WHAT GREEN LOOKS LIKE: the token mints (key valid, grants intact), the identity matches
+# blue-cypress-ci-bot, and `can_bypass` reports `always`. Anything else means the release
+# path is broken and a publish will strand itself between npm and `next` — fix it before
+# you start, not 40 minutes in.
 #
-# Near-read-only: it mints a token, asks questions, and makes exactly ONE mutation — a
-# throwaway ref created at next's existing tip and deleted again in cleanup, which is the
-# only unambiguous way to prove `contents: write` (see the write step for why the repo
-# `permissions` block cannot be used for this). It never touches `next`, `main` or any
-# lts/** branch, opens no PR, and edits no ruleset. Delete it once the release path is on
-# App tokens, or keep it as a pre-release smoke test.
+# READ-ONLY. It mints a scoped token and asks two questions. It writes nothing, pushes
+# nothing, opens nothing, and edits no ruleset — run it whenever you like.
+#
+# Keep it: what it checks is configuration living OUTSIDE this repo (the ruleset bypass,
+# the App's private key, the App's permission grants). Nothing in the codebase and no CI
+# job can prove those are intact, so without this the next release is what finds out —
+# which is exactly how v6.1.0-edge.6 went. See DEPLOYMENT.md Step 0.
 name: Verify the release App token
 
 on:
@@ -77,6 +77,14 @@ jobs:
           # No `owner:` — default scoping mints a token for THIS repository only. Setting
           # owner would widen it to every repo the installation can reach, which the
           # release path never needs.
+          #
+          # Naming the permissions is what makes this workflow read-only without losing
+          # coverage. GitHub refuses to mint a token carrying permissions the installation
+          # does not hold, so a trimmed grant fails HERE — no write required to detect it.
+          # These are exactly the two publish.yml needs: contents for the push to `next`,
+          # pull-requests for the back-merge fallback PR.
+          permission-contents: write
+          permission-pull-requests: write
 
       - name: The key belongs to the app we think it does
         env:
@@ -101,41 +109,20 @@ jobs:
           fi
           exit $rc
 
-      # DO NOT test write access with `gh api repos/OWNER/REPO --jq .permissions`.
+      # There is deliberately NO write test here any more.
       #
-      # That block is computed for an authenticated USER. An installation token has no user
-      # behind it, so GitHub returns every field false — `admin`, `maintain`, `pull`, `push`,
-      # `triage` — even when the installation holds `contents: write`. The first version of
-      # this workflow asserted `.push == true` and failed a perfectly good credential.
+      # The first version created and deleted a throwaway ref, because the question at the
+      # time was one-off: does this key work at all? (It also replaced an earlier check that
+      # read `gh api repos/OWNER/REPO --jq .permissions` and asserted `.push == true` — that
+      # block is computed for an authenticated USER, so an installation token reads
+      # all-false no matter what it holds, and the assertion could only ever fail.)
       #
-      # The giveaway is `pull: false` on a request that RETURNED 200: a token with no access
-      # to the repo gets a 404, not a permissions block. The successful read already proves
-      # access; the block just isn't populated for app tokens.
-      #
-      # So prove write the only way that is not ambiguous — perform one. Creating a ref is a
-      # `contents: write` operation and is exactly the capability publish.yml needs. The
-      # throwaway branch is deleted in the cleanup step below, and no workflow in this repo
-      # triggers on it: every `push:` trigger here is branch-filtered to next/main/lts/**
-      # or feature/mj-install-v2, so this starts no CI.
-      - name: The token can actually write to this repo
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-        run: |
-          set -euo pipefail
-          BRANCH="apptoken-writecheck-${{ github.run_id }}"
-          # Branch off next's current tip: creating a ref AT an existing commit adds no
-          # objects and changes no branch anyone uses.
-          SHA=$(gh api "repos/${{ github.repository }}/git/ref/heads/next" --jq '.object.sha')
-          echo "creating refs/heads/$BRANCH at $SHA"
-          # Record the name BEFORE the attempt, so cleanup still runs if creation half-succeeds.
-          echo "CLEANUP_BRANCH=$BRANCH" >> "$GITHUB_ENV"
-          if ! gh api -X POST "repos/${{ github.repository }}/git/refs" \
-                 -f ref="refs/heads/$BRANCH" -f sha="$SHA" --silent; then
-            echo "::error::The App token cannot create a ref in ${{ github.repository }} — no contents:write."
-            exit 1
-          fi
-          echo "::notice::contents:write confirmed (created refs/heads/$BRANCH)"
-
+      # That question is answered. What this workflow is FOR now is being run casually
+      # before a release, and a diagnostic that mutates the repo is one people hesitate to
+      # run. The scoped `permission-*` inputs on the mint step above cover the same
+      # regression read-only: if the App's grants were trimmed, the mint fails. Without
+      # them a trimmed grant would slip through, because `can_bypass` below would still
+      # report `always` while the actual push failed.
       # The load-bearing question, and the reason to run this a second time. For an
       # installation token `current_user_can_bypass` reports the APP's standing against
       # the ruleset. `never` before the bypass actor is added, `always` after. Never
@@ -173,21 +160,3 @@ jobs:
               echo "" >> "$GITHUB_STEP_SUMMARY"
               echo "No bypass yet — add app_id \`$EXPECTED_APP_ID\` as an \`Integration\` bypass actor, then re-run." >> "$GITHUB_STEP_SUMMARY" ;;
           esac
-
-      # always(): the write check exports CLEANUP_BRANCH before it creates the ref, so a
-      # partial failure still gets tidied. No-op when the variable was never set.
-      - name: Remove the throwaway branch
-        if: always()
-        env:
-          GH_TOKEN: ${{ steps.token.outputs.token }}
-        run: |
-          set -uo pipefail
-          if [ -z "${CLEANUP_BRANCH:-}" ]; then
-            echo "nothing to clean up"
-            exit 0
-          fi
-          if gh api -X DELETE "repos/${{ github.repository }}/git/refs/heads/$CLEANUP_BRANCH" --silent 2>/dev/null; then
-            echo "::notice::deleted refs/heads/$CLEANUP_BRANCH"
-          else
-            echo "::warning::could not delete refs/heads/$CLEANUP_BRANCH — remove it by hand."
-          fi

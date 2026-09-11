@@ -8,7 +8,7 @@
  * its tests can run with no install at all.
  */
 import { simpleGit } from 'simple-git';
-import { mergeMainIntoNext, refreshLockfile, LOCKFILE } from './back-merge.mjs';
+import { mergeMainIntoNext, refreshLockfile, LOCKFILE, nextPushRemote } from './back-merge.mjs';
 
 async function main() {
   const git = simpleGit();
@@ -21,8 +21,11 @@ async function main() {
 
   await refreshLockfile(git, { required: lockfileConflicted });
 
-  console.log('\nPushing to origin/next...');
-  await git.push('origin', 'HEAD:next');
+  // `next` is protected and only the release App may push to it — see nextPushRemote().
+  // The merge above still reads from `origin`; only the write is redirected.
+  const remote = nextPushRemote();
+  console.log(`\nPushing to ${remote}/next...`);
+  await git.push(remote, 'HEAD:next');
   console.log(`Successfully merged main and updated ${LOCKFILE} in next branch`);
 }
 
