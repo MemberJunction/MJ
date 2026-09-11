@@ -307,22 +307,30 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
       expect(writer.recordsSkippedCount).toBeGreaterThan(0);
    });
 
-   it('throws an error when MetadataSync is missing and decision metadata is enabled or auto', () => {
+   it('throws an error when MetadataSync is missing and decision metadata is explicitly enabled', () => {
       configInfo.metadataDirectory = undefined;
       configInfo.output = configInfo.output.filter(o => o.type.toUpperCase() !== 'METADATASYNC');
       const writer = DecisionMetadataWriter.Instance;
 
-      // When enabled: true
+      // When enabled: true, throws loudly
       configInfo.decisionMetadata = { enabled: true };
       expect(() => writer.resolveDecisionsDirectory()).toThrowError(
-         /No 'MetadataSync' output entry or 'metadataDirectory' found in config, but decision metadata is enabled/
+         /No 'MetadataSync' output entry or 'metadataDirectory' found in config, but decision metadata is enabled \(true\)/
       );
+   });
 
-      // When enabled is undefined ('auto')
+   it('returns null without throwing when MetadataSync is missing and decision metadata is auto (downstream repo compatibility)', () => {
+      configInfo.metadataDirectory = undefined;
+      configInfo.output = configInfo.output.filter(o => o.type.toUpperCase() !== 'METADATASYNC');
+      const writer = DecisionMetadataWriter.Instance;
+
+      // When enabled is undefined ('auto'), gracefully degrades without throwing
       configInfo.decisionMetadata = undefined;
-      expect(() => writer.resolveDecisionsDirectory()).toThrowError(
-         /No 'MetadataSync' output entry or 'metadataDirectory' found in config, but decision metadata is enabled \(auto\)/
-      );
+      expect(writer.resolveDecisionsDirectory()).toBeNull();
+
+      // When enabled is explicitly 'auto'
+      configInfo.decisionMetadata = { enabled: 'auto' };
+      expect(writer.resolveDecisionsDirectory()).toBeNull();
    });
 
    it('returns null and does not throw when MetadataSync is missing but decision metadata is explicitly disabled', () => {

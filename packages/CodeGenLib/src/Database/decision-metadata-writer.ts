@@ -311,10 +311,17 @@ export class DecisionMetadataWriter extends BaseSingleton<DecisionMetadataWriter
 
     const metaDir = outputDir('MetadataSync', false) ?? (configInfo.metadataDirectory ? path.resolve(process.cwd(), configInfo.metadataDirectory) : null);
     if (!metaDir) {
-      throw new Error(
-        `[DecisionMetadataWriter] No 'MetadataSync' output entry or 'metadataDirectory' found in config, but decision metadata is enabled (${enabledSetting ?? 'auto'}). ` +
-          `Add { type: 'MetadataSync', directory: './metadata' } to your config's output array, or set decisionMetadata.enabled: false to explicitly opt out.`
-      );
+      if (enabledSetting === true) {
+        throw new Error(
+          `[DecisionMetadataWriter] No 'MetadataSync' output entry or 'metadataDirectory' found in config, but decision metadata is enabled (true). ` +
+            `Add { type: 'MetadataSync', directory: './metadata' } to your config's output array, or set decisionMetadata.enabled: false to explicitly opt out.`
+        );
+      }
+      if (!this._warnedMissingDir) {
+        console.warn(`[DecisionMetadataWriter] No 'MetadataSync' output entry found in config. Decision metadata writes disabled.`);
+        this._warnedMissingDir = true;
+      }
+      return null;
     }
 
     const resolvedMetaDir = path.resolve(metaDir);
