@@ -60,6 +60,8 @@ import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
+import { decidePauseWrite, decideSchedulesToPause, decideSchedulesToResume, describeCancelOutcome, describeCancelScope, describePauseOutcome, readPausedSchedules, writePausedSchedules } from "../integration/ConnectionPause.js";
+import type { CancelScope, ScheduleJobState } from "../integration/ConnectionPause.js";
 import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
@@ -649,6 +651,28 @@ class CreateConnectionOutput {
 class MutationResultOutput {
     @Field() Success: boolean;
     @Field() Message: string;
+}
+
+/**
+ * Deactivate returns more than a boolean because pausing a connection is not one act.
+ *
+ * A caller has to be able to tell "paused, and the sync you were watching is stopping" from
+ * "paused, and the sync you were watching will run to completion in a process I cannot reach".
+ * Both are successful pauses. Only one of them means the work has stopped, and a UI that says
+ * "stopping" for the second is lying to the operator about the state of their data.
+ */
+@ObjectType()
+class DeactivateConnectionOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    /** How many scheduled jobs this pause actually moved from Active to Paused. */
+    @Field(() => Int) SchedulesPaused: number;
+    /** The live sync run at the moment of pause, when there was one. */
+    @Field({ nullable: true }) InFlightSyncRunID?: string;
+    /** True when a live run existed AND a cancel was signalled for it. */
+    @Field() CancelRequested: boolean;
+    /** 'durable' | 'this-process' | 'unknown' | 'none' — see ConnectionPause.describeCancelScope. */
+    @Field() CancelScope: string;
 }
 
 // ─── Typed sync-config (rate-limit / concurrency / time-budget as STRUCTURED fields, not a raw
@@ -1692,6 +1716,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // synchronous refresh mutation uses. A read-only provider here would fail at the first save.
         const md = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
 
+        const paused = await this.describeIfPaused(companyIntegrationID, user, md);
+        if (paused) {
+            return { Success: false, InProgress: false, RunID: 'not-started', BlockedBy: 'connection paused', Message: `Discovery not started: ${paused}` };
+        }
+
         const held = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
         if (held) {
             return {
@@ -1721,6 +1750,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<RefreshConnectorSchemaOutput> {
         return WithCatalogScope(companyIntegrationID, async () => {
+        // Checked BEFORE the lock is taken, so a refusal owes no release.
+        {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const paused = await this.describeIfPaused(companyIntegrationID, user, md);
+            if (paused) return { Success: false, RunID: 'not-started', Message: `Refresh not started: ${paused}` };
+        }
         // sync lock: a metadata refresh rewrites the IO/IOF rows a sync reads.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'metadata refresh')) {
             return {
@@ -3499,25 +3535,104 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
-     * Soft-deletes a CompanyIntegration by setting IsActive=false.
+     * Pauses a connection: IsActive=false, both scheduled jobs paused, and a stop requested for
+     * any sync already in flight.
+     *
+     * It used to be the first of those three only. The engine checks IsActive before a sync, so
+     * manual syncs did stop — but the CRON jobs kept firing (a sync schedule woke, was refused,
+     * and wrote a failed run, every tick, for as long as the connection stayed paused), the
+     * DISCOVERY schedule kept firing and was not refused at all (a paused connection went on
+     * rescanning the vendor on a timer, spending rate budget and rewriting the catalog the pause
+     * was meant to freeze), and an in-flight sync ran to completion.
+     *
+     * ORDER IS DELIBERATE. IsActive is written FIRST, because it is the flag every other actor
+     * reads: once it is false, nothing new can start, so a failure in any later step degrades the
+     * pause rather than voiding it. The schedules come next. The cancel is last and is
+     * best-effort by nature — a running sync belongs to whichever process owns it.
+     *
+     * WHAT PAUSE DOES NOT TOUCH: entity maps. Their Status is the user's own selection of which
+     * tables sync, and a pause that silently deselected tables would be undone wrong on resume.
+     *
+     * The reply distinguishes a stop that will happen from one that will not — see
+     * {@link DeactivateConnectionOutput}.
      */
-    @Mutation(() => MutationResultOutput)
+    @Mutation(() => DeactivateConnectionOutput)
     async IntegrationDeactivateConnection(
         @Arg("companyIntegrationID") companyIntegrationID: string,
         @Ctx() ctx: AppContext
-    ): Promise<MutationResultOutput> {
+    ): Promise<DeactivateConnectionOutput> {
+        const empty = { SchedulesPaused: 0, CancelRequested: false, CancelScope: 'none' as CancelScope };
         try {
             const user = this.getAuthenticatedUser(ctx);
             const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
-            if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
+            if (!loaded) return { Success: false, Message: 'CompanyIntegration not found', ...empty };
+
+            // 1. The flag first — see ORDER IS DELIBERATE above.
             ci.IsActive = false;
-            if (!await ci.Save()) return { Success: false, Message: 'Failed to deactivate' };
-            return { Success: true, Message: 'Deactivated' };
+            if (!await ci.Save()) return { Success: false, Message: 'Failed to deactivate', ...empty };
+
+            const notes: string[] = [];
+
+            // 2. Schedules. A pause of an already-paused connection moves nothing and must not
+            //    overwrite the record the FIRST pause left — decidePauseWrite is that guard.
+            let schedulesPaused = 0;
+            try {
+                const jobs = await this.findScheduledJobsForConnection(companyIntegrationID, user);
+                const toPause = decideSchedulesToPause(jobs);
+                for (const rec of toPause) {
+                    if (await this.setScheduledJobStatus(rec.ID, 'Paused', user, md)) schedulesPaused++;
+                }
+                const stored = readPausedSchedules(ci.Configuration);
+                const write = decidePauseWrite(stored, toPause);
+                if (write) {
+                    ci.Configuration = writePausedSchedules(ci.Configuration, write);
+                }
+                // Mirror onto the connection row the way the post-restart scheduler does, so a
+                // reader that only knows about ScheduleEnabled still sees a paused connection.
+                if (schedulesPaused > 0) ci.ScheduleEnabled = false;
+                if (write || schedulesPaused > 0) await ci.Save();
+                notes.push(describePauseOutcome(toPause, stored.length > 0 && toPause.length === 0));
+            } catch (schedErr) {
+                // A schedule we could not pause is worth saying out loud: the connection IS
+                // paused, but a cron may still wake it and write refused runs.
+                LogError(`IntegrationDeactivateConnection: pausing schedules failed — ${schedErr}`);
+                notes.push('Could not pause the schedules — a scheduled run may still fire and be refused.');
+            }
+
+            // 3. Cancel whatever is running, and report how far the request actually reached.
+            let inFlightRunID: string | undefined;
+            let scope: CancelScope = 'none';
+            try {
+                const live = await IntegrationEngine.GetSyncProgressAsync(companyIntegrationID, user, md);
+                if (live) {
+                    inFlightRunID = live.RunID ?? undefined;
+                    const durable = await IntegrationEngine.CancelSyncAsync(companyIntegrationID, user, md);
+                    scope = describeCancelScope({
+                        liveRunPresent: true,
+                        durableRequestRecorded: durable,
+                        runningInThisProcess: IntegrationEngine.IsSyncRunningInThisProcess(companyIntegrationID),
+                    });
+                    const sentence = describeCancelOutcome(scope);
+                    if (sentence) notes.push(sentence);
+                }
+            } catch (cancelErr) {
+                LogError(`IntegrationDeactivateConnection: cancel request failed — ${cancelErr}`);
+                notes.push('A sync may still be running; no new sync will start.');
+            }
+
+            return {
+                Success: true,
+                Message: ['Deactivated.', ...notes.filter(Boolean)].join(' '),
+                SchedulesPaused: schedulesPaused,
+                InFlightSyncRunID: inFlightRunID,
+                CancelRequested: scope === 'durable' || scope === 'this-process',
+                CancelScope: scope,
+            };
         } catch (e) {
             LogError(`IntegrationDeactivateConnection error: ${e}`);
-            return { Success: false, Message: this.formatError(e) };
+            return { Success: false, Message: this.formatError(e), ...empty };
         }
     }
 
@@ -3576,6 +3691,29 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
             ci.IsActive = true;
             if (!await ci.Save()) return { Success: false, Message: `Failed to reactivate: ${ci.LatestResult?.Message ?? 'Unknown error'}` };
+
+            // Put back EXACTLY what the pause took. Not "set every schedule Active": a connection
+            // can be paused while one of its schedules was already off because the operator turned
+            // it off, and inferring would silently restart work nobody asked for. The record
+            // written at pause is the only thing that can tell those apart.
+            let schedulesResumed = 0;
+            try {
+                const stored = readPausedSchedules(ci.Configuration);
+                if (stored.length > 0) {
+                    const jobs = await this.findScheduledJobsForConnection(companyIntegrationID, user);
+                    for (const id of decideSchedulesToResume(stored, jobs)) {
+                        if (await this.setScheduledJobStatus(id, 'Active', user, md)) schedulesResumed++;
+                    }
+                    // Consume the record whether or not every job came back: a job that was
+                    // deleted while paused is never coming back, and keeping the record would make
+                    // the next pause a no-op via decidePauseWrite's already-paused guard.
+                    ci.Configuration = writePausedSchedules(ci.Configuration, []);
+                    if (schedulesResumed > 0) ci.ScheduleEnabled = true;
+                    await ci.Save();
+                }
+            } catch (resumeErr) {
+                LogError(`IntegrationReactivateConnection: restoring schedules failed — ${resumeErr}`);
+            }
 
             if (runSchemaRefresh && !awaitSchemaRefresh) {
                 const detached = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md);
@@ -5003,6 +5141,102 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * CompanyIntegrationID). Matched case-insensitively across UUID casings (SQL Server upper /
      * PostgreSQL lower). Returns the newest match or null.
      */
+    /**
+     * Every scheduled job that targets this connection, with its kind, for pause/resume.
+     *
+     * Deliberately ONE view over both driver classes rather than two calls: pause has to move
+     * the pair together, and a partial failure that pauses the sync job but leaves the discovery
+     * job running is the exact defect this whole change exists to remove.
+     *
+     * Uses the same structured `"CompanyIntegrationID":"<uuid>"` predicate as
+     * {@link findExistingScheduledJob} — a bare-UUID substring would false-match the same id
+     * appearing under a different config key and pause an unrelated connection's job.
+     */
+    private async findScheduledJobsForConnection(
+        companyIntegrationID: string,
+        user: UserInfo
+    ): Promise<ScheduleJobState[]> {
+        const rv = new RunView();
+        const types = await rv.RunView<MJScheduledJobTypeEntity>({
+            EntityName: 'MJ: Scheduled Job Types',
+            ExtraFilter: `DriverClass IN ('IntegrationSyncScheduledJobDriver','IntegrationDiscoveryScheduledJobDriver')`,
+            Fields: ['ID', 'DriverClass'],
+            ResultType: 'simple',
+        }, user);
+        if (!types.Success || types.Results.length === 0) return [];
+
+        const kindByTypeID = new Map<string, 'sync' | 'discovery'>();
+        for (const t of types.Results) {
+            kindByTypeID.set(t.ID, t.DriverClass === 'IntegrationDiscoveryScheduledJobDriver' ? 'discovery' : 'sync');
+        }
+
+        const esc = (s: string) => s.replace(/'/g, "''");
+        const lower = esc(companyIntegrationID.toLowerCase());
+        const upper = esc(companyIntegrationID.toUpperCase());
+        const typeList = [...kindByTypeID.keys()].map(id => `'${esc(id)}'`).join(',');
+        const jobs = await rv.RunView<{ ID: string; Status: string | null; JobTypeID: string }>({
+            EntityName: 'MJ: Scheduled Jobs',
+            ExtraFilter:
+                `JobTypeID IN (${typeList}) AND ` +
+                `(Configuration LIKE '%"CompanyIntegrationID":"${lower}"%' OR Configuration LIKE '%"CompanyIntegrationID":"${upper}"%')`,
+            Fields: ['ID', 'Status', 'JobTypeID'],
+            ResultType: 'simple',
+            BypassCache: true, // pause must see committed status, not a stale filtered cache
+        }, user);
+        if (!jobs.Success) return [];
+        return jobs.Results.map(j => ({
+            ID: j.ID,
+            Status: j.Status,
+            Kind: kindByTypeID.get(j.JobTypeID) ?? 'sync',
+        }));
+    }
+
+    /**
+     * A refusal reason when this connection is paused, or null when it is not.
+     *
+     * everything.txt C6 makes deactivation mean "stop touching the source". Syncs already honoured
+     * that — the engine checks IsActive before RunSync — but DISCOVERY never did. A paused
+     * connection could still be re-scanned by hand or by a cron that outlived the pause, which
+     * spends the customer's rate budget and rewrites the very catalog the pause was meant to
+     * freeze. Pausing the schedules stops the timer; this stops everything else.
+     *
+     * Fails OPEN: a connection we cannot read is not declared paused. The gate exists to honour an
+     * explicit pause, not to become a new way for discovery to be unavailable.
+     */
+    private async describeIfPaused(
+        companyIntegrationID: string,
+        user: UserInfo,
+        md: IMetadataProvider
+    ): Promise<string | null> {
+        try {
+            const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            if (!await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID))) return null;
+            if (ci.IsActive) return null;
+            return 'This connection is paused. Resume it first — a paused connection is not scanned, so that its saved schema stays as it was.';
+        } catch (e) {
+            LogError(`describeIfPaused(${companyIntegrationID}) failed, treating as active: ${e}`);
+            return null;
+        }
+    }
+
+    /** Moves one scheduled job to a status. Returns false on any failure; the caller reports honestly. */
+    private async setScheduledJobStatus(
+        scheduledJobID: string,
+        status: 'Active' | 'Paused',
+        user: UserInfo,
+        md: IMetadataProvider
+    ): Promise<boolean> {
+        try {
+            const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
+            if (!await job.InnerLoad(CompositeKey.FromID(scheduledJobID))) return false;
+            job.Status = status;
+            return await job.Save();
+        } catch (e) {
+            LogError(`setScheduledJobStatus(${scheduledJobID}, ${status}) failed: ${e}`);
+            return false;
+        }
+    }
+
     private async findExistingScheduledJob(
         jobTypeID: string,
         companyIntegrationID: string,
@@ -6712,6 +6946,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Ctx() ctx: AppContext
     ): Promise<SchemaEvolutionOutput> {
         return WithCatalogScope(companyIntegrationID, async () => {
+        // Checked BEFORE the lock is taken, so a refusal owes no release.
+        {
+            const user = this.getAuthenticatedUser(ctx);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const paused = await this.describeIfPaused(companyIntegrationID, user, md);
+            if (paused) return { Success: false, HasChanges: false, Message: `Schema evolution not started: ${paused}` };
+        }
         // sync lock: schema evolution rewrites the metadata, field maps and DDL a sync
         // reads — data syncs (manual + scheduled) must not run while this is in flight.
         if (!IntegrationEngine.AcquireMaintenanceLock(companyIntegrationID, 'schema evolution')) {
