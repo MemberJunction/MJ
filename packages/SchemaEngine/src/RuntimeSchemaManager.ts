@@ -564,6 +564,16 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   // ─── State ───────────────────────────────────────────────────────
 
   private _isRunning = false;
+  /**
+   * True from the moment RunPipelineBatch begins until its outer `finally` — the whole pipeline,
+   * not just the DB-mutation window. `_isRunning` is the concurrency MUTEX and is deliberately
+   * released right after ExecuteMigration (the database is consistent from then on), which means
+   * it is false for WriteAdditionalSchemaInfo, RunCodeGen, CompileTypeScript, GitCommitAndPR and
+   * RestartMJAPI — roughly 95% of the pipeline's wall clock. Reporting the mutex as "running" made
+   * the API say no RSU was running while CodeGen was ten minutes in (sandbox, 2026-09-11), and every
+   * consumer that trusted it misjudged the build. Status reports THIS flag; the mutex stays a mutex.
+   */
+  private _pipelineActive = false;
   private _ddlProvider: DatabaseProviderBase | null = null;
   private _codeGenRunner: IRSUCodeGenRunner | null = null;
   private _codeGenOutputPaths: string[] = [];
@@ -959,7 +969,8 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   public GetStatus(): RSUStatus {
     return {
       Enabled: this.IsEnabled,
-      Running: this.IsRunning,
+      // The pipeline, not the mutex — see _pipelineActive. Either is enough to be "running".
+      Running: this.IsRunning || this._pipelineActive,
       OutOfSync: this.IsOutOfSync,
       OutOfSyncSince: this._outOfSyncSince,
       LastRunAt: this._lastRunAt,
@@ -1241,6 +1252,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // U11 — arm the determinate step counter (index of expected total) for this run.
     this.beginStepTracking(inputs.length);
+    this._pipelineActive = true;
     this.notifyObserver({
       Kind: 'run.start',
       ItemCount: inputs.length,
@@ -1273,6 +1285,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       return batchResult;
     } finally {
       this.endStepTracking();
+      this._pipelineActive = false;
       this.notifyRunEnd(batchResult, inputs.length);
     }
   }
