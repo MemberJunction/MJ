@@ -5741,7 +5741,7 @@ export class ManageMetadataBase {
     * `IN ('Active')` — permits exactly one value, which is a one-item list.
     *
     * This is a parser, not a policy: it reports what the constraint permits. WHICH fields get a value list
-    * out of that is decided by the caller, via isValueListEligibleField.
+    * out of that is decided after the fact, by valueListForField.
     */
    protected parseCheckConstraintValues(constraintDefinition: string, fieldName: string, entityName: string): string[] | null {
       // Normalize N'literal' to 'literal' so one pattern handles both.
