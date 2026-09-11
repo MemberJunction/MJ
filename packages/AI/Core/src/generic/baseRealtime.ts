@@ -1,4 +1,5 @@
 import { BaseModel } from "./baseModel";
+import type { RealtimeReasoningPlane } from "./modelConfiguration";
 
 /**
  * A JSON-serializable value. Used to type open configuration bags and JSON-schema
@@ -293,6 +294,46 @@ export interface RealtimeSessionCapabilities {
      * session config (OpenAI `session.update`); `false` where it's fixed at connect (Gemini Live).
      */
     CanReconfigureTurnMode: boolean;
+
+    /**
+     * Which reasoning planes this driver supports (e.g. `['local']`, `['remote']`, or `['local', 'remote']`).
+     */
+    SupportedReasoningPlanes?: readonly RealtimeReasoningPlane[];
+
+    /**
+     * Whether delegation mode can be reconfigured mid-session.
+     */
+    CanReconfigureDelegationMode?: boolean;
+
+    /**
+     * Whether the provider emits a discrete user-interruption signal when user barge-in occurs.
+     */
+    EmitsUserInterruptionSignal?: boolean;
+
+    /**
+     * Whether the provider emits a discrete signal when model generation is cut off.
+     */
+    EmitsProviderCutoffSignal?: boolean;
+
+    /**
+     * Whether the provider emits a response-complete signal when a turn ends.
+     */
+    EmitsResponseComplete?: boolean;
+
+    /**
+     * The units this provider uses to measure and bill usage: tokens, seconds, or both.
+     */
+    UsageBases?: readonly ('tokens' | 'seconds')[];
+
+    /**
+     * Whether this driver provides speech-to-text transcript events for user audio input.
+     */
+    ProvidesInputTranscription?: boolean;
+
+    /**
+     * Whether this driver provides text transcript events for model audio output.
+     */
+    ProvidesOutputTranscription?: boolean;
 }
 
 /** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */
@@ -323,6 +364,11 @@ export interface IRealtimeSession {
      * format. Optional; consumers default to 24000 (both OpenAI and Gemini Live emit 24 kHz today).
      */
     OutputSampleRate?: number;
+
+    /**
+     * Audio encoding and sample rate format supported or negotiated for this session.
+     */
+    AudioFormat?: { Codec: 'pcm16' | 'g711_ulaw' | 'g711_alaw'; SampleRate: number } | 'negotiated';
 
     /**
      * Sends a client media frame to the model.
@@ -411,9 +457,20 @@ export interface IRealtimeSession {
      *
      * @param callID The `CallID` from the originating {@link RealtimeToolCall}, used to correlate the result.
      * @param output The tool's result as a JSON-stringified string.
+     * @param taskRevision Optional task revision counter from the tool call. If supplied and mismatched, stale results are discarded.
      * @returns A promise that resolves once the result has been sent to the provider.
      */
-    SendToolResult(callID: string, output: string): Promise<void>;
+    SendToolResult(callID: string, output: string, taskRevision?: number): Promise<void>;
+
+    /**
+     * Current task revision counter for cancellation and supersede-and-discard.
+     */
+    CurrentTaskRevision?: number;
+
+    /**
+     * Advances the task revision counter, causing in-flight tool results from prior revisions to be discarded.
+     */
+    BumpTaskRevision?(): number;
 
     /**
      * **Optional capability** — injects background context (e.g. delegated-run progress, freshly
@@ -459,6 +516,13 @@ export interface IRealtimeSession {
      *   `void`/`undefined` from legacy drivers is treated as "triggered" for backward compatibility.
      */
     RequestSpokenUpdate?(instructions: string): boolean | void;
+
+    /**
+     * Mid-session instruction update (e.g. OpenAI `session.instructions.append`).
+     *
+     * @param instructions New or appended instructions for the ongoing session.
+     */
+    SendInstructions?(instructions: string): Promise<void>;
 
     /**
      * **Capability introspection.** A small, static description of what THIS live session can do, so the
@@ -666,6 +730,11 @@ export interface RealtimeToolCall {
      * Consumers parse this into the tool's expected parameter shape.
      */
     Arguments: string;
+
+    /**
+     * Optional task revision at the time the tool call was emitted. Used to detect stale/superseded results.
+     */
+    TaskRevision?: number;
 }
 
 /**
@@ -686,6 +755,11 @@ export interface RealtimeUsage {
      * Number of output tokens reported in this usage update.
      */
     OutputTokens: number;
+
+    /**
+     * Number of voice-duration seconds reported in this usage update (cumulative snapshot).
+     */
+    DurationSeconds?: number;
 
     /**
      * Per-modality breakdown of the input tokens, when the provider reports one. Realtime models
