@@ -1,0 +1,31 @@
+name: UI accessibility — template a11y enforcement
+
+on:
+  pull_request:
+    branches:
+      - next
+    paths:
+      - 'packages/**/*.html'
+      - '.github/scripts/check-a11y-templates.sh'
+      - '.github/scripts/ci/a11y-allowlist.txt'
+      - '.github/workflows/ci-a11y.yml'
+
+jobs:
+  check-a11y-templates:
+    name: Check changed templates for accessibility violations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine merge base
+        run: |
+          # The PR's diff target is origin/${{ github.base_ref }}.
+          # fetch-depth: 0 ensures we have full history for the diff.
+          echo "BASE_REF=origin/${{ github.base_ref }}" >> "$GITHUB_ENV"
+
+      - name: Check changed templates for accessibility violations
+        run: |
+          ./.github/scripts/check-a11y-templates.sh --base "$BASE_REF"

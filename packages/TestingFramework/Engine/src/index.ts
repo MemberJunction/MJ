@@ -21,6 +21,7 @@ export * from './oracles/TraceValidatorOracle';
 export * from './oracles/LLMJudgeOracle';
 export * from './oracles/ExactMatchOracle';
 export * from './oracles/SQLValidatorOracle';
+export * from './oracles/AccessibilityOracle';
 
 // Types and interfaces
 export * from './types';

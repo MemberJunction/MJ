@@ -1,0 +1,11 @@
+# Template accessibility allowlist — files exempt from check:a11y (check-a11y-templates.sh)
+#
+# One repo-relative path per line, exact match. Every entry MUST carry a comment
+# explaining why the violation is intentional (mirror of hex-allowlist.txt).
+#
+# Categories that justify an entry:
+#   1. Intentionally decorative markup where the rule misfires
+#   2. Third-party embed markup we don't control
+#   3. Pre-existing debt scheduled for cleanup (link the issue)
+#
+# (empty — the gate starts clean because it only checks changed files)

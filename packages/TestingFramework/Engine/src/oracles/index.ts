@@ -8,3 +8,4 @@ export * from './TraceValidatorOracle';
 export * from './LLMJudgeOracle';
 export * from './ExactMatchOracle';
 export * from './SQLValidatorOracle';
+export * from './AccessibilityOracle';
