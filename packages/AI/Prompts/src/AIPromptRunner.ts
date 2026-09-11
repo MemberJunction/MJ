@@ -537,11 +537,26 @@ export class AIPromptRunner {
         return null;
       }
 
-      if (credential.ExpiresAt && new Date(credential.ExpiresAt) < new Date()) {
+      // Expiry is evaluated by the engine rather than compared here, so this
+      // failover path honors the same policy — including any grace period —
+      // that getCredential() would apply a few lines below.
+      const expiration = CredentialEngine.Instance.getExpirationStatus(credential);
+      if (!expiration.usable) {
         if (verbose) {
-          this.logStatus(`   ⚠️ Credential "${credential.Name}" has expired, trying next...`, true, params);
+          this.logStatus(
+            `   ⚠️ Credential "${credential.Name}" expired on ${expiration.expiresAt?.toISOString()}, trying next...`,
+            true,
+            params
+          );
         }
         return null;
+      }
+      if (expiration.status === 'expiring-soon' && verbose) {
+        this.logStatus(
+          `   ⏳ Credential "${credential.Name}" expires in ${expiration.daysUntilExpiration} day(s)`,
+          true,
+          params
+        );
       }
 
       // Resolve the credential values
@@ -620,7 +635,7 @@ export class AIPromptRunner {
       UUIDsEqual(c.CredentialTypeID, credentialTypeId) &&
       c.IsDefault === true &&
       c.IsActive === true &&
-      (!c.ExpiresAt || new Date(c.ExpiresAt) > new Date())
+      CredentialEngine.Instance.getExpirationStatus(c).usable
     ) || null;
   }
 
