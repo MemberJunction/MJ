@@ -90,6 +90,11 @@ export interface RealtimeClientUsage {
     InputTokens?: number;
     /** Output tokens reported in this update (a delta for the completed response/turn). */
     OutputTokens?: number;
+    /**
+     * Session duration in seconds reported by the provider or transport (e.g. OpenAI Live's
+     * 15 s WebRTC session pre-bill and cumulative voice duration snapshots).
+     */
+    DurationSeconds?: number;
     /** The raw provider usage payload, for hosts that want provider-specific detail. */
     Raw?: unknown;
 }

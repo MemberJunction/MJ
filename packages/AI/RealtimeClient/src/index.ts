@@ -10,3 +10,4 @@ export * from './drivers/elevenLabsRealtimeClient';
 export * from './drivers/assemblyAIRealtimeClient';
 export * from './drivers/xaiRealtimeClient';
 export * from './drivers/huggingFaceRealtimeClient';
+export * from './drivers/openAILiveClient';
