@@ -228,6 +228,13 @@ export class SyncLogger {
                         succeeded: this.num(data.recordsCreated) + this.num(data.recordsUpdated),
                         failed: this.num(data.recordsErrored),
                         skipped: this.num(data.recordsSkipped),
+                    }, {
+                        // The quartet folds created and updated into `succeeded`. History has to
+                        // show them apart, and the run row records only TotalRecords, so this event
+                        // is the only place the split can survive.
+                        mjEntity: data.mjEntity ?? null,
+                        recordsCreated: this.num(data.recordsCreated),
+                        recordsUpdated: this.num(data.recordsUpdated),
                     });
                     break;
                 case 'sync.push.response':

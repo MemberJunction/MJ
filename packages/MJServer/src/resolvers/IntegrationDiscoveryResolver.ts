@@ -892,6 +892,10 @@ class SyncHistoryOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [SyncRunSummaryOutput], { nullable: true }) Runs?: SyncRunSummaryOutput[];
+    /** Total runs for this connection, so a pager can size itself without fetching every row. */
+    @Field({ nullable: true }) TotalKnown?: number;
+    /** True when rows exist beyond this page. */
+    @Field({ nullable: true }) HasMore?: boolean;
 }
 
 @ObjectType()
@@ -985,6 +989,10 @@ class IntegrationListRunsOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [IntegrationRunSummaryArtifactOutput], { nullable: true }) Runs?: IntegrationRunSummaryArtifactOutput[];
+    /** Feed back as `offset` for the next page. Absent when there is no next page. */
+    @Field({ nullable: true }) NextOffset?: number;
+    /** True when the store holds more runs past this page. */
+    @Field({ nullable: true }) HasMore?: boolean;
 }
 
 @ObjectType()
@@ -5260,29 +5268,72 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Paged run history, newest first.
+     *
+     * plan.md: "history must show a paginated list with all runs (25 per page) in the history, it
+     * should not shwo just aprt of it". Both surfaces used to fake paging by re-fetching with a
+     * DOUBLED limit and slicing client-side, which cannot reach past the cap and re-transfers
+     * everything already shown.
+     *
+     * `offset` maps to RunView's StartRow. TotalKnown comes from a separate count so a pager can
+     * size itself without fetching every row.
+     */
     @Query(() => SyncHistoryOutput)
     async IntegrationGetSyncHistory(
         @Arg("companyIntegrationID") companyIntegrationID: string,
-        @Arg("limit", { defaultValue: 20 }) limit: number,
+        @Arg("limit", { defaultValue: 25 }) limit: number,
+        @Arg("offset", { nullable: true, defaultValue: 0, description: 'Rows to skip. With limit, this is the page.' }) offset: number,
         @Ctx() ctx: AppContext
     ): Promise<SyncHistoryOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
+            const filter = `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}'`;
             const rv = new RunView();
             const result = await rv.RunView<SyncRunSummaryOutput>({
                 EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: filter,
                 OrderBy: 'StartedAt DESC',
                 MaxRows: limit,
+                StartRow: Math.max(0, offset ?? 0),
                 ResultType: 'simple',
                 Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords', 'RunByUserID']
             }, user);
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
+
+            // A separate count, not result.TotalRowCount: the row query is capped by MaxRows, so its
+            // count reflects the PAGE. A pager needs the whole set.
+            let totalKnown: number | undefined;
+            const countRes = await new RunView().RunView({
+                EntityName: 'MJ: Company Integration Runs',
+                ExtraFilter: filter,
+                ResultType: 'count_only',
+            }, user);
+            if (countRes?.Success) totalKnown = countRes.TotalRowCount;
+
+            // Per-entity created / updated / skipped / errored, recovered from each run's artifact.
+            // The run ROW carries only TotalRecords, so EntityDetails existed on this type and was
+            // never populated — the empty breakdown thing.txt reports. Artifacts are pruned by the
+            // retention cap and are node-local, so an old run yields nothing; that is left ABSENT
+            // rather than zeroed, so the UI can say "not recorded" instead of claiming zero.
+            const reader = new IntegrationProgressReader();
+            await Promise.all(result.Results.map(async (run) => {
+                try {
+                    const outcomes = await reader.EntityOutcomes(run.ID);
+                    if (outcomes.length > 0) run.EntityDetails = outcomes;
+                } catch { /* a missing or pruned artifact is not an error */ }
+            }));
+
+            const start = Math.max(0, offset ?? 0);
             return {
                 Success: true,
                 Message: `${result.Results.length} runs`,
-                Runs: result.Results
+                Runs: result.Results,
+                TotalKnown: totalKnown,
+                HasMore: totalKnown === undefined
+                    ? result.Results.length === limit
+                    : start + result.Results.length < totalKnown,
             };
         } catch (e) {
             LogError(`IntegrationGetSyncHistory error: ${e}`);
@@ -5305,6 +5356,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("runKind", { nullable: true }) runKind?: string,
         @Arg("inFlightOnly", { nullable: true }) inFlightOnly?: boolean,
         @Arg("limit", { defaultValue: 50 }) limit?: number,
+        @Arg("offset", { nullable: true, defaultValue: 0, description: 'Runs to skip in the underlying store. Use NextOffset from the previous page.' }) offset?: number,
     ): Promise<IntegrationListRunsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
@@ -5320,18 +5372,43 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
 
             const reader = new IntegrationProgressReader();
-            const snaps = await reader.ListRuns({
+            const want = limit ?? 50;
+            const filter = {
                 companyIntegrationID,
                 runKind: runKind as IntegrationRunKind | undefined,
                 inFlightOnly: inFlightOnly ?? false,
-            }, limit ?? 50);
+            };
 
-            // Filter to only the runs the caller is authorized to read. When
-            // scoped to a single (already-authorized) connector this is a no-op;
-            // for the cross-connector listing it prevents one tenant from seeing
-            // another tenant's runs.
-            const authorizedSnaps = await this.filterAuthorizedRuns(snaps, user, authCache);
-            return { Success: true, Message: `${authorizedSnaps.length} run(s)`, Runs: authorizedSnaps.map(s => this.toRunSummaryArtifact(s)) };
+            // AUTHORIZE-THEN-PAGE. Authorization happens after the store returns, so a page can
+            // come back short because the caller could not read some of it — not because the store
+            // ran out. Returning that short page as if it were the end is what made "load older
+            // runs" stop early. So refill from the next offset until the page is full or the store
+            // is genuinely exhausted.
+            //
+            // The refill is BOUNDED: an unauthorized caller would otherwise walk the entire store
+            // one page at a time on a single request.
+            const MAX_REFILLS = 5;
+            let cursor = Math.max(0, offset ?? 0);
+            let exhausted = false;
+            const authorizedSnaps: IntegrationRunSnapshot[] = [];
+            for (let round = 0; round <= MAX_REFILLS && authorizedSnaps.length < want; round++) {
+                const batch = await reader.ListRuns(filter, want, cursor);
+                if (batch.length === 0) { exhausted = true; break; }
+                cursor += batch.length;
+                if (batch.length < want) exhausted = true;
+                const ok = await this.filterAuthorizedRuns(batch, user, authCache);
+                authorizedSnaps.push(...ok);
+                if (exhausted) break;
+            }
+            const page = authorizedSnaps.slice(0, want);
+            const hasMore = !exhausted || authorizedSnaps.length > want;
+            return {
+                Success: true,
+                Message: `${page.length} run(s)`,
+                Runs: page.map(s => this.toRunSummaryArtifact(s)),
+                NextOffset: hasMore ? cursor : undefined,
+                HasMore: hasMore,
+            };
         } catch (e) {
             LogError(`IntegrationListRuns error: ${e}`);
             return { Success: false, Message: this.formatError(e) };

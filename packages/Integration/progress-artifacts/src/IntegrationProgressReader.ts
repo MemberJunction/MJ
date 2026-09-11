@@ -20,8 +20,15 @@ import type {
 export class IntegrationProgressReader {
     constructor(private readonly rootDir: string = join(process.cwd(), 'logs', 'integration-runs')) {}
 
-    /** List runs, newest-first by mtime. */
-    public async ListRuns(filter: IntegrationRunFilter = {}, limit = 50): Promise<IntegrationRunSnapshot[]> {
+    /**
+     * List runs, newest-first by mtime.
+     *
+     * `offset` exists because the caller authorization-filters AFTER this returns, so a short page
+     * does not mean the source is exhausted — it may just mean the caller could not read some of
+     * what came back. Without an offset there is no way to ask for the next slice, and both UI
+     * surfaces faked paging by re-requesting with a doubled limit.
+     */
+    public async ListRuns(filter: IntegrationRunFilter = {}, limit = 50, offset = 0): Promise<IntegrationRunSnapshot[]> {
         const entries = await this.safeReadDir(this.rootDir);
         const snapshots: Array<{ snap: IntegrationRunSnapshot; mtimeMs: number }> = [];
         for (const runID of entries) {
@@ -36,7 +43,8 @@ export class IntegrationProgressReader {
             snapshots.push({ snap, mtimeMs: mtime });
         }
         snapshots.sort((a, b) => b.mtimeMs - a.mtimeMs);
-        return snapshots.slice(0, limit).map(s => s.snap);
+        const start = Math.max(0, offset);
+        return snapshots.slice(start, start + limit).map(s => s.snap);
     }
 
     /**
@@ -150,6 +158,44 @@ export class IntegrationProgressReader {
         if (!raw) return 0;
         return raw.split('\n').filter(Boolean).length;
     }
+    /**
+     * Per-entity outcome counts for a sync run, recovered from its event stream.
+     *
+     * The run ROW records only TotalRecords, so history could never show created vs updated vs
+     * skipped per table — the field existed on the API type and was never populated, which is what
+     * thing.txt saw as an empty breakdown. The engine already emits every number needed on
+     * `sync.entity-map.complete`; this reads them back.
+     *
+     * Honest ceiling: artifacts are pruned by the retention cap and are node-local, so a run old
+     * enough to have been pruned yields nothing. The caller must render that as "not recorded"
+     * rather than as zeros.
+     */
+    public async EntityOutcomes(runID: string): Promise<Array<{
+        EntityName: string; InsertCount: number; UpdateCount: number; SkipCount: number; ErrorCount: number;
+    }>> {
+        const events = await this.Tail(runID, 0);
+        const byEntity = new Map<string, { EntityName: string; InsertCount: number; UpdateCount: number; SkipCount: number; ErrorCount: number }>();
+        for (const ev of events) {
+            // A sync mirrors each entity map's completion as a `stage.complete` whose stage is the
+            // object name. `counts` folds created and updated into `succeeded`, so the split rides
+            // alongside in `data`.
+            if (ev.eventType !== 'stage.complete') continue;
+            const d = (ev.data ?? {}) as Record<string, unknown>;
+            if (d.recordsCreated === undefined && d.recordsUpdated === undefined) continue;
+            const name = String(d.mjEntity ?? ev.stage ?? '');
+            if (!name) continue;
+            const row = byEntity.get(name) ?? { EntityName: name, InsertCount: 0, UpdateCount: 0, SkipCount: 0, ErrorCount: 0 };
+            // A map can appear more than once in a run (resume, or a push pass after a pull), so
+            // accumulate rather than overwrite.
+            row.InsertCount += Number(d.recordsCreated ?? 0);
+            row.UpdateCount += Number(d.recordsUpdated ?? 0);
+            row.SkipCount   += Number(ev.counts?.skipped ?? 0);
+            row.ErrorCount  += Number(ev.counts?.failed ?? 0);
+            byEntity.set(name, row);
+        }
+        return [...byEntity.values()];
+    }
+
     private async aggregateCountsFromTail(path: string): Promise<IntegrationRunSnapshot['counts']> {
         const raw = await this.safeReadFile(path);
         if (!raw) return undefined;
