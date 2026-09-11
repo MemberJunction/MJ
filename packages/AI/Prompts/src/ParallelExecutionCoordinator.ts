@@ -1,4 +1,4 @@
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual, RegisterClass } from '@memberjunction/global';
 import { ChatResult, ChatMessageRole, ChatMessage } from '@memberjunction/ai';
 import { MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
@@ -256,6 +256,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
+    contextUser?: UserInfo,
   ): Promise<ExecutionTaskResult | null> {
     if (results.length === 0) {
       return null;
@@ -275,7 +276,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         return this.selectRandomResult(results);
 
       case 'PromptSelector':
-        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken);
+        return await this.selectResultWithPrompt(results, config.selectorPromptId!, parentPromptRunId, cancellationToken, contextUser);
 
       case 'Consensus':
         return this.selectConsensusResult(results);
@@ -737,18 +738,35 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     selectorPromptId: string,
     parentPromptRunId?: string,
     _cancellationToken?: AbortSignal,
+    contextUser?: UserInfo,
   ): Promise<ExecutionTaskResult> {
     try {
-      // AIPromptRunner is statically imported (this class extends it); the prior dynamic import was
-      // only needed before the subclass relationship existed.
+      const user = contextUser || results[0]?.task?.contextUser;
 
       // Load the judge prompt from AIEngine
-      await AIEngine.Instance.Config(false);
+      await AIEngine.Instance.Config(false, user);
       const judgePrompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, selectorPromptId));
 
       if (!judgePrompt) {
         LogError(`Judge prompt with ID ${selectorPromptId} not found`);
         return results[0]; // Fallback to first result
+      }
+
+      // Pre-resolve model/vendor for judge prompt so ResultSelector prompt run has ModelID/VendorID at creation
+      let judgeModelId: string | undefined;
+      let judgeVendorId: string | undefined;
+      try {
+        const selection = await this.selectModel(judgePrompt, undefined, user);
+        if (selection?.model) {
+          judgeModelId = selection.model.ID;
+          judgeVendorId = selection.selectionInfo?.vendorSelected?.ID || (selection.model as { _selectedVendorId?: string })._selectedVendorId;
+        }
+      } catch {
+        const pm = AIEngine.Instance.PromptModels.find(
+          (p) => UUIDsEqual(p.PromptID, judgePrompt.ID) && (p.Status === 'Active' || p.Status === 'Preview'),
+        );
+        judgeModelId = pm?.ModelID;
+        judgeVendorId = pm?.VendorID;
       }
 
       // Prepare the data for the judge prompt
@@ -775,6 +793,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
           judgeData,
           parentPromptRunId,
           results.length, // execution order after all parallel children
+          user,
+          judgeModelId,
+          judgeVendorId,
         );
       }
 
@@ -786,20 +807,54 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         prompt: judgePrompt,
         data: judgeData,
         conversationMessages,
+        contextUser: user,
+        provider: this.Provider,
       });
 
       const judgeEndTime = Date.now();
       const judgeExecutionTimeMS = judgeEndTime - judgeStartTime;
 
       // Update the result selector prompt run with the result
-      if (resultSelectorPromptRun && judgeResult.promptRun) {
+      if (resultSelectorPromptRun) {
         resultSelectorPromptRun.CompletedAt = new Date(judgeEndTime);
         resultSelectorPromptRun.ExecutionTimeMS = judgeExecutionTimeMS;
         resultSelectorPromptRun.Success = judgeResult.success;
         resultSelectorPromptRun.Status = judgeResult.success ? 'Completed' : 'Failed';
         resultSelectorPromptRun.Result = judgeResult.rawResult || '';
+        resultSelectorPromptRun.JudgeID = judgePrompt.ID;
+
         if (judgeResult.tokensUsed) {
           resultSelectorPromptRun.TokensUsed = judgeResult.tokensUsed;
+        }
+
+        if (judgeResult.promptRun) {
+          if (judgeResult.promptRun.ModelID) {
+            resultSelectorPromptRun.ModelID = judgeResult.promptRun.ModelID;
+          }
+          if (judgeResult.promptRun.VendorID) {
+            resultSelectorPromptRun.VendorID = judgeResult.promptRun.VendorID;
+          }
+          if (judgeResult.promptRun.TokensPrompt != null) {
+            resultSelectorPromptRun.TokensPrompt = judgeResult.promptRun.TokensPrompt;
+          }
+          if (judgeResult.promptRun.TokensCompletion != null) {
+            resultSelectorPromptRun.TokensCompletion = judgeResult.promptRun.TokensCompletion;
+          }
+          if (judgeResult.promptRun.TokensCacheRead != null) {
+            resultSelectorPromptRun.TokensCacheRead = judgeResult.promptRun.TokensCacheRead;
+          }
+          if (judgeResult.promptRun.TokensCacheWrite != null) {
+            resultSelectorPromptRun.TokensCacheWrite = judgeResult.promptRun.TokensCacheWrite;
+          }
+          if (judgeResult.promptRun.Cost != null) {
+            resultSelectorPromptRun.Cost = judgeResult.promptRun.Cost;
+          }
+          if (judgeResult.promptRun.CostCurrency != null) {
+            resultSelectorPromptRun.CostCurrency = judgeResult.promptRun.CostCurrency;
+          }
+          if (judgeResult.promptRun.JudgeScore != null) {
+            resultSelectorPromptRun.JudgeScore = judgeResult.promptRun.JudgeScore;
+          }
         }
         await resultSelectorPromptRun.Save();
       }
@@ -824,6 +879,28 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       const bestCandidateId = rankings.find((r) => r.rank === 1)?.candidateId;
       const bestResultIndex = results.findIndex((r) => r.task.taskId === bestCandidateId);
       const bestResult = bestResultIndex >= 0 ? results[bestResultIndex] : results[0];
+
+      // Update ResultSelector JudgeScore from rankings if not already set
+      const topRanking = rankings.find((r) => r.rank === 1) || rankings[0];
+      if (resultSelectorPromptRun && resultSelectorPromptRun.JudgeScore == null && typeof (topRanking as any)?.score === 'number') {
+        resultSelectorPromptRun.JudgeScore = (topRanking as any).score;
+        await resultSelectorPromptRun.Save();
+      }
+
+      // Update child prompt runs with judge feedback & winner selection
+      for (const result of results) {
+        if (result.promptRun) {
+          result.promptRun.JudgeID = judgePrompt.ID;
+          const ranking = rankings.find((r) => r.candidateId === result.task.taskId);
+          if (ranking && typeof (ranking as any).score === 'number') {
+            result.promptRun.JudgeScore = (ranking as any).score;
+          }
+          if (result.task.taskId === bestCandidateId) {
+            result.promptRun.WasSelectedResult = true;
+          }
+          await result.promptRun.Save();
+        }
+      }
 
       // Add judge metadata to the best result
       bestResult.judgeMetadata = {
@@ -871,7 +948,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param judgeResult - Raw result from the judge prompt
    * @returns Array of ranking objects or null if parsing fails
    */
-  private parseJudgeResult(judgeResult: string): Array<{ candidateId: string; rank: number; rationale: string }> | null {
+  private parseJudgeResult(judgeResult: string): Array<{ candidateId: string; rank: number; rationale: string; score?: number }> | null {
     try {
       // Try to extract JSON from the result (in case there's extra text)
       const jsonMatch = judgeResult.match(/\{[\s\S]*\}/);
@@ -884,6 +961,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
           candidateId: ranking.candidateId,
           rank: ranking.rank,
           rationale: ranking.rationale || 'No rationale provided',
+          score: typeof ranking.score === 'number' ? ranking.score : undefined,
         }));
       }
 
@@ -1044,11 +1122,19 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       if (modelResult.success) {
         promptRun.Result = modelResult.data?.choices?.[0]?.message?.content || '';
 
-        // Extract token usage if available
+        // Extract token usage and cost if available
         if (modelResult.data?.usage) {
           promptRun.TokensUsed = modelResult.data.usage.totalTokens;
           promptRun.TokensPrompt = modelResult.data.usage.promptTokens;
           promptRun.TokensCompletion = modelResult.data.usage.completionTokens;
+          promptRun.TokensCacheRead = modelResult.data.usage.cacheReadTokens ?? 0;
+          promptRun.TokensCacheWrite = modelResult.data.usage.cacheWriteTokens ?? 0;
+          if (modelResult.data.usage.cost !== undefined) {
+            promptRun.Cost = modelResult.data.usage.cost;
+          }
+          if (modelResult.data.usage.costCurrency !== undefined) {
+            promptRun.CostCurrency = modelResult.data.usage.costCurrency;
+          }
         }
       } else {
         promptRun.ErrorMessage = modelResult.errorMessage;
@@ -1071,6 +1157,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param judgeData - The data being sent to the judge
    * @param parentPromptRunId - ID of the parent prompt run
    * @param executionOrder - Execution order within the parallel group
+   * @param contextUser - Optional context user for permissions
+   * @param modelId - Pre-resolved model ID for the judge
+   * @param vendorId - Pre-resolved vendor ID for the judge
    * @returns Promise<MJAIPromptRunEntityExtended> - The created result selector prompt run
    */
   private async createResultSelectorPromptRun(
@@ -1078,13 +1167,21 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     judgeData: Record<string, unknown>,
     parentPromptRunId: string,
     executionOrder: number,
+    contextUser?: UserInfo,
+    modelId?: string,
+    vendorId?: string,
   ): Promise<MJAIPromptRunEntityExtended> {
     try {
-      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
       promptRun.NewRecord();
 
       promptRun.PromptID = judgePrompt.ID;
-      // We don't have a specific model ID for the judge yet, it will be set by AIPromptRunner
+      if (modelId) {
+        promptRun.ModelID = modelId;
+      }
+      if (vendorId) {
+        promptRun.VendorID = vendorId;
+      }
       promptRun.RunAt = new Date();
       promptRun.RunType = 'ResultSelector';
       promptRun.ParentID = parentPromptRunId;

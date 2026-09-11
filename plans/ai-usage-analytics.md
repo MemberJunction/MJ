@@ -3,6 +3,10 @@
 > **Status:** Build spec, ready for implementation. Written 2026-09-11 against MJ `next` @ `ae1bdcaf7d`.
 > **Issue:** https://github.com/MemberJunction/MJ/issues/4396 (AN-BC).
 > **Destination in MJ:** `plans/ai-usage-analytics.md`. Migrations cite it as `-- Design: plans/ai-usage-analytics.md`.
+> **Delivery shape (decided 2026-09-11):** ONE pull request, MemberJunction/MJ#4402, branch
+> `feat/ai-usage-analytics-pr1`, reviewed as a whole. The "PR1…PR6" labels below are now **work
+> sections** committed in order onto that branch, one commit series per section, not separate PRs.
+> The dependency order in §11 still holds because later sections build on earlier ones' code.
 > **Who builds / who reviews:** built by a coding model (Gemini Flash), reviewed by Claude against
 > the acceptance checks in each PR section. Every "REVIEWER" line is a thing the reviewer verifies
 > before approving; every "BUILDER" line is an instruction, not a suggestion.
@@ -19,6 +23,7 @@ taken from the issue. Where the issue was wrong or stale, §1 says so.
 
 1. What the research changed about the issue
 2. Ground rules for the builder (non-negotiable MJ conventions)
+2a. Architecture bar (separation, typing, reuse, NavigationService, tokens, extension, simplicity)
 3. Part 1 — the cost basis doctrine (decisions, made)
 4. PR1 — write-site fixes and the guide (no schema)
 5. PR2 — parallel-execution accounting (no schema)
@@ -59,17 +64,68 @@ Corrections to the issue:
 
 These are MJ repo rules; violating any of them fails review regardless of whether the code works.
 
-- **Branch:** `feat/ai-usage-analytics-prN` off `next`, pushed with `-u origin <same name>` (root `CLAUDE.md` rule 3). One PR per section below. No commits without the user's approval.
+- **Branch:** `feat/ai-usage-analytics-pr1` off `next` (already open as MJ#4402), tracking `origin/feat/ai-usage-analytics-pr1`. All sections land on this one branch, in §11 order, each section as its own commit series prefixed with the section label (e.g. `feat(ai): [PR3] …`). One CodeGen tail, generated once for the combined DDL of §6 and §7.1, appended to the §6 migration. No force-pushes; no commits to `next`.
 - **pnpm only.** `pnpm install` at repo root only; never `npm install`. Build one package with `cd packages/X && pnpm run build`.
 - **Typing:** no `any`, no `as any`, no `unknown` shortcuts, no `.Get()`/`.Set()` on generated entities (`.claude/rules/typescript-style.md`).
 - **Data access:** entity names carry the `MJ: ` prefix; in dashboards use `RunView.FromMetadataProvider(this.ProviderToUse)` / `new RunQuery(this.RunQueryToUse)`, never `new Metadata()` / `new RunView()` (`.claude/rules/data-access.md`; `.claude/skills/scaffold-mj-dashboard/SKILL.md:448`). Never set `RunQueryParams.SQL` from user or agent input — stored queries by name/ID only.
 - **Migrations** (`migrations/CLAUDE.md`, all of it): filename `V[YYYYMMDDHHMM]__v6.1.x__Description.sql` in `migrations/v6/`, timestamp strictly greater than `202609101740`; hardcoded UUIDs from `uuidgen | tr '[:lower:]' '[:upper:]'`; `${flyway:defaultSchema}` never doubled with `__mj`; hand DDL, then ≥50 blank lines, then the CodeGen banner, then the appended `CodeGen_Run_*.sql` with **apply-time `Sequence` expressions** (`(SELECT COALESCE(MAX([Sequence]),0)+1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID]='…')`), then delete the standalone CodeGen file. `sp_addextendedproperty` on every new non-key column. No FK indexes by hand (CodeGen makes `IDX_AUTO_MJ_FKEY_*`). No `EntityField`/`EntityFieldValue`/view/proc edits by hand. CHECK constraints on nullable columns must not include `OR X IS NULL`. **Do not author the `migrations-pg` counterpart**; say in the PR body it is deferred to the release build. Run `node .github/scripts/check-migration-entityfield-sequence.mjs` and `npm run check:codegen-tail` before pushing.
 - **CodeGen order for a new column:** `mj migrate` → `mj codegen --skipfiles` → `mj sync push --dir=metadata --ci` → `mj codegen --skipdb`. Never a full `mj codegen` at step 2. Revert the `sync` block write-back in `metadata/**/*.json` before committing. One database per agent.
 - **Metadata:** declarative JSON only, `primaryKey.ID` from `uuidgen`, no `sync` blocks, no per-PR `*__Metadata_Sync.sql` (`metadata/CLAUDE.md` §1, §1b). Run `mj sync validate --dir=metadata`.
-- **Changesets:** `minor` for PR3 and PR4 (they touch the database / metadata), `patch` for PR1, PR2, PR5; PR6 is `minor`. `npm run check:changeset`.
+- **Changesets:** one changeset for the whole branch at `minor` (it carries migrations and metadata; `.claude/rules/changesets.md`). Replace the existing `patch` changeset from the PR1 commits. `npm run check:changeset`.
 - **Tests:** a change is done when `cd packages/X && pnpm test` passes for every touched package **and** `pnpm run test:integration` passes. Unit tests in `src/__tests__/*.test.ts`; Angular DOM specs `*.dom.test.ts` next to the component; `node scripts/check-spec-antipatterns.mjs packages`.
 - **Dashboards** (`packages/Angular/Explorer/dashboards/CLAUDE.md` + the scaffold skill): design tokens only (`./.github/scripts/check-css-hex-tokens.sh --file`), no `.mj-btn` overrides, `mjButton`, `@if/@for/@switch`, chrome trio / `mj-page-header-interior`, `OnPush`, PascalCase public members, `SetAgentContext` + `SetAgentClientTools` in `ngAfterViewInit`. `pnpm run check:ui`.
 - **Guides:** a new guide is registered in `guides/README.md` under "AI and agents" (`guides/README.md:143` says how).
+
+## 2a. Architecture bar (applies to every section; reviewer blocks on any miss)
+
+MJ's original architect reviews for reuse and generality first. Every step is held to these before
+correctness is even discussed:
+
+1. **Separation of concerns.** Data access and shaping live in a service (`AIInstrumentationService`
+   or a new `AIUsageAnalyticsService`), pure computation (pivot math, bucketing, coverage ratios,
+   comparison deltas) lives in plain functions in their own `.ts` with vitest tests (the pattern the
+   dashboards already use for `*-agent-context.ts` builders), components only render and bind.
+   No SQL strings, no `RunQuery`/`RunView` construction, no cost arithmetic in a component.
+2. **Strong typing end to end.** Every query's result row has an exported interface in one shared
+   `ai-usage-analytics.types.ts` (e.g. `AIUsageHourlyRow`, `AIUsageCoverageRow`), the service
+   returns those types, components consume them. No `Record<string, unknown>` past the service
+   boundary, no `any`, no `as unknown as` outside test fixtures, no `.Get()`/`.Set()`.
+3. **Reuse MJ libraries before writing anything.** In order of preference: an existing generic
+   component → an existing local component → a new *generic* component in `packages/Angular/Generic`
+   → a new local one (needs a stated reason). Concretely:
+   - Tables of query results: `mj-query-data-grid` (`@memberjunction/ng-query-viewer`), not a bespoke
+     `<table>`. Parameter capture: `mj-query-parameter-form` from the same package.
+   - Charts/KPIs: the existing `app-time-series-chart`, `app-kpi-card`, `app-performance-heatmap`
+     under `dashboards/src/AI/components/charts|widgets`. Do not add a second chart implementation.
+   - **The pivot surface (§8.3) is built as a GENERIC component, `mj-query-pivot`, in
+     `@memberjunction/ng-query-viewer`**: inputs are a saved Query name/ID (or `RunQueryParams`),
+     the dimension columns, the measure columns, optional time-bucket column and grain, optional
+     comparison window; it fetches via `RunQuery` with `DataSource:'Materialized'`, pivots with a
+     pure function, and renders with `mj-query-data-grid` + `app-time-series-chart`. The AI Usage
+     Explorer is then a thin configuration of it (query names + column lists + drill handlers).
+     Any saved aggregate Query in MJ gets a pivot UI for free; that is the point.
+   - Server side: aggregate queries are saved `MJ: Queries` (RunQuery), materialization uses
+     `@memberjunction/materialization` as shipped; no new refresh mechanism, no new cache, no
+     resolver. Cost calculation stays in `MJAIPromptRunEntityServer`; the fact view carries flags,
+     it does not recompute cost.
+4. **Navigation through `NavigationService`.** Drill-downs open records with the inherited
+   `this.navigationService.OpenEntityRecord(entityName, CompositeKey.FromID(id))` for viewing
+   (`packages/Angular/Explorer/shared/src/lib/navigation.service.ts:464`), queries with
+   `OpenQuery` (`:980`), never `router.navigate`, `window.open`, hand-built `/resource/record` URLs,
+   or the older `SharedService.Instance.OpenEntityRecord` (the realtime components still use it;
+   do not copy them). Every ID-taking drill also accepts a name where the surface has one, per the
+   dashboards' agent-tool convention. `SetAgentContext` / `SetAgentClientTools` are wired so the
+   pivot's state and its drill actions are agent-callable.
+5. **Design tokens.** Only semantic `--mj-*` tokens in any `.scss`/`.css`
+   (`.claude/rules/design-tokens.md`); no primitives, no hex. Gate: `pnpm run check:ui`.
+6. **Extension points over special cases.** Where behaviour may vary later, add one seam, not a
+   flag: `ResolveProcessingType()` (§4.3) is the model. `SourceKind`'s CASE is the one place that
+   classifies runs; new kinds are added there and nowhere else. Budgets (§9) are a generic
+   `UsageBudget` whose observed amount comes from a saved Query (`MeasureQueryID` + parameter map),
+   not an AI-only table with hardcoded cost columns; the AI usage budget is the first configuration.
+7. **Simplicity.** If a section adds a type, class, or component that has exactly one caller and
+   one shape, inline it. The reviewer will ask "what else could use this?" for anything generic and
+   "why is this here?" for anything not.
 
 ---
 
@@ -261,7 +317,7 @@ BUILDER: `packages/Angular/Explorer/dashboards/src/AI/services/ai-instrumentatio
 - `ai-analytics-resource.component.ts`: wire `SetAgentContext` / `SetAgentClientTools` in `ngAfterViewInit` (pattern: `autotagging-pipeline-resource.component.ts:449`); it has neither today.
 
 ### 8.3 The pivot surface
-New section `usage-explorer` in the left nav (`ai-analytics-resource.component.ts` nav list) → `analytics/usage-explorer/usage-explorer.component.ts`: measure (cost / tokens / runs / p95 latency / cache-read share / unpriced %) × group-by (agent, prompt, model, vendor, user, tenant, source kind, configuration) × optional secondary split × grain (hour/day) × window + comparison period. Reads `AIUsageHourly`/`AIUsageDaily` only, pivots client-side over a few hundred rows. Renders with `TimeSeriesChartComponent` (`charts/time-series-chart.component.ts:205`), `KPICardComponent` (`widgets/kpi-card.component.ts:194`), a table with CSV export. Drill: row → agent runs list (RunView, bounded) → run tree (existing `GetAgentRunTree`) → prompt run form. Preferences persisted via `UserInfoEngine` under the existing `AIAnalyticsPreferences` (`interfaces/analytics-preferences.interface.ts:9`) — add `UsageExplorer` prefs.
+Built per §2a.3 as the generic `mj-query-pivot` in `@memberjunction/ng-query-viewer`; the AI Usage Explorer configures it. New section `usage-explorer` in the left nav (`ai-analytics-resource.component.ts` nav list) → `analytics/usage-explorer/usage-explorer.component.ts`: measure (cost / tokens / runs / p95 latency / cache-read share / unpriced %) × group-by (agent, prompt, model, vendor, user, tenant, source kind, configuration) × optional secondary split × grain (hour/day) × window + comparison period. Reads `AIUsageHourly`/`AIUsageDaily` only, pivots client-side over a few hundred rows. Renders with `TimeSeriesChartComponent` (`charts/time-series-chart.component.ts:205`), `KPICardComponent` (`widgets/kpi-card.component.ts:194`), a table with CSV export. Drill: row → agent runs list (RunView, bounded) → run tree (existing `GetAgentRunTree`) → prompt run form. Preferences persisted via `UserInfoEngine` under the existing `AIAnalyticsPreferences` (`interfaces/analytics-preferences.interface.ts:9`) — add `UsageExplorer` prefs.
 
 ### 8.4 Tests and gates
 - DOM specs (`*.dom.test.ts` beside each component): KPI shows `—` + unpriced chip on null cost; coverage line renders "covers X% of runs"; the recent-runs table shows the bound line; usage-explorer pivots a fixture of 12 hourly rows into the expected grouped totals.
@@ -273,15 +329,16 @@ REVIEWER: `grep -rn "?? 0\||| 0" dashboards/src/AI/services dashboards/src/AI/co
 
 ## 9. PR6 — budgets (`minor`, needs product sign-off before build)
 
-Schema (migration + CodeGen tail; new table → `check:codegen-tail` is now meaningful):
+Per §2a.6 the entity is generic: the observed amount is produced by a saved Query, so the same table budgets AI spend today and anything else measurable by a Query tomorrow. Schema (migration + CodeGen tail; new table → `check:codegen-tail` is now meaningful):
 ```
-AIUsageBudget (ID, Name, ScopeType CHECK IN ('Global','Agent','User','Role','Tenant','Configuration'),
+UsageBudget (ID, Name, MeasureQueryID FK Query, MeasureParameters NVARCHAR(MAX) JSON, MeasureColumn NVARCHAR(100),
   ScopeEntityID NULL FK Entity, ScopeRecordID NVARCHAR(100) NULL, Period CHECK IN ('Day','Week','Month'),
-  AmountLimit DECIMAL(19,8), Currency NCHAR(3), WarnAtPercent INT, Action CHECK IN ('Notify','Throttle','Block'),
+  AmountLimit DECIMAL(19,8), Unit NVARCHAR(20), WarnAtPercent INT, Action CHECK IN ('Notify','Throttle','Block'),
   Status CHECK IN ('Active','Disabled'), LastEvaluatedAt, LastObservedAmount DECIMAL(19,8))
-AIUsageBudgetEvent (ID, BudgetID FK, PeriodStart, ObservedAmount, ThresholdPercent, Action, NotifiedAt)
+UsageBudgetEvent (ID, BudgetID FK, PeriodStart, ObservedAmount, ThresholdPercent, Action, NotifiedAt)
+-- AI usage budgets are UsageBudget rows whose MeasureQueryID is AIUsageDaily and whose MeasureParameters carry the scope filter.
 ```
-Runtime: a `ScheduledJobType` driver `AIUsageBudgetEvaluationScheduledJobDriver` (copy the shape of `MaterializationRefreshScheduledJobDriver`) that reads `AIUsageDaily` (materialized) per active budget, writes events, sends notifications through the existing notification path. Enforcement for `Block`: `hasExceededAgentRunGuardrails` gains a pre-run check against the budget's `LastObservedAmount` (cheap, no scan). `Throttle` is `Notify` + a documented hook; do not build a rate limiter here. UI: the budget half of `cost-budget.component.ts`. Tests: unit for period math and threshold crossing; integration for one evaluation cycle against fixture aggregates.
+Runtime: a `ScheduledJobType` driver `UsageBudgetEvaluationScheduledJobDriver` (copy the shape of `MaterializationRefreshScheduledJobDriver`) that reads `AIUsageDaily` (materialized) per active budget, writes events, sends notifications through the existing notification path. Enforcement for `Block`: `hasExceededAgentRunGuardrails` gains a pre-run check against the budget's `LastObservedAmount` (cheap, no scan). `Throttle` is `Notify` + a documented hook; do not build a rate limiter here. UI: the budget half of `cost-budget.component.ts`. Tests: unit for period math and threshold crossing; integration for one evaluation cycle against fixture aggregates.
 
 ---
 
@@ -309,27 +366,39 @@ The >10k-run seed: extend `packages/TestingFramework/integration-test-suite` fix
 
 ## 11. Sequencing and dependencies
 
+One branch, one PR (MJ#4402). Sections are committed in this order; each must build and pass its
+own tests before the next begins, so a reviewer can read the PR commit by commit:
+
 ```
-PR1 (doctrine, cascade, seams)  ──┐
-PR2 (parallel accounting)         ├──►  PR3 (migration + writers)  ──►  PR4 (fact view, queries, materialization)  ──►  PR5 (dashboards, pivot)  ──►  PR6 (budgets)
-                                  ┘
+§4 PR1 (doctrine, cascade, seams)            — open; fix the review items first
+§5 PR2 (parallel accounting)                 — writers in AIPromptRunner / ParallelExecutionCoordinator
+§6 PR3 (migration + attribution writers)     — ONE migration file carrying §6 DDL AND §7.1's vwAIUsageFacts,
+                                               one CodeGen tail generated after both are applied
+§7 PR4 (queries + materialization)           — metadata/queries, IsMaterialized, scheduled job
+§8 PR5 (dashboards, coverage, pivot)         — reads the §7 queries
+§9 PR6 (budgets)                             — last; drops to a follow-up issue if the deadline hits
 ```
-- PR1 and PR2 are independent of each other and of the schema; merge in any order.
-- PR3 must merge before PR4 (the fact view reads `AgentRunID`/`UserID`).
-- PR4 before PR5 (the dashboards read the queries). PR5 can start against PR4's branch.
-- PR6 needs the daily aggregate and a product decision on `Throttle`.
-- Release-engineer steps happen once, at release: PG counterparts for PR3/PR4 migrations, the consolidated `Metadata_Sync` for PR4's queries.
 
----
+- §5 and §6 touch the same writer files; do §5 first so the §6 attribution columns are added to the
+  already-restructured code, not the other way round.
+- The migration in §6 now also creates `vwAIUsageFacts` (§7.1). The view references the new
+  `AgentRunID`/`UserID` columns, so the DDL order inside the file is: columns → FKs → precision →
+  backfill → indexes → view → grants → extended properties → 50 blank lines → CodeGen tail.
+- Generate the CodeGen tail once, after the whole migration is applied to a database at the last
+  released version. If a later section changes DDL, re-run CodeGen and replace the entire tail.
+- Release-engineer steps happen once at release: the PG counterpart for the migration and the
+  consolidated `Metadata_Sync` for the §7 queries.
+- The PR description is rewritten at the end to cover all sections, with the per-section
+  verification outputs and every "BUILDER: verify" answer, in §11 order.
 
-## 12. Reviewer checklist (per PR)
+## 12. Reviewer checklist (per section, applied to the one PR)
 
-Common: branch tracks same-named remote; changeset level right; no `any`; no `.Get()/.Set()`; touched packages' `pnpm test` and `pnpm run test:integration` outputs pasted; no `sync` blocks in metadata diffs; no `migrations-pg` file.
+Common: §2a architecture bar met (separation, typing, reuse, NavigationService, tokens, extension, simplicity); branch tracks same-named remote; single `minor` changeset; no `any`; no `.Get()/.Set()`; touched packages' `pnpm test` and `pnpm run test:integration` outputs pasted; no `sync` blocks in metadata diffs; no `migrations-pg` file.
 
 - **PR1:** guide registered; `companyId` line present at the sub-agent `RunAgent` call; `ProcessingType` seam returns `'Realtime'`; guardrail uses `!= null`; AC8 skips loudly on empty.
 - **PR2:** parent created before arms; both coordinator calls receive the parent id; selector has `contextUser` + model; parent `Cost` never assigned from an arm; `:5680` bridge guarded; tests cover three arms.
-- **PR3:** filename sorts after `202609101740`; grouped `ALTER TABLE ADD`; FKs named; precision widened on all three columns and the default constraint on `AIAgentRun.TotalCost` intact; six `IX_*` indexes exactly as specified, no hand `IDX_AUTO_MJ_FKEY_*`; extended properties; backfill idempotent; ≥50 blank lines + banner + appended CodeGen with apply-time `Sequence`; standalone `CodeGen_Run_*.sql` deleted; cycle log pasted; all writer sites set both columns; `git diff --exit-code` after a second `mj codegen` on the migrated DB.
-- **PR4:** view over base tables, no TVF, no `ORDER BY`, grants present, header justifies the non-entity view; every query JSON has `uuidgen` ID, `UsesTemplate`, `Approved`, `AI` category, no inline params; SQL uses only safe filters; no `TotalCost`/`*Rollup`/`COALESCE(cost,0)`; `CalculateRunCost` body changed, name kept; materialization qualification output pasted (`paramMode`), refresh schedule authored the way the materialization plan intends; scheduled job present; AC11–AC13 green.
+- **PR3:** filename sorts after `202609101740`; the `vwAIUsageFacts` DDL is in this same file, after the columns it reads; grouped `ALTER TABLE ADD`; FKs named; precision widened on all three columns and the default constraint on `AIAgentRun.TotalCost` intact; six `IX_*` indexes exactly as specified, no hand `IDX_AUTO_MJ_FKEY_*`; extended properties; backfill idempotent; ≥50 blank lines + banner + appended CodeGen with apply-time `Sequence`; standalone `CodeGen_Run_*.sql` deleted; cycle log pasted; all writer sites set both columns; `git diff --exit-code` after a second `mj codegen` on the migrated DB.
+- **PR4:** (view checks moved to PR3) every query JSON has `uuidgen` ID, `UsesTemplate`, `Approved`, `AI` category, no inline params; SQL uses only safe filters; no `TotalCost`/`*Rollup`/`COALESCE(cost,0)`; `CalculateRunCost` body changed, name kept; materialization qualification output pasted (`paramMode`), refresh schedule authored the way the materialization plan intends; scheduled job present; AC11–AC13 green.
 - **PR5:** no unbounded run pulls; no cost coalescing; `OnPush` everywhere; agent context wired; `check:ui` green; DOM specs beside components; pivot reads aggregates only; preferences extend the existing interface.
 - **PR6:** product sign-off linked; new table has its CodeGen tail (entity subclass, resolvers, form) and `check:codegen-tail` green; `Block` check is O(1); `Throttle` documented as not enforced.
 

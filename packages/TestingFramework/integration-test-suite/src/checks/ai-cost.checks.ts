@@ -594,32 +594,21 @@ export const AiCostChecks: NamedCheck[] = [
                 `(${pricedCount}/${totalCompleted} completed runs), ${unpricedCompleted} unpriced`
             );
 
-            // (a) SUM(Cost) over completed runs that have at least one child, and SUM(Cost) over all completed runs;
-            // assert the with-children share is <= 0.01.
-            // This documents today's shape: the consolidated parallel parent is the only persisted row
-            // and carries the selected arm's cost.
-            // NOTE: PR2 flips this to "parents have Cost IS NULL" and AC8 must be updated in that PR.
-            const totalCostAll = aggregateValue(probe.AggregateResults, 'TotalCost');
-            let withChildrenShare = 0;
-            if (totalCostAll > 0) {
-                const withChildrenResult = await rv.RunView({
-                    EntityName: 'MJ: AI Prompt Runs',
-                    ExtraFilter: 'CompletedAt IS NOT NULL AND Cost IS NOT NULL AND ID IN (SELECT ParentID FROM vwAIPromptRuns WHERE ParentID IS NOT NULL)',
-                    Aggregates: [{ expression: 'SUM(Cost)', alias: 'ChildParentCost' }],
-                    ResultType: 'count_only',
-                    MaxRows: 1
-                }, ctx.User);
-                Assert(withChildrenResult.Success, `with-children prompt-run query failed: ${withChildrenResult.ErrorMessage}`);
-                const childParentCost = aggregateValue(withChildrenResult.AggregateResults, 'ChildParentCost');
-                withChildrenShare = childParentCost / totalCostAll;
-                console.log(
-                    `      → with-children cost share: ${(withChildrenShare * 100).toFixed(2)}% ` +
-                    `($${childParentCost.toFixed(4)} with children / $${totalCostAll.toFixed(4)} total completed)`
-                );
-            }
-            Assert(
-                withChildrenShare <= 0.01,
-                `Runs with children must account for <= 1% of total cost in today's model (got ${(withChildrenShare * 100).toFixed(2)}%)`
+            // (c) ParallelParent prompt runs must have Cost IS NULL.
+            // Parallel parents aggregate spend across their arms and have no own spend.
+            const invalidParallelParentsResult = await rv.RunView({
+                EntityName: 'MJ: AI Prompt Runs',
+                ExtraFilter: "CompletedAt IS NOT NULL AND RunType = 'ParallelParent' AND Cost IS NOT NULL",
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'InvalidParallelParents' }],
+                ResultType: 'count_only',
+                MaxRows: 1
+            }, ctx.User);
+            Assert(invalidParallelParentsResult.Success, `parallel parent prompt-run query failed: ${invalidParallelParentsResult.ErrorMessage}`);
+            const invalidParallelParentsCount = aggregateValue(invalidParallelParentsResult.AggregateResults, 'InvalidParallelParents');
+            AssertEqual(
+                invalidParallelParentsCount,
+                0,
+                `ParallelParent prompt runs must have Cost IS NULL (found ${invalidParallelParentsCount} row(s) with Cost IS NOT NULL)`
             );
 
             // Non-negative agent-run cost assert
@@ -636,7 +625,7 @@ export const AiCostChecks: NamedCheck[] = [
                 0,
                 `AIAgentRun.TotalCost must be non-negative (found ${negativeAgentRunCostCount} row(s) with TotalCost < 0)`
             );
-            console.log(`      → verified basis invariants: with-children share <= 1%, agent run costs non-negative`);
+            console.log(`      → verified basis invariants: ParallelParent Cost IS NULL, agent run costs non-negative`);
         }
     }
 ];

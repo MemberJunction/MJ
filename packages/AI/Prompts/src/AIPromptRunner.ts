@@ -119,7 +119,7 @@ export interface ExecutionBound {
  * ExecutePrompt → executeSinglePrompt / executePromptInParallel without
  * discarding vendor-resolution data that would need to be re-derived.
  */
-interface ModelSelectionResult {
+export interface ModelSelectionResult {
   model: MJAIModelEntityExtended | null;
   vendorDriverClass?: string;
   vendorApiName?: string;
@@ -1144,8 +1144,30 @@ export class AIPromptRunner {
       throw new Error('Parallel execution was cancelled before task execution');
     }
 
-    // Execute tasks in parallel
-    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(params, executionTasks, undefined, undefined, params.cancellationToken);
+    // 1. Create (or reuse existingPromptRun) the consolidated parent BEFORE parallel tasks run (§5.1).
+    // Use the first task's model for the initial ModelID; after selection, set ModelID/VendorID to the selected arm's.
+    const initialModel = existingSelection?.model || executionTasks[0].model;
+    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(
+      prompt,
+      initialModel,
+      params,
+      renderedPromptText,
+      startTime,
+      params.override?.vendorId,
+      existingSelection?.selectionInfo,
+      'ParallelParent',
+    );
+    consolidatedPromptRun.RunType = 'ParallelParent';
+    consolidatedPromptRun.WasSelectedResult = false;
+
+    // Execute tasks in parallel - pass consolidatedPromptRun.ID as parentPromptRunId
+    const parallelResult = await this.ParallelCoordinator.executeTasksInParallel(
+      params,
+      executionTasks,
+      undefined,
+      consolidatedPromptRun.ID,
+      params.cancellationToken,
+    );
 
     if (!parallelResult.success) {
       throw new Error(`Parallel execution failed: ${parallelResult.errors.join(', ')}`);
@@ -1159,17 +1181,37 @@ export class AIPromptRunner {
 
     let selectedResult = successfulResults[0]; // Default to first
 
-    // Use result selector if configured
+    // Use result selector if configured - pass consolidatedPromptRun.ID and contextUser
     if (successfulResults.length > 1 && prompt.ResultSelectorPromptID) {
       const selectionConfig: ResultSelectionConfig = {
         method: 'PromptSelector',
         selectorPromptId: prompt.ResultSelectorPromptID,
       };
 
-      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(successfulResults, selectionConfig, undefined, params.cancellationToken);
+      const aiSelectedResult = await this.ParallelCoordinator.selectBestResult(
+        successfulResults,
+        selectionConfig,
+        consolidatedPromptRun.ID,
+        params.cancellationToken,
+        params.contextUser,
+      );
       if (aiSelectedResult) {
         selectedResult = aiSelectedResult;
       }
+    }
+
+    // Update parent with selected arm's model and vendor
+    consolidatedPromptRun.ModelID = selectedResult.task.model.ID;
+    if (selectedResult.task.vendorId) {
+      consolidatedPromptRun.VendorID = selectedResult.task.vendorId;
+    } else if (selectedResult.task.promptModel?.VendorID) {
+      consolidatedPromptRun.VendorID = selectedResult.task.promptModel.VendorID;
+    }
+
+    // Ensure selectedResult child is marked WasSelectedResult = true
+    if (selectedResult.promptRun) {
+      selectedResult.promptRun.WasSelectedResult = true;
+      await selectedResult.promptRun.Save();
     }
 
     // Calculate total tokens and costs from all parallel executions
@@ -1196,10 +1238,6 @@ export class AIPromptRunner {
       }
     }
 
-    // Use existing prompt run if provided (hierarchical case) or create new one
-    // Use the model selection info if provided (from hierarchical execution)
-    const consolidatedPromptRun = existingPromptRun || await this.createPromptRun(prompt, selectedResult.task.model, params, renderedPromptText, startTime, params.override?.vendorId, existingSelection?.selectionInfo);
-
     // Update with parallel execution metadata
     const endTime = new Date();
     consolidatedPromptRun.CompletedAt = endTime;
@@ -1217,9 +1255,8 @@ export class AIPromptRunner {
       // prices the full input including cached tokens rather than dropping them.
       consolidatedPromptRun.TokensCacheRead = selectedResultUsage.cacheReadTokens ?? 0;
       consolidatedPromptRun.TokensCacheWrite = selectedResultUsage.cacheWriteTokens ?? 0;
-      if (selectedResultUsage.cost !== undefined) {
-        consolidatedPromptRun.Cost = selectedResultUsage.cost;
-      }
+      // NOTE (§5.1): On the parent, do NOT assign Cost from the selected arm. Leave Cost = null.
+      // TotalCost is maintained by server-side TriggerParentCostRollup.
       if (selectedResultUsage.costCurrency !== undefined) {
         consolidatedPromptRun.CostCurrency = selectedResultUsage.costCurrency;
       }
@@ -1250,13 +1287,15 @@ export class AIPromptRunner {
     consolidatedPromptRun.TokensUsedRollup = totalPromptTokens + totalCompletionTokens;
     consolidatedPromptRun.TokensCacheReadRollup = totalCacheReadTokens;
     consolidatedPromptRun.TokensCacheWriteRollup = totalCacheWriteTokens;
-    if (hasCost) {
+    // Server-side TriggerParentCostRollup maintains TotalCost from children.
+    // Keep manual sum only as a fallback when rollup did not populate TotalCost.
+    if (consolidatedPromptRun.TotalCost == null && hasCost) {
       consolidatedPromptRun.TotalCost = totalCost;
     }
     
     // Set Status and WasSelectedResult for parallel execution
     consolidatedPromptRun.Status = parallelResult.successCount > 0 ? 'Completed' : 'Failed';
-    consolidatedPromptRun.WasSelectedResult = true; // This is the consolidated result chosen by judge
+    consolidatedPromptRun.WasSelectedResult = false; // WasSelectedResult stays on the selected child, not the parent
 
     // Persist the consolidated run fire-and-forget; the finalize UPDATE chains after its INSERT via
     // the save queue. These fields are set after all the awaited parallel work, so the INSERT has long
@@ -1671,7 +1710,7 @@ export class AIPromptRunner {
    * Uses the unified buildModelVendorCandidates method to create an ordered list of candidates,
    * then selects the first one with an available API key.
    */
-  private async selectModel(
+  protected async selectModel(
     prompt: MJAIPromptEntityExtended,
     explicitModelId?: string,
     contextUser?: UserInfo,
@@ -1709,7 +1748,7 @@ export class AIPromptRunner {
         explicitModelId,
         configurationId,
         vendorId,
-        params.verbose
+        params?.verbose
       );
 
       // Track all models considered for selection info
@@ -2802,7 +2841,8 @@ export class AIPromptRunner {
     systemPromptText: string,
     startTime: Date,
     vendorId?: string,
-    modelSelectionInfo?: any
+    modelSelectionInfo?: any,
+    runType?: 'ParallelChild' | 'ParallelParent' | 'ResultSelector' | 'Single'
   ): Promise<MJAIPromptRunEntityExtended> {
     const provider: IMetadataProvider = params.provider ?? Metadata.Provider;
     const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
@@ -2982,6 +3022,10 @@ export class AIPromptRunner {
       promptRun.ValidationAttemptCount = 0; // Will be updated during execution
       promptRun.SuccessfulValidationCount = 0;
       promptRun.FinalValidationPassed = false; // Will be updated after execution
+
+      if (runType) {
+        promptRun.RunType = runType;
+      }
 
       // Persist the initial 'Running' record fire-and-forget. The ID was already assigned by
       // NewRecord() above, so callers (and the onPromptRunCreated callback) have it immediately —
@@ -5676,7 +5720,7 @@ export class AIPromptRunner {
       promptRun.TokensUsedRollup = promptRun.TokensUsed;
       promptRun.TokensCacheReadRollup = promptRun.TokensCacheRead;
       promptRun.TokensCacheWriteRollup = promptRun.TokensCacheWrite;
-      if (promptRun.Cost !== undefined) {
+      if (promptRun.RunType !== 'ParallelParent' && promptRun.Cost !== undefined) {
         promptRun.TotalCost = promptRun.Cost;
       }
 

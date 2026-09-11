@@ -476,5 +476,6 @@ export interface IParallelExecutionCoordinator {
     config: ResultSelectionConfig,
     parentPromptRunId?: string,
     cancellationToken?: AbortSignal,
+    contextUser?: UserInfo,
   ): Promise<ExecutionTaskResult | null>;
 }
