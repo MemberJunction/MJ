@@ -1,5 +1,169 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 2d14c62: Add Image, Color, and JSON to EntityField.ExtendedType. Forms render an image thumbnail (including inline base64 / data URIs) with an edit-mode upload capped at the field's MaxLength, a color swatch + hex editor, and a pretty-printed JSON textarea. Entity-viewer grid/cards/timeline key image cells off ExtendedType rather than field-name heuristics. PhotoURL, LogoURL, and ImageURL are reclassified to Image with AutoUpdateExtendedType locked so CodeGen cannot overwrite them.
+- b954812: De-duplicate the IdentityClaim `EntityRelationship` rows that `V202609091200__v6.1.x__IdentityClaim_Metadata_Tail.sql` can insert twice on a developer database.
+
+  That migration guards its four inserts on primary key. The ids it checks are the ones its authoring CodeGen run generated — but the premise of the gap it fixes is that these rows already exist on every developer database under _locally generated_ ids. There the guard finds nothing, does not fire, and inserts a second row. No unique constraint covers the natural key, so the duplicate is silent; its visible effect is a doubled related-entity tab on the four affected forms.
+
+  Forward-only cleanup keyed on `(EntityID, RelatedEntityID, RelatedEntityJoinField)`, keeping the earliest row. A fresh database has nothing to remove, so it is a no-op there.
+
+- 63bc733: Fix the polymorphic (`EntityID`/`RecordID`) soft-link dependency path, and add a canonical `RecordID` encoding API.
+
+  MJ models "a pointer to any record" as an `EntityID` + `RecordID` column pair, and `EntityField.EntityIDFieldName` has existed since the v2 baseline to declare one. It is `NULL` on every row in the system, so the code that consumes it has never run — and it did not work. This fixes the mechanism. It does **not** declare any pairs, so nothing changes at runtime until `EntityIDFieldName` is populated (see the caveat at the end).
+
+  **Defects fixed**
+  - `BuildSoftLinkDependencySQL` filtered the discriminator on the **holder** of the link rather than the entity whose dependents were being sought — it looked for `TaskLink` rows whose `EntityID` points at `TaskLink`. Both the SQL Server and PostgreSQL providers had this in the same shape.
+  - `GetRecordDependencies` returned as soon as no _hard_ foreign-key dependents were found, so the soft-link query was never built for an entity whose only dependents are polymorphic — precisely the case it exists to serve.
+  - The soft-link query compared the payload column against the bare first primary key value, but a `RecordID` column stores the field-prefixed form.
+  - String quoting was derived from the **holder's** primary key type and then applied to both the entity-ID and the record-ID literal, so an integer-keyed holder produced malformed SQL. Both literals are now always quoted, and values are escaped.
+  - Record merge repointed every dependency by writing the bare primary key value. That is correct for a foreign key and silently wrong for a `RecordID` column, which holds the field-prefixed form — it would have left pointers that resolve to nothing. The choice is now an explicit, tested seam (`ResolveMergeLinkValue`).
+  - Dependency rows mapped the dependent record's key onto the **parent** entity's primary key columns rather than the entity whose row it actually is.
+
+  **New API on `CompositeKey`**
+  - `ToRecordID()` — the canonical serialization for a polymorphic `RecordID` column. Unlike `ToConcatenatedString()` it **throws** rather than emitting a string that cannot be parsed back (a value containing the delimiter, or a null key component).
+  - `FromRecordID(entity, s)` — parses and **validates the field names and arity against the entity's primary keys**. `LoadFromConcatenatedString` cannot signal failure: given a string with no delimiter it leaves the key empty and returns normally, which is why consumers hand-roll delimiter sniffers today. The name check is also what safely rejects a legacy bare composite (`val1||val2`), which parses cleanly as a shape but names fields the entity does not have.
+  - `FromLegacyRecordID(entity, s)` — the transitional bare-value form, named so it is obviously temporary, so reading a legacy encoding is a decision at the call site rather than a guess inside the parser.
+
+  **Behavior change**
+
+  `GetRecordDependencies` now throws for an entity that is not in metadata, where it previously returned `[]`. Returning "no dependencies" for an entity we cannot resolve is indistinguishable, to a caller about to delete a record, from "this record is safe to delete".
+
+  **Not included, deliberately**
+
+  No `EntityIDFieldName` values are populated, so no polymorphic pair is declared and the soft-link path stays dormant. An audit done alongside this change found **90 write sites** across the repo that set a polymorphic payload column, of which **2** use the canonical encoding — the rest write a bare value, a comma-joined list (`CompositeKey.Values()`), a `||`-joined list, or a `Field=Value AND ...` string (`CompositeKey.ToString()`). Declaring pairs before those writers are normalized would make merge write the canonical form into columns that mostly hold bare values. Normalizing them is Layer 0 of `plans/polymorphic-foreign-keys.md`.
+
+- 2be2960: Restore FileStorageProvider create/update stored procedures so they accept SupportsSearch and RequiresOAuth again. V202608191200 regenerated those procs without the two bit columns even though the table and EntityField metadata still have them, which made mj sync push fail with "too many arguments specified".
+- b00a985: Support entity composition axes in MetadataSync and BaseEntity.
+  - Implements IsA subtype extension, authoritative/upsert collections, and embeds composition axes across sync push, pull, and validation.
+  - Adds BaseEntity.EnsureISAChild() for prospective and existing subtype child resolution.
+  - Adds entity subtype selector schema and metadata support.
+  - Wires transaction depth draining, graph rollback, authoritative collection deletion confirm gating, and cycle-protected dirty/validation checking.
+
+### Patch Changes
+
+- 197fdf8: Achieve 100% CodeGen idempotency relative to database state and eliminate metadata churn across SQL Server and PostgreSQL:
+  - **Idempotency (No-Change Runs)**: Running CodeGen against an unchanged schema produces zero diffs and zero surviving migration artifacts. The run report confirms `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`. Empty capture files are cleaned up automatically.
+  - **Minimal Blast Radius (Single-Column Changes)**: Adding a column to an entity modifies only that entity's artifacts (`__mj.ts`, specific entity zod/schema files, `generated.ts` type block, and `mjentity.form.component.*`). Sibling fields and other entities are strictly untouched.
+  - **Decision Metadata Persistence**: Categorization, display name, and form layout decisions are persisted to `metadata/entities/decisions/` and committed to version control, ensuring clean-room runs match warm runs.
+  - **Stable Form Submodule Partitioning**: Replaced array index-chunking in Angular form submodule generation with stable hash buckets of entity names, preventing unrelated form files from shifting when an entity is added or removed.
+  - **Deterministic Ordering**: Unified entity, field, and relationship sorting around `OrdinalCompare` across TypeScript and SQL, eliminating locale and database collation discrepancies.
+  - **MetadataSync Preservation**: Preserved runtime and CodeGen-managed fields during push synchronization while maintaining deterministic lookup index caching.
+  - **Description Lock Protection**: Corrected inverted `AutoUpdateDescription` logic in `MJEntityFieldEntityExtended` and `MJEntityEntityExtended` so that user edits to `Description` flip `AutoUpdateDescription` to `false`, preventing subsequent CodeGen runs from overwriting customized descriptions.
+
+- 67e4c9e: `BaseEntityResult.CompleteMessage` now renders a `ValidationErrorInfo` as its prose instead of as a JSON blob.
+
+  The getter mapped its `Errors` array with `err.message || JSON.stringify(err)` — **lowercase** `message` — while MJ's own `ValidationErrorInfo` carries **`Message`**. Every validation error therefore fell through to the JSON fallback, and `CompleteMessage` is what the server hands the client on a failed save (`ResolverBase`'s write-refusal throws put it in the `GraphQLError`; `SaveEntityGraphOperation` puts it in `ErrorMessage`). So a carefully-worded refusal written in a subclass's `ValidateAsync()` — or MJ core's own `EntityField.Validate()` — reached the user as `{"Source":"Name","Message":"Name cannot be longer than 50 characters…","Value":"…the entire rejected value…","Type":"Failure"}`.
+
+  Both readers are fixed through one shared helper, `BaseEntityResult.ErrorText()` (`Message` → `message` → JSON): the `Errors` array and the single `Error` property, which carried the same lowercase-only assumption. The JSON fallback is kept for a shape with neither field, so nothing that used to say something now says nothing.
+
+  A second, independent half of the same user-visible failure is fixed alongside it: only `ResolverBase.CreateRecord` read `CompleteMessage`. `UpdateRecord` and `DeleteRecord` read the bare `Message`, which a validation refusal leaves `null` — so the `?? 'Unknown error'` fallback fired and the reason was discarded entirely. The same rule on the same entity therefore explained itself on a create and said "Unknown error" on an update. Both now read `CompleteMessage`, which is a strict superset of `Message` and still yields `undefined` when there is nothing to say, so the fallback still fires rather than showing a blank error.
+
+- 0ec1980: Correct `.claude/rules/data-access.md` on how many record-id encodings actually exist.
+
+  The rule said "two persisted formats already exist and must not be unified", naming five columns. Those five are accurate — but the sentence reads as a claim about the whole estate, and the estate is not two formats. An audit in #4321 found 90 write sites setting a polymorphic `EntityID`/`RecordID` column, of which 2 use the canonical encoding; the rest write bare values, joined lists, `Field=Value AND …`, or strings that are not record pointers at all. One column can carry several.
+
+  The rule now separates the two _sanctioned_ formats from what the estate _contains_, and warns against assuming an arbitrary `*RecordID` column holds either — the assumption behind the soft-link defect #4321 fixes and the annotations #4330 audits. Fixes #4331.
+
+- 38d4482: Filter JSON can name fields as `Source.Field` (always written when the builder is given `sources`). Read path accepts dotted and bare names. `CompositeFilter` (`FromJSON` / `Evaluate` / `SummaryText`) lives in `@memberjunction/core` for in-memory eval and compact/grid copy. Views still compile to SQL and strip the prefix. Multi-entity field picker is a two-pane UI; single-entity views are unchanged.
+- 8d880cc: Split geo **read** (`SupportsGeoCoding`, maps, distance, virtual PrimaryAddress / `__mj_Latitude_{FK}`) from geo **write** (GeoCodeSyncService only when 1+ writable Geo\* fields exist; skip provider when native lat/lng already set). mj-sync `push.skipGeoCoding` per entity. Parallel push default 10 uses `CreateIndependentInstance()` (shared pool, own TX) instead of defaulting to 1. Durable AfterCreate without a queue submitter defers until transaction depth is 0 (fire-and-forget), not nested in the save.
+- 6485ef0: Unbreak the CodeGen drift gate — two independent CI defects, neither of which any branch could work around.
+
+  **The gate failed on its own scratch output.** Its diff step promised in a comment to ignore CodeGen's run file but only ever removed `codegen.output.log`. CodeGen writes a `CodeGen_Run_<timestamp>.sql` on every run — empty when it has nothing to emit — so that file alone made the gate unpassable at zero real drift. Both copies of the step now remove it.
+
+  **The idempotency check corrupted the first changed file's path.** `getGitStatusPorcelain` returned `stdout.trim().split('\n')`, and porcelain lines are `' M path'` with a 3-character prefix that callers strip with `substring(3)`. Trimming the whole buffer removes the leading space of the _first_ line only, so that one path loses its first character — `packages/…` became `ackages/…` — which then matches no allow-list entry. That is the `Stage single-column failed: changed files outside allow-list` failure on `next`, reporting `ackages/Angular/...`. Only the first line was ever affected, which is why it surfaced intermittently. See #4323.
+
+- 9b9e5a4: Restore the local metadata cache, which has silently not been written since 6.1.0-edge.3.
+
+  `BaseInfo.toJSON` serializes a `_`-prefixed backing field through its public getter, and since edge.3 it prefers the PascalCase getter name. That newly reaches `QueryInfo.CategoryPath`, which walks `CategoryInfo` → `Metadata.Provider.QueryCategories`. During the initial metadata load the global provider is not assigned yet, so the getter throws, `JSON.stringify` of the whole `AllMetadata` snapshot aborts, and `SaveLocalMetadataToStorage` drops the snapshot. Nothing fails visibly; every process boot (server and browser) re-reads all metadata from the database.
+
+  Two guards, each with its own regression test:
+  - `BaseInfo.toJSON` now omits a key whose getter throws instead of aborting the serialization. The method's own contract already says computed getters can throw when their sources are not ready; the value is recomputed lazily on the next access.
+  - `SaveLocalMetadataToStorage` now writes the payload first and the timestamps last. Previously the timestamps were written before the payload, so a failed save left the cache claiming freshness with no payload behind it, and `LocalMetadataObsolete()` never asked for a retry. With the timestamps last, a failed payload write leaves the previous timestamps in place and the next boot retries.
+
+- f544a93: Event-driven metadata refresh from dataset membership, and an authoritative dataset-status oracle.
+
+  **The problem.** A server process never refreshed its own in-memory metadata after a permission-bearing save it itself processed: the only trigger was the periodic `RefreshIfNeeded()` poller, and its staleness check (`GetDatasetStatusByName` Phase 1) derived each MJ_Metadata item's "remote" timestamp from the server's **own cached dataset slots** — a closed loop. A tightened field-security rule was therefore not enforced over the wire until process restart. Clients had no event-driven metadata refresh at all — a browser loaded metadata once per page load.
+
+  **The fix, in three parts:**
+  1. **Dataset-membership-driven refresh (`ProviderBase`).** When a provider loads the MJ_Metadata dataset, it records which entities compose it (`registerMetadataDatasetMembership`; persisted beside the metadata snapshot for warm boots). The existing static write-invalidation fan-out now also routes save/delete/remote-invalidate events to `handleMetadataMemberEntityEvent`: a write to any member entity schedules a refresh of the provider that owns that metadata, gated by a fail-open backend-identity check for multi-provider processes. Membership is the dataset definition itself — adding a `DatasetItem` row extends coverage with no code change, and no entity names are hardcoded anywhere. Scheduling and refresh policy are per-tier: **database providers** debounce briefly (500ms, burst-coalescing, so the enclosing transaction commits first) and hard-`Refresh()` — the writer must not trust any cache for the re-read; **`GraphQLDataProvider`** coalesces into a long randomized window (15–45s, since every browser receives every write broadcast and MJ_Metadata's members include routinely-written entities like dashboards and queries — the window caps each browser at one staleness check and at most one metadata pull per window, jittered so sessions never stampede together) and then runs the staleness check, re-pulling the graph only when genuinely stale. Single-flight guards the reload itself: a refresh request arriving mid-reload queues exactly one follow-up instead of racing a concurrent reload whose older snapshot could win the swap.
+  2. **The staleness oracle is authoritative.** `GetDatasetStatusByName` no longer derives status from cached dataset slots — status is always the batched SQL MAX/COUNT per item (the cache remains fully in play for the _data_ reads in `GetDatasetByName`), and the status query now composes the stored item `WhereClause` with the runtime filter, matching the data read (previously the SQL path ignored the stored clause).
+  3. **Throttle bypass for event-driven checks.** `CheckToSeeIfRefreshNeeded`/`RefreshIfNeeded` accept an optional `bypassMinCheckInterval`; event-driven callers hold positive evidence a member entity was written, and the 30s min-check throttle would otherwise silently drop the second of two permission changes made inside one window.
+
+  Permission changes are now enforced by the server that processed them within ~1–2 seconds (one full metadata reload per debounced burst, in the background — requests keep serving the old graph until the atomic swap) instead of not until process restart. Other server instances converge on their periodic tick, which the oracle fix makes genuinely reliable. Connected browsers converge within the client coalescing window — display freshness only; enforcement is server-side either way.
+
+- 9f73528: Nested transactions live on GenericDatabaseProvider. Depth 1 is a physical BEGIN; depth 2+ is a dialect savepoint. A savepoint error on a published handle (`ENOTBEGUN`/`EABORT`/`25P01`) throws `DoomedTransactionError` instead of opening a second physical TX (torn write). Nested begin with no physical TX is corruption. Physical hooks are abstract; `AbandonPhysicalTransaction` unpublishes on EABORT; `AfterPhysicalCommit` runs after the mutex. `TransactionDepth` moved to `@memberjunction/core` with deprecated camelCase aliases (`transactionDepth`, `savepointStack`, `inTransaction`, `inNestedTransaction`) for one release. `ResetTransactionState()` replaces poking private fields. Upgraders: read `TransactionDepth` (not a duck-typed `transactionDepth` that would be undefined).
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 98841bb: Add `BaseEntity.FieldIsDirty(name, ...more)` — boolean form of `GetFieldByName(name)?.Dirty === true`, with extra names OR'd — so call sites do not repeat the optional-chain.
+- 7f3c60c: `EntityInfo.UserExemptFromRowLevelSecurity` now requires the permission row to GRANT the operation before it can exempt the user from row-level security for it.
+
+  A permission row carries an RLS filter only for the operations it grants, so a row with `CanCreate=false` also has `CreateRLSFilterID=null`. The exemption check read that null as "unrestricted" and returned exempt. Every authenticated user holds the `UI` role, whose rows are read-only on most entities, so any user whose tenant role bound Create/Update/Delete to a row filter was silently exempt from that filter on the client (RunView/GraphQL) path: an org admin could write a record into another organization.
+
+  The check is now `ep.CanCreate && !ep.CreateRLSFilterID` (and likewise for Read/Update/Delete). A filter-less row that grants the operation still exempts, exactly as before; a row that does not grant it no longer says anything about exemption. Regression tests added to `entityInfo.rlsExemption.test.ts`.
+
+- 1748491: Search results open for entities whose primary key is not named `ID`, and round-trip composite primary keys end to end.
+
+  Clicking a universal-search result failed with `InnerLoad returned false for key ID=<value>` for any entity whose key column has another name (`individual_id`, `organization_id`, …). Every search navigation site built the key as `{ FieldName: 'ID', Value: RecordID }` or `CompositeKey.FromID(RecordID)`, and `Load()` correctly rejects a field that is not one of the entity's primary keys. MJ supports primary keys with any column name(s) and type(s), so the fix uses the entity's metadata everywhere instead of a literal.
+
+  **The contract.** A search result's `RecordID` is a _compact_ `CompositeKey` segment: the bare value for a single-column key (so `IN (...)` filters, dedup keys and persisted ids are unchanged), the full `Field1|Value1||Field2|Value2` segment for a composite key. `CompositeKey.LoadFromURLSegment(entity, s)` already reads both forms; two new statics make it the one-liner every consumer calls, and one new serializer produces it:
+  - `CompositeKey.FromURLSegment(entityInfo, recordId)` — the inverse of the compact form; falls back to an `ID` key only when the entity cannot be resolved.
+  - `CompositeKey.FromEntityRecord(entityInfo, row)` — the key from a RunView row using the entity's real primary key column(s).
+  - `FieldValueCollection.ToCompactURLSegment()` — bare value for one column, prefixed segment for several (or when a lone value itself contains `|`).
+  - `ToWhereClause()` now doubles embedded quotes, since it builds SQL from record ids that can come from an external index.
+
+  **Consumers** (`ng-explorer-core`, `ng-search`): the shell dropdown, the "See all results" page, the omnibar palette (the default search surface — not named in the report), the FK-cell "open related record" path in views and single-search-result, and the two recents name lookups all resolve the key with `FromURLSegment` against the entity's metadata.
+
+  **Producers** (`core`, `search-engine`, `ai-vectors-memory`): `EntitySearchProvider` read `record.ID`, which is `''` for these entities — `SearchFusion` drops empty ids, so the entity lane silently contributed nothing for them; it now builds the key from `PrimaryKeys`. The full-text lane, `SearchEntity`'s lexical pass and its permission filter (`ID IN (...)`, `Fields: ['ID']`), and the in-process `SimpleVectorDatabase` (`row['ID']`, `` `ID|…` ``) do the same. `VectorSearchProvider` no longer flattens a composite key to bare values joined by `||`, which nothing could parse.
+
+  **Permission filter** (`search-engine`): `verifyOwnershipAndRowFilters` verified results with `FirstPrimaryKey IN (...)`. Once composite entities emit real segments that check could never match and — it fails closed — every composite-key result would be dropped as unauthorized. Composite keys now verify with one `(F1=… AND F2=…)` term per record; single-column keys keep the `IN` fast path. Matching is on primary-key values in metadata order, UUID-normalized, so an externally indexed id still matches the row the database returns.
+
+  **Recents** (`ng-shared-generic`): `RecentAccessService` persisted `Values(',')`, which drops field names; composite keys written there could never be reopened. It now writes the compact segment. Existing single-value rows are unchanged and read back as before.
+
+  Also fixed in `core`: `EmbeddedRecord` built its parent-load key with `FromID` for a single-column key, which fails for any embedded entity whose key isn't named `ID`.
+
+- 041865c: Fix mixed-provider deadlocks on nested mj sync push (Action + Action Params).
+
+  `GetEntityObject` now always `BindProvider(this)` after construct so a 1-arg subclass (`MJActionEntityServer` et al.) cannot silently drop the graph instance and Save on the global host. Every `BaseEntity` instance RunView uses `ProviderToUse`. MetadataSync isolates one provider per JSON-root graph; it drains a graph when its last level finishes or when TransactionDepth is already 0 (Save settled — a fresh instance at the next level is safe). Leftover depth is committed on success and explicitly rolled back on failure; always release. Fail-fast on the first thrown record error. A non-throwing `status: 'error'` no longer commits. If the first CreateIndependentInstance in a file fails, every graph uses the host; if it fails after independents already exist, the file aborts — never a mix. GeoCodeSyncService writes RecordGeoCode on the owning entity's provider.
+
+- Updated dependencies [197fdf8]
+- Updated dependencies [9f73528]
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Minor Changes

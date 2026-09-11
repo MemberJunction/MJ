@@ -1,5 +1,70 @@
 # Change Log - @memberjunction/ng-code-editor
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- 51017a5: Resolve a language by its file extension when the name does not match, restoring syntax highlighting for template editors.
+
+  `_findLanguage` matched only `name` and `alias`. Several names in common use are registered by CodeMirror as extensions instead — `jinja2` is one of Jinja's (`["j2", "jinja", "jinja2"]`) while its only matchable name is `"Jinja"`. Core-entity-forms' template editors ask for `jinja2` at six call sites, so every prompt and template opened with `Language not found: jinja2` and no highlighting at all — on content that is Nunjucks, where `{{ }}` and `{% %}` are most of what you are reading.
+
+  Deliberately a fallback rather than part of the main loop: it runs only when nothing matched by name or alias, so it can turn a miss into a hit but can never change a match that already resolved. That matters because short extensions (`r`, `md`, `ts`) could otherwise outrank another language's real name.
+
+  Covered by `ng-code-editor.language.dom.test.ts`, which pins that ordering (`r` resolves to R and `html` to HTML, both of which also appear among other languages' extensions) alongside the `jinja2` case itself.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b915983]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ng-base-types@6.1.0-edge.6
+  - @memberjunction/ng-container-directives@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes
