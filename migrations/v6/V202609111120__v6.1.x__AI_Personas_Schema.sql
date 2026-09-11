@@ -7184,13 +7184,22 @@ IF NOT EXISTS (
          SET [DefaultForNewUser] = 1, [__mj_UpdatedAt] = GETUTCDATE()
          WHERE [EntityID] = '635C7C9A-7BBB-4836-AA19-3E54963E2821';
 
-/* Set categories for 16 fields */
+/* Set categories for 17 fields */
+
+-- UPDATE Entity Field Category Info MJ: AI Personas.ID 
+UPDATE [${flyway:defaultSchema}].[EntityField]
+SET 
+   Category = 'System Metadata',
+   GeneratedFormSection = 'Category'
+WHERE 
+   ID = 'F7B0C681-1B1C-46C4-9F05-988A5EF1BCC0';
 
 -- UPDATE Entity Field Category Info MJ: AI Personas.Name 
 UPDATE [${flyway:defaultSchema}].[EntityField]
 SET 
    Category = 'Persona Identity',
-   GeneratedFormSection = 'Category'
+   GeneratedFormSection = 'Category',
+   DisplayName = 'Persona Name'
 WHERE 
    ID = '23D2B51A-BBBF-475D-B8C4-C76C8AEE8EAC';
 
