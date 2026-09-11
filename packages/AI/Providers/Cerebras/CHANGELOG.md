@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/ai-cerebras
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 2a14c26: Cerebras: narrow the non-streaming response to the SDK's non-streaming union member.
+
+  `ChatCompletion` is exported as a union of the non-streaming response, a chunk response and an error
+  chunk. Only the first carries `choices`, `usage` and `model`, so holding the bare union makes those
+  three reads fail to compile.
+
+  Not a current break. The lockfile resolves `@cerebras/cerebras_cloud_sdk` to 1.64.1, where the type
+  is not yet a union, so the package builds clean today. The declared range is `^1.64.1`, which admits
+  1.91.0 — where it is — so this surfaces for anyone installing fresh outside the lockfile, and becomes
+  CI's the moment the lockfile is refreshed. The method is `nonStreamingChatCompletion`, so the
+  narrowing is correct by construction and the cast is erased at runtime.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [197fdf8]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes
