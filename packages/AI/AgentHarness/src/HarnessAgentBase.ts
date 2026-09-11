@@ -2,12 +2,11 @@ import { MJGlobal, RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { BaseAgent } from '@memberjunction/ai-agents';
 import { TemplateEngineServer } from '@memberjunction/templates';
-import { AIPromptParams, AIPromptRunResult } from '@memberjunction/ai-core-plus';
+import { AIPromptParams, AIPromptRunResult, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { ChatResult, ModelUsage } from '@memberjunction/ai';
 import {
     MJAIAgentHarnessEntity,
     MJAIAgentCredentialEntity,
-    MJAIPromptRunEntity,
     MJCredentialEntity,
 } from '@memberjunction/core-entities';
 import { BaseHarnessAdapter } from './adapters/BaseHarnessAdapter.js';
@@ -346,7 +345,7 @@ export class HarnessAgentBase extends BaseAgent {
         turn: HarnessTurnResult,
         startTime: Date,
         input: string,
-    ): Promise<MJAIPromptRunEntity | undefined> {
+    ): Promise<MJAIPromptRunEntityExtended | undefined> {
         try {
             const ids = await this.resolveAccountingIds(promptParams);
             if (!ids) {
@@ -359,12 +358,14 @@ export class HarnessAgentBase extends BaseAgent {
             }
 
             const md = this.ProviderToUse;
-            const run = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', promptParams.contextUser);
+            const run = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', promptParams.contextUser);
             run.NewRecord();
             run.PromptID = ids.PromptID;
             run.ModelID = (await this.resolveReportedModelId(turn.ReportedModel, promptParams)) ?? ids.ModelID;
             run.VendorID = ids.VendorID;
             run.AgentID = this._agentRunAgentId();
+            run.AgentRunID = promptParams.agentRunId ?? this.AgentRun?.ID ?? null;
+            run.UserID = promptParams.userId ?? this.AgentRun?.UserID ?? promptParams.contextUser?.ID ?? null;
             run.RunAt = startTime;
             run.CompletedAt = new Date();
             run.Success = !turn.ErrorMessage;
@@ -845,7 +846,7 @@ export class HarnessAgentBase extends BaseAgent {
     /** Shapes a harness turn as the prompt result the rest of BaseAgent expects. */
     private buildPromptResult(
         turn: HarnessTurnResult,
-        promptRun: MJAIPromptRunEntity | undefined,
+        promptRun: MJAIPromptRunEntityExtended | undefined,
         startTime: Date,
     ): AIPromptRunResult {
         const endTime = new Date();

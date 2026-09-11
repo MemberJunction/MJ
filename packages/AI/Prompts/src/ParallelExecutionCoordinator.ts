@@ -785,6 +785,10 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         },
       ];
 
+      const agentId = results[0]?.task?.agentId;
+      const agentRunId = results[0]?.task?.agentRunId;
+      const userId = results[0]?.task?.userId ?? user?.ID;
+
       // Create a ResultSelector prompt run log entry if parent ID is provided
       let resultSelectorPromptRun: MJAIPromptRunEntityExtended | null = null;
       if (parentPromptRunId) {
@@ -796,6 +800,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
           user,
           judgeModelId,
           judgeVendorId,
+          agentId,
+          agentRunId,
+          userId,
         );
       }
 
@@ -809,6 +816,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         conversationMessages,
         contextUser: user,
         provider: this.Provider,
+        agentId,
+        agentRunId,
+        userId,
       });
 
       const judgeEndTime = Date.now();
@@ -1061,6 +1071,11 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       promptRun.PromptID = task.prompt.ID;
       promptRun.ModelID = task.model.ID;
+      if (task.agentId) {
+        promptRun.AgentID = task.agentId;
+      }
+      promptRun.AgentRunID = task.agentRunId ?? null;
+      promptRun.UserID = task.userId ?? task.contextUser?.ID ?? null;
       promptRun.RunAt = startTime;
       promptRun.RunType = 'ParallelChild';
       promptRun.ParentID = parentPromptRunId;
@@ -1170,6 +1185,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
     contextUser?: UserInfo,
     modelId?: string,
     vendorId?: string,
+    agentId?: string,
+    agentRunId?: string,
+    userId?: string,
   ): Promise<MJAIPromptRunEntityExtended> {
     try {
       const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', contextUser);
@@ -1182,6 +1200,11 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
       if (vendorId) {
         promptRun.VendorID = vendorId;
       }
+      if (agentId) {
+        promptRun.AgentID = agentId;
+      }
+      promptRun.AgentRunID = agentRunId ?? null;
+      promptRun.UserID = userId ?? contextUser?.ID ?? null;
       promptRun.RunAt = new Date();
       promptRun.RunType = 'ResultSelector';
       promptRun.ParentID = parentPromptRunId;

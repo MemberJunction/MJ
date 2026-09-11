@@ -41,6 +41,26 @@ export class MJAIPromptRunEntityExtended extends MJAIPromptRunEntity {
      * it is serialized into the ValidationSummary JSON field.
      */
     public _jsonRepairInfo: JSONRepairInfo | null = null;
+
+    /**
+     * If this prompt run was executed as part of an AI agent run, references that agent run.
+     */
+    public get AgentRunID(): string | null {
+        return this.Get('AgentRunID');
+    }
+    public set AgentRunID(value: string | null) {
+        this.Set('AgentRunID', value);
+    }
+
+    /**
+     * The user on whose behalf this prompt was executed.
+     */
+    public get UserID(): string | null {
+        return this.Get('UserID');
+    }
+    public set UserID(value: string | null) {
+        this.Set('UserID', value);
+    }
     
     /**
      * Parses and extracts all message data from the Messages field.

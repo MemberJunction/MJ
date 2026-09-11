@@ -1139,6 +1139,12 @@ export class AIPromptRunner {
       throw new Error(`No execution tasks created for parallel execution of prompt ${prompt.Name}`);
     }
 
+    for (const task of executionTasks) {
+      task.agentId = params.agentId;
+      task.agentRunId = params.agentRunId;
+      task.userId = params.userId ?? params.contextUser?.ID;
+    }
+
     // Check for cancellation before executing tasks
     if (params.cancellationToken?.aborted) {
       throw new Error('Parallel execution was cancelled before task execution');
@@ -2857,6 +2863,8 @@ export class AIPromptRunner {
       if (params.agentId) {
         promptRun.AgentID = params.agentId;
       }
+      promptRun.AgentRunID = params.agentRunId ?? null;
+      promptRun.UserID = params.userId ?? params.contextUser?.ID ?? null;
 
       // Set ChildPromptID if this is a hierarchical execution with child prompts
       if (params.childPrompts && params.childPrompts.length > 0) {
@@ -5308,7 +5316,10 @@ export class AIPromptRunner {
             ERROR_MESSAGE: trueError,
             MALFORMED_JSON: rawOutput
           },
-          skipValidation: true // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
+          skipValidation: true, // don't want to validate as this would cause recursive infinity scenario if the JSON is invalid. Just one shot, fix or no fix
+          agentId: params.agentId,
+          agentRunId: params.agentRunId,
+          userId: params.userId ?? params.contextUser?.ID,
         });
         
         if (!repairResult.success || !repairResult.result) {

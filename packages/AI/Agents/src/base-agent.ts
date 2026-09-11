@@ -2193,6 +2193,8 @@ export class BaseAgent {
             promptRun.ModelID = modelResolution.modelID;
             promptRun.VendorID = modelResolution.vendorID || null;
             promptRun.AgentID = params.agent.ID;
+            promptRun.AgentRunID = this._agentRun?.ID ?? null;
+            promptRun.UserID = this._agentRun?.UserID ?? params.userId ?? params.contextUser?.ID ?? null;
             promptRun.Status = 'Running';
             promptRun.RunAt = new Date();
             promptRun.StreamingEnabled = true;
@@ -3617,6 +3619,8 @@ export class BaseAgent {
         // Attribute the resulting AIPromptRun to this agent. Agents share agent-type-level system
         // prompts, so without this a parent's inference and its sub-agent's are indistinguishable.
         promptParams.agentId = params.agent.ID;
+        promptParams.agentRunId = this._agentRun?.ID;
+        promptParams.userId = this._agentRun?.UserID ?? params.userId ?? params.contextUser?.ID;
 
         // Handle case where systemPrompt is optional (e.g., Flow Agent Type)
         if (systemPrompt) {
@@ -6048,6 +6052,8 @@ The context is now within limits. Please retry your request with the recovered c
                 promptParams.data = { lens, messages: rangeText };
                 promptParams.contextUser = params.contextUser;
                 promptParams.agentId = params.agent.ID;
+                promptParams.agentRunId = this._agentRun?.ID;
+                promptParams.userId = this._agentRun?.UserID ?? params.userId ?? params.contextUser?.ID;
                 const result = await this._promptRunner.ExecutePrompt<string>(promptParams);
                 const text = ExtractPromptResultText(result);
                 if (!result.success || text.length === 0) {
@@ -14596,6 +14602,8 @@ The context is now within limits. Please retry your request with the recovered c
                     };
                     promptParams.contextUser = params.contextUser;
                     promptParams.agentId = params.agent.ID;
+                    promptParams.agentRunId = this._agentRun?.ID;
+                    promptParams.userId = this._agentRun?.UserID ?? params.userId ?? params.contextUser?.ID;
 
                     const runner = new AIPromptRunner();
                     const result = await runner.ExecutePrompt<{ summary: string }>(promptParams);

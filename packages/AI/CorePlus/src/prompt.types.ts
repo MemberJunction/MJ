@@ -763,6 +763,18 @@ export class AIPromptParams {
   agentId?: string;
 
   /**
+   * Attribution only; never used for behaviour. If this prompt was executed as part
+   * of an AI agent run, references that agent run (`AIPromptRun.AgentRunID`).
+   */
+  agentRunId?: string;
+
+  /**
+   * Attribution only; never used for behaviour. The user on whose behalf this prompt
+   * was executed (`AIPromptRun.UserID`). If omitted, falls back to contextUser?.ID.
+   */
+  userId?: string;
+
+  /**
    * Optional file artifacts that may be attached as native content blocks
    * when the resolved LLM driver supports the file's MIME type natively.
    *

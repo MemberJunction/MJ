@@ -65,6 +65,15 @@ export interface ExecutionTask {
 
   /** Selected vendor ID for this execution */
   vendorId?: string;
+
+  /** ID of the agent this prompt was run as part of */
+  agentId?: string;
+
+  /** ID of the agent run this prompt was run as part of */
+  agentRunId?: string;
+
+  /** User ID on whose behalf this prompt was executed */
+  userId?: string;
 }
 
 /**
