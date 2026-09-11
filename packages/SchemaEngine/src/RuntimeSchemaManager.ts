@@ -157,6 +157,21 @@ export interface RSUPipelineInput {
    * User context used for the durable PendingWork writes. Required when PendingWork is set.
    */
   ContextUser?: UserInfo;
+
+  /**
+   * The connection this schema change belongs to.
+   *
+   * This is the run's IDENTITY, not a label: an RSU run artifact is only readable over the API by
+   * callers authorized for the connections it touched, and without this the pipeline has no way to
+   * tell an observer whose run it is (see {@link RSUObserverEvent} `run.start`). A run with no
+   * connection identity at all stays unreadable through the per-connection endpoints — which is
+   * exactly what used to happen to EVERY RSU run.
+   *
+   * Optional because a caller with no post-restart work may omit it; when it is absent the
+   * identity falls back to {@link PendingWork}'s `CompanyIntegrationID`, which every production
+   * caller supplies today. See {@link RuntimeSchemaManager.CollectCompanyIntegrationIDs}.
+   */
+  CompanyIntegrationID?: string;
 }
 
 /**
@@ -199,6 +214,17 @@ export type RSUObserverEvent =
       AffectedTables: string[];
       /** Expected total steps for the run — the denominator of a determinate progress bar. */
       StepTotal: number;
+      /**
+       * Every connection this batch touches, de-duplicated, in input order.
+       *
+       * Carries the run's IDENTITY to the observer. Without it a run artifact has no connection on
+       * it, the per-connection authorization check has nothing to test, and the run is unreadable
+       * over the API — which is what happened to every RSU run before this field existed. May hold
+       * more than one id: a batch legitimately spans connections. May be EMPTY, for a caller that
+       * supplied neither `CompanyIntegrationID` nor `PendingWork`; such a run stays unreadable
+       * through the per-connection endpoints, which is the conservative outcome.
+       */
+      CompanyIntegrationIDs: string[];
     }
   | { Kind: 'step.start'; Name: string; StepIndex?: number; StepTotal?: number }
   | {
@@ -209,6 +235,35 @@ export type RSUObserverEvent =
       Message: string;
       StepIndex?: number;
       StepTotal?: number;
+    }
+  | {
+      /**
+       * The process is about to be killed by its own pipeline.
+       *
+       * Emitted immediately BEFORE the `RestartMJAPI` step, because `RestartMJAPI` never produces a
+       * `step.end`: pm2 kills this process inside it, so `runStep`'s completion path — and the
+       * `run.end` after it — are unreachable. Without this event the stream simply stops at
+       * `step.start RestartMJAPI` and the run is flagged in-flight forever.
+       *
+       * This is the ONE event the pipeline AWAITS (see {@link RSUPipelineObserver}), because an
+       * observer that writes it asynchronously would be racing the kill signal.
+       */
+      Kind: 'restart.pending';
+      /** Steps that will run in the NEXT process, in order. */
+      RemainingSteps: string[];
+      /** 1-based position of `RestartMJAPI` in the executed sequence, for the determinate stepper. */
+      StepIndex?: number;
+      /** Expected total steps for the run, INCLUDING the post-restart ones. */
+      StepTotal?: number;
+      /** Connections whose post-restart work is queued. Same set as `run.start`, restated so a
+       *  post-restart consumer can correlate from the checkpoint alone. */
+      CompanyIntegrationIDs: string[];
+      /** Durable pending-work row IDs registered for this run, for the same correlation. */
+      PendingWorkIDs: string[];
+      /** Migrations attempted in this batch. */
+      TotalCount: number;
+      /** Migrations that succeeded and therefore have post-restart work queued. */
+      SuccessCount: number;
     }
   | {
       Kind: 'run.end';
@@ -225,11 +280,14 @@ export type RSUObserverEvent =
 /**
  * Receives {@link RSUObserverEvent}s for every RSU pipeline run in this process.
  *
- * Synchronous and fire-and-forget by contract: the pipeline never awaits an observer and never
- * fails because one threw. A throw is logged and swallowed — progress reporting must not be able
- * to break a schema migration.
+ * Fire-and-forget by contract: the pipeline never fails because an observer threw. A throw is
+ * logged and swallowed — progress reporting must not be able to break a schema migration.
+ *
+ * An observer MAY return a promise. It is ignored for every event except `restart.pending`, which
+ * the pipeline awaits (bounded — see {@link RuntimeSchemaManager.OBSERVER_DURABLE_TIMEOUT_MS})
+ * because the process is about to be killed and an unflushed write would simply be lost.
  */
-export type RSUPipelineObserver = (event: RSUObserverEvent) => void;
+export type RSUPipelineObserver = (event: RSUObserverEvent) => void | Promise<void>;
 
 /**
  * Result of a full RSU pipeline run.
@@ -921,7 +979,48 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   private static readonly EXPECTED_STEPS_SHARED_PRE = ['ValidateEnvironment', 'ValidateSQL', 'AcquireLock'] as const;
   private static readonly EXPECTED_STEPS_PER_ITEM = ['WriteMigrationFile', 'ExecuteMigration'] as const;
-  private static readonly EXPECTED_STEPS_SHARED_POST = ['WriteAdditionalSchemaInfo', 'RunCodeGen', 'CompileTypeScript', 'GitCommitAndPR', 'RestartMJAPI'] as const;
+  private static readonly EXPECTED_STEPS_SHARED_POST = [
+    'WriteAdditionalSchemaInfo',
+    'RunCodeGen',
+    'CompileTypeScript',
+    'GitCommitAndPR',
+    'RestartMJAPI',
+  ] as const;
+
+  /**
+   * The steps that run AFTER the pipeline restarts the API on itself, in order.
+   *
+   * They belong to the same run — the setup journey the user is watching is not finished until the
+   * sync starts — but they execute in a DIFFERENT PROCESS, so nothing in this class ever runs them.
+   * They are declared here because this is where the run's shape is defined: they count towards
+   * {@link ExpectedStepTotal}, so the determinate progress bar does not reach 100% and then sit
+   * there while the connector is still not live, and they are named here so the post-restart
+   * consumer and this pipeline cannot drift apart on what the remaining steps are called.
+   */
+  public static readonly EXPECTED_STEPS_POST_RESTART = ['CreateEntityMaps', 'StartSync'] as const;
+
+  /**
+   * The full expected step sequence for a batch of `itemCount` migrations, in execution order —
+   * including the two that run after the restart.
+   *
+   * Public and static so the arithmetic is directly assertable without a live pipeline; the number
+   * it produces is the denominator every progress UI divides by.
+   */
+  public static ExpectedSteps(itemCount: number): string[] {
+    const perItem: string[] = [];
+    for (let i = 0; i < itemCount; i++) perItem.push(...RuntimeSchemaManager.EXPECTED_STEPS_PER_ITEM);
+    return [
+      ...RuntimeSchemaManager.EXPECTED_STEPS_SHARED_PRE,
+      ...perItem,
+      ...RuntimeSchemaManager.EXPECTED_STEPS_SHARED_POST,
+      ...RuntimeSchemaManager.EXPECTED_STEPS_POST_RESTART,
+    ];
+  }
+
+  /** Expected total steps for a batch of `itemCount` migrations. See {@link ExpectedSteps}. */
+  public static ExpectedStepTotal(itemCount: number): number {
+    return RuntimeSchemaManager.ExpectedSteps(itemCount).length;
+  }
 
   private _currentStepName: string | null = null;
   private _currentStepIndex: number | null = null;
@@ -931,10 +1030,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
   private beginStepTracking(itemCount: number): void {
     this._currentStepIndex = 0;
     this._currentStepName = null;
-    this._stepTotal =
-      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_PRE.length +
-      itemCount * RuntimeSchemaManager.EXPECTED_STEPS_PER_ITEM.length +
-      RuntimeSchemaManager.EXPECTED_STEPS_SHARED_POST.length;
+    this._stepTotal = RuntimeSchemaManager.ExpectedStepTotal(itemCount);
   }
 
   /** Clears the U11 step counter when the run finishes (status returns to idle). */
@@ -954,16 +1050,96 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
    */
   public PipelineObserver: RSUPipelineObserver | null = null;
 
+  /**
+   * How long the pipeline will wait for an observer to make a `restart.pending` event durable.
+   *
+   * Bounded on purpose. The wait exists because the process is seconds from being killed, but an
+   * observer that hangs must not wedge a schema migration — the invariant "progress reporting can
+   * never break a migration" outranks the checkpoint. Five seconds is orders of magnitude more than
+   * appending a few lines to a local file needs, and far less than the restart path's own timeouts.
+   */
+  public static readonly OBSERVER_DURABLE_TIMEOUT_MS = 5_000;
+
   /** Delivers an event to {@link PipelineObserver}, swallowing (but logging) any throw. */
   private notifyObserver(event: RSUObserverEvent): void {
     const observer = this.PipelineObserver;
     if (!observer) return;
     try {
-      observer(event);
+      const maybePromise = observer(event);
+      // An observer may return a promise; for every event but `restart.pending` we do not wait on
+      // it. Attach a catch so a rejection is logged rather than surfacing as an unhandled rejection
+      // (which, depending on the Node flags, can take the process down mid-migration).
+      if (maybePromise && typeof maybePromise.then === 'function') {
+        void maybePromise.catch((error: unknown) =>
+          this.rsuLog(`Pipeline observer rejected on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`)
+        );
+      }
     } catch (error: unknown) {
       // Progress reporting must never break a schema migration.
       this.rsuLog(`Pipeline observer threw on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Delivers an event and WAITS for the observer to finish with it, bounded by
+   * {@link OBSERVER_DURABLE_TIMEOUT_MS}. Used for exactly one event: `restart.pending`.
+   *
+   * The ordinary fire-and-forget path is wrong there. The observer's durable write is asynchronous,
+   * and the very next thing the pipeline does is issue a command that kills this process — so a
+   * queued-but-unflushed checkpoint is simply lost, and the whole point of the checkpoint is that it
+   * survives the kill. Errors and timeouts are swallowed exactly as they are on the sync path.
+   */
+  private async notifyObserverDurable(event: RSUObserverEvent): Promise<void> {
+    const observer = this.PipelineObserver;
+    if (!observer) return;
+    try {
+      const maybePromise = observer(event);
+      if (!maybePromise || typeof maybePromise.then !== 'function') return;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeout = new Promise<void>((resolve) => {
+        timer = setTimeout(() => {
+          this.rsuLog(`Pipeline observer did not settle ${event.Kind} within ${RuntimeSchemaManager.OBSERVER_DURABLE_TIMEOUT_MS}ms — continuing`);
+          resolve();
+        }, RuntimeSchemaManager.OBSERVER_DURABLE_TIMEOUT_MS);
+        timer.unref?.();
+      });
+      try {
+        await Promise.race([maybePromise, timeout]);
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    } catch (error: unknown) {
+      this.rsuLog(`Pipeline observer failed on ${event.Kind} (ignored): ${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  /**
+   * The de-duplicated set of connections a batch touches, in input order.
+   *
+   * Resolution order per input: the explicit {@link RSUPipelineInput.CompanyIntegrationID} first,
+   * then the `CompanyIntegrationID` of any {@link RSUPipelineInput.PendingWork} entry. The fallback
+   * is not a convenience — it is the compatibility path that gives EVERY production caller today an
+   * identity without changing a single call site, because every one of them registers post-restart
+   * work against a connection. An input with neither contributes nothing, and a batch where no
+   * input has either yields an empty set: that run stays unreadable through the per-connection
+   * endpoints, which is the conservative answer, not a bug.
+   *
+   * Public and static so the identity rule is assertable on its own.
+   */
+  public static CollectCompanyIntegrationIDs(inputs: RSUPipelineInput[]): string[] {
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+    const add = (id: string | undefined | null): void => {
+      if (!id) return;
+      if (seen.has(id)) return;
+      seen.add(id);
+      ordered.push(id);
+    };
+    for (const input of inputs) {
+      add(input.CompanyIntegrationID);
+      for (const work of input.PendingWork ?? []) add(work.CompanyIntegrationID);
+    }
+    return ordered;
   }
 
   /**
@@ -1071,6 +1247,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
       Descriptions: inputs.map((i) => i.Description),
       AffectedTables: [...new Set(inputs.flatMap((i) => i.AffectedTables))],
       StepTotal: this._stepTotal ?? 0,
+      CompanyIntegrationIDs: RuntimeSchemaManager.CollectCompanyIntegrationIDs(inputs),
     });
 
     // Captured so the `finally` can publish the terminal run boundary on EVERY exit path —
@@ -1223,6 +1400,22 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
     // Restart LAST — PM2 restart kills this process, nothing runs after this
     if (!inputs.every((i) => i.SkipRestart)) {
+      // Publish the restart boundary BEFORE issuing it. `runStep('RestartMJAPI', ...)` will emit a
+      // step.start and then never emit a step.end, because pm2 kills us inside restartMJAPI() — so
+      // this is the last chance to tell an observer that the pipeline reached the restart in good
+      // order, and to hand the process on the other side what it needs to pick the run back up.
+      // Awaited (not fire-and-forget) precisely because we are about to be killed.
+      await this.notifyObserverDurable({
+        Kind: 'restart.pending',
+        RemainingSteps: [...RuntimeSchemaManager.EXPECTED_STEPS_POST_RESTART],
+        // +1: the RestartMJAPI step is issued next and its own increment happens inside runStep.
+        StepIndex: this._currentStepIndex === null ? undefined : this._currentStepIndex + 1,
+        StepTotal: this._stepTotal ?? undefined,
+        CompanyIntegrationIDs: RuntimeSchemaManager.CollectCompanyIntegrationIDs(successfulInputs),
+        PendingWorkIDs: [...new Set([...(result.PendingWorkIDs?.values() ?? [])].flat())],
+        TotalCount: inputs.length,
+        SuccessCount: successfulItems.length,
+      });
       const restartOk = await this.runStep('RestartMJAPI', () => this.restartMJAPI(), sharedSteps);
       if (restartOk) result.ApiRestarted = true;
     }
