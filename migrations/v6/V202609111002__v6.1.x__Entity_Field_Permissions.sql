@@ -142,136 +142,34 @@ EXEC sp_addextendedproperty
 GO
 
 -- ============================================================================
--- spDeleteUnneededEntityFields — teach CodeGen's field-retirement proc about
--- EntityFieldPermission
+-- Retiring a field takes its permission rows with it — via the FK, deliberately
 -- ============================================================================
--- CodeGen retires EntityField rows for columns that have left an entity's BASE VIEW, through
--- this proc. It does raw DML rather than going through the entity layer, so neither a
--- BaseEntity subclass nor Entity.CascadeDeletes can clean up the new child table ahead of it —
--- the DELETE simply fails on FK_EntityFieldPermission_EntityField, and CodeGen's whole
--- metadata-sync phase reports failure for any field-security-enabled entity that loses a column.
+-- CodeGen retires EntityField rows for columns that have left an entity's BASE VIEW, using
+-- __mj.spDeleteUnneededEntityFields. That proc does raw DML rather than going through the entity
+-- layer, so no BaseEntity subclass and no Entity.CascadeDeletes setting can clear the new child
+-- table ahead of it.
 --
--- Reproduced verbatim from the CURRENT definition of this proc —
--- V202608260829__v6.1.x__Heal_SPs_IncludedSchemaNames — with ONE addition: the
--- EntityFieldPermission delete, placed alongside the EntityFieldValue delete it mirrors.
--- Everything else is unchanged.
+-- FK_EntityFieldPermission_EntityField is declared ON DELETE CASCADE above, and that is what makes
+-- the DELETE succeed: the permission rows go with the field, and a rule about a column that no
+-- longer exists is meaningless anyway.
 --
--- RE-BASE THIS IF THE PROC CHANGES UPSTREAM. Because this migration re-creates the whole proc and
--- sorts after everything on `next`, its copy is the definition that survives — so a copy taken
--- from a stale source silently REVERTS whatever landed in between. That already happened once:
--- this block was originally lifted from the v5.46 baseline, which predates the heal above, and it
--- dropped the proc's `@IncludedSchemaNames` parameter. CodeGen only sends that argument when
--- `configInfo.includeSchemas` is non-empty, so the loss was invisible on any database without it
--- configured and would have failed CodeGen outright on one with it.
+-- This migration deliberately does NOT redefine spDeleteUnneededEntityFields to delete those rows
+-- explicitly. An earlier revision did, purely so a reader would find both child-table cleanups in
+-- one place, and that was a mistake twice over:
+--
+--   1. check-migration-no-prune.mjs forbids that proc in any versioned or baseline migration. It
+--      reconciles EntityField against the views visible AT THE MOMENT IT RUNS, so on a clean replay
+--      it executes against an intermediate schema and deletes fields that later migrations are
+--      about to need. It has to stay live-CodeGen-only.
+--   2. Re-creating a shared proc from a migration that sorts last means this copy WINS. The copy
+--      here was taken from the v5.46 baseline and silently reverted
+--      V202608260829__v6.1.x__Heal_SPs_IncludedSchemaNames, dropping the proc's
+--      @IncludedSchemaNames parameter. CodeGen only sends that argument when
+--      configInfo.includeSchemas is set, so the loss was invisible on a default config and failed
+--      CodeGen outright on one that used it.
+--
+-- If the cascade ever needs to become explicit, do it in the proc's own home — not here.
 -- ============================================================================
-CREATE OR ALTER PROC [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
-    @ExcludedSchemaNames NVARCHAR(MAX),
-    @EntityIDs NVARCHAR(MAX) = NULL,
-    @IncludedSchemaNames NVARCHAR(MAX) = NULL
-AS
-SET NOCOUNT ON;
-
-IF OBJECT_ID('tempdb..#ef_spDeleteUnneededEntityFields') IS NOT NULL
-    DROP TABLE #ef_spDeleteUnneededEntityFields
-IF OBJECT_ID('tempdb..#actual_spDeleteUnneededEntityFields') IS NOT NULL
-    DROP TABLE #actual_spDeleteUnneededEntityFields
-IF OBJECT_ID('tempdb..#DeletedFields') IS NOT NULL
-    DROP TABLE #DeletedFields
-
-DECLARE @ScopedEntityIDs TABLE (EntityID UNIQUEIDENTIFIER PRIMARY KEY);
-DECLARE @IsScoped BIT = 0;
-IF @EntityIDs IS NOT NULL AND LEN(@EntityIDs) > 0
-BEGIN
-    INSERT INTO @ScopedEntityIDs (EntityID)
-    SELECT DISTINCT TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value)))
-    FROM STRING_SPLIT(@EntityIDs, ',')
-    WHERE LTRIM(RTRIM(value)) <> ''
-      AND TRY_CONVERT(UNIQUEIDENTIFIER, LTRIM(RTRIM(value))) IS NOT NULL;
-    IF EXISTS (SELECT 1 FROM @ScopedEntityIDs) SET @IsScoped = 1;
-END
-
-DECLARE @IncludedSchemas TABLE (SchemaName NVARCHAR(255) PRIMARY KEY);
-DECLARE @HasInclude BIT = 0;
-IF @IncludedSchemaNames IS NOT NULL AND LEN(LTRIM(RTRIM(@IncludedSchemaNames))) > 0
-BEGIN
-    INSERT INTO @IncludedSchemas (SchemaName)
-    SELECT DISTINCT TRIM(value)
-    FROM STRING_SPLIT(@IncludedSchemaNames, ',')
-    WHERE TRIM(value) <> '';
-    IF EXISTS (SELECT 1 FROM @IncludedSchemas) SET @HasInclude = 1;
-END
-
-SELECT
-    ef.*
-INTO
-    #ef_spDeleteUnneededEntityFields
-FROM
-    vwEntityFields ef
-INNER JOIN
-    vwEntities e
-ON
-    ef.EntityID = e.ID
-LEFT JOIN
-    STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
-ON
-    e.SchemaName = excludedSchemas.value
-WHERE
-    e.VirtualEntity = 0 AND
-    e.ExternalDataSourceID IS NULL AND
-    excludedSchemas.value IS NULL AND
-    (@HasInclude = 0 OR e.SchemaName IN (SELECT SchemaName FROM @IncludedSchemas)) AND
-    (@IsScoped = 0 OR ef.EntityID IN (SELECT EntityID FROM @ScopedEntityIDs))
-
-SELECT *
-INTO #actual_spDeleteUnneededEntityFields
-FROM vwSQLColumnsAndEntityFields
-WHERE @IsScoped = 0 OR EntityID IN (SELECT EntityID FROM @ScopedEntityIDs)
-
-SELECT ef.* INTO #DeletedFields
-    FROM
-      #ef_spDeleteUnneededEntityFields ef
-    LEFT JOIN
-      #actual_spDeleteUnneededEntityFields actual
-      ON
-      ef.EntityID=actual.EntityID AND
-      ef.Name = actual.EntityFieldName
-    WHERE
-      actual.column_id IS NULL
-
-UPDATE ${flyway:defaultSchema}.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
-(
-  SELECT DISTINCT EntityID FROM #DeletedFields
-)
-
-DELETE FROM ${flyway:defaultSchema}.EntityFieldValue WHERE EntityFieldID IN (
-  SELECT ID FROM #DeletedFields
-)
-
--- and the field-level security rules for those fields. A rule about a column that no longer
--- exists is meaningless, and FK_EntityFieldPermission_EntityField would otherwise block the
--- EntityField delete below -- which is what happens on any field-security-enabled entity that
--- loses a column from its BASE VIEW (a dropped column, a dropped foreign key taking its joined
--- display column with it, or a custom view narrowed to stop selecting one).
---
--- The FK is also ON DELETE CASCADE, so this statement is not what makes the delete succeed. It
--- is here because this proc already states its child-table cleanup explicitly for
--- EntityFieldValue, and a reader working out what happens to a retired field should find both
--- answers in the same place rather than one here and one in a constraint definition.
-DELETE FROM ${flyway:defaultSchema}.EntityFieldPermission WHERE EntityFieldID IN (
-  SELECT ID FROM #DeletedFields
-)
-
-DELETE FROM ${flyway:defaultSchema}.EntityField WHERE ID IN
-(
-  SELECT ID FROM #DeletedFields
-)
-
-SELECT * FROM #DeletedFields
-
-DROP TABLE #ef_spDeleteUnneededEntityFields
-DROP TABLE #actual_spDeleteUnneededEntityFields
-DROP TABLE #DeletedFields
-GO
 GO
 
 
