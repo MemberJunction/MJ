@@ -178,3 +178,4 @@ export { BuildCatalogWriter, GlobalCatalogSourceOverride, ResolveCatalogSource }
 export type { CatalogSource } from './CatalogSource.js';
 export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
 export type { CatalogWriter } from './CatalogWriter.js';
+export * from './ResourcePressure.js';

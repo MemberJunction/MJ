@@ -46,6 +46,7 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
+import { ReadResourcePressure, EvaluatePressure } from './ResourcePressure.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
 import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
@@ -1852,6 +1853,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const totalMaps = config.entityMaps.length;
         let globalIndex = 0;
+        /** Pressure codes already reported on this run, so each is said once and not per map. */
+        const pressureWarned = new Set<string>();
 
         // Per-map processing. Extracted so it can run sequentially OR concurrently within a
         // dependency layer. Aggregate mutations run when each promise resolves — atomic under
@@ -1874,6 +1877,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
                 this.MergeResult(aggregate, mapResult);
+                await this.warnOnResourcePressure(logger, pressureWarned);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
                 logger?.emit('sync.entity-map.complete', {
                     externalObjectName: entityMap.ExternalObjectName,
@@ -6073,6 +6077,30 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Merges an entity-map-level result into the aggregate result.
      */
+    /**
+     * Warn on the run's own stream when the host is running out of memory or disk.
+     *
+     * plan.md line 158 wants the user told, and the only moment that is useful is BEFORE the
+     * failure. Emitted at an entity-map boundary because that is a natural checkpoint - the
+     * measurement is cheap but not free, and per-record would be absurd.
+     *
+     * ONCE per code per run. Repeating it every map would bury the run's real events, and the
+     * condition does not become more true by being restated.
+     */
+    private async warnOnResourcePressure(logger: SyncLogger | undefined, warned: Set<string>): Promise<void> {
+        if (!logger) return;
+        try {
+            const findings = EvaluatePressure(await ReadResourcePressure());
+            for (const f of findings) {
+                if (warned.has(f.Code)) continue;
+                warned.add(f.Code);
+                logger.warning('sync', f.Code, f.Message, { fraction: f.Fraction });
+            }
+        } catch {
+            // Measuring headroom must never be the thing that ends a sync.
+        }
+    }
+
     private MergeResult(aggregate: SyncResult, mapResult: SyncResult): void {
         aggregate.RecordsProcessed += mapResult.RecordsProcessed;
         aggregate.RecordsCreated += mapResult.RecordsCreated;

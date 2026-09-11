@@ -60,6 +60,7 @@ import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
 import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
+import { ReadResourcePressure, EvaluatePressure } from "@memberjunction/integration-engine";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
 // server subclass it actually gets back from GetEntityObject with a real type rather than a cast.
@@ -955,6 +956,27 @@ class ActiveOperationsOutput {
     @Field(() => [ActiveOperationOutput], { nullable: true }) Operations?: ActiveOperationOutput[];
     /** What holds this connection's maintenance lock, if anything. */
     @Field({ nullable: true }) MaintenanceLockReason?: string;
+}
+
+@ObjectType()
+class ResourcePressureFindingOutput {
+    @Field() Code: string;
+    @Field() Message: string;
+}
+
+@ObjectType()
+class ResourcePressureOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => Float, { nullable: true }) HeapUsedFraction?: number;
+    @Field(() => Float, { nullable: true }) HeapUsedMB?: number;
+    @Field(() => Float, { nullable: true }) HeapLimitMB?: number;
+    @Field(() => Float, { nullable: true }) ResidentMB?: number;
+    @Field(() => Float, { nullable: true }) ArtifactDiskFreeMB?: number;
+    @Field(() => Float, { nullable: true }) WorkDirFreeMB?: number;
+    @Field(() => Int, { nullable: true }) ActiveSyncCount?: number;
+    /** Empty when nothing is under pressure. Ordered most severe first. */
+    @Field(() => [ResourcePressureFindingOutput], { nullable: true }) Findings?: ResourcePressureFindingOutput[];
 }
 
 // ── STRUCTURED RUN ARTIFACTS (durable JSONL progress streams) ─────────
@@ -5597,6 +5619,50 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             };
         } catch (e) {
             LogError(`IntegrationGetActiveOperations error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    /**
+     * What the tenant can see about its own resource headroom.
+     *
+     * plan.md line 158: "what happens if we run out of storage when we sync, how do we alert the
+     * user, OOM (MJC should handle)". The tenant MEASURES - it is the process that fills the heap
+     * and the disk - and the control plane decides. Before this there was no measurement at all,
+     * so a sync that died of OOM or a full disk did so with no warning ahead of it and no
+     * explanation after.
+     *
+     * Deliberately not authorized per connection: this is a property of the workspace, not of any
+     * one connector, and the control plane polls it to decide admission.
+     */
+    @Query(() => ResourcePressureOutput)
+    @RequireSystemUser()
+    async IntegrationGetResourcePressure(
+        @Ctx() _ctx: AppContext
+    ): Promise<ResourcePressureOutput> {
+        try {
+            let runDirCount: number | null = null;
+            try {
+                runDirCount = (await new IntegrationProgressReader().ListRuns({}, 100000)).length;
+            } catch { /* the artifact dir may not exist yet on a fresh workspace */ }
+
+            const reading = await ReadResourcePressure({ runDirCount });
+            const findings = EvaluatePressure(reading);
+            const mb = (b: number | null) => (b === null ? undefined : Math.round(b / (1024 * 1024)));
+            return {
+                Success: true,
+                Message: findings.length === 0 ? 'No resource pressure' : findings[0].Message,
+                HeapUsedFraction: reading.HeapUsedFraction,
+                HeapUsedMB: mb(reading.HeapUsedBytes),
+                HeapLimitMB: mb(reading.HeapLimitBytes),
+                ResidentMB: mb(reading.ResidentBytes),
+                ArtifactDiskFreeMB: mb(reading.ArtifactDiskFreeBytes),
+                WorkDirFreeMB: mb(reading.WorkDirFreeBytes),
+                ActiveSyncCount: reading.ActiveSyncCount,
+                Findings: findings.map(f => ({ Code: f.Code, Message: f.Message })),
+            };
+        } catch (e) {
+            LogError(`IntegrationGetResourcePressure error: ${e}`);
             return { Success: false, Message: this.formatError(e) };
         }
     }
