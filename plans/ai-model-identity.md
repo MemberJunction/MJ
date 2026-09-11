@@ -263,3 +263,85 @@ to become a reference to a core `PersonaID`.
 
 **A1 and A2 are independent of everything else** and are worth shipping on their own — the modality
 bug is live today and silently reports every model as text-only.
+
+---
+
+## Part C — what the GPT-Live prompting guide constrains (added 2026-09-11)
+
+Verified against OpenAI's published `live-prompting` guide while correcting
+[`plans/realtime/gpt-live-1.md`](realtime/gpt-live-1.md) to Revision 2. Four findings bear directly on
+the persona schema, and one of them contradicts a column already written.
+
+### C.1 The voice prompt is a fixed-shape template, not free text
+
+OpenAI publishes a canonical `session.instructions` skeleton with named, keep-them sections:
+
+```
+You are [name], a calm, friendly voice assistant for [service].
+Speak warmly and naturally, at an unhurried pace...
+
+Backchannel policy: Use moderate backchannels...
+
+Interruption policy: Stop speaking when the user interrupts. Listen to what they say.
+
+Delegation policy:
+Backend tools: ...
+Delegate to the backend when: ...
+Do not delegate to the backend when: ...
+```
+
+> *"**Keep the policy labels.** Customize the personality, backchannel behavior, backend capabilities,
+> and delegation conditions for your product."*
+
+**Consequence:** a persona should **fill slots**, not emit prose. `Tone` and `SpeakingStyle` map to the
+opening paragraph; the delegation block is generated from the Action catalogue (see the companion
+plan §2.2). A persona that renders one blob of free text cannot be composed with the delegation
+policy without risking the conflicts the guide warns about: *"Copying every example makes the prompt
+longer and can introduce conflicting instructions."*
+
+### C.2 Barge-in behaviour is a persona dimension — add two fields
+
+`Backchannel policy:` and `Interruption policy:` are first-class template lines, and the guide warns
+they interact:
+
+> *"**Do not add a blanket 'never speak while the user is speaking' rule alongside it. That can also
+> suppress helpful listening sounds.**"*
+
+This is the one lever we have over barge-in on GPT-Live — there is no wire control. It is therefore
+persona configuration, not driver configuration. Suggest `BackchannelPolicy` and `InterruptionPolicy`
+alongside `Tone`/`SpeakingStyle`, all four slot-shaped.
+
+### C.3 ⚠️ `Locale` does not mean what the current column implies
+
+> *"**Write your prompt in the language you want the model to speak.** For example, if the assistant
+> will speak Spanish, write its instructions and example responses in Spanish."*
+>
+> *"**A voice choice does not guarantee a regional accent.**"*
+
+Two consequences for the schema as written:
+
+1. **Language is a property of the prompt body, not a scalar field.** A genuinely multilingual persona
+   needs **per-language prompt bodies**, not one body plus a `Locale` tag. As modelled today, setting
+   `Locale = 'es-ES'` on an English-worded persona produces an English-speaking assistant with a
+   Spanish label — silently wrong.
+2. **`Locale` cannot describe the voice.** Accent is not guaranteed by voice selection, so `Locale` on
+   `AIPersona` is a statement about the *prompt*, not the *binding*.
+
+Options, cheapest first: rename to `PromptLanguage` and document that the style fields must be written
+in it; or promote the style fields to a per-language child table; or drop `Locale` until a multilingual
+requirement is real. **Do not leave it ambiguous** — this is the kind of field that reads as working.
+
+### C.4 Pronunciation is per-name and inline
+
+> `Say the user's name Rosalia as "roh-sah-LEE-ah", IPA /rosaˈli.a/ (Spanish).`
+
+Pronunciation guidance is *runtime, per-record* data, not persona metadata. It belongs in the
+session-composition path (an agent supplying a caller's name), not on `AIPersona`. Flagged so nobody
+adds a `PronunciationHints` column.
+
+### C.5 Confirms the design
+
+`Tone` and `SpeakingStyle` earning their place as scalars is confirmed — the guide asks for *"a few
+short sentences"* of role, tone and pace, which is exactly two bounded fields plus the opening
+paragraph, not a JSON bag. That strengthens the open question in the review of `2ee1ea3` about what
+`StyleDescriptors` is for.
