@@ -421,6 +421,22 @@ class RefreshConnectorSchemaOutput {
     @Field({ nullable: true }) FailureMessage?: string;
 }
 
+/**
+ * The reply to a DETACHED discovery start. Deliberately a different shape from
+ * RefreshConnectorSchemaOutput: that one reports real counts because it waited, and handing back
+ * placeholder zeros from a run that has not begun is exactly the confusion this type avoids.
+ */
+@ObjectType()
+class StartSchemaRefreshOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    /** Tail this with IntegrationTailRunEvents. 'not-started' when Success is false. */
+    @Field() RunID: string;
+    @Field() InProgress: boolean;
+    /** Set when the refusal was a lock: names what is holding it, so the UI can say why. */
+    @Field({ nullable: true }) BlockedBy?: string;
+}
+
 // ─── Generate Integration Action (on-demand Integration-as-Actions) ─────────
 // Generates + persists a strongly-typed Action (DriverClass='IntegrationActionExecutor')
 // for one integration/object/verb (or all applicable verbs when verb is omitted) via
@@ -1396,6 +1412,54 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * both on stdout (visible in the MJAPI log file) and in a per-run
      * `<cwd>/logs/integration-runs/<runID>/progress.jsonl` artifact.
      */
+    /**
+     * Start discovery and return immediately with a tailable RunID.
+     *
+     * plan.md is emphatic that this must exist: "going to a page should NEVER, NEVER trigger such
+     * things automatically, it must in a very clean way tell the user to click a button to start
+     * discovery of tables". A button needs a call that returns at once; the synchronous mutation
+     * runs the whole pipeline inline and times out at the gateway on a large catalog, which is why
+     * both surfaces ended up auto-triggering on page entry and adopting whatever run they found.
+     *
+     * A DISTINCT mutation rather than a flag on the synchronous one: that reply promises real
+     * counts because it waited, and a detached launch can only offer placeholder zeros.
+     *
+     * The lock is PROBED here so a second click is refused with a reason the UI can show. The
+     * pipeline still acquires it for real - this probe is not the guard, it is the clean answer in
+     * the common case. Losing the race just means the launch fails on the run stream instead.
+     */
+    @Mutation(() => StartSchemaRefreshOutput)
+    @RequireSystemUser()
+    async IntegrationStartSchemaRefresh(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK convention hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<StartSchemaRefreshOutput> {
+        const user = this.GetUserFromPayload(ctx.userPayload);
+        // The pipeline WRITES the catalog, so it needs the read-write provider - the same one the
+        // synchronous refresh mutation uses. A read-only provider here would fail at the first save.
+        const md = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+
+        const held = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+        if (held) {
+            return {
+                Success: false,
+                InProgress: false,
+                RunID: 'not-started',
+                BlockedBy: held.Reason,
+                Message: `Discovery not started: ${held.Reason} is already running for this connection. It will be available when that finishes.`,
+            };
+        }
+
+        const summary = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md, universalPKConvention);
+        return {
+            Success: true,
+            InProgress: true,
+            RunID: summary.RunID,
+            Message: 'Discovery started.',
+        };
+    }
+
     @Mutation(() => RefreshConnectorSchemaOutput)
     @RequireSystemUser()
     async IntegrationRefreshConnectorSchema(
