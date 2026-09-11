@@ -95,7 +95,13 @@ cp -n docker/workbench/.env.database.example docker/workbench/.env.database
 
 > The template is the single source for those values — do not retype them here or anywhere else. If you override `SA_PASSWORD` / `PG_PASSWORD` in `docker/workbench/.env`, update `.env.database` to match.
 
-**2. Provider API keys are *valid*, not merely present.** The live-model tier has **no credential preflight** — a dead key fails the tier and the failures look exactly like product defects. In one build an expired Gemini key produced 11 red agent tests that were triaged as a `BaseAgent` regression before the real cause surfaced. Verify before you start:
+**2. The release path can still write to `next`.** Run **Actions → "Verify the release App token" → Run workflow**. It is read-only and takes under a minute.
+
+Everything `publish.yml` does after the packages reach npm — the `main` → `next` back-merge and the `release-lines.json` ledger — pushes to a protected branch, and the identity doing it must hold a ruleset bypass. That bypass is GitHub configuration living outside this repo: no CI job can prove it is intact, and a ruleset edit that revokes it looks like nothing at all until a release is already half-done. On 2026-09-03 exactly that happened, and v6.1.0-edge.6 published to npm and then could not merge back ([#4382](https://github.com/MemberJunction/MJ/pull/4382)).
+
+Green means the App token minted (key valid, permissions intact), the identity is `blue-cypress-ci-bot`, and `can_bypass` reports `always`. Anything else: **stop and fix it before starting the release.** A publish that strands itself between npm and `next` opens a fallback PR rather than losing work, but it is still a red release and an hour you do not get back.
+
+**3. Provider API keys are *valid*, not merely present.** The live-model tier has **no credential preflight** — a dead key fails the tier and the failures look exactly like product defects. In one build an expired Gemini key produced 11 red agent tests that were triaged as a `BaseAgent` regression before the real cause surfaced. Verify before you start:
 
 ```bash
 # Google — 200 = good, 400 = dead key
@@ -107,13 +113,13 @@ curl -s -o /dev/null -w 'openai=%{http_code}\n' https://api.openai.com/v1/models
   -H "Authorization: Bearer $(grep '^AI_VENDOR_API_KEY__OpenAILLM=' .env | cut -d= -f2- | tr -d "'\"")"
 ```
 
-**3. `MJ_API_KEY` is in repo-root `.env`, not just your shell.** It is a **self-chosen shared secret** — no registry issues it; `MJServer` reads `process.env.MJ_API_KEY` and string-compares it against the `x-mj-api-key` header. Both MJAPI *and* the test run need the same value, so `.env` is the only channel that reliably reaches both. Generate one if absent:
+**4. `MJ_API_KEY` is in repo-root `.env`, not just your shell.** It is a **self-chosen shared secret** — no registry issues it; `MJServer` reads `process.env.MJ_API_KEY` and string-compares it against the `x-mj-api-key` header. Both MJAPI *and* the test run need the same value, so `.env` is the only channel that reliably reaches both. Generate one if absent:
 
 ```bash
 grep -q '^MJ_API_KEY=' .env || printf 'MJ_API_KEY=%s\n' "$(openssl rand -hex 32)" >> .env
 ```
 
-**4. Docker has headroom.** Step 8's workbench adds four containers plus two turbo builds. Check before you start — an unrelated hot container has starved SQL Server badly enough to masquerade as migration timeouts for over an hour:
+**5. Docker has headroom.** Step 8's workbench adds four containers plus two turbo builds. Check before you start — an unrelated hot container has starved SQL Server badly enough to masquerade as migration timeouts for over an hour:
 
 ```bash
 docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
@@ -121,14 +127,14 @@ docker stats --no-stream --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}'
 
 Stop anything unrelated. On a < 8 GiB Docker VM, cap every turbo build with `--concurrency=2`.
 
-**5. If you are releasing from a FRESH CLONE, four things are missing that nothing tells you about.** Each is gitignored, so the repo looks complete and fails later, in a place that does not name the cause.
+**6. If you are releasing from a FRESH CLONE, four things are missing that nothing tells you about.** Each is gitignored, so the repo looks complete and fails later, in a place that does not name the cause.
 
 - **The repo must be BUILT before Step 3.** `mj` is a workspace package; without `packages/MJCLI/dist` the CLI loads but registers no subcommands, so `pnpm mj migrate` fails with a bare `Error: command migrate not found` — which reads like a bad install, not a missing build. Run `pnpm install && pnpm run build` first. This effectively moves Step 7 to the front on a fresh clone; that is fine, and Step 7 re-runs cheaply from cache.
 - **`packages/MJAPI/.env` must exist**, as a symlink to the repo-root `.env` (`ln -s ../../.env .env`). Without it MJAPI dies at boot on `dbDatabase / dbUsername / dbPassword … Required`, which reads as a config-file problem rather than a missing file. Working clones have this symlink; a fresh one does not.
 - **`packages/MJExplorer/src/environments/environment.ts` must exist**, or any full build fails on `Could not resolve "../environments/environment"`. CI writes this file inline before building — copy that block out of `.github/workflows/test.yml` rather than inventing values.
 - **Step 8's converter needs Python + `sqlglot`.** `mj migrate convert` shells out to a Python interpreter and fails with `the interpreter 'python3' has no sqlglot module`. On macOS, PEP 668 blocks a system `pip install`, so make a venv and point the converter at it: `python3 -m venv <dir> && <dir>/bin/pip install 'sqlglot>=27'`, then `export MJ_SQLGLOT_PYTHON=<dir>/bin/python`.
 
-**6. Pointing `mj` at PostgreSQL takes the `DB_*` variables, not the `PG_*` ones — and `.env` beats your shell.** Step 8's verification runs `mj migrate` / `mj sync push` against a PostgreSQL database, and there are three separate traps in getting them there. Each produces an error that names something other than its cause.
+**7. Pointing `mj` at PostgreSQL takes the `DB_*` variables, not the `PG_*` ones — and `.env` beats your shell.** Step 8's verification runs `mj migrate` / `mj sync push` against a PostgreSQL database, and there are three separate traps in getting them there. Each produces an error that names something other than its cause.
 
 - **`mj.config.cjs` reads `DB_HOST` / `DB_PORT` / `DB_DATABASE` / `DB_USERNAME` / `DB_PASSWORD` only.** It never consults `PG_HOST` / `PG_PORT`. (Those exist for CodeGenLib's own config layer — see [`packages/CodeGenLib/CLAUDE.md`](packages/CodeGenLib/CLAUDE.md) — which is a different resolver.) Export only the `PG_*` family and `DB_PORT` stays **1433**, so the PostgreSQL client dials SQL Server, which closes the socket on an unrecognised startup packet. You get `Database connection failed: Connection terminated unexpectedly` — which reads as a flaky database, not a wrong port.
 - **`mj migrate` authenticates with the CODEGEN credentials**, because migrations need DDL rights: `CODEGEN_DB_USERNAME` / `CODEGEN_DB_PASSWORD`. Set `DB_USERNAME=postgres` but leave `CODEGEN_DB_USERNAME=sa` and PostgreSQL rejects `sa`. The CLI truncates the message to `password authentication failed for user` **without naming the user**; `docker logs <pg-container>` names it (`FATAL: password authentication failed for user "sa"`) and is the fastest way to see what actually happened.
@@ -400,7 +406,7 @@ cd packages/MJAPI && MJ_DISABLE_TASK_GRAPH_DISPATCHER=1 pnpm start
 
 > ⚠️ **Run it from `packages/MJAPI`, not `pnpm run start:api` from the repo root.** The root script is `turbo start --filter=mj_api`, and **turbo passes through only the environment variables declared in `turbo.json`** — anything else is stripped before the task sees it. Overriding the database with `DB_DATABASE=… pnpm run start:api` therefore fails with `Error parsing config file … "path": ["dbDatabase"] … "received": "undefined"`, which reads like a config-file problem rather than an env-passthrough one. Running from the package directory bypasses turbo entirely and the variables arrive intact.
 
-- `MJ_API_KEY` must be in **repo-root `.env`** (Step 0.3), not just your shell — MJAPI and the test run are separate processes and both must see the same value. You invent this value; nothing issues it (`MJServer` string-compares `process.env.MJ_API_KEY` against the `x-mj-api-key` header). Confirm it authenticates end-to-end before running the suite, rather than discovering it 19 tests later:
+- `MJ_API_KEY` must be in **repo-root `.env`** (Step 0.4), not just your shell — MJAPI and the test run are separate processes and both must see the same value. You invent this value; nothing issues it (`MJServer` string-compares `process.env.MJ_API_KEY` against the `x-mj-api-key` header). Confirm it authenticates end-to-end before running the suite, rather than discovering it 19 tests later:
   ```bash
   curl -s -o /dev/null -w '%{http_code}\n' -X POST "http://localhost:${GRAPHQL_PORT:-4000}/" \
     -H 'Content-Type: application/json' -H "x-mj-api-key: $(grep '^MJ_API_KEY=' .env | cut -d= -f2-)" \

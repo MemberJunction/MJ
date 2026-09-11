@@ -188,6 +188,28 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
 
+      # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
+      # reasons but scan `packages/**` off disk and assert about every package, so they belong here
+      # rather than in MJGlobal's per-package `test` task: turbo caches that task on MJGlobal's own
+      # `src/**`, which means a violation introduced in ANY other package left the cached pass valid
+      # and the scan never re-ran. #4317's MetadataSync violations rode `next` from 2026-09-09 that
+      # way, surfacing only when #4343 happened to edit MJGlobal and bust its cache. Run here they
+      # are uncached and unconditional, so a violation fails the PR that introduces it.
+      # They import only vitest/fs/path — no build, no MJGlobal source.
+      #
+      # Uses the SHARED vitest config on purpose: MJGlobal's own config excludes these two files
+      # (that is the other half of this fix), so pointing at it here would match nothing. And
+      # `--passWithNoTests=false` overrides the shared default, so if these paths are ever renamed
+      # this step fails loudly instead of quietly passing with zero tests and disabling the gate.
+      - name: Repo-wide compliance scans (UUID + multi-provider)
+        if: ${{ !cancelled() }}
+        run: >-
+          pnpm --filter @memberjunction/global exec vitest run
+          --config ../../vitest.shared.ts
+          --passWithNoTests=false
+          src/__tests__/UUIDCompliance.test.ts
+          src/__tests__/MultiProviderCompliance.test.ts
+
       - name: Generic DOM coverage ratchet
         if: ${{ !cancelled() }}
         run: node scripts/dom-test-report.mjs packages/Angular/Generic --max-none=134
