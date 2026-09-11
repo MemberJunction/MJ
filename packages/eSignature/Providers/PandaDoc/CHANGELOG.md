@@ -1,5 +1,13 @@
 # @memberjunction/esignature-pandadoc
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [197fdf8]
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/esignature@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

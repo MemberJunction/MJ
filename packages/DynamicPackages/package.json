@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/dynamic-packages",
-  "version": "6.1.0-edge.5",
+  "version": "6.1.0-edge.6",
   "description": "MemberJunction: process-agnostic loader for runtime-configured packages (Open App server/client packages, generated entity packages) with per-process scoping",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
