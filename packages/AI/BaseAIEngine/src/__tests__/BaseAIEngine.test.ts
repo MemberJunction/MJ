@@ -673,6 +673,35 @@ describe('AIEngineBase', () => {
             set('_skillActions', []);
             expect(AIEngineBase.Instance.GetSkillActionIDs('s1')).toEqual([]);
         });
+
+        it('includes code-only actions (ExposeToModel = false): the bundle is the grant, not the tool list', () => {
+            set('_skillActions', [
+                { SkillID: 's1', ActionID: 'act1', ExposeToModel: true },
+                { SkillID: 's1', ActionID: 'act2', ExposeToModel: false },
+            ]);
+            expect(AIEngineBase.Instance.GetSkillActionIDs('s1').sort()).toEqual(['act1', 'act2']);
+        });
+    });
+
+    describe('GetSkillExposedActionIDs', () => {
+        it('returns only the actions the model may see', () => {
+            set('_skillActions', [
+                { SkillID: 's1', ActionID: 'act1', ExposeToModel: true },
+                { SkillID: 's1', ActionID: 'act2', ExposeToModel: false },
+                { SkillID: 's2', ActionID: 'act3', ExposeToModel: true },
+            ]);
+            expect(AIEngineBase.Instance.GetSkillExposedActionIDs('s1')).toEqual(['act1']);
+        });
+
+        it('returns [] when every bundled action is code-only', () => {
+            set('_skillActions', [{ SkillID: 's1', ActionID: 'act1', ExposeToModel: false }]);
+            expect(AIEngineBase.Instance.GetSkillExposedActionIDs('s1')).toEqual([]);
+        });
+
+        it('a row without the flag is exposed (the column defaults to 1)', () => {
+            set('_skillActions', [{ SkillID: 's1', ActionID: 'act1' }]);
+            expect(AIEngineBase.Instance.GetSkillExposedActionIDs('s1')).toEqual(['act1']);
+        });
     });
 
     describe('GetSkillSubAgentIDs', () => {
