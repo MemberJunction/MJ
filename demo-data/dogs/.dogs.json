@@ -1,0 +1,522 @@
+[
+  {
+    "fields": {
+      "Name": "Marigold",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Beagle",
+      "MicrochipNumber": "985141900000101",
+      "IntakeDate": "2026-06-15",
+      "IntakeReason": "Stray",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2024-06-15",
+      "WeightKg": 10.2,
+      "Description": "Retired breeding beagle. Content with two short walks and a sunny spot.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Low",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0001-4000-8000-000000000001"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.096Z",
+      "checksum": "2f47c752224d7e95790e9da78f7472ff48ab4396cef9865de349c84beb1d9b46"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Pickles",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Beagle",
+      "MicrochipNumber": "985141900000102",
+      "IntakeDate": "2026-06-19",
+      "IntakeReason": "Surrender",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2024-05-10",
+      "WeightKg": 12.1,
+      "Description": "Cheerful and food-motivated. Shared a run with three other dogs without a grumble.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Moderate",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0002-4000-8000-000000000002"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.116Z",
+      "checksum": "b1daee1896416fb72ff76a98b21c2d87a9d0d4e36e6b7f0861230ef9505b2559"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Tansy",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Beagle",
+      "MicrochipNumber": "985141900000103",
+      "IntakeDate": "2026-06-23",
+      "IntakeReason": "Transfer",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2024-04-04",
+      "WeightKg": 9.8,
+      "Description": "Quiet, careful, still finding her confidence. Not yet assessed with other dogs.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Low",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": null
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0003-4000-8000-000000000003"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.139Z",
+      "checksum": "0e3c4a60b5b648d902288ad99da81a52af5ff4dfd0791efc16cb7c8f248b7b8f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bugle",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Beagle",
+      "MicrochipNumber": "985141900000104",
+      "IntakeDate": "2026-06-27",
+      "IntakeReason": "Stray",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2024-02-28",
+      "WeightKg": 13,
+      "Description": "Nose first, brain second. Needs a secure garden and someone who finds that funny.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "High",
+      "IsLeashTrained": true,
+      "IsHouseTrained": false,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0004-4000-8000-000000000004"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.154Z",
+      "checksum": "5379324f47a50dd8ceed1a84fd69b540b15e50f633abc6204531b19fefd7a1d0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nutkin",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Beagle",
+      "MicrochipNumber": "985141900000105",
+      "IntakeDate": "2026-07-01",
+      "IntakeReason": "Surrender",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2024-01-23",
+      "WeightKg": 11.6,
+      "Description": "Affectionate with people, but wants to be the only dog in the house.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Moderate",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": false
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0005-4000-8000-000000000005"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.171Z",
+      "checksum": "908ef029d2d528832ad9c3445f4a08a3b260915ca6d6e7827905ae2339fae786"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fennel",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Border Collie",
+      "MicrochipNumber": "985141900000106",
+      "IntakeDate": "2026-07-05",
+      "IntakeReason": "Transfer",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2023-12-18",
+      "WeightKg": 17.4,
+      "Description": "Tireless and brilliant. Would thrive with a job -- agility, a farm, a runner.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Very High",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0006-4000-8000-000000000006"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.188Z",
+      "checksum": "2f21e0230884cad3088245ee1e420e3ef23145c221da4db5071c01b4c1b9b5da"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Quill",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Border Collie",
+      "MicrochipNumber": "985141900000107",
+      "IntakeDate": "2026-07-09",
+      "IntakeReason": "Stray",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2023-11-12",
+      "WeightKg": 18.9,
+      "Description": "Keen and biddable. Learns a new cue in about ten minutes.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "High",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0007-4000-8000-000000000007"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.207Z",
+      "checksum": "50f15455d4ae89bf147ebf51fc26b065b6c85e2069e298f46ea070f45bf97586"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sorrel",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Border Collie",
+      "MicrochipNumber": "985141900000108",
+      "IntakeDate": "2026-07-13",
+      "IntakeReason": "Surrender",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2023-10-07",
+      "WeightKg": 16.2,
+      "Description": "The calm one of the litter. Happy with a long walk and an evening on the sofa.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Moderate",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0008-4000-8000-000000000008"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.223Z",
+      "checksum": "8385f6c39649b14935086ba70947f4d77425c0c9fff359de4e68b6521511962b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Birch",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Border Collie",
+      "MicrochipNumber": "985141900000109",
+      "IntakeDate": "2026-07-17",
+      "IntakeReason": "Transfer",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2023-09-01",
+      "WeightKg": 19.5,
+      "Description": "Superb with people, sharp with other dogs. Wants to be an only dog with a lot to do.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Very High",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": false
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0009-4000-8000-000000000009"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.238Z",
+      "checksum": "9fb36fe92bdf4893d53932bfa0033da2dac825a308580481574bf97a863912f6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Wren",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Border Collie",
+      "MicrochipNumber": "985141900000110",
+      "IntakeDate": "2026-07-21",
+      "IntakeReason": "Stray",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2023-07-27",
+      "WeightKg": 15.8,
+      "Description": "Bright and busy. Still learning the lead; not yet assessed with other dogs.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "High",
+      "IsLeashTrained": false,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": null
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0010-4000-8000-000000000010"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.253Z",
+      "checksum": "b4298a54785c94b66173ebec7237761b3eee6ea47aebf1a69771f6f6543754cb"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ranger",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=German Shepherd",
+      "MicrochipNumber": "985141900000111",
+      "IntakeDate": "2026-07-25",
+      "IntakeReason": "Surrender",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2023-06-21",
+      "WeightKg": 33.1,
+      "Description": "Confident, sociable, and genuinely easy. Needs real exercise and a fenced garden.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "High",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0011-4000-8000-000000000011"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.497Z",
+      "checksum": "e21dbe7fb78cbcc7bcba9331aca99d14b3c7aa1c47ed65ff078eba4a83cf78fe"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Juno",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=German Shepherd",
+      "MicrochipNumber": "985141900000112",
+      "IntakeDate": "2026-07-29",
+      "IntakeReason": "Transfer",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2023-05-16",
+      "WeightKg": 28.7,
+      "Description": "Steady family dog. Gentle with children and unbothered by visitors.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Moderate",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0012-4000-8000-000000000012"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.512Z",
+      "checksum": "6df7eb26905fd095faffe2b16acf08edd03252386525eefa4e3ca435431f4999"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kodiak",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=German Shepherd",
+      "MicrochipNumber": "985141900000113",
+      "IntakeDate": "2026-08-02",
+      "IntakeReason": "Stray",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2023-04-10",
+      "WeightKg": 36.4,
+      "Description": "Powerful working line. Experienced handler, no other dogs, plenty to do.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Very High",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": false
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0013-4000-8000-000000000013"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.528Z",
+      "checksum": "110a055d845896ff949c01e157507af0fc1b1dee5ca71699f72a6578598da5af"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Onyx",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=German Shepherd",
+      "MicrochipNumber": "985141900000114",
+      "IntakeDate": "2026-08-06",
+      "IntakeReason": "Surrender",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2023-03-05",
+      "WeightKg": 31,
+      "Description": "Reserved and watchful. Warms to his own people slowly; wary of strangers.",
+      "IsGoodWithPeople": false,
+      "EnergyLevel": "Moderate",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": null
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0014-4000-8000-000000000014"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.542Z",
+      "checksum": "1a50722274ada6485e8cb9e2c22f256b50a48c3be9950a005e0f94cf96bf7ad1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Meadow",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=German Shepherd",
+      "MicrochipNumber": "985141900000115",
+      "IntakeDate": "2026-08-10",
+      "IntakeReason": "Transfer",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2023-01-28",
+      "WeightKg": 27.3,
+      "Description": "Nine years old and utterly serene. A big dog for a quiet home.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Low",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0015-4000-8000-000000000015"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.557Z",
+      "checksum": "c90f422a52531228cfe780bee300796ebdf68037185e10161ac5fd9c0635e8b6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Atlas",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Great Dane",
+      "MicrochipNumber": "985141900000116",
+      "IntakeDate": "2026-08-14",
+      "IntakeReason": "Stray",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2022-12-23",
+      "WeightKg": 58.2,
+      "Description": "An enormous, gentle sofa dog. Two short walks and he is content.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Low",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0016-4000-8000-000000000016"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.571Z",
+      "checksum": "46446ba68dab5a6f1e4bfd6e6d71ac307f1801d1ea537e3111d3836ad7d62371"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Clover",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Great Dane",
+      "MicrochipNumber": "985141900000117",
+      "IntakeDate": "2026-08-18",
+      "IntakeReason": "Surrender",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2022-11-17",
+      "WeightKg": 52.6,
+      "Description": "Leans on you until you sit down. Calm with everyone she has met.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Low",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0017-4000-8000-000000000017"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.585Z",
+      "checksum": "e1d64375b51ac94bafa5da5ad440911611fee7339b4973a2e49cc64d9c0808cf"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Thane",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Great Dane",
+      "MicrochipNumber": "985141900000118",
+      "IntakeDate": "2026-08-22",
+      "IntakeReason": "Transfer",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2022-10-12",
+      "WeightKg": 61,
+      "Description": "Playful for his size and surprisingly light on his feet. Loves a long amble.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Moderate",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": true
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0018-4000-8000-000000000018"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.601Z",
+      "checksum": "54e784ed621fea65693415333bc6c0217a5108b5cbd70138cd6fb816a5a3ab4b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Luna",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Great Dane",
+      "MicrochipNumber": "985141900000119",
+      "IntakeDate": "2026-08-26",
+      "IntakeReason": "Stray",
+      "Sex": "Female",
+      "EstimatedBirthDate": "2022-09-06",
+      "WeightKg": 54.9,
+      "Description": "Sweet and slow-moving. Still learning not to tow; not yet assessed with other dogs.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Low",
+      "IsLeashTrained": false,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": null
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0019-4000-8000-000000000019"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.615Z",
+      "checksum": "bc8493c7b0eb707023f3fc5f9b9e954ce3e1f3c23e3ff2c4cb0392375320a7e7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Bosun",
+      "Species": "Dog",
+      "BreedID": "@lookup:MJ: Breeds.Name=Great Dane",
+      "MicrochipNumber": "985141900000120",
+      "IntakeDate": "2026-08-30",
+      "IntakeReason": "Surrender",
+      "Sex": "Male",
+      "EstimatedBirthDate": "2022-08-01",
+      "WeightKg": 59.7,
+      "Description": "Adores people, prefers to be the only dog. A big, soppy shadow.",
+      "IsGoodWithPeople": true,
+      "EnergyLevel": "Moderate",
+      "IsLeashTrained": true,
+      "IsHouseTrained": true,
+      "IsGoodWithDogs": false
+    },
+    "primaryKey": {
+      "ID": "0A1B2C3D-0020-4000-8000-000000000020"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.631Z",
+      "checksum": "33735d217151e8132ff19f279371a446d381895d64a39e6f5a72eb5fc49b1632"
+    }
+  }
+]

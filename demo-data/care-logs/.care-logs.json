@@ -1,0 +1,362 @@
+[
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0001-4000-8000-000000000001",
+      "CareDate": "2026-06-17",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0001-4000-8000-000000000001"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.671Z",
+      "checksum": "12034a1e2b9b09ad988d5b53275fee627afa24fddf82656d87eda794478d78e6"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0002-4000-8000-000000000002",
+      "CareDate": "2026-06-21",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0002-4000-8000-000000000002"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.687Z",
+      "checksum": "c302405d64599995099b9cee1830b64806a12b873631f77bdb561768a202aedc"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0003-4000-8000-000000000003",
+      "CareDate": "2026-06-25",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0003-4000-8000-000000000003"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.700Z",
+      "checksum": "4304c20876f190edd5b232475645fc8610ba943d29355480c1c320c9fc75fe0c"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0004-4000-8000-000000000004",
+      "CareDate": "2026-06-29",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0004-4000-8000-000000000004"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.715Z",
+      "checksum": "938361cc935ba4c7ebe782e5c3e9a9412f5092fab4fbc5b80a38c1bb3a8c4456"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0005-4000-8000-000000000005",
+      "CareDate": "2026-07-03",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0005-4000-8000-000000000005"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.729Z",
+      "checksum": "6cce4388fcc9f42cb8624550586d937f92e4cb738500a5e5646136459093b57a"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0006-4000-8000-000000000006",
+      "CareDate": "2026-07-07",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0006-4000-8000-000000000006"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.744Z",
+      "checksum": "51da080d00bc930c4f424f09dcec0a8b6f63bcbd2de039fecfb19f0b083cc644"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0007-4000-8000-000000000007",
+      "CareDate": "2026-07-11",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0007-4000-8000-000000000007"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.759Z",
+      "checksum": "ec6ba59503da5c2117a7c9aad56755f16c8a7436f7f111a55f059d4a1fb49253"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0008-4000-8000-000000000008",
+      "CareDate": "2026-07-15",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0008-4000-8000-000000000008"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.774Z",
+      "checksum": "c138072d4811c18d751b777448c8adb80cc064a4cda8cfdc1def4c994d90c622"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0009-4000-8000-000000000009",
+      "CareDate": "2026-07-19",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0009-4000-8000-000000000009"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.788Z",
+      "checksum": "0620ce8bd1ebc512f8c733eb9be6b8390e74fdc6669d3a233cdc93b7eec0ff8d"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0010-4000-8000-000000000010",
+      "CareDate": "2026-07-23",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0010-4000-8000-000000000010"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.801Z",
+      "checksum": "1952ebc7f36a24b0ddeb57a33ca6f41b549ff40b62ade82e2b7e075cc16bf6e4"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0011-4000-8000-000000000011",
+      "CareDate": "2026-07-27",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0011-4000-8000-000000000011"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.835Z",
+      "checksum": "8fdc70a38bb04dd9ba3a45503a739e45ab9f8558b2c7e357a5c8a2cffb7e88d4"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0012-4000-8000-000000000012",
+      "CareDate": "2026-07-31",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0012-4000-8000-000000000012"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.860Z",
+      "checksum": "4972c2480afc20c7d61f5f91516c676e5aaa170caeed0473575f2149d0082b84"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0013-4000-8000-000000000013",
+      "CareDate": "2026-08-04",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0013-4000-8000-000000000013"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.876Z",
+      "checksum": "ff9c1c2a916c5978c95cf78d692ecda74192c7b3155697536ed1624519d716da"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0014-4000-8000-000000000014",
+      "CareDate": "2026-08-08",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0014-4000-8000-000000000014"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.893Z",
+      "checksum": "248ebf43d95dd6aa6760076235172d85bd86f124a4732f76db5be7dd0da86ff7"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0015-4000-8000-000000000015",
+      "CareDate": "2026-08-12",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0015-4000-8000-000000000015"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.909Z",
+      "checksum": "01935ece9d7e97cf6365de45f99a2c581fd621ad02e0875c2736700b668d50b7"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0016-4000-8000-000000000016",
+      "CareDate": "2026-08-16",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0016-4000-8000-000000000016"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.924Z",
+      "checksum": "be83615a0117f0386b484733923b4ad342b555d45396de6cd9b9a7fc7b9a971d"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0017-4000-8000-000000000017",
+      "CareDate": "2026-08-20",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0017-4000-8000-000000000017"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.947Z",
+      "checksum": "e8ff05147d74a6f3041cb40a26ab60a27db12ee75a056bb22378637311b2ddab"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0018-4000-8000-000000000018",
+      "CareDate": "2026-08-24",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0018-4000-8000-000000000018"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.964Z",
+      "checksum": "30a6533475628ca4148f46f636574696ac8390141e22511328922ab5403b8226"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0019-4000-8000-000000000019",
+      "CareDate": "2026-08-28",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0019-4000-8000-000000000019"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.980Z",
+      "checksum": "cc8ba552919e3725a88217631c6a4631d0f86cbd6a008faded6589080218d6a1"
+    }
+  },
+  {
+    "fields": {
+      "AnimalID": "0A1B2C3D-0020-4000-8000-000000000020",
+      "CareDate": "2026-09-01",
+      "CareType": "Vaccination",
+      "Description": "DHPP primary course completed at the intake exam.",
+      "PerformedBy": "Dr. Yusuf Adeyemi, DVM",
+      "IsComplete": true,
+      "Notes": "Cleared for adoption listing."
+    },
+    "primaryKey": {
+      "ID": "0C1B2C3D-0020-4000-8000-000000000020"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T16:52:20.996Z",
+      "checksum": "4c92a3a287bd20efba2ffc6fdae89af43dbc8a7afde7ccf8e4332c6f642894d5"
+    }
+  }
+]
