@@ -1060,6 +1060,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 RecordsCreated: 0,
                 RecordsUpdated: 0,
                 RecordsErrored: 0,
+                RecordsSkipped: 0,
                 // The run's OWN trigger type, recovered above — not a hardcoded 'Scheduled'. This is
                 // what IntegrationGetSyncProgress reports back ("Sync in progress (Manual)"), so a
                 // hardcoded value mislabels every adopted run.
@@ -1302,6 +1303,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             RecordsCreated: 0,
             RecordsUpdated: 0,
             RecordsErrored: 0,
+            RecordsSkipped: 0,
             TriggerType: triggerType,
         };
         const runCtx: EngineRunContext = {
@@ -6057,6 +6059,28 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Bound the retained error SAMPLE: only the first MAX_AGGREGATE_ERRORS are ever persisted
         // (FinalizeRun slices to 100). Accumulating every per-record error across a multi-million-row
         // failing run would hold the whole set in RAM for no gain — RecordsErrored already has the count.
+        // Feed the LIVE snapshot from the same accumulation.
+        //
+        // These four fields existed on the snapshot and on OperationProgressOutput, and the
+        // resolver returned them, but NOTHING ever wrote them — they were initialised to 0 and
+        // stayed 0 for the whole run. That is why the UI showed a bare "+" for created and "~"
+        // for updated with no breakdown: the numbers were always zero, not mis-rendered.
+        //
+        // Here rather than on the progress tick because SyncProgress carries no outcome counts at
+        // all; it only knows position. This is the one place a map's real outcome is folded, and
+        // the aggregate is already monotonic, so the snapshot inherits that for free.
+        const snap = this.currentRunContext?.progressSnapshot;
+        if (snap) {
+            snap.RecordsProcessed = aggregate.RecordsProcessed;
+            snap.RecordsCreated = aggregate.RecordsCreated;
+            snap.RecordsUpdated = aggregate.RecordsUpdated;
+            snap.RecordsErrored = aggregate.RecordsErrored;
+            snap.RecordsSkipped = aggregate.RecordsSkipped;
+            // Persist now as well as on the next tick: the final map has no tick after it, so
+            // without this the run's last counts never reach a reader in another process.
+            void this.currentRunContext?.ownership?.WriteProgress(JSON.stringify(snap));
+        }
+
         if (aggregate.Errors.length < MAX_AGGREGATE_ERRORS && mapResult.Errors.length > 0) {
             const room = MAX_AGGREGATE_ERRORS - aggregate.Errors.length;
             aggregate.Errors.push(...mapResult.Errors.slice(0, room));
