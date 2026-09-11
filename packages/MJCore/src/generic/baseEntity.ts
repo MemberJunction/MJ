@@ -1,4 +1,4 @@
-import { ClassFactory, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
+import { ClassFactory, DeserializeValidationErrors, IsMemberOverridden, MJEventType, MJGlobal, OptionalKeyedSpecialization, uuidv4, UUIDsEqual, WarningManager } from '@memberjunction/global';
 import { GetDataHooks, PreSaveHook } from './dataHooks';
 import { EntityFieldInfo, EntityInfo, EntityFieldTSType, EntityPermissionType, FieldSecurityError, RecordChange, ValidationErrorInfo, ValidationResult, EntityRelationshipInfo } from './entityInfo';
 import { EntitySubtypeResolver } from './entitySubtypeResolver';
@@ -771,6 +771,21 @@ export class BaseEntityResult {
      */
     Errors?: any[];
     /**
+     * Set by a producer whose `Message` ALREADY renders every entry of `Errors`, so that
+     * {@link CompleteMessage} does not say the same thing twice.
+     *
+     * Two kinds of producer build `Message` out of `Errors`: the client-side providers, which copy
+     * the SERVER's `CompleteMessage` (= its errors, joined) into `Message` and then rehydrate the same
+     * entries into `Errors` so a form can paint the fields; and the IS-A parent-failure paths, which
+     * write "Failed to save parent entity … : <errors joined>". Without this flag every one of them
+     * read twice in `CompleteMessage`. A substring dedupe was tried and reverted (it is lossy in ways
+     * a reader cannot detect — see `CompleteMessage`); a producer stating the fact is exact.
+     *
+     * Only honoured when `Message` actually has text: a producer that set the flag and left `Message`
+     * empty is contradicting itself, and the errors are still rendered rather than lost.
+     */
+    MessageIncludesErrors: boolean = false;
+    /**
      * A copy of the values of the entity object BEFORE the operation was performed
      */
     OriginalValues: {FieldName: string, Value: any}[] = [];
@@ -877,8 +892,12 @@ export class BaseEntityResult {
         // or dropped depending on ARRAY ORDER; and a distinct error vanishes when its text happens to
         // appear inside the summary. Saying something twice is ugly. Silently reporting one problem
         // when there were three is the failure this whole class of bug is about, so the duplication
-        // stays until a producer-side fix removes it at the source.
-        if (this.Errors && this.Errors.length > 0) {
+        // stays UNLESS the producer states, via `MessageIncludesErrors`, that `Message` already
+        // renders every entry — an exact fact, not a guess, and the only producer-side fix that
+        // removes the repeat at the source.
+        const messageHasText = !!this.Message && this.Message.trim().length > 0;
+        const errorsAlreadyInMessage = this.MessageIncludesErrors && messageHasText;
+        if (this.Errors && this.Errors.length > 0 && !errorsAlreadyInMessage) {
             // append
             msg = (msg ? msg + '\n' : '') + this.Errors.map(err => BaseEntityResult.ErrorText(err)).join('\n');
         }
@@ -2290,7 +2309,10 @@ export abstract class BaseEntity<T = unknown> {
 
             if (!result.Success || !result.Output?.Success) {
                 const detail = result.ErrorMessage ?? result.Output?.ErrorMessage ?? 'unknown error';
-                this.registerGraphFailure(detail);
+                // The structured refusal rides alongside the prose so a form can paint the fields a
+                // server-side ValidateAsync named — the same thing a plain save gets from the
+                // GraphQL error's `extensions.validationErrors`.
+                this.registerGraphFailure(detail, 'save', result.Output?.ValidationErrors);
                 this.RaiseEvent('graph_save', { Success: false, NodeCount: plan.NodeCount, Error: detail });
                 return false;
             }
@@ -2752,11 +2774,16 @@ export abstract class BaseEntity<T = unknown> {
      *
      * @param message - The failure detail.
      */
-    private registerGraphFailure(message: string | undefined, operation: 'save' | 'delete' = 'save'): void {
+    private registerGraphFailure(message: string | undefined, operation: 'save' | 'delete' = 'save', validationErrors?: unknown): void {
         const result = new BaseEntityResult();
         result.Success = false;
         result.Type = operation === 'delete' ? 'delete' : this.IsSaved ? 'update' : 'create';
         result.Message = message ?? 'Entity graph operation failed';
+        // Rehydrated into real ValidationErrorInfo instances so `LatestResult.Errors` reads exactly as
+        // it does after a local `Validate()` refusal; `[]` when the server sent none.
+        result.Errors = DeserializeValidationErrors(validationErrors);
+        // `message` is the server's CompleteMessage — the same errors, already joined — so say so.
+        result.MessageIncludesErrors = result.Errors.length > 0 && !!message;
         result.StartedAt = new Date();
         result.EndedAt = new Date();
         result.OriginalValues = this.Fields.map(f => ({ FieldName: f.CodeName, Value: f.OldValue }));
@@ -4188,6 +4215,9 @@ export abstract class BaseEntity<T = unknown> {
                             `Failed to save parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
                         // Surface the parent's field-level errors so the caller can act on them.
                         newResult.Errors = parentErrors;
+                        // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
+                        // them — say so, or CompleteMessage repeats every one.
+                        newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
                         newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                         newResult.EndedAt = new Date();
                         this.RegisterResultHistoryEntry(newResult);
@@ -5356,6 +5386,9 @@ export abstract class BaseEntity<T = unknown> {
                                         `Failed to delete parent entity '${this._parentEntity.EntityInfo?.Name}': ${detail}`;
                                     // Surface the parent's field-level errors so the caller can act on them.
                                     newResult.Errors = parentErrors;
+                                    // When `detail` was built from `parentErrors` (no parent Message), `Message` already renders
+                                    // them — say so, or CompleteMessage repeats every one.
+                                    newResult.MessageIncludesErrors = !parentLatest?.Message && parentErrors.length > 0;
                                     newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                                     newResult.EndedAt = new Date();
                                     this.RegisterResultHistoryEntry(newResult);

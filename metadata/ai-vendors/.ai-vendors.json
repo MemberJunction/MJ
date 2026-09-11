@@ -423,6 +423,10 @@
     },
     "primaryKey": {
       "ID": "A0FAB3E7-FCC3-4818-907D-695AB6ACA2AC"
+    },
+    "sync": {
+      "lastModified": "2026-09-10T17:40:33.656Z",
+      "checksum": "1134eae54271063f047baa8030bb6feee93f8075662a587c598337e1bc8648a0"
     }
   }
 ]

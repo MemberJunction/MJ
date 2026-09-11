@@ -27,6 +27,7 @@ import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import { PubSubEngine, AuthorizationError } from 'type-graphql';
 import { GraphQLError } from 'graphql';
+import { RefusalExtensions } from './refusalExtensions.js';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 import sql from 'mssql';
 import { httpTransport, CloudEvent, emitterFor } from 'cloudevents';
@@ -1540,8 +1541,10 @@ export class ResolverBase {
       }
       // save failed, throw error with message
       else {
+        // The message is the prose a toast shows; `validationErrors` is the same refusal with its
+        // field names intact, so the client can paint the fields a server-side ValidateAsync named.
         throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error creating record', {
-          extensions: { code: 'CREATE_ENTITY_ERROR', entityName },
+          extensions: RefusalExtensions('CREATE_ENTITY_ERROR', entityName, entityObject.LatestResult),
         });
       }
     } else return null;
@@ -1649,7 +1652,7 @@ export class ResolverBase {
         // lost, and it still yields undefined when there is genuinely nothing to say, leaving the
         // fallback below to fire rather than showing the user a blank error.
         throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
-          extensions: { code: 'SAVE_ENTITY_ERROR', entityName },
+          extensions: RefusalExtensions('SAVE_ENTITY_ERROR', entityName, entityObject.LatestResult),
         });
       }
     } else
@@ -2054,7 +2057,7 @@ export class ResolverBase {
         // reason on LatestResult, and #3971 proposes a first-class delete-validation seam. Every one
         // of those reasons was being replaced by 'Unknown error' at the API boundary.
         throw new GraphQLError(entityObject.LatestResult?.CompleteMessage ?? 'Unknown error', {
-          extensions: { code: 'DELETE_ENTITY_ERROR', entityName },
+          extensions: RefusalExtensions('DELETE_ENTITY_ERROR', entityName, entityObject.LatestResult),
         });
       }
     } else {

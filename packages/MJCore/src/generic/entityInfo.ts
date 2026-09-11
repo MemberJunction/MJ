@@ -3606,7 +3606,15 @@ export class EntityInfo extends BaseInfo {
     }
 
     /**
-     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not
+     * Determines if a given user, for a given permission type, is exempt from RowLevelSecurity or not.
+     *
+     * A permission row confers an exemption only for an operation it GRANTS (the matching `Can*`
+     * flag is true) and leaves unfiltered. A row that does not grant the operation has no filter
+     * for it either, and that absence means "not applicable", not "unrestricted" — so it must not
+     * lift a filter that another of the user's roles binds. Without the `Can*` check, a role that
+     * grants only reads (CanCreate=false, hence CreateRLSFilterID=null) made every holder of that
+     * role exempt from CREATE row-level security, which is the shape of the 'UI' role every
+     * authenticated user holds on nearly every entity.
      * @param user 
      * @param type 
      * @returns 
@@ -3618,19 +3626,19 @@ export class EntityInfo extends BaseInfo {
             if (roleMatch) { // user has this role 
                 switch (type) {
                     case EntityPermissionType.Create:
-                        if (!ep.CreateRLSFilterID)
+                        if (ep.CanCreate && !ep.CreateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Read:
-                        if (!ep.ReadRLSFilterID)
+                        if (ep.CanRead && !ep.ReadRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Update:
-                        if (!ep.UpdateRLSFilterID)
+                        if (ep.CanUpdate && !ep.UpdateRLSFilterID)
                             return true;
                         break;
                     case EntityPermissionType.Delete:
-                        if (!ep.DeleteRLSFilterID)
+                        if (ep.CanDelete && !ep.DeleteRLSFilterID)
                             return true;
                         break;
                 }
@@ -3641,7 +3649,15 @@ export class EntityInfo extends BaseInfo {
     }
     
     /**
-     * Returns RLS security info attributes for a given user and permission type
+     * Returns RLS security info attributes for a given user and permission type.
+     *
+     * Only permission rows that GRANT the operation (the matching `Can*` flag is true) contribute a
+     * filter. The filters of a user's roles are OR'd together by the caller, so a filter collected
+     * from a row that does not grant the operation would WIDEN the clause: a user granted Create by
+     * role A (bound to filter F1) would create against `F1 OR F2` when role B keeps a leftover
+     * `CreateRLSFilterID = F2` beside `CanCreate = false`. `GetUserPermisions` aggregates the flags
+     * across roles, so such a user passes the permission gate on role A alone; nothing else stops
+     * F2 from applying. A user with no granting row gets no clause here — and no permission either.
      * @param user 
      * @param type 
      * @returns 
@@ -3655,19 +3671,19 @@ export class EntityInfo extends BaseInfo {
                 let matchObject: RowLevelSecurityFilterInfo = null;
                 switch (type) {
                     case EntityPermissionType.Create:
-                        if (ep.CreateRLSFilterID)
+                        if (ep.CanCreate && ep.CreateRLSFilterID)
                             matchObject = ep.CreateRLSFilterObject;
                         break;
                     case EntityPermissionType.Read:
-                        if (ep.ReadRLSFilterID)
+                        if (ep.CanRead && ep.ReadRLSFilterID)
                             matchObject = ep.ReadRLSFilterObject;
                         break;
                     case EntityPermissionType.Update:
-                        if (ep.UpdateRLSFilterID)
+                        if (ep.CanUpdate && ep.UpdateRLSFilterID)
                             matchObject = ep.UpdateRLSFilterObject;
                         break;
                     case EntityPermissionType.Delete:
-                        if (ep.DeleteRLSFilterID)
+                        if (ep.CanDelete && ep.DeleteRLSFilterID)
                             matchObject = ep.DeleteRLSFilterObject;
                         break;
                 }

@@ -4,6 +4,7 @@ import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
 import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
+import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 
 /**
@@ -805,5 +806,92 @@ describe('MjFormFieldComponent — field-level security', () => {
   it('FAILS OPEN on the write gate when no user has resolved', () => {
     const f = render({ Record: makeSecuredWidget(null), FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: null } });
     expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
+});
+
+describe('a server-reported validation error paints the field the way a local one does', () => {
+  /**
+   * A `ValidateAsync()` refusal runs on the SERVER; the client cannot recompute it. It reaches the
+   * form as `FormContext.validationErrors` after the failed save — the same channel a local
+   * `Validate()` refusal uses. The gotcha this pins: `FieldErrors` used to return only the field's
+   * own local validation once the field was touched, so an error the server reported for the very
+   * field the user had just typed in never showed. `validationRevision` fixes the tie-break — an edit
+   * made BEFORE the failure must not hide it, an edit made AFTER it addresses it.
+   */
+  const ERROR_CLASS = 'mj-forms-field--has-error';
+  const MESSAGE = '.mj-forms-field-validation--error';
+  const SERVER_MESSAGE = 'Widget Name "Gadget" is already registered to another tenant.';
+  const serverError = () => new ValidationErrorInfo('Name', SERVER_MESSAGE, 'Gadget');
+  const failed = (revision: number, errors: ValidationErrorInfo[] = [serverError()]) => ({ showValidation: true, validationErrors: errors, validationRevision: revision });
+  const clean = { showValidation: false, validationErrors: [] as ValidationErrorInfo[], validationRevision: 0 };
+
+  it('an UNTOUCHED field named by the error shows the red border and the message', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    expect(text(f, MESSAGE)).toContain(SERVER_MESSAGE);
+  });
+
+  it('a field the user edited BEFORE the failed save still shows it (the real gotcha)', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: clean });
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget');
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS), 'precondition: a valid local edit shows nothing').toBe(false);
+
+    // The save fails server-side and the form publishes the refusal under a new revision.
+    f.componentRef.setInput('FormContext', failed(1));
+    f.detectChanges();
+
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    expect(text(f, MESSAGE)).toContain(SERVER_MESSAGE);
+  });
+
+  it('a later valid edit clears it — the user is addressing the error, live validation takes over', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS), 'precondition: shown').toBe(true);
+
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget Mk II');
+    f.detectChanges();
+
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
+    expect(query(f, MESSAGE)).toBeNull();
+  });
+
+  it('a later INVALID edit swaps the server message for the live local one', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    typeInto(f, 'input.mj-forms-field-input', 'x'.repeat(201)); // Name is nvarchar(200) — real BaseEntity.Validate() refuses this
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    expect(text(f, MESSAGE)).toContain('cannot be longer than'); // nvarchar(200) is 100 characters — the number is MJ's, the swap is what is under test
+    expect(text(f, MESSAGE)).not.toContain(SERVER_MESSAGE);
+  });
+
+  it('a NEW failure after the edit shows again — each failed save is a fresh revision', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget');
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS), 'precondition: cleared by the edit').toBe(false);
+
+    f.componentRef.setInput('FormContext', failed(2));
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+  });
+
+  it('an error with no field source paints NO field — it is toast-only', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: failed(1, [new ValidationErrorInfo('', 'Record-level refusal', null)]) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
+    expect(query(f, MESSAGE)).toBeNull();
+  });
+
+  it('an error naming a DIFFERENT field does not paint this one', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Description', Type: 'textbox', EditMode: true, FormContext: failed(1) });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
+  });
+
+  it('a FormContext without a revision (older hosts) still behaves: untouched shows, touched-after clears', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Name', Type: 'textbox', EditMode: true, FormContext: { showValidation: true, validationErrors: [serverError()] } });
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(true);
+    typeInto(f, 'input.mj-forms-field-input', 'Gadget Mk II');
+    f.detectChanges();
+    expect(hasClass(f, '.mj-forms-field', ERROR_CLASS)).toBe(false);
   });
 });

@@ -5483,6 +5483,16 @@ export class ManageMetadataBase {
          const allEntityFields = allEntityFieldsResult.recordset;
 
          const generationPromises = [];
+         const ag = new AdvancedGeneration();
+
+         // `skipDBUpdate` means load-only: `runValidationGeneration` is called below with
+         // `generateNewCode = false`, and `generateValidatorFunctionFromCheckConstraint` only reaches an
+         // LLM when that flag is true. Reading a validator back out of an Approved `GeneratedCode` record
+         // is therefore a plain database read — gating it on the AI feature flag is what made
+         // `mj codegen --no-ai` DELETE every committed `Validate()` override rather than preserve it, and
+         // the `codegen-drift` gate (which runs `--no-ai`) then demanded that lossy output. Generation
+         // stays gated; only the read is unconditional.
+         const emitValidators = skipDBUpdate || ag.featureEnabled('ParseCheckConstraints');
 
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
@@ -5518,18 +5528,13 @@ export class ManageMetadataBase {
                   }
                }
                else {
-                  // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse, so a
-                  // Validate() function is the only way to express it.
-                  //
-                  // Do NOT gate this call on ag.featureEnabled('ParseCheckConstraints'). That gate belongs INSIDE
-                  // generateValidatorFunctionFromCheckConstraint (paired with generateNewCode), where it guards only the LLM call.
-                  // Gating out here also skips that function's no-AI early return -- the path that returns the ALREADY-SAVED validator
-                  // when the stored CHECK constraint still matches the live one. With the gate here, `--no-ai` (or simply having the
-                  // feature switched off) means nothing is pushed to _generatedValidators, no Validate() override is emitted, and the
-                  // next rewrite of the entity subclasses silently DELETES every committed validator.
-                  // Always call; the inner function decides whether to load stored code, generate new code, or do nothing.
-                  // run this in parallel
-                  generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
+                  // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
+                  // attempt to use an LLM to do things fancier now
+                  if (emitValidators) {
+                     // either we are loading persisted validators, or the feature is on and we may generate new ones
+                     // run this in parallel
+                     generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
+                  }
                }
             }
          }
@@ -5538,8 +5543,11 @@ export class ManageMetadataBase {
          // As above: no featureEnabled() gate here. Loading previously-generated code is not an AI operation, and the
          // ParseCheckConstraints gate that does guard the LLM call lives inside generateValidatorFunctionFromCheckConstraint.
          for (const r of tableLevelResults) {
-            // run this in parallel
-            generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
+            if (emitValidators) {
+               // either we are loading persisted validators, or the feature is on and we may generate new ones
+               // run this in parallel
+               generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
+            }
          }
 
          // await the completion of all generation promises here
