@@ -1,18 +1,11 @@
 import { BaseEntity, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIRemoteBrowserProviderEntity } from '@memberjunction/core-entities';
+import type { MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures } from '@memberjunction/core-entities';
 
-/**
- * The complete set of known `IRemoteBrowserProviderFeatures` keys (see the generated
- * `MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures` interface and
- * `metadata/entities/JSONType-interfaces/IRemoteBrowserProviderFeatures.ts`). `SupportedFeatures`
- * is a flat object of optional booleans, so the validation is: every present key must be in this
- * set and every value must be a boolean. Keeping the list here (rather than reflecting off a
- * runtime value) makes the validator a PURE, dependency-free, easily-unit-tested function and
- * gives a friendly "unknown feature flag" message that a free-form `additionalProperties:false`
- * schema would not. Mirrors `KNOWN_BRIDGE_PROVIDER_FEATURE_KEYS`.
- */
-export const KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS: ReadonlySet<string> = new Set<string>([
+type RemoteBrowserFeatureKey = keyof MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures;
+
+const REMOTE_BROWSER_FEATURE_KEYS = [
     // Control substrate & strategies
     'RawCdpControl',
     'NativeAIControl',
@@ -28,10 +21,28 @@ export const KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS: ReadonlySet<string> = n
     'MultiTab',
     'FileDownloads',
     'CaptchaSolving',
-]);
+] as const satisfies readonly RemoteBrowserFeatureKey[];
 
-/** The valid `DefaultControlMode` values (mirrors the `RemoteBrowserControlMode` union + the DB CHECK). */
-export const REMOTE_BROWSER_CONTROL_MODES: ReadonlySet<string> = new Set<string>(['AgentOnly', 'ViewOnly', 'Collaborative']);
+type _MissingFeature = Exclude<RemoteBrowserFeatureKey, (typeof REMOTE_BROWSER_FEATURE_KEYS)[number]>;
+const _exhaustiveFeature: [_MissingFeature] extends [never] ? true : ['MISSING FEATURE KEYS:', _MissingFeature] = true;
+void _exhaustiveFeature;
+
+/**
+ * The complete set of known `IRemoteBrowserProviderFeatures` keys (see the generated
+ * `MJAIRemoteBrowserProviderEntity_IRemoteBrowserProviderFeatures` interface and
+ * `metadata/entities/JSONType-interfaces/IRemoteBrowserProviderFeatures.ts`). `SupportedFeatures`
+ * is a flat object of optional booleans, verified at compile time against the generated interface.
+ */
+export const KNOWN_REMOTE_BROWSER_PROVIDER_FEATURE_KEYS: ReadonlySet<string> = new Set<string>(REMOTE_BROWSER_FEATURE_KEYS);
+
+type ControlMode = NonNullable<MJAIRemoteBrowserProviderEntity['DefaultControlMode']>;
+const CONTROL_MODES = ['AgentOnly', 'ViewOnly', 'Collaborative'] as const satisfies readonly ControlMode[];
+type _MissingMode = Exclude<ControlMode, (typeof CONTROL_MODES)[number]>;
+const _exhaustiveMode: [_MissingMode] extends [never] ? true : ['MISSING CONTROL MODES:', _MissingMode] = true;
+void _exhaustiveMode;
+
+/** The valid `DefaultControlMode` values (derived from entity type + verified at compile time). */
+export const REMOTE_BROWSER_CONTROL_MODES: ReadonlySet<string> = new Set<string>(CONTROL_MODES);
 
 /**
  * Server-side `MJ: AI Remote Browser Providers` entity enforcing the invariants the Remote Browser

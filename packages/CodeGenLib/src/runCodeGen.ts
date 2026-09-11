@@ -523,8 +523,20 @@ export class RunCodeGenBase {
       }
 
       startSpinner('Running system integrity checks...');
-      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      succeedSpinner('System integrity checks completed');
+      const integrityResults = await SystemIntegrityBase.RunIntegrityChecks(conn, true);
+      const integrityFailures = integrityResults.filter((r) => !r.Success);
+      if (integrityFailures.length > 0) {
+        failSpinner(`System integrity checks FAILED: ${integrityFailures.length} check(s) failed`);
+        pipelineSuccess = false;
+        for (const failure of integrityFailures) {
+          const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
+          logError(msg);
+          reporter.note(msg);
+          this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+        }
+      } else {
+        succeedSpinner('System integrity checks completed');
+      }
 
       const afterCommands = commands('AFTER');
       if (afterCommands && afterCommands.length > 0) {

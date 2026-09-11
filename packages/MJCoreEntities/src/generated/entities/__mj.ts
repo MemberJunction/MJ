@@ -51039,6 +51039,7 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
  * Contains vendor-native voice/avatar tuning parameters (e.g., ElevenLabs voice settings)
  * moved out of generic base classes into their concrete vendor binding.
  */
+
 export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
     /** Vendor-native tuning, keyed by the vendor on AIPersonaVendor.VendorID.
      *  Typed members are those common enough to be worth compile-time checking. */
@@ -51049,7 +51050,6 @@ export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
     speed?: number;
     [key: string]: unknown;
 }
-
 
 /**
  * MJ: AI Persona Vendors - strongly typed entity sub-class
