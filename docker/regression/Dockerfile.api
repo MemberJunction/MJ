@@ -11,7 +11,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 
 WORKDIR /app
 
-COPY package.json package-lock.json turbo.json tsconfig.angular.json tsconfig.server.json ./
+# corepack activates the pnpm version pinned by package.json's `packageManager`, matching
+# docker/MJAPI/Dockerfile. This repo moved off npm in the 6.x era: there is no
+# package-lock.json, so the previous `COPY … package-lock.json` failed the build outright.
+RUN corepack enable
+
+# pnpm-workspace.yaml is LOAD-BEARING here, not incidental metadata:
+#   * linkWorkspacePackages: true — pnpm 10 defaults this to false, which makes internal deps
+#     pinned at an exact version resolve from the REGISTRY instead of linking to the local
+#     package. For an unpublished package that fails loudly; for a published one it silently
+#     builds against the wrong code.
+#   * onlyBuiltDependencies — pnpm 10 blocks postinstall scripts by default, so without this
+#     isolated-vm / sharp / esbuild / lmdb would install unbuilt and fail at runtime.
+#   * packages: — the workspace globs themselves (pnpm ignores package.json's `workspaces`).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json tsconfig.angular.json tsconfig.server.json ./
 COPY packages/ ./packages/
 COPY metadata/ ./metadata/
 COPY migrations/ ./migrations/
@@ -26,11 +39,16 @@ COPY migrations/ ./migrations/
 COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/GeneratedEntities/src/generated/
 COPY docker/regression/.docker-generated/MJAPI-generated/ ./packages/MJAPI/src/generated/
 
-RUN npm install
+RUN pnpm install --frozen-lockfile
 
-RUN npm run build:api
+RUN pnpm run build:api
 
 # ─── Runtime ───────────────────────────────────────────────────────────────
+# Copying the whole /app is what makes pnpm work across stages: its node_modules is a symlink
+# farm pointing into node_modules/.pnpm, and those links are RELATIVE and entirely contained
+# under /app — so `COPY --from=builder /app ./` preserves a self-consistent tree. Copying only
+# packages/*/dist would leave every dependency dangling. No pnpm is needed at runtime; the
+# CMD is plain `node`.
 FROM node:24-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
