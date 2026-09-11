@@ -328,6 +328,47 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI override', () => 
     }
 });
 
+describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fragment denylist (#4392)', () => {
+    // #4392 removed ValidateUserProvidedSQLClause from UserSearchString because the term is
+    // normally confined to a string literal. UserSearchParamFormatAPI breaks that premise: the
+    // admin-authored format may splice {0} in UNQUOTED (` = {0}` on a numeric field is a
+    // supported, tested case just above), and then the term IS SQL. Without the screen,
+    // `2026)) UNION SELECT 1,2,3 --` became a UNION injection in the view's WHERE clause.
+
+    const customFormatEntity = () => makeEntity({ fields: [makeField({
+        name: 'Year', type: 'int', predicate: 'Contains', paramFormat: ' = {0}',
+    })] });
+
+    for (const payload of [
+        '2026)) UNION SELECT 1,2,3 --',
+        '2026; DROP TABLE Users--',
+        '2026) OR 1=1 --',
+        "2026 /* comment */",
+        '2026; EXEC xp_cmdshell',
+    ]) {
+        it(`refuses ${JSON.stringify(payload)} when a field splices the term into SQL`, () => {
+            expect(() => provider.buildSQL(customFormatEntity(), payload)).toThrow(/UserSearchParamFormatAPI/);
+        });
+    }
+
+    it('still allows an ordinary term on a custom-format entity', () => {
+        expect(provider.buildSQL(customFormatEntity(), '2026')).toBe(`(([Year]  = 2026))`);
+    });
+
+    it('a QUOTED custom format keeps working for terms with punctuation', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" })] });
+        expect(provider.buildSQL(e, "O'Leary")).toBe(`(([Phone]  = 'O''Leary'))`);
+    });
+
+    it('does NOT screen entities without a custom format — that is the #4392 fix', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        // "union"/"drop"/";" are ordinary words here; the term lands inside a literal.
+        expect(() => provider.buildSQL(e, 'Union Pacific')).not.toThrow();
+        expect(() => provider.buildSQL(e, 'drop shipment')).not.toThrow();
+        expect(() => provider.buildSQL(e, 'a; b')).not.toThrow();
+    });
+});
+
 describe('createViewUserSearchSQL — type guards', () => {
     it('Non-text fields (int, uniqueidentifier, etc.) are skipped', () => {
         const e = makeEntity({ fields: [
@@ -382,6 +423,32 @@ describe('createViewUserSearchSQL — multiple fields', () => {
             `([LastName]  LIKE N'%foo%' ESCAPE '\\') OR ` +
             `([Email]  LIKE N'foo%' ESCAPE '\\'))`
         );
+    });
+});
+
+describe('createViewUserSearchSQL — FTX operator detection is word-boundary, not substring (#4392)', () => {
+    // As SUBSTRINGS, `OR` matches "C-OR-PORATE" and `AND` matches "ST-AND-ARD", so ordinary
+    // two-word searches were emitted as `Corporate%Office`. `%` is not a full-text operator —
+    // that is a syntax error, not a search. Only a standalone AND/OR/NOT is an operator.
+    const ftsEntity = () => makeEntity({ ftx: true, ftxFunction: 'fnSearchAccount', fields: [] });
+
+    for (const [term, expected] of [
+        ['Corporate Office', 'Corporate AND Office'],   // "cORporate" — was Corporate%Office
+        ['Standard Rate', 'Standard AND Rate'],         // "stANDard"  — was Standard%Rate
+        ['North America', 'North AND America'],         // "nORth"     — was North%America
+        ['Marcus Chen', 'Marcus AND Chen'],             // no operator substring — already worked
+    ] as [string, string][]) {
+        it(`${JSON.stringify(term)} becomes ${JSON.stringify(expected)}`, () => {
+            expect(provider.buildSQL(ftsEntity(), term)).toBe(
+                `[ID] IN (SELECT [ID] FROM [crm].[fnSearchAccount]('${expected}'))`,
+            );
+        });
+    }
+
+    it('a STANDALONE operator is still honored as a boolean expression', () => {
+        const sql = provider.buildSQL(ftsEntity(), 'foo AND bar');
+        expect(sql).toContain(' AND ');
+        expect(sql).not.toContain('%');
     });
 });
 

@@ -2238,9 +2238,15 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (entityInfo.FullTextSearchEnabled) {
             let u = safeUserSearchString;
             const uUpper = u.toUpperCase();
-            if (uUpper.includes(' AND ') || uUpper.includes(' OR ') || uUpper.includes(' NOT ')) {
+            // WORD-boundary tests, not substring tests (#4392). As substrings, `OR` matches
+            // "C-OR-PORATE" and `AND` matches "ST-AND-ARD", so ordinary two-word searches —
+            // "Corporate Office", "Standard Rate", "North America" — fell into the branch below
+            // and were emitted as `Corporate%Office`. `%` is not a full-text operator, so those
+            // searches produced a syntax error instead of results. Only a STANDALONE AND/OR/NOT
+            // is a boolean operator the caller meant.
+            if (/ (AND|OR|NOT) /.test(uUpper)) {
                 u = uUpper.replace(/ /g, '%').replace(/%AND%/g, ' AND ').replace(/%OR%/g, ' OR ').replace(/%NOT%/g, ' NOT ');
-            } else if (uUpper.includes('AND') || uUpper.includes('OR') || uUpper.includes('NOT')) {
+            } else if (/\b(AND|OR|NOT)\b/.test(uUpper)) {
                 u = u.replace(/ /g, '%');
             } else if (u.includes(' ')) {
                 if (!(u.startsWith('"') && u.endsWith('"'))) {
@@ -2253,6 +2259,27 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const pkName = this.QuoteIdentifier(entityInfo.FirstPrimaryKey.Name); // first-pk-ok: full-text search functions key on the single-column unique index the engine requires
             sUserSearchSQL = `${pkName} IN (SELECT ${pkName} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.FullTextSearchFunction ?? '')}('${u}'))`;
         } else {
+            // 🚨 SECURITY (#4392): the search term is free text, and on every predicate this
+            // method builds itself it is CONFINED — wrapped in a string literal with single
+            // quotes doubled — so no keyword it contains can reach the parser and the SQL
+            // fragment denylist is neither needed nor appropriate.
+            //
+            // `UserSearchParamFormatAPI` is the ONE exception. That format is admin-authored and
+            // may splice `{0}` in UNQUOTED: ` = {0}` on a numeric field is a documented, tested
+            // case (see createViewUserSearchSQL.test.ts). There the term IS SQL, with no quote
+            // keeping it contained, so the fragment denylist still has to apply. Screen only when
+            // such a field actually participates — ordinary entities keep accepting the ordinary
+            // searches that #4392 was about.
+            //
+            // Note this restores the pre-#4392 screen for this path; it does not close the
+            // unquoted-format hole, which the denylist never covered (`1) OR 1=1` carries no
+            // forbidden keyword). Quoting `{0}` in the format is what actually closes that.
+            if (this.userSearchFieldsUseCustomFormat(entityInfo) && !this.ValidateUserProvidedSQLClause(userSearchString)) {
+                throw new Error(
+                    `Invalid User Search string: this entity has a field using UserSearchParamFormatAPI, ` +
+                    `which splices the term directly into SQL, and the term contains forbidden keywords.`,
+                );
+            }
             const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
             for (const field of entityInfo.Fields) {
                 if (!field.IncludeInUserSearchAPI) continue;
@@ -2286,6 +2313,17 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (entityInfo.PrimaryKeys.length === 1) return;
         const columns = entityInfo.PrimaryKeys.map(pk => pk.Name).join(', ');
         throw new Error(`${feature} requires a single-column primary key. Entity "${entityInfo.Name}" has ${entityInfo.PrimaryKeys.length} primary key columns (${columns}).`);
+    }
+
+    /**
+     * True when any search-enabled field carries a `UserSearchParamFormatAPI`. Such a format is
+     * admin-authored and may place `{0}` outside quotes, so for those entities the search term is
+     * not guaranteed to land inside a literal and still needs the SQL-fragment denylist (#4392).
+     */
+    protected userSearchFieldsUseCustomFormat(entityInfo: EntityInfo): boolean {
+        return entityInfo.Fields.some(
+            f => f.IncludeInUserSearchAPI && !!f.UserSearchParamFormatAPI && f.UserSearchParamFormatAPI.length > 0,
+        );
     }
 
     /**

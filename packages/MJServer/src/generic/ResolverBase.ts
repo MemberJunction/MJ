@@ -874,9 +874,12 @@ export class ResolverBase {
    * coincidentally valid SQL: `Marcus Chen` parses as nothing, `O'Leary` as an unterminated
    * literal — so essentially every real name search returned 0 rows.
    *
-   * The provider-level denylist still covers it: `ValidateUserProvidedSQLClause` is applied to
-   * `UserSearchString` in `GenericDatabaseProvider` on both the view and the count paths, which
-   * keeps the stacked-statement / DML / comment / UNION / WAITFOR screen on the value.
+   * The provider-level denylist does NOT back this up — it was removed from `UserSearchString`
+   * in the same change, for the same reason (it refused `Union Pacific`). What protects the value
+   * is that it is never SQL: it reaches the database only as a quoted, quote-doubled literal.
+   * The single place that is not true is a field carrying `UserSearchParamFormatAPI`, whose
+   * admin-authored format may splice the term in unquoted; `createViewUserSearchSQL` re-applies
+   * `ValidateUserProvidedSQLClause` for exactly those entities.
    */
   protected screenClientViewClauses(
     clauses: {

@@ -1223,6 +1223,43 @@ const FREE_TEXT_TERMS: { Term: string; Why: string }[] = [
     { Term: 'a; b', Why: 'denylist: a semicolon read as a statement terminator' },
 ];
 
+/**
+ * Find a row on ANY LIKE-path searchable entity whose search-field value is plain multi-word text.
+ * Multi-word is the whole point of #4392, so this leg must not settle for whatever value
+ * `discoverSearchTarget` returns first.
+ */
+async function discoverMultiWordSeed(
+    ctx: IntegrationCheckContext,
+): Promise<{ Entity: EntityInfo; Field: EntityFieldInfo; Pk: string; Id: string; Value: string } | null> {
+    const rv = new RunView();
+    for (const entity of sweepEntities(ctx)) {
+        if (sweepSkip(entity) || entity.FullTextSearchEnabled || entity.PrimaryKeys.length !== 1) {
+            continue;
+        }
+        const field = entity.Fields.find(f =>
+            f.IncludeInUserSearchAPI && !f.IsVirtual && f.TSType === EntityFieldTSType.String && !f.UserSearchParamFormatAPI,
+        );
+        if (!field) {
+            continue;
+        }
+        const pk = entity.PrimaryKeys[0].Name;
+        const rows = await rv.RunView<Record<string, unknown>>(
+            { EntityName: entity.Name, Fields: [pk, field.Name], ExtraFilter: `${field.Name} IS NOT NULL`, MaxRows: 200, ResultType: 'simple' },
+            ctx.User,
+        );
+        if (!rows.Success) {
+            continue;
+        }
+        for (const row of rows.Results) {
+            const v = row[field.Name];
+            if (typeof v === 'string' && / /.test(v.trim()) && /^[A-Za-z0-9][A-Za-z0-9 ]{4,58}[A-Za-z0-9]$/.test(v.trim())) {
+                return { Entity: entity, Field: field, Pk: pk, Id: String(row[pk]), Value: v.trim() };
+            }
+        }
+    }
+    return null;
+}
+
 const RVM19: NamedCheck = {
     Id: 'runview-matrix.RVM19',
     Name: 'RVM19: UserSearchString is free text — multi-word / apostrophe / punctuation terms are accepted and still filter (#4392)',
@@ -1246,6 +1283,22 @@ const RVM19: NamedCheck = {
         const baseline = total.TotalRowCount ?? 0;
         Assert(baseline > 0, `RVM19 needs a populated entity; ${entity.Name} has ${baseline} rows`);
 
+        // Control probe: prove the entity's search surface actually FILTERS before asserting that
+        // terms filter. discoverSearchTarget accepts any IncludeInUserSearchAPI string field, but
+        // createViewUserSearchSQL skips unbounded (MAX) text columns — if every search field is
+        // one, the predicate is empty and UserSearchString is a documented no-op. That is RVM9's
+        // leg, not this one; here it would make every assertion below vacuous, so skip honestly
+        // rather than fail with a misleading "the term was dropped" message.
+        const control = await rv.RunView(
+            { EntityName: entity.Name, UserSearchString: 'zzz-no-such-term-anywhere-4392', ResultType: 'count_only', IgnoreMaxRows: true },
+            ctx.User,
+        );
+        requireSuccess(control, `RVM19 control probe on ${entity.Name}`);
+        if ((control.TotalRowCount ?? 0) >= baseline) {
+            console.warn(`      ⚠ RVM19 SKIPPED — ${entity.Name} has no effective search predicate (every search field is skipped by createViewUserSearchSQL), so no leg here would discriminate.`);
+            return;
+        }
+
         // Leg 1 — every free-text term is ACCEPTED (not refused at the boundary) and is APPLIED
         // (the count drops below the unfiltered baseline; none of these matches everything).
         for (const t of FREE_TEXT_TERMS) {
@@ -1258,31 +1311,22 @@ const RVM19: NamedCheck = {
                 `RVM19 [${t.Why}] search term ${JSON.stringify(t.Term)} returned the unfiltered count (${r.TotalRowCount}) on ${entity.Name} — the term was dropped rather than applied`);
         }
 
-        // Leg 2 — a multi-word term that DOES match, built from a real row, so this is a positive
-        // assertion (accepted AND matching) rather than merely "did not throw".
-        const seeds = await rv.RunView<Record<string, unknown>>(
-            {
-                EntityName: entity.Name, Fields: [pkName, target.Field.Name],
-                ExtraFilter: `${target.Field.Name} IS NOT NULL`, MaxRows: 200, ResultType: 'simple',
-            },
-            ctx.User,
-        );
-        requireSuccess(seeds, `RVM19 seed read on ${entity.Name}`);
-        const seed = seeds.Results.find(r => {
-            const v = r[target.Field.Name];
-            return typeof v === 'string' && /^[A-Za-z0-9][A-Za-z0-9 ]{4,58}[A-Za-z0-9]$/.test(v.trim()) && / /.test(v.trim());
-        });
+        // Leg 2 — the leg that actually proves #4392: a MULTI-WORD term drawn from a real row must
+        // come back matching that row. Search ACROSS LIKE-path entities for a multi-word value
+        // rather than only the one discoverSearchTarget happened to return first — its regex
+        // admits single-word values, so keying this leg to it made the decisive assertion skip on
+        // deployments where that entity's first usable value is one word.
+        const seed = await discoverMultiWordSeed(ctx);
         if (!seed) {
-            console.warn(`      ⚠ RVM19 positive-match leg SKIPPED — no plain MULTI-WORD ${entity.Name}.${target.Field.Name} value in this deployment.`);
+            console.warn('      ⚠ RVM19 positive-match leg SKIPPED — no plain MULTI-WORD value on any LIKE-path searchable entity in this deployment.');
         } else {
-            const term = String(seed[target.Field.Name]).trim();
             const hit = await rv.RunView<Record<string, unknown>>(
-                { EntityName: entity.Name, Fields: [pkName], UserSearchString: term, IgnoreMaxRows: true, ResultType: 'simple' }, ctx.User,
+                { EntityName: seed.Entity.Name, Fields: [seed.Pk], UserSearchString: seed.Value, IgnoreMaxRows: true, ResultType: 'simple' }, ctx.User,
             );
-            requireSuccess(hit, `RVM19 multi-word search for ${JSON.stringify(term)} on ${entity.Name}`);
-            Assert(hit.Results.some(r => normId(String(r[pkName])) === normId(String(seed[pkName]))),
-                `RVM19 the seed row (${String(seed[pkName])}) is missing from the results of a search for its own multi-word ${target.Field.Name} ${JSON.stringify(term)}`);
-            console.log(`      → multi-word term ${JSON.stringify(term)}: ${hit.Results.length} row(s), seed row present`);
+            requireSuccess(hit, `RVM19 multi-word search for ${JSON.stringify(seed.Value)} on ${seed.Entity.Name}`);
+            Assert(hit.Results.some(r => normId(String(r[seed.Pk])) === normId(seed.Id)),
+                `RVM19 the seed row (${seed.Id}) is missing from the results of a search for its own multi-word ${seed.Field.Name} ${JSON.stringify(seed.Value)}`);
+            console.log(`      → multi-word term ${JSON.stringify(seed.Value)} on ${seed.Entity.Name}.${seed.Field.Name}: ${hit.Results.length} row(s), seed row present`);
         }
 
         // Leg 3 — the escaping is still doing its job: a quote-breaking payload lands INSIDE the
