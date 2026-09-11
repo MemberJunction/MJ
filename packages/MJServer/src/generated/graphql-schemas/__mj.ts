@@ -14162,7 +14162,7 @@ export class MJAIPersona_ {
     @MaxLength(36)
     ID: string;
         
-    @Field({description: `Unique display name identifying this persona (e.g., Alloy, Aria, Sage).`}) 
+    @Field({description: `Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.`}) 
     @MaxLength(100)
     Name: string;
         

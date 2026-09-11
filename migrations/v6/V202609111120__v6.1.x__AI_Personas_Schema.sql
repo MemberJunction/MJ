@@ -89,6 +89,14 @@ CREATE TABLE [${flyway:defaultSchema}].[AIAgentPersona] (
 );
 GO
 
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE UNIQUE INDEX [UQ_AIAgentPersona_OneDefaultPerAgent]
+    ON [${flyway:defaultSchema}].[AIAgentPersona] ([AgentID])
+    WHERE [IsDefault] = 1;
+GO
+
 -- -------------------------------------------------------------------------------------
 -- Extended Properties / Descriptions: AIPersona
 -- -------------------------------------------------------------------------------------
@@ -100,7 +108,7 @@ EXEC sp_addextendedproperty
 
 EXEC sp_addextendedproperty
     @name = N'MS_Description',
-    @value = N'Unique display name identifying this persona (e.g., Alloy, Aria, Sage).',
+    @value = N'Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.',
     @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
     @level1type = N'TABLE',  @level1name = N'AIPersona',
     @level2type = N'COLUMN', @level2name = N'Name';

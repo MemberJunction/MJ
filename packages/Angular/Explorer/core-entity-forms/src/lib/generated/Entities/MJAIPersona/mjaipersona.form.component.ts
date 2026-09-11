@@ -16,7 +16,6 @@ export class MJAIPersonaFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'personaIdentity', sectionName: 'Persona Identity', isExpanded: true },
             { sectionKey: 'behavioralTraits', sectionName: 'Behavioral Traits', isExpanded: true },
             { sectionKey: 'mediaAssets', sectionName: 'Media Assets', isExpanded: true },

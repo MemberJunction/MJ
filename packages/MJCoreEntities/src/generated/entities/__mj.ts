@@ -1672,10 +1672,11 @@ export const MJAIAgentPersonaSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: Whether the agent is allowed to use this persona. Set to 0 to explicitly disable or veto a persona.`),
-    StyleOverride: z.string().nullable().describe(`
+    StyleOverride: z.any().nullable().describe(`
         * * Field Name: StyleOverride
         * * Display Name: Style Override
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride
         * * Description: Optional JSON payload overriding or refining persona presentation specifically for this agent (e.g. Tone or SpeakingStyle adjustments).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -5870,10 +5871,11 @@ export const MJAIPersonaVendorSchema = z.object({
         * * SQL Data Type: int
         * * Default Value: 0
         * * Description: Selection priority when multiple vendor bindings qualify for a given persona and modality. Higher numbers indicate higher priority.`),
-    VendorSettings: z.string().nullable().describe(`
+    VendorSettings: z.any().nullable().describe(`
         * * Field Name: VendorSettings
         * * Display Name: Vendor Settings
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPersonaVendorEntity_IAIPersonaVendorSettings
         * * Description: Provider-specific configuration JSON (e.g., ElevenLabs stability, similarityBoost, style, useSpeakerBoost).`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
@@ -5912,9 +5914,9 @@ export const MJAIPersonaSchema = z.object({
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Persona Name
         * * SQL Data Type: nvarchar(100)
-        * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage).`),
+        * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
         * * Display Name: Description
@@ -5950,10 +5952,11 @@ export const MJAIPersonaSchema = z.object({
         * * Display Name: Speaking Style
         * * SQL Data Type: nvarchar(255)
         * * Description: Stylistic manner of speaking (e.g., Casual and conversational, Direct and concise, Academic).`),
-    StyleDescriptors: z.string().nullable().describe(`
+    StyleDescriptors: z.any().nullable().describe(`
         * * Field Name: StyleDescriptors
         * * Display Name: Style Descriptors
         * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPersonaEntity_IAIPersonaStyleDescriptors
         * * Description: Additional descriptive keywords or JSON metadata capturing nuanced personality and presentation traits.`),
     PreviewAudioURL: z.string().nullable().describe(`
         * * Field Name: PreviewAudioURL
@@ -38995,6 +38998,26 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
 
 
 /**
+ * Agent-specific presentation style overrides for an assigned AI Persona.
+ *
+ * Stored as JSON in `MJ: AI Agent Personas.StyleOverride`. CodeGen emits a typed
+ * `StyleOverrideObject` accessor on `MJAIAgentPersonaEntity` returning `MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null`.
+ *
+ * Allows an agent to fine-tune a catalog persona (e.g. "Aria, but more formal and authoritative")
+ * without minting an entirely separate persona record.
+ */
+export interface MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride {
+    /** Optional override for the persona's core Tone. */
+    Tone?: string;
+
+    /** Optional override for the persona's SpeakingStyle. */
+    SpeakingStyle?: string;
+
+    /** Open extension point for additional descriptor overrides. */
+    [key: string]: unknown;
+}
+
+/**
  * MJ: AI Agent Personas - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentPersona
@@ -39109,6 +39132,7 @@ export class MJAIAgentPersonaEntity extends BaseEntity<MJAIAgentPersonaEntityTyp
     * * Field Name: StyleOverride
     * * Display Name: Style Override
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride
     * * Description: Optional JSON payload overriding or refining persona presentation specifically for this agent (e.g. Tone or SpeakingStyle adjustments).
     */
     get StyleOverride(): string | null {
@@ -39116,6 +39140,27 @@ export class MJAIAgentPersonaEntity extends BaseEntity<MJAIAgentPersonaEntityTyp
     }
     set StyleOverride(value: string | null) {
         this.Set('StyleOverride', value);
+    }
+
+    private _StyleOverrideObject_cached: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null | undefined = undefined;
+    private _StyleOverrideObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for StyleOverride — returns parsed JSON as MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get StyleOverrideObject(): MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null {
+        const raw = this.StyleOverride;
+        if (raw !== this._StyleOverrideObject_lastRaw) {
+            this._StyleOverrideObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleOverrideObject_lastRaw = raw;
+        }
+        return this._StyleOverrideObject_cached!;
+    }
+    set StyleOverrideObject(value: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleOverride = raw;
+        this._StyleOverrideObject_cached = value;
+        this._StyleOverrideObject_lastRaw = raw;
     }
 
     /**
@@ -50844,6 +50889,40 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 
 
 /**
+ * Provider-specific configuration JSON for a persona-to-vendor binding.
+ *
+ * Stored as JSON in `MJ: AI Persona Vendors.VendorSettings`. CodeGen emits a typed
+ * `VendorSettingsObject` accessor on `MJAIPersonaVendorEntity` returning `MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null`.
+ *
+ * Contains vendor-native voice/avatar tuning parameters (e.g., ElevenLabs voice settings)
+ * moved out of generic base classes into their concrete vendor binding.
+ */
+export interface MJAIPersonaVendorEntity_IElevenLabsVoiceSettings {
+    /** Stability slider (0.0 to 1.0) controlling voice consistency vs variability. */
+    stability?: number;
+    /** Similarity boost (0.0 to 1.0) controlling adherence to the original voice sample. */
+    similarityBoost?: number;
+    /** Style exaggeration (0.0 to 1.0) amplifying stylistic inflections. */
+    style?: number;
+    /** Speaker boost enhancement toggle. */
+    useSpeakerBoost?: boolean | number;
+}
+
+export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
+    /** ElevenLabs tuning settings at top level for flat vendor configuration. */
+    stability?: number;
+    similarityBoost?: number;
+    style?: number;
+    useSpeakerBoost?: boolean | number;
+
+    /** Namespaced ElevenLabs tuning settings. */
+    ElevenLabs?: MJAIPersonaVendorEntity_IElevenLabsVoiceSettings;
+
+    /** Open extension point for other vendor-specific settings (e.g., HeyGen avatar configs). */
+    [key: string]: unknown;
+}
+
+/**
  * MJ: AI Persona Vendors - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIPersonaVendor
@@ -50976,6 +51055,7 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
     * * Field Name: VendorSettings
     * * Display Name: Vendor Settings
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPersonaVendorEntity_IAIPersonaVendorSettings
     * * Description: Provider-specific configuration JSON (e.g., ElevenLabs stability, similarityBoost, style, useSpeakerBoost).
     */
     get VendorSettings(): string | null {
@@ -50983,6 +51063,27 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
     }
     set VendorSettings(value: string | null) {
         this.Set('VendorSettings', value);
+    }
+
+    private _VendorSettingsObject_cached: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null | undefined = undefined;
+    private _VendorSettingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for VendorSettings — returns parsed JSON as MJAIPersonaVendorEntity_IAIPersonaVendorSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get VendorSettingsObject(): MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null {
+        const raw = this.VendorSettings;
+        if (raw !== this._VendorSettingsObject_lastRaw) {
+            this._VendorSettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._VendorSettingsObject_lastRaw = raw;
+        }
+        return this._VendorSettingsObject_cached!;
+    }
+    set VendorSettingsObject(value: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.VendorSettings = raw;
+        this._VendorSettingsObject_cached = value;
+        this._VendorSettingsObject_lastRaw = raw;
     }
 
     /**
@@ -51035,6 +51136,20 @@ export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityT
 
 
 /**
+ * Nuanced style and presentation descriptors for an AI Persona.
+ *
+ * Stored as JSON in `MJ: AI Personas.StyleDescriptors`. CodeGen emits a typed
+ * `StyleDescriptorsObject` accessor on `MJAIPersonaEntity` returning `MJAIPersonaEntity_IAIPersonaStyleDescriptors | null`.
+ *
+ * Reserved extension point for fine-grained style descriptors (e.g. cadence, emphasis, prosody quirks)
+ * beyond the primary Tone and SpeakingStyle scalar columns.
+ */
+export interface MJAIPersonaEntity_IAIPersonaStyleDescriptors {
+    /** Open extension point until the first typed knob lands. */
+    [key: string]: unknown;
+}
+
+/**
  * MJ: AI Personas - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIPersona
@@ -51079,9 +51194,9 @@ export class MJAIPersonaEntity extends BaseEntity<MJAIPersonaEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Persona Name
     * * SQL Data Type: nvarchar(100)
-    * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage).
+    * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.
     */
     get Name(): string {
         return this.Get('Name');
@@ -51185,6 +51300,7 @@ export class MJAIPersonaEntity extends BaseEntity<MJAIPersonaEntityType> {
     * * Field Name: StyleDescriptors
     * * Display Name: Style Descriptors
     * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPersonaEntity_IAIPersonaStyleDescriptors
     * * Description: Additional descriptive keywords or JSON metadata capturing nuanced personality and presentation traits.
     */
     get StyleDescriptors(): string | null {
@@ -51192,6 +51308,27 @@ export class MJAIPersonaEntity extends BaseEntity<MJAIPersonaEntityType> {
     }
     set StyleDescriptors(value: string | null) {
         this.Set('StyleDescriptors', value);
+    }
+
+    private _StyleDescriptorsObject_cached: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null | undefined = undefined;
+    private _StyleDescriptorsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for StyleDescriptors — returns parsed JSON as MJAIPersonaEntity_IAIPersonaStyleDescriptors.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get StyleDescriptorsObject(): MJAIPersonaEntity_IAIPersonaStyleDescriptors | null {
+        const raw = this.StyleDescriptors;
+        if (raw !== this._StyleDescriptorsObject_lastRaw) {
+            this._StyleDescriptorsObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleDescriptorsObject_lastRaw = raw;
+        }
+        return this._StyleDescriptorsObject_cached!;
+    }
+    set StyleDescriptorsObject(value: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleDescriptors = raw;
+        this._StyleDescriptorsObject_cached = value;
+        this._StyleDescriptorsObject_lastRaw = raw;
     }
 
     /**
