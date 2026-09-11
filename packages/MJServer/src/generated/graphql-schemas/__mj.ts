@@ -14756,6 +14756,14 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     UsageTypeID?: string;
         
+    @Field({nullable: true, description: `If this prompt run was executed as part of an AI agent run, references that agent run. May be NULL for direct prompt runs or runs that pre-date attribution; backfilled from AIAgentRunStep.`}) 
+    @MaxLength(36)
+    AgentRunID?: string;
+        
+    @Field({nullable: true, description: `The user on whose behalf this prompt was executed. May be NULL for automated/unauthenticated runs or runs that pre-date attribution; backfilled from the parent AIAgentRun.`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Prompt?: string;
@@ -14803,6 +14811,14 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     UsageType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -15097,6 +15113,12 @@ export class CreateMJAIPromptRunInput {
     @Field({ nullable: true })
     UsageTypeID: string | null;
 
+    @Field({ nullable: true })
+    AgentRunID: string | null;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -15373,6 +15395,12 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     UsageTypeID?: string | null;
+
+    @Field({ nullable: true })
+    AgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
