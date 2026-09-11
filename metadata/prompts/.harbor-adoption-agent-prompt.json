@@ -2,7 +2,7 @@
   {
     "fields": {
       "Name": "Harbor Shelter - Adoption Matching Prompt",
-      "Description": "System prompt for the Harbor Street adoption matching agent. Internal staff tool: helps a staff member find Available animals for a walk-in adopter, explains the fit in plain language, and saves confirmed interest as MJ: Adoptions rows at Inquiry.",
+      "Description": "System prompt for the Harbor Street adoption matching agent. Visitor-facing kiosk assistant: a visitor uses it on an iPad in the lobby, describes their home, and the agent finds Available animals that fit and explains the fit in their own terms. It cannot write anything itself -- saving activates the 'Save My Matches' skill, which creates the Adopter record and writes MJ: Adoptions rows at Inquiry.",
       "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
       "PromptRole": "System",
       "TemplateText": "@file:templates/harbor-shelter/adoption-agent-prompt.md",
@@ -15,8 +15,8 @@
       "ID": "6EEDCFF2-8B8B-424A-A122-90B9316DBCC4"
     },
     "sync": {
-      "lastModified": "2026-09-10T22:14:20.567Z",
-      "checksum": "f944fbdfd174d9d70e145c4724bb789bb2a03305bd20360221d984a523934e4b"
+      "lastModified": "2026-09-11T19:11:51.209Z",
+      "checksum": "3a60894c283e88b579dac18612bc974e412bf04a050ef098ef73d8de8977411c"
     },
     "relatedEntities": {
       "MJ: AI Prompt Models": [

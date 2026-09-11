@@ -54,14 +54,17 @@
             "Description": "Animals currently on offer, with the subtype traits that drive a match. Filtered to Available so the agent cannot suggest one that is on hold or already placed.",
             "SourceType": "RunView",
             "EntityName": "MJ: Animals",
-            "ExtraFilter": "Status = 'Available'"
+            "ExtraFilter": "Status = 'Available'",
+            "ResultType": "simple",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Species\", \"Breed\", \"Sex\", \"EstimatedBirthDate\", \"WeightKg\", \"Description\", \"IsGoodWithPeople\"]",
+            "OrderBy": "Species, Name"
           },
           "primaryKey": {
             "ID": "0EFE0DF1-B484-4BCF-AD7F-A7784F9FE039"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:25:55.206Z",
-            "checksum": "10cf76ed4f1405c5f8b2592cc200aa1f3fc36dc4a5910724628869beb1b9d80a"
+            "lastModified": "2026-09-11T18:23:40.087Z",
+            "checksum": "0fe75a88c4d849dc1163e51915d300a35a0dc5e5398468e16ff27570ed8ade49"
           }
         },
         {
@@ -70,14 +73,17 @@
             "Name": "DOG_TRAITS",
             "Description": "Dog subtype rows — energy level, good with dogs, leash and house trained. These are the fields module 7's IS-A split made queryable instead of buried in free text.",
             "SourceType": "RunView",
-            "EntityName": "MJ: Dogs"
+            "EntityName": "MJ: Dogs",
+            "ResultType": "simple",
+            "FieldsToRetrieve": "[\"ID\", \"EnergyLevel\", \"IsLeashTrained\", \"IsHouseTrained\", \"IsGoodWithDogs\"]",
+            "ExtraFilter": "Status IN ('Available','Hold')"
           },
           "primaryKey": {
             "ID": "26037F3B-2735-4F19-A6B5-71FF685C214F"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:25:55.223Z",
-            "checksum": "3897e22308259b9d3b8d4da55fcc4ebf11c2169a75327fd81bf16c269b18d862"
+            "lastModified": "2026-09-11T18:23:40.067Z",
+            "checksum": "9fd2978f5c8bc1e5678ffb7d7633ad426aca4501f1363c3574356e9034a858a3"
           }
         },
         {
@@ -86,14 +92,17 @@
             "Name": "CAT_TRAITS",
             "Description": "Cat subtype rows — indoor only, declawed, litter trained, good with cats.",
             "SourceType": "RunView",
-            "EntityName": "MJ: Cats"
+            "EntityName": "MJ: Cats",
+            "ResultType": "simple",
+            "FieldsToRetrieve": "[\"ID\", \"IsIndoorOnly\", \"IsDeclawed\", \"IsLitterTrained\", \"IsGoodWithCats\"]",
+            "ExtraFilter": "Status IN ('Available','Hold')"
           },
           "primaryKey": {
             "ID": "490288D9-B5B7-4A27-B22D-EB1B07DEE602"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:25:55.244Z",
-            "checksum": "75721c03cde53e782b103a704c32dfd3059711de0f623a6841d9226a78d0a3dd"
+            "lastModified": "2026-09-11T18:23:40.108Z",
+            "checksum": "2e795cf57175392b0b130a682d52b2b59909ff525777cf357972b097f9689a3e"
           }
         },
         {
@@ -102,14 +111,17 @@
             "Name": "BREEDS",
             "Description": "Breed lookup for size category and typical lifespan, so the agent can flag a Giant breed in a condo.",
             "SourceType": "RunView",
-            "EntityName": "MJ: Breeds"
+            "EntityName": "MJ: Breeds",
+            "ResultType": "simple",
+            "FieldsToRetrieve": "[\"Name\", \"Species\", \"SizeCategory\"]",
+            "ExtraFilter": "IsActive = 1"
           },
           "primaryKey": {
             "ID": "7CDD516F-D1FF-418B-8C67-566B83061D3C"
           },
           "sync": {
-            "lastModified": "2026-09-10T21:25:55.267Z",
-            "checksum": "20ba9a61acd09ad171d4df45e56e7cfe07d1210ea07aea3aca16586dfc4599c2"
+            "lastModified": "2026-09-11T18:23:40.130Z",
+            "checksum": "17b8f95315800d52e3e8f1df99691f88781a49f033d083ffb911488e636d618c"
           }
         },
         {
@@ -119,14 +131,17 @@
             "Description": "Animals on HOLD -- someone else's adoption is already in progress on them. These may be MENTIONED so a visitor knows the animal exists, but they are NOT on offer and may never become available. Deliberately a SEPARATE source from AVAILABLE_ANIMALS: the source an animal came from is what tells the agent whether it may offer that animal or merely mention it. Intake and Transferred animals appear in NEITHER source and must never be named.",
             "SourceType": "RunView",
             "EntityName": "MJ: Animals",
-            "ExtraFilter": "Status = 'Hold'"
+            "ExtraFilter": "Status = 'Hold'",
+            "ResultType": "simple",
+            "FieldsToRetrieve": "[\"ID\", \"Name\", \"Species\", \"Breed\", \"Description\"]",
+            "OrderBy": "Species, Name"
           },
           "primaryKey": {
             "ID": "D05FDF2B-A072-41EF-B912-5EE22C4B441B"
           },
           "sync": {
-            "lastModified": "2026-09-10T22:14:20.807Z",
-            "checksum": "2f2af59baf37f7fad587577991386445bd657be6f553844e11e947da7ef39e10"
+            "lastModified": "2026-09-11T18:23:40.149Z",
+            "checksum": "2992e076cc6bbaef62f0dc2c2ca0d233eee392580cc492a4e25250bdb9bd6196"
           }
         }
       ],
