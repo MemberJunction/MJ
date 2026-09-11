@@ -84,9 +84,6 @@ CREATE TABLE ${flyway:defaultSchema}.EntityFieldPermission (
     -- -- so no BaseEntity subclass, and no Entity.CascadeDeletes setting, can clean up ahead of
     -- it. Without the cascade that DELETE fails on this constraint and CodeGen's whole
     -- metadata-sync phase reports failure on any FLS-enabled entity that loses a column.
-    -- spDeleteUnneededEntityFields is ALSO taught to clear these rows first (below), which is the
-    -- belt to this braces: the proc keeps the deletion explicit and greppable, the cascade covers
-    -- every other path that reaches EntityField.
     CONSTRAINT FK_EntityFieldPermission_EntityField
         FOREIGN KEY (EntityFieldID) REFERENCES ${flyway:defaultSchema}.EntityField(ID)
         ON DELETE CASCADE,
