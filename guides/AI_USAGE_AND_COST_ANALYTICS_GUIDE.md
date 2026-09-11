@@ -11,7 +11,7 @@ Before writing queries, dashboards, or services that measure or report AI spend,
 These nine rules govern all AI usage and cost reporting across MemberJunction:
 
 1. **The additive basis is own cost at the prompt-run grain: `AIPromptRun.Cost`.**
-   Never `TotalCost` (= `Cost + DescendantCost`), never `AIAgentRun.TotalCost` (subtree-inclusive since `calculateTokenStats` adds sub-agent totals), never any `*Rollup` column (written only by task-graph settlement, NULL otherwise, and an output of `GetAgentRunTree` — reading it into an aggregate creates the feedback loop warned about in `metadata/queries/SQL/get-agent-run-tree.sql:21-32`).
+   Never `TotalCost` (= `Cost + DescendantCost`), never `AIAgentRun.TotalCost` (subtree-inclusive since `calculateTokenStats` adds sub-agent totals), never any `*Rollup` column (written only by task-graph settlement, NULL otherwise, and an output of `GetAgentRunTree` — reading it into an aggregate creates the feedback loop warned about in `metadata/queries/SQL/get-agent-run-tree.sql:21-32`). Rule 1 governs *aggregates*: displaying a single run's `TotalCost` (or `TotalCostRollup ?? TotalCost`) on a detail view or card is the correct representation for that individual run, but these inclusive columns must never be summed across runs.
 
 2. **`Cost IS NULL` means unpriced, `Cost = 0` means free.**
    `BaseAIEngine.CalculateModelCost` (`packages/AI/BaseAIEngine/src/BaseAIEngine.ts:642-726`) returns `null` on six distinct guards for exactly this reason. No consumer may coalesce NULL to 0 in an aggregate; every cost aggregate must carry an `UnpricedRuns` count beside every cost figure.
@@ -41,28 +41,26 @@ These nine rules govern all AI usage and cost reporting across MemberJunction:
 
 ## 2. Consumer Audit: How Each Layer Reads Cost
 
-Research conducted across the monorepo identified the following consumers and their current compliance with the doctrine rules:
-
-| Consumer File & Location | Current Access Pattern | Doctrine Violations | Remediation Plan |
+Research conducted across the monorepo identified the following consumers and their current compliance with the doctrine rules:| Consumer File & Location | Current Access Pattern | Doctrine Violations | Remediation Plan |
 |---|---|---|---|
 | `ai-instrumentation.service.ts` (`:329, :348, :377, :378, :503, :549, :608, :648`) | Coalesces cost with `|| 0`; reads agent-run `TotalCost` and rollup properties | **Rules 1, 2**: Coalesces unpriced NULLs to 0; double-counts agent subtrees | Migrate to read `vwAIUsageFacts` or query aggregates; count `UnpricedRuns` |
-| `cost-budget.component.ts` (`:831, :832, :918, :948, :971, :1014`) | Uses `Cost ?? TotalCost ?? 0` across client-loaded prompt runs | **Rules 1, 2**: Falls back to `TotalCost`, coalesces NULL to 0 | Consume `AI: Daily Usage Facts` / aggregate queries with explicit coverage counts |
-| `agent-run-analysis.component.ts` | Reads `AIAgentRun.TotalCost` and step rollups client-side | **Rules 1, 4**: Subtrees double-counted when parents and children both in view | Aggregate from prompt-run own `Cost` via query-time hierarchy CTE |
+| `cost-budget.component.ts` (`:831, :832, :918, :948, :971, :1014`) | Uses `Cost ?? TotalCost ?? 0` across client-loaded prompt runs | **Rules 1, 2**: Falls back to `TotalCost`, coalesces NULL to 0 | Consume `vwAIUsageFacts`, `AIUsageHourly`, `AIUsageDaily` / aggregate queries with explicit coverage counts |
+| `agent-run-analysis.component.ts` | Reads `AIAgentRun.TotalCost` (`:703`) with no `ParentRunID IS NULL` filter | **Rules 1, 4**: Subtrees double-counted when parent and child agent runs are both in view | Filter to root runs (`ParentRunID IS NULL`) or aggregate from prompt-run own `Cost` via query-time hierarchy CTE |
 | `model-performance.component.ts` | Sums prompt run costs directly, defaulting NULLs to 0 | **Rules 1, 2**: Masks unpriced runs as free | Use prompt-run `Cost` only; display `PricedRuns` vs `UnpricedRuns` |
-| `usage-patterns.component.ts` | Scans client-side run records without coverage or unpriced separation | **Rules 2, 9**: Silent under-reporting for unpriced runs | Query pre-aggregated facts with coverage metrics |
-| `error-analysis.component.ts` | Aggregates spend on failed runs using `TotalCost` | **Rule 1**: Uses rollup/inclusive column | Use prompt-run `Cost` |
-| `prompt-run-analysis.component.ts` | Displays prompt runs with fallback to `TotalCost` | **Rule 1**: Mixes own cost with descendant rollups | Display own `Cost`; show separate derived descendant rollups |
-| `ai-agent-run-cost.service.ts` (`:54-67`) | Uses `CalculateRunCost` stored procedure | **Rule 4 compliant precedent**: Correctly walks hierarchy with CTE | Standard pattern to emulate for ad-hoc agent run trees |
+| `usage-patterns.component.ts` | Requests `Cost` (`:64`) but never reads it in component logic | Unbounded pull with no `MaxRows` | Remove unused `Cost` projection; add `MaxRows` |
+| `error-analysis.component.ts` | No cost reads in component | Compliant (no cost reads; needs `MaxRows` paging only) | None |
+| `prompt-run-analysis.component.ts` | Reads prompt runs; sums `Cost` via `sumNullable(r => r.Cost)` (`:1056`); sort key (`:1133`) coalesces NULL to 0 | Correctly sums `Cost` under Rule 1; sort key coalesces NULL to 0; needs `MaxRows` paging | Keep `Cost` sum; preserve unpriced sort ordering; add `MaxRows` paging |
+| `ai-agent-run-cost.service.ts` (`:54-67`) | Executes `CalculateRunCost` query (`metadata/queries/SQL/calculate-ai-agent-run-cost.sql:31`) | **Rule 1**: The saved query sums `pr.TotalCost` instead of `pr.Cost` (fixed in PR4) | Update `calculate-ai-agent-run-cost.sql` to sum `pr.Cost`; note it is an `MJ: Queries` record, not a stored procedure |
 | `ai-agent-run-analytics.component.ts` (`:565, :1361, :1611`) | Reads `TotalCost` across multiple agent run records | **Rules 1, 4**: Double counts child agent runs | Switch to hierarchical CTE aggregate query |
-| `ai-prompt-form.component.ts` (`:1606`) | Displays `TotalCost` on single prompt run | **Rule 1**: Blurs own cost vs descendant cost | Show `Cost` (own) and `DescendantCost` as separate fields |
+| `ai-prompt-form.component.ts` (`:1606`) | Displays `TotalCost` on single prompt run | Display of a single run — compliant; do not SUM this column across runs | Show `Cost` (own) and `DescendantCost` as separate fields |
 | `agent-execution-monitor.component.ts` (`:991`) | Reads `TotalCost` on agent run nodes | **Rules 1, 4**: Accumulates rollup figures across tree | Show node own cost vs subtree rollup derived from query |
-| `agent-execution-node.component.ts` (`:690`) | Displays `TotalCost` on node | **Rule 1**: Uses rollup column directly | Derive node own cost |
-| `message-item.component.ts` (`:1411`) | Reads agent run `TotalCost` for chat turn spend | **Rule 1**: Reads denormalized agent total | Read associated prompt run `Cost` |
+| `agent-execution-node.component.ts` (`:690`) | Displays `TotalCost` on node | Display of a single run — compliant; do not SUM this column across runs | None |
+| `message-item.component.ts` (`:1411`) | Reads agent run `TotalCost` for chat turn spend | Display of a single run — compliant; do not SUM this column across runs | None |
 | `scheduling-instrumentation.service.ts` (`:251`) | Coalesces agent run `TotalCost || 0` | **Rules 1, 2**: Coalesces NULL to 0 and reads subtree total | Read own `Cost` from prompt runs executed by job |
-| `teams-card-builder.ts` (`:380`) | Formats `TotalCost` into notifications | **Rule 1**: May over-report if sub-agent runs exist | Format own cost or derived hierarchy total |
-| `slack-block-builder.ts` (`:574`) | Formats `TotalCost` into notifications | **Rule 1**: May over-report if sub-agent runs exist | Format own cost or derived hierarchy total |
+| `teams-card-builder.ts` (`:380`) | Formats `TotalCost` into notifications | Display of a single run — compliant; do not SUM this column across runs | None |
+| `slack-block-builder.ts` (`:574`) | Formats `TotalCost` into notifications | Display of a single run — compliant; do not SUM this column across runs | None |
 | `ai-agent-session-form.component.ts` (`:317, :350`) | Sums agent run `TotalCost` across session | **Rules 1, 4**: Double-counts sub-agent runs in session | Sum prompt run `Cost` linked to session's agent runs |
-| `MCPServer/src/Server.ts` (`:2134`) | Returns `TotalCost` in tool outputs | **Rule 1**: Surfaces subtree-inclusive total | Return own `Cost` and query-derived total |
+| `MCPServer/src/Server.ts` (`:2134`) | Returns `TotalCost` in tool outputs | Display of a single run — compliant; do not SUM this column across runs | Return own `Cost` and query-derived total |
 
 ---
 
@@ -73,8 +71,8 @@ The following files contain existing guard tests, CTE patterns, and warnings tha
 1. **`metadata/queries/SQL/get-agent-run-tree.sql:21-32`**:
    Documents why rollups are outputs of hierarchy traversals, and why reading rollups back into aggregates creates circular feedback loops.
 2. **`packages/AI/CorePlus/src/__tests__/agent-run-tree.test.ts:162-163`**:
-   Unit test asserting that agent run tree calculations correctly aggregate child spend without double-counting.
+   Unit test asserting that `TotalCostRollup` is never read by the tree (it is an output), protecting against circular feedback loops.
 3. **`packages/TestingFramework/integration-test-suite/src/checks/workflow-demo-agents.checks.ts:341-385`**:
    Integration check ensuring multi-step and sub-agent workflows record verifiable prompt and agent run costs.
 4. **`packages/TestingFramework/integration-test-suite/src/checks/ai-cost.checks.ts` (`AC6`, `AC7`, `AC8`)**:
-   Regression checks enforcing that `TotalCost = Cost + DescendantCost`, priceable work is not silently uncosted, and prompt runs with children do not accumulate direct cost.
+   Regression checks enforcing that `TotalCost = Cost + DescendantCost`, priceable work is not silently uncosted, and AC8 documents today's shape: completed prompt runs with children account for `<= 0.01` (≤ 1%) of total cost, reports unpriced coverage ratio, and asserts non-negative agent run costs. (PR2 will update AC8 to assert parallel parents have `Cost IS NULL`).

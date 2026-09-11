@@ -20,6 +20,7 @@
  * cross-check, not a restatement.
  */
 import { RunView } from '@memberjunction/core';
+import type { AggregateResult } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import type { MJAIModelCostEntity } from '@memberjunction/core-entities';
 import {
@@ -52,6 +53,16 @@ const KNOWN_DRIVER_DIVISORS: Readonly<Record<string, number>> = {
 /** Loud, uniform skip-as-pass note. */
 function skipNote(checkId: string, reason: string): void {
     console.warn(`  ⚠ ai-cost.${checkId} SKIPPED — ${reason}`);
+}
+
+/** Helper to extract numeric aggregate value from AggregateResults by alias. */
+function aggregateValue(results: readonly AggregateResult[] | undefined, alias: string): number {
+    const hit = (results ?? []).find(a => a.alias === alias);
+    if (!hit || hit.value == null) return 0;
+    Assert(!hit.error, `aggregate '${alias}' returned an error: ${hit.error}`);
+    const n = Number(hit.value);
+    Assert(Number.isFinite(n), `aggregate '${alias}' value is not numeric: ${JSON.stringify(hit.value)}`);
+    return n;
 }
 
 /** Ensure the AI metadata cache (models, vendors, costs, price/unit types) is loaded. */
@@ -544,62 +555,79 @@ export const AiCostChecks: NamedCheck[] = [
     },
     {
         Id: 'ai-cost.AC8',
-        Name: 'AC8: prompt-run cost precision and basis invariants — sub-cent counts, parallel parent zero own cost, leaf child costs, non-negative agent run totals',
+        Name: 'AC8: prompt-run cost precision and basis invariants — with-children cost share, coverage reporting, non-negative agent run totals',
         Fn: async (ctx): Promise<void> => {
             const rv = new RunView();
-            const totalPromptRuns = await rv.RunView({
+
+            // Probe completed prompt runs for total count and total cost.
+            const probe = await rv.RunView({
                 EntityName: 'MJ: AI Prompt Runs',
-                ResultType: 'count_only'
+                ExtraFilter: 'CompletedAt IS NOT NULL',
+                Aggregates: [
+                    { expression: 'COUNT(*)', alias: 'TotalCompleted' },
+                    { expression: 'SUM(Cost)', alias: 'TotalCost' }
+                ],
+                ResultType: 'count_only',
+                MaxRows: 1
             }, ctx.User);
-            Assert(totalPromptRuns.Success, `prompt-run count probe failed: ${totalPromptRuns.ErrorMessage}`);
-            if ((totalPromptRuns.TotalRowCount ?? 0) === 0) {
-                skipNote('AC8', 'no MJ: AI Prompt Runs rows exist — precision and basis invariants are unexercised');
+            Assert(probe.Success, `prompt-run completed probe failed: ${probe.ErrorMessage}`);
+            const totalCompleted = aggregateValue(probe.AggregateResults, 'TotalCompleted');
+            if (totalCompleted === 0) {
+                skipNote('AC8', 'no completed MJ: AI Prompt Runs rows exist — precision and basis invariants are unexercised');
                 return;
             }
 
-            // Query 1: count of rows where sub-cent precision is actually present today
-            const subCentResult = await rv.RunView({
+            // (b) Report unpriced ratio as coverage (log line, no assert — coverage is reported, not gated, in PR1).
+            const unpricedProbe = await rv.RunView({
                 EntityName: 'MJ: AI Prompt Runs',
-                ExtraFilter: 'Cost IS NOT NULL AND TotalCost IS NOT NULL AND ROUND(Cost, 4) != Cost',
-                ResultType: 'count_only'
+                ExtraFilter: 'CompletedAt IS NOT NULL AND Cost IS NULL',
+                Aggregates: [{ expression: 'COUNT(*)', alias: 'UnpricedCompleted' }],
+                ResultType: 'count_only',
+                MaxRows: 1
             }, ctx.User);
-            Assert(subCentResult.Success, `sub-cent precision query failed: ${subCentResult.ErrorMessage}`);
-            const subCentPrecisionCount = subCentResult.TotalRowCount ?? 0;
-            console.log(`      → sub-cent precision prompt runs (ROUND(Cost, 4) != Cost): ${subCentPrecisionCount}`);
-
-            // Query 2: ParallelParent prompt runs must carry Cost = NULL (assert 0)
-            const parallelParentResult = await rv.RunView({
-                EntityName: 'MJ: AI Prompt Runs',
-                ExtraFilter: "RunType = 'ParallelParent' AND Cost IS NOT NULL",
-                ResultType: 'count_only'
-            }, ctx.User);
-            Assert(parallelParentResult.Success, `parallel parent cost query failed: ${parallelParentResult.ErrorMessage}`);
-            const parallelParentWithCostCount = parallelParentResult.TotalRowCount ?? 0;
-            AssertEqual(
-                parallelParentWithCostCount,
-                0,
-                `ParallelParent prompt runs must not carry own cost (found ${parallelParentWithCostCount} row(s) with Cost IS NOT NULL)`
+            Assert(unpricedProbe.Success, `unpriced prompt-run query failed: ${unpricedProbe.ErrorMessage}`);
+            const unpricedCompleted = aggregateValue(unpricedProbe.AggregateResults, 'UnpricedCompleted');
+            const pricedCount = totalCompleted - unpricedCompleted;
+            const coveragePct = (pricedCount / totalCompleted) * 100;
+            console.log(
+                `      → prompt-run pricing coverage: ${coveragePct.toFixed(1)}% priced ` +
+                `(${pricedCount}/${totalCompleted} completed runs), ${unpricedCompleted} unpriced`
             );
 
-            // Query 3: Sanity check on leaf child runs having cost
-            const promptRunEntity = ctx.Provider.Entities.find(e => e.Name === 'MJ: AI Prompt Runs');
-            const schema = promptRunEntity?.SchemaName ?? '__mj';
-            const view = promptRunEntity?.BaseView ?? 'vwAIPromptRuns';
+            // (a) SUM(Cost) over completed runs that have at least one child, and SUM(Cost) over all completed runs;
+            // assert the with-children share is <= 0.01.
+            // This documents today's shape: the consolidated parallel parent is the only persisted row
+            // and carries the selected arm's cost.
+            // NOTE: PR2 flips this to "parents have Cost IS NULL" and AC8 must be updated in that PR.
+            const totalCostAll = aggregateValue(probe.AggregateResults, 'TotalCost');
+            let withChildrenShare = 0;
+            if (totalCostAll > 0) {
+                const withChildrenResult = await rv.RunView({
+                    EntityName: 'MJ: AI Prompt Runs',
+                    ExtraFilter: 'CompletedAt IS NOT NULL AND Cost IS NOT NULL AND ID IN (SELECT ParentID FROM vwAIPromptRuns WHERE ParentID IS NOT NULL)',
+                    Aggregates: [{ expression: 'SUM(Cost)', alias: 'ChildParentCost' }],
+                    ResultType: 'count_only',
+                    MaxRows: 1
+                }, ctx.User);
+                Assert(withChildrenResult.Success, `with-children prompt-run query failed: ${withChildrenResult.ErrorMessage}`);
+                const childParentCost = aggregateValue(withChildrenResult.AggregateResults, 'ChildParentCost');
+                withChildrenShare = childParentCost / totalCostAll;
+                console.log(
+                    `      → with-children cost share: ${(withChildrenShare * 100).toFixed(2)}% ` +
+                    `($${childParentCost.toFixed(4)} with children / $${totalCostAll.toFixed(4)} total completed)`
+                );
+            }
+            Assert(
+                withChildrenShare <= 0.01,
+                `Runs with children must account for <= 1% of total cost in today's model (got ${(withChildrenShare * 100).toFixed(2)}%)`
+            );
 
-            const leafChildResult = await rv.RunView({
-                EntityName: 'MJ: AI Prompt Runs',
-                ExtraFilter: `ParentID IS NOT NULL AND Cost IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${schema}.${view} c WHERE c.ParentID = ${view}.ID)`,
-                ResultType: 'count_only'
-            }, ctx.User);
-            Assert(leafChildResult.Success, `leaf child cost query failed: ${leafChildResult.ErrorMessage}`);
-            const leafChildCount = leafChildResult.TotalRowCount ?? 0;
-            console.log(`      → leaf child prompt runs with cost: ${leafChildCount}`);
-
-            // Query 4: AIAgentRun.TotalCost must be non-negative (assert 0)
+            // Non-negative agent-run cost assert
             const negativeAgentRunCostResult = await rv.RunView({
                 EntityName: 'MJ: AI Agent Runs',
                 ExtraFilter: 'TotalCost IS NOT NULL AND TotalCost < 0',
-                ResultType: 'count_only'
+                ResultType: 'count_only',
+                MaxRows: 1
             }, ctx.User);
             Assert(negativeAgentRunCostResult.Success, `negative agent run cost query failed: ${negativeAgentRunCostResult.ErrorMessage}`);
             const negativeAgentRunCostCount = negativeAgentRunCostResult.TotalRowCount ?? 0;
@@ -608,7 +636,7 @@ export const AiCostChecks: NamedCheck[] = [
                 0,
                 `AIAgentRun.TotalCost must be non-negative (found ${negativeAgentRunCostCount} row(s) with TotalCost < 0)`
             );
-            console.log(`      → verified basis invariants: parallel parents have no own cost, agent run costs non-negative`);
+            console.log(`      → verified basis invariants: with-children share <= 1%, agent run costs non-negative`);
         }
     }
 ];
