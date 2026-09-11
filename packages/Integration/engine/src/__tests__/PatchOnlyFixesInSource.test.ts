@@ -11,6 +11,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ENGINE = readFileSync(join(__dirname, '..', 'IntegrationEngine.ts'), 'utf-8');
+const CONNECTOR = readFileSync(join(__dirname, '..', 'BaseIntegrationConnector.ts'), 'utf-8');
+const REST = readFileSync(join(__dirname, '..', 'BaseRESTIntegrationConnector.ts'), 'utf-8');
 const PIPELINE = readFileSync(join(__dirname, '..', 'IntegrationConnectorCreationPipeline.ts'), 'utf-8');
 
 describe('U17 — the incremental fetch filter is pinned to the run start', () => {
@@ -124,5 +126,36 @@ describe('MJ-RUN-4 — an abandoned object reaches the run, not just the event s
     it('keeps the durable Errors entry at Warning severity, so Status stays Success', () => {
         const i = ENGINE.indexOf('FETCH_ABORTED_INCOMPLETE');
         expect(ENGINE.slice(i, i + 1600)).toMatch(/Severity: 'Warning'/);
+    });
+});
+
+describe('L4 — the content-hash prefetch must not cache per batch', () => {
+    it('bypasses the result cache', () => {
+        // Every batch's filter is unique, so each cached entry is never hit again and memory grows
+        // O(records processed). A ~500k-record drain killed a 3.8 GB box: the KERNEL oom-killed the
+        // process at ~2.3 GB RSS BEFORE V8's ceiling, twice — so no --max-old-space-size fixes it.
+        // This is the fix, and the deploy-time heap ceiling is NOT a substitute for it.
+        const i = ENGINE.indexOf('async PrefetchContentHashes');
+        expect(i).toBeGreaterThan(-1);
+        const body = ENGINE.slice(i, ENGINE.indexOf('\n    }', i));
+        expect(body).toMatch(/BypassCache: true/);
+    });
+});
+
+/**
+ * The empty-table describe fallback is deliberately NOT here — see the note at the site in
+ * BaseIntegrationConnector.DiscoverFieldsViaFetch. It is a DIVERGENCE, not a missing fix: zero
+ * fields is also the correct answer when the sampler adjourned, and porting it turns two
+ * DagDiscoveryABCDE tests red. That signal is what classified it.
+ */
+
+describe('first contact must still sample', () => {
+    it('a not-yet-persisted object falls through to the generic loop instead of throwing', () => {
+        // The pipeline samples BEFORE it persists, so a runtime-discovered object has no catalog
+        // row yet. Throwing here ran the whole fallback chain with zero records — no statistical
+        // PK and no observed widths, for exactly the objects discovery exists to learn.
+        expect(REST).toMatch(/let obj[^\n]*= null;/);
+        expect(REST).toMatch(/catch \{[\s\S]{0,120}not persisted yet/);
+        expect(REST).toMatch(/if \(!obj \|\| this\.DetectTemplateVars\(obj\.APIPath\)\.length === 0\)/);
     });
 });

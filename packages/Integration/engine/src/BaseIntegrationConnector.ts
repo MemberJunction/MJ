@@ -947,6 +947,17 @@ export abstract class BaseIntegrationConnector {
                 ),
                 { Discovery: { TimeBudgetMs: timeBudgetMs }, ReadOnly: true },
             );
+            // NOTE — the fleet patch adds a describe-surface fallback here when the stream yields
+            // zero fields, because an EMPTY table was persisted FIELDLESS ("No fields found for this
+            // table") even though the describe surface knows its columns. It is deliberately NOT
+            // ported into source: zero fields is also the CORRECT answer when the sampler ADJOURNED
+            // — a multi-var object whose parents cannot be paired must yield nothing rather than
+            // guess — and two tests in DagDiscoveryABCDE pin exactly that. Falling back
+            // unconditionally overrides the adjourn.
+            //
+            // The version that belongs upstream distinguishes the two: "the source returned zero
+            // records" is a fallback case, "the sampler declined to run" is not. Neither side has
+            // that signal today, so the divergence stays in the patch.
             const tookMs = Date.now() - startedMs;
             const seen = watchdog.Peek(watchKey);
             console.log(
