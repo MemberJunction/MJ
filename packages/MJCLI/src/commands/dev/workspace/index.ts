@@ -296,7 +296,7 @@ export default class DevWorkspace extends Command {
   }
 
   /**
-   * The Open App half of the assembly report: which client bootstrap packages were registered at
+   * The Open App half of the assembly report: which client-side packages were registered at
    * the parent, and which were declared but cannot be. Nothing in the tree DEPENDS on these, so
    * without this line a developer has no way to tell whether the generator saw their app at all.
    */
@@ -304,7 +304,7 @@ export default class DevWorkspace extends Command {
     const registered = report.OpenAppClientPackages.filter((c) => c.Provided);
     if (registered.length > 0) {
       const detail = verbose ? `: ${registered.map((c) => c.Package).join(', ')}` : '';
-      this.log(chalk.dim(`dependencies: ${registered.length} Open App client bootstrap package(s) registered at the parent${detail}`));
+      this.log(chalk.dim(`dependencies: ${registered.length} Open App client-side package(s) registered at the parent${detail}`));
     }
     for (const missing of report.OpenAppClientPackages.filter((c) => !c.Provided)) {
       this.warn(

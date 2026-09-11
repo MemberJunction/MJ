@@ -43,6 +43,7 @@ import type {
   DevDepConflict,
   DuplicateFamilyPackage,
   MemberPackageJson,
+  MjAppPackageEntry,
   OpenAppClientPackage,
   PackageExtension,
   ParentManifestReport,
@@ -425,7 +426,7 @@ export function IndexWorkspacePackages(members: readonly CandidateRepo[]): Map<s
 }
 
 /**
- * The client bootstrap packages the members' own `mj-app.json` files declare.
+ * The client-side packages the members' own `mj-app.json` files declare.
  *
  * These are invisible to every other derivation in this module: nothing in the tree DEPENDS on
  * them. A host registers them (`dynamicPackages.client`) and `mj codegen manifest` appends a
@@ -438,14 +439,68 @@ export function IndexWorkspacePackages(members: readonly CandidateRepo[]): Map<s
  * (`guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` §17). Over-linking is the sanctioned direction —
  * an unregistered package resolves but does not load.
  */
+/**
+ * Validates and returns one declared package array from a member's `mj-app.json`.
+ *
+ * `mj-app.json` is committed in a SIBLING repo and hand-editable, so its parsed shape is genuinely
+ * unknown here — {@link MjAppJson} is an assertion about a file this repo does not own, and
+ * `readJsonFile` validates only that the TEXT parses. Narrowing it with real guards is what makes
+ * that type true for every consumer downstream, and it is the same fail-fast-and-name-the-file
+ * contract `readJsonFile` already sets ("Unparseable JSON at <path>"). Without it a missing `name`
+ * surfaced as `Cannot read properties of undefined (reading 'length')`, which names neither the
+ * repo nor the file — and a developer may have a dozen of them.
+ */
+function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'): MjAppPackageEntry[] {
+  const declared: unknown = member.MjAppJson?.packages?.[section];
+  if (declared === undefined || declared === null) return [];
+  const where = `${member.Name}/mj-app.json: packages.${section}`;
+  if (!Array.isArray(declared)) {
+    throw new Error(`${where} must be an array of package entries, got ${typeof declared}`);
+  }
+  for (const [index, entry] of declared.entries()) {
+    if (entry === null || typeof entry !== 'object') {
+      throw new Error(`${where}[${index}] must be an object, got ${entry === null ? 'null' : typeof entry}`);
+    }
+    if (typeof (entry as { name?: unknown }).name !== 'string') {
+      throw new Error(`${where}[${index}] has no "name" string — a package entry must name its package`);
+    }
+  }
+  return declared as MjAppPackageEntry[];
+}
+
+/**
+ * Every package a member declares that an app shell will be asked to import.
+ *
+ * This set mirrors the HOST's rule exactly, because the host is the only thing that decides what
+ * the shell imports. `GetClientPackagesFromManifest`
+ * (`packages/OpenApp/Engine/src/install/config-manager.ts`) builds the client dynamic-package list
+ * as `[...packages.client, ...packages.shared]` with **no role test** — its own comment: "every
+ * client/shared package is emitted regardless of startupExport — client entries are side-effect
+ * imports" — and `mj codegen manifest --open-app-client-bootstrap` turns every enabled entry into
+ * an import in the shell's generated class-registrations manifest, with no role field even present
+ * on its entry type.
+ *
+ * So there is deliberately no `role` filter here. An earlier revision kept only `role: 'bootstrap'`
+ * on the premise that other roles "are imported normally"; the host contradicts that, and `role`
+ * is a required seven-value enum whose `components` / `module` members are the documented Angular
+ * roles. Anything narrower leaves a schema-valid package imported by the shell and linked by
+ * nobody — the exact page-load-with-a-green-build failure this module exists to prevent (#4364).
+ *
+ * `packages.server[]` is NOT here, and that is not an oversight: the host routes it to
+ * `dynamicPackages.server`, a Node process that resolves importer-relative rather than from the
+ * vite root, so it is not part of the shell's resolution problem.
+ */
+function readShellImportedEntries(member: CandidateRepo): MjAppPackageEntry[] {
+  return [...readDeclaredEntries(member, 'client'), ...readDeclaredEntries(member, 'shared')];
+}
+
 export function CollectOpenAppClientPackages(
   members: readonly CandidateRepo[],
   workspacePackages: ReadonlyMap<string, MemberPackageJson>
 ): OpenAppClientPackage[] {
   const collected = new Map<string, OpenAppClientPackage>();
   for (const member of sortedByName(members)) {
-    for (const entry of member.MjAppJson?.packages?.client ?? []) {
-      if (entry.role !== 'bootstrap') continue; // library entries are imported normally; they need no shell registration
+    for (const entry of readShellImportedEntries(member)) {
       if (entry.name.length === 0 || collected.has(entry.name)) continue;
       collected.set(entry.name, { Package: entry.name, Repo: member.Name, Provided: workspacePackages.has(entry.name) });
     }
@@ -499,7 +554,7 @@ export function CollectWorkspaceShells(members: readonly CandidateRepo[]): Works
 }
 
 /**
- * Peers of the registered client bootstrap packages that a shell cannot resolve.
+ * Peers of the registered client-side packages that a shell cannot resolve.
  *
  * A peer is a gap for a shell when the workspace does not PROVIDE it and the shell does not
  * DECLARE it. Both halves are required: without the first, every `@memberjunction/*` peer is
@@ -525,7 +580,7 @@ export function ResolveShellPeerGaps(
       if (manifest === undefined) continue; // unprovided: reported by OpenAppClientPackages, nothing to resolve
       for (const [peer, range] of Object.entries(manifest.peerDependencies ?? {})) {
         if (workspacePackages.has(peer) || declares.has(peer)) continue;
-        gaps.push({ Shell: shell.Name, Package: client.Package, Peer: peer, Range: range, Pin: overrides[peer] ?? null });
+        gaps.push({ Shell: shell.Name, Package: client.Package, Peer: peer, Range: range, Pin: findPeerPin(overrides, peer, range) });
       }
     }
   }
@@ -629,6 +684,31 @@ function overrideKeyName(key: string): string {
   return at <= 0 ? key : key.slice(0, at);
 }
 
+/** First integer in a version or range — `^21.1.3` -> `21`, `21.2.22` -> `21`. Null when there is none. */
+function majorOf(versionOrRange: string): string | null {
+  return /(\d+)/.exec(versionOrRange)?.[1] ?? null;
+}
+
+/**
+ * The exact version the parent's assembled overrides pin for a peer, or null when nothing does.
+ *
+ * Must not be a bare `overrides[peer]` lookup. {@link DeriveLockfilePins} emits a bare key ONLY
+ * when a package resolves to a single major across every member's graph; the moment two majors
+ * exist anywhere it emits per-major selector keys instead (`chalk@^5` / `chalk@^4`). A bare lookup
+ * misses those entirely and the command then reports "nothing in the parent pins it" for a peer the
+ * parent does pin — inverting the one actionable fact the warning carries. When several majors are
+ * pinned, the useful one is the major the client package actually asks for.
+ */
+function findPeerPin(overrides: Readonly<Record<string, string>>, peer: string, range: string): string | null {
+  const exact = overrides[peer];
+  if (exact !== undefined) return exact;
+  const matches = Object.entries(overrides).filter(([key]) => overrideKeyName(key) === peer);
+  if (matches.length === 0) return null;
+  const wantedMajor = majorOf(range);
+  const sameMajor = matches.find(([key]) => majorOf(key.slice(peer.length)) === wantedMajor);
+  return (sameMajor ?? matches[0])[1];
+}
+
 /** Removes every pin entry (plain or per-major selector) for a name; records what was displaced. */
 function displacePinsForName(overrides: Record<string, string>, name: string, newValue: string, superseded: Set<string>): void {
   for (const key of Object.keys(overrides)) {
@@ -699,7 +779,7 @@ function buildPnpmBlock(
  * member-provided package. Every decision lands in the returned Report.
  */
 /**
- * The parent manifest's `dependencies`: every member-PROVIDED client bootstrap package at
+ * The parent manifest's `dependencies`: every member-PROVIDED client-side package at
  * `workspace:*`.
  *
  * This key is what puts the package at the parent's `node_modules` root, which is the only place

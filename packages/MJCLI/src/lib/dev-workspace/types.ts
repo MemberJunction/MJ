@@ -56,7 +56,11 @@ export interface MemberPackageInfo {
 /** One `packages.client[]` / `server[]` / `shared[]` entry in a member's committed `mj-app.json`. */
 export interface MjAppPackageEntry {
   name: string;
-  /** `bootstrap` packages are loaded by the host at startup; `library` packages are imported normally. */
+  /**
+   * One of the manifest schema's seven roles (`bootstrap`, `actions`, `engine`, `provider`, `module`,
+   * `components`, `library`). Read for reporting only — the host's client emitter applies NO role
+   * filter, so role never decides whether a package must be linked. See `readShellImportedEntries`.
+   */
   role?: string;
   startupExport?: string;
 }
@@ -81,11 +85,12 @@ export interface MjAppJson {
 }
 
 /**
- * A client bootstrap package an Open App member declares in its own `mj-app.json`.
+ * A client-side package an Open App member declares in its own `mj-app.json`.
  *
- * `role: 'bootstrap'` is the only role that matters here: those are the packages a host appends to
- * the app shell's generated class-registrations manifest, so they are the ones a shell will import
- * without ever declaring. Library-role and server entries reach nothing through the shell.
+ * Collected from `packages.client[]` AND `packages.shared[]`, at every role, because that is exactly
+ * the set the host emits into `dynamicPackages.client` and therefore the set an app shell imports
+ * without ever declaring. `packages.server[]` is excluded: the host routes it to
+ * `dynamicPackages.server`, a Node process that resolves importer-relative, not from the vite root.
  */
 export interface OpenAppClientPackage {
   /** Package name, e.g. `@mj-biz-apps/caliber-ng`. */
@@ -109,7 +114,7 @@ export interface WorkspaceShell {
 }
 
 /**
- * A peer an Open App client bootstrap package needs that a given shell will NOT resolve.
+ * A peer an Open App client-side package needs that a given shell will NOT resolve.
  *
  * Reported per shell rather than once: a workspace can enumerate several shells, and a peer one
  * shell happens to declare must not mask another shell's gap. Measured on the real workspace, the
@@ -119,7 +124,7 @@ export interface WorkspaceShell {
 export interface ShellPeerGap {
   /** The shell that will fail to resolve it. */
   Shell: string;
-  /** The client bootstrap package whose `peerDependencies` names it. */
+  /** The client-side package whose `peerDependencies` names it. */
   Package: string;
   /** The unmet peer, e.g. `@angular/elements`. */
   Peer: string;
@@ -129,7 +134,7 @@ export interface ShellPeerGap {
   Pin: string | null;
 }
 
-/** Which declared client bootstrap packages are linked at the parent root. */
+/** Which declared client-side packages are linked at the parent root. */
 export interface ClientPackageCensus {
   Entries: Array<{ Package: string; Repo: string; Provided: boolean; Linked: boolean }>;
 }
@@ -276,7 +281,7 @@ export interface ParentManifestReport {
   /** Lockfile-derived pins displaced by an explicit member override or a family workspace:* override. */
   SupersededPins: string[];
   /**
-   * Open App client bootstrap packages found in members' `mj-app.json`. Entries with
+   * Open App client-side packages found in members' `mj-app.json`. Entries with
    * `Provided: false` are NOT registered — the declaration names a package no member ships — and
    * the command warns on each.
    */

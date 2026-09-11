@@ -346,25 +346,76 @@ describe('CollectOpenAppClientPackages', () => {
     ]);
   });
 
-  it('ignores library-role and server entries — only client bootstrap packages reach a shell', () => {
+  // The set mirrors the HOST's own rule, which is the only thing that decides what the shell
+  // imports: GetClientPackagesFromManifest (OpenApp/Engine config-manager.ts) builds the client
+  // dynamic-package list as [...client, ...shared] with NO role filter — "every client/shared
+  // package is emitted regardless of startupExport". Anything narrower here is unlinked at the
+  // parent while the shell's generated manifest still imports it (#4401 review, F6/F7).
+  it('collects every client entry regardless of role — the host applies no role filter', () => {
     const mixed = repo('bizapps-mixed', {
       MjAppJson: {
         packages: {
           client: [
             { name: '@mj-biz-apps/mixed-ng', role: 'bootstrap' },
             { name: '@mj-biz-apps/mixed-lib', role: 'library' },
+            { name: '@mj-biz-apps/mixed-cmp', role: 'components' },
           ],
-          server: [{ name: '@mj-biz-apps/mixed-server', role: 'bootstrap' }],
         },
       },
       Packages: [
         pkg('packages/Angular', '@mj-biz-apps/mixed-ng'),
         pkg('packages/Lib', '@mj-biz-apps/mixed-lib'),
-        pkg('packages/Server', '@mj-biz-apps/mixed-server'),
+        pkg('packages/Cmp', '@mj-biz-apps/mixed-cmp'),
       ],
     });
     const names = CollectOpenAppClientPackages([mixed], IndexWorkspacePackages([mixed])).map((c) => c.Package);
-    expect(names).toEqual(['@mj-biz-apps/mixed-ng']);
+    expect(names).toEqual(['@mj-biz-apps/mixed-cmp', '@mj-biz-apps/mixed-lib', '@mj-biz-apps/mixed-ng']);
+  });
+
+  it('collects shared entries too — the host merges them into the client list', () => {
+    const shared = repo('bizapps-shared', {
+      MjAppJson: {
+        packages: {
+          shared: [{ name: '@mj-biz-apps/shared-entities', role: 'library' }],
+        },
+      },
+      Packages: [pkg('packages/Entities', '@mj-biz-apps/shared-entities')],
+    });
+    expect(CollectOpenAppClientPackages([shared], IndexWorkspacePackages([shared]))).toEqual([
+      { Package: '@mj-biz-apps/shared-entities', Repo: 'bizapps-shared', Provided: true },
+    ]);
+  });
+
+  // server[] goes to dynamicPackages.SERVER, a Node process that resolves importer-relative —
+  // not the vite root. It is not part of the shell's resolution problem.
+  it('never collects a server entry', () => {
+    const server = repo('bizapps-srv', {
+      MjAppJson: { packages: { server: [{ name: '@mj-biz-apps/srv', role: 'bootstrap' }] } },
+      Packages: [pkg('packages/Server', '@mj-biz-apps/srv')],
+    });
+    expect(CollectOpenAppClientPackages([server], IndexWorkspacePackages([server]))).toEqual([]);
+  });
+
+  it('de-duplicates a package named in both client and shared', () => {
+    const both = repo('bizapps-both', {
+      MjAppJson: {
+        packages: {
+          client: [{ name: '@mj-biz-apps/dup', role: 'components' }],
+          shared: [{ name: '@mj-biz-apps/dup', role: 'library' }],
+        },
+      },
+      Packages: [pkg('packages/Dup', '@mj-biz-apps/dup')],
+    });
+    expect(CollectOpenAppClientPackages([both], IndexWorkspacePackages([both]))).toHaveLength(1);
+  });
+
+  it('validates shared entries with the same guard, naming packages.shared', () => {
+    const broken = repo('bizapps-broken', {
+      MjAppJson: JSON.parse('{"packages":{"shared":[{"role":"library"}]}}') as CandidateRepo['MjAppJson'],
+    });
+    expect(() => CollectOpenAppClientPackages([broken], IndexWorkspacePackages([broken]))).toThrow(
+      /bizapps-broken[\s\S]*packages\.shared/
+    );
   });
 
   it('de-duplicates a package two members both declare, keeping the first by repo sort order', () => {
@@ -377,6 +428,40 @@ describe('CollectOpenAppClientPackages', () => {
 
   it('returns nothing for a member with no mj-app.json', () => {
     expect(CollectOpenAppClientPackages([repo('MJ')], IndexWorkspacePackages([repo('MJ')]))).toEqual([]);
+  });
+
+  // mj-app.json is committed in a SIBLING repo and hand-editable, so the declared type is an
+  // assertion about a file this repo does not own. These three shapes reached `entry.role` /
+  // `entry.name.length` and aborted the whole command with a bare TypeError naming no file —
+  // `readJsonFile` already sets the standard by naming the path on unparseable JSON.
+  // Built with JSON.parse so the value arrives exactly as production receives it.
+  const malformed = (json: string): CandidateRepo =>
+    repo('bizapps-broken', { MjAppJson: JSON.parse(json) as CandidateRepo['MjAppJson'] });
+
+  it('names the repo and the file when a client entry has no name', () => {
+    const broken = malformed('{"packages":{"client":[{"role":"bootstrap"}]}}');
+    expect(() => CollectOpenAppClientPackages([broken], IndexWorkspacePackages([broken]))).toThrow(
+      /bizapps-broken[\s\S]*mj-app\.json/
+    );
+  });
+
+  it('names the repo and the file when a client entry is null', () => {
+    const broken = malformed('{"packages":{"client":[null]}}');
+    expect(() => CollectOpenAppClientPackages([broken], IndexWorkspacePackages([broken]))).toThrow(
+      /bizapps-broken[\s\S]*mj-app\.json/
+    );
+  });
+
+  it('names the repo and the file when client is not an array', () => {
+    const broken = malformed('{"packages":{"client":{"name":"@x/y","role":"bootstrap"}}}');
+    expect(() => CollectOpenAppClientPackages([broken], IndexWorkspacePackages([broken]))).toThrow(
+      /bizapps-broken[\s\S]*mj-app\.json/
+    );
+  });
+
+  it('tolerates a null packages block, which is well-formed JSON saying nothing', () => {
+    const empty = malformed('{"packages":null}');
+    expect(CollectOpenAppClientPackages([empty], IndexWorkspacePackages([empty]))).toEqual([]);
   });
 });
 
@@ -683,6 +768,34 @@ describe('shell peer gaps', () => {
     expect(
       ResolveShellPeerGaps(CollectOpenAppClientPackages(members, index), CollectWorkspaceShells(members), index, {})
     ).toEqual([]);
+  });
+
+  // DeriveLockfilePins emits a BARE override key only when a package resolves to one major
+  // everywhere; otherwise it emits per-major selector keys (`chalk@^5` / `chalk@^4`). A bare-name
+  // lookup misses those and then tells the developer "nothing in the parent pins it" — the exact
+  // opposite of the truth, and the one actionable fact the warning exists to carry (#4401, F5).
+  it('finds the pin when the parent keys it per-major', () => {
+    const members = [shell(), caliber];
+    const index = IndexWorkspacePackages(members);
+    const gaps = ResolveShellPeerGaps(
+      CollectOpenAppClientPackages(members, index),
+      CollectWorkspaceShells(members),
+      index,
+      { '@angular/elements@^21': '21.2.22' }
+    );
+    expect(gaps[0].Pin).toBe('21.2.22');
+  });
+
+  it('picks the per-major pin whose major matches the peer range', () => {
+    const members = [shell(), caliber]; // caliber asks for @angular/elements ^21.1.3
+    const index = IndexWorkspacePackages(members);
+    const gaps = ResolveShellPeerGaps(
+      CollectOpenAppClientPackages(members, index),
+      CollectWorkspaceShells(members),
+      index,
+      { '@angular/elements@^19': '19.1.0', '@angular/elements@^21': '21.2.22' }
+    );
+    expect(gaps[0].Pin).toBe('21.2.22');
   });
 
   it('reports Pin null when nothing in the parent pins the missing peer', () => {
