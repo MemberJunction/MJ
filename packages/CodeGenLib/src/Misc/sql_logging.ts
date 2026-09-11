@@ -80,7 +80,7 @@ export function resolveSQLOutputFolder(args: ResolveSQLOutputFolderArgs): string
  */
 export class SQLLogging {
     private static _SQLLoggingFilePath: string = '';
-    private static _OmitRecurringScriptsFromLog: boolean = false;
+    private static _OmitRecurringScriptsFromLog: boolean = true;
     /** CLI `--sql-output-dir`. Set before {@link initSQLLogging}. */
     public static sqlOutputDirFlag: string | undefined;
 

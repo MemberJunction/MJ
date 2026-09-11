@@ -15,9 +15,9 @@ import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IR
          RunQueryParams, RunQueryEnrichment, BaseEntityResult, QueryExecutionSpec,
          RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewWithCacheCheckResult,
          RunQueryWithCacheCheckParams, RunQueriesWithCacheCheckResponse, RunQueryWithCacheCheckResult,
-         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider,
+         KeyValuePair, getGraphQLTypeNameBase, AggregateExpression, InMemoryLocalStorageProvider, ReadableFieldsTransportKey,
          SearchEntityParams, EntitySearchResult, ScoredCandidate, RemoteOpInvokeOptions, RemoteOpResult, RemoteOpProgress } from "@memberjunction/core";
-import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore } from "@memberjunction/global";
+import { MJGlobal, MJEventType, UUIDsEqual, GetGlobalObjectStore, DeserializeValidationErrors } from "@memberjunction/global";
 import { MJUserViewEntityExtended, ViewInfo } from '@memberjunction/core-entities'
 
 import { gql, GraphQLClient } from 'graphql-request'
@@ -1822,6 +1822,95 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
         }
     }
 
+    /**
+     * Field-level security, client side. The current user's denied-READ set is computable HERE
+     * because `EntityFieldPermission` records ship to clients with entity metadata — so the
+     * provider can exclude denied fields from the selection sets it requests (a GraphQL response
+     * always contains every REQUESTED key, so key-omission — which drives
+     * `EntityField.NotLoaded` marking in the hydration paths — only happens for fields never
+     * requested). Empty for unrestricted users and non-FLS entities.
+     *
+     * **This is an optimization, not the correctness boundary.** It is computed from metadata
+     * this client holds, which can lag the server's — and which it may not hold at all once
+     * metadata filtering lands (issue #3485). What makes a response correct regardless is the
+     * server's own `ReadableFields___`; see {@link ApplyServerFieldAccess}.
+     */
+    private GetDeniedReadFieldNamesForCurrentUser(entityInfo: EntityInfo): Set<string> {
+        if (!entityInfo?.EnableFieldLevelSecurity || !this.CurrentUser) {
+            return new Set<string>();
+        }
+        return entityInfo.GetDeniedReadFields(this.CurrentUser);
+    }
+
+    /**
+     * The `ReadableFields___` selection to append to a query, or `''` when it should not be asked
+     * for. See {@link ReadableFieldsTransportKey} for what it carries.
+     *
+     * **Gated on the ENTITY's field-security flag, deliberately not on whether THIS user currently
+     * has denials.** Gating on the user's denied set would re-introduce the dependence on local
+     * metadata this key exists to remove: in the window right after a permission change the client
+     * believes it is unrestricted, would not ask, and would silently load the server's nulls as
+     * real values. The entity-level flag is stable configuration by comparison.
+     *
+     * Not asking on non-FLS entities — which is nearly all of them — also keeps this client
+     * working against a server whose generated schema predates the key. On an FLS-enabled entity
+     * the two must match versions, which is the narrow and acceptable coupling: restricting a
+     * non-nullable column is broken on such a server regardless.
+     */
+    private FieldSecurityTransportSelection(entityInfo: EntityInfo): string {
+        return entityInfo?.EnableFieldLevelSecurity ? ReadableFieldsTransportKey : '';
+    }
+
+    /**
+     * Turns fields the SERVER withheld into genuine key-absence on a response payload, so the
+     * hydration paths mark them {@link EntityField.NotLoaded} rather than loading a null over
+     * them.
+     *
+     * This is needed because deleting the key server-side is not sufficient by itself: GraphQL
+     * emits every SELECTED field, so a withheld field the client asked for arrives as an explicit
+     * `null` that is indistinguishable from a genuine one. Rewriting it back to absence here is
+     * what preserves the "key-absence means not-loaded, never means null" contract end to end.
+     *
+     * Two sources, in priority order:
+     *
+     * 1. **The server's `ReadableFields___`** — authoritative. It describes the request that
+     *    actually ran, so it is correct even when this client's metadata is stale, and it stays
+     *    correct once metadata filtering (issue #3485) means the client may not hold the
+     *    permission rules at all. Anything not on that list is withheld, whatever value arrived.
+     * 2. **This client's own denied set** — the fallback, for a server predating the transport
+     *    key. Only null values are pruned here: a non-null arrival means the local set is stale
+     *    in the safe direction (the server actually allowed the field), and dropping a real value
+     *    would be a regression rather than a protection.
+     *
+     * The transport key itself is always removed — it is not an entity field, and leaving it on
+     * the payload would trip `SetMany`'s field-not-found warning during hydration.
+     */
+    protected ApplyServerFieldAccess<T>(entityInfo: EntityInfo, row: T): T {
+        if (!row || typeof row !== 'object') return row;
+        const record = row as Record<string, unknown>;
+        const readable = record[ReadableFieldsTransportKey];
+        delete record[ReadableFieldsTransportKey];
+
+        if (Array.isArray(readable)) {
+            const allowed = new Set(readable.map(n => String(n).trim().toLowerCase()));
+            for (const field of entityInfo.Fields) {
+                if (allowed.has(field.Name.trim().toLowerCase())) continue;
+                delete record[field.Name];
+                delete record[field.CodeName];
+            }
+            return row;
+        }
+
+        const denied = this.GetDeniedReadFieldNamesForCurrentUser(entityInfo);
+        if (denied.size === 0) return row;
+        for (const field of entityInfo.Fields) {
+            if (!denied.has(field.Name.trim().toLowerCase())) continue;
+            if (record[field.Name] === null) delete record[field.Name];
+            if (record[field.CodeName] === null) delete record[field.CodeName];
+        }
+        return row;
+    }
+
     public async Save(entity: BaseEntity, user: UserInfo, options: EntitySaveOptions) : Promise<{}> {
         // IS-A parent entity save: the full ORM pipeline (permissions, validation, events)
         // already ran in BaseEntity._InnerSave(). Skip the network call — the leaf entity's
@@ -1867,10 +1956,37 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             // so if the key were dropped here nothing would tell the server which parent row this is
             // about: it would mint a fresh GUID and INSERT a second copy of the parent. IsChildType
             // (not ParticipatesInIsA) is the right predicate — a ROOT's key is its own to mint.
+            //
+            // NotLoaded fields are OMITTED from the mutation input entirely (legal — the
+            // generated Update input types mark every non-PK field optional): their value is
+            // a construction artifact the user was never shown, and the NOT-NULL fabrication
+            // fallback below must never run for them. An explicitly (blind-)set field has its
+            // flag cleared and flows normally — the write-only case.
+            // Denied-READ fields are dropped from both the input and the response selection.
+            // Input: the loop below calls entity.Get(), which throws for a denied field.
+            // Response: a never-requested key comes back absent, which is what marks the field
+            // NotLoaded on the refresh, and a denied NOT-NULL column no longer breaks response
+            // serialization.
+            //
+            // Only the READ verb is filtered here. A readable-but-update-denied field must
+            // still be SENT, or the server cannot reject an attempt to change it — its check
+            // is dirty-only (BaseEntity.CheckFieldLevelUpdatePermissions), so an unchanged
+            // value round-trips safely and a changed one is refused. Create-denied values are
+            // dropped server-side (ApplyFieldLevelCreateSuppression). Filtering either verb
+            // here would replace a visible refusal with a silent success.
+            //
+            // The two rules compose: the field-security clause exempts the primary key, so the
+            // IS-A child's shared key survives it and the promotion key still reaches the server.
             const isaChildCreate = !entity.IsSaved && entity.EntityInfo.IsChildType;
-            const filteredFields = entity.Fields.filter(f => !f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaChildCreate)));
+            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
+            const isDeniedRead = (fieldName: string) => deniedReadFields.has(fieldName.trim().toLowerCase());
+            const filteredFields = entity.Fields.filter(f =>
+                (!f.ReadOnly || (f.IsPrimaryKey && (entity.IsSaved || isaChildCreate))) &&
+                (f.IsPrimaryKey || (!f.NotLoaded && !isDeniedRead(f.Name))));
                 const inner = `                ${mutationName}(input: $input) {
-                ${entity.Fields.map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                ${entity.Fields.filter(f => !isDeniedRead(f.Name))
+                    .map(f => SharedFieldMapper.MapFieldName(f.CodeName)).join("\n                    ")}
+                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
             }`
             const outer = gql`mutation ${type}${graphQLTypeName} ($input: ${mutationName}Input!) {
                 ${inner}
@@ -1942,6 +2058,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 options.SkipOldValuesCheck === false) {
                 const ov = [];
                 entity.Fields.forEach(f => {
+                    // A NotLoaded field has no real old value — sending a fabricated null
+                    // would feed the server's conflict detection fiction. Omit it entirely.
+                    if (f.NotLoaded && !f.IsPrimaryKey) return;
                     let val = null;
                     if (f.OldValue !== null && f.OldValue !== undefined) {
                         if (f.EntityFieldInfo.TSType === EntityFieldTSType.Date) 
@@ -1986,7 +2105,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         // got our data, send it back to the caller, which is the entity object
                         // and that object needs to update itself from this data.
                         result.Success = true;
-                        result.NewValues = this.ConvertBackToMJFields(results);
+                        // Prune stale-metadata nulls so the entity's post-save refresh
+                        // (finalizeSave) sees key-omission and marks NotLoaded correctly.
+                        result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(results));
                     }
                     else {
                         // the transaction failed, nothing to update, but we need to call Reject so the
@@ -2004,7 +2125,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                 if (d && d[mutationName]) {
                     result.Success = true;
                     result.EndedAt = new Date();
-                    result.NewValues = this.ConvertBackToMJFields(d[mutationName]);
+                    // Prune stale-metadata nulls so finalizeSave's re-hydration sees
+                    // key-omission and marks NotLoaded correctly on the refresh.
+                    result.NewValues = this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[mutationName]));
                     return result.NewValues;
                 }
                 else
@@ -2015,6 +2138,18 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Success = false;
             result.EndedAt = new Date();
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // A refusal from Validate()/ValidateAsync() on the server arrives twice: as the prose in
+            // `message` (kept above, for the toast) and as `extensions.validationErrors`, the same
+            // reasons with their field names. Rehydrating them here — the result is already
+            // registered on the entity — means `record.LatestResult.Errors` reads exactly as it does
+            // after a local Validate() refusal, so the form paints the fields either way. Empty when
+            // the server sent none (a SQL error, a permission refusal).
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            // Whether `Message` already renders those errors is a fact only the SERVER knows (it threw
+            // the message), so it states it on the wire and we repeat it — never inferred here. Without
+            // the statement CompleteMessage keeps today's behaviour (the text may read twice).
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
             return null;
         }
@@ -2059,9 +2194,15 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const rel = EntityRelationshipsToLoad && EntityRelationshipsToLoad.length > 0 ? this.getRelatedEntityString(entity.EntityInfo, EntityRelationshipsToLoad) : '';
 
             const graphQLTypeName = getGraphQLTypeNameBase(entity.EntityInfo);
+            // Field security: don't request fields this client believes it cannot read — the keys
+            // come back genuinely absent and InnerLoad marks them NotLoaded (D-1). This is an
+            // optimization, NOT the correctness mechanism: it is only as good as this client's
+            // metadata. `ReadableFields___` (requested just below) is what makes the result
+            // correct when that metadata is stale. Empty set for unrestricted users — no change.
+            const deniedReadFields = this.GetDeniedReadFieldNamesForCurrentUser(entity.EntityInfo);
                 const query = gql`query Single${graphQLTypeName}${rel.length > 0 ? 'Full' : ''} (${pkeyOuterParamString}) {
                 ${graphQLTypeName}(${pkeyInnerParamString}) {
-                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType)
+                                    ${entity.Fields.filter((f) => !f.EntityFieldInfo.IsBinaryFieldType && !deniedReadFields.has(f.Name.trim().toLowerCase()))
                                       .map((f) => {
                                         if (f.EntityFieldInfo.Name.trim().toLowerCase().startsWith('__mj_')) {
                                           // fields that start with __mj_ need to be converted to _mj__ for the GraphQL query
@@ -2071,6 +2212,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                                         }
                                       })
                                       .join('\n                    ')}
+                    ${this.FieldSecurityTransportSelection(entity.EntityInfo)}
                     ${rel}
                 }
             }
@@ -2079,7 +2221,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const d = await this.ExecuteGQL(query, vars)
             if (d && d[graphQLTypeName]) {
                 // the resulting object has all the values in it, but we need to convert any elements that start with _mj__ back to __mj_
-                return this.ConvertBackToMJFields(d[graphQLTypeName]);
+                // (plus the stale-metadata null prune, so InnerLoad's key-omission marking is exact)
+                return this.ApplyServerFieldAccess(entity.EntityInfo, this.ConvertBackToMJFields(d[graphQLTypeName]));
             }
             else
                 return null;
@@ -2253,6 +2396,10 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.EndedAt = new Date(); // done processing
             result.Success = false;
             result.Message = e.response?.errors?.length > 0 ? e.response.errors[0].message : e.message;
+            // Same rehydration as Save(): a delete refused with field-named reasons keeps them.
+            const extensions = e.response?.errors?.[0]?.extensions;
+            result.Errors = DeserializeValidationErrors(extensions?.validationErrors);
+            result.MessageIncludesErrors = result.Errors.length > 0 && extensions?.messageIncludesValidationErrors === true;
             LogError(e);
 
             return false;

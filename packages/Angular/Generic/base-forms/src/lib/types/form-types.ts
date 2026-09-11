@@ -83,6 +83,14 @@ export interface FormContext {
    * Fields filter by `ValidationErrorInfo.Source === FieldName` to find their errors.
    */
   validationErrors?: ValidationErrorInfo[];
+  /**
+   * Increments every time the form publishes a fresh set of `validationErrors` (each failed save).
+   * A field compares it with the revision current when the user last edited it: an edit made AFTER
+   * the failure means the user is addressing the error, so the field goes back to its own live
+   * validation; an edit made BEFORE it must not hide an error the save just reported — which is what
+   * happened to a server-side `ValidateAsync()` refusal on the very field the user had just typed in.
+   */
+  validationRevision?: number;
   /** Whether drag-and-drop section reordering is allowed. Read by panels to show/hide drag handles. */
   allowSectionReorder?: boolean;
   /**

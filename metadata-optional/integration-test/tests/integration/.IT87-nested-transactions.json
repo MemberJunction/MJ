@@ -13,10 +13,19 @@
       "checks": [
         {
           "type": "nested-transactions",
-          "config": { "runMutationTests": true }
+          "config": {
+            "runMutationTests": true
+          }
         }
       ]
     },
     "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "35A4E81F-090B-4F41-88A6-A42B736B83DE"
+  },
+  "sync": {
+    "lastModified": "2026-09-09T11:23:36.370Z",
+    "checksum": "6b09a5b1c4421fe9c5113af588134333cb9b63a9852bf823d19028f1873d18c5"
   }
 }

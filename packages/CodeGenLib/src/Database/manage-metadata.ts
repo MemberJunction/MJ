@@ -381,6 +381,20 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Returns an explicitly-typed UUID literal for the platform.
+    * SQL Server: CAST('...' AS uniqueidentifier), PostgreSQL: CAST('...' AS uuid)
+    *
+    * Needed wherever a UUID literal appears in the SELECT list of an `INSERT ... SELECT`. A bare
+    * quoted literal is fine in `INSERT ... VALUES`, where both platforms coerce it to the target
+    * column's type — but in the projection of a SELECT, PostgreSQL can resolve an untyped literal
+    * to `text` and then refuse to assign it to a `uuid` column. `CAST(x AS y)` is ANSI and settles
+    * it on both, with the type name coming from the dialect rather than a platform branch here.
+    */
+   protected uuidLit(value: string): string {
+      return `CAST('${value}' AS ${this.dialect.UuidTypeNames[0]})`;
+   }
+
+   /**
     * Quotes mixed-case identifiers in a SQL string for the current platform.
     * Delegates to the database provider's quoteSQLForExecution method.
     */
@@ -5471,6 +5485,15 @@ export class ManageMetadataBase {
          const generationPromises = [];
          const ag = new AdvancedGeneration();
 
+         // `skipDBUpdate` means load-only: `runValidationGeneration` is called below with
+         // `generateNewCode = false`, and `generateValidatorFunctionFromCheckConstraint` only reaches an
+         // LLM when that flag is true. Reading a validator back out of an Approved `GeneratedCode` record
+         // is therefore a plain database read — gating it on the AI feature flag is what made
+         // `mj codegen --no-ai` DELETE every committed `Validate()` override rather than preserve it, and
+         // the `codegen-drift` gate (which runs `--no-ai`) then demanded that lossy output. Generation
+         // stays gated; only the read is unconditional.
+         const emitValidators = skipDBUpdate || ag.featureEnabled('ParseCheckConstraints');
+
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
          for (const r of columnLevelResults) {
@@ -5507,8 +5530,8 @@ export class ManageMetadataBase {
                else {
                   // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
                   // attempt to use an LLM to do things fancier now
-                  if (ag.featureEnabled('ParseCheckConstraints')) {
-                     // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+                  if (emitValidators) {
+                     // either we are loading persisted validators, or the feature is on and we may generate new ones
                      // run this in parallel
                      generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
                   }
@@ -5516,10 +5539,12 @@ export class ManageMetadataBase {
             }
          }
 
-         // now for the table level constraints run the process for advanced generation
+         // now for the table level constraints, build a Validate function for each constraint.
+         // As above: no featureEnabled() gate here. Loading previously-generated code is not an AI operation, and the
+         // ParseCheckConstraints gate that does guard the LLM call lives inside generateValidatorFunctionFromCheckConstraint.
          for (const r of tableLevelResults) {
-            if (ag.featureEnabled('ParseCheckConstraints')) {
-               // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+            if (emitValidators) {
+               // either we are loading persisted validators, or the feature is on and we may generate new ones
                // run this in parallel
                generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
             }
@@ -6185,9 +6210,7 @@ export class ManageMetadataBase {
                for (const p of permissions) {
                   const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
                   if (RoleID) {
-                     const sSQLInsertPermission = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                                   (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                                   ('${newEntityID}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
+                     const sSQLInsertPermission = this.buildEntityPermissionInsertSQL(newEntityID, RoleID, p.CanRead, p.CanCreate, p.CanUpdate, p.CanDelete);
                      await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else
@@ -6383,6 +6406,43 @@ export class ManageMetadataBase {
    }
 
    /**
+    * INSERT for one `EntityPermission` row, skipped when a row already exists for that
+    * (EntityID, RoleID, Type).
+    *
+    * The guard is not defensive tidiness — `EntityPermission` carries a UNIQUE constraint on those
+    * three columns (`UQ_EntityPermission_EntityID_RoleID_Type`), so an unguarded INSERT is a failed
+    * CodeGen run rather than a duplicate row. All three call sites are "grant the configured default
+    * permissions", which is naturally re-entrant: an entity re-detected as new, or a second CodeGen
+    * pass over the same entity, reaches them again. Before the constraint existed this silently
+    * accumulated duplicates — a live database showed one (entity, role) pair with rows created three
+    * years apart, and pairs whose verb flags disagreed.
+    *
+    * `Type` is written explicitly rather than left to the column default so the row being inserted
+    * and the row being tested for are keyed identically; a default that changed later would
+    * otherwise put them out of step. Expressed as INSERT ... SELECT ... WHERE NOT EXISTS, which is
+    * valid on both SQL Server and PostgreSQL, so no provider branch is needed.
+    */
+   protected buildEntityPermissionInsertSQL(
+      entityId: string,
+      roleId: string,
+      canRead: boolean,
+      canCreate: boolean,
+      canUpdate: boolean,
+      canDelete: boolean
+   ): string {
+      const table = this.qs(mj_core_schema(), 'EntityPermission');
+      const entityLit = this.uuidLit(entityId);
+      const roleLit = this.uuidLit(roleId);
+      return `INSERT INTO ${table}
+                (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('Type')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+              SELECT ${entityLit}, ${roleLit}, 'Allow', ${this.boolLit(canRead)}, ${this.boolLit(canCreate)}, ${this.boolLit(canUpdate)}, ${this.boolLit(canDelete)}, ${this.utcNow()}, ${this.utcNow()}
+              WHERE NOT EXISTS (
+                SELECT 1 FROM ${table}
+                WHERE ${this.qi('EntityID')} = ${entityLit} AND ${this.qi('RoleID')} = ${roleLit} AND ${this.qi('Type')} = 'Allow'
+              )`;
+   }
+
+   /**
     * Adds default permissions for a newly created entity based on config settings.
     * Shared by both table-backed entity creation and virtual entity creation.
     */
@@ -6400,9 +6460,7 @@ export class ManageMetadataBase {
       for (const p of permissions) {
          const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
          if (RoleID) {
-            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                 (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                 ('${entityId}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
+            const sSQLInsert = this.buildEntityPermissionInsertSQL(entityId, RoleID, p.CanRead, p.CanCreate, p.CanUpdate, p.CanDelete);
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
          } else {
             LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
@@ -6563,9 +6621,7 @@ export class ManageMetadataBase {
             logStatus(`    > Materialized entity "${entityName}": role "${p.RoleName}" NOT granted read (it cannot read every source entity; the snapshot has no row-level scoping).`);
             continue;
          }
-         const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                              (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                              ('${entityId}', '${roleId}', ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()})`;
+         const sSQLInsert = this.buildEntityPermissionInsertSQL(entityId, roleId, true, false, false, false);
          await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add read permission for materialized entity ${entityName} for role ${p.RoleName}`);
       }
    }
@@ -6600,7 +6656,10 @@ export class ManageMetadataBase {
    }
 
    /** Pure form of the role-RLS layer (see {@link entityHasRowLevelSecurity}). IO-free so it can be reused
-    *  verbatim by the runtime refresher's equivalent gate. */
+    *  verbatim by the runtime refresher's equivalent gate. Deliberately WIDER than the runtime's own reader
+    *  (`EntityInfo.GetUserRowLevelSecurityInfo` collects a filter only from an Allow row whose `CanRead` is
+    *  set, since #4358): a leftover filter beside a cleared flag still counts as "protected" here, which errs
+    *  conservative for a leak gate. */
    public static EntityHasRoleReadRLS(entity: EntityInfo): boolean {
       return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
    }

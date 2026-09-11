@@ -30,6 +30,7 @@ import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, resolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
 import { SystemIntegrityBase } from './Misc/system_integrity';
+import { reconcileFieldLevelSecurity } from './Database/reconcileFieldLevelSecurity';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { AIEngine } from '@memberjunction/aiengine';
 import { UserInfo } from '@memberjunction/core';
@@ -293,6 +294,13 @@ export class RunCodeGenBase {
           succeedSpinner('Metadata management completed');
         }
 
+        // Field-level security reconciliation. Runs AFTER the refresh above so it sees the
+        // EntityField rows manageMetadata just created for newly-discovered columns: on an
+        // FLS-enabled entity a field with no permission rows is DENIED, so a column added
+        // without this step would be invisible to every user until something else reconciled.
+        // It also removes rows orphaned by a dropped column or a revoked role.
+        await reporter.phase('reconcileFieldPermissions', () => reconcileFieldLevelSecurity(provider, currentUser));
+
         const sqlOutputDir = outputDir('SQL', true);
         let sqlGenerationSucceeded = true;
         if (sqlOutputDir) {
@@ -496,7 +504,13 @@ export class RunCodeGenBase {
         pipelineSuccess = false;
         return false;
       } else {
-        succeedSpinner('AI Generated Code loaded from Metadata');
+        // Report the COUNT, not just success. Loading zero validators is a legitimate state for a
+        // database that has none, and an invisible catastrophe for one that has plenty: file
+        // generation emits each entity as though it had no `Validate()` override, silently deleting
+        // whatever was committed. Both times that regression shipped, the log said exactly this
+        // line and nothing else. A number here makes the next one visible in CI output.
+        const loadedValidators = ManageMetadataBase.generatedValidators.length;
+        succeedSpinner(`AI Generated Code loaded from Metadata (${loadedValidators} validator${loadedValidators === 1 ? '' : 's'})`);
       }
 
       const skipFiles = skipFileGeneration || getSettingValue('skip_file_generation', false);

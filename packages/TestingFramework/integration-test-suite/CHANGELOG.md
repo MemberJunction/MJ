@@ -1,5 +1,143 @@
 # @memberjunction/integration-test-suite
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 798e015: IT56/PG7: gate self-write compliance on BOTH scripted writes, not just the restricted one.
+
+  `IT: Self-Write Restricted` is prompted to emit `notes.a` (allowed) and `config.b` (restricted) in a single `payloadChangeRequest`. PG7's `runWithCompliance` phase watched only for the restricted half, so a model that emitted `config.b` and dropped `notes.a` passed the compliance gate and then failed the next assertion with `the ALLOWED notes.a self-write did not land — expected "IT-NOTES-OK", got undefined` — a bare value assertion that reads as an engine defect.
+
+  It is not one. Driving the agent directly, a fully compliant response yields `FinalPayload {"notes":{"a":"IT-NOTES-OK"}}` with `config` correctly absent: the allowed path applies and the restricted path is blocked, exactly as designed. The failure was partial model non-compliance that the predicate could not see.
+
+  Requiring both markers makes that case report `model-noncompliance:` like the other eight checks in the bundle instead of accusing the engine.
+
+### Patch Changes
+
+- 512bb53: Security: close the role-elevation path on `MJ: Roles` and `MJ: User Roles` (issue #4282).
+
+  Issue #4260 closed the `User.Type` route to elevated capability. Role assignment is the platform's other authority mechanism and was unguarded: no server-side entity subclass existed for either entity, so `ClassFactory` resolved the generated classes, whose `Validate()` knows nothing about who is calling. On a baseline seed — and verified against a live database — the `Developer` and `Integration` roles hold unfiltered `CanCreate`/`CanUpdate`/`CanDelete` on both entities. Reproduced end to end on the real stack before the fix: a caller whose `Type` is `'User'`, holding only `Developer` and `UI`, inserted a row granting itself `Integration` (`Validate()` passed, `Save()` returned `true`), and separately created a brand-new role.
+
+  **`MJUserRoleEntityServer`** — a non-Owner may only grant, move or revoke a role they themselves hold. That subset rule is a ceiling: whatever a non-Owner does through this entity, the authority they hand out is authority they already had, so no sequence of calls lets a caller exceed their own grant. Delegated administration, IdP/group sync and onboarding automation — the legitimate non-Owner uses `User.Type` does not have — all keep working. On an update the pre-save `RoleID` is checked as well as the new one, so an assignment cannot be repointed to strip someone of a role the caller does not hold. `UserID` is deliberately not frozen: moving a grant between users stays inside the same ceiling. One consequence of that is chosen knowingly rather than incidental — because revocation shares the granting ceiling, a non-Owner may repoint or delete **any** user's assignment of a role the caller also holds, including an Owner's. That is not escalation: Owner authority lives in `User.Type`, which #4260 froze, and not in a role. It does let one non-Owner strip peers of a role they share, which is deprivation rather than elevation — reversible by an Owner and recorded in Record Changes. Narrowing revocation to the caller's own row would close it only by breaking delegated administration, the legitimate non-Owner use this rule exists to preserve.
+
+  **`MJRoleEntityServer`** — a non-Owner may not create, change or delete a role. Every field on this entity is authority-bearing: `Name` is what user/role synchronization matches on, `DirectoryID` maps an external directory group to the role, and `SQLName` decides which database role CodeGen grants object rights to.
+
+  Both guards override `Save()` and `Delete()` alongside `Validate()`, so the rules hold on every write path — GraphQL resolvers, Remote Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and cannot be switched off by the `ReplayOnly` save option, which skips `Validate()` while still performing the write. Both are pure: they read only the record's own field state and the caller's already-cached roles, so they cost nothing per save and are unit-testable without a database.
+
+  **Upgrade notes.**
+  - **Explorer's role-management screen stops working for non-Owner administrators.** It has no Owner gate of its own today, so a Developer-role non-Owner reaches it in practice; creating, renaming and deleting roles from it are now refused with a message naming the rule. This is the same trade-off #4260 accepted for the user-management screen.
+  - **Explorer's bulk role assignment now checks each `Save()` return.** `executeBulkRoleAssign` enrols each row in a transaction group, where `Save()` reports only _enrolment_ — the provider queues the item locally and returns `true` without a round trip. A row refused **client-side** (a `CheckPermissions` denial or a field-rule failure) does return `false` and is never enrolled; that return was ignored, so an all-refused batch left the group empty, and an empty group's `Submit()` returns `true` for having nothing to do — the screen reported success having assigned nothing. It now collects each such refusal with the user it applies to and surfaces them.
+
+    To be precise about what this does **not** cover: the role-elevation guard added here is server-side only (`@memberjunction/core-entities-server` is not a browser dependency), so it refuses during `Submit()`, not during `Save()` — and that refusal currently reaches the user nowhere at all. `ExecuteTransactionGroup` on the server discards its own `Save()`/`Delete()` return values, so a refused row never enrols in the server's group either; an all-refused batch submits an empty group, whose `Submit()` returns `true` for having nothing to do, and the screen closes with no message. Verified end to end against a live server: a non-Owner assigning a role they do not hold is correctly **refused** — no row is written, the guard works — but is **reported as success**. This is a pre-existing gap in that resolver (it predates this PR and equally affects `MJ: Users` via issue #4260), tracked as issue #4309 and deliberately not closed here.
+
+  - **`AssignUserRolesAction` now fails the whole batch when the caller does not hold the role.** The core action (`CoreActions/src/custom/user-management/assign-user-roles.action.ts`) builds its `MJ: User Roles` object with `params.ContextUser` and assigns atomically, so a refused `Save()` rolls the transaction back and the action returns `Success: false` with `ResultCode: 'FAILED'` carrying the guard's message. Nothing is partially assigned and nothing is swallowed — unlike the transaction-group paths above, this one already reports its refusal. The "onboarding automation" the subset rule preserves is therefore preserved exactly where the automation's context user holds the role being granted: an automation running as a non-Owner that grants roles its own context user does not hold must be given those roles, or an Owner context user.
+  - **`SyncRoles` / `SyncUsers` / `SyncRolesAndUsers` are unaffected on a default install** — all three carry `@RequireSystemUser()`, and `getSystemUser()` resolves the seeded `Type='Owner'` system user. A deployment whose system user is **not** an Owner will see those sync paths fail closed at the save, loudly rather than silently, for the same reason #4260 documented.
+  - **Not closed by this change:** `MJ: Entity Permissions` carries the same unfiltered `Developer`/`Integration` grant, so a holder of either role can still widen a role's permissions directly. That is an independent route with its own decision to make about the invariant, so it is deliberately out of scope here rather than fixed in passing; this changeset does not claim to close it.
+
+  New unit coverage in MJCoreEntitiesServer (41 tests across both guards, including the pre-fix reproduction) and a new deterministic integration bundle, **IT89 — Role Privilege Elevation Guard** (`role-elevation`, RE1–RE6), which proves the ClassFactory wiring and both guards against a real provider the way IT88 does for `MJ: Users`.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [319a7ed]
+- Updated dependencies [2f305df]
+- Updated dependencies [197fdf8]
+- Updated dependencies [62e0707]
+- Updated dependencies [6673f51]
+- Updated dependencies [d1d74c2]
+- Updated dependencies [0312b22]
+- Updated dependencies [f6a4341]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [41b0d28]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [ddf8621]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [c679e8d]
+- Updated dependencies [a723521]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [328a98d]
+- Updated dependencies [a4bb2f7]
+- Updated dependencies [770cfca]
+- Updated dependencies [ee85060]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [cdd25c0]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [c11f8c6]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [ac96bb6]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai-agents@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/codegen-lib@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/metadata-sync@6.1.0-edge.6
+  - @memberjunction/actions@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/communication-ms-graph@6.1.0-edge.6
+  - @memberjunction/communication-gmail@6.1.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/testing-integration@6.1.0-edge.6
+  - @memberjunction/auth-providers@6.1.0-edge.6
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.6
+  - @memberjunction/open-app-engine@6.1.0-edge.6
+  - @memberjunction/record-set-processor@6.1.0-edge.6
+  - @memberjunction/record-set-processor-base@6.1.0-edge.6
+  - @memberjunction/content-autotagging@6.1.0-edge.6
+  - @memberjunction/predictive-studio@6.1.0-edge.6
+  - @memberjunction/search-engine@6.1.0-edge.6
+  - @memberjunction/ai-agent-harness@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/ai-prompts@6.1.0-edge.6
+  - @memberjunction/conversations-runtime@6.1.0-edge.6
+  - @memberjunction/scheduling-engine@6.1.0-edge.6
+  - @memberjunction/task-graph@6.1.0-edge.6
+  - @memberjunction/templates@6.1.0-edge.6
+  - @memberjunction/ai-bridge-server@6.1.0-edge.6
+  - @memberjunction/queue@6.1.0-edge.6
+  - @memberjunction/ai-bridge-base@6.1.0-edge.6
+  - @memberjunction/api-keys@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/communication-engine@6.1.0-edge.6
+  - @memberjunction/notifications@6.1.0-edge.6
+  - @memberjunction/communication-sendgrid@6.1.0-edge.6
+  - @memberjunction/storage@6.1.0-edge.6
+  - @memberjunction/query-processor@6.1.0-edge.6
+  - @memberjunction/templates-base-types@6.1.0-edge.6
+  - @memberjunction/communication-expo-push@6.1.0-edge.6
+  - @memberjunction/communication-twilio@6.1.0-edge.6
+  - @memberjunction/redis-provider@6.1.0-edge.6
+  - @memberjunction/predictive-studio-core@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes
