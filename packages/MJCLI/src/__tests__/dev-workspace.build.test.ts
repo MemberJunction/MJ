@@ -45,6 +45,7 @@ function repo(name: string, overrides?: Partial<CandidateRepo>): CandidateRepo {
     Lockfile: null,
     TurboJson: null,
     MjAppJson: null,
+    MjAppJsonError: null,
     WorkspaceGlobs: ['packages/*'],
     WorkspaceGlobsSource: 'no-workspace-yaml',
     ...overrides,
@@ -332,7 +333,7 @@ describe('CollectOpenAppClientPackages', () => {
   const caliber = openAppMember('bizapps-caliber', '@mj-biz-apps/caliber-ng');
 
   it('collects a member-provided client bootstrap package', () => {
-    expect(CollectOpenAppClientPackages([caliber], IndexWorkspacePackages([caliber]))).toEqual([
+    expect(CollectOpenAppClientPackages([caliber], IndexWorkspacePackages([caliber])).Packages).toEqual([
       { Package: '@mj-biz-apps/caliber-ng', Repo: 'bizapps-caliber', Provided: true },
     ]);
   });
@@ -341,7 +342,7 @@ describe('CollectOpenAppClientPackages', () => {
     const ghost = repo('bizapps-ghost', {
       MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/ghost-ng', role: 'bootstrap' }] } },
     });
-    expect(CollectOpenAppClientPackages([ghost], IndexWorkspacePackages([ghost]))).toEqual([
+    expect(CollectOpenAppClientPackages([ghost], IndexWorkspacePackages([ghost])).Packages).toEqual([
       { Package: '@mj-biz-apps/ghost-ng', Repo: 'bizapps-ghost', Provided: false },
     ]);
   });
@@ -368,7 +369,7 @@ describe('CollectOpenAppClientPackages', () => {
         pkg('packages/Cmp', '@mj-biz-apps/mixed-cmp'),
       ],
     });
-    const names = CollectOpenAppClientPackages([mixed], IndexWorkspacePackages([mixed])).map((c) => c.Package);
+    const names = CollectOpenAppClientPackages([mixed], IndexWorkspacePackages([mixed])).Packages.map((c) => c.Package);
     expect(names).toEqual(['@mj-biz-apps/mixed-cmp', '@mj-biz-apps/mixed-lib', '@mj-biz-apps/mixed-ng']);
   });
 
@@ -381,7 +382,7 @@ describe('CollectOpenAppClientPackages', () => {
       },
       Packages: [pkg('packages/Entities', '@mj-biz-apps/shared-entities')],
     });
-    expect(CollectOpenAppClientPackages([shared], IndexWorkspacePackages([shared]))).toEqual([
+    expect(CollectOpenAppClientPackages([shared], IndexWorkspacePackages([shared])).Packages).toEqual([
       { Package: '@mj-biz-apps/shared-entities', Repo: 'bizapps-shared', Provided: true },
     ]);
   });
@@ -393,7 +394,7 @@ describe('CollectOpenAppClientPackages', () => {
       MjAppJson: { packages: { server: [{ name: '@mj-biz-apps/srv', role: 'bootstrap' }] } },
       Packages: [pkg('packages/Server', '@mj-biz-apps/srv')],
     });
-    expect(CollectOpenAppClientPackages([server], IndexWorkspacePackages([server]))).toEqual([]);
+    expect(CollectOpenAppClientPackages([server], IndexWorkspacePackages([server])).Packages).toEqual([]);
   });
 
   it('de-duplicates a package named in both client and shared', () => {
@@ -406,7 +407,7 @@ describe('CollectOpenAppClientPackages', () => {
       },
       Packages: [pkg('packages/Dup', '@mj-biz-apps/dup')],
     });
-    expect(CollectOpenAppClientPackages([both], IndexWorkspacePackages([both]))).toHaveLength(1);
+    expect(CollectOpenAppClientPackages([both], IndexWorkspacePackages([both])).Packages).toHaveLength(1);
   });
 
   it('validates shared entries with the same guard, naming packages.shared', () => {
@@ -421,13 +422,43 @@ describe('CollectOpenAppClientPackages', () => {
   it('de-duplicates a package two members both declare, keeping the first by repo sort order', () => {
     const a = openAppMember('aaa-repo', '@mj-biz-apps/dup-ng');
     const b = openAppMember('zzz-repo', '@mj-biz-apps/dup-ng');
-    const collected = CollectOpenAppClientPackages([b, a], IndexWorkspacePackages([b, a]));
+    const collected = CollectOpenAppClientPackages([b, a], IndexWorkspacePackages([b, a])).Packages;
     expect(collected).toHaveLength(1);
     expect(collected[0].Repo).toBe('aaa-repo');
   });
 
+  // The sibling collector reports this ambiguity rather than resolving it silently —
+  // CollectFamilyPackages returns Duplicates and the command warns "the link target is decided by
+  // sort order; use --exclude to drop one". Same ambiguity here (rkihm-BC review, R3).
+  it('reports a package two members both declare, naming every declaring repo', () => {
+    const a = openAppMember('aaa-repo', '@mj-biz-apps/dup-ng');
+    const b = openAppMember('zzz-repo', '@mj-biz-apps/dup-ng');
+    expect(CollectOpenAppClientPackages([b, a], IndexWorkspacePackages([b, a])).Duplicates).toEqual([
+      { Package: '@mj-biz-apps/dup-ng', Repos: ['aaa-repo', 'zzz-repo'] },
+    ]);
+  });
+
+  it('reports no duplicates when each package is declared once', () => {
+    const a = openAppMember('aaa-repo', '@mj-biz-apps/a-ng');
+    const b = openAppMember('zzz-repo', '@mj-biz-apps/z-ng');
+    expect(CollectOpenAppClientPackages([a, b], IndexWorkspacePackages([a, b])).Duplicates).toEqual([]);
+  });
+
+  it('does not call one repo declaring a package in both client and shared a duplicate', () => {
+    const both = repo('bizapps-both', {
+      MjAppJson: {
+        packages: {
+          client: [{ name: '@mj-biz-apps/dup', role: 'components' }],
+          shared: [{ name: '@mj-biz-apps/dup', role: 'library' }],
+        },
+      },
+      Packages: [pkg('packages/Dup', '@mj-biz-apps/dup')],
+    });
+    expect(CollectOpenAppClientPackages([both], IndexWorkspacePackages([both])).Duplicates).toEqual([]);
+  });
+
   it('returns nothing for a member with no mj-app.json', () => {
-    expect(CollectOpenAppClientPackages([repo('MJ')], IndexWorkspacePackages([repo('MJ')]))).toEqual([]);
+    expect(CollectOpenAppClientPackages([repo('MJ')], IndexWorkspacePackages([repo('MJ')])).Packages).toEqual([]);
   });
 
   // mj-app.json is committed in a SIBLING repo and hand-editable, so the declared type is an
@@ -461,7 +492,7 @@ describe('CollectOpenAppClientPackages', () => {
 
   it('tolerates a null packages block, which is well-formed JSON saying nothing', () => {
     const empty = malformed('{"packages":null}');
-    expect(CollectOpenAppClientPackages([empty], IndexWorkspacePackages([empty]))).toEqual([]);
+    expect(CollectOpenAppClientPackages([empty], IndexWorkspacePackages([empty])).Packages).toEqual([]);
   });
 });
 
@@ -692,6 +723,30 @@ describe('BuildRootPackageJson dependencies', () => {
     expect(manifest).not.toHaveProperty('dependencies');
   });
 
+  // classifyDevDep maps any family-provided name to workspace:* and keeps it in the devDep union,
+  // and a provided client package is by definition family-provided — so a member that devDepends on
+  // its own client package put it in both blocks of a GENERATED file (rkihm-BC review, R2).
+  it('emits a client package once, in dependencies, even when a member devDepends on it', () => {
+    const selfDep = repo('bizapps-caliber', {
+      RootPackageJson: { name: 'caliber', devDependencies: { '@mj-biz-apps/caliber-ng': 'workspace:*' } },
+      MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/caliber-ng', role: 'bootstrap' }] } },
+      Packages: [pkg('packages/Angular', '@mj-biz-apps/caliber-ng')],
+    });
+    const manifest = JSON.parse(BuildRootPackageJson('mj-dev', [selfDep]).Content);
+    expect(manifest.dependencies).toHaveProperty('@mj-biz-apps/caliber-ng', 'workspace:*');
+    expect(manifest.devDependencies ?? {}).not.toHaveProperty('@mj-biz-apps/caliber-ng');
+  });
+
+  it('leaves an unrelated family devDependency in the devDependency union', () => {
+    const other = repo('bizapps-caliber', {
+      RootPackageJson: { name: 'caliber', devDependencies: { '@mj-biz-apps/caliber-lib': 'workspace:*' } },
+      MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/caliber-ng', role: 'bootstrap' }] } },
+      Packages: [pkg('packages/Angular', '@mj-biz-apps/caliber-ng'), pkg('packages/Lib', '@mj-biz-apps/caliber-lib')],
+    });
+    const manifest = JSON.parse(BuildRootPackageJson('mj-dev', [other]).Content);
+    expect(manifest.devDependencies).toHaveProperty('@mj-biz-apps/caliber-lib', 'workspace:*');
+  });
+
   it('never registers a client package no member provides, and reports it', () => {
     const ghost = repo('bizapps-ghost', {
       MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/ghost-ng', role: 'bootstrap' }] } },
@@ -746,7 +801,7 @@ describe('shell peer gaps', () => {
     const members = [shell(), caliber];
     const index = IndexWorkspacePackages(members);
     const gaps = ResolveShellPeerGaps(
-      CollectOpenAppClientPackages(members, index),
+      CollectOpenAppClientPackages(members, index).Packages,
       CollectWorkspaceShells(members),
       index,
       { '@angular/elements': '21.2.22' }
@@ -766,7 +821,7 @@ describe('shell peer gaps', () => {
     const members = [shell({ '@angular/elements': '21.2.22' }), caliber];
     const index = IndexWorkspacePackages(members);
     expect(
-      ResolveShellPeerGaps(CollectOpenAppClientPackages(members, index), CollectWorkspaceShells(members), index, {})
+      ResolveShellPeerGaps(CollectOpenAppClientPackages(members, index).Packages, CollectWorkspaceShells(members), index, {})
     ).toEqual([]);
   });
 
@@ -778,7 +833,7 @@ describe('shell peer gaps', () => {
     const members = [shell(), caliber];
     const index = IndexWorkspacePackages(members);
     const gaps = ResolveShellPeerGaps(
-      CollectOpenAppClientPackages(members, index),
+      CollectOpenAppClientPackages(members, index).Packages,
       CollectWorkspaceShells(members),
       index,
       { '@angular/elements@^21': '21.2.22' }
@@ -790,7 +845,7 @@ describe('shell peer gaps', () => {
     const members = [shell(), caliber]; // caliber asks for @angular/elements ^21.1.3
     const index = IndexWorkspacePackages(members);
     const gaps = ResolveShellPeerGaps(
-      CollectOpenAppClientPackages(members, index),
+      CollectOpenAppClientPackages(members, index).Packages,
       CollectWorkspaceShells(members),
       index,
       { '@angular/elements@^19': '19.1.0', '@angular/elements@^21': '21.2.22' }
@@ -802,7 +857,7 @@ describe('shell peer gaps', () => {
     const members = [shell(), caliber];
     const index = IndexWorkspacePackages(members);
     const gaps = ResolveShellPeerGaps(
-      CollectOpenAppClientPackages(members, index),
+      CollectOpenAppClientPackages(members, index).Packages,
       CollectWorkspaceShells(members),
       index,
       {}
@@ -824,7 +879,7 @@ describe('shell peer gaps', () => {
     const members = [shell(), demo, caliber];
     const index = IndexWorkspacePackages(members);
     const gaps = ResolveShellPeerGaps(
-      CollectOpenAppClientPackages(members, index),
+      CollectOpenAppClientPackages(members, index).Packages,
       CollectWorkspaceShells(members),
       index,
       {}

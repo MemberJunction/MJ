@@ -424,7 +424,7 @@ function checkOneCopyCensus(census: StoreCensus): DoctorCheck {
 export function CollectClientPackageCensus(parentDir: string, memberNames: readonly string[]): ClientPackageCensus {
   const inWorkspace = new Set(memberNames);
   const members = DetectCandidates(parentDir).filter((candidate) => inWorkspace.has(candidate.Name));
-  const clients = CollectOpenAppClientPackages(members, IndexWorkspacePackages(members));
+  const clients = CollectOpenAppClientPackages(members, IndexWorkspacePackages(members)).Packages;
   return {
     Entries: clients.map((client) => ({
       Package: client.Package,

@@ -41,6 +41,7 @@ import { DeriveLockfilePins, type LockfilePinsResult } from './lockfile.js';
 import type {
   CandidateRepo,
   DevDepConflict,
+  DuplicateClientPackage,
   DuplicateFamilyPackage,
   MemberPackageJson,
   MjAppPackageEntry,
@@ -497,15 +498,36 @@ function readShellImportedEntries(member: CandidateRepo): MjAppPackageEntry[] {
 export function CollectOpenAppClientPackages(
   members: readonly CandidateRepo[],
   workspacePackages: ReadonlyMap<string, MemberPackageJson>
-): OpenAppClientPackage[] {
+): { Packages: OpenAppClientPackage[]; Duplicates: DuplicateClientPackage[] } {
   const collected = new Map<string, OpenAppClientPackage>();
+  const declaredBy = new Map<string, string[]>();
   for (const member of sortedByName(members)) {
+    // Detection carried this rather than throwing, so an excluded sibling's broken file could not
+    // abort the command. This is the consumer that actually reads the declaration, so it raises.
+    if (member.MjAppJsonError) {
+      throw new Error(`${member.Name}/mj-app.json could not be read: ${member.MjAppJsonError}`);
+    }
+    const seenInMember = new Set<string>();
     for (const entry of readShellImportedEntries(member)) {
-      if (entry.name.length === 0 || collected.has(entry.name)) continue;
+      if (entry.name.length === 0) continue;
+      // One repo naming a package in BOTH client[] and shared[] is not an ambiguity — it is one
+      // member declaring one package twice, and the link target is not in question.
+      if (!seenInMember.has(entry.name)) {
+        seenInMember.add(entry.name);
+        declaredBy.set(entry.name, [...(declaredBy.get(entry.name) ?? []), member.Name]);
+      }
+      if (collected.has(entry.name)) continue;
       collected.set(entry.name, { Package: entry.name, Repo: member.Name, Provided: workspacePackages.has(entry.name) });
     }
   }
-  return [...collected.values()].sort((a, b) => (a.Package < b.Package ? -1 : a.Package > b.Package ? 1 : 0));
+  const byPackage = (a: { Package: string }, b: { Package: string }) => (a.Package < b.Package ? -1 : a.Package > b.Package ? 1 : 0);
+  return {
+    Packages: [...collected.values()].sort(byPackage),
+    Duplicates: [...declaredBy.entries()]
+      .filter(([, repos]) => repos.length > 1)
+      .map(([Package, Repos]) => ({ Package, Repos }))
+      .sort(byPackage),
+  };
 }
 
 /** The prefix every MJ Angular library carries — the surface an Open App client package registers into. */
@@ -800,10 +822,17 @@ export function BuildRootPackageJson(parentDirName: string, members: readonly Ca
     throw new Error('BuildRootPackageJson requires at least one member repo');
   }
   const workspacePackages = IndexWorkspacePackages(members);
-  const clientPackages = CollectOpenAppClientPackages(members, workspacePackages);
+  const clients = CollectOpenAppClientPackages(members, workspacePackages);
+  const clientPackages = clients.Packages;
   const clientDependencies = BuildClientDependencies(clientPackages);
   const family = CollectFamilyPackages(members);
   const union = ResolveDevDependencyUnion(members, new Set(family.Names));
+  // A provided client package is by definition family-provided, so classifyDevDep already mapped it
+  // to workspace:* in the union — and a member devDepending on its own client package is ordinary.
+  // Emitting it in both blocks of a GENERATED manifest is noise, not a conflict (identical
+  // specifier), so `dependencies` keeps it: that block is what puts the package at the parent root,
+  // which is the whole point of registering it.
+  for (const name of Object.keys(clientDependencies)) delete union.DevDependencies[name];
   const pins = DeriveLockfilePins(
     members.flatMap((m) => (m.Lockfile !== null && m.Lockfile.Kind !== 'unsupported' ? [{ Repo: m.Name, Lockfile: m.Lockfile }] : [])),
     new Set(family.Names)
@@ -826,7 +855,7 @@ export function BuildRootPackageJson(parentDirName: string, members: readonly Ca
     Conflicts: union.Conflicts,
     PinSource: Source,
     Pin,
-    Report: buildManifestReport(members, family, union, pins, blocks, assembled.SupersededPins, clientPackages, shellPeerGaps),
+    Report: buildManifestReport(members, family, union, pins, blocks, assembled.SupersededPins, clients, shellPeerGaps),
   };
 }
 
@@ -838,7 +867,7 @@ function buildManifestReport(
   pins: LockfilePinsResult,
   blocks: MemberPnpmBlocksResult,
   supersededPins: string[],
-  clientPackages: OpenAppClientPackage[],
+  clients: { Packages: OpenAppClientPackage[]; Duplicates: DuplicateClientPackage[] },
   shellPeerGaps: ShellPeerGap[]
 ): ParentManifestReport {
   const lockfileSkips = members.flatMap((m) =>
@@ -860,8 +889,9 @@ function buildManifestReport(
     SkippedTypesDevDeps: [...union.SkippedTypes].sort(),
     DroppedWorkspaceDevDeps: union.DroppedWorkspace,
     SupersededPins: supersededPins,
-    OpenAppClientPackages: clientPackages,
+    OpenAppClientPackages: clients.Packages,
     ShellPeerGaps: shellPeerGaps,
+    DuplicateClientPackages: clients.Duplicates,
   };
 }
 

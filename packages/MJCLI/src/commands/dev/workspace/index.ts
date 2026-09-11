@@ -306,6 +306,12 @@ export default class DevWorkspace extends Command {
       const detail = verbose ? `: ${registered.map((c) => c.Package).join(', ')}` : '';
       this.log(chalk.dim(`dependencies: ${registered.length} Open App client-side package(s) registered at the parent${detail}`));
     }
+    for (const dup of report.DuplicateClientPackages) {
+      this.warn(
+        `client package ${dup.Package} is declared by ${dup.Repos.join(' AND ')} — the link target is ` +
+          `decided by sort order (${dup.Repos[0]} wins); use --exclude to drop one`
+      );
+    }
     for (const missing of report.OpenAppClientPackages.filter((c) => !c.Provided)) {
       this.warn(
         `${missing.Repo}/mj-app.json declares client package ${missing.Package} but NO member provides it — not ` +
