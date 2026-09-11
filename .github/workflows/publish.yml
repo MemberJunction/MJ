@@ -725,12 +725,79 @@ jobs:
           fi
           gh release create "$VERSION" --title "$VERSION" --generate-notes --latest=false $EXTRA_FLAGS --repo "${{ github.repository }}"
 
+      # Minted HERE rather than at the top of the job, and this is load-bearing: an App
+      # installation token lives one hour, while this job's budget is 120 minutes and the
+      # build alone takes ~25. A token minted at checkout would routinely be expired by the
+      # time the back-merge runs — which is the LAST thing the job does. Mint it late, use
+      # it immediately. Covers this step and the two below; nothing between them is slow.
+      - name: Mint the App token for pushes to next
+        if: ${{ env.BRANCH == 'main' }}
+        id: next_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      # A SECOND remote, deliberately, rather than re-pointing `origin`.
+      #
+      # `next` is protected by ruleset `next-protect`, whose bypass list accepts only roles,
+      # teams and GitHub Apps — never an individual user. The release PAT's account
+      # (MJ-GH-bot) is an outside collaborator, so it cannot hold a bypass at all; as of
+      # 2026-09-03 it does not, and every push to `next` from this workflow was rejected
+      # with GH013 until `blue-cypress-ci-bot` was added as a bypass actor (MJ#4382).
+      #
+      # Only the write to `next` moves. `origin` keeps the PAT, so the push to `main` and
+      # the tag (both already done by this point), every `gh release` call, and all reads
+      # behave exactly as before. The App holds only `contents: write` +
+      # `pull_requests: write` — it could NOT do the `gh issue` and `gh workflow run` work
+      # elsewhere in this file, which is why this is a second remote and not a swap.
+      - name: Add the App-authenticated remote for next
+        if: ${{ env.BRANCH == 'main' }}
+        env:
+          APP_TOKEN: ${{ steps.next_token.outputs.token }}
+        run: |
+          git remote remove next-push 2>/dev/null || true
+          git remote add next-push "https://x-access-token:$APP_TOKEN@github.com/${GITHUB_REPOSITORY}"
+          echo "::notice::next-push remote configured as ${{ steps.next_token.outputs.app-slug }}"
+
+      # continue-on-error, paired with the explicit failure step at the end of the job.
+      # The back-merge is no longer allowed to kill the steps after it: recording the
+      # release in release-lines.json is independent work that should still happen, and the
+      # fallback below needs to run precisely when this fails. The job still ends RED —
+      # see "Fail the run if the back-merge did not land".
       - name: Merge main into next and update package-lock
         if: ${{ env.BRANCH == 'main' }}
+        id: backmerge
+        continue-on-error: true
+        env:
+          MJ_NEXT_PUSH_REMOTE: next-push
         run: |
           git checkout next
           git log -n1
-          pnpm run mergemain:update-lock
+          pnpm run mergemain:update-lock 2>&1 | tee "$RUNNER_TEMP/backmerge.log"
+          exit "${PIPESTATUS[0]}"
+
+      # The recovery that #4382 had to do by hand. Two different failures land here — a
+      # genuine merge conflict (ci/back-merge.mjs refuses to guess at anything but the
+      # lockfile) and a rejected push (the bypass is configuration outside this repo and
+      # can be revoked, exactly as it was on 2026-09-03). A PR answers both.
+      #
+      # It does NOT make the release done: the back-merge is outstanding until someone
+      # merges that PR, which is why the job still fails below.
+      - name: Fallback - open a back-merge PR
+        if: ${{ env.BRANCH == 'main' && steps.backmerge.outcome == 'failure' }}
+        id: backmerge_pr
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ steps.next_token.outputs.token }}
+          VERSION: ${{ steps.version.outputs.VERSION }}
+        run: |
+          set -euo pipefail
+          REASON=$(tail -c 2000 "$RUNNER_TEMP/backmerge.log" 2>/dev/null || echo 'back-merge step produced no log')
+          node ci/backmerge-fallback.mjs \
+            --version "$VERSION" \
+            --remote next-push \
+            --reason "$REASON"
 
       # release-lines.json bookkeeping. Process doc §4.1 says publish workflows append the
       # mechanical fields (`newest`, and the per-release `releases` ledger) via direct push.
@@ -741,14 +808,19 @@ jobs:
       # It writes to `next`, never to `main`. A push to main is this workflow's own Edge
       # trigger, so a bookkeeping commit there would start a publish that consumes whatever
       # changesets are banked on main. `next` carries no publish trigger, and main inherits
-      # the entry at the next release through the merge step above. The step above has already
-      # pushed HEAD:next, so HEAD is the branch tip here.
+      # the entry at the next release through the merge step above.
       #
-      # LAST step in the job, deliberately, and fatal rather than continue-on-error. The
-      # packages are on npm by the time this runs, so a failure means "released, not yet
-      # recorded" — recoverable by hand — while a red run is the only signal that the ledger
-      # is behind. [skip ci] keeps a predictable two-field JSON edit from re-running every
-      # gate; `--mode push` proves the edit touched nothing else before it is committed.
+      # This step used to rely on the back-merge above having pushed HEAD:next, so that HEAD
+      # was the branch tip here. That coupling is why ONE rejected push at v6.1.0-edge.6
+      # produced TWO unfinished steps. It now resolves `next` itself, which makes it
+      # independent: the ledger is recorded whether or not the back-merge landed, and the
+      # two failures are reported separately instead of one masking the other.
+      #
+      # Still fatal rather than continue-on-error. The packages are on npm by the time this
+      # runs, so a failure means "released, not yet recorded" — recoverable by hand — while
+      # a red run is the only signal that the ledger is behind. [skip ci] keeps a predictable
+      # two-field JSON edit from re-running every gate; `--mode push` proves the edit touched
+      # nothing else before it is committed.
       - name: Record the release in release-lines.json
         if: ${{ env.BRANCH == 'main' }}
         env:
@@ -768,11 +840,39 @@ jobs:
           fi
           echo "::notice::classifying dbImpact over ${PREV}..${VERSION}"
           git fetch origin next
+          # Move onto next's actual tip rather than assuming HEAD is already there. `-f` for
+          # the same reason the LTS path documents below: the build rewrites tracked
+          # generated files, so the tree is dirty here and a plain checkout would abort with
+          # "local changes would be overwritten". What gets discarded is build output.
+          # `git describe` above already ran against a local tag object, so it is unaffected.
+          git checkout -f -B record-release-lines origin/next
           node ci/append-release-line.mjs --version "${VERSION#v}" --since "$PREV" --until "$VERSION"
           node ci/validate-release-lines.mjs --base origin/next --mode push
           git add release-lines.json
           git commit -m "chore: record ${VERSION#v} in release-lines.json [skip ci]"
-          git push origin HEAD:next
+          git push next-push HEAD:next
+
+      # The back-merge runs continue-on-error so the ledger step above still gets its turn
+      # and the fallback PR can be opened. The run must still end RED: until that PR is
+      # merged the repo is "published, not merged", and a green run would say otherwise.
+      # Same doctrine the ledger step has always had, just reported at the end instead of
+      # by stopping the job halfway.
+      - name: Fail the run if the back-merge did not land
+        if: ${{ env.BRANCH == 'main' && steps.backmerge.outcome == 'failure' }}
+        env:
+          PR_URL: ${{ steps.backmerge_pr.outputs.pr_url }}
+        run: |
+          echo "::error::The release published, but the main -> next back-merge did not land."
+          if [ -n "${PR_URL:-}" ]; then
+            echo "::error::Resolve and merge ${PR_URL} to finish the release."
+            echo "### Back-merge outstanding" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "The release is on npm. Merge $PR_URL to complete it." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::The fallback could not open a PR either — finish the back-merge by hand:"
+            echo "::error::  git checkout next && git merge origin/main"
+          fi
+          exit 1
 
   # ---------------------------------------------------------------------------
   # LTS line release (guides/RELEASE_ENGINEERING_RUNBOOK.md operation 3;
@@ -1365,6 +1465,27 @@ jobs:
             -f version="${VERSION#v}" -f line_branch="$LINE"
           echo "::notice::release-notes generation dispatched for ${VERSION#v} on $LINE; review and merge the PR it opens."
 
+      # `next` is protected and only the release App may push to it — see the edge path's
+      # remote step for the full reasoning. Minted here, immediately before the only step in
+      # this job that writes to `next`, because an installation token lives one hour and this
+      # job's budget is far longer. The line branch's own pushes above keep using `origin`
+      # on the PAT: `lts-lines` still bypasses on the repository-admin role, so they were
+      # never affected by the 2026-09-03 change.
+      - name: Mint the App token for pushes to next
+        id: next_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Add the App-authenticated remote for next
+        env:
+          APP_TOKEN: ${{ steps.next_token.outputs.token }}
+        run: |
+          git remote remove next-push 2>/dev/null || true
+          git remote add next-push "https://x-access-token:$APP_TOKEN@github.com/${GITHUB_REPOSITORY}"
+          echo "::notice::next-push remote configured as ${{ steps.next_token.outputs.app-slug }}"
+
       # Same bookkeeping as the edge path above — see that step for why it writes to `next`,
       # why it is last, and why it is fatal. One difference: this job is checked out on the
       # LINE branch, whose own release-lines.json is inert (`"lines": {}`) because the source
@@ -1404,7 +1525,7 @@ jobs:
           node ci/validate-release-lines.mjs --base origin/next --mode push
           git add release-lines.json
           git commit -m "chore: record ${VERSION#v} in release-lines.json [skip ci]"
-          git push origin HEAD:next
+          git push next-push HEAD:next
 
 
   # ---------------------------------------------------------------------------
@@ -1594,10 +1715,35 @@ jobs:
       - name: Re-enter Edge pre-mode and open the ${{ steps.cut.outputs.NEXTLINE }} stream
         run: node ci/candidate-cut.mjs reenter --line "$CUT"
 
-      # next kept merging during the build. push-next merges origin/next in and retries
+      # `next` is protected and only the release App may push to it — see the edge path's
+      # remote step for the reasoning. Minted here rather than at job start because an
+      # installation token lives one hour; the two steps that write to `next` (this one and
+      # the ledger at the end) both fall inside that window from this point.
+      - name: Mint the App token for pushes to next
+        id: next_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Add the App-authenticated remote for next
+        env:
+          APP_TOKEN: ${{ steps.next_token.outputs.token }}
+        run: |
+          git remote remove next-push 2>/dev/null || true
+          git remote add next-push "https://x-access-token:$APP_TOKEN@github.com/${GITHUB_REPOSITORY}"
+          echo "::notice::next-push remote configured as ${{ steps.next_token.outputs.app-slug }}"
+
+      # next kept merging during the build. push-next merges next-push/next in and retries
       # (bounded); only pnpm-lock.yaml may auto-resolve. Never force.
+      #
+      # --remote moves BOTH the fetch and the push onto the App-authenticated remote, which
+      # is required: pushNext() merges `<remote>/next` between attempts, so the ref it reads
+      # and the ref it writes must be the same remote. The tag push and branch creation in
+      # the step below deliberately stay on `origin` — those are not covered by next-protect
+      # and the App has no reason to hold them.
       - name: Push next
-        run: node ci/candidate-cut.mjs push-next
+        run: node ci/candidate-cut.mjs push-next --remote next-push
 
       - name: Push the tag and create ${{ steps.cut.outputs.BRANCH }} at it
         env:
@@ -1640,7 +1786,7 @@ jobs:
           node ci/validate-release-lines.mjs --base origin/next --mode push
           git add release-lines.json
           git commit -m "chore: record $VERSION in release-lines.json [skip ci]"
-          git push origin HEAD:next
+          git push next-push HEAD:next
 
       - name: Deploy docs for the new line
         env:
