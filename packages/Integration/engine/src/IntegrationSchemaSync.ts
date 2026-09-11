@@ -569,9 +569,13 @@ export class IntegrationSchemaSync {
         // which is the ordinary case for something discovery found on its own.
         const declaredObjectID = declaredByName.get(r.srcObj.ExternalName.toLowerCase())?.ID;
         const declaredFieldByName = new Map<string, string>();
+        const declaredFieldRowByName = new Map<string, MJIntegrationObjectFieldEntity>();
         if (declaredObjectID) {
           for (const df of engine.GetIntegrationObjectFields(declaredObjectID)) {
-            if (df.ID) declaredFieldByName.set(df.Name.toLowerCase(), df.ID);
+            if (df.ID) {
+              declaredFieldByName.set(df.Name.toLowerCase(), df.ID);
+              declaredFieldRowByName.set(df.Name.toLowerCase(), df);
+            }
           }
         }
         // U1 / rsuplan line 29 — the primary key is EITHER declared OR streamed, NEVER unioned. If the
@@ -581,14 +585,18 @@ export class IntegrationSchemaSync {
         // added component is NULL — the HubSpot `id` + `hs_object_id` failure). Streaming still runs for
         // every object to find columns/widths/customs; ONLY the PK promotion is gated. A prior *discovered*
         // PK does not count as the authoritative declared key (excluded so a re-run can't self-perpetuate).
-        const objectHasDeclaredPK = existingFields.some(f => f.IsPrimaryKey === true && f.MetadataSource !== 'Discovered');
+        // MJ-CAT-17: on a first discovery the per-connection field list is empty, so the declared key
+        // must be read from the declaration itself or a streamed field would be promoted over it.
+        const objectHasDeclaredPK = existingFields.some(f => f.IsPrimaryKey === true && f.MetadataSource !== 'Discovered')
+          || [...declaredFieldRowByName.values()].some(f => f.IsPrimaryKey === true);
         const perObjectLogs: FieldMergeLog[] = [];
         const perObjectStats = { created: 0, updated: 0 };
         for (const srcField of r.srcObj.Fields) {
           const fr = await IntegrationSchemaSync.UpsertField(
             writer, r.ObjectID!, srcField, existingFields, siblingNameToID, objectHasDeclaredPK,
             r.srcObj.FieldsAreAuthoritative ?? SourceSchema.IsAuthoritative === true,
-            declaredFieldByName.get(srcField.Name.toLowerCase()) ?? null);
+            declaredFieldByName.get(srcField.Name.toLowerCase()) ?? null,
+            declaredFieldRowByName.get(srcField.Name.toLowerCase()) ?? null);
           if (fr.Created) perObjectStats.created++;
           if (fr.Updated) perObjectStats.updated++;
           perObjectLogs.push({
@@ -752,7 +760,25 @@ export class IntegrationSchemaSync {
     /** Whether the connector claims its object enumeration is complete. Decides provenance. */
     discoveryIsAuthoritative: boolean,
   ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom' }> {
-    const existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
+    let existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
+    // MJ-CAT-17. A per-connection catalog starts EMPTY, so on a connection's first discovery every
+    // declared object is "new" here even though the connector declared it. Creating it from the
+    // sample alone left APIPath = Name (every fetch 404'd), no pagination, no watermark field and no
+    // declared keys — observed on the sandbox 2026-09-11, first PheedLoop sync: 27 objects, 27 HTTP 404s,
+    // 0 rows. Seed the row FROM THE DECLARATION, then overlay exactly as for a row that already existed.
+    // On the shared catalog a declared object always IS the existing row, so this never fires there.
+    let seeded = false;
+    if (!existing && declaredObject) {
+      const row = await writer.NewObjectRow();
+      writer.StampNewObject(row, declaredObject.ID, 'Declared');
+      row.Name = declaredObject.Name;
+      row.Status = 'Active';
+      row.IsCustom = declaredObject.IsCustom;
+      row.MetadataSource = declaredObject.MetadataSource;
+      writer.RebaseFromDeclared(row, declaredObject, 'object');
+      existing = row;
+      seeded = true;
+    }
 
     if (existing) {
       // Declared row exists. Overlay rule (external-wins-when-present): when the
@@ -805,7 +831,7 @@ export class IntegrationSchemaSync {
         dirty = true;
         changes.push('Status:reactivated');
       }
-      if (dirty) {
+      if (dirty || seeded) {
         // LastSeenAt rides the save we are already doing. It is deliberately NOT refreshed for an
         // unchanged object: that would mean one extra round trip per object per run — 205 of them
         // on the largest catalog here — to record a timestamp nothing currently reads. So it means
@@ -833,7 +859,7 @@ export class IntegrationSchemaSync {
             fieldsTouched: changes,
           }),
         );
-        return { ObjectID: existing.ID, Created: false, Updated: true, EffectiveSource: 'Declared' };
+        return { ObjectID: existing.ID, Created: seeded, Updated: !seeded, EffectiveSource: 'Declared' };
       }
       console.log(
         JSON.stringify({
@@ -914,6 +940,8 @@ export class IntegrationSchemaSync {
     fieldsAuthoritative: boolean,
     /** The declared field this was matched to, or null when it exists only here. */
     declaredFieldID: string | null = null,
+    /** The declared field ROW, when the caller has it — what a first discovery seeds from (MJ-CAT-17). */
+    declaredField: MJIntegrationObjectFieldEntity | null = null,
   ): Promise<{
     Created: boolean;
     Updated: boolean;
@@ -924,7 +952,22 @@ export class IntegrationSchemaSync {
       if (!target || !siblingNameToID) return undefined;
       return siblingNameToID.get(target.toLowerCase());
     };
-    const existing = existingFields.find((f) => f.Name.toLowerCase() === srcField.Name.toLowerCase());
+    let existing = existingFields.find((f) => f.Name.toLowerCase() === srcField.Name.toLowerCase());
+    // MJ-CAT-17 — see UpsertObject. A declared field with no per-connection row yet is seeded from the
+    // declaration (type, width, key flags, sequence) and then overlaid like an existing row.
+    let seeded = false;
+    if (!existing && declaredField) {
+      const row = await writer.NewFieldRow();
+      writer.StampNewField(row, declaredField.ID, 'Declared');
+      row.IntegrationObjectID = objectID;
+      row.Name = declaredField.Name;
+      row.Status = 'Active';
+      row.IsCustom = declaredField.IsCustom;
+      row.MetadataSource = declaredField.MetadataSource;
+      writer.RebaseFromDeclared(row, declaredField, 'field');
+      existing = row;
+      seeded = true;
+    }
     const winners: FieldMergeLog['AttributeWinners'] = {};
 
     if (existing) {
@@ -1056,12 +1099,12 @@ export class IntegrationSchemaSync {
       } else if (existing.RelatedIntegrationObjectID) {
         winners.ForeignKey = 'Declared';
       }
-      if (dirty) {
+      if (dirty || seeded) {
         const saved = await existing.Save();
         if (!saved) {
           console.warn(`[IntegrationSchemaSync] UpsertField save failed for '${srcField.Name}': ${existing.LatestResult?.CompleteMessage ?? 'unknown error'}`);
         }
-        return { Created: false, Updated: true, EffectiveSource: 'Declared', AttributeWinners: winners };
+        return { Created: seeded, Updated: !seeded, EffectiveSource: 'Declared', AttributeWinners: winners };
       }
       return { Created: false, Updated: false, EffectiveSource: 'Declared', AttributeWinners: winners };
     }
