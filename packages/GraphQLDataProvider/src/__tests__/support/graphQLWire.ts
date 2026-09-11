@@ -42,15 +42,22 @@ export type WireResponder = (
  * (`e.response.errors[0].extensions.code`).
  */
 export class FakeGraphQLResponseError extends Error {
-    public response: { errors: Array<{ message: string; extensions?: { code?: string } }> };
+    public response: { errors: Array<{ message: string; extensions?: Record<string, unknown> }> };
 
-    constructor(message: string, code?: string) {
+    /**
+     * @param message - The GraphQL error message (what `ResolverBase` throws as `CompleteMessage`).
+     * @param code - `extensions.code`, when the server sets one.
+     * @param extraExtensions - Any further `extensions` keys — e.g. the `validationErrors` a
+     *   write-refusal carries — merged beside `code`.
+     */
+    constructor(message: string, code?: string, extraExtensions?: Record<string, unknown>) {
         super(message);
         this.name = 'FakeGraphQLResponseError';
+        const extensions: Record<string, unknown> = { ...(code !== undefined ? { code } : {}), ...(extraExtensions ?? {}) };
         this.response = {
             errors: [
-                code !== undefined
-                    ? { message, extensions: { code } }
+                Object.keys(extensions).length > 0
+                    ? { message, extensions }
                     : { message },
             ],
         };
