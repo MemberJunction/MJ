@@ -5252,11 +5252,14 @@ export class ManageMetadataBase {
          for (const r of columnLevelResults) {
             // now, for each of the constraints we get back here, loop through and evaluate if they're simple and if they're simple, parse and sync with entity field values for that field
             if (r.ConstraintDefinition && r.ConstraintDefinition.length > 0) {
-               // the field itself decides whether a parsed list is worth capturing at all (bit, primary keys)
-               const field = allEntityFields.find((f: { ID: string; Type?: string; IsPrimaryKey?: boolean; }) => f.ID === r.EntityFieldID);
-               const parsedValues = ManageMetadataBase.isValueListEligibleField(field)
-                  ? this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName)
-                  : null;
+               // parse first, then decide whether THIS field should carry the list (bit, PK singleton guards).
+               // UUIDsEqual, not ===: PG returns lowercase UUIDs and SQL Server uppercase, and a missed
+               // lookup here fails OPEN (the exclusions stop applying), so a case mismatch would be silent.
+               const field = allEntityFields.find((f: { ID: string; Type?: string; IsPrimaryKey?: boolean; }) =>
+                  UUIDsEqual(f.ID, r.EntityFieldID));
+               const parsedValues = ManageMetadataBase.valueListForField(
+                  field,
+                  this.parseCheckConstraintValues(r.ConstraintDefinition, r.ColumnName, r.EntityName));
                if (parsedValues) {
                   if (!skipDBUpdate) {
                      // we only do this part if we are not skiping the database update as this code will sync values from the CHECK
@@ -5546,30 +5549,48 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Whether a CHECK constraint on this field should become an EntityFieldValue list (and so a dropdown in
-    * Explorer) at all. Two field shapes are excluded, because for them an enumerated CHECK is never a domain
-    * value list:
+    * The value list to actually store for a field, or null when a parsed list should NOT become
+    * EntityFieldValue rows (and so should not become a dropdown in Explorer either).
     *
-    * - `bit`: `CHECK (Flag IN (0,1))` is vacuous — bit already permits exactly 0 and 1 — and `CHECK (Flag=1)` is a
-    *   validator, not a two-item dropdown over what renders as a checkbox.
-    * - a primary key: `CHECK (ID=1)` is the single-row-table guard MJ's own sequence tables use. It is a
-    *   structural invariant, not a set of values a user picks from.
+    * Runs AFTER parsing rather than gating it, so each exclusion is no broader than its own reason and
+    * neither one can drop a list that was captured before #3978:
     *
-    * Anything else — including a field whose metadata row was not found — is eligible.
+    * - `bit`: `IN (0,1)` is vacuous — bit already permits exactly 0 and 1 — and `= 1` is a validator,
+    *   not a two-item dropdown over what renders as a checkbox. Every bit list is rendered unquoted, so
+    *   none of them was reachable before this change and nothing regresses.
+    * - a PRIMARY KEY carrying a SINGLE value: `CHECK (ID=1)` is the single-row-table guard MJ's own
+    *   sequence tables use — a structural invariant, not a set of values a user picks from. A
+    *   MULTI-value list on a primary key is left alone: `CHECK (Code IN ('US','CA'))` on a natural-key
+    *   PK is a real domain list, it was captured before this change, and CodeGen also runs over customer
+    *   schemas where natural-key primary keys are ordinary.
+    *
+    * A field whose metadata row was not found keeps whatever parsed, which is the pre-#3978 behaviour.
     */
-   protected static isValueListEligibleField(field: { Type?: string; IsPrimaryKey?: boolean; } | undefined): boolean {
-      if (!field) {
-         return true;
+   protected static valueListForField(
+      field: { Type?: string; IsPrimaryKey?: boolean; } | undefined,
+      parsedValues: string[] | null
+   ): string[] | null {
+      if (!parsedValues || !field) {
+         return parsedValues;
       }
       if (field.Type?.trim().toLowerCase() === 'bit') {
-         return false;
+         return null;
       }
-      return !field.IsPrimaryKey;
+      if (field.IsPrimaryKey && parsedValues.length === 1) {
+         return null;
+      }
+      return parsedValues;
    }
 
    /**
     * Sorts a parsed value list in place, so the sequence a value gets is stable across databases and runs.
     * An all-numeric list is compared as numbers (1, 2, 10); anything else keeps the default lexical order.
+    *
+    * Keyed off the VALUES, not the column type — so a string column whose list happens to be all-numeric
+    * (`CHECK (Code IN ('1','2','10'))` on nvarchar) would re-sequence too. Measured over every column CHECK
+    * constraint in a live 6.x database (MJ core + BizApps accounting/orders): of the 431 lists the previous
+    * parser already captured, ZERO re-sequence under this comparison. If one ever turns up and the churn is
+    * unwanted, gate `allNumeric` on the field being numeric as well.
     */
    protected static sortCheckConstraintValues(values: string[]): string[] {
       const allNumeric = values.length > 0 && values.every(v => /^-?\d+(?:\.\d*)?(?:[eE][+-]?\d+)?$/.test(v));

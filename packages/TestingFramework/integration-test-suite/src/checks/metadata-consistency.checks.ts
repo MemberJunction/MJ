@@ -265,12 +265,15 @@ function parseCheckConstraintValues(definition: string, columnName: string): str
 const NUMERIC_LITERAL = `\\(-?\\d+(?:\\.\\d*)?(?:[eE][+-]?\\d+)?\\)`;
 
 /**
- * Mirrors CodeGen's isValueListEligibleField: a `bit` or primary-key field never gets a CHECK-derived
- * value list (`IN (0,1)` is vacuous on a bit; `CHECK (ID=1)` is a single-row-table guard), so those
- * fields are not compared here either.
+ * Mirrors CodeGen's valueListForField: a `bit` field never gets a CHECK-derived value list (`IN (0,1)`
+ * is vacuous on a bit), and neither does a primary key carrying a SINGLE value (`CHECK (ID=1)` is a
+ * single-row-table guard). A multi-value list on a natural-key PK IS captured, so it is compared here.
  */
-function valueListEligible(field: EntityFieldInfo): boolean {
-    return field.Type?.trim().toLowerCase() !== 'bit' && !field.IsPrimaryKey;
+function valueListCaptured(field: EntityFieldInfo, physical: string[]): boolean {
+    if (field.Type?.trim().toLowerCase() === 'bit') {
+        return false;
+    }
+    return !(field.IsPrimaryKey && physical.length === 1);
 }
 
 /** Escape regex metacharacters in an identifier so it can be embedded in a pattern. */
@@ -444,12 +447,12 @@ const MC3: NamedCheck = {
             if (!entity || !field) {
                 continue; // table/column outside MJ metadata — not this audit's business
             }
-            if (!valueListEligible(field)) {
-                continue; // CodeGen does not derive a value list for this field, so there is nothing to compare
-            }
             const physical = parseCheckConstraintValues(row.Definition, row.ColumnName);
             if (!physical) {
                 continue; // not a value-list constraint (range/length/etc.)
+            }
+            if (!valueListCaptured(field, physical)) {
+                continue; // CodeGen does not store a value list for this field, so there is nothing to compare
             }
             compared++;
             const expected = normalizeValueList(physical);

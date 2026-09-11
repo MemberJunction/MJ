@@ -21,8 +21,11 @@ class TestableManageMetadata extends ManageMetadataBase {
    public parse(definition: string, fieldName: string): string[] | null {
       return this.parseCheckConstraintValues(definition, fieldName, 'Test Entity');
    }
-   public static eligible(field: { Type?: string; IsPrimaryKey?: boolean; } | undefined): boolean {
-      return ManageMetadataBase.isValueListEligibleField(field);
+   public static captured(
+      field: { Type?: string; IsPrimaryKey?: boolean; } | undefined,
+      parsedValues: string[] | null
+   ): string[] | null {
+      return ManageMetadataBase.valueListForField(field, parsedValues);
    }
    public static sort(values: string[]): string[] {
       return ManageMetadataBase.sortCheckConstraintValues(values);
@@ -155,23 +158,37 @@ describe('parseCheckConstraintValues — constraints that are NOT value lists', 
    });
 });
 
-describe('isValueListEligibleField — which fields get a value list at all', () => {
+describe('valueListForField — which parsed lists actually get stored', () => {
+   // The gate runs AFTER parsing, so an exclusion can be no broader than its reason and neither one
+   // can drop a list that the old parser already captured.
+   const list = ['Active', 'Inactive'];
+
    it('excludes a bit field: IN (0,1) is vacuous and = 1 is a validator, not a dropdown', () => {
-      expect(TestableManageMetadata.eligible({ Type: 'bit', IsPrimaryKey: false })).toBe(false);
-      expect(TestableManageMetadata.eligible({ Type: 'BIT ', IsPrimaryKey: false })).toBe(false);
+      expect(TestableManageMetadata.captured({ Type: 'bit', IsPrimaryKey: false }, ['0', '1'])).toBeNull();
+      expect(TestableManageMetadata.captured({ Type: 'BIT ', IsPrimaryKey: false }, ['1'])).toBeNull();
    });
 
-   it('excludes a primary key: CHECK (ID=1) is a single-row-table guard, not a domain list', () => {
-      expect(TestableManageMetadata.eligible({ Type: 'int', IsPrimaryKey: true })).toBe(false);
+   it('excludes a SINGLE-value list on a primary key: CHECK (ID=1) is a single-row-table guard', () => {
+      expect(TestableManageMetadata.captured({ Type: 'int', IsPrimaryKey: true }, ['1'])).toBeNull();
    });
 
-   it('includes an ordinary numeric or string field', () => {
-      expect(TestableManageMetadata.eligible({ Type: 'int', IsPrimaryKey: false })).toBe(true);
-      expect(TestableManageMetadata.eligible({ Type: 'nvarchar', IsPrimaryKey: false })).toBe(true);
+   it('KEEPS a multi-value list on a primary key — a natural-key enum is a real domain list', () => {
+      // CHECK (Code IN ('US','CA')) on a char(2) PK parsed to a value list before #3978 too, so
+      // dropping it would be a regression on the customer schemas CodeGen also runs over.
+      expect(TestableManageMetadata.captured({ Type: 'char', IsPrimaryKey: true }, ['US', 'CA'])).toEqual(['US', 'CA']);
    });
 
-   it('includes a field whose metadata row was not found, rather than silently dropping it', () => {
-      expect(TestableManageMetadata.eligible(undefined)).toBe(true);
+   it('keeps an ordinary numeric or string field', () => {
+      expect(TestableManageMetadata.captured({ Type: 'int', IsPrimaryKey: false }, ['1', '2'])).toEqual(['1', '2']);
+      expect(TestableManageMetadata.captured({ Type: 'nvarchar', IsPrimaryKey: false }, list)).toEqual(list);
+   });
+
+   it('keeps the list when the field metadata row was not found, rather than silently dropping it', () => {
+      expect(TestableManageMetadata.captured(undefined, list)).toEqual(list);
+   });
+
+   it('passes a null parse straight through', () => {
+      expect(TestableManageMetadata.captured({ Type: 'int', IsPrimaryKey: false }, null)).toBeNull();
    });
 });
 

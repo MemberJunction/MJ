@@ -515,7 +515,20 @@ describe('EntityField.Validate — value lists (#3969)', () => {
                     { ID: 's-2', EntityFieldID: 'field-1', Sequence: 2, Value: '0', Code: '0' },
                 ],
             };
-            expect(new EntityField(makeFieldInfo(signed), 0).Validate().Success).toBe(true);
+            // Zero has to be assigned through the SETTER, not the constructor: EntityField's constructor
+            // guards with `if (Value)`, so `new EntityField(fi, 0)` leaves the field UNSET and the null
+            // gate would pass the test whether or not 0 is in the list. Zero is the case most worth
+            // pinning here — it is the one `Number('')` collides with.
+            const zero = new EntityField(makeFieldInfo(signed));
+            zero.Value = 0;
+            expect(zero.Validate().Success).toBe(true);
+
+            const zeroOffList = new EntityField(makeFieldInfo({ ...signed, EntityFieldValues: [
+                { ID: 's-1', EntityFieldID: 'field-1', Sequence: 1, Value: '-1', Code: '-1' },
+            ] }));
+            zeroOffList.Value = 0;
+            expect(zeroOffList.Validate().Success).toBe(false);
+
             expect(new EntityField(makeFieldInfo(signed), -1).Validate().Success).toBe(true);
             expect(new EntityField(makeFieldInfo(signed), 1).Validate().Success).toBe(false);
         });
