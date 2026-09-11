@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, RunView, UserInfo } from '@memberjunction/core';
 import type { MJIntegrationObjectEntity, MJIntegrationObjectFieldEntity } from '@memberjunction/core-entities';
 import {
     CATALOG_FIELD_COLUMNS,
@@ -142,6 +142,23 @@ export interface CatalogWriter {
 
     /** Record that this row was seen — and optionally sampled — by the discovery now running. */
     MarkSeen(row: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity, sampled: boolean): void;
+
+    /**
+     * Retire an object/field that an AUTHORITATIVE discovery no longer returns.
+     *
+     * The two catalogs differ here on purpose, which is why this is a writer method and not an
+     * `if` at the call site:
+     *   - SHARED rows are DISABLED, never deleted. They are the declared metadata every other
+     *     connection of the connector still reads, and a missing row there is unrecoverable.
+     *   - PER-CONNECTION rows are DELETED. plan.md: "Removed tables are more than deselected,
+     *     they just dont exist, its likely a cascade delete." Nothing else owns them, and leaving
+     *     tombstones would make the connection's catalog drift from its source forever.
+     *
+     * Returns whether the row is gone (`deleted`) so the caller can report honestly; the mirror
+     * TABLE and its data are never touched either way.
+     */
+    RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }>;
+    RetireField(row: MJIntegrationObjectFieldEntity): Promise<{ ok: boolean; deleted: boolean }>;
 }
 
 /**
@@ -236,6 +253,17 @@ export class SharedCatalogWriter implements CatalogWriter {
         /* the parent object id is the only ownership a shared field row carries */
     }
 
+    /** Shared rows are the declared floor for every other connection — disable, never delete. */
+    public async RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }> {
+        row.Status = 'Disabled';
+        return { ok: await row.Save(), deleted: false };
+    }
+
+    public async RetireField(row: MJIntegrationObjectFieldEntity): Promise<{ ok: boolean; deleted: boolean }> {
+        row.Status = 'Disabled';
+        return { ok: await row.Save(), deleted: false };
+    }
+
     public MarkSeen(): void {
         /* the shared catalog has no seen timestamps */
     }
@@ -315,6 +343,44 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
         w.IsSelected = false;
         w.FirstSeenAt = this.seenAt;
         w.LastSeenAt = this.seenAt;
+    }
+
+    /**
+     * Delete, not disable — see the interface comment.
+     *
+     * Order matters and there is no ON DELETE CASCADE in the migration (deletes are deliberately
+     * explicit, so nothing disappears as a side effect of an unrelated write):
+     *   1. NULL out inbound dependency edges. `RelatedCompanyIntegrationObjectID` is self-
+     *      referencing, so another object's field may point at this one; deleting underneath it
+     *      would violate that FK and abort the whole persist. Nulling drops the edge and keeps the
+     *      referencing field alive, which is right — the field still exists in the source, only
+     *      the thing it pointed at is gone.
+     *   2. Delete this object's own fields (the FK child rows).
+     *   3. Delete the object.
+     */
+    public async RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }> {
+        const inbound = await viewRows<MJIntegrationObjectFieldEntity>(
+            ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
+            `RelatedCompanyIntegrationObjectID = '${lit(row.ID)}'`,
+            this.contextUser, this.md, CATALOG_FIELD_COLUMNS, FIELD_WRITE_ALIASES);
+        for (const edge of inbound) {
+            (edge as unknown as Record<string, unknown>).RelatedCompanyIntegrationObjectID = null;
+            if (!(await edge.Save())) {
+                LogError(`[CatalogWriter] Could not clear dependency edge ${edge.ID} -> ${row.ID}; not deleting the object.`);
+                return { ok: false, deleted: false };
+            }
+        }
+        for (const child of await this.FieldsForObject(row.ID)) {
+            if (!(await child.Delete())) {
+                LogError(`[CatalogWriter] Could not delete field ${child.ID} of ${row.ID}; not deleting the object.`);
+                return { ok: false, deleted: false };
+            }
+        }
+        return { ok: await row.Delete(), deleted: true };
+    }
+
+    public async RetireField(row: MJIntegrationObjectFieldEntity): Promise<{ ok: boolean; deleted: boolean }> {
+        return { ok: await row.Delete(), deleted: true };
     }
 
     public MarkSeen(row: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity, sampled: boolean): void {
