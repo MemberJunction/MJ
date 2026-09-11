@@ -14,6 +14,81 @@ import { logError } from './status_logging';
 export const DEFAULT_REMOTE_OP_LIBRARY_ITEMS: ReadonlyArray<string> = ['RunView', 'Metadata', 'RunQuery'];
 
 /**
+ * Minimal entity descriptor shape needed to resolve a Remote Operation's schema.
+ */
+export interface RemoteOperationEntityDescriptor {
+    Name: string;
+    BaseTable?: string;
+    CodeName?: string;
+    SchemaName: string;
+}
+
+/**
+ * Resolves the logical schema that an MJ: Remote Operations row belongs to.
+ *
+ * Precedence:
+ * 1. An explicit SchemaName property if present on the entity object (forward compatibility).
+ * 2. An OpenApp schema matching the OperationKey's namespace (e.g. key 'Orders.PreviewPrice' -> schema '__mj_BizAppsOrders' or 'Orders').
+ * 3. An entity in the entities list matching the OperationKey's namespace (e.g. key 'RecordProcess.RunNow' -> entity 'Record Process' in schema '__mj').
+ * 4. Fallback to mjCoreSchema ('__mj').
+ */
+export function resolveRemoteOperationSchema(
+    op: MJRemoteOperationEntity,
+    entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
+    allSchemas: string[],
+    mjCoreSchema: string = '__mj',
+): string {
+    // 1. Explicit SchemaName property if present
+    const rawSchema = (op as unknown as { SchemaName?: string }).SchemaName;
+    if (rawSchema && typeof rawSchema === 'string' && rawSchema.trim().length > 0) {
+        return rawSchema.trim();
+    }
+
+    // OperationKey is namespaced by convention: <Namespace>.<OperationName>
+    const opKey = (op.OperationKey || '').trim();
+    const keyParts = opKey.split('.');
+    const namespace = (keyParts[0] || '').trim().toLowerCase();
+    if (!namespace) {
+        return mjCoreSchema;
+    }
+
+    // 2. Direct schema name match (e.g. namespace "orders" matching "__mj_BizAppsOrders", "orders", etc.)
+    const schemaMatch = allSchemas.find((s) => {
+        const sLower = s.trim().toLowerCase();
+        return (
+            sLower === namespace ||
+            sLower === `__mj_bizapps${namespace}` ||
+            sLower.endsWith(`_${namespace}`) ||
+            sLower.endsWith(namespace)
+        );
+    });
+    if (schemaMatch && schemaMatch.trim().toLowerCase() !== mjCoreSchema.trim().toLowerCase()) {
+        return schemaMatch.trim();
+    }
+
+    // 3. Entity match: check if any entity has BaseTable, CodeName, or Name matching namespace
+    const entityMatch = entities.find((e) => {
+        const bt = (e.BaseTable || '').trim().toLowerCase();
+        const cn = (e.CodeName || '').trim().toLowerCase();
+        const n = (e.Name || '').trim().toLowerCase();
+        return (
+            bt === namespace ||
+            cn === namespace ||
+            n === namespace ||
+            n === `mj: ${namespace}` ||
+            n.endsWith(`: ${namespace}`) ||
+            n.endsWith(`: ${namespace}s`)
+        );
+    });
+    if (entityMatch && entityMatch.SchemaName) {
+        return entityMatch.SchemaName.trim();
+    }
+
+    // 4. Fallback to core schema
+    return mjCoreSchema;
+}
+
+/**
  * Generates the strongly-typed base class for each `MJ: Remote Operations` row — the CodeGen half of the
  * Remote Operations primitive (the typed peer of generated entity subclasses). Each row becomes a subclass
  * of `BaseRemotableOperation<TInput, TOutput>` whose `OperationKey`, `ExecutionMode`, `RequiredScope`,
@@ -30,6 +105,18 @@ export const DEFAULT_REMOTE_OP_LIBRARY_ITEMS: ReadonlyArray<string> = ['RunView'
  * Mirrors `ActionSubClassGeneratorBase` (the other "read a custom entity's rows → emit TypeScript" generator).
  */
 export class RemoteOperationGeneratorBase {
+    /**
+     * Resolves the logical schema that an operation belongs to.
+     */
+    public resolveOperationSchema(
+        op: MJRemoteOperationEntity,
+        entities: ReadonlyArray<RemoteOperationEntityDescriptor>,
+        allSchemas: string[],
+        mjCoreSchema: string = '__mj',
+    ): string {
+        return resolveRemoteOperationSchema(op, entities, allSchemas, mjCoreSchema);
+    }
+
     /**
      * Emits `remote_operations.ts` into `directory`, one typed base per Active operation.
      * @param remoteOps All `MJ: Remote Operations` rows (any status; non-Active rows are skipped).
