@@ -960,6 +960,24 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
   }
 
+  /**
+   * Enter/Space on the row opens the field-mapping editor — but ONLY when the row
+   * itself is focused. The row contains its own controls (the sync checkbox and the
+   * direction button), and their `stopPropagation()` guards are on `click`, not
+   * `keydown`, which bubbles. Without the target check, Space on the checkbox both
+   * opened the editor and had its default toggle cancelled by `preventDefault()`.
+   */
+  OnEntityMapRowKeydown(event: KeyboardEvent, em: EntityMapRow): void {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+    event.preventDefault();
+    this.OnEntityMapClick(em);
+  }
+
   CloseEntityMapEditor(): void {
     this.EditorEntityMap = null;
     this.cdr.detectChanges();

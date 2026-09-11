@@ -397,8 +397,16 @@
 }
 
 .resize-handle:hover,
+.resize-handle:focus-visible,
 .resize-handle.active {
     background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+}
+
+/* The handle is a keyboard-operable widget (arrows/Home/End), so it needs a visible
+   focus ring — the 6px hover tint alone is too subtle to serve as one. */
+.resize-handle:focus-visible {
+    outline: 2px solid var(--mj-brand-primary);
+    outline-offset: -1px;
 }
 
 .resize-handle-grip {
@@ -410,6 +418,7 @@
 }
 
 .resize-handle:hover .resize-handle-grip,
+.resize-handle:focus-visible .resize-handle-grip,
 .resize-handle.active .resize-handle-grip {
     background: var(--mj-brand-primary);
 }
