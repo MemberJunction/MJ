@@ -271,6 +271,39 @@ class SchemaEvolutionOutput {
 
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
 
+/**
+ * One tunable setting, described by the connector.
+ *
+ * Exists so a surface can render the settings for a connection it knows nothing about, and so the
+ * DEFAULT it shows is the engine's real one. The alternative — a hardcoded list per surface — is
+ * how a sample size of 500 came to be shown and stamped against an engine whose default is 50.
+ */
+@ObjectType()
+class ConnectorSettingOutput {
+    @Field() Key: string;
+    @Field() Label: string;
+    @Field() Group: string;
+    @Field() Type: string;
+    @Field(() => [String], { nullable: true }) Options?: string[];
+    /** JSON-encoded: the value is polymorphic per setting, and Type says how to read it. */
+    @Field({ nullable: true }) DefaultJSON?: string;
+    @Field(() => Float, { nullable: true }) Min?: number;
+    @Field(() => Float, { nullable: true }) Max?: number;
+    /** 'basic' | 'advanced' | 'expert' — how a surface decides what to show. */
+    @Field() Tier: string;
+    /** 'connection' | 'object' */
+    @Field() AppliesTo: string;
+    @Field() Description: string;
+    @Field() Sensitive: boolean;
+}
+
+@ObjectType()
+class ConnectorSettingsSchemaOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ConnectorSettingOutput]) Settings: ConnectorSettingOutput[];
+}
+
 @ObjectType()
 class ConnectorCapabilitiesOutput {
     @Field() Success: boolean;
@@ -6195,6 +6228,43 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * Use this to determine which operations (Create/Update/Delete/Search) are supported
      * before attempting point-action calls.
      */
+    @Query(() => ConnectorSettingsSchemaOutput)
+    async IntegrationGetConnectorSettingsSchema(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ConnectorSettingsSchemaOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector } = await this.resolveConnector(companyIntegrationID, user, provider);
+            const schema = connector.SettingsSchema ?? [];
+            return {
+                Success: true,
+                Message: `${schema.length} setting(s)`,
+                Settings: schema.map(s => ({
+                    Key: s.Key,
+                    Label: s.Label,
+                    Group: s.Group,
+                    Type: s.Type,
+                    Options: s.Options,
+                    // Serialized because the value is genuinely polymorphic per setting and a
+                    // typed union here would be a schema change every time one is added. The
+                    // renderer already knows the Type, so it knows how to read this.
+                    DefaultJSON: s.Default === undefined ? undefined : JSON.stringify(s.Default),
+                    Min: s.Min,
+                    Max: s.Max,
+                    Tier: s.Tier,
+                    AppliesTo: s.AppliesTo,
+                    Description: s.Description,
+                    Sensitive: s.Sensitive,
+                })),
+            };
+        } catch (e) {
+            LogError(`IntegrationGetConnectorSettingsSchema error: ${e}`);
+            return { Success: false, Message: this.formatError(e), Settings: [] };
+        }
+    }
+
     @Query(() => ConnectorCapabilitiesOutput)
     async IntegrationGetConnectorCapabilities(
         @Arg("companyIntegrationID") companyIntegrationID: string,
