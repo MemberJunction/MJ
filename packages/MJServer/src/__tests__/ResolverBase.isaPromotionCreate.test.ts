@@ -26,6 +26,7 @@ import {
     DatabaseProviderBase,
     EntityInfo,
     EntitySaveOptions,
+    FieldPermissionAccess,
     IMetadataProvider,
     Metadata,
     UserInfo,
@@ -57,6 +58,8 @@ interface FieldSpec {
     AllowsNull?: boolean;
     AllowUpdateAPI?: boolean;
     IsVirtual?: boolean;
+    /** Field-level security rows (only read on an entity with EnableFieldLevelSecurity). */
+    EntityFieldPermissions?: Record<string, unknown>[];
 }
 
 function field(spec: FieldSpec): Record<string, unknown> {
@@ -79,6 +82,23 @@ function field(spec: FieldSpec): Record<string, unknown> {
         Sequence: spec.Sequence,
         Status: 'Active',
         EntityFieldValues: [],
+        EntityFieldPermissions: spec.EntityFieldPermissions ?? [],
+    };
+}
+
+/**
+ * One field-level permission row for the test role. On an FLS-enabled entity a field with NO rows
+ * is denied, so every non-key field of such an entity gets an explicit row.
+ */
+function fieldPermission(fieldName: string, access: { read?: string; update?: string; create?: string }): Record<string, unknown> {
+    const sequence: Record<string, number> = { Name: 2, MicrochipNumber: 3 }; // matches field()'s `EF-<entity>-<sequence>` ids
+    return {
+        ID: `fperm-${fieldName}`,
+        EntityFieldID: `EF-${ANIMAL_ENTITY_ID}-${sequence[fieldName]}`,
+        RoleID: ROLE_ID,
+        ReadAccess: access.read ?? FieldPermissionAccess.Allow,
+        UpdateAccess: access.update ?? FieldPermissionAccess.Allow,
+        CreateAccess: access.create ?? FieldPermissionAccess.Allow,
     };
 }
 
@@ -88,6 +108,7 @@ function permission(entityID: string): Record<string, unknown> {
 
 function entityData(overrides: {
     ID: string; Name: string; BaseTable: string; ParentID: string | null; EntityFields: Record<string, unknown>[];
+    EnableFieldLevelSecurity?: boolean; AllowMultipleSubtypes?: boolean;
 }): Record<string, unknown> {
     return {
         ID: overrides.ID,
@@ -100,7 +121,8 @@ function entityData(overrides: {
         AllowUpdateAPI: true,
         AllowDeleteAPI: true,
         IncludeInAPI: true,
-        AllowMultipleSubtypes: false,
+        AllowMultipleSubtypes: overrides.AllowMultipleSubtypes ?? false,
+        EnableFieldLevelSecurity: overrides.EnableFieldLevelSecurity ?? false,
         ParentID: overrides.ParentID,
         Status: 'Active',
         EntityFields: overrides.EntityFields,
@@ -110,13 +132,23 @@ function entityData(overrides: {
     };
 }
 
-function buildEntities(): EntityInfo[] {
+/**
+ * Fixture options. `nameLockedByFls`: Animals runs with field-level security ON and the test role
+ * may READ but neither UPDATE nor CREATE `Name` (every other field stays open). `overlapping`:
+ * Animals allows multiple subtypes.
+ */
+function buildEntities(options: { nameLockedByFls?: boolean; overlapping?: boolean } = {}): EntityInfo[] {
+    const fls = options.nameLockedByFls === true;
     const animals = entityData({
         ID: ANIMAL_ENTITY_ID, Name: 'Animals', BaseTable: 'Animal', ParentID: null,
+        EnableFieldLevelSecurity: fls,
+        AllowMultipleSubtypes: options.overlapping === true,
         EntityFields: [
             field({ EntityID: ANIMAL_ENTITY_ID, Name: 'ID', Type: 'uniqueidentifier', IsPrimaryKey: true, AllowsNull: false, Sequence: 1 }),
-            field({ EntityID: ANIMAL_ENTITY_ID, Name: 'Name', Type: 'nvarchar', AllowsNull: false, AllowUpdateAPI: true, Sequence: 2 }),
-            field({ EntityID: ANIMAL_ENTITY_ID, Name: 'MicrochipNumber', Type: 'nvarchar', AllowsNull: true, AllowUpdateAPI: true, Sequence: 3 }),
+            field({ EntityID: ANIMAL_ENTITY_ID, Name: 'Name', Type: 'nvarchar', AllowsNull: false, AllowUpdateAPI: true, Sequence: 2,
+                EntityFieldPermissions: fls ? [fieldPermission('Name', { update: FieldPermissionAccess.Deny, create: FieldPermissionAccess.Deny })] : [] }),
+            field({ EntityID: ANIMAL_ENTITY_ID, Name: 'MicrochipNumber', Type: 'nvarchar', AllowsNull: true, AllowUpdateAPI: true, Sequence: 3,
+                EntityFieldPermissions: fls ? [fieldPermission('MicrochipNumber', {})] : [] }),
         ],
     });
     // Mirrors what CodeGen emits for an IS-A child: its OWN `ID` PK (shared with the parent), its
@@ -160,6 +192,8 @@ interface SaveRecord {
     Type: 'create' | 'update';
     ID: unknown;
     Values: Record<string, unknown>;
+    /** Fields field-level security told the provider to OMIT from an INSERT (CreateSuppressed). */
+    SuppressedOnCreate: string[];
 }
 
 class FakeIsaProvider {
@@ -209,6 +243,7 @@ class FakeIsaProvider {
             Type: entity.IsSaved ? 'update' : 'create',
             ID: entity.Get('ID'),
             Values: entity.GetAll(),
+            SuppressedOnCreate: entity.Fields.filter(f => f.CreateSuppressed).map(f => f.Name),
         });
         return entity.GetAll();
     }
@@ -236,20 +271,25 @@ describe('ResolverBase.CreateRecord — IS-A promotion attaches the new child to
     let payload: UserPayload;
     let previousGlobalProvider: IMetadataProvider;
 
-    beforeEach(() => {
+    /** (Re)build the fake provider over a fixture variant and publish it as the global provider. */
+    function useFixture(options: { nameLockedByFls?: boolean; overlapping?: boolean } = {}): void {
         const user = buildUser();
-        provider = new FakeIsaProvider(buildEntities(), user);
+        provider = new FakeIsaProvider(buildEntities(options), user);
         provider.rows = {
             Animals: {
                 [EXISTING_ANIMAL_ID]: { ID: EXISTING_ANIMAL_ID, Name: 'Biscuit', MicrochipNumber: '985112000000001' },
             },
             Dogs: {},
         };
+        Metadata.Provider = provider as unknown as IMetadataProvider;
+        payload = { email: user.Email, userRecord: user, sessionId: 'test-session' };
+    }
+
+    beforeEach(() => {
         // EntityInfo resolves ParentEntityInfo / ChildEntities through the GLOBAL provider (a
         // stateless info-class proxy), and MapFieldNamesToCodeNames falls back to it too.
         previousGlobalProvider = Metadata.Provider;
-        Metadata.Provider = provider as unknown as IMetadataProvider;
-        payload = { email: user.Email, userRecord: user, sessionId: 'test-session' };
+        useFixture();
     });
 
     afterEach(() => {
@@ -311,5 +351,62 @@ describe('ResolverBase.CreateRecord — IS-A promotion attaches the new child to
 
         expect(provider.loads).toEqual([]);
         expect(provider.saves.map(s => [s.Entity, s.Type])).toEqual([['Toys', 'create']]);
+    });
+
+    it('overlapping subtypes (AllowMultipleSubtypes): promotion still attaches to the existing parent and creates only the child', async () => {
+        // Overlapping hierarchies exist precisely to be added to incrementally, so promotion is the
+        // natural operation there. The disjoint guard does not run; the attach path is the same.
+        useFixture({ overlapping: true });
+
+        const result = await new CreateProbe().Create('Dogs', { ID: EXISTING_ANIMAL_ID, IsHouseTrained: true }, provider, payload);
+
+        expect(provider.loads).toEqual([{ Entity: 'Animals', ID: EXISTING_ANIMAL_ID }]);
+        expect(provider.saves.filter(s => s.Entity === 'Animals')).toEqual([]);
+        expect(provider.saves).toEqual([
+            expect.objectContaining({ Entity: 'Dogs', Type: 'create', ID: EXISTING_ANIMAL_ID }),
+        ]);
+        expect(result?.['ID']).toBe(EXISTING_ANIMAL_ID);
+    });
+
+    describe('field-level security: the same parent field on a child create meets two different verbs', () => {
+        // With FLS on, parent fields sent on a child-create input are enforced by whichever verb the
+        // PARENT's save runs — and that is decided by whether the parent row already exists:
+        //   promotion  → the parent is LOADED, saves as an UPDATE → CheckFieldLevelUpdatePermissions REJECTS;
+        //   whole-chain create → the parent is NEW, saves as a CREATE → ApplyFieldLevelCreateSuppression OMITS.
+        // That fork is deliberate (a promotion really is an update of the parent) and these pin it.
+
+        it('promotion: a parent field the user cannot UPDATE rejects the whole save, before any SQL', async () => {
+            useFixture({ nameLockedByFls: true });
+
+            await expect(
+                new CreateProbe().Create('Dogs', { ID: EXISTING_ANIMAL_ID, Name: 'Biscuit II', IsHouseTrained: true }, provider, payload)
+            ).rejects.toThrow(/permission to update field 'Name'/);
+
+            expect(provider.loads).toEqual([{ Entity: 'Animals', ID: EXISTING_ANIMAL_ID }]);
+            expect(provider.saves).toEqual([]);
+        });
+
+        it('promotion: parent fields the user CAN update still go through as an UPDATE', async () => {
+            useFixture({ nameLockedByFls: true });
+
+            await new CreateProbe().Create('Dogs', { ID: EXISTING_ANIMAL_ID, MicrochipNumber: '985112000000002', IsHouseTrained: true }, provider, payload);
+
+            expect(provider.saves).toEqual([
+                expect.objectContaining({ Entity: 'Animals', Type: 'update', ID: EXISTING_ANIMAL_ID }),
+                expect.objectContaining({ Entity: 'Dogs', Type: 'create', ID: EXISTING_ANIMAL_ID }),
+            ]);
+            expect(provider.saves[0].Values['MicrochipNumber']).toBe('985112000000002');
+        });
+
+        it('whole-chain create: the same parent field the user cannot CREATE is silently OMITTED, and the create proceeds', async () => {
+            useFixture({ nameLockedByFls: true });
+
+            await new CreateProbe().Create('Dogs', { Name: 'Pretzel', MicrochipNumber: '985112000000003', IsHouseTrained: false }, provider, payload);
+
+            expect(provider.loads).toEqual([]);
+            expect(provider.saves.map(s => [s.Entity, s.Type])).toEqual([['Animals', 'create'], ['Dogs', 'create']]);
+            expect(provider.saves[0].SuppressedOnCreate).toEqual(['Name']);
+            expect(provider.saves[0].Values['MicrochipNumber']).toBe('985112000000003');
+        });
     });
 });

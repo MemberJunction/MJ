@@ -1544,7 +1544,11 @@ export class ResolverBase {
 
   /**
    * The entity's primary key as supplied on a mutation input, or null when any part of it is
-   * missing. Composite keys are all-or-nothing: a half-specified key identifies nothing.
+   * missing. Composite keys are all-or-nothing: a half-specified key identifies nothing. An empty
+   * string counts as missing, the same as null — it is never a valid key value, and a GUID or
+   * string key that is "" identifies no row, so the create proceeds as a whole-chain create rather
+   * than failing the lookup. A malformed non-empty key (e.g. a non-GUID for a uniqueidentifier)
+   * is NOT swallowed: the load throws and the mutation fails loudly.
    */
   protected primaryKeyFromInput(entityInfo: EntityInfo, input: Record<string, unknown>): CompositeKey | null {
     const pairs: KeyValuePair[] = [];

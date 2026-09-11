@@ -245,24 +245,22 @@ describe('GraphQLDataProvider Save — IS-A promotion carries the shared primary
         expect(GraphQLWire.Requests).toHaveLength(0);
     });
 
-    it('whole-chain create: a brand-new IS-A child sends the key its chain minted', async () => {
-        // Control for the other IS-A create shape: NEW Animal + NEW Dog together. The chain mints
-        // one GUID at the root and mirrors it down; the create carries it so the server's chain
-        // adopts the same key rather than minting its own.
+    it('whole-chain create: a brand-new IS-A child still sends NO key (the server mints the root identity)', async () => {
+        // The other IS-A create shape: NEW Animal + NEW Dog together. The parent is not saved, so
+        // this is not a promotion; the key stays off the wire exactly as before, the server mints
+        // the root key as it always has, and the resolver pays no parent lookup on this path.
         const animal = new TestIsaEntity(animalInfo, provider);
         const dog = new TestIsaEntity(dogInfo, provider);
         dog.WireParent(animal);
         dog.NewRecord();
-        const mintedId = dog.Get('ID') as string;
-        expect(mintedId).toBeTruthy();
-        expect(animal.Get('ID')).toBe(mintedId);
+        expect(animal.IsSaved).toBe(false);
         dog.Set('Name', 'Pretzel');
-        GraphQLWire.EnqueueResponse({ CreateShelterDog: { ID: mintedId, Name: 'Pretzel' } });
+        GraphQLWire.EnqueueResponse({ CreateShelterDog: { ID: 'SERVER-MINTED', Name: 'Pretzel' } });
 
         await provider.Save(dog, user, new EntitySaveOptions());
 
         const input = lastInputRecord();
-        expect(input['ID']).toBe(mintedId);
+        expect(input).not.toHaveProperty('ID');
         expect(input['Name']).toBe('Pretzel');
     });
 

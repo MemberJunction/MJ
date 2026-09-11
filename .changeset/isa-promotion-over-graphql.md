@@ -16,7 +16,9 @@ Two independent defects, both required:
   relationship), so on a promotion the key never left the browser. The parent's own save is
   short-circuited (`IsParentEntitySave`) on the premise that the leaf mutation carries the whole
   chain — so nothing told the server which parent row this was about. The create input now carries
-  the shared key for an unsaved IS-A child.
+  the shared key for a promotion — an unsaved IS-A child whose parent is already saved. A
+  whole-chain create (new parent + new child) still sends no key, so the server keeps minting the
+  root identity and pays no parent lookup on that path.
 - **Server** (`ResolverBase.CreateRecord`): `NewRecord()` reset the whole chain to "new", so even
   with the key present the parent saved as a CREATE. When a child create carries a complete key,
   the resolver now binds the new child to the existing parent row with `AttachToParent` (#3825):
