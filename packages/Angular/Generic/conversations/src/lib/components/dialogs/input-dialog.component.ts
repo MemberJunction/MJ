@@ -53,6 +53,12 @@ import { Component, Input } from '@angular/core';
          against the dialog edges while the header and footer were padded. Same inset as the sibling
          rating dialog, which already compensates for this. */
       padding: 4px 20px 8px;
+      /* Parity with the rating dialog: the Explorer shell's global reset makes this redundant, but a host
+         without that reset would let the 100%-wide inputs (padding + border, no local box-sizing) overflow. */
+      box-sizing: border-box;
+    }
+    .input-dialog-content * {
+      box-sizing: border-box;
     }
     .dialog-message {
       margin: 0 0 16px 0;

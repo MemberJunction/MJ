@@ -24,6 +24,7 @@ import {
     EntityInfo,
     EntityFieldInfo,
     UserInfo,
+    UserInfo,
     ProviderType,
     PotentialDuplicateResponse,
     DatasetResultType,
@@ -62,8 +63,8 @@ class SearchSQLTestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
-    public buildSQL(entityInfo: EntityInfo, userSearchString: string): string {
-        return this.createViewUserSearchSQL(entityInfo, userSearchString);
+    public buildSQL(entityInfo: EntityInfo, userSearchString: string, contextUser?: UserInfo): string {
+        return this.createViewUserSearchSQL(entityInfo, userSearchString, contextUser);
     }
 
     // --- Abstract-member implementations (just enough to satisfy the type system) ---
@@ -326,6 +327,50 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI override', () => 
             expect(sql).toBe(`(([Phone]  = '${escaped}'))`);
         });
     }
+});
+
+describe('createViewUserSearchSQL — the custom-format denylist follows field-level security (#4392 + FLS)', () => {
+    // The denylist is re-applied only because UserSearchParamFormatAPI may splice the term into
+    // SQL unquoted. Field-level security can exclude that very field from the search — and a
+    // field that never reaches the SQL cannot carry the term into it. Screening on behalf of an
+    // excluded field would refuse ordinary searches ("Union Pacific") for precisely the users
+    // with the LEAST access, which is the wrong way round. Participation, not configuration,
+    // is what makes the screen necessary.
+
+    /** An entity whose ONLY custom-format field is denied to the caller. */
+    function entityWithDeniedCustomFormat(denied: string[]): EntityInfo {
+        const e = makeEntity({ fields: [
+            makeField({ name: 'Year', type: 'int', predicate: 'Contains', paramFormat: ' = {0}' }),
+            makeField({ name: 'Name', predicate: 'Contains' }),
+        ] });
+        Object.assign(e, {
+            EnableFieldLevelSecurity: true,
+            GetDeniedReadFields: () => new Set(denied.map(d => d.toLowerCase())),
+        });
+        return e;
+    }
+
+    const someUser = { Email: 'x@y.com' } as unknown as UserInfo;
+
+    it('screens when the custom-format field IS searchable by this user', () => {
+        expect(() => provider.buildSQL(entityWithDeniedCustomFormat([]), '2026)) UNION SELECT 1 --', someUser))
+            .toThrow(/UserSearchParamFormatAPI/);
+    });
+
+    it('does NOT screen when field security excludes the custom-format field', () => {
+        // 'Year' is denied, so only the quoted LIKE predicate on 'Name' is built — the term is
+        // confined to a literal again and the ordinary-search fix applies.
+        const sql = provider.buildSQL(entityWithDeniedCustomFormat(['year']), 'Union Pacific', someUser);
+        expect(sql).toBe(`(([Name]  LIKE N'%Union Pacific%' ESCAPE '\\'))`);
+        expect(sql).not.toContain('[Year]');
+    });
+
+    it('a denied custom-format field also cannot smuggle the term into SQL', () => {
+        const sql = provider.buildSQL(entityWithDeniedCustomFormat(['year']), "2026)) UNION SELECT 1 --", someUser);
+        // No unquoted splice anywhere: the payload sits inside the LIKE literal on Name.
+        expect(sql).not.toContain('[Year]');
+        expect(sql).toContain(`LIKE N'%2026)) UNION SELECT 1 --%'`);
+    });
 });
 
 describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fragment denylist (#4392)', () => {
