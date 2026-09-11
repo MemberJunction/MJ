@@ -165,6 +165,24 @@ describe('RemoteOperationGeneratorBase', () => {
             expect(out).toContain('export class RecordProcessResumeRunOperation');
             expect(out).toContain('export class RecordProcessCancelRunOperation');
         });
+        it('de-duplicates shared auxiliary types embedded in multi-declaration blocks', async () => {
+            const op1Out = 'export type SharedStatus = "A" | "B";\nexport interface Op1Output {\n    status: SharedStatus;\n}';
+            const op2Out = 'export type SharedStatus = "A" | "B";\nexport interface Op2Output {\n    status: SharedStatus;\n}';
+            const out = await generate([
+                makeOp({ OperationKey: 'Test.Op1', OutputTypeName: 'Op1Output', OutputTypeDefinition: op1Out }),
+                makeOp({ OperationKey: 'Test.Op2', OutputTypeName: 'Op2Output', OutputTypeDefinition: op2Out }),
+            ]);
+            expect(out.match(/export type SharedStatus/g)?.length).toBe(1);
+            expect(out).toContain('export interface Op1Output');
+            expect(out).toContain('export interface Op2Output');
+        });
+        it('preserves inner comments and closing braces within interfaces', async () => {
+            const opOut = 'export interface OpWithCommentsOutput {\n    id: string;\n    /** Inner comment */\n    amount?: number;\n}';
+            const out = await generate([
+                makeOp({ OperationKey: 'Test.OpComments', OutputTypeName: 'OpWithCommentsOutput', OutputTypeDefinition: opOut }),
+            ]);
+            expect(out).toContain('export interface OpWithCommentsOutput {\n    id: string;\n    /** Inner comment */\n    amount?: number;\n}');
+        });
     });
 
     describe('header imports', () => {

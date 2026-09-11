@@ -205,7 +205,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (414 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -235,6 +235,7 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -265,10 +266,13 @@ import {
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -1570,6 +1574,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -1600,10 +1605,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -1680,14 +1688,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
     MJCompanyIntegrationSyncWatermarkEntity,
-    MJComponentDependencyEntity,
-    MJComponentEntity,
-    MJComponentEntityExtended,
-    MJComponentLibraryEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJComponentDependencyEntity,
+    MJComponentEntity,
+    MJComponentEntityExtended,
+    MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
@@ -1884,14 +1892,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScopedPromptConfigEntity,
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
-    MJSearchProviderEntity,
-    MJSearchScopeEntity,
-    MJSearchScopeEntityEntity,
-    MJSearchScopeExternalIndexEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSearchProviderEntity,
+    MJSearchScopeEntity,
+    MJSearchScopeEntityEntity,
+    MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
@@ -2088,14 +2096,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     FacebookCreateAlbumAction,
     FacebookCreatePostAction,
     FacebookGetPageInsightsAction,
-    FacebookGetPagePostsAction,
-    FacebookGetPostInsightsAction,
-    FacebookRespondToCommentsAction,
-    FacebookSchedulePostAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    FacebookGetPagePostsAction,
+    FacebookGetPostInsightsAction,
+    FacebookRespondToCommentsAction,
+    FacebookSchedulePostAction,
     FacebookSearchPostsAction,
     GetAccountAnalyticsAction,
     GetCommentsAction,
@@ -2292,14 +2300,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
-    TaskGraphResumeServerOperation,
-    TaskGraphRetryTaskServerOperation,
-    TaskGraphSetBreakpointsServerOperation,
-    TaskGraphSkipTaskServerOperation,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    TaskGraphResumeServerOperation,
+    TaskGraphRetryTaskServerOperation,
+    TaskGraphSetBreakpointsServerOperation,
+    TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
     TaskGraphSubmitServerOperation,
     TaskGraphUpdateTaskInputServerOperation,
@@ -2496,14 +2504,14 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SummarizeContentAction,
     SyncMCPToolsAction,
     TavilySearchAction,
-    TeamsWebhookAction,
-    TestMCPConnectionAction,
-    TestRuntimeActionAction,
-    TextAnalyzerAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    TeamsWebhookAction,
+    TestMCPConnectionAction,
+    TestRuntimeActionAction,
+    TextAnalyzerAction,
     URLLinkValidatorAction,
     URLMetadataExtractorAction,
     UnitConverterAction,
@@ -2548,7 +2556,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1028;
+export const CLASS_REGISTRATIONS_COUNT = 1032;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

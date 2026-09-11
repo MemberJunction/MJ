@@ -69,19 +69,119 @@ export class RemoteOperationGeneratorBase {
     }
 
     /**
-     * Emits every distinct Input/Output type definition ONCE (de-duped by content), as a shared block above
+     * Splits a definition block containing one or more top-level declarations (with their preceding comments)
+     * so individual types/interfaces can be de-duplicated independently.
+     */
+    protected splitDeclarations(text: string): Array<{ name: string | null; content: string }> {
+        const lines = text.split('\n');
+        const decls: Array<{ name: string | null; content: string }> = [];
+        let currentComment: string[] = [];
+        let currentDecl: string[] = [];
+        let currentName: string | null = null;
+        let braceDepth = 0;
+        let inComment = false;
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const trimmed = line.trim();
+
+            if (braceDepth === 0 && (trimmed.startsWith('/*') || inComment)) {
+                if (currentDecl.length > 0) {
+                    decls.push({ name: currentName, content: currentDecl.join('\n').trim() });
+                    currentDecl = [];
+                    currentName = null;
+                }
+                currentComment.push(line);
+                if (trimmed.includes('*/')) {
+                    inComment = false;
+                } else {
+                    inComment = true;
+                }
+                continue;
+            }
+
+            if (braceDepth === 0 && trimmed.startsWith('//')) {
+                if (currentDecl.length > 0) {
+                    decls.push({ name: currentName, content: currentDecl.join('\n').trim() });
+                    currentDecl = [];
+                    currentName = null;
+                }
+                currentComment.push(line);
+                continue;
+            }
+
+            const match = braceDepth === 0 ? line.match(/^export\s+(?:type|interface|enum|class|const)\s+([A-Za-z0-9_$]+)/) : null;
+            if (match) {
+                if (currentDecl.length > 0) {
+                    decls.push({ name: currentName, content: currentDecl.join('\n').trim() });
+                    currentDecl = [];
+                }
+                currentName = match[1];
+                if (currentComment.length > 0) {
+                    currentDecl.push(...currentComment);
+                    currentComment = [];
+                }
+                currentDecl.push(line);
+            } else if (currentDecl.length > 0) {
+                currentDecl.push(line);
+            } else if (trimmed.length > 0) {
+                currentDecl.push(...currentComment, line);
+                currentComment = [];
+            }
+
+            let inBlock = false;
+            let inQuote: string | null = null;
+            for (let j = 0; j < line.length; j++) {
+                const ch = line[j];
+                const next = line[j + 1];
+                if (!inBlock && !inQuote && ch === '/' && next === '/') break;
+                if (!inBlock && !inQuote && ch === '/' && next === '*') { inBlock = true; j++; continue; }
+                if (inBlock && ch === '*' && next === '/') { inBlock = false; j++; continue; }
+                if (!inBlock) {
+                    if (inQuote) {
+                        if (ch === '\\') { j++; continue; }
+                        if (ch === inQuote) inQuote = null;
+                    } else {
+                        if (ch === "'" || ch === '"' || ch === '`') inQuote = ch;
+                        else if (ch === '{' || ch === '(') braceDepth++;
+                        else if (ch === '}' || ch === ')') braceDepth = Math.max(0, braceDepth - 1);
+                    }
+                }
+            }
+        }
+
+        if (currentDecl.length > 0) {
+            decls.push({ name: currentName, content: currentDecl.join('\n').trim() });
+        }
+        return decls;
+    }
+
+    /**
+     * Emits every distinct Input/Output type definition ONCE (de-duped by name and content), as a shared block above
      * the classes. Operations frequently share a type (e.g. the pause/resume/cancel control ops all use
      * `ProcessRunControlInput`); emitting each op's definition inline would produce duplicate-identifier errors.
      */
     protected collectTypeDefinitions(ops: MJRemoteOperationEntity[]): string {
-        const seen = new Set<string>();
+        const seenNames = new Set<string>();
+        const seenContent = new Set<string>();
         const blocks: string[] = [];
         for (const op of ops) {
             for (const def of [op.InputTypeDefinition, op.OutputTypeDefinition]) {
                 const trimmed = def?.trim();
-                if (trimmed && !seen.has(trimmed)) {
-                    seen.add(trimmed);
-                    blocks.push(trimmed);
+                if (!trimmed) continue;
+
+                const decls = this.splitDeclarations(trimmed);
+                for (const decl of decls) {
+                    if (decl.name) {
+                        if (!seenNames.has(decl.name)) {
+                            seenNames.add(decl.name);
+                            seenContent.add(decl.content);
+                            blocks.push(decl.content);
+                        }
+                    } else if (!seenContent.has(decl.content)) {
+                        seenContent.add(decl.content);
+                        blocks.push(decl.content);
+                    }
                 }
             }
         }

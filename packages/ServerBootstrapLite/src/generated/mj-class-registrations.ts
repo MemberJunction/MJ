@@ -188,7 +188,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (410 classes)
+// @memberjunction/core-entities (414 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -218,6 +218,7 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -248,10 +249,13 @@ import {
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -1313,6 +1317,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -1343,10 +1348,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -1432,14 +1440,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
     MJContentItemChunkEntity,
-    MJContentItemDuplicateEntity,
-    MJContentItemEntity,
-    MJContentItemTagEntity,
-    MJContentProcessRunDetailEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_1: any[] = [
+    MJContentItemDuplicateEntity,
+    MJContentItemEntity,
+    MJContentItemTagEntity,
+    MJContentProcessRunDetailEntity,
     MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
@@ -1636,14 +1644,14 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopeStorageAccountEntity,
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
-    MJSignatureProviderEntity,
-    MJSignatureRequestDocumentEntity,
-    MJSignatureRequestEntity,
-    MJSignatureRequestLogEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
+    MJSignatureProviderEntity,
+    MJSignatureRequestDocumentEntity,
+    MJSignatureRequestEntity,
+    MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
@@ -1840,14 +1848,14 @@ const CLASS_REGISTRATIONS_2: any[] = [
     HootSuiteGetSocialProfilesAction,
     HootSuiteSearchPostsAction,
     HootSuiteUpdateScheduledPostAction,
-    InstagramCreatePostAction,
-    InstagramCreateStoryAction,
-    InstagramGetAccountInsightsAction,
-    InstagramGetBusinessPostsAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    InstagramCreatePostAction,
+    InstagramCreateStoryAction,
+    InstagramGetAccountInsightsAction,
+    InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
     InstagramSchedulePostAction,
@@ -2044,14 +2052,14 @@ const CLASS_REGISTRATIONS_3: any[] = [
     AddDocumentContentAction,
     AddRecordsToListAction,
     AddViewResultsToListAction,
-    AggregateDataAction,
-    AssignUserRolesAction,
-    BulkUpdateListItemStatusAction,
-    BusinessDaysCalculatorAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    AggregateDataAction,
+    AssignUserRolesAction,
+    BulkUpdateListItemStatusAction,
+    BusinessDaysCalculatorAction,
     CSVParserAction,
     CalculateExpressionAction,
     CensusDataLookupAction,
@@ -2211,7 +2219,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 944;
+export const CLASS_REGISTRATIONS_COUNT = 948;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
