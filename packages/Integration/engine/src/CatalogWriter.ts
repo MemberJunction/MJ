@@ -222,6 +222,34 @@ async function viewRows<T>(
 }
 
 /** The catalog shared by every connection of a connector. Today's behaviour, unchanged. */
+/**
+ * `MJ_INTEGRATION_CATALOG_STRICT=1` makes the DECLARED catalog read-only at runtime.
+ *
+ * `MJ: Integration Object(Field)s` are the connector's shipped metadata, and they are not merely
+ * reference data: `PerConnectionCatalogWriter.RebaseFromDeclared` copies their columns onto every
+ * per-connection row on every discovery, so they are the FLOOR every connection is rebuilt from.
+ * A single connection left on the shared catalog writes its own sampled shape into that floor, and
+ * every later connection of the same connector then inherits one account's widths and columns as
+ * though the vendor had declared them.
+ *
+ * Observed on the sandbox, 2026-09-11: one discovery on a `Shared` connection added 69 sampled
+ * columns and overwrote 4 columns on 487 declared fields. The run reported success and nothing
+ * anywhere recorded that the declared catalog had changed — it was only provable because a
+ * snapshot had been taken beforehand.
+ *
+ * Deliberately OFF by default and enabled per environment: a connection legitimately on the shared
+ * catalog (one that predates the per-connection tables and has not been backfilled) writes here by
+ * design, and would start failing. Turn it on where every connection is already per-connection —
+ * the sandbox — so a regression is a loud failure rather than silent corruption. Reads are
+ * untouched; only the row-producing calls throw, so the declared floor stays readable.
+ */
+const STRICT_ENV = 'MJ_INTEGRATION_CATALOG_STRICT';
+
+function strictDeclaredCatalog(): boolean {
+    const v = process.env[STRICT_ENV];
+    return v === '1' || (typeof v === 'string' && v.trim().toLowerCase() === 'true');
+}
+
 export class SharedCatalogWriter implements CatalogWriter {
     public readonly Source = 'Shared' as const;
     private static readonly OBJECTS = 'MJ: Integration Objects';
@@ -243,19 +271,42 @@ export class SharedCatalogWriter implements CatalogWriter {
                         this.contextUser, this.md, null, null);
     }
 
+    /**
+     * The four calls below exist to hand the caller a row it is about to mutate and Save, so they
+     * are the write boundary — guarding them, rather than the reads above, keeps the declared floor
+     * readable while making a runtime write to it impossible. See `strictDeclaredCatalog`.
+     */
+    private refuseIfStrict(what: string): void {
+        if (!strictDeclaredCatalog()) return;
+        throw new Error(
+            `DECLARED_CATALOG_READONLY: refusing to ${what} in the shared/declared catalog for `
+            + `integration ${this.integrationID}. ${STRICT_ENV} is set, which makes `
+            + `"MJ: Integration Object(Field)s" read-only at runtime — they hold the connector's `
+            + `DECLARED metadata, and every per-connection catalog is rebased from them, so a `
+            + `discovery writing here would put one account's shape into every other connection of `
+            + `this connector. Set this connection's Configuration.catalogSource to "perConnection" `
+            + `(MJ Central stamps that at create), or unset ${STRICT_ENV} if this environment still `
+            + `has connections that legitimately use the shared catalog.`
+        );
+    }
+
     public NewObjectRow(): Promise<MJIntegrationObjectEntity> {
+        this.refuseIfStrict('create an object');
         return newRow(this.md, SharedCatalogWriter.OBJECTS, this.contextUser, null, null);
     }
 
     public NewFieldRow(): Promise<MJIntegrationObjectFieldEntity> {
+        this.refuseIfStrict('create a field');
         return newRow(this.md, SharedCatalogWriter.FIELDS, this.contextUser, null, null);
     }
 
     public LoadObject(id: string): Promise<MJIntegrationObjectEntity | null> {
+        this.refuseIfStrict('modify an object');
         return loadRow(this.md, SharedCatalogWriter.OBJECTS, this.contextUser, id, null, null);
     }
 
     public LoadField(id: string): Promise<MJIntegrationObjectFieldEntity | null> {
+        this.refuseIfStrict('modify a field');
         return loadRow(this.md, SharedCatalogWriter.FIELDS, this.contextUser, id, null, null);
     }
 
