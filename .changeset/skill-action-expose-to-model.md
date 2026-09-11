@@ -24,5 +24,5 @@ wants the association without the model ever calling the action on its own mid-c
   subset of `actions`), written on export for rows with the flag off and applied on import; a file
   without the key leaves surviving rows' flags as they were.
 
-Migration `V202609102050__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
 rows keep today's behaviour).

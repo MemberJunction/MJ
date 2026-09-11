@@ -342,7 +342,7 @@ Two subtleties worth calling out (both are load-bearing correctness points):
 
 ---
 
-**v6.1.x** — Migration [`V202609102050__v6.1.x__Skill_Action_Expose_To_Model.sql`](../migrations/v6).
+**v6.1.x** — Migration [`V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql`](../migrations/v6).
 Additive: `AISkillAction.ExposeToModel` (BIT NOT NULL, default 1). `1` = today's behaviour; `0` keeps the
 action bundled (SKILL.md export, tooling) but out of the agent's run — not described to the model, not
 executable by the agent. See §1.3; SKILL.md carries it as `codeOnlyActions` (§1.7).
