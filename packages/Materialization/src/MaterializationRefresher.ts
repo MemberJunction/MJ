@@ -828,9 +828,11 @@ export class MaterializationRefresher {
 
     /**
      * True if an entity is read-RLS-protected — any of its role permissions carries a non-empty `ReadRLSFilterID`.
-     * Matches CodeGenLib's `entityHasRowLevelSecurity` (and MJ's `GetUserRowLevelSecurityWhereClause`, which
-     * sources the read filter solely from `EntityPermission.ReadRLSFilterID`). Used by the runtime leak gate to
-     * refuse refreshing a local mirror of an EXTERNAL RLS-protected entity — a mirror can't reproduce remote RLS.
+     * Matches CodeGenLib's `entityHasRowLevelSecurity`. Deliberately WIDER than the runtime's own reader
+     * (`GetUserRowLevelSecurityInfo` since #4358 collects a filter only from an Allow row whose `CanRead` is set):
+     * a leftover filter beside a cleared flag counts here as "protected", which errs conservative for a leak
+     * gate. Used to refuse refreshing a local mirror of an EXTERNAL RLS-protected entity — a mirror can't
+     * reproduce remote RLS.
      */
     public static entityHasReadRLS(entity: EntityInfo): boolean {
         return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
