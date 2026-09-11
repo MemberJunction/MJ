@@ -73,6 +73,41 @@ const FIELD_READ_ALIASES: ReadonlyArray<readonly [alias: string, source: string]
     ['RelatedIntegrationObjectID', 'RelatedCompanyIntegrationObjectID'],
 ] as const;
 
+/**
+ * Columns whose value the CONNECTOR declares (metadata/ folder), as opposed to columns the
+ * connection owns or discovery decides.
+ *
+ * plan.md requires that a schema refresh treat IO/IOF as the source of truth and REPLACE what is
+ * in CIO/CIOF rather than layering on it: "it will use IO/IOF as the SOT before then replacing
+ * what is in the respective CIO/CIOF, it will not do the changes on top of CIO/CIOF since it is
+ * stale metadata". Without that, an open-app upgrade that changes a declared APIPath or page size
+ * would never reach a connection that had already discovered once — the stale per-connection value
+ * would win every subsequent overlay.
+ *
+ * Derived by SUBTRACTION so it cannot drift when a column is added: anything not explicitly
+ * identity, per-connection state, or discovery-owned lifecycle is connector-declared.
+ * Description / DisplayName / IncrementalWatermarkField are deliberately IN this set — they are
+ * rebased from the declaration and then discovery overlays them if it reports a value, which is
+ * exactly the documented precedence.
+ */
+const NOT_DECLARED_OWNED = new Set<string>([
+    // identity and linkage
+    'ID', 'IntegrationID', 'Name',
+    'CompanyIntegrationID', 'IntegrationObjectID',
+    'CompanyIntegrationObjectID', 'RelatedCompanyIntegrationObjectID', 'IntegrationObjectFieldID',
+    // per-connection state
+    'Provenance', 'ProvenanceDetail', 'IsSelected', 'SelectedAt',
+    'FirstSeenAt', 'LastSeenAt', 'LastSampledAt', 'ObservedMaxLength',
+    // decided by discovery, not declared
+    'Status', 'IsCustom', 'MetadataSource',
+]);
+
+export const DECLARED_OWNED_OBJECT_COLUMNS: readonly string[] =
+    CATALOG_OBJECT_COLUMNS.filter(c => !NOT_DECLARED_OWNED.has(c));
+
+export const DECLARED_OWNED_FIELD_COLUMNS: readonly string[] =
+    CATALOG_FIELD_COLUMNS.filter(c => !NOT_DECLARED_OWNED.has(c));
+
 /** Where a per-connection row's shape came from. */
 export type CatalogProvenance = 'Declared' | 'Endpoint' | 'Sampled';
 

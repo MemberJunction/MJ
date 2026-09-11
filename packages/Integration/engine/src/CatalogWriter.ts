@@ -7,6 +7,8 @@ import {
     CompanyIntegrationCatalogSchemaMismatch,
     ENTITY_COMPANY_INTEGRATION_OBJECTS,
     ENTITY_COMPANY_INTEGRATION_OBJECT_FIELDS,
+    DECLARED_OWNED_OBJECT_COLUMNS,
+    DECLARED_OWNED_FIELD_COLUMNS,
 } from '@memberjunction/integration-engine-base';
 
 /**
@@ -157,6 +159,19 @@ export interface CatalogWriter {
      * Returns whether the row is gone (`deleted`) so the caller can report honestly; the mirror
      * TABLE and its data are never touched either way.
      */
+    /**
+     * Reset the connector-DECLARED columns of an existing row from the declared definition,
+     * before discovery overlays it.
+     *
+     * plan.md: a refresh uses IO/IOF as the source of truth and REPLACES what is in CIO/CIOF,
+     * because the per-connection row is a projection, not an accumulator. Without this an open-app
+     * upgrade that changes a declared APIPath or page size never reaches a connection that has
+     * already discovered once. Shared writers no-op: there the row IS the declaration.
+     */
+    RebaseFromDeclared(row: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity,
+                       declared: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity | null,
+                       kind: 'object' | 'field'): string[];
+
     RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }>;
     RetireField(row: MJIntegrationObjectFieldEntity): Promise<{ ok: boolean; deleted: boolean }>;
 }
@@ -253,6 +268,9 @@ export class SharedCatalogWriter implements CatalogWriter {
         /* the parent object id is the only ownership a shared field row carries */
     }
 
+    /** The shared row IS the declaration; there is nothing to rebase it from. */
+    public RebaseFromDeclared(): string[] { return []; }
+
     /** Shared rows are the declared floor for every other connection — disable, never delete. */
     public async RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }> {
         row.Status = 'Disabled';
@@ -343,6 +361,31 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
         w.IsSelected = false;
         w.FirstSeenAt = this.seenAt;
         w.LastSeenAt = this.seenAt;
+    }
+
+    /**
+     * Copy the declared columns back over this connection's row so discovery overlays a CURRENT
+     * declaration rather than its own previous output. Returns the columns that actually moved,
+     * for the merge log. A row with no declared match (an object that exists only for this
+     * connection) has nothing to rebase from and is left alone.
+     */
+    public RebaseFromDeclared(
+        row: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity,
+        declared: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity | null,
+        kind: 'object' | 'field'
+    ): string[] {
+        if (!declared) return [];
+        const cols = kind === 'object' ? DECLARED_OWNED_OBJECT_COLUMNS : DECLARED_OWNED_FIELD_COLUMNS;
+        const target = row as unknown as Record<string, unknown>;
+        const source = declared as unknown as Record<string, unknown>;
+        const moved: string[] = [];
+        for (const c of cols) {
+            const next = source[c] ?? null;
+            if ((target[c] ?? null) === next) continue;
+            target[c] = next;
+            moved.push(c);
+        }
+        return moved;
     }
 
     /**
