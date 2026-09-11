@@ -49,6 +49,28 @@ export interface DetectOptions {
   MaxSiblingDirs?: number;
 }
 
+/**
+ * Reads a repo's `mj-app.json`, carrying a parse failure rather than throwing it.
+ *
+ * {@link DetectCandidates} calls {@link LoadRepo} for every subdirectory of the parent — before the
+ * candidate filter, and long before `selectMembers` applies `--exclude`. Throwing here would let a
+ * single Open App repo mid-edit abort `mj dev workspace` and `dev workspace doctor` for a workspace
+ * that does not even include it, with no flag able to route around it. So the failure travels on the
+ * candidate and is raised by the consumer that actually reads the declaration, for the members it
+ * actually reads.
+ *
+ * The root `package.json` deliberately keeps throwing in {@link LoadRepo}: unparseable there means
+ * the directory is not a loadable repo at all, which is a different claim and has no member-scoped
+ * consumer to defer to.
+ */
+function readMjApp(repoPath: string): { MjAppJson: MjAppJson | null; MjAppJsonError: string | null } {
+  try {
+    return { MjAppJson: readJsonFile<MjAppJson>(path.join(repoPath, 'mj-app.json')), MjAppJsonError: null };
+  } catch (error) {
+    return { MjAppJson: null, MjAppJsonError: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 /** Reads and parses a JSON file, returning null when absent; throws on unparseable JSON. */
 function readJsonFile<T>(filePath: string): T | null {
   if (!existsSync(filePath)) return null;
@@ -324,7 +346,7 @@ export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | nu
     UnsupportedGlobs: enumerated.UnsupportedGlobs,
     Lockfile: ReadMemberLockfile(repoPath),
     TurboJson: existsSync(turboPath) ? readFileSync(turboPath, 'utf8') : null,
-    MjAppJson: readJsonFile<MjAppJson>(path.join(repoPath, 'mj-app.json')),
+    ...readMjApp(repoPath),
     WorkspaceGlobs: workspaceGlobs.Globs,
     WorkspaceGlobsSource: workspaceGlobs.Source,
   };

@@ -134,6 +134,19 @@ export interface ShellPeerGap {
   Pin: string | null;
 }
 
+/**
+ * One client-side package that more than one member declares.
+ *
+ * Reported rather than resolved silently, the way {@link DuplicateFamilyPackage} already is: which
+ * member the parent links is decided by repo sort order, and that is an ambiguity the developer
+ * should be told about, not a fact the generator should keep to itself.
+ */
+export interface DuplicateClientPackage {
+  Package: string;
+  /** Every member repo whose `mj-app.json` declares it, in sort order — the first is the one linked. */
+  Repos: string[];
+}
+
 /** Which declared client-side packages are linked at the parent root. */
 export interface ClientPackageCensus {
   Entries: Array<{ Package: string; Repo: string; Provided: boolean; Linked: boolean }>;
@@ -222,6 +235,18 @@ export interface CandidateRepo {
   /** Raw contents of the repo's root `turbo.json`, or null when absent. */
   TurboJson: string | null;
   /**
+   * Why the member's `mj-app.json` could not be parsed, or null when it parsed (or is absent).
+   *
+   * Detection walks EVERY sibling directory, before the candidate filter and long before
+   * `--exclude` is applied, so throwing here would let one broken file in a repo the user
+   * deliberately excludes abort the whole command. The failure is carried instead and raised by
+   * whoever actually reads the declaration, for members it actually reads.
+   *
+   * A broken root `package.json` still throws in `LoadRepo`: that one means the directory is not a
+   * loadable repo at all, which is a different statement.
+   */
+  MjAppJsonError: string | null;
+  /**
    * The member's committed `mj-app.json`, or null when it ships none (a non-Open-App member such
    * as the MJ monorepo). Its `packages.client[]` is the only registration-independent record of
    * which packages an app shell will be asked to import.
@@ -288,6 +313,8 @@ export interface ParentManifestReport {
   OpenAppClientPackages: OpenAppClientPackage[];
   /** Per-shell unmet peers of the registered client packages — reported, never auto-added. */
   ShellPeerGaps: ShellPeerGap[];
+  /** Client-side packages more than one member declares; the first by repo sort order is linked. */
+  DuplicateClientPackages: DuplicateClientPackage[];
 }
 
 /** Result of building the parent `package.json`. */
