@@ -577,6 +577,12 @@ export class IntegrationConnectorCreationPipeline {
                     emitter.stageError('Introspect', `DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`, { code: 'discover-fields-failed' });
                     console.error(`[IntrospectPipeline] DiscoverFieldsViaFetch failed for "${d.Name}": ${msg}`);
                 }
+                if (fields.length === 0) {
+                    // A RUNTIME-DISCOVERED object has no declaration behind it, so the sample is the
+                    // only source of fields there is — an empty one is persisted verbatim as a
+                    // fieldless object. Ask the connector's describe surface before accepting that.
+                    fields = await this.DescribeAsLastResort(d.Name, opts, emitter);
+                }
                 schema.Objects.push({
                     ExternalName: d.Name,
                     ExternalLabel: d.Label,
@@ -694,6 +700,44 @@ export class IntegrationConnectorCreationPipeline {
         console.warn(`[IntrospectPipeline] sample fallback for "${objectName}": ${msg}`);
     }
 
+    /**
+     * LAST RESORT before an object is persisted with NO FIELDS AT ALL.
+     *
+     * A sample returns zero fields whenever it saw zero records, and an empty source table is an
+     * ordinary state rather than a malfunction — so it never throws, never takes the failure
+     * fallback, and the empty result was written out as the object's schema. The object then maps
+     * to nothing and syncs nothing, and because discovery does not re-run on its own, the emptiness
+     * of a table at one moment becomes a permanent property of the schema. All while the connector's
+     * own describe surface knew the columns the entire time.
+     *
+     * Only ever consulted when nothing else can supply fields. An object whose declaration already
+     * names fields keeps them and merges normally — which is also what preserves the sampler's
+     * deliberate "adjourn to declared-only fields" outcome for a composition child whose parent
+     * tuple is unknowable: that returns zero fields ON PURPOSE, and it must stay a no-op rather
+     * than become a fallback.
+     */
+    private async DescribeAsLastResort(
+        objectName: string,
+        opts: ConnectorCreationPipelineOptions,
+        emitter: IntegrationProgressEmitter
+    ): Promise<ExternalFieldSchema[]> {
+        // Announce it either way. The condition being reported is "this discovery learned nothing",
+        // which is true whether or not the catalog can rescue it — and a fieldless object that
+        // nobody was told about is exactly how this stayed invisible.
+        this.ReportSampleFallback(
+            objectName,
+            new Error('the sample returned no fields (the source produced no records)'),
+            emitter
+        );
+        try {
+            return await opts.Connector.DiscoverFields(opts.CompanyIntegration, objectName, opts.ContextUser);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.warn(`[IntrospectPipeline] catalog backstop also failed for "${objectName}": ${msg}`);
+            return [];
+        }
+    }
+
     private async SampleDeclaredObjectInPlace(
         existing: SourceObjectInfo,
         objectName: string,
@@ -701,10 +745,17 @@ export class IntegrationConnectorCreationPipeline {
         emitter: IntegrationProgressEmitter
     ): Promise<void> {
         try {
-            const dfields = await opts.Connector.DiscoverFieldsViaFetch(
+            let dfields = await opts.Connector.DiscoverFieldsViaFetch(
                 opts.CompanyIntegration, objectName, opts.ContextUser,
                 { OnFallback: (err) => this.ReportSampleFallback(objectName, err, emitter) }
             );
+            if (dfields.length === 0 && existing.Fields.length === 0) {
+                // A name-only declaration plus a sample that saw nothing leaves NOTHING to persist,
+                // and the branch below would assign that emptiness as the object's whole schema.
+                // Gated on the declaration being empty too: an object that declared fields keeps
+                // them and merges, so the sampler's deliberate zero-field "adjourn" stays a no-op.
+                dfields = await this.DescribeAsLastResort(objectName, opts, emitter);
+            }
             const sampled = dfields.map(f => ({
                 Name: f.Name, Label: f.Label, Description: f.Description, SourceType: f.DataType,
                 IsRequired: f.IsRequired, AllowsNull: f.AllowsNull, MaxLength: f.MaxLength ?? null,
