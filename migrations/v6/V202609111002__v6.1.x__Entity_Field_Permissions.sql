@@ -151,15 +151,24 @@ GO
 -- the DELETE simply fails on FK_EntityFieldPermission_EntityField, and CodeGen's whole
 -- metadata-sync phase reports failure for any field-security-enabled entity that loses a column.
 --
--- Reproduced verbatim from the v5.46 baseline with ONE addition: the EntityFieldPermission
--- delete, placed alongside the EntityFieldValue delete it mirrors. Everything else is unchanged.
+-- Reproduced verbatim from the CURRENT definition of this proc —
+-- V202608260829__v6.1.x__Heal_SPs_IncludedSchemaNames — with ONE addition: the
+-- EntityFieldPermission delete, placed alongside the EntityFieldValue delete it mirrors.
+-- Everything else is unchanged.
+--
+-- RE-BASE THIS IF THE PROC CHANGES UPSTREAM. Because this migration re-creates the whole proc and
+-- sorts after everything on `next`, its copy is the definition that survives — so a copy taken
+-- from a stale source silently REVERTS whatever landed in between. That already happened once:
+-- this block was originally lifted from the v5.46 baseline, which predates the heal above, and it
+-- dropped the proc's `@IncludedSchemaNames` parameter. CodeGen only sends that argument when
+-- `configInfo.includeSchemas` is non-empty, so the loss was invisible on any database without it
+-- configured and would have failed CodeGen outright on one with it.
 -- ============================================================================
 CREATE OR ALTER PROC [${flyway:defaultSchema}].[spDeleteUnneededEntityFields]
     @ExcludedSchemaNames NVARCHAR(MAX),
-    @EntityIDs NVARCHAR(MAX) = NULL
+    @EntityIDs NVARCHAR(MAX) = NULL,
+    @IncludedSchemaNames NVARCHAR(MAX) = NULL
 AS
--- Get rid of any EntityFields that are NOT virtual and are not part of the underlying VIEW or TABLE - these are orphaned meta-data elements
--- where a field once existed but no longer does either it was renamed or removed from the table or view
 SET NOCOUNT ON;
 
 IF OBJECT_ID('tempdb..#ef_spDeleteUnneededEntityFields') IS NOT NULL
@@ -169,9 +178,6 @@ IF OBJECT_ID('tempdb..#actual_spDeleteUnneededEntityFields') IS NOT NULL
 IF OBJECT_ID('tempdb..#DeletedFields') IS NOT NULL
     DROP TABLE #DeletedFields
 
--- Materialize the optional entity scope list once. @IsScoped lets the WHERE clauses
--- short-circuit to the unscoped path with a single int compare instead of joining
--- against an empty table variable.
 DECLARE @ScopedEntityIDs TABLE (EntityID UNIQUEIDENTIFIER PRIMARY KEY);
 DECLARE @IsScoped BIT = 0;
 IF @EntityIDs IS NOT NULL AND LEN(@EntityIDs) > 0
@@ -184,7 +190,17 @@ BEGIN
     IF EXISTS (SELECT 1 FROM @ScopedEntityIDs) SET @IsScoped = 1;
 END
 
--- put these two views into temp tables, for some SQL systems, this makes the join below WAY faster
+DECLARE @IncludedSchemas TABLE (SchemaName NVARCHAR(255) PRIMARY KEY);
+DECLARE @HasInclude BIT = 0;
+IF @IncludedSchemaNames IS NOT NULL AND LEN(LTRIM(RTRIM(@IncludedSchemaNames))) > 0
+BEGIN
+    INSERT INTO @IncludedSchemas (SchemaName)
+    SELECT DISTINCT TRIM(value)
+    FROM STRING_SPLIT(@IncludedSchemaNames, ',')
+    WHERE TRIM(value) <> '';
+    IF EXISTS (SELECT 1 FROM @IncludedSchemas) SET @HasInclude = 1;
+END
+
 SELECT
     ef.*
 INTO
@@ -195,25 +211,22 @@ INNER JOIN
     vwEntities e
 ON
     ef.EntityID = e.ID
--- Use LEFT JOIN with STRING_SPLIT to filter out excluded schemas
 LEFT JOIN
     STRING_SPLIT(@ExcludedSchemaNames, ',') AS excludedSchemas
 ON
     e.SchemaName = excludedSchemas.value
 WHERE
-    e.VirtualEntity = 0 AND -- exclude virtual entities from this always
-    e.ExternalDataSourceID IS NULL AND -- exclude external-data-source entities (no physical table/view; data is remote)
-    excludedSchemas.value IS NULL AND -- This ensures rows with matching SchemaName are excluded
-    (@IsScoped = 0 OR ef.EntityID IN (SELECT EntityID FROM @ScopedEntityIDs)) -- scoped run: only listed entities
+    e.VirtualEntity = 0 AND
+    e.ExternalDataSourceID IS NULL AND
+    excludedSchemas.value IS NULL AND
+    (@HasInclude = 0 OR e.SchemaName IN (SELECT SchemaName FROM @IncludedSchemas)) AND
+    (@IsScoped = 0 OR ef.EntityID IN (SELECT EntityID FROM @ScopedEntityIDs))
 
--- get actual fields from the database so we can compare MJ metadata to the SQL catalog.
--- When scoped, narrow vwSQLColumnsAndEntityFields the same way so the orphan join below stays correct.
 SELECT *
 INTO #actual_spDeleteUnneededEntityFields
 FROM vwSQLColumnsAndEntityFields
 WHERE @IsScoped = 0 OR EntityID IN (SELECT EntityID FROM @ScopedEntityIDs)
 
--- now figure out which fields are NO longer in the DB and should be removed from MJ metadata
 SELECT ef.* INTO #DeletedFields
     FROM
       #ef_spDeleteUnneededEntityFields ef
@@ -225,14 +238,11 @@ SELECT ef.* INTO #DeletedFields
     WHERE
       actual.column_id IS NULL
 
-
--- first update the entity UpdatedAt so that our metadata timestamps are right
 UPDATE ${flyway:defaultSchema}.Entity SET __mj_UpdatedAt=GETUTCDATE() WHERE ID IN
 (
   SELECT DISTINCT EntityID FROM #DeletedFields
 )
 
--- next delete the entity field values
 DELETE FROM ${flyway:defaultSchema}.EntityFieldValue WHERE EntityFieldID IN (
   SELECT ID FROM #DeletedFields
 )
@@ -251,19 +261,17 @@ DELETE FROM ${flyway:defaultSchema}.EntityFieldPermission WHERE EntityFieldID IN
   SELECT ID FROM #DeletedFields
 )
 
--- now delete the entity fields themsevles
 DELETE FROM ${flyway:defaultSchema}.EntityField WHERE ID IN
 (
   SELECT ID FROM #DeletedFields
 )
 
--- return the deleted fields to the caller
 SELECT * FROM #DeletedFields
 
--- clean up and get rid of our temp tables now
 DROP TABLE #ef_spDeleteUnneededEntityFields
 DROP TABLE #actual_spDeleteUnneededEntityFields
 DROP TABLE #DeletedFields
+GO
 GO
 
 
