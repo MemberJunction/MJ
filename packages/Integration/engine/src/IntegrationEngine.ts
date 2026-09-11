@@ -5464,6 +5464,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 // 2x margin defended by nothing is not a guard. Same reasoning as baseEngine's own
                 // IgnoreMaxRows use, and this file documents the identical trap on the push side.
                 IgnoreMaxRows: true,
+                // L4 — this prefetch runs once per batch and every batch's filter is unique, so the
+                // provider's result cache keeps one entry per batch that is never hit again. Memory
+                // then grows O(records processed) for the lifetime of the run, which is how a
+                // ~500k-record drain killed a 3.8 GB box: the KERNEL oom-killed the process at
+                // ~2.3 GB RSS, twice, BEFORE V8's own ceiling was reached — so no
+                // --max-old-space-size value fixes it and box RAM is the binding constraint.
+                // BypassCache makes the call O(batch), matching LoadAllRecordMaps below.
+                BypassCache: true,
             }, contextUser);
             if (!res.Success) return undefined;
             const Hashes = new Map<string, string>();
