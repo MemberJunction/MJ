@@ -259,7 +259,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!this.Record) return;
     const oldValue = this.Record.Get(this.FieldName);
     this.Record.Set(this.FieldName, newValue);
-    this._touched = true;
+    this.markTouched();
     this.runFieldValidation();
     this.ValueChange.emit({ FieldName: this.FieldName, OldValue: oldValue, NewValue: newValue });
   }
@@ -296,19 +296,50 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether the user has interacted with (changed) this field */
   private _touched = false;
 
+  /**
+   * `FormContext.validationRevision` as it stood when the user last edited this field. Compared with
+   * the current revision in {@link FieldErrors}: equal means the edit came AFTER the last failed
+   * save, so the user is addressing it and live local validation is the truth; lower means the
+   * failure is newer than the edit, so the form-level errors must win.
+   */
+  private _touchedAtRevision = 0;
+
   /** Set when an image upload is rejected (type/size) — shown with field validation. */
   private imageUploadError: string | null = null;
 
   /** Locally computed validation errors for this field */
   private _fieldErrors: ValidationErrorInfo[] = [];
 
+  /**
+   * The ONE way a user interaction marks this field touched: every site must also stamp the
+   * revision, or a field touched after a failed save would keep showing the stale form-level error.
+   */
+  private markTouched(): void {
+    this._touched = true;
+    this._touchedAtRevision = this.FormContext?.validationRevision ?? 0;
+  }
+
+  /**
+   * True when the user has edited this field since the form last published validation errors.
+   *
+   * Plain `_touched` was the wrong test: it stayed true from the moment the user typed, so after a
+   * failed save the field returned its own — necessarily local, synchronous — validation, and an
+   * error the SERVER had just reported for that very field (a `ValidateAsync()` refusal, which the
+   * client cannot compute) never showed on the one field the user had just been in.
+   */
+  private get editedSinceLastValidationFailure(): boolean {
+    return this._touched && this._touchedAtRevision === (this.FormContext?.validationRevision ?? 0);
+  }
+
   /** Validation errors for this field from the best available source */
   get FieldErrors(): ValidationErrorInfo[] {
-    // If touched, use fresh local validation (covers real-time feedback)
-    if (this._touched) {
+    // Edited after the last failure: fresh local validation (real-time feedback, and how a
+    // server-reported error clears — a later valid edit yields no local errors).
+    if (this.editedSinceLastValidationFailure) {
       return this._fieldErrors;
     }
-    // Otherwise use form-level errors from save failure (covers untouched fields)
+    // Otherwise the form-level errors from the failed save — whether this field was never touched,
+    // or was touched before the save that failed.
     const contextErrors = this.FormContext?.validationErrors;
     if (contextErrors && contextErrors.length > 0) {
       return contextErrors.filter(e => e.Source === this.FieldName);
@@ -2147,7 +2178,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const allowed = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'image/webp', 'image/svg+xml']);
     if (file.type && !allowed.has(file.type)) {
       this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
-      this._touched = true;
+      this.markTouched();
       this.cdr.markForCheck();
       return;
     }
@@ -2155,7 +2186,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const absoluteReadCap = 8 * 1024 * 1024;
     if (file.size > absoluteReadCap) {
       this.imageUploadError = `File is too large to read (max ${FormatByteSize(absoluteReadCap)}).`;
-      this._touched = true;
+      this.markTouched();
       this.cdr.markForCheck();
       return;
     }
@@ -2165,7 +2196,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       const dataUri = await this.readFileAsDataUri(file);
       if (!IsInlineImageDataUri(dataUri)) {
         this.imageUploadError = 'That file is not a supported image type (PNG, JPEG, GIF, WebP, or SVG).';
-        this._touched = true;
+        this.markTouched();
         this.cdr.markForCheck();
         return;
       }
@@ -2181,10 +2212,10 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
         return;
       }
       this.imageUploadError = `Image is too large for this field (max ${this.ImageMaxSizeLabel}). Try a smaller file or paste an image URL.`;
-      this._touched = true;
+      this.markTouched();
     } catch {
       this.imageUploadError = 'Could not read that image.';
-      this._touched = true;
+      this.markTouched();
     }
     this.cdr.markForCheck();
   }
