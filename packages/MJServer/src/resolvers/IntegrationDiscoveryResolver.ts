@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType, Int, Float } from "type-graphql";
-import { CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityInfo, LocalCacheManager, Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider, TransactionGroupBase } from "@memberjunction/core";
 import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { NoLog } from "../logging/NoLog.js";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -6017,6 +6017,39 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 for (const emp of empResult.Results) {
                     emp.TransactionGroup = tg;
                     await emp.Delete();
+                }
+            }
+
+            // Step 6b: the per-connection catalog. Its rows carry a plain FK to this connection and
+            // nothing cascades, so without this the CompanyIntegration delete below violates the
+            // constraint and the WHOLE transaction rolls back — "Transaction failed — all deletes
+            // rolled back" for any connection that ever ran a discovery on the per-connection
+            // catalog (sandbox 2026-09-11, MJ-CAT-18). Fields first: they reference the objects,
+            // including each other's objects through RelatedCompanyIntegrationObjectID, and every
+            // row that can point at this connection's objects is this connection's own. Guarded on
+            // registration, so a workspace without the catalog migration deletes exactly as before.
+            if (md.Entities.some(e => e.Name === 'MJ: Company Integration Objects')) {
+                const cioResult = await rv.RunView<BaseEntity>({
+                    EntityName: 'MJ: Company Integration Objects',
+                    ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                    ResultType: 'entity_object',
+                }, sysUser);
+                const perConnectionObjects = cioResult.Success ? cioResult.Results : [];
+                if (perConnectionObjects.length > 0) {
+                    const objectIDs = perConnectionObjects.map(o => `'${String(o.Get('ID')).replace(/'/g, "''")}'`).join(',');
+                    const ciofResult = await rv.RunView<BaseEntity>({
+                        EntityName: 'MJ: Company Integration Object Fields',
+                        ExtraFilter: `CompanyIntegrationObjectID IN (${objectIDs})`,
+                        ResultType: 'entity_object',
+                    }, sysUser);
+                    for (const field of (ciofResult.Success ? ciofResult.Results : [])) {
+                        field.TransactionGroup = tg;
+                        await field.Delete();
+                    }
+                    for (const object of perConnectionObjects) {
+                        object.TransactionGroup = tg;
+                        await object.Delete();
+                    }
                 }
             }
 
