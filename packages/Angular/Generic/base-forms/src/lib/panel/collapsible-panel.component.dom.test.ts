@@ -39,11 +39,15 @@ function formStub(expanded: boolean) {
  * hasRenderableContent() sweeps this property on every change-detection cycle.
  */
 function fieldChildren(readable: boolean[]) {
+  // `Navigate` and `ValueChange` are both stubbed because `ngAfterContentInit` subscribes to
+  // every projected field's outputs. They are irrelevant to what these tests assert, but a
+  // missing one is not inert — it throws inside content-init, before any assertion runs.
   const items = readable.map((r, i) => ({
     DisplayName: `Field ${i}`,
     IsFieldReadableByUser: r,
     ShouldHideField: !r,
     Navigate: of(),
+    ValueChange: of(),
   }));
   return {
     length: items.length,

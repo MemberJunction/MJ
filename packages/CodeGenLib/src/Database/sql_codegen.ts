@@ -562,7 +562,7 @@ export class SQLCodeGenBase {
             return;
         }
         try {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const standardRoleNames = new Set(['ui', 'developer', 'integration']);
             const managedRoles = md.Roles.filter(r =>
                 (r.SQLName ?? '').trim().length > 0 && !standardRoleNames.has((r.Name ?? '').trim().toLowerCase())

@@ -163,7 +163,11 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
         // Guard B — the system user may not be given a role that denies it a field. Applies to every
         // caller, Owner included: an Owner is entitled to make the assignment but the resulting state
         // is one the server cannot run in, so this is not an authority question.
-        const rejection = MJUserRoleEntityServer.SystemUserRejectionReason(this.UserID, this.RoleID);
+        const rejection = MJUserRoleEntityServer.SystemUserRejectionReason(
+            this.UserID,
+            this.RoleID,
+            this.ProviderToUse as unknown as IMetadataProvider
+        );
         if (rejection) {
             result.Errors.push(new ValidationErrorInfo('RoleID', rejection, this.RoleID, ValidationErrorType.Failure));
         }
@@ -353,7 +357,7 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
      * Why this role may not be given to this user, or null when it may.
      * Only ever rejects for the system user; every other user is unaffected.
      */
-    public static SystemUserRejectionReason(userID: string | null, roleID: string | null): string | null {
+    public static SystemUserRejectionReason(userID: string | null, roleID: string | null, provider?: IMetadataProvider): string | null {
         if (!userID || !roleID) {
             return null;
         }
@@ -364,7 +368,7 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
             return null; // not the system user — nothing to guard
         }
 
-        const restricted = MJUserRoleEntityServer.EntitiesWithRestrictingFieldRulesForRole(roleID);
+        const restricted = MJUserRoleEntityServer.EntitiesWithRestrictingFieldRulesForRole(roleID, provider);
         if (restricted.length === 0) {
             return null;
         }
@@ -397,8 +401,8 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
      * is the one both guards exist to prevent. Disabling preserves rules so re-enabling does
      * not lose them, so a rule on a disabled entity is dormant rather than gone.
      */
-    private static EntitiesWithRestrictingFieldRulesForRole(roleID: string): string[] {
-        const md = new Metadata();
+    private static EntitiesWithRestrictingFieldRulesForRole(roleID: string, provider?: IMetadataProvider): string[] {
+        const md = provider ?? new Metadata();
         const names: string[] = [];
         for (const entity of md.Entities as EntityInfo[]) {
             const hit = entity.Fields.some(
