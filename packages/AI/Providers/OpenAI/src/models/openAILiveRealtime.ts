@@ -15,6 +15,9 @@ import {
     RealtimeRemoteReasoning,
     ClientRealtimeSessionConfig,
     JSONObject,
+    RealtimeVoiceOption,
+    RealtimeProxyRegistry,
+    OPENAI_LIVE_SDP_EXCHANGE_PATH,
 } from '@memberjunction/ai';
 import { MapUsageModalityDetail } from './openAIRealtime.js';
 
@@ -44,17 +47,19 @@ export type LiveClientEvent =
               };
               delegation?: {
                   type: 'client' | 'responses';
-                  target?: {
-                      model?: string;
-                      reasoning_effort?: string;
+                  responses?: {
+                      model: string;
+                      reasoning?: {
+                          effort?: string;
+                      };
                       max_output_tokens?: number;
+                      tools?: Array<{
+                          type: 'function';
+                          name: string;
+                          description?: string;
+                          parameters?: Record<string, unknown>;
+                      }>;
                   };
-                  tools?: Array<{
-                      type: 'function';
-                      name: string;
-                      description?: string;
-                      parameters?: Record<string, unknown>;
-                  }>;
               };
           };
       }
@@ -66,13 +71,13 @@ export type LiveClientEvent =
     | {
           event_id: string;
           type: 'session.commentary.append';
-          text: string;
+          content: string;
           delegation_id: string | null;
       }
     | {
           event_id: string;
           type: 'session.thinking.append';
-          text: string;
+          content: string;
           delegation_id: string | null;
       }
     | {
@@ -300,6 +305,7 @@ export class OpenAILiveSession implements IRealtimeSession {
             description: t.Description,
             parameters: t.ParametersSchema as Record<string, unknown> | undefined,
         }));
+        const hasTools = !!(mappedTools && mappedTools.length > 0);
 
         const startFrame: LiveClientEvent = {
             event_id: randomUUID(),
@@ -314,19 +320,25 @@ export class OpenAILiveSession implements IRealtimeSession {
                     },
                 },
                 delegation: {
-                    type: plane === 'remote' ? 'responses' : 'client',
-                    ...(plane === 'remote'
+                    type: plane === 'remote' || hasTools ? 'responses' : 'client',
+                    ...(plane === 'remote' || hasTools
                         ? {
-                              ...(this._options.remoteSettings
-                                  ? {
-                                        target: {
-                                            model: this._options.remoteSettings.Ref,
-                                            reasoning_effort: this._options.remoteSettings.Effort,
+                              responses: {
+                                  model: this._options.remoteSettings?.Ref ?? 'gpt-4o',
+                                  ...(this._options.remoteSettings?.Effort
+                                      ? {
+                                            reasoning: {
+                                                effort: this._options.remoteSettings.Effort,
+                                            },
+                                        }
+                                      : {}),
+                                  ...(typeof this._options.remoteSettings?.MaxOutputTokens === 'number'
+                                      ? {
                                             max_output_tokens: this._options.remoteSettings.MaxOutputTokens,
-                                        },
-                                    }
-                                  : {}),
-                              ...(mappedTools && mappedTools.length > 0 ? { tools: mappedTools } : {}),
+                                        }
+                                      : {}),
+                                  ...(mappedTools && mappedTools.length > 0 ? { tools: mappedTools } : {}),
+                              },
                           }
                         : {}),
                 },
@@ -669,7 +681,7 @@ export class OpenAILiveSession implements IRealtimeSession {
             this.sendFrame({
                 event_id: randomUUID(),
                 type: 'session.commentary.append',
-                text: output,
+                content: output,
                 delegation_id: callID,
             });
         }
@@ -679,7 +691,7 @@ export class OpenAILiveSession implements IRealtimeSession {
         this.sendFrame({
             event_id: randomUUID(),
             type: 'session.thinking.append',
-            text,
+            content: text,
             delegation_id: null,
         });
     }
@@ -688,7 +700,7 @@ export class OpenAILiveSession implements IRealtimeSession {
         this.sendFrame({
             event_id: randomUUID(),
             type: 'session.commentary.append',
-            text: instructions,
+            content: instructions,
             delegation_id: null,
         });
         return true;
@@ -760,6 +772,19 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     constructor(apiKey: string, endpoint?: string) {
         super(apiKey);
         this._endpoint = endpoint ?? 'wss://api.openai.com/v1/live/sessions';
+    }
+
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: 'alloy', Name: 'Alloy' },
+            { ID: 'ash', Name: 'Ash' },
+            { ID: 'ballad', Name: 'Ballad' },
+            { ID: 'coral', Name: 'Coral' },
+            { ID: 'echo', Name: 'Echo' },
+            { ID: 'sage', Name: 'Sage' },
+            { ID: 'shimmer', Name: 'Shimmer' },
+            { ID: 'verse', Name: 'Verse' },
+        ];
     }
 
     /**
@@ -878,6 +903,9 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             parameters: t.ParametersSchema as Record<string, unknown> | undefined,
         }));
 
+        const hasTools = !!(mappedTools && mappedTools.length > 0);
+        const delegationType = plane === 'remote' || hasTools ? 'responses' : 'client';
+
         // WebRTC session config: omit audio.format entirely (negotiated via SDP)
         const sessionPayload: Record<string, unknown> = {
             model: params.Model || 'gpt-live-1',
@@ -888,31 +916,59 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
                 },
             },
             delegation: {
-                type: plane === 'remote' ? 'responses' : 'client',
-                ...(plane === 'remote'
+                type: delegationType,
+                ...(delegationType === 'responses'
                     ? {
-                          ...(reasoningConfig?.Remote
-                              ? {
-                                    target: {
-                                        model: reasoningConfig.Remote.Ref,
-                                        reasoning_effort: reasoningConfig.Remote.Effort,
+                          responses: {
+                              model: reasoningConfig?.Remote?.Ref ?? 'gpt-4o',
+                              ...(reasoningConfig?.Remote?.Effort
+                                  ? {
+                                        reasoning: {
+                                            effort: reasoningConfig.Remote.Effort,
+                                        },
+                                    }
+                                  : {}),
+                              ...(typeof reasoningConfig?.Remote?.MaxOutputTokens === 'number'
+                                  ? {
                                         max_output_tokens: reasoningConfig.Remote.MaxOutputTokens,
-                                    },
-                                }
-                              : {}),
-                          ...(mappedTools && mappedTools.length > 0 ? { tools: mappedTools } : {}),
+                                    }
+                                  : {}),
+                              ...(hasTools ? { tools: mappedTools } : {}),
+                          },
                       }
                     : {}),
             },
         };
 
+        const ticket = RealtimeProxyRegistry.Instance.Issue({
+            UpstreamUrl: this._endpoint,
+            UpstreamAuthHeader: this.apiKey,
+            DriverClass: 'OpenAILiveRealtime',
+            TTLSeconds: 60,
+        });
+
+        const brokerUrl = this.resolveBrokerUrl(params, ticket.ID);
+
         return {
             Provider: 'openai-live',
             Model: params.Model || 'gpt-live-1',
-            EphemeralToken: '',
-            ExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+            EphemeralToken: brokerUrl,
+            ExpiresAt: ticket.ExpiresAt,
             SessionConfig: sessionPayload as JSONObject,
         };
+    }
+
+    /**
+     * Resolves the browser-facing HTTP(S) broker URL for the OpenAI Live WebRTC SDP exchange.
+     */
+    protected resolveBrokerUrl(params: RealtimeSessionParams, ticketId: string): string {
+        const override = params.Config?.['proxyBaseUrl'] ?? params.Config?.['brokerBaseUrl'];
+        const source =
+            (typeof override === 'string' && override.trim().length > 0 ? override.trim() : '') ||
+            process.env['MJAPI_PUBLIC_URL'] ||
+            `${process.env['GRAPHQL_BASE_URL'] ?? 'http://localhost'}:${process.env['GRAPHQL_PORT'] ?? '4103'}`;
+        const baseUrl = source.replace(/\/+$/, '');
+        return `${baseUrl}${OPENAI_LIVE_SDP_EXCHANGE_PATH}?ticket=${encodeURIComponent(ticketId)}`;
     }
 
     /**

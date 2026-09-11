@@ -225,7 +225,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(mockSocket.sentFrames.length).toBe(1);
         const resultFrame = JSON.parse(mockSocket.sentFrames[0]);
         expect(resultFrame.type).toBe('session.commentary.append');
-        expect(resultFrame.text).toBe('{"status":"ok"}');
+        expect(resultFrame.content).toBe('{"status":"ok"}');
         expect(resultFrame.delegation_id).toBe('delegation-abc');
 
         // Send context note
@@ -233,7 +233,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(mockSocket.sentFrames.length).toBe(2);
         const noteFrame = JSON.parse(mockSocket.sentFrames[1]);
         expect(noteFrame.type).toBe('session.thinking.append');
-        expect(noteFrame.text).toBe('Background note');
+        expect(noteFrame.content).toBe('Background note');
         expect(noteFrame.delegation_id).toBeNull();
 
         // Request spoken update
@@ -241,7 +241,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(mockSocket.sentFrames.length).toBe(3);
         const updateFrame = JSON.parse(mockSocket.sentFrames[2]);
         expect(updateFrame.type).toBe('session.commentary.append');
-        expect(updateFrame.text).toBe('Brief update');
+        expect(updateFrame.content).toBe('Brief update');
         expect(updateFrame.delegation_id).toBeNull();
     });
 
@@ -332,10 +332,11 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(mockSocket.sentFrames.length).toBe(1);
         const startFrame = JSON.parse(mockSocket.sentFrames[0]);
         expect(startFrame.session.delegation.type).toBe('responses');
-        expect(startFrame.session.delegation.target.model).toBe('o3-mini');
-        expect(startFrame.session.delegation.target.reasoning_effort).toBe('high');
-        expect(startFrame.session.delegation.tools.length).toBe(1);
-        expect(startFrame.session.delegation.tools[0].name).toBe('lookup_order');
+        expect(startFrame.session.delegation.responses.model).toBe('o3-mini');
+        expect(startFrame.session.delegation.responses.reasoning.effort).toBe('high');
+        expect(startFrame.session.delegation.responses.max_output_tokens).toBe(2000);
+        expect(startFrame.session.delegation.responses.tools.length).toBe(1);
+        expect(startFrame.session.delegation.responses.tools[0].name).toBe('lookup_order');
     });
 
     it('handles remote plane response.event for tool calls and deduplicated token usage', async () => {

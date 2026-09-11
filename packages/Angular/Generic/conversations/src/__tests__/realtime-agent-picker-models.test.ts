@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  BuildRealtimeConfigOverridesJson,
   BuildRealtimeModelOptions,
   VoiceModelCandidate,
 } from '../lib/services/realtime-pairing';
@@ -53,5 +54,23 @@ describe('BuildRealtimeModelOptions', () => {
     const input = [model({ ID: 'm2', Name: 'B' }), model({ ID: 'm1', Name: 'A' })];
     BuildRealtimeModelOptions(input);
     expect(input.map(m => m.ID)).toEqual(['m2', 'm1']); // input order untouched
+  });
+});
+
+describe('BuildRealtimeConfigOverridesJson', () => {
+  it('returns null when neither model nor voice is specified', () => {
+    expect(BuildRealtimeConfigOverridesJson(null, null)).toBeNull();
+    expect(BuildRealtimeConfigOverridesJson('', '')).toBeNull();
+    expect(BuildRealtimeConfigOverridesJson(undefined, undefined)).toBeNull();
+  });
+
+  it('builds valid JSON payload when model preference is set', () => {
+    const json = BuildRealtimeConfigOverridesJson('51F8EF42-316F-41CB-81E9-A63996AD90F7', null);
+    expect(json).toBe('{"realtime":{"modelPreference":"51F8EF42-316F-41CB-81E9-A63996AD90F7"}}');
+  });
+
+  it('builds valid JSON payload when both model and voice are set', () => {
+    const json = BuildRealtimeConfigOverridesJson('51F8EF42-316F-41CB-81E9-A63996AD90F7', 'alloy');
+    expect(json).toBe('{"realtime":{"modelPreference":"51F8EF42-316F-41CB-81E9-A63996AD90F7","voice":{"default":{"voice":"alloy"}}}}');
   });
 });

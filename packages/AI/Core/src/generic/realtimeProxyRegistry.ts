@@ -8,6 +8,11 @@ import { BaseSingleton } from '@memberjunction/global';
 export const REALTIME_PROXY_PATH = '/realtime-proxy';
 
 /**
+ * The URL path MJAPI's OpenAI Live SDP broker listens on for WebRTC offer/answer exchanges.
+ */
+export const OPENAI_LIVE_SDP_EXCHANGE_PATH = '/realtime/openai-live/sdp-exchange';
+
+/**
  * A short-lived, one-time authorization to open ONE upstream realtime websocket through the
  * MJAPI realtime proxy. Stored server-side only — the upstream URL and (optional) auth header
  * NEVER leave the server; the browser only ever receives the opaque ticket id embedded in the
@@ -30,6 +35,8 @@ export interface RealtimeProxyTicketEntry {
     UpstreamAuthHeader?: string;
     /** The MJ user this ticket was minted for (for audit / optional validation at consume time). */
     UserID?: string;
+    /** The driver class authorizing this ticket (e.g. 'OpenAILiveRealtime'). */
+    DriverClass?: string;
     /** Epoch-ms after which the ticket is invalid. Enforced on {@link RealtimeProxyRegistry.Consume}. */
     ExpiresAtMs: number;
 }
@@ -42,6 +49,8 @@ export interface RealtimeProxyIssueParams {
     UpstreamAuthHeader?: string;
     /** The MJ user the ticket is for (optional). */
     UserID?: string;
+    /** The driver class authorizing this ticket (optional). */
+    DriverClass?: string;
     /** Time-to-live, in seconds, for the ONE upstream open this ticket authorizes. */
     TTLSeconds: number;
 }
@@ -91,6 +100,7 @@ export class RealtimeProxyRegistry extends BaseSingleton<RealtimeProxyRegistry> 
             UpstreamUrl: params.UpstreamUrl,
             UpstreamAuthHeader: params.UpstreamAuthHeader,
             UserID: params.UserID,
+            DriverClass: params.DriverClass,
             ExpiresAtMs: expiresAtMs,
         });
         return { ID: id, ExpiresAt: new Date(expiresAtMs).toISOString() };

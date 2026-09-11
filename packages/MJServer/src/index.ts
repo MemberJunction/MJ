@@ -44,6 +44,8 @@ import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
+import { createOpenAILiveBrokerRouter } from './rest/OpenAILiveBrokerHandler.js';
+import { OPENAI_LIVE_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
 import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
@@ -1179,6 +1181,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // auth middleware (an <audio>/<video> element can't send Authorization headers).
   app.use('/media', cors<cors.CorsRequest>(), createMediaStreamRouter());
   startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
+
+  // ─── OpenAI Live WebRTC SDP broker (ticket-gated, registered BEFORE auth) ─────
+  app.use(OPENAI_LIVE_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), express.json({ limit: '2mb' }), createOpenAILiveBrokerRouter());
+  startupLog.LogIf('verbose', `[OpenAILive] WebRTC SDP broker registered at ${OPENAI_LIVE_SDP_EXCHANGE_PATH}`);
 
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the

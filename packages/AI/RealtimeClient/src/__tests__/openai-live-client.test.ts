@@ -346,6 +346,120 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(sent[1]).toEqual({ type: 'response.create' });
     });
 
+    it('processes session.input_transcript.delta and streams in-place with ReplacesPrevious', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Draw ',
+        });
+        expect(transcripts.length).toBe(1);
+        expect(transcripts[0]).toEqual({
+            Role: 'User',
+            Text: 'Draw ',
+            IsFinal: true,
+            Kind: 'normal',
+            ReplacesPrevious: false,
+        });
+
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'a box',
+        });
+        expect(transcripts.length).toBe(2);
+        expect(transcripts[1]).toEqual({
+            Role: 'User',
+            Text: 'Draw a box',
+            IsFinal: true,
+            Kind: 'normal',
+            ReplacesPrevious: true,
+        });
+    });
+
+    it('processes session.output_transcript.delta and handles tool call via nested response.event', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        const toolCalls: RealtimeClientToolCall[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+        client.OnToolCall((c) => toolCalls.push(c));
+
+        // Assistant speech delta
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Sure, I will draw that',
+        });
+        expect(client.IsBusy).toBe(true);
+        expect(transcripts.length).toBe(1);
+        expect(transcripts[0]).toEqual({
+            Role: 'Assistant',
+            Text: 'Sure, I will draw that',
+            IsFinal: false,
+            Kind: 'normal',
+        });
+
+        // Nested response.event containing response.output_item.done
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: {
+                    type: 'function_call',
+                    call_id: 'call_wb_1',
+                    name: 'Whiteboard_AddShape',
+                    arguments: '{"shape":"rect"}',
+                },
+            },
+        });
+
+        // Assistant transcript is finalized before tool call
+        expect(transcripts.length).toBe(2);
+        expect(transcripts[1]).toEqual({
+            Role: 'Assistant',
+            Text: 'Sure, I will draw that',
+            IsFinal: true,
+            Kind: 'normal',
+        });
+        expect(client.IsBusy).toBe(false);
+        expect(toolCalls.length).toBe(1);
+        expect(toolCalls[0].CallID).toBe('call_wb_1');
+        expect(toolCalls[0].ToolName).toBe('Whiteboard_AddShape');
+        expect(toolCalls[0].ArgumentsJson).toBe('{"shape":"rect"}');
+    });
+
+    it('handles session.delegation.created and SendToolResult via session.commentary.append', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const toolCalls: RealtimeClientToolCall[] = [];
+        client.OnToolCall((c) => toolCalls.push(c));
+
+        client.Channel.EmitServer({
+            type: 'session.delegation.created',
+            delegation_id: 'del_client_1',
+        });
+
+        expect(toolCalls.length).toBe(1);
+        expect(toolCalls[0].CallID).toBe('del_client_1');
+        expect(toolCalls[0].ToolName).toBe('backend_delegation');
+
+        client.Channel.Sent = [];
+        client.SendToolResult('del_client_1', '{"result":"done"}');
+
+        const sent = client.Channel.SentEvents();
+        expect(sent.length).toBe(1);
+        expect(sent[0]).toEqual({
+            type: 'session.commentary.append',
+            content: '{"result":"done"}',
+            delegation_id: 'del_client_1',
+        });
+    });
+
     it('SendContextNote sends session.thinking.append without interrupting speech', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
@@ -357,7 +471,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(sent.length).toBe(1);
         expect(sent[0]).toEqual({
             type: 'session.thinking.append',
-            text: 'Background note for reasoning',
+            content: 'Background note for reasoning',
             delegation_id: null,
         });
     });
@@ -376,7 +490,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(sent.length).toBe(2);
         expect(sent[0]).toEqual({
             type: 'session.commentary.append',
-            text: 'Still working on query execution',
+            content: 'Still working on query execution',
             delegation_id: null,
         });
         expect(sent[1]).toEqual({ type: 'response.create' });
