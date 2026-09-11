@@ -92,6 +92,7 @@
     "@memberjunction/data-context-server": "6.1.0-edge.6",
     "@memberjunction/doc-utils": "6.1.0-edge.6",
     "@memberjunction/encryption": "6.1.0-edge.6",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.6",
     "@memberjunction/geo-core": "6.1.0-edge.6",
     "@memberjunction/predictive-studio": "6.1.0-edge.6",
     "@memberjunction/queue": "6.1.0-edge.6",
