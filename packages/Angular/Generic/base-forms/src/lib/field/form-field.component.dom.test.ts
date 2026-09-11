@@ -3,7 +3,7 @@ import { Component, EventEmitter, Input, Output, Pipe, PipeTransform } from '@an
 import { CommonModule } from '@angular/common';
 import { ComponentFixture } from '@angular/core/testing';
 import { renderComponentFixture, query, queryAll, text, click, typeInto, capture, hasClass } from '@memberjunction/ng-test-utils';
-import { BaseEntity, EntityInfo } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, UserInfo } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { MjFormFieldComponent } from './form-field.component';
 
@@ -513,6 +513,7 @@ describe('date-only fields are a calendar day, not an instant', () => {
             const shown = text(f, '.mj-forms-field-value');
             expect(shown, 'a datetime must keep local-time rendering').toMatch(/\d{1,2}:\d{2}/);
         });
+    });
 });
 
 describe('an unreadable stored date is announced, not hidden (bc-aidp-next-golive#185)', () => {
@@ -607,6 +608,205 @@ describe('an unreadable stored date is announced, not hidden (bc-aidp-next-goliv
         expect(text(f, '.mj-forms-field-value')).toContain('Invalid Date');
     });
 });
+
+// ─── Field-level security ─────────────────────────────────────────────────
+//
+// BaseEntity.Get() THROWS for a field the current user cannot read, so a form that rendered a
+// denied field would take out the whole form rather than hide a column. These tests pin the
+// gate that prevents that, and pin that it fails open — the server is the real boundary, so a
+// form hiding fields because no user resolved yet would be worse than one showing them.
+
+describe('MjFormFieldComponent — field-level security', () => {
+  const HR_ROLE_ID = 'A0000000-0000-0000-0000-000000000001';
+  const INTERN_ROLE_ID = 'A0000000-0000-0000-0000-000000000003';
+
+  /** Widget metadata with field security ON and `Description` readable only by HR. */
+  function makeSecuredEntityInfo(): EntityInfo {
+    const openTo = (fieldId: string, roles: string[]) =>
+      roles.map((roleId, i) => ({
+        ID: `${fieldId}-open-${i}`,
+        EntityFieldID: fieldId,
+        RoleID: roleId,
+        ReadAccess: 'Allow',
+        UpdateAccess: 'Allow',
+        CreateAccess: 'Allow',
+      }));
+
+    return new EntityInfo({
+      ID: 'E0000001-0000-0000-0000-000000000001',
+      Name: 'Test Widgets',
+      Status: 'Active',
+      BaseTable: 'TestWidget',
+      BaseView: 'vwTestWidgets',
+      EnableFieldLevelSecurity: true,
+      Permissions: [
+        { RoleID: HR_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true, CanDelete: true },
+        { RoleID: INTERN_ROLE_ID, CanRead: true, CanUpdate: true, CanCreate: true, CanDelete: true },
+      ],
+      Fields: [
+        { ID: 'F1', Name: 'ID', Type: 'uniqueidentifier', AllowsNull: false, IsPrimaryKey: true, AllowUpdateAPI: false },
+        { ID: 'F2', Name: 'Name', DisplayName: 'Widget Name', Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true, EntityFieldPermissions: openTo('F2', [HR_ROLE_ID, INTERN_ROLE_ID]) },
+        { ID: 'F3', Name: 'Description', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: openTo('F3', [HR_ROLE_ID]) },
+        // Readable by the intern but NOT updatable or creatable — the see-but-not-touch case.
+        { ID: 'F4', Name: 'Notes', Type: 'nvarchar', Length: 200, AllowsNull: true, AllowUpdateAPI: true, EntityFieldPermissions: [
+            ...openTo('F4', [HR_ROLE_ID]),
+            { ID: 'F4-ro', EntityFieldID: 'F4', RoleID: INTERN_ROLE_ID, ReadAccess: 'Allow', UpdateAccess: 'No Access', CreateAccess: 'No Access' },
+        ] },
+      ],
+    });
+  }
+
+  function makeSecuredWidget(user: UserInfo | null): BaseEntity {
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Description: 'secret', Notes: 'jotting' }, true, true);
+    // The ENTITY resolves its own acting user for BaseEntity.Get()'s gate. Set it explicitly so
+    // the component's provider and the entity agree — otherwise the component would allow a
+    // render that the entity then refuses, which is exactly the crash being guarded against.
+    if (user) {
+      entity.ContextCurrentUser = user;
+    }
+    return entity;
+  }
+
+  /**
+   * Stands in for the provider's signed-in user.
+   *
+   * The widening cast lives HERE, once, rather than at each assignment. `satisfies` keeps the
+   * literal honest against the real `UserInfo` members this double claims to stand in for, so a
+   * rename or retype on `UserInfo` still breaks this file — which a blanket cast at the call
+   * sites would have silently swallowed. Only `UserRoles` needs the seam: the aggregation reads
+   * `RoleID` off each entry, and building real `UserRoleInfo` instances would pull in metadata
+   * construction this spec has no use for.
+   */
+  function userWithRoles(roleIds: string[]): UserInfo {
+    const user = {
+      ID: 'C0000000-0000-0000-0000-000000000001',
+      Name: 'Test User',
+      Email: 'test@example.com',
+      IsActive: true,
+      UserRoles: roleIds.map((RoleID) => ({ RoleID, Role: `Role-${RoleID}` })),
+    } satisfies Pick<UserInfo, 'ID' | 'Name' | 'Email' | 'IsActive'> & {
+      UserRoles: ReadonlyArray<{ RoleID: string; Role: string }>;
+    };
+    return user as unknown as UserInfo;
+  }
+
+  function renderAs(fieldName: string, roleIds: string[] | null): ComponentFixture<MjFormFieldComponent> {
+    const user = roleIds ? userWithRoles(roleIds) : null;
+    // Provider is an @Input, so it is bound BEFORE the first change detection — which matters,
+    // because the readability answer is memoized on first read.
+    return render({
+      Record: makeSecuredWidget(user),
+      FieldName: fieldName,
+      Type: 'textbox',
+      Provider: { CurrentUser: user },
+    });
+  }
+
+  it('renders nothing at all for a field the user cannot read', () => {
+    const f = renderAs('Description', [INTERN_ROLE_ID]);
+    expect(query(f, '.mj-forms-field')).toBeNull();
+    expect(query(f, '.mj-forms-field-label')).toBeNull();
+  });
+
+  it('renders normally for a user who may read the field', () => {
+    const f = renderAs('Description', [HR_ROLE_ID]);
+    expect(text(f, '.mj-forms-field-value')).toBe('secret');
+  });
+
+  it('leaves unrestricted fields on the same entity alone', () => {
+    const f = renderAs('Name', [INTERN_ROLE_ID]);
+    expect(text(f, '.mj-forms-field-value')).toBe('Gadget');
+  });
+
+  it('FAILS OPEN when no user has resolved yet', () => {
+    // Asserted on the gate rather than the DOM: with no user on the component's provider the
+    // ENTITY still falls back to the global provider to resolve its own acting user, so a
+    // render would exercise that fallback rather than this decision. The component's answer is
+    // what this test is about — the server is the real boundary, and a form that hid fields
+    // because no user had resolved yet would be worse than one that shows them.
+    const f = render({ Record: makeSecuredWidget(null), FieldName: 'Description', Type: 'textbox', Provider: { CurrentUser: null } });
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+  });
+
+  it('FAILS OPEN on an entity with field security switched off', () => {
+    const f = render({ Record: makeWidget(), FieldName: 'Description', Type: 'textbox', Provider: { CurrentUser: userWithRoles([INTERN_ROLE_ID]) } });
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+  });
+
+  it('never calls Get() for a denied field — rendering one would throw', () => {
+    // The whole point of gating in the template rather than catching downstream: a single
+    // denied field must not be able to take out the form it sits in.
+    const f = renderAs('Description', [INTERN_ROLE_ID]);
+    expect(() => f.detectChanges()).not.toThrow();
+  });
+
+  it('ShouldHideField answers for a denied field WITHOUT reading its value', () => {
+    // The template guards rendering behind IsFieldReadableByUser, but ShouldHideField is also
+    // called PROGRAMMATICALLY — MjCollapsiblePanelComponent.hasRenderableContent() sweeps
+    // `FieldComponents.some(f => !f.ShouldHideField)` to decide whether a section has anything
+    // to show. That path skips the template guard entirely, so before this was fixed the getter
+    // fell through to `this.Value` → BaseEntity.Get() → FieldSecurityError, thrown fresh on
+    // EVERY change-detection cycle for as long as the record stayed open.
+    const f = renderAs('Description', [INTERN_ROLE_ID]);
+    expect(() => f.componentInstance.ShouldHideField).not.toThrow();
+    expect(f.componentInstance.ShouldHideField).toBe(true);
+  });
+
+  it('ShouldHideField still reflects emptiness for a READABLE field', () => {
+    // The denied short-circuit must not swallow the ordinary hide-when-empty behaviour.
+    const f = renderAs('Description', [HR_ROLE_ID]);
+    f.componentInstance.HideWhenEmptyInReadOnlyMode = true;
+    expect(f.componentInstance.ShouldHideField).toBe(false); // 'secret' is present
+  });
+
+  // ---- write gate: readable but not writable ----
+
+  it('marks a readable-but-not-updatable field read-only on a SAVED record', () => {
+    // Without this the user types into a control the server will reject on save, and the error
+    // names a field they had every reason to think was editable.
+    const f = renderAs('Notes', [INTERN_ROLE_ID]);
+    expect(f.componentInstance.IsFieldReadableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+    expect(f.componentInstance.IsFieldReadOnly).toBe(true);
+  });
+
+  it('leaves the field writable for a role that may update it', () => {
+    const f = renderAs('Notes', [HR_ROLE_ID]);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+    expect(f.componentInstance.IsFieldReadOnly).toBe(false);
+  });
+
+  it('uses the CREATE verb on an unsaved record, not the update verb', () => {
+    // Create denial does not raise a server error — the value is silently dropped and the column
+    // takes its default. The read-only control is the only signal the user gets.
+    const user = userWithRoles([INTERN_ROLE_ID]);
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.ContextCurrentUser = user;
+    entity.NewRecord();
+    const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
+    expect(f.componentInstance.Record.IsSaved).toBe(false);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(false);
+  });
+
+  it('re-evaluates the write gate when a new record becomes saved', () => {
+    // IsSaved flips WITHOUT ngOnChanges firing — the Record input is the same object. A plain
+    // memo would answer with the create-time verb for the rest of the form's life.
+    const user = userWithRoles([HR_ROLE_ID]);
+    const entity = new TestWidgetEntity(makeSecuredEntityInfo());
+    entity.ContextCurrentUser = user;
+    entity.NewRecord();
+    const f = render({ Record: entity, FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: user } });
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+    entity.SetMany({ ID: WIDGET_ID, Name: 'Gadget', Notes: 'jotting' }, true, true);
+    expect(f.componentInstance.Record.IsSaved).toBe(true);
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
+
+  it('FAILS OPEN on the write gate when no user has resolved', () => {
+    const f = render({ Record: makeSecuredWidget(null), FieldName: 'Notes', Type: 'textbox', Provider: { CurrentUser: null } });
+    expect(f.componentInstance.IsFieldWritableByUser).toBe(true);
+  });
 });
 
 describe('a server-reported validation error paints the field the way a local one does', () => {

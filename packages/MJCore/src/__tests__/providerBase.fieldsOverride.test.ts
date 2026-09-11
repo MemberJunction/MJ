@@ -503,12 +503,16 @@ describe('ProviderBase Fields-Override Gate — Edge cases', () => {
     });
 
     describe('ResultType variants', () => {
-        // Note: ResultType='entity_object' has its OWN unconditional Fields override at
-        // PreProcessRunView (line ~2288 in providerBase.ts) which runs INSIDE concrete
-        // provider subclasses, AFTER the gate. So entity_object always ends up with full
-        // fields regardless of the gate — the gate doesn't break that contract.
-        // This test asserts the gate's narrow-Fields behavior for the simple case which
-        // is what production code paths actually flow through.
+        // ResultType='entity_object' widens to full fields IN THE GATE ITSELF, independent of
+        // cache eligibility. This used to be left to the unconditional override in
+        // PreProcessRunView — but that hook runs only inside the DATABASE provider subclasses,
+        // so it never covered the GraphQL client: a client entity_object request without
+        // CacheLocal shipped the caller's narrow Fields over the wire and materialized PARTIAL
+        // entities, which round-trip missing state into a save. (It went unnoticed because the
+        // pre-not-loaded `GetAll` emitted every field name regardless of what had actually been
+        // loaded — even the integration oracle written for this, runview-matrix.RVM4, could not
+        // fail.) Widening in the gate makes the contract hold on every provider; the DB-side
+        // PreProcessRunView override remains as a harmless second assertion of the same thing.
 
         it('ResultType="simple" on non-cached entity → narrow Fields preserved', async () => {
             await provider.RunView({
@@ -532,19 +536,17 @@ describe('ProviderBase Fields-Override Gate — Edge cases', () => {
             expect(lastCapturedFields(provider)).toEqual(NARROW_FIELDS);
         });
 
-        it('ResultType="entity_object" on non-cached entity → gate skips override; PreProcessRunView in concrete provider handles full-fields requirement separately', async () => {
-            // The base ProviderBase gate skips the override (entity is non-cacheable).
-            // In production, a concrete provider's PreProcessRunView would then run AFTER
-            // and force Fields to full for entity_object. We're testing the base gate here:
-            // it should not interfere — narrow Fields reach our InternalRunView (which is
-            // standing in for what would have been routed through PreProcessRunView).
+        it('ResultType="entity_object" on a NON-CACHED entity → gate widens to full fields anyway (entities must hydrate complete)', async () => {
+            // The entity is cache-ineligible, so the cache-coherence reason to widen does not
+            // apply — but the ENTITY-OBJECT reason does, and it is the one that matters for
+            // data safety. Every provider, cached or not, must fetch the full width here.
             await provider.RunView({
                 EntityName: 'NoCaching',
                 Fields: NARROW_FIELDS,
                 ResultType: 'entity_object',
                 CacheLocal: true,
             });
-            expect(lastCapturedFields(provider)).toEqual(NARROW_FIELDS);
+            expect(lastCapturedFields(provider)).toEqual(FULL_FIELDS);
         });
     });
 

@@ -17681,6 +17681,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJEntityEntity_IEntitySubtypeSelectorConfig
         * * Description: Optional JSON configuration specifying the declarative subtype selector for this entity (shape = IEntitySubtypeSelectorConfig). Path is a dotted foreign-key dereference path ending at a column containing the target subtype entity name (e.g. "ProductID.ProductTypeID.OrderLineExtensionEntity"). Read by BaseEntity.ResolveSubtypeEntityName() as a fallback when no runtime EntitySubtypeResolver is registered, and by offline tooling like Loom and CodeGen to determine conditional IsA child entities. NULL means no declarative subtype selector is configured.`),
+    EnableFieldLevelSecurity: z.boolean().describe(`
+        * * Field Name: EnableFieldLevelSecurity
+        * * Display Name: Enable Field Level Security
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -18501,6 +18507,80 @@ export const MJEntityDocumentSchema = z.object({
 });
 
 export type MJEntityDocumentEntityType = z.infer<typeof MJEntityDocumentSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Field Permissions
+ */
+export const MJEntityFieldPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityFieldID: z.string().describe(`
+        * * Field Name: EntityFieldID
+        * * Display Name: Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
+    ReadAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: ReadAccess
+        * * Display Name: Read Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may read the field's values. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default) and leaves the outcome to the user's other roles. Enforced at the API output boundary (result projection and GraphQL field mapping), by predicate validation which rejects an ExtraFilter/OrderBy/Aggregate referencing an unreadable field, and by the strongly-typed accessor path which throws.`),
+    UpdateAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: UpdateAccess
+        * * Display Name: Update Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may modify the field's value on an EXISTING record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow — a field a user cannot see is one they cannot change. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.`),
+    CreateAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: CreateAccess
+        * * Display Name: Create Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may supply the field's value when INSERTING a record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow. When a user may not create a field, any value they supply is dropped and the column takes its default — the insert is not rejected, matching the read path where a denied field is simply absent rather than an error. A NOT NULL column with no default that a user cannot create makes records uncreatable for that user; restricted fields should be nullable or defaulted.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityField: z.string().describe(`
+        * * Field Name: EntityField
+        * * Display Name: Entity Field
+        * * SQL Data Type: nvarchar(255)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityFieldPermissionEntityType = z.infer<typeof MJEntityFieldPermissionSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Field Values
@@ -82673,6 +82753,20 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * * Field Name: EnableFieldLevelSecurity
+    * * Display Name: Enable Field Level Security
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.
+    */
+    get EnableFieldLevelSecurity(): boolean {
+        return this.Get('EnableFieldLevelSecurity');
+    }
+    set EnableFieldLevelSecurity(value: boolean) {
+        this.Set('EnableFieldLevelSecurity', value);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -84802,6 +84896,208 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     */
     get ReasoningAgent(): string | null {
         return this.Get('ReasoningAgent');
+    }
+}
+
+
+/**
+ * MJ: Entity Field Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityFieldPermission
+ * * Base View: vwEntityFieldPermissions
+ * * @description Role-based field-level (column-level) security. One row per (entity field, role), carrying three independent trinary verbs — ReadAccess, UpdateAccess and CreateAccess — each Allow, Deny or No Access. Rows are only consulted when the parent entity has EnableFieldLevelSecurity = 1. Across the roles a user holds, a verb resolves to (any Allow) AND NOT (any Deny); No Access is neutral and grants nothing while blocking nothing. Read is required for Update and Create, enforced per row by a CHECK constraint and again after aggregation. Primary keys and MemberJunction system audit columns are never restrictable.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Field Permissions')
+export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermissionEntityType> {
+    /**
+    * Loads the MJ: Entity Field Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Field Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityFieldPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Field Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To grant Create or Update access, Read access must also be set to 'Allow'. This prevents users from having permission to modify or create data they cannot view.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateReadAccessRequiredForCreateOrUpdate(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To grant Create or Update access, Read access must also be set to 'Allow'. This prevents users from having permission to modify or create data they cannot view.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReadAccessRequiredForCreateOrUpdate(result: ValidationResult) {
+        const hasUpdate = this.UpdateAccess === "Allow";
+        const hasCreate = this.CreateAccess === "Allow";
+        const hasRead = this.ReadAccess === "Allow";
+    
+        if ((hasUpdate || hasCreate) && !hasRead) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ReadAccess",
+                "Read access must be set to 'Allow' if either Create or Update access is allowed.",
+                this.ReadAccess,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityFieldID
+    * * Display Name: Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    */
+    get EntityFieldID(): string {
+        return this.Get('EntityFieldID');
+    }
+    set EntityFieldID(value: string) {
+        this.Set('EntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: ReadAccess
+    * * Display Name: Read Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may read the field's values. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default) and leaves the outcome to the user's other roles. Enforced at the API output boundary (result projection and GraphQL field mapping), by predicate validation which rejects an ExtraFilter/OrderBy/Aggregate referencing an unreadable field, and by the strongly-typed accessor path which throws.
+    */
+    get ReadAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('ReadAccess');
+    }
+    set ReadAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('ReadAccess', value);
+    }
+
+    /**
+    * * Field Name: UpdateAccess
+    * * Display Name: Update Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may modify the field's value on an EXISTING record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow — a field a user cannot see is one they cannot change. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.
+    */
+    get UpdateAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('UpdateAccess');
+    }
+    set UpdateAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('UpdateAccess', value);
+    }
+
+    /**
+    * * Field Name: CreateAccess
+    * * Display Name: Create Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may supply the field's value when INSERTING a record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow. When a user may not create a field, any value they supply is dropped and the column takes its default — the insert is not rejected, matching the read path where a denied field is simply absent rather than an error. A NOT NULL column with no default that a user cannot create makes records uncreatable for that user; restricted fields should be nullable or defaulted.
+    */
+    get CreateAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('CreateAccess');
+    }
+    set CreateAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('CreateAccess', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityField
+    * * Display Name: Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityField(): string {
+        return this.Get('EntityField');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
     }
 }
 

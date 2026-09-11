@@ -32,7 +32,7 @@ import {
     SimpleVectorServiceProvider,
 } from '@memberjunction/ai-vectors-memory';
 
-// @memberjunction/core-entities (414 classes)
+// @memberjunction/core-entities (411 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -62,7 +62,6 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
-    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -93,13 +92,10 @@ import {
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
-    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
-    MJAIPersonaEntity,
-    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -253,6 +249,7 @@ import {
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -803,7 +800,6 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
-    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -834,13 +830,10 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
-    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
-    MJAIPersonaEntity,
-    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -966,14 +959,14 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJDashboardUserStateEntity,
     MJDataContextEntity,
     MJDataContextItemEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJDatasetEntity,
     MJDatasetItemEntity,
     MJDuplicateRunDetailEntity,
     MJDuplicateRunDetailMatchEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJDuplicateRunEntity,
     MJEmployeeCompanyIntegrationEntity,
     MJEmployeeEntity,
@@ -998,6 +991,7 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJEntityEntityExtended,
     MJEntityFieldEntity,
     MJEntityFieldEntityExtended,
+    MJEntityFieldPermissionEntity,
     MJEntityFieldValueEntity,
     MJEntityFormOverrideEntity,
     MJEntityOrganicKeyEntity,
@@ -1170,13 +1164,13 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJUserFavoriteEntity,
     MJUserNotificationEntity,
     MJUserNotificationPreferenceEntity,
+    MJUserNotificationTypeEntity,
+    MJUserRecordLogEntity,
+    MJUserRoleEntity,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_2: any[] = [
-    MJUserNotificationTypeEntity,
-    MJUserRecordLogEntity,
-    MJUserRoleEntity,
     MJUserRoutineEntity,
     MJUserRoutineRecipientEntity,
     MJUserRoutineRunEntity,
@@ -1374,13 +1368,13 @@ const CLASS_REGISTRATIONS_2: any[] = [
     ListsOperationsResource,
     ListsSharedWithMeResource,
     MCPDashboardComponent,
+    MCPResourceComponent,
+    MappingWorkspaceComponent,
+    ModelManagementComponent,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
-    MCPResourceComponent,
-    MappingWorkspaceComponent,
-    ModelManagementComponent,
     OverviewComponent,
     PSModelsResourceComponent,
     PSPredictionsResourceComponent,
@@ -1450,7 +1444,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 658;
+export const CLASS_REGISTRATIONS_COUNT = 655;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
