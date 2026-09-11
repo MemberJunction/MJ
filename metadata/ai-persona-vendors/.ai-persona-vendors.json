@@ -1,0 +1,156 @@
+[
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "alloy",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5B433299-BE14-4940-9D9A-5A53E77AB0A3"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "ash",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6162BBCA-8A36-4A36-8DD8-C172BE09D8C0"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "ballad",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E7FAB7D1-E4A4-4B3D-87DF-0FD6AADD31A5"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "coral",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B6AA90E0-1492-48E8-8961-EE4A7BC42687"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "echo",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F21515FB-8E2D-446B-A60E-0B231CE4202E"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fable",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "fable",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "BF5EB69E-3B20-4DDD-877A-FECE0A8052E4"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Nova",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "nova",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "25DBA561-5AC3-48A9-B2AD-930BC759B2F4"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Onyx",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "onyx",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "230FDE21-BABC-4AC5-8A5C-4E28612C4614"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "sage",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A514C6C6-B083-4047-9BE4-6E1D7BA2C671"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "shimmer",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E0C69CE9-3429-4DEB-BBE7-957407B1A2DD"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "verse",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "CAB0BA54-786A-4076-9E2A-49DDC2022552"
+    }
+  }
+]

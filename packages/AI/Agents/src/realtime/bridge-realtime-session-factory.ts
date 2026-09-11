@@ -248,10 +248,24 @@ export async function GetRealtimeModelVoices(
 
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const driverClass = SelectRealtimeVendorForModel(model.ID)?.DriverClass ?? null;
+        const selection = SelectRealtimeVendorForModel(model.ID);
+        const driverClass = selection?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
+
+        // 1. Consult metadata first (Personas & PersonaVendors)
+        const modelPersonas = AIEngine.Instance.GetModelPersonas(model.ID, 'Audio', selection.VendorID);
+        if (modelPersonas.length > 0) {
+            const voices: RealtimeVoiceOption[] = modelPersonas.map((rp) => ({
+                ID: rp.PersonaVendor.APIName,
+                Name: rp.Persona.Name,
+            }));
+            out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
+            continue;
+        }
+
+        // 2. Fallback: instantiate driver and query SupportedVoices (legacy / uncatalogued models)
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
             BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
         );

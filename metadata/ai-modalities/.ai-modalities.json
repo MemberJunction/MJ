@@ -1,0 +1,98 @@
+[
+  {
+    "fields": {
+      "Name": "Text",
+      "Description": "Natural language text content for conversation messages and prompts.",
+      "ContentBlockType": "text",
+      "MIMETypePattern": "text/*",
+      "Type": "Content",
+      "DefaultMaxSizeBytes": null,
+      "DefaultMaxCountPerMessage": null,
+      "DisplayOrder": 1
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EA43F4CF-EC26-41D7-B2AC-CF928AF63E46"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Image",
+      "Description": "Static images (PNG, JPEG, WebP, GIF) for vision capabilities and image generation.",
+      "ContentBlockType": "image_url",
+      "MIMETypePattern": "image/*",
+      "Type": "Binary",
+      "DefaultMaxSizeBytes": 5242880,
+      "DefaultMaxCountPerMessage": 10,
+      "DisplayOrder": 2
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AAD386E4-D6ED-4E6E-8960-B56AC1D2783B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Audio",
+      "Description": "Audio files (MP3, WAV, M4A) for speech-to-text, audio understanding, and text-to-speech.",
+      "ContentBlockType": "audio_url",
+      "MIMETypePattern": "audio/*",
+      "Type": "Binary",
+      "DefaultMaxSizeBytes": 26214400,
+      "DefaultMaxCountPerMessage": 5,
+      "DisplayOrder": 3
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "FC3CAE20-6FA8-4ABF-B02E-62CEA920313E"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Video",
+      "Description": "Video files (MP4, WebM) for video understanding and generation.",
+      "ContentBlockType": "video_url",
+      "MIMETypePattern": "video/*",
+      "Type": "Binary",
+      "DefaultMaxSizeBytes": 52428800,
+      "DefaultMaxCountPerMessage": 3,
+      "DisplayOrder": 4
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "9AAD272B-A1C8-4498-ACFC-0C6D50D82B96"
+    }
+  },
+  {
+    "fields": {
+      "Name": "File",
+      "Description": "Generic files and documents (PDF, DOC, etc.) for document processing.",
+      "ContentBlockType": "file_url",
+      "MIMETypePattern": "application/*",
+      "Type": "Binary",
+      "DefaultMaxSizeBytes": 10485760,
+      "DefaultMaxCountPerMessage": 5,
+      "DisplayOrder": 5
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3E930454-29AE-48B9-8888-10FD74BC67B9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Embedding",
+      "Description": "Vector embeddings for semantic search and similarity operations.",
+      "ContentBlockType": "embedding",
+      "MIMETypePattern": "application/json",
+      "Type": "Structured",
+      "DefaultMaxSizeBytes": null,
+      "DefaultMaxCountPerMessage": null,
+      "DisplayOrder": 6
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "BB0C8564-E79C-4AF9-82B0-26D6EAB4BC01"
+    }
+  }
+]

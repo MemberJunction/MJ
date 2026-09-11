@@ -1,0 +1,156 @@
+[
+  {
+    "fields": {
+      "Name": "Alloy",
+      "Description": "Versatile and balanced voice with neutral tone and clear delivery.",
+      "Tone": "Balanced",
+      "SpeakingStyle": "Direct and clear",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "430E5C17-AC61-4939-A4A6-71E088033238"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ash",
+      "Description": "Casual and conversational male voice.",
+      "Tone": "Casual",
+      "SpeakingStyle": "Conversational and relaxed",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B7FB7475-3EE0-46B3-A062-9F6A34596B8D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ballad",
+      "Description": "Warm, engaging, and expressive voice with melodic pacing.",
+      "Tone": "Warm",
+      "SpeakingStyle": "Engaging and expressive",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EC902A09-A6AD-4FC3-8A91-D92BD9437BFE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Coral",
+      "Description": "Friendly, approachable, and animated female voice.",
+      "Tone": "Friendly",
+      "SpeakingStyle": "Approachable and clear",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B46B80F9-2BE1-4B6E-8143-4353703D655A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Echo",
+      "Description": "Resonant and confident voice with steady delivery.",
+      "Tone": "Confident",
+      "SpeakingStyle": "Deep and measured",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6C10F8B6-33F6-48A0-95C1-7B3A61AA4FFB"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fable",
+      "Description": "Storyteller-style voice with British accent nuance and expressive cadence.",
+      "Tone": "Expressive",
+      "SpeakingStyle": "Narrative and articulate",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "0B33E0E1-24B3-4674-9240-C651DE032D2B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nova",
+      "Description": "Energetic and crisp female voice with brisk cadence.",
+      "Tone": "Energetic",
+      "SpeakingStyle": "Crisp and brisk",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "077971E4-AF0C-44E6-B638-A010BC167E70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Onyx",
+      "Description": "Deep, authoritative, and calm male voice.",
+      "Tone": "Authoritative",
+      "SpeakingStyle": "Calm and measured",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C2E533E1-02B0-4CAC-9A43-966E9517CE12"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sage",
+      "Description": "Thoughtful, articulate, and calm voice with gentle pacing.",
+      "Tone": "Thoughtful",
+      "SpeakingStyle": "Articulate and gentle",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4A7F6A9D-0AB2-48AA-969D-13AFED76F40C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shimmer",
+      "Description": "Bright, uplifting, and cheerful voice.",
+      "Tone": "Bright",
+      "SpeakingStyle": "Upbeat and clear",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "73EF19EA-C655-49A2-AA47-0420975AC6A1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Verse",
+      "Description": "Dynamic and versatile voice with focused, natural delivery.",
+      "Tone": "Dynamic",
+      "SpeakingStyle": "Natural and direct",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A6CD4025-9B88-400D-82DB-BAD2992C78D9"
+    }
+  }
+]
