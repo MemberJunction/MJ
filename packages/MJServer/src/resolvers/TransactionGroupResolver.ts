@@ -78,6 +78,19 @@ export class TransactionOutputType {
 
 
 
+/**
+ * Renders one refused transaction-group item for the server log, naming the position, entity and
+ * operation so an operator can tie the refusal back to the row the client sent.
+ *
+ * `CompleteMessage` rather than `Message` because a refusal can report itself through any of
+ * `Message`, `Error` or the `Errors` array — a validation failure populates only the last of the
+ * three, so reading `Message` alone logs an empty reason for exactly the case that matters most.
+ */
+function describeRefusedItem(index: number, item: TransactionItemInputType, entity: BaseEntity): string {
+    const reason = entity.LatestResult?.CompleteMessage?.trim();
+    return `  [${index}] ${item.OperationType} '${item.EntityName}': ${reason || 'refused without a reported reason'}`;
+}
+
 export class TransactionResolver extends ResolverBase {
     /**
      * Maps a TransactionGroup item's operation type onto the SAME API-key scope path the singular
@@ -123,8 +136,14 @@ export class TransactionResolver extends ResolverBase {
             const tg = await md.CreateTransactionGroup();
             const entityObjects: BaseEntity[] = [];
             const objectValues: any[] = [];
+            // #4309: Save()/Delete() report a LOGICAL refusal by returning false — they do not throw —
+            // and a refused row is never enrolled, because TransactionGroup.AddTransaction() is reached
+            // only from inside ProviderToUse.Save()/Delete(). Discarding that boolean let a group whose
+            // rows were all refused arrive at Submit() empty, take its legitimate "nothing to do"
+            // branch, and report success for writes that never happened.
+            const refusals: string[] = [];
 
-            for (const item of group.Items) {
+            for (const [index, item] of group.Items.entries()) {
                 // instantiate a new entity object for the item
                 const entity = await md.GetEntityObject(item.EntityName, context.userPayload.userRecord);
                 entityObjects.push(entity); // save for later for mapping variables if needed
@@ -147,15 +166,37 @@ export class TransactionResolver extends ResolverBase {
                         objectValues.push(itemValues);
                         entity.SetMany(itemValues, true);
                         entity.TransactionGroup = tg;
-                        await entity.Save();
+                        if (!await entity.Save()) {
+                            refusals.push(describeRefusedItem(index, item, entity));
+                        }
                         break;
                     case "Delete":
                         await entity.InnerLoad(pkey);
                         objectValues.push(entity.GetDataObject());
                         entity.TransactionGroup = tg;
-                        await entity.Delete();
+                        if (!await entity.Delete()) {
+                            refusals.push(describeRefusedItem(index, item, entity));
+                        }
                         break;
                 }
+            }
+
+            // A refused row never enrolled, so submitting now would commit only the SURVIVORS and
+            // still report unqualified success. Nothing has been written at this point — enrolment
+            // is deferral, and the provider does not touch the database until Submit() — so
+            // returning here leaves the database exactly as we found it.
+            //
+            // The predicate is the RETURN VALUE, not whether the group ended up empty: a row that
+            // is not dirty also fails to enrol and correctly returns true, and an empty group
+            // legitimately means "nothing to do" for a caller that enrolled nothing. That is also
+            // why this belongs here rather than in TransactionGroupBase.Submit() — this is the only
+            // layer that still knows which row was refused and why.
+            if (refusals.length > 0) {
+                LogError(
+                    `TransactionResolver::ExecuteTransactionGroup --- ${refusals.length} of ${group.Items.length} ` +
+                    `item(s) were refused, so the group was not submitted:\n${refusals.join('\n')}`
+                );
+                return await this.PrepareReturnValue(false, entityObjects, objectValues, group);
             }
 
             // now, we need to set the variables
