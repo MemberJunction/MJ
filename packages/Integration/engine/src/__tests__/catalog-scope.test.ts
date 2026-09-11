@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test } from 'vitest';
+import { expect, test } from 'vitest';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import {
     CurrentCatalogCI,
@@ -80,4 +80,82 @@ test('a callback created outside the scope sees no scope when invoked inside it'
     const cb = () => { observed = CurrentCatalogCI(); };
     RunInCatalogScope(A, () => cb());
     assert.equal(observed, A, 'a synchronous call inside the scope DOES see it');
+});
+
+/**
+ * The scoping lives on the EXISTING getters, not on new ones, and that is load-bearing: two
+ * connectors in the separate Integrations repository call these getters directly rather than going
+ * through the REST base. A new method name would have left exactly those two reading the shared
+ * catalog forever while every other path went per-connection — the asymmetry this design exists to
+ * remove, reintroduced by the fix for it.
+ */
+function withPerConnectionCatalog<T>(ciID: string, objects: Array<{ ID: string; Name: string; Status: string; Sequence: number }>, fn: () => T): T {
+    const e = IntegrationEngineBase.Instance as unknown as Record<string, unknown>;
+    const saved = { has: e.HasCompanyIntegrationCatalog, get: e.GetCompanyIntegrationObjects, dag: e.GetCompanyIntegrationObjectsInDependencyOrder };
+    e.HasCompanyIntegrationCatalog = (id: string) => id === ciID;
+    e.GetCompanyIntegrationObjects = (id: string) => (id === ciID ? objects : []);
+    // Deliberately a DIFFERENT order from GetCompanyIntegrationObjects. Dependency order is not
+    // sequence order, and without the difference a test cannot tell whether the DAG getter ran or
+    // whether it merely fell through to the (also scoped) active-objects getter.
+    e.GetCompanyIntegrationObjectsInDependencyOrder = (id: string) => (id === ciID ? [...objects].reverse() : []);
+    try { return fn(); }
+    finally {
+        e.HasCompanyIntegrationCatalog = saved.has;
+        e.GetCompanyIntegrationObjects = saved.get;
+        e.GetCompanyIntegrationObjectsInDependencyOrder = saved.dag;
+    }
+}
+
+const PER_CONNECTION = [
+    { ID: 'cio-1', Name: 'OnlyMine', Status: 'Active', Sequence: 1 },
+    { ID: 'cio-2', Name: 'AlsoMine', Status: 'Active', Sequence: 2 },
+];
+
+test('the existing getters answer per-connection INSIDE a scope', () => {
+    IntegrationEngineBase.Instance.SeedForTesting({
+        IntegrationObjects: [{ ID: 'io-1', IntegrationID: 'int-1', Name: 'Shared', Status: 'Active', Sequence: 1 } as never],
+    });
+    withPerConnectionCatalog(A, PER_CONNECTION, () => {
+        // outside the scope: the shared answer, unchanged
+        expect(IntegrationEngineBase.Instance.GetActiveIntegrationObjects('int-1').map(o => o.Name)).toEqual(['Shared']);
+        RunInCatalogScope(A, () => {
+            expect(IntegrationEngineBase.Instance.GetActiveIntegrationObjects('int-1').map(o => o.Name)).toEqual(['OnlyMine', 'AlsoMine']);
+            expect(IntegrationEngineBase.Instance.GetIntegrationObjectsByIntegrationID('int-1').map(o => o.Name)).toEqual(['OnlyMine', 'AlsoMine']);
+            // The per-connection DAG, NOT the active-objects getter it would fall through to —
+            // the reversed order is what tells them apart.
+            expect(IntegrationEngineBase.Instance.GetObjectsInDependencyOrder('int-1').map(o => o.Name)).toEqual(['AlsoMine', 'OnlyMine']);
+            expect(IntegrationEngineBase.Instance.GetIntegrationObject('int-1', 'OnlyMine')?.Name).toBe('OnlyMine');
+        });
+        // and back out again
+        expect(IntegrationEngineBase.Instance.GetActiveIntegrationObjects('int-1').map(o => o.Name)).toEqual(['Shared']);
+    });
+});
+
+test('a name absent from the per-connection catalog does NOT fall back to the shared one', () => {
+    // Once a connection has its own catalog, a miss means the object is genuinely not in it.
+    // Falling back would resurrect an object this connection never discovered.
+    withPerConnectionCatalog(A, PER_CONNECTION, () => {
+        RunInCatalogScope(A, () => {
+            expect(IntegrationEngineBase.Instance.GetIntegrationObject('int-1', 'Shared')).toBeUndefined();
+        });
+    });
+});
+
+test('the SHARED getters ignore the scope entirely', () => {
+    // The declared floor a discovery overlays onto, and the Shared branch of the resolver, must
+    // never be redirected — a discovery would otherwise overlay its own previous output.
+    withPerConnectionCatalog(A, PER_CONNECTION, () => {
+        RunInCatalogScope(A, () => {
+            expect(IntegrationEngineBase.Instance.GetSharedIntegrationObjects('int-1').map(o => o.Name)).toEqual(['Shared']);
+            expect(IntegrationEngineBase.Instance.GetActiveSharedIntegrationObjects('int-1').map(o => o.Name)).toEqual(['Shared']);
+        });
+    });
+});
+
+test('a scope whose connection has NO per-connection catalog reads shared', () => {
+    withPerConnectionCatalog(A, PER_CONNECTION, () => {
+        RunInCatalogScope(B, () => {
+            expect(IntegrationEngineBase.Instance.GetActiveIntegrationObjects('int-1').map(o => o.Name)).toEqual(['Shared']);
+        });
+    });
 });

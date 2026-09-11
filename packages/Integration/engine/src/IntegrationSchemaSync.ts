@@ -514,7 +514,10 @@ export class IntegrationSchemaSync {
     // object records which declared row it was matched to, and that link is what makes
     // "whose definition is this" answerable later.
     const declaredByName = new Map<string, string>();
-    for (const declared of engine.GetIntegrationObjectsByIntegrationID(IntegrationID)) {
+    // Explicitly the SHARED rows. That getter is scope-aware now, and inside a per-connection run
+    // it would hand back this connection's own rows — so the discovery would overlay its own
+    // previous output and the provenance link back to the declared definition would be lost.
+    for (const declared of engine.GetSharedIntegrationObjects(IntegrationID)) {
       if (declared.ID) declaredByName.set(declared.Name.toLowerCase(), declared.ID);
     }
 
