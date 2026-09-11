@@ -53,6 +53,87 @@ export interface MemberPackageInfo {
   PackageJson: MemberPackageJson;
 }
 
+/** One `packages.client[]` / `server[]` / `shared[]` entry in a member's committed `mj-app.json`. */
+export interface MjAppPackageEntry {
+  name: string;
+  /** `bootstrap` packages are loaded by the host at startup; `library` packages are imported normally. */
+  role?: string;
+  startupExport?: string;
+}
+
+/**
+ * The subset of a member's committed `mj-app.json` this generator reads.
+ *
+ * This is an Open App's OWN declaration of what it ships — tracked in its repo, and therefore
+ * stable in a way the host's `mj.config.cjs` `dynamicPackages` is not (that file is rewritten by
+ * `mj app install`/`enable`/`disable`). Reading the app's declaration rather than the host's
+ * registration is also what keeps the linking half independent of the registration half, per the
+ * axiom in `guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` (§17): a workspace links an app whether or
+ * not a host has registered it.
+ */
+export interface MjAppJson {
+  name?: string;
+  packages?: {
+    client?: MjAppPackageEntry[];
+    server?: MjAppPackageEntry[];
+    shared?: MjAppPackageEntry[];
+  };
+}
+
+/**
+ * A client bootstrap package an Open App member declares in its own `mj-app.json`.
+ *
+ * `role: 'bootstrap'` is the only role that matters here: those are the packages a host appends to
+ * the app shell's generated class-registrations manifest, so they are the ones a shell will import
+ * without ever declaring. Library-role and server entries reach nothing through the shell.
+ */
+export interface OpenAppClientPackage {
+  /** Package name, e.g. `@mj-biz-apps/caliber-ng`. */
+  Package: string;
+  /** Member repo directory whose `mj-app.json` declares it. */
+  Repo: string;
+  /** Whether a workspace member actually provides the package — a declaration can outrun the tree. */
+  Provided: boolean;
+}
+
+/** An Angular app shell the workspace enumerates, with everything it declares. */
+export interface WorkspaceShell {
+  /** Package name from the shell's own package.json, e.g. `mj_explorer`. */
+  Name: string;
+  /** Package directory relative to its member repo root. */
+  RelPath: string;
+  /** Member repo that provides it. */
+  Repo: string;
+  /** Every name in the shell's `dependencies` + `devDependencies` — what it can already resolve. */
+  Declares: string[];
+}
+
+/**
+ * A peer an Open App client bootstrap package needs that a given shell will NOT resolve.
+ *
+ * Reported per shell rather than once: a workspace can enumerate several shells, and a peer one
+ * shell happens to declare must not mask another shell's gap. Measured on the real workspace, the
+ * shell-agnostic form of this rule produced a false negative — a demo app declaring
+ * `@angular/elements` hid MJExplorer's real gap (#4364).
+ */
+export interface ShellPeerGap {
+  /** The shell that will fail to resolve it. */
+  Shell: string;
+  /** The client bootstrap package whose `peerDependencies` names it. */
+  Package: string;
+  /** The unmet peer, e.g. `@angular/elements`. */
+  Peer: string;
+  /** The range the client package asks for. */
+  Range: string;
+  /** Exact version the parent's assembled overrides already pin, or null when nothing pins it. */
+  Pin: string | null;
+}
+
+/** Which declared client bootstrap packages are linked at the parent root. */
+export interface ClientPackageCensus {
+  Entries: Array<{ Package: string; Repo: string; Provided: boolean; Linked: boolean }>;
+}
+
 /** One dependency resolution read from a member's committed lockfile. */
 export interface ResolvedLockEntry {
   Name: string;
@@ -136,6 +217,12 @@ export interface CandidateRepo {
   /** Raw contents of the repo's root `turbo.json`, or null when absent. */
   TurboJson: string | null;
   /**
+   * The member's committed `mj-app.json`, or null when it ships none (a non-Open-App member such
+   * as the MJ monorepo). Its `packages.client[]` is the only registration-independent record of
+   * which packages an app shell will be asked to import.
+   */
+  MjAppJson: MjAppJson | null;
+  /**
    * The member's own workspace globs, relative to its repo root: the `packages:`
    * list of its `pnpm-workspace.yaml` with positives filtered to packages-rooted
    * entries and negations all kept (a `!**\/dist\/**` guard included — they only subtract),
@@ -188,6 +275,14 @@ export interface ParentManifestReport {
   DroppedWorkspaceDevDeps: Array<{ Package: string; Repo: string }>;
   /** Lockfile-derived pins displaced by an explicit member override or a family workspace:* override. */
   SupersededPins: string[];
+  /**
+   * Open App client bootstrap packages found in members' `mj-app.json`. Entries with
+   * `Provided: false` are NOT registered — the declaration names a package no member ships — and
+   * the command warns on each.
+   */
+  OpenAppClientPackages: OpenAppClientPackage[];
+  /** Per-shell unmet peers of the registered client packages — reported, never auto-added. */
+  ShellPeerGaps: ShellPeerGap[];
 }
 
 /** Result of building the parent `package.json`. */

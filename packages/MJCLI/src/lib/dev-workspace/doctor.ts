@@ -21,12 +21,13 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import chalk from 'chalk';
 import type { Dirent } from 'node:fs';
-import { SENTINEL_MARKER } from './build.js';
+import { CollectOpenAppClientPackages, IndexWorkspacePackages, SENTINEL_MARKER } from './build.js';
 import { LOCKFILE_NAME, NODE_MODULES_NAME } from './clean.js';
+import { DetectCandidates } from './detect.js';
 import { DescribeDirSource } from './dir-flag.js';
 import { CollectWorkspaceStatus } from './status.js';
 import { SENTINEL_FILE_NAME } from './write.js';
-import type { DirSource, WorkspaceStatus } from './types.js';
+import type { ClientPackageCensus, DirSource, WorkspaceStatus } from './types.js';
 
 /**
  * Packages that MUST resolve to exactly one copy across a joined workspace.
@@ -406,6 +407,55 @@ function checkOneCopyCensus(census: StoreCensus): DoctorCheck {
 }
 
 /**
+ * Reads which declared client bootstrap packages are linked at the parent root.
+ *
+ * Parent-root linkage is exactly the question that matters: an app shell imports these through its
+ * GENERATED class-registrations manifest without declaring them, so the parent root is the only
+ * place its resolution can find them. Filesystem-reading, like the singleton census beside it.
+ */
+export function CollectClientPackageCensus(parentDir: string): ClientPackageCensus {
+  const members = DetectCandidates(parentDir);
+  const clients = CollectOpenAppClientPackages(members, IndexWorkspacePackages(members));
+  return {
+    Entries: clients.map((client) => ({
+      Package: client.Package,
+      Repo: client.Repo,
+      Provided: client.Provided,
+      Linked: existsSync(path.join(parentDir, NODE_MODULES_NAME, ...client.Package.split('/'))),
+    })),
+  };
+}
+
+/**
+ * Every client bootstrap package a member declares must resolve from the parent root — the v1
+ * requirement in `guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` (§185): "every package named in a
+ * host's dynamicPackages.client[] MUST resolve to an importable package".
+ */
+function checkClientPackages(census: ClientPackageCensus): DoctorCheck {
+  const name = 'open app client packages';
+  if (census.Entries.length === 0) {
+    return { Name: name, Severity: 'skip', Detail: 'no member declares a client bootstrap package in its mj-app.json' };
+  }
+  const broken = census.Entries.filter((entry) => !entry.Linked);
+  if (broken.length === 0) {
+    return {
+      Name: name,
+      Severity: 'pass',
+      Detail: `all ${census.Entries.length} declared client package(s) linked at the parent: ${census.Entries.map((e) => e.Package).join(', ')}`,
+    };
+  }
+  const detail = broken.map((e) => `${e.Package} (${e.Repo}${e.Provided ? '' : ' — no member provides it'})`).join(', ');
+  return {
+    Name: name,
+    Severity: 'fail',
+    Detail:
+      `not linked at the parent: ${detail} — an app shell imports these through its generated ` +
+      `class-registrations manifest without declaring them, so an unlinked one fails at PAGE LOAD with a green ` +
+      `build. Fix: re-run \`mj dev workspace --force\`, then \`pnpm install\` at the parent.`,
+  };
+}
+
+/**
  * Runs every health check at a parent directory. `activePnpmVersion` comes from the
  * caller (a spawn — see `pnpm.ts`) and `dirSource` likewise, so this module reads
  * neither processes nor the environment. Read-only.
@@ -434,6 +484,7 @@ export function CollectDoctorReport(
       checkCandidates(status),
       checkStandaloneInstalls(status),
       checkOneCopyCensus(census),
+      checkClientPackages(CollectClientPackageCensus(parentDir)),
     ],
   };
 }

@@ -291,7 +291,35 @@ export default class DevWorkspace extends Command {
     for (const dup of report.DuplicateFamilyPackages) {
       this.warn(`package ${dup.Package} is provided by ${dup.Repos.join(' AND ')} — the link target is decided by sort order; use --exclude to drop one`);
     }
+    this.reportOpenAppClientPackages(report, verbose);
     this.reportManifestDrops(report, verbose);
+  }
+
+  /**
+   * The Open App half of the assembly report: which client bootstrap packages were registered at
+   * the parent, and which were declared but cannot be. Nothing in the tree DEPENDS on these, so
+   * without this line a developer has no way to tell whether the generator saw their app at all.
+   */
+  private reportOpenAppClientPackages(report: ParentManifestReport, verbose: boolean): void {
+    const registered = report.OpenAppClientPackages.filter((c) => c.Provided);
+    if (registered.length > 0) {
+      const detail = verbose ? `: ${registered.map((c) => c.Package).join(', ')}` : '';
+      this.log(chalk.dim(`dependencies: ${registered.length} Open App client bootstrap package(s) registered at the parent${detail}`));
+    }
+    for (const missing of report.OpenAppClientPackages.filter((c) => !c.Provided)) {
+      this.warn(
+        `${missing.Repo}/mj-app.json declares client package ${missing.Package} but NO member provides it — not ` +
+          `registered; an app shell that loads it will fail to resolve it at page load`
+      );
+    }
+    for (const gap of report.ShellPeerGaps) {
+      const pin = gap.Pin === null ? 'nothing in the parent pins it' : `the parent already pins ${gap.Pin}`;
+      this.warn(
+        `shell ${gap.Shell} does not declare ${gap.Peer} (${gap.Range}), needed by client package ${gap.Package} — ` +
+          `${pin}. Add it to that shell's own package.json: an Angular dev server resolves @angular/* from the ` +
+          `shell, so a copy in the library's own tree is never used, and the page fails to load with a green build`
+      );
+    }
   }
 
   /** The dropped/skipped half of the assembly report: @types, workspace: drops, superseded pins, lockfile skips. */

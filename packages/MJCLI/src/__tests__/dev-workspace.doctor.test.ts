@@ -156,6 +156,35 @@ describe('CollectSingletonCensus', () => {
   });
 });
 
+describe('open app client packages check', () => {
+  /** A member declaring one client bootstrap package, which it also provides. */
+  const caliberFixture = {
+    'bizapps-caliber': {
+      RootPackageJson: { name: 'caliber' },
+      MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/caliber-ng', role: 'bootstrap' }] } },
+      Packages: { Angular: { name: '@mj-biz-apps/caliber-ng' } },
+    },
+  };
+
+  it('fails when a declared client bootstrap package is not linked at the parent', () => {
+    parent = CreateFixtureParent(caliberFixture);
+    const check = checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages');
+    expect(check.Severity).toBe('fail');
+    expect(check.Detail).toContain('@mj-biz-apps/caliber-ng');
+  });
+
+  it('passes once the package is linked at the parent', () => {
+    parent = CreateFixtureParent(caliberFixture);
+    mkdirSync(path.join(parent, 'node_modules', '@mj-biz-apps', 'caliber-ng'), { recursive: true });
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages').Severity).toBe('pass');
+  });
+
+  it('skips when no member declares a client bootstrap package', () => {
+    parent = CreateFixtureParent({ 'bizapps-x': { RootPackageJson: { name: 'x' }, MjAppJson: true } });
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages').Severity).toBe('skip');
+  });
+});
+
 describe('CollectDoctorReport', () => {
   it('passes every check on a generated, installed, single-copy workspace', () => {
     parent = CreateFixtureParent({ 'bizapps-x': { RootPackageJson: { name: 'x' }, MjAppJson: true } });

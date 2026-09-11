@@ -42,10 +42,14 @@ import type {
   CandidateRepo,
   DevDepConflict,
   DuplicateFamilyPackage,
+  MemberPackageJson,
+  OpenAppClientPackage,
   PackageExtension,
   ParentManifestReport,
   RootPackageJsonResult,
+  ShellPeerGap,
   TurboJsonResult,
+  WorkspaceShell,
   WorkspaceSentinel,
 } from './types.js';
 
@@ -85,6 +89,11 @@ export const NPMRC_BASE_LINES: readonly string[] = [
  *
  * Kept here (rather than as prose) so the command's guidance text has one source of
  * truth. Grouped by the MJ package whose peer declaration creates the requirement.
+ *
+ * Scope: this list covers MJ's OWN libraries. Open App client packages declare shell-provided
+ * peers too, and they are NOT enumerated here — MJ's CLI does not hardcode knowledge of specific
+ * Open App repos. They are DERIVED instead, per shell, by {@link ResolveShellPeerGaps} from the
+ * members' committed `mj-app.json` files (#4364).
  */
 export const SHELL_PROVIDED_PEERS: ReadonlyArray<{ Library: string; Peers: readonly string[] }> = [
   {
@@ -362,6 +371,11 @@ function workspaceName(parentDirName: string): string {
   return `${cleaned.length > 0 ? cleaned : 'mj'}-dev-workspace`;
 }
 
+/** Members in plain codepoint order by name — the order every derivation resolves ties in. */
+function sortedByName(members: readonly CandidateRepo[]): CandidateRepo[] {
+  return [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0));
+}
+
 /**
  * Collects every package name the workspace members provide, from the members'
  * OWN package enumerations. These names get `workspace:*` overrides in the
@@ -376,7 +390,7 @@ export function CollectFamilyPackages(members: readonly CandidateRepo[]): {
   Duplicates: DuplicateFamilyPackage[];
 } {
   const providers = new Map<string, Set<string>>();
-  for (const member of [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0))) {
+  for (const member of sortedByName(members)) {
     for (const pkg of member.Packages) {
       const name = pkg.PackageJson.name;
       if (name === undefined || name.length === 0) continue;
@@ -390,6 +404,132 @@ export function CollectFamilyPackages(members: readonly CandidateRepo[]): {
     if (repos.size > 1) duplicates.push({ Package: name, Repos: [...repos].sort() });
   }
   return { Names: [...providers.keys()].sort(), Duplicates: duplicates.sort((a, b) => (a.Package < b.Package ? -1 : 1)) };
+}
+
+/**
+ * Indexes every package the workspace members provide, by package name. One lookup structure
+ * serves both "does the workspace provide this?" (what {@link CollectFamilyPackages} answers with
+ * a name list) and "what does this package declare?" — the peer resolution in
+ * {@link ResolveShellPeerGaps} needs the manifest, not just the name.
+ */
+export function IndexWorkspacePackages(members: readonly CandidateRepo[]): Map<string, MemberPackageJson> {
+  const index = new Map<string, MemberPackageJson>();
+  for (const member of sortedByName(members)) {
+    for (const pkg of member.Packages) {
+      const name = pkg.PackageJson.name;
+      if (name === undefined || name.length === 0) continue;
+      if (!index.has(name)) index.set(name, pkg.PackageJson);
+    }
+  }
+  return index;
+}
+
+/**
+ * The client bootstrap packages the members' own `mj-app.json` files declare.
+ *
+ * These are invisible to every other derivation in this module: nothing in the tree DEPENDS on
+ * them. A host registers them (`dynamicPackages.client`) and `mj codegen manifest` appends a
+ * side-effect import to the app shell's generated class-registrations manifest — so the shell
+ * imports a package it never declared, and pnpm, correctly, never linked (#4364). Emitting them as
+ * parent dependencies is the only place that can be fixed.
+ *
+ * Deliberately registration-INDEPENDENT: a member's client package is collected whether or not a
+ * host has registered it, per the linking ⊥ registration axiom
+ * (`guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` §17). Over-linking is the sanctioned direction —
+ * an unregistered package resolves but does not load.
+ */
+export function CollectOpenAppClientPackages(
+  members: readonly CandidateRepo[],
+  workspacePackages: ReadonlyMap<string, MemberPackageJson>
+): OpenAppClientPackage[] {
+  const collected = new Map<string, OpenAppClientPackage>();
+  for (const member of sortedByName(members)) {
+    for (const entry of member.MjAppJson?.packages?.client ?? []) {
+      if (entry.role !== 'bootstrap') continue; // library entries are imported normally; they need no shell registration
+      if (entry.name.length === 0 || collected.has(entry.name)) continue;
+      collected.set(entry.name, { Package: entry.name, Repo: member.Name, Provided: workspacePackages.has(entry.name) });
+    }
+  }
+  return [...collected.values()].sort((a, b) => (a.Package < b.Package ? -1 : a.Package > b.Package ? 1 : 0));
+}
+
+/** The prefix every MJ Angular library carries — the surface an Open App client package registers into. */
+const MJ_ANGULAR_PREFIX = '@memberjunction/ng-';
+
+/**
+ * The MJ Angular app shells the workspace enumerates — the shells that could actually host an Open
+ * App client package.
+ *
+ * Structural, with no configuration, and all three conditions earn their place:
+ *  - depends on `@angular/core` — a LIBRARY takes it as a peer, so this alone separates app from library;
+ *  - carries an Angular application builder (`@angular/cli` / `@angular/build`) in devDependencies;
+ *  - declares at least one `@memberjunction/ng-*` package — it has an MJ Angular surface.
+ *
+ * The third condition is not decoration. Without it the sole other Angular app in the MJ monorepo,
+ * `mj_angular_elements_demo`, is reported as missing five peers of packages it will never load —
+ * five warnings on every regenerate, which is how a report teaches people to stop reading it. It
+ * declares zero `@memberjunction/ng-*` packages while MJExplorer declares 22, and an Open App
+ * client package peer-depends on eleven of them, so a shell with none cannot be hosting one. It is
+ * a predicate, deliberately not a count threshold.
+ *
+ * Scope, stated rather than implied: only packages the workspace enumerates are candidates, and
+ * detection filters members' `apps/*` globs out because every Open App repo names its shells
+ * `mj_api`/`mj_explorer` and they collide (#3795). A shell under `apps/` is outside the workspace
+ * by design and is not checked here.
+ */
+export function CollectWorkspaceShells(members: readonly CandidateRepo[]): WorkspaceShell[] {
+  const shells: WorkspaceShell[] = [];
+  for (const member of sortedByName(members)) {
+    for (const pkg of member.Packages) {
+      const { name, dependencies = {}, devDependencies = {} } = pkg.PackageJson;
+      if (name === undefined || name.length === 0) continue;
+      const isApp = dependencies['@angular/core'] !== undefined;
+      const hasBuilder = devDependencies['@angular/cli'] !== undefined || devDependencies['@angular/build'] !== undefined;
+      const hostsMJAngular = Object.keys(dependencies).some((dep) => dep.startsWith(MJ_ANGULAR_PREFIX));
+      if (!isApp || !hasBuilder || !hostsMJAngular) continue;
+      shells.push({
+        Name: name,
+        RelPath: pkg.RelPath,
+        Repo: member.Name,
+        Declares: [...Object.keys(dependencies), ...Object.keys(devDependencies)].sort(),
+      });
+    }
+  }
+  return shells.sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0));
+}
+
+/**
+ * Peers of the registered client bootstrap packages that a shell cannot resolve.
+ *
+ * A peer is a gap for a shell when the workspace does not PROVIDE it and the shell does not
+ * DECLARE it. Both halves are required: without the first, every `@memberjunction/*` peer is
+ * noise; without the second, `@angular/core` is a false positive in every shell.
+ *
+ * Why this must not be auto-added to the parent manifest: an Angular dev server externalizes
+ * `@angular/*` and resolves it from the VITE ROOT (the shell), so the copy `auto-install-peers`
+ * places in the consumer's own tree is never consulted — measured, with a control, on 2026-09-11.
+ * The fix belongs in the shell's own tracked package.json, which is what {@link SHELL_PROVIDED_PEERS}
+ * has always said and what MJExplorer already does for `@angular/service-worker`.
+ */
+export function ResolveShellPeerGaps(
+  clientPackages: readonly OpenAppClientPackage[],
+  shells: readonly WorkspaceShell[],
+  workspacePackages: ReadonlyMap<string, MemberPackageJson>,
+  overrides: Readonly<Record<string, string>>
+): ShellPeerGap[] {
+  const gaps: ShellPeerGap[] = [];
+  for (const shell of shells) {
+    const declares = new Set(shell.Declares);
+    for (const client of clientPackages) {
+      const manifest = workspacePackages.get(client.Package);
+      if (manifest === undefined) continue; // unprovided: reported by OpenAppClientPackages, nothing to resolve
+      for (const [peer, range] of Object.entries(manifest.peerDependencies ?? {})) {
+        if (workspacePackages.has(peer) || declares.has(peer)) continue;
+        gaps.push({ Shell: shell.Name, Package: client.Package, Peer: peer, Range: range, Pin: overrides[peer] ?? null });
+      }
+    }
+  }
+  return gaps;
 }
 
 /** Records a first-member-wins value, reporting any differing later declaration as a conflict. */
@@ -558,10 +698,30 @@ function buildPnpmBlock(
  * patches hoisted, lockfile-derived pins, and `workspace:*` overrides for every
  * member-provided package. Every decision lands in the returned Report.
  */
+/**
+ * The parent manifest's `dependencies`: every member-PROVIDED client bootstrap package at
+ * `workspace:*`.
+ *
+ * This key is what puts the package at the parent's `node_modules` root, which is the only place
+ * an app shell that never declared it can resolve it from. An unprovided package is skipped — a
+ * `workspace:*` specifier on a package nothing provides is unresolvable and fails the install, the
+ * same reasoning as the devDependency union's `DroppedWorkspace` branch.
+ */
+export function BuildClientDependencies(clientPackages: readonly OpenAppClientPackage[]): Record<string, string> {
+  const deps: Record<string, string> = {};
+  for (const client of clientPackages) {
+    if (client.Provided) deps[client.Package] = 'workspace:*';
+  }
+  return deps;
+}
+
 export function BuildRootPackageJson(parentDirName: string, members: readonly CandidateRepo[]): RootPackageJsonResult {
   if (members.length === 0) {
     throw new Error('BuildRootPackageJson requires at least one member repo');
   }
+  const workspacePackages = IndexWorkspacePackages(members);
+  const clientPackages = CollectOpenAppClientPackages(members, workspacePackages);
+  const clientDependencies = BuildClientDependencies(clientPackages);
   const family = CollectFamilyPackages(members);
   const union = ResolveDevDependencyUnion(members, new Set(family.Names));
   const pins = DeriveLockfilePins(
@@ -570,11 +730,14 @@ export function BuildRootPackageJson(parentDirName: string, members: readonly Ca
   );
   const blocks = ResolveMemberPnpmBlocks(members);
   const assembled = AssembleParentOverrides(pins.Pins, blocks.Overrides, family.Names);
+  const shellPeerGaps = ResolveShellPeerGaps(clientPackages, CollectWorkspaceShells(members), workspacePackages, assembled.Overrides);
   const { Pin, Source } = ResolvePnpmPin(members);
   const manifest = {
     name: workspaceName(parentDirName),
     private: true,
     packageManager: Pin,
+    // Omitted entirely when empty, so a parent with no Open App member regenerates byte-identically.
+    ...(Object.keys(clientDependencies).length > 0 ? { dependencies: clientDependencies } : {}),
     devDependencies: union.DevDependencies,
     pnpm: buildPnpmBlock(assembled.Overrides, blocks),
   };
@@ -583,7 +746,7 @@ export function BuildRootPackageJson(parentDirName: string, members: readonly Ca
     Conflicts: union.Conflicts,
     PinSource: Source,
     Pin,
-    Report: buildManifestReport(members, family, union, pins, blocks, assembled.SupersededPins),
+    Report: buildManifestReport(members, family, union, pins, blocks, assembled.SupersededPins, clientPackages, shellPeerGaps),
   };
 }
 
@@ -594,7 +757,9 @@ function buildManifestReport(
   union: DevDependencyUnionResult,
   pins: LockfilePinsResult,
   blocks: MemberPnpmBlocksResult,
-  supersededPins: string[]
+  supersededPins: string[],
+  clientPackages: OpenAppClientPackage[],
+  shellPeerGaps: ShellPeerGap[]
 ): ParentManifestReport {
   const lockfileSkips = members.flatMap((m) =>
     m.Lockfile !== null && m.Lockfile.Kind !== 'unsupported' ? m.Lockfile.Skipped.map((skip) => ({ Repo: m.Name, Skip: skip })) : []
@@ -615,6 +780,8 @@ function buildManifestReport(
     SkippedTypesDevDeps: [...union.SkippedTypes].sort(),
     DroppedWorkspaceDevDeps: union.DroppedWorkspace,
     SupersededPins: supersededPins,
+    OpenAppClientPackages: clientPackages,
+    ShellPeerGaps: shellPeerGaps,
   };
 }
 

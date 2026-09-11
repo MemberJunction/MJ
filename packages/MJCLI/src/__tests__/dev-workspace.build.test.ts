@@ -16,7 +16,10 @@ import {
   BuildShellPeerGuidance,
   BuildWorkspaceYaml,
   CollectFamilyPackages,
+  CollectOpenAppClientPackages,
+  CollectWorkspaceShells,
   CompareVersionStrings,
+  IndexWorkspacePackages,
   FALLBACK_PNPM_PIN,
   NPMRC_BASE_LINES,
   ONLY_BUILT_DEPENDENCIES,
@@ -24,10 +27,11 @@ import {
   ResolveDevDependencyUnion,
   ResolveMemberPnpmBlocks,
   ResolvePnpmPin,
+  ResolveShellPeerGaps,
   SENTINEL_MARKER,
   SHELL_PROVIDED_PEERS,
 } from '../lib/dev-workspace/build.js';
-import type { CandidateRepo } from '../lib/dev-workspace/types.js';
+import type { CandidateRepo, MemberPackageInfo, MemberPackageJson } from '../lib/dev-workspace/types.js';
 
 /** Minimal CandidateRepo factory for pure-builder tests. */
 function repo(name: string, overrides?: Partial<CandidateRepo>): CandidateRepo {
@@ -40,6 +44,7 @@ function repo(name: string, overrides?: Partial<CandidateRepo>): CandidateRepo {
     UnsupportedGlobs: [],
     Lockfile: null,
     TurboJson: null,
+    MjAppJson: null,
     WorkspaceGlobs: ['packages/*'],
     WorkspaceGlobsSource: 'no-workspace-yaml',
     ...overrides,
@@ -292,8 +297,16 @@ describe('ResolveDevDependencyUnion', () => {
 });
 
 /** Member package shorthand for family/enumeration tests. */
-function pkg(relPath: string, name: string): { RelPath: string; PackageJson: { name: string } } {
-  return { RelPath: relPath, PackageJson: { name } };
+function pkg(relPath: string, name: string, extra?: Partial<MemberPackageJson>): MemberPackageInfo {
+  return { RelPath: relPath, PackageJson: { name, ...extra } };
+}
+
+/** A member whose mj-app.json declares one client bootstrap package, which it also provides. */
+function openAppMember(repoName: string, packageName: string, extra?: Partial<MemberPackageJson>): CandidateRepo {
+  return repo(repoName, {
+    MjAppJson: { packages: { client: [{ name: packageName, role: 'bootstrap' }] } },
+    Packages: [pkg('packages/Angular', packageName, extra)],
+  });
 }
 
 describe('CollectFamilyPackages', () => {
@@ -312,6 +325,58 @@ describe('CollectFamilyPackages', () => {
       repo('MJ-clone', { Packages: [pkg('packages/MJCore', '@memberjunction/core')] }),
     ]);
     expect(Duplicates).toEqual([{ Package: '@memberjunction/core', Repos: ['MJ', 'MJ-clone'] }]);
+  });
+});
+
+describe('CollectOpenAppClientPackages', () => {
+  const caliber = openAppMember('bizapps-caliber', '@mj-biz-apps/caliber-ng');
+
+  it('collects a member-provided client bootstrap package', () => {
+    expect(CollectOpenAppClientPackages([caliber], IndexWorkspacePackages([caliber]))).toEqual([
+      { Package: '@mj-biz-apps/caliber-ng', Repo: 'bizapps-caliber', Provided: true },
+    ]);
+  });
+
+  it('marks a client package NO member provides as unprovided rather than dropping it', () => {
+    const ghost = repo('bizapps-ghost', {
+      MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/ghost-ng', role: 'bootstrap' }] } },
+    });
+    expect(CollectOpenAppClientPackages([ghost], IndexWorkspacePackages([ghost]))).toEqual([
+      { Package: '@mj-biz-apps/ghost-ng', Repo: 'bizapps-ghost', Provided: false },
+    ]);
+  });
+
+  it('ignores library-role and server entries — only client bootstrap packages reach a shell', () => {
+    const mixed = repo('bizapps-mixed', {
+      MjAppJson: {
+        packages: {
+          client: [
+            { name: '@mj-biz-apps/mixed-ng', role: 'bootstrap' },
+            { name: '@mj-biz-apps/mixed-lib', role: 'library' },
+          ],
+          server: [{ name: '@mj-biz-apps/mixed-server', role: 'bootstrap' }],
+        },
+      },
+      Packages: [
+        pkg('packages/Angular', '@mj-biz-apps/mixed-ng'),
+        pkg('packages/Lib', '@mj-biz-apps/mixed-lib'),
+        pkg('packages/Server', '@mj-biz-apps/mixed-server'),
+      ],
+    });
+    const names = CollectOpenAppClientPackages([mixed], IndexWorkspacePackages([mixed])).map((c) => c.Package);
+    expect(names).toEqual(['@mj-biz-apps/mixed-ng']);
+  });
+
+  it('de-duplicates a package two members both declare, keeping the first by repo sort order', () => {
+    const a = openAppMember('aaa-repo', '@mj-biz-apps/dup-ng');
+    const b = openAppMember('zzz-repo', '@mj-biz-apps/dup-ng');
+    const collected = CollectOpenAppClientPackages([b, a], IndexWorkspacePackages([b, a]));
+    expect(collected).toHaveLength(1);
+    expect(collected[0].Repo).toBe('aaa-repo');
+  });
+
+  it('returns nothing for a member with no mj-app.json', () => {
+    expect(CollectOpenAppClientPackages([repo('MJ')], IndexWorkspacePackages([repo('MJ')]))).toEqual([]);
   });
 });
 
@@ -526,6 +591,137 @@ describe('BuildRootPackageJson', () => {
       { Repo: 'MJ', Skip: { Name: 'fstream', Version: 'tar-fs@3.1.1', Reason: 'non-semver resolution' } },
     ]);
     expect(result.Report.DroppedWorkspaceDevDeps).toEqual([]); // provided by a member — kept, not dropped
+  });
+});
+
+describe('BuildRootPackageJson dependencies', () => {
+  const caliber = openAppMember('bizapps-caliber', '@mj-biz-apps/caliber-ng');
+
+  it('registers a member-provided client bootstrap package at workspace:*', () => {
+    const manifest = JSON.parse(BuildRootPackageJson('mj-dev', [caliber]).Content);
+    expect(manifest.dependencies).toEqual({ '@mj-biz-apps/caliber-ng': 'workspace:*' });
+  });
+
+  it('omits the dependencies key entirely when no member declares a client package', () => {
+    const manifest = JSON.parse(BuildRootPackageJson('mj-dev', [repo('MJ')]).Content);
+    expect(manifest).not.toHaveProperty('dependencies');
+  });
+
+  it('never registers a client package no member provides, and reports it', () => {
+    const ghost = repo('bizapps-ghost', {
+      MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/ghost-ng', role: 'bootstrap' }] } },
+    });
+    const result = BuildRootPackageJson('mj-dev', [ghost]);
+    expect(JSON.parse(result.Content)).not.toHaveProperty('dependencies');
+    expect(result.Report.OpenAppClientPackages).toEqual([
+      { Package: '@mj-biz-apps/ghost-ng', Repo: 'bizapps-ghost', Provided: false },
+    ]);
+  });
+});
+
+describe('shell peer gaps', () => {
+  const SHELL_DEPS = { '@angular/core': '21.1.3', '@angular/common': '21.1.3', '@memberjunction/ng-shared': '6.1.0' };
+  const SHELL_DEV = { '@angular/cli': '21.1.3' };
+  const shell = (extraDeps?: Record<string, string>): CandidateRepo =>
+    repo('MJ', {
+      Packages: [
+        pkg('packages/MJExplorer', 'mj_explorer', {
+          dependencies: { ...SHELL_DEPS, ...extraDeps },
+          devDependencies: SHELL_DEV,
+        }),
+      ],
+    });
+  const caliber = openAppMember('bizapps-caliber', '@mj-biz-apps/caliber-ng', {
+    peerDependencies: { '@angular/core': '^21.1.3', '@angular/elements': '^21.1.3' },
+  });
+
+  it('detects an Angular app shell by its own dependencies, never a library', () => {
+    const library = openAppMember('bizapps-lib', '@mj-biz-apps/lib-ng', {
+      peerDependencies: { '@angular/core': '^21.1.3' }, // libraries take core as a PEER
+    });
+    expect(CollectWorkspaceShells([shell(), library]).map((s) => s.Name)).toEqual(['mj_explorer']);
+  });
+
+  // mj_angular_elements_demo is a real Angular app in the MJ monorepo that hosts no MJ Angular
+  // surface. Without this condition it reported five peers of packages it will never load, on
+  // every regenerate — noise that teaches people to stop reading the report.
+  it('ignores an Angular app that declares no @memberjunction/ng-* package', () => {
+    const standaloneDemo = repo('MJ-demo', {
+      Packages: [
+        pkg('packages/Demo', 'elements_demo', {
+          dependencies: { '@angular/core': '21.1.3', '@memberjunction/core': '6.1.0' }, // no ng-* surface
+          devDependencies: SHELL_DEV,
+        }),
+      ],
+    });
+    expect(CollectWorkspaceShells([shell(), standaloneDemo]).map((s) => s.Name)).toEqual(['mj_explorer']);
+  });
+
+  it('reports a peer the shell does not declare, with the pin the parent already derived', () => {
+    const members = [shell(), caliber];
+    const index = IndexWorkspacePackages(members);
+    const gaps = ResolveShellPeerGaps(
+      CollectOpenAppClientPackages(members, index),
+      CollectWorkspaceShells(members),
+      index,
+      { '@angular/elements': '21.2.22' }
+    );
+    expect(gaps).toEqual([
+      {
+        Shell: 'mj_explorer',
+        Package: '@mj-biz-apps/caliber-ng',
+        Peer: '@angular/elements',
+        Range: '^21.1.3',
+        Pin: '21.2.22',
+      },
+    ]);
+  });
+
+  it('never reports a peer the shell declares, nor one a workspace member provides', () => {
+    const members = [shell({ '@angular/elements': '21.2.22' }), caliber];
+    const index = IndexWorkspacePackages(members);
+    expect(
+      ResolveShellPeerGaps(CollectOpenAppClientPackages(members, index), CollectWorkspaceShells(members), index, {})
+    ).toEqual([]);
+  });
+
+  it('reports Pin null when nothing in the parent pins the missing peer', () => {
+    const members = [shell(), caliber];
+    const index = IndexWorkspacePackages(members);
+    const gaps = ResolveShellPeerGaps(
+      CollectOpenAppClientPackages(members, index),
+      CollectWorkspaceShells(members),
+      index,
+      {}
+    );
+    expect(gaps[0].Pin).toBeNull();
+  });
+
+  // The shell-agnostic form of this rule returned a FALSE NEGATIVE on the real workspace:
+  // a demo app declaring @angular/elements hid MJExplorer's real gap (#4364).
+  it('does not let one shell declaring a peer mask another shell that does not', () => {
+    const demo = repo('MJ-demo', {
+      Packages: [
+        pkg('packages/Demo', 'elements_demo', {
+          dependencies: { ...SHELL_DEPS, '@angular/elements': '21.2.22' },
+          devDependencies: SHELL_DEV,
+        }),
+      ],
+    });
+    const members = [shell(), demo, caliber];
+    const index = IndexWorkspacePackages(members);
+    const gaps = ResolveShellPeerGaps(
+      CollectOpenAppClientPackages(members, index),
+      CollectWorkspaceShells(members),
+      index,
+      {}
+    );
+    expect(gaps.map((g) => g.Shell)).toEqual(['mj_explorer']);
+  });
+
+  it('flows the gaps into the manifest report', () => {
+    const report = BuildRootPackageJson('mj-dev', [shell(), caliber]).Report;
+    expect(report.ShellPeerGaps.map((g) => g.Peer)).toEqual(['@angular/elements']);
   });
 });
 

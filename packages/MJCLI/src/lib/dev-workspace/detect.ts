@@ -28,7 +28,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { ReadMemberLockfile } from './lockfile.js';
-import type { CandidateReason, CandidateRepo, MemberPackageInfo, MemberPackageJson, WorkspaceGlobsSource } from './types.js';
+import type { CandidateReason, CandidateRepo, MemberPackageInfo, MemberPackageJson, MjAppJson, WorkspaceGlobsSource } from './types.js';
 
 /** Root package name that identifies the MJ monorepo checkout. */
 export const MJ_MONOREPO_PACKAGE_NAME = 'memberjunction-workspace';
@@ -50,11 +50,11 @@ export interface DetectOptions {
 }
 
 /** Reads and parses a JSON file, returning null when absent; throws on unparseable JSON. */
-function readJsonFile(filePath: string): MemberPackageJson | null {
+function readJsonFile<T>(filePath: string): T | null {
   if (!existsSync(filePath)) return null;
   const raw = readFileSync(filePath, 'utf8');
   try {
-    return JSON.parse(raw) as MemberPackageJson;
+    return JSON.parse(raw) as T;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Unparseable JSON at ${filePath}: ${message}`);
@@ -310,7 +310,7 @@ function detectReasons(repoPath: string, rootPkg: MemberPackageJson, packages: M
  */
 export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | null {
   const repoPath = path.join(parentDir, dirName);
-  const rootPkg = readJsonFile(path.join(repoPath, 'package.json'));
+  const rootPkg = readJsonFile<MemberPackageJson>(path.join(repoPath, 'package.json'));
   if (rootPkg === null) return null;
   const workspaceGlobs = loadWorkspaceGlobs(repoPath);
   const enumerated = loadRepoPackages(repoPath, workspaceGlobs.Globs);
@@ -324,6 +324,7 @@ export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | nu
     UnsupportedGlobs: enumerated.UnsupportedGlobs,
     Lockfile: ReadMemberLockfile(repoPath),
     TurboJson: existsSync(turboPath) ? readFileSync(turboPath, 'utf8') : null,
+    MjAppJson: readJsonFile<MjAppJson>(path.join(repoPath, 'mj-app.json')),
     WorkspaceGlobs: workspaceGlobs.Globs,
     WorkspaceGlobsSource: workspaceGlobs.Source,
   };

@@ -34,6 +34,29 @@ describe('DetectCandidates', () => {
     expect(candidates[0].Reasons).toContain('mj-app-json');
   });
 
+  it('reads a member mj-app.json into MjAppJson, client entries included', () => {
+    parent = CreateFixtureParent({
+      'bizapps-caliber': {
+        RootPackageJson: { name: 'caliber' },
+        MjAppJson: {
+          name: 'mj-bizapps-caliber',
+          packages: { client: [{ name: '@mj-biz-apps/caliber-ng', role: 'bootstrap', startupExport: 'LoadCaliber' }] },
+        },
+      },
+    });
+    const [member] = DetectCandidates(parent);
+    expect(member.MjAppJson?.packages?.client).toEqual([
+      { name: '@mj-biz-apps/caliber-ng', role: 'bootstrap', startupExport: 'LoadCaliber' },
+    ]);
+  });
+
+  it('leaves MjAppJson null for a member that ships none', () => {
+    parent = CreateFixtureParent({
+      'plain-repo': { RootPackageJson: { name: 'plain' }, Packages: { Lib: { name: '@mj-biz-apps/lib' } } },
+    });
+    expect(DetectCandidates(parent)[0].MjAppJson).toBeNull();
+  });
+
   it('detects a repo whose library packages mention the @mj-biz-apps scope (name or deps)', () => {
     parent = CreateFixtureParent({
       producer: {

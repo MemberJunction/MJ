@@ -77,6 +77,26 @@ commands as plain `mj dev workspace ...`.
 - Genuine version conflicts between members are **reported, not hidden** (highest committed
   version wins; the report names every declaring package).
 
+### Open App client packages
+
+A member's `mj-app.json` `packages.client[]` entries with `role: bootstrap` are registered in the
+generated parent `package.json` as `dependencies` at `workspace:*`. That is deliberate
+over-linking: a client package is linked whether or not a host has registered it in
+`dynamicPackages.client`, because linking and registration are independent
+([`OPEN_APP_WORKSPACE_LINKING_SPEC.md`](OPEN_APP_WORKSPACE_LINKING_SPEC.md) §17) — an unregistered
+package resolves but does not load. Without this the shell imports the package through its
+*generated* class-registrations manifest while nothing in the tree declares it, so pnpm never links
+it.
+
+If one of those packages declares a peer your app shell does not, the generator **warns and names
+it with the version the parent already pins**; it does not add it for you. Declare it in the
+shell's own `package.json`, the way MJExplorer declares `@angular/service-worker` and
+`@angular/elements`. An Angular dev server externalizes `@angular/*` and resolves it from the
+**vite root** (the shell), so a copy in the library's own `node_modules` is never consulted — which
+is why this fails at page load with a completely green build.
+
+`mj dev workspace doctor` fails when a declared client package is not linked at the parent.
+
 ## Recovery
 
 Someone (or an IDE) ran `npm install` / `pnpm install` **inside** a member repo? `status` will flag
