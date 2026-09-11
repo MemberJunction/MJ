@@ -20,6 +20,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Personas&Name=StyleDescriptors"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:12.826Z",
+            "checksum": "abe0726ecf454566fd61386b19bf6e8949eefa217a1e9fa7f491026992907102"
           }
         }
       ]
@@ -49,6 +53,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Persona Vendors&Name=VendorSettings"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:12.827Z",
+            "checksum": "b85e6798025d11d710446b7e85b008c3c0f8d90d673967a0c9e2caa3700db6ab"
           }
         }
       ]
@@ -78,6 +86,10 @@
           ],
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Agent Personas&Name=StyleOverride"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:12.827Z",
+            "checksum": "abbeb6cc065855c8eb01480e9886c5eada458ad9b34075277fac1db7a6632635"
           }
         }
       ]

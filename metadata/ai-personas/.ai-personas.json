@@ -11,6 +11,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "430E5C17-AC61-4939-A4A6-71E088033238"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.730Z",
+      "checksum": "419d89de9218fa6edc26edac601013092b892f2439f821afaac9b4a19c6af8e3"
     }
   },
   {
@@ -25,6 +29,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "B7FB7475-3EE0-46B3-A062-9F6A34596B8D"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.734Z",
+      "checksum": "6d5c036b6aaf004a0306c70e87e39ee2f68c80f6e7a0fea1c0acec65a92d2340"
     }
   },
   {
@@ -39,6 +47,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "EC902A09-A6AD-4FC3-8A91-D92BD9437BFE"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.734Z",
+      "checksum": "e8b79fef335399625d11aa017c55925b9df26abff21e054a34f2b02089548532"
     }
   },
   {
@@ -53,6 +65,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "B46B80F9-2BE1-4B6E-8143-4353703D655A"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.734Z",
+      "checksum": "dc8766043431d28f5d15811c1bfb9422b849dc0eafe46b07f87d626b92e618c6"
     }
   },
   {
@@ -67,6 +83,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "6C10F8B6-33F6-48A0-95C1-7B3A61AA4FFB"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.725Z",
+      "checksum": "3316ad1c5ec65262dc89145fc926a038489b9e27f49127cc252e8041f3d15c80"
     }
   },
   {
@@ -81,6 +101,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "0B33E0E1-24B3-4674-9240-C651DE032D2B"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.730Z",
+      "checksum": "6a92ba05b4b18c046df6a60fb2ead47b91308c1e2ef912ca624784530112bf47"
     }
   },
   {
@@ -95,6 +119,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "077971E4-AF0C-44E6-B638-A010BC167E70"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.729Z",
+      "checksum": "37039f7a5cc323320e4d13a41e5d3fc88116876e028fa74ac753f4a1b88f66e3"
     }
   },
   {
@@ -109,6 +137,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "C2E533E1-02B0-4CAC-9A43-966E9517CE12"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.729Z",
+      "checksum": "921e28132688bb47be1639ec8457fa2c82790e938015676d7653c8b3ed8f3bd2"
     }
   },
   {
@@ -123,6 +155,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "4A7F6A9D-0AB2-48AA-969D-13AFED76F40C"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.730Z",
+      "checksum": "8988c3048a5eb58a200f8edae7fb067bf1f1d8ee4b3b111b9b549ebc1cf03db2"
     }
   },
   {
@@ -137,6 +173,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "73EF19EA-C655-49A2-AA47-0420975AC6A1"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.740Z",
+      "checksum": "7994152297af2ae32393f0a88c5d9518f03c0b328d6da19903f202f87ae8076e"
     }
   },
   {
@@ -151,6 +191,10 @@
     "relatedEntities": {},
     "primaryKey": {
       "ID": "A6CD4025-9B88-400D-82DB-BAD2992C78D9"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.757Z",
+      "checksum": "49492afba112c59dc47d0f722f3616f4290e8ad27f9948bdcde3167dca5a9282"
     }
   }
 ]

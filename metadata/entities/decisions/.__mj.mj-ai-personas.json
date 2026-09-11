@@ -19,6 +19,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Personas&Name=ID"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:13.123Z",
+            "checksum": "7083dd713467ad4e8fef75e9545eed1805c63d81ee6974712c6ad37ad3b6775d"
           }
         },
         {
@@ -32,6 +36,10 @@
           },
           "primaryKey": {
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: AI Personas&Name=Name"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:13.158Z",
+            "checksum": "1f4dad6d915a30876849482c2f11bafda6ea84e3002b166bf7e139515aa2b476"
           }
         },
         {
