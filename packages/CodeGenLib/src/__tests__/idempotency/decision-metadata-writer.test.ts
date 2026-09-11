@@ -10,19 +10,24 @@ import {
    buildSettingLookup,
    buildAppEntityLookup,
    writeIfChanged,
-   DecisionRecord
+   DecisionRecord,
+   FieldDecisionRecord
 } from '../../Database/decision-metadata-format';
-import { configInfo } from '../../Config/config';
+import { configInfo, initializeConfig, currentWorkingDirectory } from '../../Config/config';
 
 describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
    let tmpDir: string;
    let origMetaDir: string | undefined;
    let origDecisionConfig: typeof configInfo.decisionMetadata;
+   let origOutput: typeof configInfo.output;
+   let origCwd: string;
 
    beforeEach(async () => {
       tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mj-decision-test-'));
       origMetaDir = configInfo.metadataDirectory;
       origDecisionConfig = configInfo.decisionMetadata;
+      origOutput = [...configInfo.output];
+      origCwd = currentWorkingDirectory;
 
       // Create fake metadata root with entities/.mj-sync.json
       const entitiesDir = path.join(tmpDir, 'entities');
@@ -31,6 +36,8 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
 
       configInfo.metadataDirectory = tmpDir;
       configInfo.decisionMetadata = { enabled: true };
+      // Remove any ambient MetadataSync from configInfo.output so tmpDir-based tests use tmpDir
+      configInfo.output = configInfo.output.filter(o => o.type.toUpperCase() !== 'METADATASYNC');
 
       DecisionMetadataWriter.Instance.clear();
    });
@@ -38,6 +45,8 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
    afterEach(async () => {
       configInfo.metadataDirectory = origMetaDir;
       configInfo.decisionMetadata = origDecisionConfig;
+      configInfo.output = origOutput;
+      initializeConfig(origCwd);
       await fs.remove(tmpDir);
    });
 
@@ -243,7 +252,7 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
       expect(writer.recordsRemovedCount).toBe(1);
 
       const updated = await fs.readJson(filePath);
-      const fieldNames = updated[0].relatedEntities['MJ: Entity Fields'].map((f: any) => f.fields.Name);
+      const fieldNames = updated[0].relatedEntities['MJ: Entity Fields'].map((f: FieldDecisionRecord) => f.fields.Name);
       expect(fieldNames).toEqual(['ActiveStatus']);
       expect(fieldNames).not.toContain('DroppedColumn');
    });
@@ -296,5 +305,52 @@ describe('T14 — Decision Metadata Writer & Formatter (C7, §3.5)', () => {
 
       expect(writer.recordsWrittenCount).toBe(0);
       expect(writer.recordsSkippedCount).toBeGreaterThan(0);
+   });
+
+   it('throws an error when MetadataSync is missing and decision metadata is enabled or auto', () => {
+      configInfo.metadataDirectory = undefined;
+      configInfo.output = configInfo.output.filter(o => o.type.toUpperCase() !== 'METADATASYNC');
+      const writer = DecisionMetadataWriter.Instance;
+
+      // When enabled: true
+      configInfo.decisionMetadata = { enabled: true };
+      expect(() => writer.resolveDecisionsDirectory()).toThrowError(
+         /No 'MetadataSync' output entry or 'metadataDirectory' found in config, but decision metadata is enabled/
+      );
+
+      // When enabled is undefined ('auto')
+      configInfo.decisionMetadata = undefined;
+      expect(() => writer.resolveDecisionsDirectory()).toThrowError(
+         /No 'MetadataSync' output entry or 'metadataDirectory' found in config, but decision metadata is enabled \(auto\)/
+      );
+   });
+
+   it('returns null and does not throw when MetadataSync is missing but decision metadata is explicitly disabled', () => {
+      configInfo.metadataDirectory = undefined;
+      configInfo.output = configInfo.output.filter(o => o.type.toUpperCase() !== 'METADATASYNC');
+      configInfo.decisionMetadata = { enabled: false };
+
+      const writer = DecisionMetadataWriter.Instance;
+      expect(writer.resolveDecisionsDirectory()).toBeNull();
+   });
+
+   it('resolves decisions directory using MetadataSync output entry when present', () => {
+      configInfo.metadataDirectory = undefined;
+      configInfo.output = [
+         ...configInfo.output.filter(o => o.type.toUpperCase() !== 'METADATASYNC'),
+         { type: 'MetadataSync', directory: path.relative(currentWorkingDirectory, tmpDir) }
+      ];
+      const writer = DecisionMetadataWriter.Instance;
+      const resolved = writer.resolveDecisionsDirectory();
+      expect(resolved).toBe(path.join(tmpDir, 'entities', 'decisions'));
+   });
+
+   it('resolves decisions directory to <repoRoot>/metadata/entities/decisions when loading mj.config.cjs', () => {
+      const repoRoot = path.resolve(__dirname, '../../../../..');
+      initializeConfig(repoRoot);
+
+      const writer = DecisionMetadataWriter.Instance;
+      const resolved = writer.resolveDecisionsDirectory();
+      expect(resolved).toBe(path.join(repoRoot, 'metadata', 'entities', 'decisions'));
    });
 });

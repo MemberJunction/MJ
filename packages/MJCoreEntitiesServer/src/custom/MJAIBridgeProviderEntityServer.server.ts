@@ -32,6 +32,7 @@ export const KNOWN_BRIDGE_PROVIDER_FEATURE_KEYS: ReadonlySet<string> = new Set<s
     'DTMF',
     'CallTransfer',
     'Recording',
+    'DetachedMediaPlane',
 ]);
 
 /**
