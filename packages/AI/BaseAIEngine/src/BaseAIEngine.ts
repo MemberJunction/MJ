@@ -1802,7 +1802,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
 
         for (const am of agentRecords) {
             const normId = NormalizeUUID(am.ModalityID);
-            const isAllowed = am.IsAllowed !== false && (am.IsAllowed as unknown) !== 0;
+            const isAllowed = am.IsAllowed !== false;
             if (isAllowed) {
                 const modality = this._modalities.find(m => UUIDsEqual(m.ID, am.ModalityID));
                 if (modality) {
@@ -1854,7 +1854,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         // Process junction records
         for (const mm of modelModalityRecords) {
             const normModalityId = NormalizeUUID(mm.ModalityID);
-            const isExplicitlyDisabled = mm.IsSupported === false || (mm.IsSupported as unknown) === 0;
+            const isExplicitlyDisabled = mm.IsSupported === false;
             if (!isExplicitlyDisabled) {
                 const modality = this._modalities.find(m => UUIDsEqual(m.ID, mm.ModalityID));
                 if (modality) {
@@ -1893,7 +1893,7 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             );
             if (agentRecord) {
                 // Explicit record exists: IsAllowed is authoritative (IsAllowed = false is a hard veto)
-                return agentRecord.IsAllowed !== false && (agentRecord.IsAllowed as unknown) !== 0;
+                return agentRecord.IsAllowed !== false;
             }
         }
 
