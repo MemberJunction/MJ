@@ -47081,6 +47081,8 @@ export interface MJAIBridgeProviderEntity_IBridgeProviderFeatures {
     CallTransfer?: boolean;
     /** The bridge can request platform recording (subject to per-jurisdiction consent handling). */
     Recording?: boolean;
+    /** Detached media plane: platform terminates live audio directly; bridge attaches a sideband (e.g. OpenAISipBridge). */
+    DetachedMediaPlane?: boolean;
 }
 
 /**

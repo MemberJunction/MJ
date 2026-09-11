@@ -186,5 +186,18 @@
       "lastModified": "2026-06-16T01:17:23.306Z",
       "checksum": "43e19b6e5c86643bc96b1115f26d5ebf9c1a420c32d650e804f821aaa2e4a30d"
     }
+  },
+  {
+    "fields": {
+      "Name": "OpenAI Direct SIP",
+      "Description": "OpenAI Direct SIP telephony bridge with a detached media plane. Inbound SIP call legs terminate directly at OpenAI while MemberJunction attaches a sideband connection for signaling, telemetry, tool execution, and DTMF observation.",
+      "BridgeType": "Telephony",
+      "DriverClass": "OpenAISipBridge",
+      "Status": "Active",
+      "SupportedFeatures": "{\"InboundRouting\":true,\"DTMF\":true,\"CallTransfer\":true,\"DetachedMediaPlane\":true}"
+    },
+    "primaryKey": {
+      "ID": "98B5C42D-4DFB-455F-AA36-F5B478C5F2D1"
+    }
   }
 ]

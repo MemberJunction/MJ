@@ -973,6 +973,30 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
     private wireTransportSeam(active: ActiveBridgeSession): void {
         const { Bridge, RealtimeSession } = active;
 
+        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
+        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
+        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
+        RealtimeSession.OnInterruption(() => {
+            if (this.diagOutbound.has(active.SessionBridgeID)) {
+                LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
+            }
+            Bridge.FlushOutboundMedia();
+            // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
+            // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
+            if (active.RoomKey) {
+                this.clearRoomModeratorState(active.RoomKey, false);
+                if (active.HoldsFloor) {
+                    this.releaseRoomFloor(active);
+                }
+            }
+        });
+
+        if (Bridge.Features.DetachedMediaPlane) {
+            // Detached media plane (e.g. OpenAISipBridge): the carrier/platform terminates the media leg
+            // directly with the AI provider. MJ is NOT in the media relay path.
+            return;
+        }
+
         // Inbound: endpoint media → the agent hears (and, for a video model, SEES) it. The frame's
         // Track tags the plane, so a human's camera (`video-in`) reaches the model as a `video` frame.
         Bridge.OnMedia((frame: BridgeMediaFrame) => {
@@ -1012,24 +1036,6 @@ export class AIBridgeEngine extends BaseSingleton<AIBridgeEngine> implements ISt
             active.LastActivityMs = Date.now();
             const track: BridgeMediaTrackKind = 'video-out';
             Bridge.SendMedia(track, this.arrayBufferToFrame(chunk, track));
-        });
-
-        // Barge-in: on a TRUE interruption (the user speaks over the agent), the model stops generating —
-        // but the driver may still hold queued outbound audio that would keep playing. Flush it so the
-        // agent goes quiet immediately. Without this, interruption "doesn't work" on the bridge surface.
-        RealtimeSession.OnInterruption(() => {
-            if (this.diagOutbound.has(active.SessionBridgeID)) {
-                LogStatusEx({ message: `[AIBridgeEngine][diag] barge-in — flushing the agent's queued audio (bridge ${active.SessionBridgeID}).`, verboseOnly: true });
-            }
-            Bridge.FlushOutboundMedia();
-            // A human cut in → any moderator decision staged for the prior turn is now stale. Drop the queued
-            // speakers (the human's new turn will drive a fresh decision); also free the floor this agent held.
-            if (active.RoomKey) {
-                this.clearRoomModeratorState(active.RoomKey, false);
-                if (active.HoldsFloor) {
-                    this.releaseRoomFloor(active);
-                }
-            }
         });
     }
 
