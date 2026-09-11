@@ -25,10 +25,29 @@ import type {
 } from '@memberjunction/core-entities';
 import type { SourceSchemaInfo, SourceObjectInfo, SourceFieldInfo } from './types';
 import { ReadFieldSyncDirective, WriteFieldSyncDirective } from './SyncDirectives.js';
+import { CatalogWriter, PerConnectionCatalogWriter, SharedCatalogWriter } from './CatalogWriter.js';
 import { ActionMetadataGenerator, type IntegrationObjectInfo } from './ActionMetadataGenerator';
 
 export interface PersistSchemaOptions {
   IntegrationID: string;
+  /**
+   * The connection this discovery belongs to. Required to write the per-connection catalog; the
+   * IntegrationID stays alongside it because the declared floor a discovery overlays is still
+   * looked up by connector, and because a per-connection row carries it denormalised.
+   */
+  CompanyIntegrationID?: string;
+  /**
+   * Which catalog this discovery persists into.
+   *
+   * 'Shared' is the default and is bytes-identical to the behaviour before the per-connection
+   * catalog existed, so the tables can be created, backfilled and verified against live traffic
+   * before anything reads or writes them.
+   *
+   * 'PerConnection' requires CompanyIntegrationID and REFUSES rather than falling back: a silent
+   * shared write would put one connection's discovery into every other connection's catalog, which
+   * is the failure the whole design exists to remove, and it would report success.
+   */
+  CatalogSource?: 'Shared' | 'PerConnection';
   SourceSchema: SourceSchemaInfo;
   ContextUser: UserInfo;
   Provider?: IMetadataProvider;
@@ -471,14 +490,41 @@ export class IntegrationSchemaSync {
     // skewed the sync DAG, so it was removed. Whatever FK info SourceSchema.Objects already carries flows
     // through the Declared/Discovered merge as-is. (EnrichSchemaConstraints remains exported for offline use.)
 
-    // Load existing objects for this integration from cache
-    const existingObjects = engine.GetIntegrationObjectsByIntegrationID(IntegrationID);
+    // Which catalog this discovery writes into. Refuse rather than fall back: writing one
+    // connection's discovery into the catalog every other connection reads is exactly the failure
+    // this design removes, and it would report success.
+    if (opts.CatalogSource === 'PerConnection' && !opts.CompanyIntegrationID) {
+      throw new Error(
+        'PER_CONNECTION_CATALOG_MISSING: CatalogSource is PerConnection but no CompanyIntegrationID '
+        + 'was supplied. Refusing to fall back to the shared catalog, which would persist this '
+        + "connection's discovery into every other connection of the same connector.",
+      );
+    }
+    const writer: CatalogWriter = opts.CatalogSource === 'PerConnection'
+      ? new PerConnectionCatalogWriter(md, opts.CompanyIntegrationID!, IntegrationID, ContextUser, new Date())
+      : new SharedCatalogWriter(md, IntegrationID, ContextUser);
+
+    // Existing rows come from the DATABASE, not the engine cache. The cache is refreshed between
+    // discovery passes, not within one, so the second pass of a two-pass run must be able to see
+    // what the first pass persisted. It is also the only thing that works for the per-connection
+    // catalog: its cached rows are read-only projections with no Save().
+    const existingObjects = await writer.ObjectsInScope();
+
+    // The declared floor a discovery overlays is still looked up by CONNECTOR: a per-connection
+    // object records which declared row it was matched to, and that link is what makes
+    // "whose definition is this" answerable later.
+    const declaredByName = new Map<string, string>();
+    for (const declared of engine.GetIntegrationObjectsByIntegrationID(IntegrationID)) {
+      if (declared.ID) declaredByName.set(declared.Name.toLowerCase(), declared.ID);
+    }
 
     // Phase 1: upsert objects. Object upserts must complete before field upserts
     // (fields need ObjectID). Within this phase, upserts are independent so we
     // batch-execute via Promise.all (concurrency cap to avoid hammering the DB).
     const objectUpserts = SourceSchema.Objects.map((srcObj) => async () => {
-      const objResult = await IntegrationSchemaSync.UpsertObject(md, IntegrationID, srcObj, existingObjects, ContextUser);
+      const objResult = await IntegrationSchemaSync.UpsertObject(
+        writer, srcObj, existingObjects, declaredByName.get(srcObj.ExternalName.toLowerCase()) ?? null,
+        SourceSchema.IsAuthoritative === true);
       return { srcObj, ...objResult };
     });
     const objectResults = useBatch ? await IntegrationSchemaSync.batchExec(objectUpserts, 8) : await IntegrationSchemaSync.serialExec(objectUpserts);
@@ -511,7 +557,18 @@ export class IntegrationSchemaSync {
     const fieldUpsertJobs = objectResults
       .filter((r) => r.ObjectID)
       .map((r) => async () => {
-        const existingFields = engine.GetIntegrationObjectFields(r.ObjectID!);
+        const existingFields = await writer.FieldsForObject(r.ObjectID!);
+        // The declared field rows this object's fields overlay, by lowercased name. Read from the
+        // engine cache because the DECLARED catalog is shared and unchanged by this run — only the
+        // per-connection copy is being written. Empty for an object with no declared counterpart,
+        // which is the ordinary case for something discovery found on its own.
+        const declaredObjectID = declaredByName.get(r.srcObj.ExternalName.toLowerCase());
+        const declaredFieldByName = new Map<string, string>();
+        if (declaredObjectID) {
+          for (const df of engine.GetIntegrationObjectFields(declaredObjectID)) {
+            if (df.ID) declaredFieldByName.set(df.Name.toLowerCase(), df.ID);
+          }
+        }
         // U1 / rsuplan line 29 — the primary key is EITHER declared OR streamed, NEVER unioned. If the
         // object already carries a primary key from its declared metadata, streamed discovery must not
         // promote a *different* field to PK: that fabricates a composite whose extra, often-nullable
@@ -523,7 +580,10 @@ export class IntegrationSchemaSync {
         const perObjectLogs: FieldMergeLog[] = [];
         const perObjectStats = { created: 0, updated: 0 };
         for (const srcField of r.srcObj.Fields) {
-          const fr = await IntegrationSchemaSync.UpsertField(md, r.ObjectID!, srcField, existingFields, ContextUser, siblingNameToID, objectHasDeclaredPK);
+          const fr = await IntegrationSchemaSync.UpsertField(
+            writer, r.ObjectID!, srcField, existingFields, siblingNameToID, objectHasDeclaredPK,
+            r.srcObj.FieldsAreAuthoritative ?? SourceSchema.IsAuthoritative === true,
+            declaredFieldByName.get(srcField.Name.toLowerCase()) ?? null);
           if (fr.Created) perObjectStats.created++;
           if (fr.Updated) perObjectStats.updated++;
           perObjectLogs.push({
@@ -581,8 +641,7 @@ export class IntegrationSchemaSync {
         fieldsAuthoritativeByObject[r.srcObj.ExternalName] =
           r.srcObj.FieldsAreAuthoritative ?? SourceSchema.IsAuthoritative === true;
         objectIDByName[r.srcObj.ExternalName.toLowerCase()] = r.ObjectID;
-        activeFieldsByObjectID[r.ObjectID] = engine
-          .GetIntegrationObjectFields(r.ObjectID)
+        activeFieldsByObjectID[r.ObjectID] = (await writer.FieldsForObject(r.ObjectID))
           .filter((iof) => iof.Status === 'Active')
           .map((iof) => ({ ID: iof.ID, Name: iof.Name }));
       }
@@ -597,14 +656,14 @@ export class IntegrationSchemaSync {
         DiscoveredObjectNames: SourceSchema.Objects.map((o) => o.ExternalName),
         DiscoveredFieldNamesByObject: discoveredFieldNamesByObject,
         FieldsAuthoritativeByObject: fieldsAuthoritativeByObject,
-        ActiveObjects: engine.GetActiveIntegrationObjects(IntegrationID).map((io) => ({ ID: io.ID, Name: io.Name })),
+        ActiveObjects: existingObjects.filter((io) => io.Status === 'Active').map((io) => ({ ID: io.ID, Name: io.Name })),
         ActiveFieldsByObjectID: activeFieldsByObjectID,
         ObjectIDByName: objectIDByName,
       });
       let deactivated = 0;
       for (const id of decision.ObjectIDsToDeactivate) {
-        const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', ContextUser);
-        if (await obj.InnerLoad(CompositeKey.FromID(id))) {
+        const obj = await writer.LoadObject(id);
+        if (obj) {
           obj.Status = 'Disabled'; // deactivate (Active|Deprecated|Disabled enum); never delete
           if (await obj.Save()) { deactivated++; result.ObjectsDeactivated.push(obj.Name); }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom object ${id}: ${obj.LatestResult?.CompleteMessage ?? 'unknown'}`);
@@ -612,12 +671,15 @@ export class IntegrationSchemaSync {
       }
       let fieldsDeactivated = 0;
       for (const id of decision.FieldIDsToDeactivate) {
-        const f = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', ContextUser);
-        if (await f.InnerLoad(CompositeKey.FromID(id))) {
+        const f = await writer.LoadField(id);
+        if (f) {
           f.Status = 'Disabled'; // deactivate, never delete
           if (await f.Save()) {
             fieldsDeactivated++;
-            const owner = engine.GetIntegrationObjectByID(f.IntegrationObjectID)?.Name ?? f.IntegrationObjectID;
+            // Name the owner from the rows this run already read. The engine cache would answer
+            // for the SHARED catalog only, so on a per-connection run it would silently miss and
+            // the log line would carry a bare id.
+            const owner = existingObjects.find((o) => o.ID === f.IntegrationObjectID)?.Name ?? f.IntegrationObjectID;
             result.FieldsDeactivated.push(`${owner}.${f.Name}`);
           }
           else LogError(`[IntegrationSchemaSync] Failed to deactivate phantom field ${id}: ${f.LatestResult?.CompleteMessage ?? 'unknown'}`);
@@ -666,11 +728,13 @@ export class IntegrationSchemaSync {
   // ── Object upsert ────────────────────────────────────────────────
 
   private static async UpsertObject(
-    md: IMetadataProvider,
-    integrationID: string,
+    writer: CatalogWriter,
     srcObj: SourceObjectInfo,
     existingObjects: MJIntegrationObjectEntity[],
-    contextUser: UserInfo,
+    /** The declared row this object was matched to, or null when it exists only here. */
+    declaredObjectID: string | null,
+    /** Whether the connector claims its object enumeration is complete. Decides provenance. */
+    discoveryIsAuthoritative: boolean,
   ): Promise<{ ObjectID: string | null; Created: boolean; Updated: boolean; EffectiveSource: 'Declared' | 'Discovered' | 'Custom' }> {
     const existing = existingObjects.find((o) => o.Name.toLowerCase() === srcObj.ExternalName.toLowerCase());
 
@@ -716,10 +780,22 @@ export class IntegrationSchemaSync {
         changes.push('Status:reactivated');
       }
       if (dirty) {
+        // LastSeenAt rides the save we are already doing. It is deliberately NOT refreshed for an
+        // unchanged object: that would mean one extra round trip per object per run — 205 of them
+        // on the largest catalog here — to record a timestamp nothing currently reads. So it means
+        // "last run that changed this row", and the day something needs true last-seen it becomes
+        // a set-based UPDATE, not a per-row save.
+        writer.MarkSeen(existing, false);
+        // A failed save used to be swallowed whole. That is how a declared row silently kept a
+        // stale definition while the run reported success.
+        let saveError: string | null = null;
         try {
-          await existing.Save();
-        } catch {
-          /* ignore save failures on declared records */
+          if (!(await existing.Save())) saveError = existing.LatestResult?.CompleteMessage ?? 'unknown validation failure';
+        } catch (e) {
+          saveError = e instanceof Error ? e.message : String(e);
+        }
+        if (saveError) {
+          LogError(`[IntegrationSchemaSync] Failed to update object '${srcObj.ExternalName}': ${saveError}`);
         }
         console.log(
           JSON.stringify({
@@ -752,9 +828,14 @@ export class IntegrationSchemaSync {
     // PersistDiscoveredSchema is called; absent a signal, 'Discovered' is the
     // safer label.
     try {
-      const obj = await md.GetEntityObject<MJIntegrationObjectEntity>('MJ: Integration Objects', contextUser);
-      obj.NewRecord();
-      obj.IntegrationID = integrationID;
+      const obj = await writer.NewObjectRow();
+      // Ownership and provenance. On the shared catalog this writes the integration id and nothing
+      // else, exactly as before. Provenance is coarse ON PURPOSE: a row is 'Declared' when a
+      // curated definition matched it, 'Endpoint' when the connector's own enumeration claimed to
+      // be complete, and 'Sampled' otherwise. The per-attribute truth lives in the merge log, not
+      // in this single column.
+      writer.StampNewObject(obj, declaredObjectID,
+        declaredObjectID ? 'Declared' : (discoveryIsAuthoritative ? 'Endpoint' : 'Sampled'));
       obj.Name = srcObj.ExternalName;
       // APIPath is NOT NULL with no DB default. Declared objects get it from the metadata file;
       // a runtime-DISCOVERED object has no source APIPath (ExternalObjectSchema carries none),
@@ -797,13 +878,16 @@ export class IntegrationSchemaSync {
   // ── Field upsert ─────────────────────────────────────────────────
 
   private static async UpsertField(
-    md: IMetadataProvider,
+    writer: CatalogWriter,
     objectID: string,
     srcField: SourceFieldInfo,
     existingFields: MJIntegrationObjectFieldEntity[],
-    contextUser: UserInfo,
-    siblingNameToID?: Map<string, string>,
-    objectHasDeclaredPK: boolean = false,
+    siblingNameToID: Map<string, string> | undefined,
+    objectHasDeclaredPK: boolean,
+    /** Whether the connector claims its field enumeration for this object is complete. */
+    fieldsAuthoritative: boolean,
+    /** The declared field this was matched to, or null when it exists only here. */
+    declaredFieldID: string | null = null,
   ): Promise<{
     Created: boolean;
     Updated: boolean;
@@ -958,8 +1042,12 @@ export class IntegrationSchemaSync {
 
     // New field — discovered for the first time
     try {
-      const field = await md.GetEntityObject<MJIntegrationObjectFieldEntity>('MJ: Integration Object Fields', contextUser);
-      field.NewRecord();
+      const field = await writer.NewFieldRow();
+      writer.StampNewField(field, declaredFieldID,
+        declaredFieldID ? 'Declared' : (fieldsAuthoritative ? 'Endpoint' : 'Sampled'));
+      // On the per-connection catalog this column is a view alias of CompanyIntegrationObjectID and
+      // the writer maps it; on the shared one it is the column itself. Either way the parent link
+      // is written the same way here.
       field.IntegrationObjectID = objectID;
       field.Name = srcField.Name;
       field.DisplayName = srcField.Label || srcField.Name;
