@@ -250,12 +250,33 @@ Two things cause it, and the workflow responds to both the same way:
 3. **Failed the run deliberately.** The release is not complete until the PR merges, and a
    green run would say otherwise.
 
+### What ELSE stopped, that nobody tells you about
+
+`publish.yml` is the trigger for two `workflow_run` workflows, and **both refuse to run when
+the triggering run did not conclude `success`** ("Error out if the trigger did not succeed").
+So a failed back-merge silently takes them with it:
+
+| Workflow | Consequence of the skip |
+|---|---|
+| [`docker.yml`](../.github/workflows/docker.yml) | **None during the Edge era.** It skips any prerelease version by design — *"no Docker image for Edge builds, by decision, not by omission."* Nothing to catch up. |
+| [`docs.yml`](../.github/workflows/docs.yml) | **Real.** The `/v6/` docs set builds from `main`, which the release DID advance, so the published site silently keeps documenting the previous release. |
+
+When v6.1.0-edge.6 failed this way on 2026-09-11, the docs site stayed on the 2026-09-02
+(edge.5) build and nothing surfaced it — the release PR was recovered, the ledger was
+recorded, and the stale docs went unnoticed until someone went looking.
+
+**Catching docs up is a manual dispatch:** Actions → *Update package documentation* → Run
+workflow (it carries `workflow_dispatch`). Check the last successful run first — if a later
+release already deployed, you do not need this.
+
 ### What you do
 
 1. Open the PR. Resolve conflicts there and merge it. That is the whole recovery.
-2. If the run is red but there is **no** PR, the fallback itself failed — check its step,
+2. Dispatch *Update package documentation* to catch up the docs site (see above) — the
+   failed run skipped it.
+3. If the run is red but there is **no** PR, the fallback itself failed — check its step,
    then finish by hand: `git checkout next && git merge origin/main`.
-3. If the run warns *"main is already an ancestor of next — nothing to back-merge"*, the
+4. If the run warns *"main is already an ancestor of next — nothing to back-merge"*, the
    merge had in fact landed before the step reported failure. Nothing is outstanding; read
    the back-merge step's log to find out why it failed anyway.
 
