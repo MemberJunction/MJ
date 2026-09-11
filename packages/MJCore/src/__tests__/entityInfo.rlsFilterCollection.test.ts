@@ -27,7 +27,7 @@ function buildRLSFilter(id: string, filterText: string): RowLevelSecurityFilterI
     return new RowLevelSecurityFilterInfo({ ID: id, Name: `Filter-${id}`, FilterText: filterText, Description: 'Test filter' });
 }
 
-function buildPermission(overrides: Partial<Record<string, unknown>>): EntityPermissionInfo {
+function buildPermission(overrides: Partial<EntityPermissionInfo> & { RoleID: string }): EntityPermissionInfo {
     return new EntityPermissionInfo({
         ID: `perm-${overrides.RoleID}`,
         EntityID: ENTITY_ID,
@@ -128,5 +128,30 @@ describe('GetUserRowLevelSecurityInfo collects filters only from rows that GRANT
 
         expect(entity.GetUserRowLevelSecurityInfo(user, EntityPermissionType.Create)).toEqual([]);
         expect(entity.GetUserPermisions(user).CanCreate).toBe(false);
+    });
+});
+
+describe('Deny rows never read as grants (their Can* flags are denials)', () => {
+    it('a Deny row with CanCreate + a Create filter contributes no filter, even though its flag is set', () => {
+        const entity = buildEntityInfo([
+            buildPermission({ RoleID: ROLE_A_ID, CanCreate: true, CreateRLSFilterID: FILTER_1_ID }),
+            buildPermission({ RoleID: ROLE_B_ID, Type: 'Deny', CanCreate: true, CreateRLSFilterID: FILTER_2_ID }),
+        ]);
+        const ids = entity.GetUserRowLevelSecurityInfo(buildUser([ROLE_A_ID, ROLE_B_ID]), EntityPermissionType.Create).map((f) => f.ID);
+        expect(ids).toEqual([FILTER_1_ID]);
+    });
+
+    it('a Deny row with CanRead and no filter does NOT exempt the user from RLS', () => {
+        const entity = buildEntityInfo([
+            buildPermission({ RoleID: ROLE_A_ID, CanRead: true, ReadRLSFilterID: FILTER_1_ID }),
+            buildPermission({ RoleID: ROLE_B_ID, Type: 'Deny', CanRead: true, ReadRLSFilterID: null }),
+        ]);
+        expect(entity.UserExemptFromRowLevelSecurity(buildUser([ROLE_A_ID, ROLE_B_ID]), EntityPermissionType.Read)).toBe(false);
+    });
+
+    it('Type is compared case- and whitespace-insensitively, and a blank Type is Allow', () => {
+        expect(buildPermission({ RoleID: ROLE_A_ID, Type: ' DENY ' }).IsDeny).toBe(true);
+        expect(buildPermission({ RoleID: ROLE_A_ID, Type: '' }).IsDeny).toBe(false);
+        expect(buildPermission({ RoleID: ROLE_A_ID, Type: 'Allow' }).IsDeny).toBe(false);
     });
 });
