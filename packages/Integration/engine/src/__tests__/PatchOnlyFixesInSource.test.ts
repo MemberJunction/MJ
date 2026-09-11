@@ -89,3 +89,40 @@ describe('MJ-DISC-16 — a first-discovered object is sampled in the same run', 
         expect(pk).toBeGreaterThan(heal);
     });
 });
+
+/**
+ * MJ-MEM-2 is deliberately NOT here.
+ *
+ * The fleet patch inverts this file's timeout predicate so a timed-out page is retried instead of
+ * abandoning the whole object for the run. That is a real problem — sixteen NetSuite objects ended
+ * INCOMPLETE in one run on ACR dev — but the upstream rule is also deliberate and has two tests:
+ * WithTimeout does not CANCEL the attempt it abandons, so retrying stacks a second full page on a
+ * source already too slow to finish the first.
+ *
+ * So it is a DIVERGENCE, not a missing fix, and it stays in the patch. Porting it here breaks
+ * GovernedFetch.test.ts and IntegrationEngine.fetch-timeout.test.ts, which is exactly the signal
+ * that told us so. The fix that satisfies both sides — suspend the object, resume from its keyset
+ * — is owed and belongs upstream.
+ */
+
+describe('MJ-RUN-4 — an abandoned object reaches the run, not just the event stream', () => {
+    it('records the object on the run result', () => {
+        expect(ENGINE).toMatch(/\(result\.IncompleteObjects \?\?= \[\]\)\.push\(/);
+    });
+
+    it('names them in the completion message', () => {
+        expect(ENGINE).toMatch(/object\(s\) INCOMPLETE:/);
+        expect(ENGINE).toMatch(/finalizeSyncProgress\(progress, abortSignal\?\.aborted \? 'cancelled' : 'completed', completionMessage\)/);
+    });
+
+    it('still finalizes as completed — a held watermark is not a failed run', () => {
+        const i = ENGINE.indexOf('const incomplete = result.IncompleteObjects');
+        expect(i).toBeGreaterThan(-1);
+        expect(ENGINE.slice(i, i + 900)).toMatch(/'cancelled' : 'completed'/);
+    });
+
+    it('keeps the durable Errors entry at Warning severity, so Status stays Success', () => {
+        const i = ENGINE.indexOf('FETCH_ABORTED_INCOMPLETE');
+        expect(ENGINE.slice(i, i + 1600)).toMatch(/Severity: 'Warning'/);
+    });
+});

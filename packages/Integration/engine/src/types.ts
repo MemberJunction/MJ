@@ -232,6 +232,15 @@ export interface SyncResult {
     Success: boolean;
     /** Summary error message when the sync fails or completes with errors */
     ErrorMessage?: string;
+    /**
+     * Objects whose fetch stopped early, so their result set for this run is INCOMPLETE.
+     *
+     * Not a failure — the watermark is held and the unfetched window retries next run — but the
+     * run cannot be reported as an unqualified success either. Without this, a nightly sync that
+     * abandons sixteen objects reads as a clean Success with a small TotalRecords, and the only
+     * evidence is a warning buried in the event stream.
+     */
+    IncompleteObjects?: string[];
     /** The CompanyIntegrationRun ID created for this sync */
     RunID?: string;
     /** Total records processed */
