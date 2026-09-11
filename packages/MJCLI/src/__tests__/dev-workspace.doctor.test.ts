@@ -168,20 +168,65 @@ describe('open app client packages check', () => {
 
   it('fails when a declared client bootstrap package is not linked at the parent', () => {
     parent = CreateFixtureParent(caliberFixture);
+    writeGeneratedWorkspace(parent, ['bizapps-caliber']);
+    mkdirSync(path.join(parent, 'node_modules'), { recursive: true }); // installed, but this package missing
     const check = checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages');
     expect(check.Severity).toBe('fail');
     expect(check.Detail).toContain('@mj-biz-apps/caliber-ng');
   });
 
+  // `--no-install` is a first-class, advertised flag. The two sibling checks reading this same
+  // precondition de-escalate it on purpose — checkInstallArtifacts warns ("absence is incomplete,
+  // not broken") and checkOneCopyCensus skips — so escalating it to a hard failure here would
+  // report an ordinary `--no-install` run as a broken manifest and exit non-zero (#4401 review, F4).
+  it('skips on a generated parent that has not been installed yet', () => {
+    parent = CreateFixtureParent(caliberFixture);
+    writeGeneratedWorkspace(parent, ['bizapps-caliber']);
+
+    const report = CollectDoctorReport(parent, '10.33.0', 'flag');
+    expect(checkNamed(report, 'open app client packages').Severity).toBe('skip');
+    expect(DoctorHasFailures(report)).toBe(false);
+  });
+
   it('passes once the package is linked at the parent', () => {
     parent = CreateFixtureParent(caliberFixture);
+    writeGeneratedWorkspace(parent, ['bizapps-caliber']);
     mkdirSync(path.join(parent, 'node_modules', '@mj-biz-apps', 'caliber-ng'), { recursive: true });
     expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages').Severity).toBe('pass');
   });
 
-  it('skips when no member declares a client bootstrap package', () => {
+  it('skips when a member declares no client bootstrap package', () => {
     parent = CreateFixtureParent({ 'bizapps-x': { RootPackageJson: { name: 'x' }, MjAppJson: true } });
+    writeGeneratedWorkspace(parent, ['bizapps-x']);
     expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages').Severity).toBe('skip');
+  });
+
+  // A parent that was never generated has no member list to judge against, and checkGeneratedFiles
+  // / checkSentinel already fail loudly there — so this check stays quiet instead of adding noise.
+  it('skips on a parent that was never generated', () => {
+    parent = CreateFixtureParent(caliberFixture);
+    expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages').Severity).toBe('skip');
+  });
+
+  // A candidate repo that is NOT a workspace member can never be linked at the parent — that is
+  // what excluding it MEANS — so judging it is a guaranteed false failure. The real workspace has
+  // nine such repos, and the `candidates` check one line above already reports them as the
+  // expected state (WORKSPACE.md §8: "8 passed, 1 warned, 0 failed").
+  it('ignores a candidate repo that is not a workspace member', () => {
+    parent = CreateFixtureParent({
+      ...caliberFixture,
+      'bizapps-orders': {
+        RootPackageJson: { name: 'orders' },
+        MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/orders-ng', role: 'bootstrap' }] } },
+        Packages: { Angular: { name: '@mj-biz-apps/orders-ng' } },
+      },
+    });
+    writeGeneratedWorkspace(parent, ['bizapps-caliber']); // orders is deliberately excluded
+    mkdirSync(path.join(parent, 'node_modules', '@mj-biz-apps', 'caliber-ng'), { recursive: true });
+
+    const check = checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages');
+    expect(check.Severity).toBe('pass');
+    expect(check.Detail).not.toContain('orders-ng');
   });
 });
 

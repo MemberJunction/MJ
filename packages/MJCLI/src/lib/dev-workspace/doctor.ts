@@ -407,14 +407,23 @@ function checkOneCopyCensus(census: StoreCensus): DoctorCheck {
 }
 
 /**
- * Reads which declared client bootstrap packages are linked at the parent root.
+ * Reads which declared client-side packages are linked at the parent root.
  *
  * Parent-root linkage is exactly the question that matters: an app shell imports these through its
  * GENERATED class-registrations manifest without declaring them, so the parent root is the only
  * place its resolution can find them. Filesystem-reading, like the singleton census beside it.
+ *
+ * `memberNames` is passed in rather than re-derived, and that is the whole correctness argument:
+ * `DetectCandidates` answers "what Open App repo is on disk?", which is NOT "what is in this
+ * workspace" — `mj-app.json` existence is itself a detection reason (`detect.ts`), so every
+ * excluded sibling is a candidate. Judging an excluded repo is a guaranteed false failure: it can
+ * never be linked at the parent, because that is what excluding it means. The generate path has
+ * always drawn this line (`selectMembers` runs before `BuildRootPackageJson`), and so does every
+ * other member-scoped check here, via `status.Members`.
  */
-export function CollectClientPackageCensus(parentDir: string): ClientPackageCensus {
-  const members = DetectCandidates(parentDir);
+export function CollectClientPackageCensus(parentDir: string, memberNames: readonly string[]): ClientPackageCensus {
+  const inWorkspace = new Set(memberNames);
+  const members = DetectCandidates(parentDir).filter((candidate) => inWorkspace.has(candidate.Name));
   const clients = CollectOpenAppClientPackages(members, IndexWorkspacePackages(members));
   return {
     Entries: clients.map((client) => ({
@@ -427,14 +436,26 @@ export function CollectClientPackageCensus(parentDir: string): ClientPackageCens
 }
 
 /**
- * Every client bootstrap package a member declares must resolve from the parent root — the v1
+ * Every client-side package a member declares must resolve from the parent root — the v1
  * requirement in `guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` (§185): "every package named in a
  * host's dynamicPackages.client[] MUST resolve to an importable package".
  */
-function checkClientPackages(census: ClientPackageCensus): DoctorCheck {
+function checkClientPackages(census: ClientPackageCensus, installed: boolean): DoctorCheck {
   const name = 'open app client packages';
   if (census.Entries.length === 0) {
-    return { Name: name, Severity: 'skip', Detail: 'no member declares a client bootstrap package in its mj-app.json' };
+    return { Name: name, Severity: 'skip', Detail: 'no member declares a client or shared package in its mj-app.json' };
+  }
+  // Linkage is `pnpm install`'s output, not the generator's, so "not installed yet" is unanswerable
+  // rather than broken — the state `--no-install` leaves behind on purpose. The two sibling checks
+  // reading this same precondition de-escalate it for that reason (checkInstallArtifacts warns,
+  // "absence is incomplete, not broken"; checkOneCopyCensus skips), and escalating it here reported
+  // an ordinary `--no-install` run as a broken manifest, exit 1.
+  if (!installed) {
+    return {
+      Name: name,
+      Severity: 'skip',
+      Detail: `${census.Entries.length} declared package(s), but the parent has no node_modules — run \`pnpm install\` at the parent, then re-run doctor`,
+    };
   }
   const broken = census.Entries.filter((entry) => !entry.Linked);
   if (broken.length === 0) {
@@ -484,7 +505,7 @@ export function CollectDoctorReport(
       checkCandidates(status),
       checkStandaloneInstalls(status),
       checkOneCopyCensus(census),
-      checkClientPackages(CollectClientPackageCensus(parentDir)),
+      checkClientPackages(CollectClientPackageCensus(parentDir, status.Members), status.NodeModulesExists),
     ],
   };
 }
