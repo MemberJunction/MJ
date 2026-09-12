@@ -254,22 +254,24 @@ export async function GetRealtimeModelVoices(
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
 
-        // 1. Consult metadata first (Personas & PersonaVendors)
+        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions)
         const modelPersonas = AIEngine.Instance.GetModelPersonas(model.ID, 'Audio', selection.VendorID);
-        if (modelPersonas.length > 0) {
-            const voices: RealtimeVoiceOption[] = modelPersonas.map((rp) => ({
-                ID: rp.PersonaVendor.APIName,
-                Name: rp.Persona.Name,
-            }));
-            out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
-            continue;
-        }
+        const voices: RealtimeVoiceOption[] = modelPersonas.map((rp) => ({
+            ID: rp.PersonaVendor.APIName,
+            Name: rp.Persona.Name,
+        }));
 
-        // 2. Fallback: instantiate driver and query SupportedVoices (legacy / uncatalogued models)
+        // 2. Union with driver SupportedVoices: append any driver voices not already present
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
             BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
         );
-        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
+        for (const dv of instance?.SupportedVoices ?? []) {
+            if (!voices.some((v) => v.ID.toLowerCase() === dv.ID.toLowerCase())) {
+                voices.push(dv);
+            }
+        }
+
+        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
     }
     return out;
 }

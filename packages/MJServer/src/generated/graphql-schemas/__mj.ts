@@ -17634,6 +17634,9 @@ export class MJAISkillAction_ {
     @Field() 
     _mj__UpdatedAt: Date;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply.`}) 
+    ExposeToModel?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Skill?: string;
@@ -17661,6 +17664,9 @@ export class CreateMJAISkillActionInput {
     @Field({ nullable: true })
     ActionID?: string;
 
+    @Field(() => Boolean, { nullable: true })
+    ExposeToModel?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -17679,6 +17685,9 @@ export class UpdateMJAISkillActionInput {
 
     @Field({ nullable: true })
     ActionID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    ExposeToModel?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

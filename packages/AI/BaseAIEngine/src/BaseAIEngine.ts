@@ -1047,6 +1047,21 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * The subset of {@link GetSkillActionIDs} that joins the activating agent's run: rows with
+     * `ExposeToModel` set. A bundled action with the flag off stays associated with the skill (SKILL.md
+     * export, tooling) but is left out of the run — not described to the model and not executable by
+     * the agent; application code invokes it through the Actions API. An action a person triggers
+     * through the UI on a later turn (a menu button in the skill's reply) is the case. This is what
+     * `BaseAgent.enableSkillCapabilities` pushes onto the run; {@link GetSkillActionIDs} (every bundled
+     * row) is unchanged for export and the integration checks.
+     */
+    public GetSkillExposedActionIDs(skillID: string): string[] {
+        return this._skillActions
+            .filter(sa => UUIDsEqual(sa.SkillID, skillID) && sa.ExposeToModel !== false)
+            .map(sa => sa.ActionID);
+    }
+
+    /**
      * Returns the sub-agent IDs bundled into a skill (via "MJ: AI Skill Sub Agents"). Callers
      * resolve the full `MJAIAgentEntityExtended` objects via `this.Agents` / `GetAgentByID`.
      */

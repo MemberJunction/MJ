@@ -81,20 +81,22 @@ describe('GetRealtimeModelVoices', () => {
         mockGetModelPersonas.mockClear();
     });
 
-    it('reads voices from metadata personas first, avoiding driver instantiation', async () => {
+    it('emits metadata personas first and unions driver SupportedVoices as a superset', async () => {
         const result = await GetRealtimeModelVoices();
         expect(result).toHaveLength(2);
 
-        // m1 has personas in metadata
+        // m1 has personas in metadata, and driver voices not in metadata are appended
         const m1Result = result.find(r => r.ModelID === 'm1');
         expect(m1Result).toBeDefined();
         expect(m1Result!.ModelName).toBe('GPT-Live-1');
+        // metadata personas come first, followed by driver fallback-voice
         expect(m1Result!.Voices).toEqual([
             { ID: 'alloy', Name: 'Alloy' },
             { ID: 'echo', Name: 'Echo' },
+            { ID: 'fallback-voice', Name: 'Fallback Voice' },
         ]);
 
-        // m2 has no personas in metadata, falls back to driver SupportedVoices
+        // m2 has no personas in metadata, includes all driver SupportedVoices
         const m2Result = result.find(r => r.ModelID === 'm2');
         expect(m2Result).toBeDefined();
         expect(m2Result!.ModelName).toBe('Legacy Realtime');
@@ -102,7 +104,9 @@ describe('GetRealtimeModelVoices', () => {
             { ID: 'fallback-voice', Name: 'Fallback Voice' },
         ]);
 
-        // ClassFactory.CreateInstance should only have been called ONCE (for m2), not for m1
-        expect(createInstanceCalls).toBe(1);
+        // Guard: for every model whose driver returns voices, the emitted set is a superset
+        for (const res of result) {
+            expect(res.Voices.some(v => v.ID === 'fallback-voice')).toBe(true);
+        }
     });
 });

@@ -96,8 +96,8 @@ export type JSONObject = { [key: string]: JSONValue };
 export function RealtimeDiagLog(message: string): void {
     const v = (process.env.MJ_VERBOSE ?? '').toLowerCase();
     if (v === 'true' || v === '1' || v === 'yes') {
-        // Strip line breaks to prevent log injection (CWE-117)
-        const sanitized = message.replace(/[\r\n]+/g, ' ');
+        // Strip line breaks, Unicode line separators, and ANSI escapes to prevent log injection (CWE-117)
+        const sanitized = message.replace(/[\r\n\u2028\u2029\x1b]/g, ' ');
         // eslint-disable-next-line no-console
         console.log(sanitized);
     }

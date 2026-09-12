@@ -114,6 +114,7 @@ export * from 'type-graphql';
 // later importers, which makes schema build fail on ViewResult.RowCount.
 export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
+export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
 export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
 export type {
     ServerExtensionConfig,

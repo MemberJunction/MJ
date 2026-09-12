@@ -2066,10 +2066,10 @@ GO
             '99F3E501-8443-4C39-9D4C-77F712B1ACA1', -- Entity: MJ: AI Personas
             (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '99F3E501-8443-4C39-9D4C-77F712B1ACA1'),
             'Name',
-            'Name',
-            'Unique display name identifying this persona (e.g., Alloy, Aria, Sage).',
+            'Persona Name',
+            'Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.',
             'nvarchar',
-            200,
+            100,
             0,
             0,
             0,

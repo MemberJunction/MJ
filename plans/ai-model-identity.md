@@ -140,7 +140,7 @@ Mirror **`AIModel` / `AIModelVendor`** — the precedent that actually *runs* (v
 does filter `Status='Active'`, sort `Priority DESC`, skip null `DriverClass`) — rather than the
 Modalities precedent, which did not.
 
-**As built** in `migrations/v6/V202609111120__v6.1.x__AI_Personas_Schema.sql` — this block tracks the
+**As built** in `migrations/v6/V202609112345__v6.1.x__AI_Personas_Schema.sql` — this block tracks the
 migration, not the original sketch:
 
 ```

@@ -68,14 +68,25 @@ describe('coreReservedServerExtensionRoots', () => {
         const mountRegex = /app\.(?:use|get|post)\s*\(\s*([^,\s)]+)/g;
         const reservedRoots = coreReservedServerExtensionRoots('/');
 
+        // Explicit allowlist of known non-path middleware mounts (e.g. app.use(mw), app.use(cors()), app.use(compression(...)))
+        const knownNonPathTokens = [
+            'cors',
+            'express.',
+            'compression',
+            'cookieParser',
+            'createUnifiedAuthMiddleware',
+            'mw',
+        ];
+        const isKnownNonPath = (t: string): boolean =>
+            knownNonPathTokens.some(k => t === k || t.startsWith(k));
+
+        // Strip single-line and multi-line comments so comments like `app.use(...)` are not treated as code
+        const cleanPreAuthSrc = preAuthSrc.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
+
         let match: RegExpExecArray | null;
         const mountedTokens: string[] = [];
-        while ((match = mountRegex.exec(preAuthSrc)) !== null) {
-            const token = match[1].trim();
-            if (token.startsWith('cors') || token.startsWith('express.') || token.startsWith('create') || token.startsWith('cookieParser')) {
-                continue;
-            }
-            mountedTokens.push(token);
+        while ((match = mountRegex.exec(cleanPreAuthSrc)) !== null) {
+            mountedTokens.push(match[1].trim());
         }
 
         expect(mountedTokens.length).toBeGreaterThan(0);
@@ -94,8 +105,10 @@ describe('coreReservedServerExtensionRoots', () => {
             const isLiteralPath = token.startsWith("'") || token.startsWith('"') || token.startsWith('`');
             const isPathConstant = /^[A-Z0-9_]+_PATH$/.test(token) || token in knownConstants;
             if (!isLiteralPath && !isPathConstant) {
-                // Not a path-based route mount (e.g. app.use(mw), app.use(compression(...)))
-                continue;
+                if (isKnownNonPath(token)) {
+                    continue;
+                }
+                throw new Error(`Unrecognized pre-auth mount argument '${token}' in index.ts. If this is a non-path middleware, add it to knownNonPathTokens; if it is a route, reserve its prefix or map its constant.`);
             }
 
             let pathPrefix: string;
