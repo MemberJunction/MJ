@@ -1359,4 +1359,43 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         warnSpy.mockRestore();
     });
+
+    it('preserves emittedToolCallIds across CancelActiveResponse so duplicate entry point does not re-emit tool call', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const toolCalls: { ToolName: string; CallID: string }[] = [];
+        client.OnToolCall((call) => {
+            toolCalls.push({ ToolName: call.ToolName, CallID: call.CallID });
+        });
+
+        // 1. First entry point delivers tool call (e.g. via output_item.done)
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: { type: 'function_call', call_id: 'call_cancel_test', name: 'my_tool', arguments: '{"q":1}' },
+            },
+        });
+
+        expect(toolCalls.length).toBe(1);
+        expect(toolCalls[0].CallID).toBe('call_cancel_test');
+
+        // 2. Cancellation occurs (barge-in, error, SendText, etc.)
+        client.CancelActiveResponse();
+
+        // 3. Second entry point delivers the same call_id (e.g. via response.function_call_arguments.done)
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.function_call_arguments.done',
+                call_id: 'call_cancel_test',
+                name: 'my_tool',
+                arguments: '{"q":1}',
+            },
+        });
+
+        // Consumer must see EXACTLY ONE tool call — dedupe guard must have survived cancel
+        expect(toolCalls.length).toBe(1);
+    });
 });

@@ -215,7 +215,12 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     public CancelActiveResponse(): void {
         this.stopPlaybackDrainMonitoring();
         this.pendingAssistantText = '';
-        this.emittedToolCallIds.clear();
+        // Note: emittedToolCallIds is intentionally NOT cleared here.
+        // GPT-Live has no wire response.cancel event, so the server may continue
+        // delivering output_item.done / function_call_arguments.done for this turn.
+        // Keeping emittedToolCallIds intact prevents double tool emission on cancel.
+        // toolBatchBarrier also deliberately survives a cancel so pending tool outputs
+        // can be submitted without triggering 'function_call_outputs_required'.
         if (this.responseActive || this.audioPlaying) {
             // Mechanics rule: GPT-Live has no wire response.cancel event on WebRTC;
             // cancellation is local playback drain and state flush only.
