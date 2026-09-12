@@ -143,6 +143,8 @@ export interface IxAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GrokRealtime')
 export class xAIRealtime extends OpenAIRealtime {
+    public static override readonly SupportsDynamicToolSet = true;
+
     /**
      * @param apiKey The xAI API key used to authenticate the Grok Voice realtime socket.
      */

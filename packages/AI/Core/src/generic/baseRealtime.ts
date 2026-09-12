@@ -105,6 +105,15 @@ export function RealtimeDiagLog(message: string): void {
 
 export abstract class BaseRealtimeModel extends BaseModel {
     /**
+     * Whether this driver subclass supports dynamic, multi-tool sets projected into the realtime
+     * session (e.g. direct action invocation on realtime co-agents).
+     *
+     * Static capability descriptor read before a session instance exists.
+     * Default: absent / false. Subclasses that support dynamic toolsets declare `public static readonly SupportsDynamicToolSet = true;`.
+     */
+    public static readonly SupportsDynamicToolSet?: boolean = false;
+
+    /**
      * Opens a stateful duplex session with the provider.
      *
      * The returned {@link IRealtimeSession} is the long-lived handle that streams media and
@@ -352,6 +361,15 @@ export interface RealtimeSessionCapabilities {
      * Whether the provider supports receiving multiple parallel tool calls and batched results (gpt-live-1.md §4.2).
      */
     SupportsParallelToolCalls?: boolean;
+
+    /**
+     * Whether this driver supports dynamic, multi-tool sets projected into the realtime session
+     * (e.g. direct action invocation on realtime co-agents).
+     *
+     * When `true`, allowed target agent actions can be registered as direct tools on the realtime model.
+     * When absent or `false`, only single/co-agent delegation tools (`invoke-target-agent`) are registered.
+     */
+    SupportsDynamicToolSet?: boolean;
 
     /**
      * Maximum number of concurrent delegations supported by the provider, or undefined if unbounded.

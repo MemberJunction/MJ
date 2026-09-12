@@ -617,6 +617,8 @@ export interface IOpenAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAIRealtime')
 export class OpenAIRealtime extends BaseRealtimeModel {
+    public static override readonly SupportsDynamicToolSet = true;
+
     private _openAI: OpenAI;
 
     /**
@@ -1095,7 +1097,10 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** @inheritdoc — profile-gated: only providers whose endpoint honors a live partial `session.update`. */
     public get Capabilities(): RealtimeSessionCapabilities {
-        return { CanReconfigureTurnMode: this.profile.supportsLiveReconfigure };
+        return {
+            CanReconfigureTurnMode: this.profile.supportsLiveReconfigure,
+            SupportsDynamicToolSet: OpenAIRealtime.SupportsDynamicToolSet,
+        };
     }
 
     /**

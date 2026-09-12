@@ -23,7 +23,9 @@ import {
     REALTIME_MODERATOR_DEFAULTS,
     FindIgnoredRealtimeConfigKeys,
     REALTIME_CONFIG_SECTION_KEYS,
-    RealtimeConfigSection
+    RealtimeConfigSection,
+    GetDirectActionsConfig,
+    IsActionAllowedForDirectInvocation
 } from '../realtime/realtime-coagent-config';
 
 describe('DeepMergeConfigs', () => {
@@ -805,6 +807,10 @@ describe('FindIgnoredRealtimeConfigKeys', () => {
             disclosure: 'silent',
             allowedAgents: [{ agentId: 'AGENT-1', label: 'Skip' }],
             session: { effortLevel: 'high' },
+            directActions: { enabled: true, actionNames: ['Action1'], timeoutMs: 5000 },
+            allowDirectActionInvocation: true,
+            directActionNames: ['Action1', 'Action2'],
+            directActionTimeoutMs: 8000,
         };
 
         expect(REALTIME_CONFIG_SECTION_KEYS.length).toBe(Object.keys(VALID_SAMPLE).length);
@@ -818,5 +824,86 @@ describe('FindIgnoredRealtimeConfigKeys', () => {
             const effective = ResolveEffectiveRealtimeConfig(null, null, payload);
             expect(effective.realtime?.[key], `'${key}' did not survive the cascade`).toBeDefined();
         }
+    });
+});
+
+describe('Direct actions config & allowlist evaluation', () => {
+    it('defaults to closed: unconfigured, disabled, or empty actionNames gives enabled=false and allows nothing', () => {
+        expect(GetDirectActionsConfig()).toEqual({ enabled: false, actionNames: [], timeoutMs: 10_000 });
+        expect(GetDirectActionsConfig({})).toEqual({ enabled: false, actionNames: [], timeoutMs: 10_000 });
+        expect(GetDirectActionsConfig({ realtime: {} })).toEqual({ enabled: false, actionNames: [], timeoutMs: 10_000 });
+
+        expect(IsActionAllowedForDirectInvocation('GetRecord', undefined)).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', {})).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', { realtime: {} })).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', { realtime: { directActions: { enabled: false, actionNames: ['GetRecord'] } } })).toBe(false);
+        expect(IsActionAllowedForDirectInvocation('GetRecord', { realtime: { directActions: { enabled: true, actionNames: [] } } })).toBe(false);
+    });
+
+    it('resolves structured directActions configuration', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['GetCustomer', 'LookupOrder'],
+                    timeoutMs: 15_000,
+                },
+            },
+        };
+        const resolved = GetDirectActionsConfig(config);
+        expect(resolved).toEqual({
+            enabled: true,
+            actionNames: ['GetCustomer', 'LookupOrder'],
+            timeoutMs: 15_000,
+        });
+
+        expect(IsActionAllowedForDirectInvocation('GetCustomer', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('getcustomer', config)).toBe(true); // case-insensitive
+        expect(IsActionAllowedForDirectInvocation('LookupOrder', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('DeleteRecord', config)).toBe(false);
+    });
+
+    it('resolves flat direct action shorthand properties', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                allowDirectActionInvocation: true,
+                directActionNames: ['SearchItems'],
+                directActionTimeoutMs: 7_500,
+            },
+        };
+        const resolved = GetDirectActionsConfig(config);
+        expect(resolved).toEqual({
+            enabled: true,
+            actionNames: ['SearchItems'],
+            timeoutMs: 7_500,
+        });
+
+        expect(IsActionAllowedForDirectInvocation('SearchItems', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('OtherAction', config)).toBe(false);
+    });
+
+    it('wildcard "*" allows all actions when enabled', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['*'],
+                },
+            },
+        };
+        expect(IsActionAllowedForDirectInvocation('AnyAction', config)).toBe(true);
+        expect(IsActionAllowedForDirectInvocation('AnotherAction', config)).toBe(true);
+    });
+
+    it('does not allow actions if enabled is false even when wildcard is set', () => {
+        const config: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: false,
+                    actionNames: ['*'],
+                },
+            },
+        };
+        expect(IsActionAllowedForDirectInvocation('AnyAction', config)).toBe(false);
     });
 });

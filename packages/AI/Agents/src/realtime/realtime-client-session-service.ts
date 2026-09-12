@@ -31,8 +31,10 @@
  */
 
 import { UserInfo, IMetadataProvider, LogError, LogStatus, RunView } from '@memberjunction/core';
-import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity } from '@memberjunction/core-entities';
+import { MJAIAgentRunStepEntity, MJAIPromptRunEntity, MJArtifactEntity, MJApplicationEntity, MJConversationEntity, MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal, MJLruCache, UUIDsEqual, EscapeSQLString } from '@memberjunction/global';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { ActionParam, MJActionEntityExtended, RunActionParams } from '@memberjunction/actions-base';
 import {
     BaseRealtimeModel,
     ChatMessage,
@@ -78,7 +80,9 @@ import {
     RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
     ResolveEffectiveRealtimeConfig,
-    MatchProviderVoiceSettings
+    MatchProviderVoiceSettings,
+    GetDirectActionsConfig,
+    IsActionAllowedForDirectInvocation
 } from './realtime-coagent-config';
 import { SelectRealtimeVendorForModel, RealtimeVendorSelection } from './realtime-vendor-resolution';
 
@@ -1446,6 +1450,7 @@ export class RealtimeClientSessionService {
      */
     protected async configureEngine(contextUser: UserInfo, provider: IMetadataProvider): Promise<void> {
         await AIEngine.Instance.Config(false, contextUser, provider);
+        await ActionEngineServer.Instance.Config(false, contextUser);
     }
 
     /**
@@ -1760,7 +1765,11 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
-        const tools = this.buildStableToolSet(input.ExtraTools);
+        const directTools = this.buildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass);
+        const combinedExtra = directTools.length > 0
+            ? [...(input.ExtraTools ?? []), ...directTools]
+            : input.ExtraTools;
+        const tools = this.buildStableToolSet(combinedExtra);
         // Hoisted (rather than built inline at the return) so the mint log below can report the voice
         // that ACTUALLY reached the driver — see the `voice=` field. Same bag, built once.
         const configBag = this.buildSessionConfigBag(input, effectiveConfig, driverClass, modelID, modelVendorID);
@@ -2227,8 +2236,8 @@ export class RealtimeClientSessionService {
         const invokeTarget: RealtimeToolDefinition = {
             Name: INVOKE_TARGET_AGENT_TOOL_NAME,
             Description:
-                'Hand the user\'s request to the target agent to perform the actual work. Call this whenever ' +
-                'real work (data lookup, analysis, actions) is required, then narrate progress while it runs.',
+                'Invoke the target agent to perform complex, multi-step, or background work (seconds to minutes). ' +
+                'Use this whenever work is needed beyond conversation and your directly-available tools; narrate while it runs.',
             ParametersSchema: {
                 type: 'object',
                 properties: {
@@ -2252,7 +2261,7 @@ export class RealtimeClientSessionService {
 
     /**
      * Builds the {@link RealtimeToolBroker} for a relayed tool call, wiring `DelegateToTarget` to a
-     * target-agent run and `ExecuteTool` to a structured "not available" placeholder.
+     * target-agent run and `ExecuteTool` to direct-action execution or a structured "not available" placeholder.
      *
      * @param input The relayed tool input.
      * @param contextUser The calling user.
@@ -2266,7 +2275,7 @@ export class RealtimeClientSessionService {
     ): RealtimeToolBroker {
         const deps: RealtimeToolBrokerDeps = {
             DelegateToTarget: (request) => this.delegateToTarget(input, request, contextUser, provider),
-            ExecuteTool: (call) => this.executeNonTargetTool(call)
+            ExecuteTool: (call) => this.executeNonTargetTool(call, input, contextUser, provider)
         };
         return new RealtimeToolBroker(deps);
     }
@@ -2567,18 +2576,243 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Routes a non-target tool call. For now this returns a structured "not available" result —
-     * the richer client/UI/action routing is wired in a later phase. Documented minimal seam.
+     * Inspects whether the resolved realtime driver class supports dynamic tool registration.
+     * Dynamic tool sets (e.g. per-agent direct action projection) are registered on the provider
+     * socket only when the driver explicitly declares `SupportsDynamicToolSet === true`.
+     *
+     * @param driverClass The vendor's DriverClass (the ClassFactory key).
+     * @returns True if the driver supports dynamic tool sets, false otherwise.
+     */
+    protected driverSupportsDynamicToolSet(driverClass?: string): boolean {
+        if (!driverClass) {
+            return false;
+        }
+        const reg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseRealtimeModel, driverClass);
+        const subClass = reg?.SubClass as typeof BaseRealtimeModel | undefined;
+        return subClass?.SupportsDynamicToolSet === true;
+    }
+
+    /**
+     * Resolves the active database actions assigned to the target agent.
+     * **Overridable seam** for tests to provide mock action sets without an engine cache.
+     *
+     * @param targetAgentID The target agent ID.
+     * @returns The active action entities assigned to the agent.
+     */
+    protected getTargetAgentActions(targetAgentID: string): MJActionEntityExtended[] {
+        const agentActions = (AIEngine.Instance.AgentActions ?? []).filter(
+            aa => UUIDsEqual(aa.AgentID, targetAgentID) && aa.Status === 'Active'
+        );
+        return (ActionEngineServer.Instance.Actions ?? []).filter(a =>
+            agentActions.some(aa => UUIDsEqual(aa.ActionID, a.ID)) && a.Status === 'Active'
+        );
+    }
+
+    /**
+     * Builds the projected direct action tool definitions for a target agent if supported by the driver.
+     * Gated by driver capability (`SupportsDynamicToolSet`) and explicit configuration opt-in
+     * (`Configuration.realtime.directActions.enabled = true`).
+     *
+     * @param targetAgentID The target agent ID being voiced.
+     * @param effectiveConfig The resolved effective configuration.
+     * @param driverClass The resolved vendor's DriverClass.
+     * @returns The array of projected direct action tools (empty if unsupported or disabled).
+     */
+    public buildDirectActionTools(
+        targetAgentID: string | undefined,
+        effectiveConfig?: RealtimeCoAgentConfig,
+        driverClass?: string
+    ): RealtimeToolDefinition[] {
+        if (!targetAgentID || !this.driverSupportsDynamicToolSet(driverClass)) {
+            return [];
+        }
+
+        const directConfig = GetDirectActionsConfig(effectiveConfig);
+        if (!directConfig || !directConfig.enabled) {
+            return [];
+        }
+
+        const candidateActions = this.getTargetAgentActions(targetAgentID);
+        const allowedActions = candidateActions.filter(action =>
+            IsActionAllowedForDirectInvocation(action.Name, directConfig)
+        );
+
+        return allowedActions.map(action => this.mapActionToToolDefinition(action));
+    }
+
+    /**
+     * Maps an action entity and its metadata parameters to a RealtimeToolDefinition.
+     *
+     * @param action The action entity to map.
+     * @returns The constructed tool definition.
+     */
+    protected mapActionToToolDefinition(action: MJActionEntityExtended): RealtimeToolDefinition {
+        const rawParams: readonly MJActionParamEntity[] = (action.Params?.Items && action.Params.Items.length > 0)
+            ? action.Params.Items
+            : (ActionEngineServer.Instance.ActionParams ?? []).filter(p => UUIDsEqual(p.ActionID, action.ID));
+
+        const inputParams = rawParams.filter(p => {
+            const dir = (p.Type ?? 'Input').trim().toLowerCase();
+            return dir === 'input' || dir === 'both';
+        });
+
+        const properties: Record<string, JSONObject> = {};
+        const required: string[] = [];
+
+        for (const p of inputParams) {
+            let schemaType: string = 'string';
+            if (p.IsArray) {
+                schemaType = 'array';
+            } else if (p.ValueType === 'Simple Object' || p.ValueType === 'BaseEntity Sub-Class') {
+                schemaType = 'object';
+            }
+            const propSchema: JSONObject = {
+                type: schemaType,
+                description: p.Description || p.Name
+            };
+            properties[p.Name] = propSchema;
+            if (p.IsRequired) {
+                required.push(p.Name);
+            }
+        }
+
+        const parametersSchema: JSONObject = {
+            type: 'object',
+            properties: properties as JSONObject,
+            ...(required.length > 0 ? { required } : {})
+        };
+
+        return {
+            Name: action.Name,
+            Description: action.Description || `Execute the ${action.Name} action.`,
+            ParametersSchema: parametersSchema
+        };
+    }
+
+    /**
+     * Routes a non-target tool call. When dynamic tool sets are enabled and the tool matches an
+     * allowed direct action on the target agent, executes the action directly via
+     * {@link ActionEngineServer.Instance.RunAction} bounded by a timeout.
+     * Otherwise returns a structured "not available" result the model can narrate.
      *
      * @param call The non-target tool call.
-     * @returns A failed {@link ToolExecutionResult} the model can narrate.
+     * @param input The optional relayed tool input context.
+     * @param contextUser The calling user context.
+     * @param provider The metadata provider.
+     * @returns A {@link ToolExecutionResult} for the model's tool_response.
      */
-    protected async executeNonTargetTool(call: RealtimeToolCall): Promise<ToolExecutionResult> {
-        return {
-            CallID: call.CallID,
-            Success: false,
-            Output: `Tool '${call.ToolName}' is not available in this voice session.`
-        };
+    protected async executeNonTargetTool(
+        call: RealtimeToolCall,
+        input?: ExecuteRelayedToolInput,
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): Promise<ToolExecutionResult> {
+        if (!input?.TargetAgentID) {
+            return {
+                CallID: call.CallID,
+                Success: false,
+                Output: `Tool '${call.ToolName}' is not available in this voice session.`
+            };
+        }
+
+        const target = this.resolveTargetAgent(input.TargetAgentID);
+        if (!target) {
+            return {
+                CallID: call.CallID,
+                Success: false,
+                Output: `Target agent is not available to execute '${call.ToolName}'.`
+            };
+        }
+
+        const candidateActions = this.getTargetAgentActions(target.ID);
+        const action = candidateActions.find(a =>
+            a.Name?.trim().toLowerCase() === call.ToolName.trim().toLowerCase() ||
+            a.Name?.replace(/\s+/g, '_').toLowerCase() === call.ToolName.trim().toLowerCase()
+        );
+
+        if (!action) {
+            return {
+                CallID: call.CallID,
+                Success: false,
+                Output: `Tool '${call.ToolName}' is not available to this agent.`
+            };
+        }
+
+        const effectiveConfig = this.resolveEffectiveConfig(target, undefined, target);
+        const directConfig = GetDirectActionsConfig(effectiveConfig);
+
+        if (!IsActionAllowedForDirectInvocation(action.Name, directConfig)) {
+            return {
+                CallID: call.CallID,
+                Success: false,
+                Output: `Action '${action.Name}' is not enabled for direct voice invocation.`
+            };
+        }
+
+        const timeoutMs = directConfig?.timeoutMs ?? 10_000;
+        const executingUser = contextUser ?? ActionEngineServer.Instance.ContextUser;
+
+        try {
+            const rawParams = this.parseActionParams(call.Arguments);
+            const actionParams: ActionParam[] = Object.entries(rawParams).map(([name, value]) => ({
+                Name: name,
+                Value: value,
+                Type: 'Input'
+            }));
+
+            const runParams = new RunActionParams();
+            runParams.Action = action;
+            runParams.ContextUser = executingUser;
+            runParams.Params = actionParams;
+            runParams.Filters = [];
+
+            let timerHandle: ReturnType<typeof setTimeout> | undefined;
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                timerHandle = setTimeout(() => {
+                    reject(new Error(`Action '${action.Name}' execution timed out after ${timeoutMs}ms`));
+                }, timeoutMs);
+                if (typeof timerHandle.unref === 'function') {
+                    timerHandle.unref();
+                }
+            });
+
+            const result = await Promise.race([
+                ActionEngineServer.Instance.RunAction(runParams),
+                timeoutPromise
+            ]).finally(() => {
+                if (timerHandle) {
+                    clearTimeout(timerHandle);
+                }
+            });
+
+            const outputText = result.Message || (result.Success ? 'Action completed successfully.' : 'Action failed.');
+
+            return {
+                CallID: call.CallID,
+                Success: result.Success,
+                Output: outputText
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+                CallID: call.CallID,
+                Success: false,
+                Output: `Action '${action.Name}' failed: ${message}`
+            };
+        }
+    }
+
+    /** Parses JSON arguments string into a key-value record of parameters. */
+    protected parseActionParams(argumentsJson: string): Record<string, unknown> {
+        try {
+            const parsed = JSON.parse(argumentsJson);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed as Record<string, unknown>;
+            }
+        } catch {
+            /* not JSON */
+        }
+        return {};
     }
 
     /**

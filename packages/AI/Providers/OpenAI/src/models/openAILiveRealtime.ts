@@ -228,6 +228,7 @@ export class OpenAILiveSession implements IRealtimeSession {
             ProvidesInputTranscription: true,
             ProvidesOutputTranscription: true,
             SupportsParallelToolCalls: true,
+            SupportsDynamicToolSet: OpenAILiveRealtime.SupportsDynamicToolSet,
         };
 
         this._startPromise = new Promise<void>((resolve, reject) => {
@@ -869,6 +870,8 @@ export class OpenAILiveSession implements IRealtimeSession {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')
 export class OpenAILiveRealtime extends BaseRealtimeModel {
+    public static override readonly SupportsDynamicToolSet = true;
+
     private _endpoint: string;
 
     constructor(apiKey: string, endpoint?: string) {

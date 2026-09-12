@@ -33,7 +33,8 @@ import { RealtimeDisclosurePolicy } from './realtime-coagent-config';
  * co-agent always exposes this single `invoke-target-agent` tool, and the specific target is a
  * runtime parameter passed *inside* the call — never a different tool per target. This keeps the
  * provider contract identical across targets (and is what lets a pre-provisioned, fixed-tool
- * provider like Eleven Labs fit the same model later).
+ * provider like Eleven Labs fit the same model later). Drivers declaring `SupportsDynamicToolSet`
+ * can also project allowed direct actions from the target agent for low-latency execution.
  */
 export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';
 
@@ -63,8 +64,9 @@ export function BuildRealtimeAgentFraming(
         `You are the real-time voice for the agent "${targetName}". Hold a natural, low-latency ` +
         `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
         `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
-        `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
-        `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
+        `third person. When work is required that matches one of your directly-available tools, ` +
+        `invoke it directly for fast execution. For complex, multi-step, or background work, call ` +
+        `the '${INVOKE_TARGET_AGENT_TOOL_NAME}' tool and narrate progress while it runs.` +
         BuildColleaguesClause(colleagues) +
         BuildTourGuidanceClause() +
         interactiveSurfaceClause

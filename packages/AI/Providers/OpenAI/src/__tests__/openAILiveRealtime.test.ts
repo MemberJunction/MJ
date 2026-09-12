@@ -99,6 +99,8 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(session.Capabilities.CanReconfigureTurnMode).toBe(false);
         expect(session.Capabilities.EmitsUserInterruptionSignal).toBe(false);
         expect(session.Capabilities.EmitsProviderCutoffSignal).toBe(true);
+        expect(session.Capabilities.SupportsDynamicToolSet).toBe(true);
+        expect(OpenAILiveRealtime.SupportsDynamicToolSet).toBe(true);
     });
 
     it('rejects StartSession if socket closes before session.started', async () => {

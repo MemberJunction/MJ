@@ -364,8 +364,9 @@ export class RealtimeSessionRunner {
      * Always includes the stable, target-independent {@link INVOKE_TARGET_AGENT_TOOL_NAME} tool,
      * followed by any {@link RealtimeSessionRunnerDeps.ExtraTools} and then any contributed
      * {@link RealtimeSessionRunnerDeps.ServerChannelTools} (the server-side interactive channels'
-     * dynamic vocabulary). This is the full set the provider sees — everything target-specific runs
-     * *inside* the delegated agent's own run and is never registered on the realtime socket.
+     * dynamic vocabulary). Drivers supporting dynamic toolsets may also project allowed target
+     * actions directly, while connect-bound or server-bound drivers (e.g. ElevenLabs, Gemini) route
+     * target work inside the delegated agent run.
      *
      * @returns The ordered tool definitions to register.
      */
@@ -384,8 +385,8 @@ export class RealtimeSessionRunner {
         const invokeTargetTool: RealtimeToolDefinition = {
             Name: INVOKE_TARGET_AGENT_TOOL_NAME,
             Description:
-                'Invoke the target agent to perform real work (seconds to minutes). Use this whenever ' +
-                'actual work is needed beyond conversation; narrate while it runs.',
+                'Invoke the target agent to perform complex, multi-step, or background work (seconds to minutes). ' +
+                'Use this whenever work is needed beyond conversation and your directly-available tools; narrate while it runs.',
             ParametersSchema: invokeTargetSchema
         };
 
