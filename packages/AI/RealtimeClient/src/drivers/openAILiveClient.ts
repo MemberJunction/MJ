@@ -47,6 +47,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     public static readonly PLAYBACK_DRAIN_TRANSCRIPT_GAP_MS = 300;
     public static readonly PLAYBACK_DRAIN_SILENCE_THRESHOLD = 0.01;
     public static readonly ASSISTANT_SAFETY_BACKSTOP_MS = 3000;
+    public static readonly MAX_OUTBOUND_QUEUE_SIZE = 100;
 
     // ── Transport ──────────────────────────────────────────────────────────────
     private peerConnection: IRealtimeLivePeerConnection | null = null;
@@ -70,6 +71,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private playbackDrainInterval: ReturnType<typeof setInterval> | null = null;
     private assistantSafetyBackstopTimer: ReturnType<typeof setTimeout> | null = null;
     private clientDelegationCallIds = new Set<string>();
+    private emittedToolCallIds = new Set<string>();
     private toolBatchBarrier = new RealtimeToolBatchBarrier();
     private outboundQueue: Array<Record<string, unknown>> = [];
 
@@ -182,6 +184,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.pendingUserText = '';
         this.pendingAssistantText = '';
         this.clientDelegationCallIds.clear();
+        this.emittedToolCallIds.clear();
         this.toolBatchBarrier.Clear();
         this.outboundQueue = [];
 
@@ -212,8 +215,10 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     public CancelActiveResponse(): void {
         this.stopPlaybackDrainMonitoring();
         this.pendingAssistantText = '';
+        this.emittedToolCallIds.clear();
         if (this.responseActive || this.audioPlaying) {
-            this.sendDataChannelFrame({ type: 'response.cancel' });
+            // Mechanics rule: GPT-Live has no wire response.cancel event on WebRTC;
+            // cancellation is local playback drain and state flush only.
             this.responseActive = false;
             this.audioPlaying = false;
             this.pendingNarration = false;
@@ -249,9 +254,11 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             content: instructions,
             delegation_id: null,
         });
-        this.sendDataChannelFrame({
-            type: 'response.create',
-        });
+        if (this.toolBatchBarrier.IsEmpty) {
+            this.sendDataChannelFrame({
+                type: 'response.create',
+            });
+        }
     }
 
     /**
@@ -560,52 +567,42 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         }
     }
 
-    private handleOutputItemDone(item: Record<string, unknown> | undefined): void {
-        if (item?.type === 'function_call') {
-            this.finalizeAssistantTranscript();
-            this.responseActive = false;
-            this.audioPlaying = false;
-            const callId = String(item.call_id ?? '');
-            if (callId) {
-                this.toolBatchBarrier.TrackPendingCall(callId, () => {
-                    this.sendDataChannelFrame({
-                        type: 'response.create',
-                    });
-                });
-            }
-            const call: RealtimeClientToolCall = {
-                CallID: callId,
-                ToolName: String(item.name ?? ''),
-                ArgumentsJson: String(item.arguments ?? '{}'),
-            };
-            this.emitToolCall(call);
-        }
-    }
-
-    private handleFunctionCallArgumentsDone(itemOrEvent: Record<string, unknown> | undefined): void {
-        if (!itemOrEvent) {
+    private handleToolCallItem(callId: string, name: string, argsJson: string): void {
+        if (!callId || !name) {
             return;
         }
+        if (this.emittedToolCallIds.has(callId)) {
+            return;
+        }
+        this.emittedToolCallIds.add(callId);
+
         this.finalizeAssistantTranscript();
         this.responseActive = false;
         this.audioPlaying = false;
-        const callId = String(itemOrEvent.call_id ?? '');
-        if (callId) {
-            this.toolBatchBarrier.TrackPendingCall(callId, () => {
-                this.sendDataChannelFrame({
-                    type: 'response.create',
-                });
+        this.toolBatchBarrier.TrackPendingCall(callId, () => {
+            this.sendDataChannelFrame({
+                type: 'response.create',
             });
-        }
+        });
         const call: RealtimeClientToolCall = {
             CallID: callId,
-            ToolName: String(itemOrEvent.name ?? ''),
-            ArgumentsJson: String(itemOrEvent.arguments ?? '{}'),
+            ToolName: name,
+            ArgumentsJson: argsJson,
         };
         this.emitToolCall(call);
     }
 
+    private handleOutputItemDone(item: Record<string, unknown> | undefined): void {
+        if (item?.type === 'function_call') {
+            const callId = String(item.call_id ?? '');
+            const name = String(item.name ?? '');
+            const args = String(item.arguments ?? '{}');
+            this.handleToolCallItem(callId, name, args);
+        }
+    }
+
     private handleResponseCompleted(respOrUsage: Record<string, unknown> | undefined): void {
+        this.emittedToolCallIds.clear();
         this.finalizeAssistantTranscript();
         const usage = (respOrUsage?.usage as Record<string, unknown> | undefined) ?? respOrUsage;
         const seconds = typeof usage?.seconds === 'number' ? usage.seconds : undefined;
@@ -618,6 +615,14 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             DurationSeconds: duration,
             Raw: usage,
         });
+    }
+
+    private isResponsesDelegation(): boolean {
+        const delegation = this.sessionConfig?.['delegation'];
+        if (delegation && typeof delegation === 'object' && !Array.isArray(delegation)) {
+            return (delegation as Record<string, unknown>)['type'] === 'responses';
+        }
+        return false;
     }
 
     private handleDataChannelMessage(raw: string): void {
@@ -686,7 +691,10 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 if (inner?.type === 'response.output_item.done') {
                     this.handleOutputItemDone(inner.item as Record<string, unknown> | undefined);
                 } else if (inner?.type === 'response.function_call_arguments.done') {
-                    this.handleFunctionCallArgumentsDone(inner);
+                    const callId = String(inner.call_id ?? '');
+                    const name = String(inner.name ?? '');
+                    const args = String(inner.arguments ?? '{}');
+                    this.handleToolCallItem(callId, name, args);
                 } else if (inner?.type === 'response.completed' || inner?.type === 'response.done') {
                     this.handleResponseCompleted((inner.response as Record<string, unknown> | undefined) ?? inner);
                 }
@@ -696,17 +704,23 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             case 'session.delegation.created': {
                 this.finalizeAssistantTranscript();
                 this.finalizeUserTranscript();
-                const delegationId = String(event.delegation_id ?? '');
-                if (delegationId) {
-                    this.clientDelegationCallIds.add(delegationId);
-                    this.responseActive = false;
-                    this.audioPlaying = false;
-                    const call: RealtimeClientToolCall = {
-                        CallID: delegationId,
-                        ToolName: 'backend_delegation',
-                        ArgumentsJson: JSON.stringify({ delegation_id: delegationId }),
-                    };
-                    this.emitToolCall(call);
+                this.responseActive = false;
+                this.audioPlaying = false;
+                // In responses delegation mode (remote reasoning), session.delegation.created marks the start
+                // of reasoning on the responses model (e.g. gpt-4o). Tool calls are emitted individually
+                // via response.event (response.output_item.done) with their real function names.
+                // Only emit 'backend_delegation' when in client delegation mode (local plane).
+                if (!this.isResponsesDelegation()) {
+                    const delegationId = String(event.delegation_id ?? '');
+                    if (delegationId) {
+                        this.clientDelegationCallIds.add(delegationId);
+                        const call: RealtimeClientToolCall = {
+                            CallID: delegationId,
+                            ToolName: 'backend_delegation',
+                            ArgumentsJson: JSON.stringify({ delegation_id: delegationId }),
+                        };
+                        this.emitToolCall(call);
+                    }
                 }
                 break;
             }
@@ -759,6 +773,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private sendDataChannelFrame(payload: Record<string, unknown>): void {
+        const frameType = typeof payload.type === 'string' ? payload.type : 'unknown';
         if (this.dataChannel && this.dataChannel.readyState === 'open') {
             try {
                 this.dataChannel.send(JSON.stringify(payload));
@@ -766,7 +781,14 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 console.warn('[OpenAILiveClient] Failed to send data channel frame:', err);
             }
         } else if (!this.dataChannel || this.dataChannel.readyState === 'connecting') {
+            if (this.outboundQueue.length >= OpenAILiveClient.MAX_OUTBOUND_QUEUE_SIZE) {
+                const dropped = this.outboundQueue.shift();
+                const droppedType = typeof dropped?.type === 'string' ? dropped.type : 'unknown';
+                console.warn(`[OpenAILiveClient] outboundQueue reached max capacity (${OpenAILiveClient.MAX_OUTBOUND_QUEUE_SIZE}), dropped oldest frame (${droppedType})`);
+            }
             this.outboundQueue.push(payload);
+        } else {
+            console.warn(`[OpenAILiveClient] Dropping frame (${frameType}) because data channel is ${this.dataChannel.readyState}`);
         }
     }
 

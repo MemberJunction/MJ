@@ -574,6 +574,32 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         });
     });
 
+    it('does not emit backend_delegation tool call on session.delegation.created when delegation.type is responses', async () => {
+        const responsesConfig = makeConfig();
+        responsesConfig.SessionConfig = {
+            model: 'gpt-live-1',
+            delegation: {
+                type: 'responses',
+                responses: {
+                    model: 'gpt-4o',
+                },
+            },
+        };
+        await client.Connect(responsesConfig, micStream);
+        client.Channel.Open();
+
+        const toolCalls: RealtimeClientToolCall[] = [];
+        client.OnToolCall((c) => toolCalls.push(c));
+
+        client.Channel.EmitServer({
+            type: 'session.delegation.created',
+            delegation_id: 'del_responses_1',
+        });
+
+        // In responses mode, session.delegation.created is remote reasoning lifecycle only; no tool call emitted
+        expect(toolCalls.length).toBe(0);
+    });
+
     it('SendContextNote sends session.thinking.append without interrupting speech', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
@@ -646,7 +672,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(interrupted).toBe(true);
         expect(client.IsBusy).toBe(false);
         const sent = client.Channel.SentEvents();
-        expect(sent).toEqual([{ type: 'response.cancel' }]);
+        expect(sent).toEqual([]); // Local cancellation only — GPT-Live WebRTC has no wire response.cancel
     });
 
     it('emits cumulative usage with at least 15s pre-bill duration on response completion', async () => {
@@ -1195,29 +1221,142 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         });
     });
 
-    it('processes top-level response.output_item.done and response.function_call_arguments.done', async () => {
+    it('skips response.create on RequestSpokenUpdate when a tool call is pending in barrier', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        // Model emits tool call -> barrier now has pending call
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: {
+                    type: 'function_call',
+                    call_id: 'call_weather_1',
+                    name: 'Get_Weather',
+                    arguments: '{"location":"Dallas"}',
+                },
+            },
+        });
+
+        client.Channel.Sent = [];
+        // While tool call is pending, request spoken update
+        client.RequestSpokenUpdate('Checking the weather now');
+
+        const sent = client.Channel.SentEvents();
+        expect(sent.length).toBe(1);
+        expect(sent[0]).toMatchObject({
+            type: 'session.commentary.append',
+            content: 'Checking the weather now',
+        });
+        // MUST NOT send response.create while tool output is pending
+        expect(sent.some((e) => e.type === 'response.create')).toBe(false);
+    });
+
+    it('deduplicates tool calls between response.output_item.done and response.function_call_arguments.done', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
 
         const toolCalls: RealtimeClientToolCall[] = [];
         client.OnToolCall((c) => toolCalls.push(c));
 
-        // Nested response.event containing response.function_call_arguments.done
+        // Output item done emits tool call
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: {
+                    type: 'function_call',
+                    call_id: 'call_weather_dup',
+                    name: 'Get_Weather',
+                    arguments: '{"location":"Miami"}',
+                },
+            },
+        });
+
+        // Function call arguments done arrives for same call_id -> should NOT duplicate
         client.Channel.EmitServer({
             type: 'response.event',
             event: {
                 type: 'response.function_call_arguments.done',
-                call_id: 'call_top_2',
+                call_id: 'call_weather_dup',
                 name: 'Get_Weather',
-                arguments: '{"location":"Dallas"}',
+                arguments: '{"location":"Miami"}',
             },
         });
 
         expect(toolCalls.length).toBe(1);
         expect(toolCalls[0]).toEqual({
-            CallID: 'call_top_2',
+            CallID: 'call_weather_dup',
             ToolName: 'Get_Weather',
-            ArgumentsJson: '{"location":"Dallas"}',
+            ArgumentsJson: '{"location":"Miami"}',
         });
+    });
+
+    it('guards against empty or missing tool name', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const toolCalls: RealtimeClientToolCall[] = [];
+        client.OnToolCall((c) => toolCalls.push(c));
+
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.function_call_arguments.done',
+                call_id: 'call_empty_name',
+                name: '',
+                arguments: '{}',
+            },
+        });
+
+        expect(toolCalls.length).toBe(0);
+    });
+
+    it('caps outbound queue at 100 frames and drops oldest with warning when connecting', async () => {
+        await client.Connect(makeConfig(), micStream);
+        // Channel remains 'connecting'
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        // Queue 105 frames while connecting
+        for (let i = 0; i < 105; i++) {
+            client.SendContextNote(`Context note ${i}`);
+        }
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('outboundQueue reached max capacity (100), dropped oldest frame')
+        );
+
+        // Open channel to flush
+        client.Channel.Open();
+        const sent = client.Channel.SentEvents();
+        expect(sent.length).toBe(100);
+        // First 5 should have been dropped, so the first sent is index 5
+        expect(sent[0]).toMatchObject({
+            type: 'session.thinking.append',
+            content: 'Context note 5',
+        });
+        expect(sent[sent.length - 1]).toMatchObject({
+            type: 'session.thinking.append',
+            content: 'Context note 104',
+        });
+
+        warnSpy.mockRestore();
+    });
+
+    it('warns and drops frames when channel is closed', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.close(); // readyState becomes 'closed'
+
+        const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        client.SendContextNote('Note on closed channel');
+
+        expect(warnSpy).toHaveBeenCalledWith(
+            expect.stringContaining('Dropping frame (session.thinking.append) because data channel is closed')
+        );
+
+        warnSpy.mockRestore();
     });
 });

@@ -65,7 +65,7 @@ seconds, backend). Say **"no separate transcription model to configure or bill"*
 
 **Client events:** `session.start` · `session.update` · `session.input_audio.append` ·
 `session.input_audio.{mute,unmute}` · `session.instructions.append` · `session.thinking.append` ·
-`session.commentary.append` · `response.item.create` · `response.create` · `session.close`
+`session.commentary.append` · `conversation.item.create` · `response.create` · `session.close`
 
 **Server events:** `session.started` · `session.updated` · `session.output_audio.delta` ·
 `session.input_transcript.delta` · `session.output_transcript.delta` ·
@@ -270,7 +270,7 @@ raw-socket adapter. **The handshake header set** ⛳ was verified from `openai@7
 | `SendInput` | `session.input_audio.append` `{audio: b64}` | WS/SIP only — **forbidden on WebRTC** |
 | `OnOutput` | `session.output_audio.delta` `{delta}` | **[R2] NO timing fields, NO done event.** Revision 1's "free timing" was wrong — `start_ms`/`end_ms` belong to *transcript* deltas. Track your own playback queue |
 | `OnTranscript` | `session.{input,output}_transcript.delta` | Half-open `[start_ms, end_ms)` on the session timeline. **Not** wall-clock, **not** word alignment, **no** turn-completed event, **no** speaker id |
-| **`SendToolResult`** | **local plane:** `session.commentary.append` (speakable) or `session.thinking.append` (quiet), each with `delegation_id` · **remote plane:** `response.item.create` **then** a separate `response.create` | **[R2] Revision 1 gave only the remote form, on the plane we default to.** *"Both commands require Responses delegation."* One `response.create` per **batch**, not per result — coordinated by `RealtimeToolBatchBarrier` (`@memberjunction/ai/generic/realtimeToolBatchBarrier.ts`), shared by both `OpenAILiveRealtime` and `OpenAILiveClient`. |
+| **`SendToolResult`** | **local plane:** `session.commentary.append` (speakable) or `session.thinking.append` (quiet), each with `delegation_id` · **remote plane:** `conversation.item.create` (type `function_call_output`, live-verified against OpenAI wire protocol) **then** a separate `response.create` | **[R2] Revision 1 gave only the remote form, on the plane we default to.** *"Both commands require Responses delegation."* One `response.create` per **batch**, not per result — coordinated by `RealtimeToolBatchBarrier` (`@memberjunction/ai/generic/realtimeToolBatchBarrier.ts`), shared by both `OpenAILiveRealtime` and `OpenAILiveClient`. |
 | `SendContextNote` | **[R2] `session.thinking.append`**, not `instructions.append` | Instructions are *"application-authored behavioral guidance"* and **can interrupt speech in progress**; the guides warn *"do not copy untrusted tool output into it as an instruction."* Retrieved facts belong in `thinking` |
 | `RequestSpokenUpdate` | `session.commentary.append` | Same event as a spoken tool result; distinguished only by `delegation_id`. Make that explicit in the interface or the two will be conflated |
 | *(new)* steer/redirect | `session.instructions.append` | Deliberately disruptive. Worth its own primitive |
@@ -301,7 +301,7 @@ Each one silently produces a hung delegation:
    `response.completed`… **An empty terminal output list does not mean there are no pending function
    calls.**"*
 3. *"Appending a function result does not automatically continue the response"* — `response.create` is
-   a required separate step, and `response.item.create` has **no success acknowledgment**
+   a required separate step, and `conversation.item.create` has **no success acknowledgment**
 4. Three ids to correlate: outer `delegation_id`, the `response_id` on
    `session.delegation.created`, and a third from the nested `response.created`
 
@@ -490,7 +490,7 @@ P0 and P1 are independently valuable and should not wait.
 |---|---|
 | "Zero event names overlap" | `response.create` and `session.update` overlap **with different semantics** |
 | `OnOutput` gets `start_ms`/`end_ms` — "free timing" | No timing fields and no output-audio-done event; those belong to transcript deltas |
-| `SendToolResult` → `response.item.create` + `response.create` | Responses-mode **only** — unavailable on the plane we default to |
+| `SendToolResult` → `response.item.create` + `response.create` | Wire event is `conversation.item.create` with item type `function_call_output` (OpenAI rejects `response.item.create` and errors with `function_call_outputs_required`) followed by `response.create` per batch |
 | `SendContextNote` → `instructions.append` | Should be `thinking.append`; instructions interrupt speech and must not carry tool output |
 | Transcription is "free" | Both directions and timestamped, yes; "free" is stated nowhere |
 | `mcp` is a hosted tool type | Not documented anywhere in the guides |

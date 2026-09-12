@@ -531,6 +531,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                     'under the system user (scoped-anonymous caller).',
             );
         }
+        LogStatus(
+            `ExecuteRealtimeSessionTool: dispatching relayed tool '${toolName}' (callId: ${callId}) for session ${agentSessionId}...`,
+        );
+        const startTime = Date.now();
         const { ResultJson, PausedRunID, Artifacts } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
@@ -551,6 +555,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             },
             runUser,
             provider,
+        );
+        LogStatus(
+            `ExecuteRealtimeSessionTool: completed relayed tool '${toolName}' (callId: ${callId}) in ${Date.now() - startTime}ms`,
         );
 
         // Roll the paused-run id forward in the session config: clear the one we just consumed, and

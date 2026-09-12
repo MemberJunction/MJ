@@ -467,22 +467,7 @@ export class OpenAILiveSession implements IRealtimeSession {
     }
 
     private compileDelegationPolicy(tools: RealtimeToolDefinition[]): string {
-        const toolBullets = tools
-            .map((t) => `- ${t.Name}: ${t.Description || 'Execute backend capability'}`)
-            .join('\n');
-
-        return (
-            'Delegation policy:\n' +
-            'Backend tools:\n' +
-            toolBullets +
-            '\n\n' +
-            'Delegate to the backend when:\n' +
-            '- The user asks for assistance or changes requiring backend capabilities.\n\n' +
-            'Do not delegate to the backend when:\n' +
-            '- The user greets you or asks you to repeat a result already provided.\n\n' +
-            'Delegate before giving an answer that depends on backend work.\n' +
-            'Do not guess the result while waiting, but brief spoken holding phrases while backend work proceeds are permitted.'
-        );
+        return OpenAILiveRealtime.CompileDelegationPolicy(tools);
     }
 
     private handleMessage(raw: string): void {
@@ -557,7 +542,9 @@ export class OpenAILiveSession implements IRealtimeSession {
             }
 
             case 'session.delegation.created': {
-                if (event.delegation_id) {
+                // In remote reasoning plane, session.delegation.created is remote lifecycle notice only.
+                // Tool calls are dispatched via response.event (response.output_item.done).
+                if (this._options.reasoningPlane !== 'remote' && event.delegation_id) {
                     const call: RealtimeToolCall = {
                         CallID: event.delegation_id,
                         ToolName: 'backend_delegation',
@@ -991,6 +978,29 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * Compiles the delegation policy block informing GPT-Live about available backend tools
+     * and when to delegate to the reasoning model.
+     */
+    public static CompileDelegationPolicy(tools: RealtimeToolDefinition[]): string {
+        const toolBullets = tools
+            .map((t) => `- ${t.Name}: ${t.Description || 'Execute backend capability'}`)
+            .join('\n');
+
+        return (
+            'Delegation policy:\n' +
+            'Backend tools:\n' +
+            toolBullets +
+            '\n\n' +
+            'Delegate to the backend when:\n' +
+            '- The user asks for assistance or changes requiring backend capabilities.\n\n' +
+            'Do not delegate to the backend when:\n' +
+            '- The user greets you or asks you to repeat a result already provided.\n\n' +
+            'Delegate before giving an answer that depends on backend work.\n' +
+            'Do not guess the result while waiting, but brief spoken holding phrases while backend work proceeds are permitted.'
+        );
+    }
+
+    /**
      * Mints a client session config for the browser-direct WebRTC topology.
      *
      * In the OpenAI Live WebRTC topology, the browser exchanges its offer SDP with the
@@ -1020,10 +1030,22 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         const rawParallelToolCalls = config?.['parallelToolCalls'] ?? config?.['parallel_tool_calls'];
         const parallelToolCalls = typeof rawParallelToolCalls === 'boolean' ? rawParallelToolCalls : undefined;
 
+        const sections: string[] = [];
+        if (params.SystemPrompt) {
+            sections.push(params.SystemPrompt.trim());
+        }
+        if (params.InitialContext) {
+            sections.push(params.InitialContext.trim());
+        }
+        if (hasTools && params.Tools && params.Tools.length > 0) {
+            sections.push(OpenAILiveRealtime.CompileDelegationPolicy(params.Tools));
+        }
+        const compiledInstructions = sections.join('\n\n');
+
         // WebRTC session config: omit audio.format entirely (negotiated via SDP)
         const sessionPayload: Record<string, unknown> = {
             model: params.Model || 'gpt-live-1',
-            instructions: params.SystemPrompt,
+            instructions: compiledInstructions,
             audio: {
                 output: {
                     voice: OpenAILiveRealtime.resolveVoice(config),

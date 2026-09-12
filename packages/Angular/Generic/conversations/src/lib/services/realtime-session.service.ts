@@ -1673,7 +1673,7 @@ export class RealtimeSessionService {
       void this.handleToolCall(call);
     });
     client.OnError((error: RealtimeClientError) => {
-      console.error('[RealtimeSession] Provider error event:', error);
+      console.error('[RealtimeSession] Provider error event:', JSON.stringify(error), error);
     });
     // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
     // the server (onto the co-agent AIPromptRun) debounced + once at teardown. Providers
