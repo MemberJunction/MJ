@@ -23,6 +23,14 @@ const mockGetModelPersonas = vi.fn((modelId: string, _modality: string, _vendorI
     return [];
 });
 
+const mockModelPersonas = [
+    { ModelID: 'm1', PersonaID: 'p-fable', IsSupported: false },
+];
+
+const mockPersonaVendors = [
+    { PersonaID: 'p-fable', VendorID: 'v1', APIName: 'fable' },
+];
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
@@ -30,6 +38,8 @@ vi.mock('@memberjunction/aiengine', () => ({
                 Models: mockModels,
                 Config: vi.fn(async () => undefined),
                 GetModelPersonas: mockGetModelPersonas,
+                ModelPersonas: mockModelPersonas,
+                PersonaVendors: mockPersonaVendors,
             };
         },
     },
@@ -66,7 +76,10 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
                     CreateInstance: (_base: unknown, _driverClass: string) => {
                         createInstanceCalls++;
                         return {
-                            SupportedVoices: [{ ID: 'fallback-voice', Name: 'Fallback Voice' }],
+                            SupportedVoices: [
+                                { ID: 'fallback-voice', Name: 'Fallback Voice' },
+                                { ID: 'fable', Name: 'Fable (Excluded on m1)' },
+                            ],
                         };
                     },
                 },
@@ -85,16 +98,17 @@ describe('GetRealtimeModelVoices', () => {
         const result = await GetRealtimeModelVoices();
         expect(result).toHaveLength(2);
 
-        // m1 has personas in metadata, and driver voices not in metadata are appended
+        // m1 has personas in metadata, and driver voices not in metadata are appended, skipping explicitly excluded voices (fable)
         const m1Result = result.find(r => r.ModelID === 'm1');
         expect(m1Result).toBeDefined();
         expect(m1Result!.ModelName).toBe('GPT-Live-1');
-        // metadata personas come first, followed by driver fallback-voice
+        // metadata personas come first, followed by driver fallback-voice (fable is excluded via IsSupported: false)
         expect(m1Result!.Voices).toEqual([
             { ID: 'alloy', Name: 'Alloy' },
             { ID: 'echo', Name: 'Echo' },
             { ID: 'fallback-voice', Name: 'Fallback Voice' },
         ]);
+        expect(m1Result!.Voices.some(v => v.ID === 'fable')).toBe(false);
 
         // m2 has no personas in metadata, includes all driver SupportedVoices
         const m2Result = result.find(r => r.ModelID === 'm2');
@@ -102,9 +116,10 @@ describe('GetRealtimeModelVoices', () => {
         expect(m2Result!.ModelName).toBe('Legacy Realtime');
         expect(m2Result!.Voices).toEqual([
             { ID: 'fallback-voice', Name: 'Fallback Voice' },
+            { ID: 'fable', Name: 'Fable (Excluded on m1)' },
         ]);
 
-        // Guard: for every model whose driver returns voices, the emitted set is a superset
+        // Guard: for every model whose driver returns voices, the emitted set is a superset of non-excluded driver voices
         for (const res of result) {
             expect(res.Voices.some(v => v.ID === 'fallback-voice')).toBe(true);
         }

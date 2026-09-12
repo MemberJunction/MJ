@@ -175,13 +175,12 @@ export abstract class BaseRealtimeModel extends BaseModel {
     }
 
     /**
-     * The provider-native voice ids this model can speak with (e.g. OpenAI `alloy`/`echo`/`shimmer`). The
-     * model/driver is the authoritative owner of "what voices do I support", so each driver declares its
-     * own — used to populate the dev voice picker. Default empty (a driver that hasn't declared voices
-     * yields no picker options, falling back to the configured/default voice).
+     * Static fallback list of provider-native voices supported by this driver when metadata personas
+     * are not present or sparse.
      *
-     * NOTE: this is the near-term, driver-owned source of truth. Long term this should move to metadata so
-     * providers that let users add their OWN voices (e.g. ElevenLabs) can be enumerated dynamically.
+     * NOTE: Database metadata (`MJ: AI Personas` + `AI Model Personas`) is authoritative where configured.
+     * At runtime, `GetRealtimeModelVoices` unions metadata personas with this driver fallback list so that
+     * newly uncatalogued provider voices remain selectable while catalogued personas carry curated names/descriptions.
      *
      * @returns The supported voice ids (id + human label), or `[]` when none are declared.
      */
