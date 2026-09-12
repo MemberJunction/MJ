@@ -29,11 +29,11 @@ import { RealtimeDisclosurePolicy } from './realtime-coagent-config';
 /**
  * The stable name of the primary tool every Realtime Co-Agent registers with the realtime provider.
  *
- * Per the plan's design rule, the realtime-registered tool set is **target-independent**: the
+ * Per the plan's design rule, the core delegation tool set is **target-independent**: the
  * co-agent always exposes this single `invoke-target-agent` tool, and the specific target is a
- * runtime parameter passed *inside* the call — never a different tool per target. This keeps the
- * provider contract identical across targets (and is what lets a pre-provisioned, fixed-tool
- * provider like Eleven Labs fit the same model later). Drivers declaring `SupportsDynamicToolSet`
+ * runtime parameter passed *inside* the call — never a different delegation tool per target. This keeps the
+ * delegation contract identical across targets (and is what lets a pre-provisioned, fixed-tool
+ * provider like Eleven Labs fit the same model). Drivers declaring `SupportsDynamicToolSet`
  * can also project allowed direct actions from the target agent for low-latency execution.
  */
 export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';

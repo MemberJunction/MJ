@@ -9,14 +9,14 @@
  *
  * 1. {@link RealtimeClientSessionService.PrepareClientSession} — resolves the Realtime model,
  *    assembles the companion system prompt (co-agent prompt + target identity + history + memory),
- *    builds the stable, target-independent tool set (always including `invoke-target-agent`), and
+ *    builds the realtime tool set (always including `invoke-target-agent`, plus allowed direct actions on dynamic-toolset drivers), and
  *    asks the model to mint a {@link ClientRealtimeSessionConfig} (ephemeral token + provider
  *    session config) the browser applies verbatim.
  * 2. {@link RealtimeClientSessionService.ExecuteRelayedTool} — executes a single tool call the
  *    browser relayed, routing it through the shared {@link RealtimeToolBroker} so the result is
  *    byte-for-byte identical to the server-bridged path. `invoke-target-agent` delegates to the
- *    target agent via {@link AgentRunner.RunAgent}; every other tool returns a structured
- *    "not available" result for now (action wiring is a later phase).
+ *    target agent via {@link AgentRunner.RunAgent}; allowed direct actions execute via
+ *    {@link ActionEngineServer.Instance.RunAction}; other tools return a structured "not available" result.
  *
  * **Why this duplicates BaseAgent.** The private helpers in `BaseAgent.executeRealtimeSession`
  * (model resolution, companion-prompt assembly, target-agent resolution, delegation) are the
@@ -138,7 +138,7 @@ export interface PrepareClientSessionInput {
     CompanyID?: string;
     /** Optional provider-specific session config bag (voice, language, turn detection, etc.). */
     Config?: JSONObject;
-    /** Optional extra, target-independent tools to expose in addition to `invoke-target-agent`. */
+    /** Optional extra tools to expose in addition to `invoke-target-agent`. */
     ExtraTools?: RealtimeToolDefinition[];
     /**
      * Optional EXPLICIT realtime model choice (`MJ: AI Models.ID`). When set, that exact model is
@@ -1800,7 +1800,7 @@ export class RealtimeClientSessionService {
 
     /**
      * Builds the {@link RealtimeSessionParams} for the client-direct session: the companion system
-     * prompt plus the stable, target-independent tool set.
+     * prompt plus the registered realtime tool set.
      *
      * @param input The prepare-session input.
      * @param coAgent The resolved co-agent.
@@ -2286,12 +2286,11 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Builds the stable, target-independent tool set every voice session exposes: the single
-     * `invoke-target-agent` tool plus any caller-supplied extra tools. The target is a runtime
-     * argument *inside* the call, never a per-target tool — this keeps the provider contract
-     * identical across targets.
+     * Builds the tool set every voice session exposes: the core `invoke-target-agent` tool plus
+     * any caller-supplied extra tools or projected direct actions. The target is a runtime
+     * argument *inside* the delegation call, keeping the provider delegation contract identical.
      *
-     * @param extraTools Optional additional target-independent tools.
+     * @param extraTools Optional additional tools to register.
      * @returns The tools to register at session start.
      */
     protected buildStableToolSet(extraTools?: RealtimeToolDefinition[]): RealtimeToolDefinition[] {

@@ -3,11 +3,12 @@
  * the {@link RealtimeAgentType} (Realtime Co-Agent).
  *
  * The {@link RealtimeSessionRunner} owns the lifecycle of a single full-duplex
- * {@link IRealtimeSession}: it opens the session, registers a **stable, target-independent** tool
- * set (always including `invoke-target-agent`), wires the provider event handlers, routes tool
- * calls (invoke-target → delegate to the target agent; others → an injected tool executor),
+ * {@link IRealtimeSession}: it opens the session, registers the tool set (always including
+ * `invoke-target-agent`, extra tools, and any server channel tools), wires the provider event handlers,
+ * routes tool calls (invoke-target → delegate to the target agent; others → an injected tool executor),
  * persists each transcript turn as a conversation detail, accumulates usage and checkpoints it on
- * a debounced cadence, and aborts any in-flight delegated run on barge-in.
+ * a debounced cadence, and aborts any in-flight delegated run on barge-in. (Note: telephony, media,
+ * and room sessions run via this runner do not project direct actions).
  *
  * **Why dependency injection.** Every collaborator that would otherwise pull in `BaseAgent`,
  * metadata, or the database is injected via {@link RealtimeSessionRunnerDeps}. That keeps the
@@ -82,8 +83,7 @@ export interface RealtimeSessionRunnerDeps {
 
     /**
      * Extra realtime tools to register *in addition to* the always-present `invoke-target-agent`
-     * tool — e.g. fixed UI/control tools. These stay target-independent (see
-     * {@link INVOKE_TARGET_AGENT_TOOL_NAME}). Optional.
+     * tool — e.g. fixed UI/control tools. Optional.
      */
     ExtraTools?: RealtimeToolDefinition[];
 
@@ -444,7 +444,7 @@ export class RealtimeSessionRunner {
         }
 
         this.deps.LogStatus?.(
-            `🎙️ Realtime session started with ${tools.length} tool(s) (target-independent set).`,
+            `🎙️ Realtime session started with ${tools.length} tool(s).`,
             true
         );
     }
