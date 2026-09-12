@@ -252,7 +252,6 @@ module.exports = {
     // their GeneratedEntities package (this repo doesn't generate non-core ops, so only the core target is set).
     { type: 'CoreRemoteOperations', directory: './packages/MJCoreEntities/src/generated' },
     { type: 'DBSchemaJSON', directory: './Schema Files' },
-    { type: 'MetadataSync', directory: './metadata' },
   ],
 
   // Build commands for monorepo packages

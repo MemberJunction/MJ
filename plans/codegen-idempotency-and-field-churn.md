@@ -1109,6 +1109,8 @@ all) is the right long-term shape and is recorded in §9 — it changes the publ
 
 ### C7 — Decision metadata lives in `metadata/entities/`: exporter, CodeGen writer, release path
 
+> **⛔ REVERTED — this section is history, not instructions.** The decision metadata store (`metadata/entities/decisions/`, `DecisionMetadataWriter`, `decision-metadata-format.ts`, the export script, the `decisionMetadata` config block and the `MetadataSync` `output[]` entry) shipped in #4296 and was removed in full in #4397. It was redundant with the migration's CodeGen capture (`migrations/v*/CodeGen_Run_*.sql`) and it weakened the drift gate. The authoritative source of truth is the field-metadata lock (`field-metadata-lock.ts`) plus that migration capture. Everything below, and every other `C7` reference in this document (incl. tests T14/T15), describes code that no longer exists — **do not rebuild it.**
+
 **Files:** new `scripts/codegen-decision-metadata-export.mjs`; new
 `packages/CodeGenLib/src/Database/decision-metadata-writer.ts` (+ a shared
 `decision-metadata-format.ts` used by both); `metadata/entities/decisions/` (new folder under the
