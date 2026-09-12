@@ -152,3 +152,75 @@ describe('RealtimeSessionState — in-place caption updates', () => {
   });
 });
 
+describe('RealtimeSessionState — direct action cards', () => {
+  let harness: ReturnType<typeof buildStreams>;
+  let state: RealtimeSessionState;
+
+  beforeEach(() => {
+    harness = buildStreams();
+    state = new RealtimeSessionState();
+    state.Attach(harness.streams);
+  });
+
+  it('creates an action card from synthetic progress when a direct action is dispatched', () => {
+    harness.progress$.next({
+      CallID: 'call-action-1',
+      ToolName: 'File_Storage_List_Objects',
+      Step: 'direct_action',
+      Message: 'Executing File_Storage_List_Objects'
+    });
+
+    expect(state.Cards).toHaveLength(1);
+    const card = state.Cards[0];
+    expect(card.Kind).toBe('action');
+    expect(card.ToolName).toBe('File_Storage_List_Objects');
+    expect(card.AgentName).toBe('File Storage List Objects');
+    expect(card.LatestStep).toBe('direct_action');
+    expect(card.Done).toBe(false);
+  });
+
+  it('flips the dispatched action card to done on result', () => {
+    harness.progress$.next({
+      CallID: 'call-action-1',
+      ToolName: 'Get_Weather',
+      Step: 'direct_action',
+      Message: 'Executing Get_Weather'
+    });
+    expect(state.Cards[0].Done).toBe(false);
+
+    harness.result$.next({
+      CallID: 'call-action-1',
+      ToolName: 'Get_Weather',
+      Success: true,
+      Output: 'Sunny, 75°F'
+    });
+
+    expect(state.Cards).toHaveLength(1);
+    const card = state.Cards[0];
+    expect(card.Kind).toBe('action');
+    expect(card.Done).toBe(true);
+    expect(card.Success).toBe(true);
+    expect(card.Result).toBe('Sunny, 75°F');
+  });
+
+  it('safety net: creates exactly one done action card when result arrives with no prior progress', () => {
+    expect(state.Cards).toHaveLength(0);
+
+    harness.result$.next({
+      CallID: 'call-fast-1',
+      ToolName: 'Get_Weather',
+      Success: true,
+      Output: 'Rainy, 50°F'
+    });
+
+    expect(state.Cards).toHaveLength(1);
+    const card = state.Cards[0];
+    expect(card.Kind).toBe('action');
+    expect(card.AgentName).toBe('Get Weather');
+    expect(card.Done).toBe(true);
+    expect(card.Success).toBe(true);
+    expect(card.Result).toBe('Rainy, 50°F');
+  });
+});
+
+

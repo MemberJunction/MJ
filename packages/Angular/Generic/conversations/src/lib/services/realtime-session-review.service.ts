@@ -287,6 +287,7 @@ export const MAX_REVIEW_DETAILS = 500;
 export function BuildReviewDelegationCard(run: RealtimeSessionReviewRun, fallbackAgentName: string): RealtimeDelegationCardVM {
   const startedAt = run.StartedAt?.getTime() ?? 0;
   return {
+    Kind: 'agent',
     CallID: run.RunID,
     AgentName: run.AgentName || fallbackAgentName,
     LatestMessage: run.Message ?? run.ErrorMessage ?? run.Status,

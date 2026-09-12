@@ -2,8 +2,13 @@
   <!-- WORKING — compact live card -->
   <div class="work-card" role="status" aria-live="polite">
     <div class="work-card__head">
-      <div class="avatar" aria-hidden="true">{{ Card.AgentName.charAt(0) }}</div>
-      <div class="work-card__title">{{ Card.AgentName }} is working…</div>
+      @if (Card.Kind === 'action') {
+        <div class="avatar avatar--action" aria-hidden="true"><i class="fa-solid fa-wrench"></i></div>
+        <div class="work-card__title">{{ Card.AgentName }}</div>
+      } @else {
+        <div class="avatar" aria-hidden="true">{{ Card.AgentName.charAt(0) }}</div>
+        <div class="work-card__title">{{ Card.AgentName }} is working…</div>
+      }
       <span class="pill pill--running">
         <i class="fa-solid fa-spinner spin" aria-hidden="true"></i> Running
       </span>
@@ -14,10 +19,12 @@
           <span>Open run</span>
         </button>
       }
-      <button type="button" class="cancel-work" (click)="CancelWork($event)"
-              title="Cancel this work" aria-label="Cancel this work">
-        <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-      </button>
+      @if (Card.Kind !== 'action') {
+        <button type="button" class="cancel-work" (click)="CancelWork($event)"
+                title="Cancel this work" aria-label="Cancel this work">
+          <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+      }
     </div>
     <div class="work-card__step">{{ StepLabel }}</div>
     @if (ShowDetailLine) {
@@ -46,7 +53,11 @@
       <span class="done-chip__preview">{{ ResultPreview }}</span>
       <span class="via-badge">
         <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
-        via {{ Card.AgentName }}
+        @if (Card.Kind === 'action') {
+          tool
+        } @else {
+          via {{ Card.AgentName }}
+        }
       </span>
     </ng-template>
     <ng-template mjAccordionActions>
@@ -77,7 +88,12 @@
             <i class="fa-solid fa-arrow-right" aria-hidden="true"></i>
           </button>
         }
-        @if (Card.RunRef) {
+        @if (Card.Kind === 'action') {
+          <div class="done-detail__meta">
+            <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
+            Direct action · {{ Card.AgentName }}
+          </div>
+        } @else if (Card.RunRef) {
           <div class="done-detail__meta">
             <i class="fa-solid fa-shield-halved" [title]="ProvenanceTitle" aria-hidden="true"></i>
             via {{ Card.AgentName }} · run {{ Card.RunRef }}

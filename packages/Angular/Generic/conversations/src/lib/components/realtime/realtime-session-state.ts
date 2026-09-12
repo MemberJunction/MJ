@@ -31,13 +31,17 @@ export interface RealtimeSessionStreams {
  * references and in-place updates reliably re-render.
  */
 export interface RealtimeDelegationCardVM {
-  /** The `invoke-target-agent` call this card represents. */
+  /** What this card represents: a delegated agent run, or a direct action invoked by the co-agent. */
+  Kind: 'agent' | 'action';
+  /** The `invoke-target-agent` or direct-action call this card represents. */
   CallID: string;
-  /** Display name of the delegated agent (e.g. "Sage"). */
+  /** Display name of the delegated agent (e.g. "Sage") or formatted direct action title (e.g. "Get Weather"). */
   AgentName: string;
+  /** The raw tool name when Kind === 'action' (e.g. "File_Storage_List_Objects"). */
+  ToolName?: string;
   /** Latest human-readable progress message from the stream. */
   LatestMessage: string;
-  /** The delegation phase (`prompt_execution` | `action_execution` | …). */
+  /** The delegation phase (`prompt_execution` | `action_execution` | `direct_action` | …). */
   LatestStep: string;
   /** Optional completion percentage (0–100) when the server supplies it. */
   Percentage?: number;
@@ -103,11 +107,21 @@ export interface RealtimeThreadDividerItem {
 export type RealtimeThreadItem = RealtimeThreadCaptionItem | RealtimeThreadDelegationItem | RealtimeThreadDividerItem;
 
 /**
+ * Converts a sanitized wire tool name (e.g. "File_Storage_List_Objects" or "Get_Weather")
+ * into a clean human-readable title ("File Storage List Objects", "Get Weather").
+ */
+export function FormatToolName(toolName: string): string {
+  if (!toolName) return '';
+  return toolName.replace(/_/g, ' ').trim();
+}
+
+/**
  * Maps a raw delegation step id to a human-friendly phrase. Unknown steps fall back to
  * the raw progress message (per product direction) so the UI never shows snake_case ids.
  */
 export function FriendlyStepLabel(step: string, message: string): string {
   switch (step) {
+    case 'direct_action': return 'Looking that up';
     case 'prompt_execution': return 'Thinking it through';
     case 'action_execution': return 'Running actions';
     case 'subagent_execution': return 'Working with another agent';
@@ -208,6 +222,9 @@ export class RealtimeSessionState {
     this.Items = [...items];
     for (const item of items) {
       if (item.Kind === 'delegation') {
+        if (!item.Card.Kind) {
+          item.Card.Kind = 'agent';
+        }
         this.cardsByCallId.set(item.Card.CallID, item.Card);
       }
     }
@@ -309,6 +326,7 @@ export class RealtimeSessionState {
     if (existing) {
       this.replaceCard({
         ...existing,
+        ToolName: progress.ToolName ?? existing.ToolName,
         LatestStep: progress.Step,
         LatestMessage: progress.Message,
         Percentage: progress.Percentage
@@ -321,9 +339,12 @@ export class RealtimeSessionState {
 
   /** Creates a working card for a first-seen CallID and appends it to the thread tail. */
   private insertCard(progress: RealtimeDelegationProgress): void {
+    const isAction = !!progress.ToolName && progress.ToolName !== 'invoke-target-agent';
     const card: RealtimeDelegationCardVM = {
       CallID: progress.CallID,
-      AgentName: this.AgentName,
+      Kind: isAction ? 'action' : 'agent',
+      ToolName: progress.ToolName,
+      AgentName: isAction ? FormatToolName(progress.ToolName!) : this.AgentName,
       LatestStep: progress.Step,
       LatestMessage: progress.Message,
       Percentage: progress.Percentage,
@@ -342,10 +363,43 @@ export class RealtimeSessionState {
   private onResult(result: RealtimeDelegationResult): void {
     const existing = this.cardsByCallId.get(result.CallID);
     if (!existing) {
-      return; // non-delegation tool result (no card was ever created) — ignore
+      if (!result.ToolName) {
+        return; // untracked result without tool name — ignore
+      }
+      // Create-or-update safety net: if a terminal result arrives without prior progress
+      // (e.g. fast direct action or missed stream packet), construct and insert the done card
+      // rather than dropping the result.
+      const isAction = result.ToolName !== 'invoke-target-agent';
+      const toolName = result.ToolName;
+      const card: RealtimeDelegationCardVM = {
+        CallID: result.CallID,
+        Kind: isAction ? 'action' : 'agent',
+        ToolName: toolName,
+        AgentName: isAction ? FormatToolName(toolName) : this.AgentName,
+        LatestStep: isAction ? 'direct_action' : 'decision_processing',
+        LatestMessage: isAction ? `Executed ${FormatToolName(toolName)}` : 'Completed',
+        Done: true,
+        Success: result.Success,
+        Result: result.Output,
+        RunRef: this.shortRunRef(result.CallID),
+        RunID: result.RunID,
+        Artifacts: result.Artifacts,
+        StartedAt: Date.now(),
+        FinishedAt: Date.now()
+      };
+      this.cardsByCallId.set(result.CallID, card);
+      this.Items = [...this.Items, { Kind: 'delegation', Card: card }];
+      this.rebuildCards();
+      this.recomputeActive();
+      if (!this.HasRunningDelegation) {
+        this.Narration = null;
+      }
+      this.Changed$.next();
+      return;
     }
     this.replaceCard({
       ...existing,
+      ToolName: result.ToolName ?? existing.ToolName,
       Done: true,
       Success: result.Success,
       Result: result.Output,
