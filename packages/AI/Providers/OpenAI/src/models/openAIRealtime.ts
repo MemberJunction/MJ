@@ -186,6 +186,11 @@ export interface OpenAIRealtimeProfile {
      * emits anything). Compat endpoints without `create_response` gating set false.
      */
     supportsLiveReconfigure: boolean;
+    /**
+     * Whether this driver/session supports dynamic, multi-tool sets projected into the realtime
+     * session (e.g. per-agent direct action invocation).
+     */
+    supportsDynamicToolSet: boolean;
     /** The fatal-error message surfaced when the socket closes unexpectedly. */
     unexpectedCloseMessage: string;
     /**
@@ -276,6 +281,7 @@ export const OPENAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsMcpTools: true,
     supportsVoiceOutput: true,
     supportsLiveReconfigure: true,
+    supportsDynamicToolSet: true,
     unexpectedCloseMessage: 'OpenAI realtime connection closed unexpectedly',
     supportedTurnModes: ['serverVad', 'semanticVad'],
     // A normalized request (catalog/cascade `turnDetection`) maps first; otherwise OpenAI's default
@@ -617,7 +623,7 @@ export interface IOpenAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'OpenAIRealtime')
 export class OpenAIRealtime extends BaseRealtimeModel {
-    public static override readonly SupportsDynamicToolSet = true;
+    public static override readonly SupportsDynamicToolSet = OPENAI_REALTIME_PROFILE.supportsDynamicToolSet;
 
     private _openAI: OpenAI;
 
@@ -1097,10 +1103,13 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
 
     /** @inheritdoc — profile-gated: only providers whose endpoint honors a live partial `session.update`. */
     public get Capabilities(): RealtimeSessionCapabilities {
-        return {
+        const caps: RealtimeSessionCapabilities = {
             CanReconfigureTurnMode: this.profile.supportsLiveReconfigure,
-            SupportsDynamicToolSet: OpenAIRealtime.SupportsDynamicToolSet,
         };
+        if (this.profile.supportsDynamicToolSet) {
+            caps.SupportsDynamicToolSet = true;
+        }
+        return caps;
     }
 
     /**
