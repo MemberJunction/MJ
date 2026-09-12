@@ -77,6 +77,34 @@ commands as plain `mj dev workspace ...`.
 - Genuine version conflicts between members are **reported, not hidden** (highest committed
   version wins; the report names every declaring package).
 
+### Open App client packages
+
+Every entry in a member's `mj-app.json` `packages.client[]` **and** `packages.shared[]` is
+registered in the generated parent `package.json` as `dependencies` at `workspace:*`, **at every
+role**. That set is not a choice — it mirrors the host exactly: `GetClientPackagesFromManifest`
+builds `dynamicPackages.client` as `[...client, ...shared]` with no role filter, and
+`mj codegen manifest --open-app-client-bootstrap` turns every entry there into an import in the
+shell's *generated* class-registrations manifest. Anything narrower leaves a package the shell
+imports and nothing declares, so pnpm never links it. (`packages.server[]` is excluded: it goes to
+`dynamicPackages.server`, a Node process that resolves importer-relative, not from the vite root.)
+
+It is also deliberate over-linking: a package is linked whether or not a host has registered it,
+because linking and registration are independent
+([`OPEN_APP_WORKSPACE_LINKING_SPEC.md`](OPEN_APP_WORKSPACE_LINKING_SPEC.md) §17) — an unregistered
+package resolves but does not load.
+
+If one of those packages declares a peer your app shell does not, the generator **warns and names
+it with the version the parent already pins**; it does not add it for you. Declare it in the
+shell's own `package.json`, the way MJExplorer declares `@angular/service-worker` and
+`@angular/elements`. An Angular dev server externalizes `@angular/*` and resolves it from the
+**vite root** (the shell), so a copy in the library's own `node_modules` is never consulted — which
+is why this fails at page load with a completely green build.
+
+`mj dev workspace doctor` fails when a **member's** declared client package is not linked at the
+parent. A package declared by a repo that is not a workspace member is ignored (it can never be
+linked — that is what excluding it means), and the check skips entirely until `pnpm install` has
+run at the parent, since linkage is the install's output rather than the generator's.
+
 ## Recovery
 
 Someone (or an IDE) ran `npm install` / `pnpm install` **inside** a member repo? `status` will flag

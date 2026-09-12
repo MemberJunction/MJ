@@ -21,6 +21,7 @@
     "@angular/cdk": "21.2.14",
     "@angular/common": "21.2.22",
     "@angular/core": "21.2.22",
+    "@angular/elements": "21.2.22",
     "@angular/forms": "21.2.22",
     "@angular/localize": "21.2.22",
     "@angular/platform-browser": "21.2.22",

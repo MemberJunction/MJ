@@ -53,6 +53,115 @@ export interface MemberPackageInfo {
   PackageJson: MemberPackageJson;
 }
 
+/** One `packages.client[]` / `server[]` / `shared[]` entry in a member's committed `mj-app.json`. */
+export interface MjAppPackageEntry {
+  name: string;
+  /**
+   * One of the manifest schema's seven roles (`bootstrap`, `actions`, `engine`, `provider`, `module`,
+   * `components`, `library`). Read for reporting only — the host's client emitter applies NO role
+   * filter, so role never decides whether a package must be linked. See `readShellImportedEntries`.
+   */
+  role?: string;
+  startupExport?: string;
+}
+
+/**
+ * The subset of a member's committed `mj-app.json` this generator reads.
+ *
+ * This is an Open App's OWN declaration of what it ships — tracked in its repo, and therefore
+ * stable in a way the host's `mj.config.cjs` `dynamicPackages` is not (that file is rewritten by
+ * `mj app install`/`enable`/`disable`). Reading the app's declaration rather than the host's
+ * registration is also what keeps the linking half independent of the registration half, per the
+ * axiom in `guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` (§17): a workspace links an app whether or
+ * not a host has registered it.
+ */
+export interface MjAppJson {
+  name?: string;
+  packages?: {
+    client?: MjAppPackageEntry[];
+    server?: MjAppPackageEntry[];
+    shared?: MjAppPackageEntry[];
+  };
+}
+
+/**
+ * A client-side package an Open App member declares in its own `mj-app.json`.
+ *
+ * Collected from `packages.client[]` AND `packages.shared[]`, at every role, because that is exactly
+ * the set the host emits into `dynamicPackages.client` and therefore the set an app shell imports
+ * without ever declaring. `packages.server[]` is excluded: the host routes it to
+ * `dynamicPackages.server`, a Node process that resolves importer-relative, not from the vite root.
+ */
+export interface OpenAppClientPackage {
+  /** Package name, e.g. `@mj-biz-apps/caliber-ng`. */
+  Package: string;
+  /** Member repo directory whose `mj-app.json` declares it. */
+  Repo: string;
+  /** Whether a workspace member actually provides the package — a declaration can outrun the tree. */
+  Provided: boolean;
+}
+
+/** An Angular app shell the workspace enumerates, with everything it declares. */
+export interface WorkspaceShell {
+  /** Package name from the shell's own package.json, e.g. `mj_explorer`. */
+  Name: string;
+  /** Package directory relative to its member repo root. */
+  RelPath: string;
+  /** Member repo that provides it. */
+  Repo: string;
+  /** Every name in the shell's `dependencies` + `devDependencies` — what it can already resolve. */
+  Declares: string[];
+}
+
+/**
+ * A peer an Open App client-side package needs that a given shell will NOT resolve.
+ *
+ * Reported per shell rather than once: a workspace can enumerate several shells, and a peer one
+ * shell happens to declare must not mask another shell's gap. Measured on the real workspace, the
+ * shell-agnostic form of this rule produced a false negative — a demo app declaring
+ * `@angular/elements` hid MJExplorer's real gap (#4364).
+ */
+export interface ShellPeerGap {
+  /** The shell that will fail to resolve it. */
+  Shell: string;
+  /** The client-side package whose `peerDependencies` names it. */
+  Package: string;
+  /** The unmet peer, e.g. `@angular/elements`. */
+  Peer: string;
+  /** The range the client package asks for. */
+  Range: string;
+  /** Exact version the parent's assembled overrides already pin, or null when nothing pins it. */
+  Pin: string | null;
+}
+
+/**
+ * One client-side package that more than one member declares.
+ *
+ * Reported rather than resolved silently, the way {@link DuplicateFamilyPackage} already is: which
+ * member the parent links is decided by repo sort order, and that is an ambiguity the developer
+ * should be told about, not a fact the generator should keep to itself.
+ */
+export interface DuplicateClientPackage {
+  Package: string;
+  /** Every member repo whose `mj-app.json` declares it, in sort order — the first is the one linked. */
+  Repos: string[];
+}
+
+/** Which declared client-side packages are linked at the parent root. */
+export interface ClientPackageCensus {
+  Entries: Array<{ Package: string; Repo: string; Provided: boolean; Linked: boolean }>;
+  /**
+   * Members whose `mj-app.json` could not be parsed, so their declarations are unknown.
+   *
+   * Carried rather than thrown because `doctor` diagnoses where `generate` writes: aborting the
+   * whole report over one unreadable file costs the nine checks that have nothing to do with it —
+   * the one-copy census and standalone-install detection especially, which are the reason someone
+   * runs doctor in the first place. `generate` still refuses outright, which is correct: it emits a
+   * manifest and must not do so from a declaration it could not read.
+   */
+  Unreadable: Array<{ Repo: string; Message: string }>;
+}
+
 /** One dependency resolution read from a member's committed lockfile. */
 export interface ResolvedLockEntry {
   Name: string;
@@ -136,6 +245,24 @@ export interface CandidateRepo {
   /** Raw contents of the repo's root `turbo.json`, or null when absent. */
   TurboJson: string | null;
   /**
+   * Why the member's `mj-app.json` could not be parsed, or null when it parsed (or is absent).
+   *
+   * Detection walks EVERY sibling directory, before the candidate filter and long before
+   * `--exclude` is applied, so throwing here would let one broken file in a repo the user
+   * deliberately excludes abort the whole command. The failure is carried instead and raised by
+   * whoever actually reads the declaration, for members it actually reads.
+   *
+   * A broken root `package.json` still throws in `LoadRepo`: that one means the directory is not a
+   * loadable repo at all, which is a different statement.
+   */
+  MjAppJsonError: string | null;
+  /**
+   * The member's committed `mj-app.json`, or null when it ships none (a non-Open-App member such
+   * as the MJ monorepo). Its `packages.client[]` is the only registration-independent record of
+   * which packages an app shell will be asked to import.
+   */
+  MjAppJson: MjAppJson | null;
+  /**
    * The member's own workspace globs, relative to its repo root: the `packages:`
    * list of its `pnpm-workspace.yaml` with positives filtered to packages-rooted
    * entries and negations all kept (a `!**\/dist\/**` guard included — they only subtract),
@@ -188,6 +315,16 @@ export interface ParentManifestReport {
   DroppedWorkspaceDevDeps: Array<{ Package: string; Repo: string }>;
   /** Lockfile-derived pins displaced by an explicit member override or a family workspace:* override. */
   SupersededPins: string[];
+  /**
+   * Open App client-side packages found in members' `mj-app.json`. Entries with
+   * `Provided: false` are NOT registered — the declaration names a package no member ships — and
+   * the command warns on each.
+   */
+  OpenAppClientPackages: OpenAppClientPackage[];
+  /** Per-shell unmet peers of the registered client packages — reported, never auto-added. */
+  ShellPeerGaps: ShellPeerGap[];
+  /** Client-side packages more than one member declares; the first by repo sort order is linked. */
+  DuplicateClientPackages: DuplicateClientPackage[];
 }
 
 /** Result of building the parent `package.json`. */
