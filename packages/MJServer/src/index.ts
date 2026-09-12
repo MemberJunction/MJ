@@ -48,11 +48,16 @@ import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.j
 import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
-import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
-import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
-import { RingCentralTelephonyService, SetRingCentralTelephonyService } from './telephony/index.js';
-import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService, GetTeamsMeetingsService, StartCalendarScheduler } from './telephony/index.js';
-import { InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from './telephony/index.js';
+import {
+  RESOLVER_PATHS as TELEPHONY_RESOLVER_PATHS,
+  LoadTelephonyAdapters,
+  InstallMediaUpgradeDispatcher,
+  IsGraphQLWsPath,
+  GetTeamsMeetingsService,
+  StartCalendarScheduler,
+} from '@memberjunction/telephony-adapters';
+
+LoadTelephonyAdapters();
 
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
@@ -303,7 +308,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
-  const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
+  const combinedResolverPaths = [...resolverPaths, ...localResolverPaths, ...TELEPHONY_RESOLVER_PATHS];
 
   const isWindows = sep === '\\';
   const globs = combinedResolverPaths.flatMap((path) => (isWindows ? path.replace(/\\/g, '/') : path));
@@ -1253,6 +1258,51 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   _currentExtensionLoader = extensionLoader;
 
   // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
+  // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
+  const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
+  if (configInfo.telephony?.enabled) {
+    if (configInfo.telephony.twilio) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'TwilioTelephonyExtension',
+        RootPath: '/telephony/twilio',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+      });
+    }
+    if (configInfo.telephony.vonage) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'VonageTelephonyExtension',
+        RootPath: '/telephony/vonage',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+      });
+    }
+    if (configInfo.telephony.ringcentral) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'RingCentralTelephonyExtension',
+        RootPath: '/telephony/ringcentral',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+      });
+    }
+    if (configInfo.telephony.teams?.enabled) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'TeamsMeetingsExtension',
+        RootPath: '/meetings/teams',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.teams as unknown as Record<string, unknown>,
+      });
+    }
+  }
+
+  const rawHostExtensions = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  const mergedHostExtensions = mergeServerExtensionConfigs(telephonyExtensionConfigs, rawHostExtensions);
+
+  // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
   // (and remains the only source for host-only extensions such as Slack/Teams).
   // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
   // so a new pre-auth app.use(...) in serve() must also be added to
@@ -1260,7 +1310,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   const extensionConfigs = prepareServerExtensionConfigs(
     mergeServerExtensionConfigs(
       options?.serverExtensions ?? [],
-      (configInfo.serverExtensions ?? []) as ServerExtensionConfig[],
+      mergedHostExtensions,
     ),
     {
       onInvalid: (message) => LogError(message),
@@ -1271,66 +1321,6 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   for (const cfg of extensionConfigs) {
     LogStatus(`Server extension ${describeServerExtensionMount(cfg)}`);
   }
-
-  // ─── Telephony (Twilio) ingress: inbound voice webhook + Media-Streams WSS (PUBLIC) ──
-  // Carriers cannot present an MJ JWT — the X-Twilio-Signature HMAC is the gate. The
-  // public webhook router mounts BEFORE the auth middleware; the Media-Streams WSS attaches
-  // to the shared HTTP server. The outbound PlaceTwilioCall mutation reuses the same service.
-  if (configInfo.telephony?.enabled && configInfo.telephony.twilio) {
-    const twilioHandler = createTwilioTelephonyHandler(oauthPublicUrl, configInfo.telephony.twilio);
-    app.use(TWILIO_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), twilioHandler.publicRouter);
-    twilioHandler.attachMediaStreamServer();
-    SetTwilioTelephonyService(twilioHandler.service);
-    extensionLoader.Services.RegisterService('TwilioTelephonyService', twilioHandler.service);
-    startupLog.LogIf('verbose', `[Telephony] Twilio routes registered at ${TWILIO_TELEPHONY_MOUNT_PATH}/voice + Media-Streams WSS`);
-  }
-
-  // ─── Telephony (Vonage) ingress: inbound answer/event webhooks + media WSS (PUBLIC) ──
-  // Carriers cannot present an MJ JWT — the Vonage signed-request HMAC / webhook JWT is the gate.
-  // The public router mounts BEFORE the auth middleware; the media WSS attaches to the shared
-  // HTTP server. The outbound PlaceVonageCall mutation reuses the same service.
-  if (configInfo.telephony?.enabled && configInfo.telephony.vonage) {
-    const vonageHandler = createVonageTelephonyHandler(oauthPublicUrl, configInfo.telephony.vonage);
-    app.use(VONAGE_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), vonageHandler.publicRouter);
-    vonageHandler.attachMediaStreamServer();
-    SetVonageTelephonyService(vonageHandler.service);
-    extensionLoader.Services.RegisterService('VonageTelephonyService', vonageHandler.service);
-    startupLog.LogIf('verbose', `[Telephony] Vonage routes registered at ${VONAGE_TELEPHONY_MOUNT_PATH}/answer + /event + media WSS`);
-  }
-
-  // ─── Telephony (RingCentral) ingress: SIP softphone registration (no HTTP webhook / media WSS) ──
-  // RingCentral's only bidirectional-audio transport is a registered SIP softphone — inbound calls arrive
-  // as SIP INVITEs on its own SIP/TLS connection, so there is no public webhook or media WSS to mount.
-  // start() registers the softphone fire-and-forget so SIP registration never blocks boot; the outbound
-  // PlaceRingCentralCall mutation reuses the same service via the runtime holder.
-  if (configInfo.telephony?.enabled && configInfo.telephony.ringcentral) {
-    const ringCentralService = new RingCentralTelephonyService(configInfo.telephony.ringcentral);
-    SetRingCentralTelephonyService(ringCentralService);
-    extensionLoader.Services.RegisterService('RingCentralTelephonyService', ringCentralService);
-    void ringCentralService.start();
-    startupLog.LogIf('verbose', `[Telephony] RingCentral SIP softphone starting (codec ${configInfo.telephony.ringcentral.codec ?? 'OPUS/16000'})`);
-  }
-
-  // ─── Teams meetings ingress: Graph change-notification webhook (PUBLIC) ──────────────
-  // Graph cannot present an MJ JWT — the subscription validationToken handshake + the per-
-  // notification clientState shared secret are the gate. The public webhook router mounts
-  // BEFORE the auth middleware. The ACS application-hosted-media audio plane is owned by the
-  // server's native ACS media adapter, which attaches transports to the shared registry
-  // (a media WSS is not needed here). The StartTeamsMeetingSession mutation reuses the same
-  // service via the runtime holder.
-  if (configInfo.telephony?.enabled && configInfo.telephony.teams?.enabled) {
-    const teamsHandler = createTeamsMeetingsHandler(configInfo.telephony.teams);
-    app.use(TEAMS_MEETINGS_MOUNT_PATH, cors<cors.CorsRequest>(), teamsHandler.publicRouter);
-    SetTeamsMeetingsService(teamsHandler.service);
-    extensionLoader.Services.RegisterService('TeamsMeetingsService', teamsHandler.service);
-    startupLog.LogIf('verbose', `[Meetings] Teams routes registered at ${TEAMS_MEETINGS_MOUNT_PATH}/notifications`);
-  }
-
-  // Install the single path-routing WebSocket-upgrade dispatcher AFTER all media WSS routes have
-  // registered. ws 8.x has each {server}-bound WebSocketServer 400 paths it doesn't own, so the GraphQL
-  // socket and the telephony media sockets cannot coexist as separate {server} servers — this strips the
-  // auto-listeners and routes upgrades by path. No-op when no media routes registered (telephony off).
-  InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath);
 
   // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
   // Without this, the browser blocks 401 responses from the auth middleware
@@ -1434,6 +1424,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   await extensionLoader.NotifyAllExtensionsMounted({
     httpServer,
     publicUrl: oauthPublicUrl,
+  });
+
+  // Install the single path-routing WebSocket-upgrade dispatcher AFTER all extensions across both
+  // pre-auth and post-auth phases have mounted and registered their media WSS routes. ws 8.x has each
+  // {server}-bound WebSocketServer 400 paths it doesn't own, so the GraphQL socket and the telephony
+  // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
+  // routes upgrades by path. No-op when no media routes registered (telephony off).
+  InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
+    return RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
   });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
@@ -1606,14 +1605,14 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // unref'd). Gated on Teams meetings being enabled (the provider whose scheduled-join is wired) and
   // reuses the SAME meetings service as the ingress; identities without configured calendar creds are
   // skipped, so this is a harmless no-op until a Graph-backed identity + token are configured.
-  if (resumeUser && configInfo.telephony?.teams?.enabled) { // global-provider-ok: server-owned background poller under the server's provider + system user
+  if (resumeUser) { // global-provider-ok: server-owned background poller under the server's provider + system user
     const teamsMeetingsService = GetTeamsMeetingsService();
     if (teamsMeetingsService) {
       StartCalendarScheduler({
         Provider: Metadata.Provider, // global-provider-ok: server-owned background poller under the server's single default provider + system user
         ContextUser: resumeUser,
         TeamsService: teamsMeetingsService,
-        TeamsConfig: configInfo.telephony.teams,
+        TeamsConfig: teamsMeetingsService.Config,
       });
     }
   }

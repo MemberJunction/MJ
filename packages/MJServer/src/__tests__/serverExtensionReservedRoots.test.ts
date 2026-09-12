@@ -37,9 +37,6 @@ describe('coreReservedServerExtensionRoots', () => {
             exportedStringConst('auth/AuthProviderCatalogRouter.ts', 'AUTH_CATALOG_MOUNT_PATH'),
             exportedStringConst('auth/magicLink/MagicLinkRouter.ts', 'MAGIC_LINK_MOUNT_PATH'),
             exportedStringConst('realtimeWidget/WidgetRouter.ts', 'WIDGET_MOUNT_PATH'),
-            exportedStringConst('telephony/TwilioTelephonyRouter.ts', 'TWILIO_TELEPHONY_MOUNT_PATH'),
-            exportedStringConst('telephony/VonageTelephonyRouter.ts', 'VONAGE_TELEPHONY_MOUNT_PATH'),
-            exportedStringConst('telephony/TeamsMeetingsRouter.ts', 'TEAMS_MEETINGS_MOUNT_PATH'),
         ]);
     });
 
@@ -95,9 +92,6 @@ describe('coreReservedServerExtensionRoots', () => {
             REALTIME_SDP_EXCHANGE_PATH: '/realtime',
             MAGIC_LINK_MOUNT_PATH: '/magic-link',
             WIDGET_MOUNT_PATH: '/widget',
-            TWILIO_TELEPHONY_MOUNT_PATH: '/telephony/twilio',
-            VONAGE_TELEPHONY_MOUNT_PATH: '/telephony/vonage',
-            TEAMS_MEETINGS_MOUNT_PATH: '/meetings/teams',
             AUTH_CATALOG_MOUNT_PATH: '/auth',
         };
 
@@ -133,9 +127,6 @@ describe('coreReservedServerExtensionRoots', () => {
                 '/auth',
                 '/magic-link',
                 '/widget',
-                '/telephony/twilio',
-                '/telephony/vonage',
-                '/meetings/teams',
                 '/healthcheck',
                 '/esignature',
                 '/media',
@@ -155,13 +146,13 @@ describe('coreReservedServerExtensionRoots', () => {
         expect(validateServerExtensionRootPath('/esignature', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/media', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/widget', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/telephony', extra)).toMatch(/reserved prefix/);
-        expect(validateServerExtensionRootPath('/meetings/teams', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/realtime', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/realtime-proxy', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/Realtime', extra)).toMatch(/reserved prefix/);
         expect(validateServerExtensionRootPath('/checkout', extra)).toBeNull();
         expect(validateServerExtensionRootPath('/healthcare', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/telephony/twilio', extra)).toBeNull();
+        expect(validateServerExtensionRootPath('/meetings/teams', extra)).toBeNull();
     });
 
     it('reserves a non-default graphqlRootPath and its nested paths', () => {
