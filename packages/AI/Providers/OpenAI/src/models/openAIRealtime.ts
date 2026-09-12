@@ -1178,6 +1178,22 @@ export class OpenAIRealtimeSession implements IRealtimeSession {
         this.connection.off('event', this.eventListener);
         this.connection.off('error', this.errorListener);
         this.connection.close();
+        this.clearHandlers();
+    }
+
+    /**
+     * Drops all registered callback handlers so a closed session can't keep the caller's
+     * dispatch/UI context reachable through a stale closure. Mirrors the same cleanup in the
+     * Gemini and ElevenLabs realtime sessions.
+     */
+    private clearHandlers(): void {
+        this.outputHandler = undefined;
+        this.transcriptHandler = undefined;
+        this.toolCallHandler = undefined;
+        this.interruptionHandler = undefined;
+        this.usageHandler = undefined;
+        this.errorHandler = undefined;
+        this.closeHandler = undefined;
     }
 
     // ---- Inbound event translation ----

@@ -3299,78 +3299,86 @@ export async function listAvailableTools(filterOptions: ToolFilterOptions = {}):
         // Initialize database connection to discover dynamic tools
         const poolConfig = buildPoolConfig();
         const pool = new sql.ConnectionPool(poolConfig);
+        // Without this handler, a dropped idle connection crashes the process with an
+        // uncaught pool-level error instead of letting the pool recover.
+        pool.on('error', (err) => {
+            console.error('[ConnectionPool] Pool-level connection error (stale connection evicted):', err.message);
+        });
         await pool.connect();
 
-        const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
-        await setupSQLServerClient(sqlConfig);
+        try {
+            const sqlConfig = new SQLServerProviderConfigData(pool, _config.mjCoreSchema);
+            await setupSQLServerClient(sqlConfig);
 
-        // Register all tools (they won't actually be added to server, just tracked)
-        // We need to use a dummy filter that includes everything for listing
-        const listingFilterOptions = { ...filterOptions };
-        activeFilterOptions = {}; // Temporarily clear filters to get all tool names
+            // Register all tools (they won't actually be added to server, just tracked)
+            // We need to use a dummy filter that includes everything for listing
+            const listingFilterOptions = { ...filterOptions };
+            activeFilterOptions = {}; // Temporarily clear filters to get all tool names
 
-        // Add built-in tools
-        registeredToolNames.push("Get_Entity_List");
-        registeredToolNames.push("Get_Single_Entity");
+            // Add built-in tools
+            registeredToolNames.push("Get_Entity_List");
+            registeredToolNames.push("Get_Single_Entity");
 
-        // Add agent run diagnostic tools
-        registeredToolNames.push("List_Recent_Agent_Runs");
-        registeredToolNames.push("Get_Agent_Run_Summary");
-        registeredToolNames.push("Get_Agent_Run_Step_Detail");
-        registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
+            // Add agent run diagnostic tools
+            registeredToolNames.push("List_Recent_Agent_Runs");
+            registeredToolNames.push("Get_Agent_Run_Summary");
+            registeredToolNames.push("Get_Agent_Run_Step_Detail");
+            registeredToolNames.push("Get_Agent_Run_Step_Full_Data");
 
-        // Use system user for tool discovery
-        const systemUser = UserCache.Instance.GetSystemUser();
-        if (!systemUser) {
-            throw new Error('System user not found in UserCache');
-        }
-
-        // Load tools to populate registeredToolNames
-        await loadEntityToolsForListing(systemUser);
-        await loadAgentToolsForListing(systemUser);
-
-        // Close database connection
-        await pool.close();
-
-        // Apply filters to the list if specified
-        let toolsToShow = registeredToolNames;
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            activeFilterOptions = listingFilterOptions;
-            toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
-        }
-
-        // Sort tools alphabetically
-        toolsToShow.sort();
-
-        console.log("\n=== Available MCP Tools ===\n");
-
-        if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
-            console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
-        } else {
-            console.log(`Total tools: ${toolsToShow.length}\n`);
-        }
-
-        // Group tools by prefix for better readability
-        const toolGroups: Record<string, string[]> = {};
-        for (const tool of toolsToShow) {
-            const prefix = tool.split('_')[0];
-            if (!toolGroups[prefix]) {
-                toolGroups[prefix] = [];
+            // Use system user for tool discovery
+            const systemUser = UserCache.Instance.GetSystemUser();
+            if (!systemUser) {
+                throw new Error('System user not found in UserCache');
             }
-            toolGroups[prefix].push(tool);
-        }
 
-        // Print grouped tools
-        for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
-            console.log(`--- ${prefix} ---`);
-            for (const tool of tools) {
-                console.log(`  ${tool}`);
+            // Load tools to populate registeredToolNames
+            await loadEntityToolsForListing(systemUser);
+            await loadAgentToolsForListing(systemUser);
+
+            // Apply filters to the list if specified
+            let toolsToShow = registeredToolNames;
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                activeFilterOptions = listingFilterOptions;
+                toolsToShow = registeredToolNames.filter(name => shouldIncludeTool(name, listingFilterOptions));
             }
-            console.log();
-        }
 
-        console.log("Use --include and --exclude to filter tools when starting the server.");
-        console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+            // Sort tools alphabetically
+            toolsToShow.sort();
+
+            console.log("\n=== Available MCP Tools ===\n");
+
+            if (listingFilterOptions.includePatterns || listingFilterOptions.excludePatterns) {
+                console.log(`Showing ${toolsToShow.length} of ${registeredToolNames.length} tools (filtered)\n`);
+            } else {
+                console.log(`Total tools: ${toolsToShow.length}\n`);
+            }
+
+            // Group tools by prefix for better readability
+            const toolGroups: Record<string, string[]> = {};
+            for (const tool of toolsToShow) {
+                const prefix = tool.split('_')[0];
+                if (!toolGroups[prefix]) {
+                    toolGroups[prefix] = [];
+                }
+                toolGroups[prefix].push(tool);
+            }
+
+            // Print grouped tools
+            for (const [prefix, tools] of Object.entries(toolGroups).sort()) {
+                console.log(`--- ${prefix} ---`);
+                for (const tool of tools) {
+                    console.log(`  ${tool}`);
+                }
+                console.log();
+            }
+
+            console.log("Use --include and --exclude to filter tools when starting the server.");
+            console.log("Example: npx @memberjunction/ai-mcp-server --include \"Get_Users_*,Run_Agent\"");
+        } finally {
+            // Guarantee the pool is released even if tool discovery throws — otherwise a
+            // failed listing leaks the connection pool for the rest of the CLI process.
+            await pool.close().catch(() => {});
+        }
 
     } catch (error) {
         console.error("Failed to list tools:", error);

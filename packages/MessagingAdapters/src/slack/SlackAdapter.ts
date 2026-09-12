@@ -50,10 +50,15 @@ export class SlackAdapter extends BaseMessagingAdapter {
     private botID: string = '';
 
     /**
-     * Message IDs of "Thinking..." indicators, keyed by `channelId:threadTs`.
-     * Per-thread keying prevents concurrent messages from overwriting each other's indicator.
+     * Message IDs of "Thinking..." indicators, keyed by `channelId:threadTs`, alongside the
+     * time each was recorded. Per-thread keying prevents concurrent messages from overwriting
+     * each other's indicator. Entries are normally consumed (deleted) by the next streaming
+     * update or the final message for that thread; the TTL sweep below only catches a thread
+     * whose consuming step throws before it runs, so the entry doesn't survive indefinitely.
      */
-    private thinkingMessageIds = new Map<string, string>();
+    private thinkingMessageIds = new Map<string, { ts: string; timestamp: number }>();
+    private static readonly THINKING_MESSAGE_TTL_MS = 60 * 60 * 1000;
+    private static readonly THINKING_MESSAGE_MAX_SIZE = 10_000;
 
     /**
      * Maximum length of a message's `text` field.
@@ -166,7 +171,24 @@ export class SlackAdapter extends BaseMessagingAdapter {
             ...identityParams
         });
         if (result.ts) {
-            this.thinkingMessageIds.set(this.threadKey(message), result.ts);
+            this.storeThinkingMessageId(this.threadKey(message), result.ts);
+        }
+    }
+
+    /** Store a "Thinking..." message id with TTL/max-size eviction, mirroring TeamsAdapter's `storeConversationRef`. */
+    private storeThinkingMessageId(key: string, ts: string): void {
+        const now = Date.now();
+        this.thinkingMessageIds.set(key, { ts, timestamp: now });
+        for (const [k, entry] of this.thinkingMessageIds) {
+            if (now - entry.timestamp > SlackAdapter.THINKING_MESSAGE_TTL_MS) {
+                this.thinkingMessageIds.delete(k);
+            }
+        }
+        if (this.thinkingMessageIds.size > SlackAdapter.THINKING_MESSAGE_MAX_SIZE) {
+            const oldest = [...this.thinkingMessageIds.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+            for (const [k] of oldest.slice(0, oldest.length - SlackAdapter.THINKING_MESSAGE_MAX_SIZE)) {
+                this.thinkingMessageIds.delete(k);
+            }
         }
     }
 
@@ -206,7 +228,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
     ): Promise<string> {
         // Reuse the "Thinking..." message for the first streaming update
         const key = this.threadKey(originalMessage);
-        const messageToUpdate = existingMessageId ?? this.thinkingMessageIds.get(key) ?? null;
+        const messageToUpdate = existingMessageId ?? this.thinkingMessageIds.get(key)?.ts ?? null;
 
         if (messageToUpdate) {
             this.thinkingMessageIds.delete(key); // Consumed
@@ -330,7 +352,7 @@ export class SlackAdapter extends BaseMessagingAdapter {
      */
     protected async sendFinalMessage(originalMessage: IncomingMessage, response: FormattedResponse): Promise<void> {
         const key = this.threadKey(originalMessage);
-        const thinkingId = this.thinkingMessageIds.get(key);
+        const thinkingId = this.thinkingMessageIds.get(key)?.ts;
         if (thinkingId) {
             this.thinkingMessageIds.delete(key);
             await this.updateFinalMessage(originalMessage, thinkingId, response);
