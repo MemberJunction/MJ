@@ -217,9 +217,9 @@ export abstract class BaseRealtimeClient {
 
     // ── Audio-activity metering (capability surface — see driver obligation #9) ─
     /** Meter over the USER's microphone, when the driver attached one. */
-    private inputAudioMeter: IRealtimeAudioMeter | null = null;
+    protected inputAudioMeter: IRealtimeAudioMeter | null = null;
     /** Meter over the AGENT's audio output, when the driver attached one. */
-    private outputAudioMeter: IRealtimeAudioMeter | null = null;
+    protected outputAudioMeter: IRealtimeAudioMeter | null = null;
 
     /**
      * The session's current audible activity, or `null` when this driver attached no

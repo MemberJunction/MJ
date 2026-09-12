@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
 import { ClientRealtimeSessionConfig } from '@memberjunction/ai';
 import {
@@ -15,8 +15,20 @@ import {
     OpenAILiveClient,
     IRealtimeLivePeerConnection,
 } from '../drivers/openAILiveClient';
+import { IRealtimeAudioMeter } from '../audio/audioMeter';
 
 // ── Test Fakes ─────────────────────────────────────────────────────────────
+
+class FakeAudioMeter implements IRealtimeAudioMeter {
+    public CurrentLevel = 0;
+    public Level(): number {
+        return this.CurrentLevel;
+    }
+    public Bins(_count?: number): number[] {
+        return [];
+    }
+    public Close(): void {}
+}
 
 class FakeDataChannel implements IRealtimeDataChannel {
     public readyState: RTCDataChannelState = 'connecting';
@@ -187,6 +199,10 @@ class TestableOpenAILiveClient extends OpenAILiveClient {
     public get Channel(): FakeDataChannel {
         return this.MockPC.Channel;
     }
+
+    public SetOutputAudioMeter(meter: IRealtimeAudioMeter | null): void {
+        this.attachOutputAudioMeter(meter);
+    }
 }
 
 function makeConfig(): ClientRealtimeSessionConfig {
@@ -268,7 +284,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(transcripts.length).toBe(1);
         expect(transcripts[0].Role).toBe('User');
         expect(transcripts[0].Text).toBe('Hello co-agent');
-        expect(transcripts[0].IsFinal).toBe(true);
+        expect(transcripts[0].IsFinal).toBe(false);
 
         // Assistant delta
         client.Channel.EmitServer({
@@ -369,7 +385,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(sent[1]).toEqual({ type: 'response.create' });
     });
 
-    it('processes session.input_transcript.delta and streams in-place with ReplacesPrevious', async () => {
+    it('processes session.input_transcript.delta as interim deltas and finalizes at turn boundary', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
 
@@ -384,9 +400,8 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(transcripts[0]).toEqual({
             Role: 'User',
             Text: 'Draw ',
-            IsFinal: true,
+            IsFinal: false,
             Kind: 'normal',
-            ReplacesPrevious: false,
         });
 
         client.Channel.EmitServer({
@@ -396,10 +411,28 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(transcripts.length).toBe(2);
         expect(transcripts[1]).toEqual({
             Role: 'User',
+            Text: 'a box',
+            IsFinal: false,
+            Kind: 'normal',
+        });
+
+        // Model takes the floor (session.output_transcript.delta) -> finalizes user turn
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Sure',
+        });
+        expect(transcripts.length).toBe(4);
+        expect(transcripts[2]).toEqual({
+            Role: 'User',
             Text: 'Draw a box',
             IsFinal: true,
             Kind: 'normal',
-            ReplacesPrevious: true,
+        });
+        expect(transcripts[3]).toEqual({
+            Role: 'Assistant',
+            Text: 'Sure',
+            IsFinal: false,
+            Kind: 'normal',
         });
     });
 
@@ -681,7 +714,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(finalTranscripts.some(t => t.Role === 'Assistant' && t.Text === 'Checking now...')).toBe(true);
     });
 
-    it('Step 2: two user turns with silent delegation between them have ReplacesPrevious: false on turn 2', async () => {
+    it('Step 2: two user turns with silent delegation between them finalize cleanly without bleeding state', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
 
@@ -695,13 +728,19 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         });
         expect(transcripts.length).toBe(1);
         expect(transcripts[0].Text).toBe('First user command');
-        expect(transcripts[0].ReplacesPrevious).toBe(false);
+        expect(transcripts[0].IsFinal).toBe(false);
 
         // Silent delegation occurs (model takes the floor to delegate; no output transcript spoken)
         client.Channel.EmitServer({
             type: 'session.delegation.created',
             delegation_id: 'del_silent_1',
         });
+
+        // Turn 1 finalized by delegation taking the floor
+        expect(transcripts.length).toBe(2);
+        expect(transcripts[1].Role).toBe('User');
+        expect(transcripts[1].Text).toBe('First user command');
+        expect(transcripts[1].IsFinal).toBe(true);
 
         // Turn 2: user speaks second utterance
         const turn2StartIndex = transcripts.length;
@@ -712,11 +751,19 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         expect(transcripts.length).toBe(turn2StartIndex + 1);
         expect(transcripts[turn2StartIndex].Text).toBe('Second user command');
-        // Turn 2's FIRST delta MUST NOT replace the previous turn!
-        expect(transcripts[turn2StartIndex].ReplacesPrevious).toBe(false);
+        expect(transcripts[turn2StartIndex].IsFinal).toBe(false);
+
+        // Turn 2 finalized by model taking the floor
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Done',
+        });
+        expect(transcripts[turn2StartIndex + 1].Role).toBe('User');
+        expect(transcripts[turn2StartIndex + 1].Text).toBe('Second user command');
+        expect(transcripts[turn2StartIndex + 1].IsFinal).toBe(true);
     });
 
-    it('Step 2: within one turn, deltas 2..N carry ReplacesPrevious: true and cumulative text', async () => {
+    it('Step 2: within one turn, deltas are interim and finalize with full text on floor change', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
 
@@ -731,9 +778,8 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(transcripts[0]).toEqual({
             Role: 'User',
             Text: 'Four score',
-            IsFinal: true,
+            IsFinal: false,
             Kind: 'normal',
-            ReplacesPrevious: false,
         });
 
         // Delta 2
@@ -743,10 +789,9 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         });
         expect(transcripts[1]).toEqual({
             Role: 'User',
-            Text: 'Four score and seven years',
-            IsFinal: true,
+            Text: ' and seven years',
+            IsFinal: false,
             Kind: 'normal',
-            ReplacesPrevious: true,
         });
 
         // Delta 3
@@ -756,11 +801,190 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         });
         expect(transcripts[2]).toEqual({
             Role: 'User',
+            Text: ' ago',
+            IsFinal: false,
+            Kind: 'normal',
+        });
+
+        // Floor change (session.output_transcript.delta) -> finalizes turn
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Understood.',
+        });
+        expect(transcripts[3]).toEqual({
+            Role: 'User',
             Text: 'Four score and seven years ago',
             IsFinal: true,
             Kind: 'normal',
-            ReplacesPrevious: true,
         });
+        expect(transcripts[4]).toEqual({
+            Role: 'Assistant',
+            Text: 'Understood.',
+            IsFinal: false,
+            Kind: 'normal',
+        });
+    });
+
+    it('E-1: whitespace-only user delta resets properly on finalize without emitting or bleeding into next turn', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // Whitespace-only delta
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: '   ',
+        });
+        expect(transcripts.length).toBe(1);
+        expect(transcripts[0].IsFinal).toBe(false);
+
+        // Finalize triggered by silent delegation
+        client.Channel.EmitServer({
+            type: 'session.delegation.created',
+            delegation_id: 'del_whitespace',
+        });
+        // No final user transcript was emitted because trimmed length was 0
+        const finals = transcripts.filter((t) => t.Role === 'User' && t.IsFinal);
+        expect(finals.length).toBe(0);
+
+        // Subsequent real delta
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Actual command',
+        });
+        // Model takes floor
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Response',
+        });
+        const finalUser = transcripts.find((t) => t.Role === 'User' && t.IsFinal);
+        expect(finalUser?.Text).toBe('Actual command');
+    });
+
+    it('C-2: finalizes assistant transcript on playback drain via output audio silence threshold', async () => {
+        vi.useFakeTimers();
+        try {
+            await client.Connect(makeConfig(), micStream);
+            client.Channel.Open();
+
+            const fakeMeter = new FakeAudioMeter();
+            fakeMeter.CurrentLevel = 0.5; // active audio
+            client.SetOutputAudioMeter(fakeMeter);
+
+            const transcripts: RealtimeClientTranscript[] = [];
+            client.OnTranscript((t) => transcripts.push(t));
+
+            // Assistant starts speaking
+            client.Channel.EmitServer({
+                type: 'session.output_transcript.delta',
+                delta: 'Playing some audio...',
+            });
+
+            expect(client.State).toBe('speaking');
+            expect(client.IsBusy).toBe(true);
+            expect(client.IsAudioPlaying).toBe(true);
+            expect(transcripts.length).toBe(1);
+            expect(transcripts[0]).toEqual({
+                Role: 'Assistant',
+                Text: 'Playing some audio...',
+                IsFinal: false,
+                Kind: 'normal',
+            });
+
+            // Advance time by 350ms (beyond transcript gap 300ms, but audio meter is still 0.5)
+            vi.advanceTimersByTime(350);
+            expect(client.State).toBe('speaking');
+            expect(transcripts.filter((t) => t.Role === 'Assistant' && t.IsFinal).length).toBe(0);
+
+            // Audio meter drops to silence
+            fakeMeter.CurrentLevel = 0.0;
+
+            // Advance 100ms (silence duration < 200ms)
+            vi.advanceTimersByTime(100);
+            expect(client.State).toBe('speaking');
+            expect(transcripts.filter((t) => t.Role === 'Assistant' && t.IsFinal).length).toBe(0);
+
+            // Advance another 150ms (silence duration reaches 200ms)
+            vi.advanceTimersByTime(150);
+
+            // Now playback drain has completed!
+            expect(client.State).toBe('listening');
+            expect(client.IsBusy).toBe(false);
+            expect(client.IsAudioPlaying).toBe(false);
+            const finals = transcripts.filter((t) => t.Role === 'Assistant' && t.IsFinal);
+            expect(finals.length).toBe(1);
+            expect(finals[0].Text).toBe('Playing some audio...');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('C-2: safety backstop timer finalizes assistant transcript when audio meter is absent', async () => {
+        vi.useFakeTimers();
+        try {
+            await client.Connect(makeConfig(), micStream);
+            client.Channel.Open();
+
+            const transcripts: RealtimeClientTranscript[] = [];
+            client.OnTranscript((t) => transcripts.push(t));
+
+            client.Channel.EmitServer({
+                type: 'session.output_transcript.delta',
+                delta: 'Fallback speech',
+            });
+
+            expect(client.State).toBe('speaking');
+            expect(client.IsBusy).toBe(true);
+
+            // Advance 1500ms (< 3000ms backstop)
+            vi.advanceTimersByTime(1500);
+            expect(client.State).toBe('speaking');
+            expect(transcripts.filter((t) => t.Role === 'Assistant' && t.IsFinal).length).toBe(0);
+
+            // Advance another 1500ms (total 3000ms)
+            vi.advanceTimersByTime(1500);
+
+            expect(client.State).toBe('listening');
+            expect(client.IsBusy).toBe(false);
+            const finals = transcripts.filter((t) => t.Role === 'Assistant' && t.IsFinal);
+            expect(finals.length).toBe(1);
+            expect(finals[0].Text).toBe('Fallback speech');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('C-2: barge-in immediately finalizes pending assistant transcript before user speech starts', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // Assistant starts speaking
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'I was thinking that maybe...',
+        });
+        expect(client.State).toBe('speaking');
+
+        // User barges in before playback drain
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Hold on!',
+        });
+
+        // Assistant transcript finalized immediately
+        const assistantFinals = transcripts.filter((t) => t.Role === 'Assistant' && t.IsFinal);
+        expect(assistantFinals.length).toBe(1);
+        expect(assistantFinals[0].Text).toBe('I was thinking that maybe...');
+
+        // User delta received as interim
+        const userInterims = transcripts.filter((t) => t.Role === 'User' && !t.IsFinal);
+        expect(userInterims.length).toBe(1);
+        expect(userInterims[0].Text).toBe('Hold on!');
     });
 
     it('Step 2: asserts userTurnTranscribed field is completely eliminated from the client', () => {

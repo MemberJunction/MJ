@@ -43,6 +43,10 @@ export interface IRealtimeLivePeerConnection extends IRealtimePeerConnection {
 @RegisterClass(BaseRealtimeClient, 'OpenAILiveRealtime')
 export class OpenAILiveClient extends BaseRealtimeClient {
     public static readonly PREBILL_DURATION_SECONDS = 15;
+    public static readonly PLAYBACK_DRAIN_SILENCE_MS = 200;
+    public static readonly PLAYBACK_DRAIN_TRANSCRIPT_GAP_MS = 300;
+    public static readonly PLAYBACK_DRAIN_SILENCE_THRESHOLD = 0.01;
+    public static readonly ASSISTANT_SAFETY_BACKSTOP_MS = 3000;
 
     // ── Transport ──────────────────────────────────────────────────────────────
     private peerConnection: IRealtimeLivePeerConnection | null = null;
@@ -61,7 +65,10 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private totalDurationSeconds = OpenAILiveClient.PREBILL_DURATION_SECONDS;
     private pendingUserText = '';
     private pendingAssistantText = '';
-    private assistantDoneTimer: ReturnType<typeof setTimeout> | null = null;
+    private lastOutputTranscriptTime = 0;
+    private drainSilenceStartTime: number | null = null;
+    private playbackDrainInterval: ReturnType<typeof setInterval> | null = null;
+    private assistantSafetyBackstopTimer: ReturnType<typeof setTimeout> | null = null;
     private clientDelegationCallIds = new Set<string>();
     private toolBatchBarrier = new RealtimeToolBatchBarrier();
 
@@ -167,10 +174,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.responseActive = false;
         this.audioPlaying = false;
         this.pendingNarration = false;
-        if (this.assistantDoneTimer) {
-            clearTimeout(this.assistantDoneTimer);
-            this.assistantDoneTimer = null;
-        }
+        this.stopPlaybackDrainMonitoring();
         this.pendingUserText = '';
         this.pendingAssistantText = '';
         this.clientDelegationCallIds.clear();
@@ -201,10 +205,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Cancels an active model response and flushes local playback.
      */
     public CancelActiveResponse(): void {
-        if (this.assistantDoneTimer) {
-            clearTimeout(this.assistantDoneTimer);
-            this.assistantDoneTimer = null;
-        }
+        this.stopPlaybackDrainMonitoring();
         this.pendingAssistantText = '';
         if (this.responseActive || this.audioPlaying) {
             this.sendDataChannelFrame({ type: 'response.cancel' });
@@ -463,10 +464,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private finalizeAssistantTranscript(): void {
-        if (this.assistantDoneTimer) {
-            clearTimeout(this.assistantDoneTimer);
-            this.assistantDoneTimer = null;
-        }
+        this.stopPlaybackDrainMonitoring();
         if (this.pendingAssistantText.trim().length > 0) {
             this.emitTranscript({
                 Role: 'Assistant',
@@ -499,14 +497,61 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         }
     }
 
-    private scheduleAssistantDone(delayMs = 750): void {
-        if (this.assistantDoneTimer) {
-            clearTimeout(this.assistantDoneTimer);
+    private startPlaybackDrainMonitoring(): void {
+        if (this.playbackDrainInterval) {
+            return;
         }
-        this.assistantDoneTimer = setTimeout(() => {
-            this.assistantDoneTimer = null;
+        this.playbackDrainInterval = setInterval(() => {
+            this.checkPlaybackDrain();
+        }, 50);
+    }
+
+    private stopPlaybackDrainMonitoring(): void {
+        if (this.playbackDrainInterval) {
+            clearInterval(this.playbackDrainInterval);
+            this.playbackDrainInterval = null;
+        }
+        if (this.assistantSafetyBackstopTimer) {
+            clearTimeout(this.assistantSafetyBackstopTimer);
+            this.assistantSafetyBackstopTimer = null;
+        }
+        this.drainSilenceStartTime = null;
+    }
+
+    private scheduleAssistantSafetyBackstop(delayMs = OpenAILiveClient.ASSISTANT_SAFETY_BACKSTOP_MS): void {
+        if (this.assistantSafetyBackstopTimer) {
+            clearTimeout(this.assistantSafetyBackstopTimer);
+        }
+        this.assistantSafetyBackstopTimer = setTimeout(() => {
+            this.assistantSafetyBackstopTimer = null;
             this.finalizeAssistantTranscript();
         }, delayMs);
+    }
+
+    private checkPlaybackDrain(): void {
+        if (!this.pendingAssistantText && !this.audioPlaying) {
+            this.stopPlaybackDrainMonitoring();
+            return;
+        }
+
+        const now = Date.now();
+        if (now - this.lastOutputTranscriptTime < OpenAILiveClient.PLAYBACK_DRAIN_TRANSCRIPT_GAP_MS) {
+            this.drainSilenceStartTime = null;
+            return;
+        }
+
+        if (this.outputAudioMeter) {
+            const level = this.outputAudioMeter.Level();
+            if (level <= OpenAILiveClient.PLAYBACK_DRAIN_SILENCE_THRESHOLD) {
+                if (this.drainSilenceStartTime === null) {
+                    this.drainSilenceStartTime = now;
+                } else if (now - this.drainSilenceStartTime >= OpenAILiveClient.PLAYBACK_DRAIN_SILENCE_MS) {
+                    this.finalizeAssistantTranscript();
+                }
+            } else {
+                this.drainSilenceStartTime = null;
+            }
+        }
     }
 
     private handleOutputItemDone(item: Record<string, unknown> | undefined): void {
@@ -570,14 +615,12 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 if (this.pendingAssistantText) {
                     this.finalizeAssistantTranscript();
                 }
-                const isContinuation = this.pendingUserText.length > 0;
                 this.pendingUserText += delta;
                 this.emitTranscript({
                     Role: 'User',
-                    Text: this.pendingUserText,
-                    IsFinal: true,
+                    Text: delta,
+                    IsFinal: false,
                     Kind: 'normal',
-                    ReplacesPrevious: isContinuation,
                 });
                 break;
             }
@@ -602,7 +645,10 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                     IsFinal: false,
                     Kind: this.pendingNarration ? 'narration' : 'normal',
                 });
-                this.scheduleAssistantDone(750);
+                this.lastOutputTranscriptTime = Date.now();
+                this.drainSilenceStartTime = null;
+                this.startPlaybackDrainMonitoring();
+                this.scheduleAssistantSafetyBackstop();
                 break;
             }
 
