@@ -44,7 +44,10 @@ export class TelephonyResolver {
             if (!service) {
                 return failure('Twilio telephony is not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+            const provider = getReadWriteProvider(context.providers);
+            if (!provider) {
+                return failure('Database provider is not available.');
+            }
             const callSid = await service.PlaceOutboundCall(agentIdentityId, toNumber, user, provider);
             return { Success: true, CallSid: callSid };
         } catch (error) {

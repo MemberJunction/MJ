@@ -45,7 +45,10 @@ export class TeamsMeetingsResolver {
             if (!service) {
                 return failure('Teams meetings are not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+            const provider = getReadWriteProvider(context.providers);
+            if (!provider) {
+                return failure('Database provider is not available.');
+            }
             const result = await service.JoinMeetingByUrl(agentIdentityId, joinUrl, user, provider);
             if (!result.accepted) {
                 return failure(result.reason ?? 'The meeting join was not accepted.');

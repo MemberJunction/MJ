@@ -265,7 +265,7 @@ export class RingCentralTelephonyService {
 
     private resolveServerContext(): { user: UserInfo; provider: IMetadataProvider } | null {
         const user = UserCache.Instance.GetSystemUser() ?? UserCache.Users.find((u) => u.IsActive && u.Type?.trim().toLowerCase() === 'owner') ?? null;
-        const provider = Metadata.Provider as unknown as IMetadataProvider | undefined;
+        const provider = Metadata.Provider; // global-provider-ok: inbound telephony webhook runs in server-global provider context
         if (!user || !provider) {
             return null;
         }

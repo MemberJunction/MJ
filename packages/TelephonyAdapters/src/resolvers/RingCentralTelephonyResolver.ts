@@ -44,7 +44,10 @@ export class RingCentralTelephonyResolver {
             if (!service) {
                 return failure('RingCentral telephony is not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+            const provider = getReadWriteProvider(context.providers);
+            if (!provider) {
+                return failure('Database provider is not available.');
+            }
             const sessionId = await service.PlaceOutboundCall(agentIdentityId, toNumber, user, provider);
             return { Success: true, SessionId: sessionId };
         } catch (error) {

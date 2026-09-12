@@ -44,7 +44,10 @@ export class VonageTelephonyResolver {
             if (!service) {
                 return failure('Vonage telephony is not configured on this server.');
             }
-            const provider = getReadWriteProvider(context.providers) as unknown as IMetadataProvider;
+            const provider = getReadWriteProvider(context.providers);
+            if (!provider) {
+                return failure('Database provider is not available.');
+            }
             const callId = await service.PlaceOutboundCall(agentIdentityId, toNumber, user, provider);
             return { Success: true, CallId: callId };
         } catch (error) {

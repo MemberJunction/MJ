@@ -95,9 +95,10 @@ export class TeamsMeetingsExtension extends BaseServerExtension {
             return;
         }
         const systemUser = UserCache.Instance.GetSystemUser();
-        if (systemUser && Metadata.Provider) {
+        const provider = Metadata.Provider; // global-provider-ok: server extension lifecycle runs in server-global provider context
+        if (systemUser && provider) {
             this.schedulerHandle = StartCalendarScheduler({
-                Provider: Metadata.Provider,
+                Provider: provider,
                 ContextUser: systemUser,
                 TeamsService: this.service,
                 TeamsConfig: this.config,
