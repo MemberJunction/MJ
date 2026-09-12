@@ -129,8 +129,12 @@
                 <a class="login-card__anchor"
                    [href]="card.href"
                    [attr.target]="card.newTab ? '_blank' : null"
-                   [attr.rel]="card.newTab ? 'noopener noreferrer' : null">{{ card.title }}<!--
-                   -->@if (card.newTab) {<span class="login-card__sr"> (opens in a new tab)</span>}</a>
+                   [attr.rel]="card.newTab ? 'noopener noreferrer' : null">
+                  {{ card.title }}
+                  @if (card.newTab) {
+                    <span class="login-card__sr">(opens in a new tab)</span>
+                  }
+                </a>
               } @else {
                 {{ card.title }}
               }
