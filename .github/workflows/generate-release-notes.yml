@@ -94,7 +94,13 @@ jobs:
 
           # Pinned explicitly — the CLI's default alias `auto` currently resolves to
           # the RETIRED gemini-3-pro-preview.
-          gemini_model: gemini-3.6-flash
+          #
+          # 3.8-flash (released 2026-09-02) supersedes 3.6-flash here. Note the date on the
+          # price: $0.75/$3.75 per 1M is INTRODUCTORY and runs to 2026-12-31, stepping to
+          # $1.50/$7.50 on 2027-01-01 with context caching doubling alongside it. At a few
+          # release runs a month that is noise — it is recorded so whoever reads this in
+          # January knows the jump was expected and not a billing fault.
+          gemini_model: gemini-3.8-flash
 
           # Pinned so the tool-name strings below stay true; `latest` moves.
           gemini_cli_version: '0.54.4'
@@ -318,7 +324,8 @@ jobs:
           GEMINI_CLI_TRUST_WORKSPACE: 'true'
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
-          gemini_model: gemini-3.6-flash
+          # See the Edge job above for why this model and what happens to its price in 2027.
+          gemini_model: gemini-3.8-flash
           gemini_cli_version: '0.54.4'
 
           # Narrower than the Edge job on purpose: this agent writes ONE file. It needs
