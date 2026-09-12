@@ -1,0 +1,35 @@
+{
+  "entity": "MJ: AI Agent Personas",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "IsAllowed": true,
+    "IsDefault": false,
+    "Sequence": 0
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".ai-agent-personas.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "AgentID": {
+        "entity": "MJ: AI Agents",
+        "field": "Name"
+      },
+      "PersonaID": {
+        "entity": "MJ: AI Personas",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

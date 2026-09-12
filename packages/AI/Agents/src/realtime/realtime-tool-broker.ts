@@ -29,13 +29,19 @@ import { RealtimeDisclosurePolicy } from './realtime-coagent-config';
 /**
  * The stable name of the primary tool every Realtime Co-Agent registers with the realtime provider.
  *
- * Per the plan's design rule, the realtime-registered tool set is **target-independent**: the
+ * Per the plan's design rule, the core delegation tool set is **target-independent**: the
  * co-agent always exposes this single `invoke-target-agent` tool, and the specific target is a
- * runtime parameter passed *inside* the call — never a different tool per target. This keeps the
- * provider contract identical across targets (and is what lets a pre-provisioned, fixed-tool
- * provider like Eleven Labs fit the same model later).
+ * runtime parameter passed *inside* the call — never a different delegation tool per target. This keeps the
+ * delegation contract identical across targets (and is what lets a pre-provisioned, fixed-tool
+ * provider like Eleven Labs fit the same model). Drivers declaring `SupportsDynamicToolSet`
+ * can also project allowed direct actions from the target agent for low-latency execution.
  */
 export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';
+
+/** The shared description for the `invoke-target-agent` tool. */
+export const INVOKE_TARGET_AGENT_DESCRIPTION =
+    'Invoke the target agent to perform complex, multi-step, or background work (seconds to minutes). ' +
+    'Use this whenever work is needed beyond conversation and your directly-available tools; narrate while it runs.';
 
 /**
  * **The single producer of the realtime co-agent's identity framing.** Builds the opening of the companion
@@ -52,19 +58,29 @@ export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';
  * @param colleagues Optional set of OTHER agents the lead may delegate to (the union-accumulated
  *   allowed-agent set; Move 4). When non-empty, a "colleagues" clause is appended naming each and the
  *   per-target disclosure guidance. Empty/omitted ⇒ the classic single-target framing, byte-identical.
+ * @param hasDirectTools Whether the co-agent session has directly-available tools projected for execution.
+ *   When false (default), emits the strict delegation wording ("do not attempt to do the work yourself")
+ *   and omits mention of directly-available tools.
  * @returns The identity framing paragraph.
  */
 export function BuildRealtimeAgentFraming(
     targetName: string,
     interactiveSurfaceClause = '',
-    colleagues: RealtimeColleague[] = []
+    colleagues: RealtimeColleague[] = [],
+    hasDirectTools = false
 ): string {
+    const workGuidance = hasDirectTools
+        ? `When work is required that matches one of your directly-available tools, ` +
+          `invoke it directly for fast execution. For complex, multi-step, or background work, call ` +
+          `the '${INVOKE_TARGET_AGENT_TOOL_NAME}' tool and narrate progress while it runs.`
+        : `When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
+          `tool and narrate progress while it runs — do not attempt to do the work yourself.`;
+
     return (
         `You are the real-time voice for the agent "${targetName}". Hold a natural, low-latency ` +
         `conversation with the user, always speaking in the FIRST PERSON as ${targetName} — own the work ` +
         `("I'm pulling that up", "I found three matches"); never refer to ${targetName} or the work in the ` +
-        `third person. When actual work is required, call the '${INVOKE_TARGET_AGENT_TOOL_NAME}' ` +
-        `tool and narrate progress while it runs — do not attempt to do the work yourself.` +
+        `third person. ${workGuidance}` +
         BuildColleaguesClause(colleagues) +
         BuildTourGuidanceClause() +
         interactiveSurfaceClause

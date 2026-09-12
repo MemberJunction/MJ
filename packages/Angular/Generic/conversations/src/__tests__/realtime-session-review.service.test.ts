@@ -8,11 +8,13 @@ import type {
   RealtimeDelegationResult
 } from '../lib/services/realtime-session.service';
 import {
+  BuildReviewActionCard,
   BuildReviewDelegationCard,
   BuildReviewThreadItems,
   MAX_REVIEW_LEGS,
   MergeChainChannelStates,
   RealtimeSessionReview,
+  RealtimeSessionReviewAction,
   RealtimeSessionReviewLeg,
   RealtimeSessionReviewRun,
   RealtimeSessionReviewService,
@@ -271,6 +273,52 @@ describe('RealtimeSessionReviewService', () => {
       ]);
       const review = await service.LoadSessionReview('SESSION-1', provider);
       expect(review?.Turns.map(t => t.Text)).toEqual(['visible']);
+    });
+
+    it('maps hidden AI rows with realtime_tool_execution payload into DirectActions', async () => {
+      mockRunViews([
+        ok([sessionRow()]),
+        ok([
+          detailRow('User', 'hello', '2026-06-10T10:01:00Z'),
+          {
+            ID: 'D-act-1',
+            Role: 'AI',
+            HiddenToUser: true,
+            Status: 'Complete',
+            ExternalID: 'call-act-1',
+            CompletionTime: 250,
+            __mj_CreatedAt: '2026-06-10T10:02:00Z',
+            Message: JSON.stringify({
+              type: 'realtime_tool_execution',
+              callId: 'call-act-1',
+              toolName: 'File_Storage_List_Objects',
+              argsJson: '{"path":"/docs"}',
+              resultJson: '{"files":["readme.md"]}',
+              success: true,
+              durationMs: 250
+            })
+          },
+          detailRow('AI', 'here are your files', '2026-06-10T10:03:00Z')
+        ]),
+        ok([]),
+        ok([])
+      ]);
+      const review = await service.LoadSessionReview('SESSION-1', provider);
+      expect(review).not.toBeNull();
+      // Turns should contain ONLY the visible speech turns (2 turns)
+      expect(review?.Turns.map(t => t.Text)).toEqual(['hello', 'here are your files']);
+      // DirectActions should contain the parsed action execution
+      expect(review?.DirectActions).toHaveLength(1);
+      expect(review?.DirectActions?.[0]).toMatchObject({
+        ID: 'D-act-1',
+        CallID: 'call-act-1',
+        ToolName: 'File_Storage_List_Objects',
+        ArgsJson: '{"path":"/docs"}',
+        ResultJson: '{"files":["readme.md"]}',
+        Success: true,
+        DurationMs: 250
+      });
+      expect(review?.DirectActions?.[0].At?.toISOString()).toBe('2026-06-10T10:02:00.000Z');
     });
   });
 
@@ -556,6 +604,7 @@ function reviewFixture(overrides: Partial<RealtimeSessionReview> = {}): Realtime
     RecordingMedia: null,
     Turns: [],
     DelegatedRuns: [],
+    DirectActions: [],
     ChannelStates: [],
     Legs: [],
     Artifacts: [],
@@ -571,6 +620,21 @@ function legFixture(overrides: Partial<RealtimeSessionReviewLeg> = {}): Realtime
     CloseReason: 'Explicit',
     Turns: [],
     DelegatedRuns: [],
+    DirectActions: [],
+    ...overrides
+  };
+}
+
+function reviewAction(toolName: string, at: string | null, overrides: Partial<RealtimeSessionReviewAction> = {}): RealtimeSessionReviewAction {
+  return {
+    ID: `ACT-${toolName}`,
+    CallID: `call-${toolName}`,
+    ToolName: toolName,
+    ArgsJson: '{}',
+    ResultJson: '{"status":"ok"}',
+    Success: true,
+    DurationMs: 150,
+    At: at ? new Date(at) : null,
     ...overrides
   };
 }
@@ -592,6 +656,59 @@ function reviewRun(id: string, startedAt: string | null, overrides: Partial<Real
 }
 
 describe('BuildReviewThreadItems', () => {
+  it('interleaves turns, delegated runs, and direct action cards chronologically', () => {
+    const review = reviewFixture({
+      Turns: [
+        reviewTurn('User', 'first', new Date('2026-06-10T10:01:00Z')),
+        reviewTurn('Assistant', 'fourth', new Date('2026-06-10T10:06:00Z'))
+      ],
+      DirectActions: [
+        reviewAction('File_Storage_List_Objects', '2026-06-10T10:02:00Z', { CallID: 'call-fs-1' })
+      ],
+      DelegatedRuns: [reviewRun('RUN-1', '2026-06-10T10:04:00Z')]
+    });
+    const items = BuildReviewThreadItems(review);
+    expect(items.map(i => i.Kind)).toEqual(['caption', 'delegation', 'delegation', 'caption']);
+    expect(items[0]).toMatchObject({ Kind: 'caption', Role: 'User', Text: 'first' });
+    expect(items[1]).toMatchObject({
+      Kind: 'delegation',
+      Card: {
+        Kind: 'action',
+        CallID: 'call-fs-1',
+        ToolName: 'File_Storage_List_Objects',
+        AgentName: 'File Storage List Objects',
+        LatestMessage: 'Executed File Storage List Objects',
+        LatestStep: 'direct_action',
+        Done: true,
+        Success: true
+      }
+    });
+    expect(items[2]).toMatchObject({ Kind: 'delegation', Card: { Kind: 'agent', CallID: 'RUN-1' } });
+    expect(items[3]).toMatchObject({ Kind: 'caption', Role: 'Assistant', Text: 'fourth' });
+  });
+
+  it('renders direct actions within their respective legs in multi-leg reviews', () => {
+    const review = reviewFixture({
+      Legs: [
+        legFixture({
+          SessionID: 'SESSION-A',
+          CloseReason: 'Explicit',
+          Turns: [reviewTurn('User', 'leg one turn', new Date('2026-06-10T10:01:00Z'))],
+          DirectActions: [reviewAction('Whiteboard_draw_shape', '2026-06-10T10:02:00Z')]
+        }),
+        legFixture({
+          SessionID: 'SESSION-B',
+          StartedAt: new Date('2026-06-10T11:00:00Z'),
+          Turns: [reviewTurn('Assistant', 'leg two turn', new Date('2026-06-10T11:01:00Z'))],
+          DirectActions: [reviewAction('File_Storage_List_Objects', '2026-06-10T11:02:00Z')]
+        })
+      ]
+    });
+    const items = BuildReviewThreadItems(review);
+    expect(items.map(i => i.Kind)).toEqual(['caption', 'delegation', 'divider', 'caption', 'delegation']);
+    expect(items[1]).toMatchObject({ Kind: 'delegation', Card: { Kind: 'action', ToolName: 'Whiteboard_draw_shape' } });
+    expect(items[4]).toMatchObject({ Kind: 'delegation', Card: { Kind: 'action', ToolName: 'File_Storage_List_Objects' } });
+  });
   it('interleaves turns and delegation cards chronologically (oldest first)', () => {
     const review = reviewFixture({
       Turns: [

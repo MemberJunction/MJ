@@ -19,3 +19,4 @@ export * from './generic/realtimeProxyRegistry';
 export * from './generic/baseRealtimeChannelServer';
 export * from './generic/errorTypes';
 export * from './generic/errorAnalyzer';
+export * from './generic/realtimeToolBatchBarrier';

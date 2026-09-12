@@ -19,7 +19,7 @@
 
 import { IRealtimeSession, ChatMessage, BaseRealtimeModel, RealtimeVoiceOption, GetAIAPIKey } from '@memberjunction/ai';
 import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from '../base-agent';
@@ -248,14 +248,40 @@ export async function GetRealtimeModelVoices(
 
     const out: RealtimeModelVoices[] = [];
     for (const model of models) {
-        const driverClass = SelectRealtimeVendorForModel(model.ID)?.DriverClass ?? null;
+        const selection = SelectRealtimeVendorForModel(model.ID);
+        const driverClass = selection?.DriverClass ?? null;
         if (!driverClass) {
             continue; // no active vendor with a resolvable key — not runnable, so omit
         }
+
+        // 1. Consult metadata first (Personas & PersonaVendors carry curated names/descriptions)
+        const modelPersonas = AIEngine.Instance.GetModelPersonas(model.ID, 'Audio', selection.VendorID);
+        const voices: RealtimeVoiceOption[] = modelPersonas.map((rp) => ({
+            ID: rp.PersonaVendor.APIName,
+            Name: rp.Persona.Name,
+        }));
+
+        // Collect explicitly excluded voice IDs (IsSupported === false) for this model and vendor
+        const excludedVoiceApiNames = new Set(
+            AIEngine.Instance.GetModelPersonaExclusions(model.ID, 'Audio', selection.VendorID)
+                .map((name) => name.toLowerCase())
+        );
+
+        // 2. Union with driver SupportedVoices: append any driver voices not already present or explicitly excluded
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseRealtimeModel>(
             BaseRealtimeModel, driverClass, GetAIAPIKey(driverClass),
         );
-        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: instance?.SupportedVoices ?? [] });
+        for (const dv of instance?.SupportedVoices ?? []) {
+            const dvIdLower = dv.ID.toLowerCase();
+            if (excludedVoiceApiNames.has(dvIdLower)) {
+                continue;
+            }
+            if (!voices.some((v) => v.ID.toLowerCase() === dvIdLower)) {
+                voices.push(dv);
+            }
+        }
+
+        out.push({ ModelID: model.ID, ModelName: model.Name ?? '', Voices: voices });
     }
     return out;
 }

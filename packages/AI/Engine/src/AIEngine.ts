@@ -26,14 +26,14 @@ import { MJAIActionEntity, MJActionEntity,
          MJAICredentialBindingEntity, MJAIModalityEntity, MJAIAgentModalityEntity,
          MJAIModelModalityEntity, MJAIClientToolDefinitionEntity,
          MJAIAgentClientToolEntity, MJAIAgentCategoryEntity, IsInjectableNoteStatus,
-         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity } from "@memberjunction/core-entities";
-import { AIEngineBase } from "@memberjunction/ai-engine-base";
+         MJAISkillEntity, MJAISkillActionEntity, MJAISkillSubAgentEntity, MJAIAgentSkillEntity, MJAISkillPermissionEntity,
+         MJAIPersonaEntity, MJAIPersonaVendorEntity, MJAIModelPersonaEntity, MJAIAgentPersonaEntity } from "@memberjunction/core-entities";
+import { AIEngineBase, ResolvedModelPersona, ResolvedAgentPersona, EffectiveAgentPersona, EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 import { SimpleVectorService } from "@memberjunction/ai-vectors-memory";
 import { NoteEmbeddingMetadata, NoteMatchResult } from "./types/NoteMatchResult";
 import { ExampleEmbeddingMetadata, ExampleMatchResult } from "./types/ExampleMatchResult";
 import { ActionEngineBase } from "@memberjunction/actions-base";
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, MJAIPromptEntityExtended, MJAIPromptCategoryEntityExtended } from "@memberjunction/ai-core-plus";
-import { EffectiveAgentPermissions } from "@memberjunction/ai-engine-base";
 
 
 /**
@@ -339,23 +339,46 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public GetModalityByName(name: string): MJAIModalityEntity | undefined {
         return this.Base.GetModalityByName(name);
     }
-    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
-        return this.Base.GetAgentModalities(agentId, direction);
+    public GetAgentModalitiesByDirection(agentId: string, direction: 'Input' | 'Output', modelId?: string): MJAIModalityEntity[] {
+        return this.Base.GetAgentModalities(agentId, direction, modelId);
     }
     public GetModelModalitiesByDirection(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
         return this.Base.GetModelModalities(modelId, direction);
     }
-    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
-        return this.Base.AgentSupportsModality(agentId, modalityName, direction);
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output', modelId?: string): boolean {
+        return this.Base.AgentSupportsModality(agentId, modalityName, direction, modelId);
     }
     public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
         return this.Base.ModelSupportsModality(modelId, modalityName, direction);
     }
-    public AgentSupportsAttachments(agentId: string): boolean {
-        return this.Base.AgentSupportsAttachments(agentId);
+    public AgentSupportsAttachments(agentId: string, modelId?: string): boolean {
+        return this.Base.AgentSupportsAttachments(agentId, modelId);
     }
-    public GetAgentSupportedInputModalities(agentId: string): string[] {
-        return this.Base.GetAgentSupportedInputModalities(agentId);
+    public GetAgentSupportedInputModalities(agentId: string, modelId?: string): string[] {
+        return this.Base.GetAgentSupportedInputModalities(agentId, modelId);
+    }
+
+    // Persona getters - delegated from AIEngineBase
+    public get Personas(): MJAIPersonaEntity[] { return this.Base.Personas; }
+    public get PersonaVendors(): MJAIPersonaVendorEntity[] { return this.Base.PersonaVendors; }
+    public get ModelPersonas(): MJAIModelPersonaEntity[] { return this.Base.ModelPersonas; }
+    public get AgentPersonas(): MJAIAgentPersonaEntity[] { return this.Base.AgentPersonas; }
+
+    // Persona helper methods - delegated from AIEngineBase
+    public GetModelPersonas(modelId: string, modalityName = 'Audio', vendorId?: string): ResolvedModelPersona[] {
+        return this.Base.GetModelPersonas(modelId, modalityName, vendorId);
+    }
+    public GetModelPersonaExclusions(modelId: string, modalityName = 'Audio', vendorId?: string): string[] {
+        return this.Base.GetModelPersonaExclusions(modelId, modalityName, vendorId);
+    }
+    public GetAgentPersonas(agentId: string): ResolvedAgentPersona[] {
+        return this.Base.GetAgentPersonas(agentId);
+    }
+    public ResolveAgentPersona(
+        agentId: string,
+        options?: { modelId?: string; vendorId?: string; modalityName?: string }
+    ): EffectiveAgentPersona | null {
+        return this.Base.ResolveAgentPersona(agentId, options);
     }
 
     // Delegate AIEngineBase public methods

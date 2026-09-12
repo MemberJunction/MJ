@@ -748,7 +748,7 @@ jobs:
   # ---------------------------------------------------------------------------------------
   unit-tests:
     name: Run unit tests
-    if: always()
+    if: ${{ always() && !cancelled() }}
     needs: [guards, build, test, esm-guard]
     timeout-minutes: 10
     runs-on: ubuntu-latest

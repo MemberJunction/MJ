@@ -23,7 +23,7 @@ import {
   RealtimeClientUsage
 } from '@memberjunction/ai-realtime-client';
 import { BuildNarrationInstructions } from './narration-template';
-import { ParseDelegationResultJson, ParsedDelegationArtifact } from './delegation-result-parser';
+import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components/realtime/channels/base-realtime-channel-client';
 import { RealtimeAudioRecorder } from './realtime-audio-recorder';
 
@@ -78,9 +78,11 @@ export interface RealtimeCaption {
  * future overlay render a "working" card while the realtime model narrates the same progress aloud.
  */
 export interface RealtimeDelegationProgress {
-  /** The `invoke-target-agent` call this progress belongs to. */
+  /** The tool/agent call this progress belongs to. */
   CallID: string;
-  /** The delegation phase: `prompt_execution` | `action_execution` | `subagent_execution` | `decision_processing`. */
+  /** The raw tool name when this progress represents a direct action (e.g. `File_Storage_List_Objects`). */
+  ToolName?: string;
+  /** The delegation phase: `prompt_execution` | `action_execution` | `subagent_execution` | `decision_processing` | `direct_action`. */
   Step: string;
   /** Human-readable progress message. */
   Message: string;
@@ -94,8 +96,10 @@ export interface RealtimeDelegationProgress {
  * content + provenance.
  */
 export interface RealtimeDelegationResult {
-  /** The `invoke-target-agent` call this result belongs to. */
+  /** The tool/agent call this result belongs to. */
   CallID: string;
+  /** The raw tool name when this result represents a direct action. */
+  ToolName?: string;
   /** Whether the delegated work succeeded. */
   Success: boolean;
   /** The result text — the agent's output, or an error message on failure. */
@@ -449,6 +453,10 @@ export class RealtimeSessionService {
   private sessionConversationId: string | null = null;
   /** First final user utterance of the live session (the naming seed). */
   private firstUserTranscript: string | null = null;
+  /** Buffer accumulating streaming user interim deltas into a single in-progress bubble. */
+  private pendingUserCaption = '';
+  /** Whether an in-place interim user caption is currently placed in `_captions$`. */
+  private hasActiveInterimUserCaption = false;
 
   /**
    * When the active/last session CREATED its conversation (started without one), the new
@@ -1669,7 +1677,7 @@ export class RealtimeSessionService {
       void this.handleToolCall(call);
     });
     client.OnError((error: RealtimeClientError) => {
-      console.error('[RealtimeSession] Provider error event:', error);
+      console.error('[RealtimeSession] Provider error event:', JSON.stringify(error), error);
     });
     // Usage telemetry: accumulate the driver's per-response token DELTAS and relay them to
     // the server (onto the co-agent AIPromptRun) debounced + once at teardown. Providers
@@ -1742,9 +1750,24 @@ export class RealtimeSessionService {
       // silence gap is timed where its audio really is — not inherited from the prior
       // turn's end. Narration interims are ephemeral and excluded (Kind guard inside).
       this.markTurnAudioStart(transcript.Kind);
+      if (transcript.Role === 'User') {
+        if (!this.hasActiveInterimUserCaption) {
+          if (transcript.Text.trim().length === 0) {
+            return;
+          }
+          this.hasActiveInterimUserCaption = true;
+          this.pendingUserCaption = transcript.Text;
+          this.appendCaption({ Role: 'User', Text: this.pendingUserCaption });
+        } else {
+          this.pendingUserCaption += transcript.Text;
+          this.replaceLastCaption('User', this.pendingUserCaption);
+        }
+      }
       return;
     }
     if (transcript.Role === 'Assistant') {
+      this.hasActiveInterimUserCaption = false;
+      this.pendingUserCaption = '';
       if (transcript.Kind === 'narration') {
         this._delegationNarration$.next({ Text: transcript.Text });
         // Remember what was actually SAID so later updates build on it instead of repeating.
@@ -1762,11 +1785,25 @@ export class RealtimeSessionService {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
       }
+    } else if (this.hasActiveInterimUserCaption) {
+      this.hasActiveInterimUserCaption = false;
+      this.pendingUserCaption = '';
+      if (transcript.Text.trim().length === 0) {
+        return;
+      }
+      this.replaceLastCaption('User', transcript.Text);
+      if (this.firstUserTranscript === null) {
+        this.firstUserTranscript = transcript.Text;
+      }
+      await this.relayTranscript('user', transcript.Text);
     } else if (transcript.ReplacesPrevious) {
-      // STREAMING user transcription: providers like Grok emit the growing utterance as repeated
+      // STREAMING user transcription: providers like Grok and OpenAI Live emit the growing utterance as repeated
       // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
       // in-place User caption + persisted turn instead of stacking a new bubble per increment — the
-      // same correction semantics the assistant branch uses. (OpenAI sends one final → the else path.)
+      // same correction semantics the assistant branch uses. (Classic OpenAI Realtime sends one final → the else path.)
+      if (transcript.Text.trim().length === 0) {
+        return;
+      }
       this.replaceLastCaption('User', transcript.Text);
       await this.relayTranscript('user', transcript.Text, true);
     } else {
@@ -1865,8 +1902,9 @@ export class RealtimeSessionService {
   private async handleToolCall(call: RealtimeClientToolCall): Promise<void> {
     const clientHandler = this.findClientToolHandler(call.ToolName);
     if (clientHandler) {
-      // Local UI tool: no server relay, no 'thinking' turn-state / narration burst — these
-      // are fast, in-browser surface mutations (e.g. drawing on the whiteboard).
+      // Local UI tool: no server relay, no 'thinking' turn-state / narration burst, and intentionally
+      // NO thread card — these are fast, in-browser surface mutations (e.g. drawing on the whiteboard)
+      // whose visual effects are immediately visible on the dedicated canvas/surface.
       const resultJson = await this.executeClientTool(clientHandler, call);
       this.client?.SendToolResult(call.CallID, resultJson);
       // Observability: record the channel tool call on the co-agent's run (run-only — NOT a chat
@@ -1888,9 +1926,21 @@ export class RealtimeSessionService {
       this.lastNarratedTail = '';
     }
     this.inFlightCallIds.add(call.CallID);
+
+    if (call.ToolName !== 'invoke-target-agent') {
+      // Direct action: emit synthetic progress immediately so the conversation thread
+      // and activity rail render an active "working" action card while the tool executes.
+      this._delegationProgress$.next({
+        CallID: call.CallID,
+        ToolName: call.ToolName,
+        Step: 'direct_action',
+        Message: `Executing ${FormatToolName(call.ToolName)}`
+      });
+    }
+
     try {
       const resultJson = await this.executeSessionTool(call.CallID, call.ToolName, call.ArgumentsJson);
-      this.emitDelegationResult(call.CallID, resultJson);
+      this.emitDelegationResult(call.CallID, resultJson, call.ToolName);
       this.client?.SendToolResult(call.CallID, resultJson);
     } catch (error) {
       console.error('[RealtimeSession] Tool execution failed:', error);
@@ -1902,7 +1952,7 @@ export class RealtimeSessionService {
         success: false,
         error: error instanceof Error ? error.message : String(error)
       });
-      this.emitDelegationResult(call.CallID, errorJson);
+      this.emitDelegationResult(call.CallID, errorJson, call.ToolName);
       this.client?.SendToolResult(call.CallID, errorJson);
     }
   }
@@ -1937,13 +1987,12 @@ export class RealtimeSessionService {
   /**
    * Emits a delegation result so the overlay's "working" card flips to a result card with real
    * content. Parses the broker's `{success, output, runId}` | `{success:false, error}` shape via
-   * {@link ParseDelegationResultJson}; if it isn't JSON, surfaces the raw string. Only delegation
-   * cards (created from progress events) react — non-delegation tool results have no card and are
-   * harmlessly ignored downstream. The `runId` (the delegated `MJ: AI Agent Runs` record) rides
-   * along as {@link RealtimeDelegationResult.RunID} for the overlay's dev links, and any `artifacts`
-   * ride along as {@link RealtimeDelegationResult.Artifacts} for the surface panel's artifact tabs.
+   * {@link ParseDelegationResultJson}; if it isn't JSON, surfaces the raw string. The `runId`
+   * (the delegated `MJ: AI Agent Runs` record) rides along as {@link RealtimeDelegationResult.RunID}
+   * for the overlay's dev links, and any `artifacts` ride along as {@link RealtimeDelegationResult.Artifacts}
+   * for the surface panel's artifact tabs.
    */
-  private emitDelegationResult(callId: string, resultJson: string): void {
+  private emitDelegationResult(callId: string, resultJson: string, toolName?: string): void {
     // The result will be spoken next — a deferred interim update is now pointless
     // (this is what keeps fast agents like Sage from narrating over their own answer),
     // and any progress still in the PubSub pipe for this call is stale.
@@ -1958,6 +2007,7 @@ export class RealtimeSessionService {
     const parsed = ParseDelegationResultJson(resultJson);
     this._delegationResult$.next({
       CallID: callId,
+      ToolName: toolName,
       Success: parsed.Success,
       Output: parsed.Output,
       RunID: parsed.RunID,
@@ -2699,6 +2749,8 @@ export class RealtimeSessionService {
   /** Resets reactive + internal state at the start of a session. */
   private resetState(): void {
     this._captions$.next([]);
+    this.pendingUserCaption = '';
+    this.hasActiveInterimUserCaption = false;
     this.SetMinimized(false);
     this.stopSegmentFlushing();
     this.segmentIndex = 0;

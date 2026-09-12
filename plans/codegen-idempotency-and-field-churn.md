@@ -10,6 +10,9 @@
 > was wrong (function names, line ranges, mechanisms, example values) this document says so
 > inline rather than silently correcting, so the builder does not go looking for code that does
 > not exist. Appendix A is the claim-by-claim verification record.
+>
+> **Reversion Note (C7 Decision Metadata Store Reverted):**
+> The `metadata/entities/decisions/` store, `DecisionMetadataWriter`, format schema, and export scripts have been removed. The decision metadata store was redundant with the migration's CodeGen capture (`migrations/v5/CodeGen_Run_*.sql`), and it actively weakened the drift gate. The field-metadata lock (`field-metadata-lock.ts`) and database migration capture SQL are the authoritative single source of truth.
 
 ---
 
@@ -1105,6 +1108,8 @@ all) is the right long-term shape and is recorded in §9 — it changes the publ
 **Tests:** T9.
 
 ### C7 — Decision metadata lives in `metadata/entities/`: exporter, CodeGen writer, release path
+
+> **⛔ REVERTED — this section is history, not instructions.** The decision metadata store (`metadata/entities/decisions/`, `DecisionMetadataWriter`, `decision-metadata-format.ts`, the export script, the `decisionMetadata` config block and the `MetadataSync` `output[]` entry) shipped in #4296 and was removed in full in #4397. It was redundant with the migration's CodeGen capture (`migrations/v*/CodeGen_Run_*.sql`) and it weakened the drift gate. The authoritative source of truth is the field-metadata lock (`field-metadata-lock.ts`) plus that migration capture. Everything below, and every other `C7` reference in this document (incl. tests T14/T15), describes code that no longer exists — **do not rebuild it.**
 
 **Files:** new `scripts/codegen-decision-metadata-export.mjs`; new
 `packages/CodeGenLib/src/Database/decision-metadata-writer.ts` (+ a shared

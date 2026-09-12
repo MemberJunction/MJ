@@ -4693,6 +4693,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
             } else {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is current — no refresh needed`, verboseOnly: false });
+                await this.RefreshCurrentUser();
             }
         } catch (e) {
             LogError(`[Metadata Cache] Background validation failed: ${e}`);
@@ -4735,6 +4736,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 }
             } else {
                 LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is current`, verboseOnly: false });
+                // Even when entity metadata is current, refresh CurrentUser so user roles and permissions
+                // stay in sync with the database without requiring a schema change or manual cache clear.
+                await this.RefreshCurrentUser();
             }
         } catch (e) {
             LogError(`[Metadata Cache] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — engines will smart-cache-check`);
@@ -4935,6 +4939,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
     }
     
+
+    /**
+     * Refreshes the CurrentUser from the server and updates local metadata in place.
+     * Useful on warm boot or when user roles/permissions change dynamically without
+     * entity schema changes.
+     */
+    public async RefreshCurrentUser(): Promise<UserInfo | null> {
+        try {
+            const user = await this.GetCurrentUser();
+            if (user && this._localMetadata) {
+                this._localMetadata.CurrentUser = user;
+                void this.SaveLocalMetadataToStorage();
+                return user;
+            }
+        } catch (e) {
+            LogError(`[Metadata Cache] RefreshCurrentUser failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
+        return null;
+    }
 
     /**
      * Gets the current user information from the provider.

@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { IMetadataProvider, Metadata, RunView, RunViewParams } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RealtimeDelegationCardVM, RealtimeThreadItem } from '../components/realtime/realtime-session-state';
-import { ParsedDelegationArtifact } from './delegation-result-parser';
+import { ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 
 /**
  * Why a reviewed session was closed, as stamped server-side by `SessionManager.CloseSession`
@@ -107,6 +107,29 @@ export function MergeChainChannelStates(
 }
 
 /**
+ * A direct action or channel tool execution performed during the reviewed session
+ * (stored as a hidden `MJ: Conversation Details` turn with `type: 'realtime_tool_execution'`).
+ */
+export interface RealtimeSessionReviewAction {
+  /** `MJ: Conversation Details.ID`. */
+  ID: string;
+  /** Correlated tool call id (`MJ: Conversation Details.ExternalID`), falling back to ID. */
+  CallID: string;
+  /** The tool/action name (e.g. `File_Storage_List_Objects` or `Whiteboard_draw_shape`). */
+  ToolName: string;
+  /** Serialized argument payload, when recorded. */
+  ArgsJson: string | null;
+  /** Serialized result payload, when recorded. */
+  ResultJson: string | null;
+  /** Whether the execution reported success. */
+  Success: boolean;
+  /** Execution duration in ms (`MJ: Conversation Details.CompletionTime`). */
+  DurationMs: number;
+  /** When the tool execution was recorded (`MJ: Conversation Details.__mj_CreatedAt`). */
+  At: Date | null;
+}
+
+/**
  * One LEG of a reviewed session chain: a single `MJ: AI Agent Sessions` row plus its own
  * caption turns and delegated-run previews. A session resumed via `lastSessionId` chains
  * legs together (newest leg's `LastSessionID` → prior leg); the review loader walks that
@@ -126,6 +149,8 @@ export interface RealtimeSessionReviewLeg {
   Turns: RealtimeSessionReviewTurn[];
   /** This leg's delegated-run previews (oldest first, minus its co-agent observability run). */
   DelegatedRuns: RealtimeSessionReviewRun[];
+  /** This leg's direct action and channel tool executions. */
+  DirectActions?: RealtimeSessionReviewAction[];
 }
 
 /**
@@ -167,6 +192,8 @@ export interface RealtimeSessionReview {
   Turns: RealtimeSessionReviewTurn[];
   /** Delegated run previews (oldest first, all legs), minus each leg's co-agent observability run. */
   DelegatedRuns: RealtimeSessionReviewRun[];
+  /** Direct action and channel tool executions (oldest first, all legs). */
+  DirectActions?: RealtimeSessionReviewAction[];
   /**
    * Saved channel states, one per session-channel row that carried a name. Channel state
    * (e.g. the whiteboard board) is the LATEST leg's only — earlier legs' states were
@@ -216,6 +243,8 @@ interface DetailRow {
   HiddenToUser: boolean;
   UserID: string | null;
   Status: string | null;
+  ExternalID?: string | null;
+  CompletionTime?: number | null;
   UtteranceStartMs: number | null;
   UtteranceEndMs: number | null;
   __mj_CreatedAt: string | null;
@@ -270,7 +299,7 @@ interface SessionConfigJson {
 }
 
 const SESSION_FIELDS = ['ID', 'AgentID', 'Agent', 'Status', 'ConversationID', 'Config', 'LastSessionID', 'LastActiveAt', 'ClosedAt', 'CloseReason', 'RecordingFileID', 'RecordingStartedAt', 'RecordingMedia', '__mj_CreatedAt'];
-const DETAIL_FIELDS = ['ID', 'Role', 'Message', 'HiddenToUser', 'UserID', 'Status', 'UtteranceStartMs', 'UtteranceEndMs', '__mj_CreatedAt'];
+const DETAIL_FIELDS = ['ID', 'Role', 'Message', 'HiddenToUser', 'UserID', 'Status', 'ExternalID', 'CompletionTime', 'UtteranceStartMs', 'UtteranceEndMs', '__mj_CreatedAt'];
 const RUN_FIELDS = ['ID', 'AgentID', 'Agent', 'Status', 'Success', 'Message', 'ErrorMessage', 'FinalStep', 'StartedAt', 'CompletedAt'];
 const CHANNEL_FIELDS = ['ID', 'Channel', 'Config'];
 const JUNCTION_FIELDS = ['ID', 'ConversationDetailID', 'ArtifactVersionID'];
@@ -287,6 +316,7 @@ export const MAX_REVIEW_DETAILS = 500;
 export function BuildReviewDelegationCard(run: RealtimeSessionReviewRun, fallbackAgentName: string): RealtimeDelegationCardVM {
   const startedAt = run.StartedAt?.getTime() ?? 0;
   return {
+    Kind: 'agent',
     CallID: run.RunID,
     AgentName: run.AgentName || fallbackAgentName,
     LatestMessage: run.Message ?? run.ErrorMessage ?? run.Status,
@@ -301,8 +331,28 @@ export function BuildReviewDelegationCard(run: RealtimeSessionReviewRun, fallbac
   };
 }
 
+/** Maps one direct-action execution to the done action-card VM the thread/rail render. */
+export function BuildReviewActionCard(action: RealtimeSessionReviewAction): RealtimeDelegationCardVM {
+  const at = action.At?.getTime() ?? 0;
+  const toolTitle = FormatToolName(action.ToolName);
+  return {
+    Kind: 'action',
+    CallID: action.CallID,
+    ToolName: action.ToolName,
+    AgentName: toolTitle,
+    LatestMessage: `Executed ${toolTitle}`,
+    LatestStep: 'direct_action',
+    Done: true,
+    Success: action.Success,
+    RunRef: shortRunRef(action.CallID),
+    Result: action.ResultJson,
+    StartedAt: at,
+    FinishedAt: at + action.DurationMs
+  };
+}
+
 /**
- * Builds the chronological thread (caption turns + done delegation cards, oldest first)
+ * Builds the chronological thread (caption turns + done delegation cards + done action cards, oldest first)
  * for a reviewed session — the items `RealtimeSessionState.LoadHistoricalItems` takes.
  *
  * CHAIN-AWARE: when the review carries multiple {@link RealtimeSessionReview.Legs}, each
@@ -315,7 +365,12 @@ export function BuildReviewThreadItems(review: RealtimeSessionReview): RealtimeT
   const legs = review.Legs ?? [];
   if (legs.length <= 1) {
     const only = legs[0];
-    return buildLegThreadItems(only?.Turns ?? review.Turns, only?.DelegatedRuns ?? review.DelegatedRuns, review.AgentName);
+    return buildLegThreadItems(
+      only?.Turns ?? review.Turns,
+      only?.DelegatedRuns ?? review.DelegatedRuns,
+      only?.DirectActions ?? review.DirectActions ?? [],
+      review.AgentName
+    );
   }
   const items: RealtimeThreadItem[] = [];
   legs.forEach((leg, i) => {
@@ -328,18 +383,19 @@ export function BuildReviewThreadItems(review: RealtimeSessionReview): RealtimeT
         CloseReason: legs[i - 1].CloseReason ?? null
       });
     }
-    items.push(...buildLegThreadItems(leg.Turns, leg.DelegatedRuns, review.AgentName));
+    items.push(...buildLegThreadItems(leg.Turns, leg.DelegatedRuns, leg.DirectActions ?? [], review.AgentName));
   });
   return items;
 }
 
 /**
- * Builds ONE leg's chronological items (caption turns + done delegation cards, oldest
- * first). Entries without a timestamp sort to the front, preserving their relative order.
+ * Builds ONE leg's chronological items (caption turns + done delegation cards + done action cards,
+ * oldest first). Entries without a timestamp sort to the front, preserving their relative order.
  */
 function buildLegThreadItems(
   turns: RealtimeSessionReviewTurn[],
   runs: RealtimeSessionReviewRun[],
+  actions: RealtimeSessionReviewAction[],
   fallbackAgentName: string
 ): RealtimeThreadItem[] {
   const stamped: Array<{ At: number; Item: RealtimeThreadItem }> = [];
@@ -348,6 +404,9 @@ function buildLegThreadItems(
   }
   for (const run of runs) {
     stamped.push({ At: run.StartedAt?.getTime() ?? 0, Item: { Kind: 'delegation', Card: BuildReviewDelegationCard(run, fallbackAgentName) } });
+  }
+  for (const action of actions) {
+    stamped.push({ At: action.At?.getTime() ?? 0, Item: { Kind: 'delegation', Card: BuildReviewActionCard(action) } });
   }
   // Array.prototype.sort is stable — equal timestamps keep their build order.
   stamped.sort((a, b) => a.At - b.At);
@@ -589,6 +648,7 @@ export class RealtimeSessionReviewService {
       RecordingMedia: session.RecordingMedia ?? null,
       Turns: legs.flatMap(l => l.Turns),
       DelegatedRuns: legs.flatMap(l => l.DelegatedRuns),
+      DirectActions: legs.flatMap(l => l.DirectActions ?? []),
       // Multi-leg: newest leg with a SAVED state wins per channel — a final leg that
       // never touched the board no longer hides an earlier leg's drawing from review.
       ChannelStates: MergeChainChannelStates(chain.map(leg => this.mapChannels(leg.channels))),
@@ -606,8 +666,46 @@ export class RealtimeSessionReviewService {
       ClosedAt: this.toDate(leg.session.ClosedAt),
       CloseReason: leg.session.CloseReason ?? null,
       Turns: this.mapTurns(leg.details),
-      DelegatedRuns: this.mapRuns(leg.runs, config.coAgentRunID ?? null)
+      DelegatedRuns: this.mapRuns(leg.runs, config.coAgentRunID ?? null),
+      DirectActions: this.mapDirectActions(leg.details)
     };
+  }
+
+  /** Hidden detail rows with realtime_tool_execution payload → direct-action reviews. */
+  private mapDirectActions(details: DetailRow[]): RealtimeSessionReviewAction[] {
+    const actions: RealtimeSessionReviewAction[] = [];
+    for (const row of details) {
+      if (!row.HiddenToUser || row.Role !== 'AI' || !row.Message) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(row.Message) as {
+          type?: string;
+          callId?: string | null;
+          toolName?: string;
+          argsJson?: string | null;
+          resultJson?: string | null;
+          success?: boolean;
+          durationMs?: number;
+        };
+        if (parsed && parsed.type === 'realtime_tool_execution' && typeof parsed.toolName === 'string') {
+          const createdAt = this.toDate(row.__mj_CreatedAt);
+          actions.push({
+            ID: row.ID,
+            CallID: parsed.callId || row.ExternalID || row.ID,
+            ToolName: parsed.toolName,
+            ArgsJson: parsed.argsJson ?? null,
+            ResultJson: parsed.resultJson ?? null,
+            Success: typeof parsed.success === 'boolean' ? parsed.success : (row.Status === 'Complete'),
+            DurationMs: typeof parsed.durationMs === 'number' ? parsed.durationMs : (row.CompletionTime ?? 0),
+            At: createdAt
+          });
+        }
+      } catch {
+        // Not a JSON fact payload — ignore
+      }
+    }
+    return actions;
   }
 
   /** Persisted detail rows → caption turns: visible `User`/`AI` rows with text (AI → Assistant). */

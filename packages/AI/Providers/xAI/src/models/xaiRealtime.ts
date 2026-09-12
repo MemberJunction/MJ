@@ -52,6 +52,7 @@ export const XAI_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsMcpTools: false,
     supportsVoiceOutput: false,
     supportsLiveReconfigure: true,
+    supportsDynamicToolSet: true,
     unexpectedCloseMessage: 'xAI Grok Voice realtime connection closed unexpectedly',
     // server_vad is the only turn mode xAI documents on Grok Voice today. When xAI ships a
     // native full-duplex / smarter turn mode (the Grok Voice Think Fast family reasons while
@@ -143,6 +144,8 @@ export interface IxAIRealtimeConnection {
  */
 @RegisterClass(BaseRealtimeModel, 'GrokRealtime')
 export class xAIRealtime extends OpenAIRealtime {
+    public static override readonly SupportsDynamicToolSet = XAI_REALTIME_PROFILE.supportsDynamicToolSet;
+
     /**
      * @param apiKey The xAI API key used to authenticate the Grok Voice realtime socket.
      */

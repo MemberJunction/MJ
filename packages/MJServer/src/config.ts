@@ -539,11 +539,17 @@ const telephonySchema = z.object({
   teams: teamsMeetingsSchema.optional(),
 }).passthrough();
 
+const realtimeSchema = z.object({
+  /** Master switch. When false (default), the WebRTC SDP broker router is not mounted. */
+  enabled: zodBooleanWithTransforms().default(false),
+}).passthrough();
+
 const configInfoSchema = z.object({
   userHandling: userHandlingInfoSchema,
   magicLink: magicLinkSchema.optional().default({}),
   widget: widgetSchema.optional().default({}),
   telephony: telephonySchema.optional().default({}),
+  realtime: realtimeSchema.optional().default({}),
   databaseSettings: databaseSettingsInfoSchema,
   viewingSystem: viewingSystemInfoSchema.optional(),
   restApiOptions: restApiOptionsSchema.optional().default({}),
@@ -598,6 +604,7 @@ export type UserHandlingInfo = z.infer<typeof userHandlingInfoSchema>;
 export type MagicLinkConfig = z.infer<typeof magicLinkSchema>;
 export type WidgetConfig = z.infer<typeof widgetSchema>;
 export type TelephonyConfig = z.infer<typeof telephonySchema>;
+export type RealtimeConfig = z.infer<typeof realtimeSchema>;
 export type TwilioTelephonyConfig = z.infer<typeof twilioTelephonySchema>;
 export type VonageTelephonyConfig = z.infer<typeof vonageTelephonySchema>;
 export type RingCentralTelephonyConfig = z.infer<typeof ringcentralTelephonySchema>;
@@ -742,6 +749,11 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
     systemUserEmail: 'not.set@nowhere.com',
     pollingIntervalMs: 15000,
     maxConcurrentRuns: 3
+  },
+
+  // Realtime WebRTC SDP broker defaults (off by default)
+  realtime: {
+    enabled: parseBooleanEnv(process.env.MJ_REALTIME_ENABLED),
   },
 
   // Telemetry defaults — on unless the operator turns it off via MJ_TELEMETRY_ENABLED.

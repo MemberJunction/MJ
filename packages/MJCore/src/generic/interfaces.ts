@@ -705,6 +705,12 @@ export interface IMetadataProvider {
 
     get CurrentUser(): UserInfo
 
+    /**
+     * Refreshes CurrentUser and its role assignments from the server,
+     * updating cached metadata in place.
+     */
+    RefreshCurrentUser?(): Promise<UserInfo | null>;
+
     get Roles(): RoleInfo[]
 
     get RowLevelSecurityFilters(): RowLevelSecurityFilterInfo[]
