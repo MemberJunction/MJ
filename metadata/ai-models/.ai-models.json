@@ -17832,7 +17832,17 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
             "DriverClass": "ElevenLabsRealtime",
             "APIName": null,
-            "ModelConfiguration": "{\"Realtime\":{\"Reasoning\":{\"Plane\":\"remote\",\"Remote\":{\"Kind\":\"hostedAgent\",\"Ref\":\"MJ Realtime Co-Agent\"}}}}",
+            "ModelConfiguration": {
+              "Realtime": {
+                "Reasoning": {
+                  "Plane": "remote",
+                  "Remote": {
+                    "Kind": "hostedAgent",
+                    "Ref": "MJ Realtime Co-Agent"
+                  }
+                }
+              }
+            },
             "Priority": 0,
             "Status": "Active",
             "SupportedResponseFormats": "Any",
@@ -17966,7 +17976,17 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
             "DriverClass": "InworldRealtime",
             "APIName": "inworld-realtime",
-            "ModelConfiguration": "{\"Realtime\":{\"Reasoning\":{\"Plane\":\"remote\",\"Remote\":{\"Kind\":\"model\",\"Ref\":\"anthropic/claude-sonnet-4-6\"}}}}",
+            "ModelConfiguration": {
+              "Realtime": {
+                "Reasoning": {
+                  "Plane": "remote",
+                  "Remote": {
+                    "Kind": "model",
+                    "Ref": "anthropic/claude-sonnet-4-6"
+                  }
+                }
+              }
+            },
             "MaxInputTokens": 128000,
             "Priority": 0,
             "Status": "Active",

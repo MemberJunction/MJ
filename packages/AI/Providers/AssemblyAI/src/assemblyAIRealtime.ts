@@ -13,6 +13,7 @@ import {
     type RealtimeSessionError,
     type JSONObject,
     type JSONValue,
+    type RealtimeVoiceOption,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -172,6 +173,15 @@ type FetchLike = (
  */
 @RegisterClass(BaseRealtimeModel, 'AssemblyAIRealtime')
 export class AssemblyAIRealtime extends BaseRealtimeModel {
+    /**
+     * The voices the AssemblyAI Voice Agent API can speak with — used to populate the voice picker.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: 'ivy', Name: 'Ivy' },
+            { ID: 'james', Name: 'James' },
+        ];
+    }
     /**
      * Opens a server-bridged session: connects the agent websocket authenticated with the
      * API key, sends the full session config as the FIRST frame (`session.update` — prompt,

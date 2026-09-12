@@ -196,5 +196,203 @@
       "lastModified": "2026-09-11T18:26:10.757Z",
       "checksum": "49492afba112c59dc47d0f722f3616f4290e8ad27f9948bdcde3167dca5a9282"
     }
+  },
+  {
+    "fields": {
+      "Name": "Cedar",
+      "Description": "Calm, melodic, and polished voice with natural pacing.",
+      "Tone": "Calm",
+      "SpeakingStyle": "Melodic and clear",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8F6B18D3-A504-4C72-835A-617F9A0A1011"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.429Z",
+      "checksum": "f1fe69564ec3051b41b9003c128794d669697e3150558410e12213c046bc9799"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marin",
+      "Description": "Warm, natural, and expressive voice with clear articulation.",
+      "Tone": "Warm",
+      "SpeakingStyle": "Expressive and conversational",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "9C4B2E15-D84B-4E31-9A74-123456789ABC"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.496Z",
+      "checksum": "639bdb2058c773447e9fb448f6b2e2cbcf914f318c4c0c658af179ee2e6d70a9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puck",
+      "Description": "Upbeat, energetic, and engaging voice with bright delivery.",
+      "Tone": "Upbeat",
+      "SpeakingStyle": "Energetic and friendly",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3E2A1B70-5F11-4654-8B6F-71A2D3C4E5F6"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.417Z",
+      "checksum": "9883fa93b9538bf264546c6bf05885f24cda8847cbc22b285093d374cd265ce0"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Charon",
+      "Description": "Informative, steady, and measured voice with deep resonance.",
+      "Tone": "Informative",
+      "SpeakingStyle": "Measured and authoritative",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4F3B2C81-6E22-4765-9C70-82B3E4D5F607"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.496Z",
+      "checksum": "cb28a373d2ed56c7add27278558db83134fd2d767c4f5021e95b1030eb928262"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kore",
+      "Description": "Firm, clear, and confident voice with direct phrasing.",
+      "Tone": "Firm",
+      "SpeakingStyle": "Clear and focused",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5A4C3D92-7F33-4876-AD81-93C4F5E60718"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.492Z",
+      "checksum": "80681ad8f49c529cf58d08dcd5ec3b73083c1a6f62d54808c35d104f48f2df63"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fenrir",
+      "Description": "Excitable, dynamic, and passionate voice with lively pacing.",
+      "Tone": "Excitable",
+      "SpeakingStyle": "Passionate and fast-paced",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6B5D4E03-8044-4987-BE92-04D506F71829"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.418Z",
+      "checksum": "0a373c95b8b107a0543c330b6d7cc69eb3d166ea50ec92975d3490e712082f00"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aoede",
+      "Description": "Breezy, relaxed, and smooth voice with natural warmth.",
+      "Tone": "Breezy",
+      "SpeakingStyle": "Relaxed and easy-going",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7C6E5F14-9155-4A98-CF03-15E61708293A"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.417Z",
+      "checksum": "bbff293a3b28dacbce5bcebc654fcf3aeb4dd1aee2ccd9d8c5b45db7514c2aaa"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ivy",
+      "Description": "Clear, friendly, and natural female voice optimized for conversation.",
+      "Tone": "Friendly",
+      "SpeakingStyle": "Natural and articulate",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8D7F6025-A266-4BA9-D014-26F728193A4B"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.416Z",
+      "checksum": "560bf0b1d82e06a6f2832d0d901949a9fe17821819d3df921547dbdeb6d5aa82"
+    }
+  },
+  {
+    "fields": {
+      "Name": "James",
+      "Description": "Professional, articulate, and steady male voice.",
+      "Tone": "Professional",
+      "SpeakingStyle": "Articulate and confident",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "9E807136-B377-4CBA-E125-3708392A4B5C"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.417Z",
+      "checksum": "9b8ebee37cef8638f9f12420fcc7fb12d963e92de94a06cfc877b20ce083b3f4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rachel",
+      "Description": "Calm, warm, and natural conversational female voice.",
+      "Tone": "Warm",
+      "SpeakingStyle": "Conversational and polished",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AF918247-C488-4DCB-F236-48194A3B5C6D"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.523Z",
+      "checksum": "d3a014054002ae425437f20a119ffbf67c23b7a8165ced949fb37e5060a89d79"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Adam",
+      "Description": "Deep, authoritative, and expressive male voice.",
+      "Tone": "Authoritative",
+      "SpeakingStyle": "Deep and measured",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B0A29358-D599-4EDC-0347-592A5B4C6D7E"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:28:57.523Z",
+      "checksum": "f85ffa84e50059e6aa327833643302b925103e47b0662fcfb4c009ad907ef72c"
+    }
   }
 ]

@@ -196,5 +196,203 @@
       "lastModified": "2026-09-11T18:26:10.836Z",
       "checksum": "8a52619298230cb6b67ba7f77bc2a03d952074256f4ee1878690abd0eb8deee8"
     }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "cedar",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "96322C02-6906-4333-B63F-18689F29EE9E"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.496Z",
+      "checksum": "d979eafca20dfaa07c30a6b6b97e621e7c3876a6a5e29cb95a6cc91c97dc76ce"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "marin",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3325857A-9B67-454C-8293-2EE77B447D51"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.490Z",
+      "checksum": "c1d05e5d95335e6e0792057aff85a23a534f1364612d4d3680f583add08eeb73"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Puck",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Puck",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "565B9D69-15D7-4017-97F5-1CB5ED44601F"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.490Z",
+      "checksum": "637a584ffd2d9f18e076fdb7c3c0d792b2f8f10acbddd954c0b166e35fe2f883"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Charon",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Charon",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C7D45702-18E8-4471-A8DB-630F39773C09"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.494Z",
+      "checksum": "29d5d281bc8cbda7cadce0eb16e1bf8fe618bd528312e12ecf06aebd36fda267"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Kore",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Kore",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "815D667F-0272-4F62-ABC4-A8C52A99285F"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.496Z",
+      "checksum": "c1d4ac1e797fd9c980cdee636de2768b3009073dc46a418d4871ec2ffb52b91f"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fenrir",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Fenrir",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DE088865-BDC2-417F-BB39-191E68305237"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.495Z",
+      "checksum": "c9e7aa936896e216578e7276ed4783e6762be2bcc5446ea80f1b4c21e4ac0cc5"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Aoede",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Aoede",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7BD760FD-3C72-42D0-A8FE-6E573C242FEC"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.492Z",
+      "checksum": "383b9d56a6aea865665ec0b49b6fdf8a32c8ffd841a99eadc5ee461ca70a9a0d"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ivy",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=AssemblyAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "ivy",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "091386C8-C359-4215-A24A-75C3B1DFB77E"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.489Z",
+      "checksum": "82c64dae0277fe2137b996c5261619c892e6f09c05b52f5e868f3b46cee1713f"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=James",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=AssemblyAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "james",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AB41DF68-FA22-458E-B0DA-FC4D5DDA7212"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.488Z",
+      "checksum": "157815d9a37c6019e35f23ff607c57fcb83c505afb51f1ccda24c52d8ca02eeb"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Rachel",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "21m00Tcm4TlvDq8ikWAM",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "02F13023-B2FC-4935-BC7D-DDFC769324DB"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.537Z",
+      "checksum": "e3f6ef1b167e129cf87d3e82899286f4dc8ab43ab333a804569f318a62c522a4"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Adam",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "pNInz6obpgDQGcFmaJgB",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6E2A7E85-ED5E-437D-8E9E-19FE8C5F588B"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T23:29:17.537Z",
+      "checksum": "851df8e21aaa58b0c984d86dcba7ad5a27c5eba485a4406d3671368e4fb86e20"
+    }
   }
 ]
