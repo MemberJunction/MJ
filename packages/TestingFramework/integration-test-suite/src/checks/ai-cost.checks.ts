@@ -662,21 +662,21 @@ export const AiCostChecks: NamedCheck[] = [
             const mrInfo = mrRes.Results![0];
             Assert(mrInfo.RefreshSchedule !== null && mrInfo.RefreshSchedule.trim().length > 0, `AIUsageHourly MaterializedResult must have RefreshSchedule IS NOT NULL, got: ${mrInfo.RefreshSchedule}`);
 
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: integration test script — single-provider process by design
             const mrEntity = await md.GetEntityObject<MJMaterializedResultEntity>('MJ: Materialized Results', ctx.User);
             const loaded = await mrEntity.Load(mrInfo.ID);
             Assert(loaded, `failed to load MaterializedResult entity for ID: ${mrInfo.ID}`);
 
-            const exec = Metadata.Provider as unknown as { ExecuteSQL?: unknown };
+            const exec = Metadata.Provider as unknown as { ExecuteSQL?: unknown }; // global-provider-ok: integration test script — single-provider process by design
             if (typeof exec?.ExecuteSQL === 'function') {
                 const refresher = new MaterializationRefresher();
-                const refreshRes = await refresher.RefreshOne(mrEntity, ctx.User, Metadata.Provider);
+                const refreshRes = await refresher.RefreshOne(mrEntity, ctx.User, Metadata.Provider); // global-provider-ok: integration test script — single-provider process by design
                 Assert(refreshRes.Success, `RefreshOne failed for ${mrInfo.TableName}: ${refreshRes.ErrorMessage}`);
 
                 await mrEntity.Load(mrInfo.ID);
                 AssertEqual(mrEntity.Status, 'Active', `MaterializedResult status must be Active after RefreshOne, got: ${mrEntity.Status}`);
             } else {
-                console.warn('  ⚠ AC11: Metadata.Provider does not implement ExecuteSQL (client provider run path) — skipping RefreshOne live execution');
+                console.warn('  ⚠ AC11: Metadata.Provider does not implement ExecuteSQL (client provider run path) — skipping RefreshOne live execution'); // global-provider-ok: integration test script — single-provider process by design
                 Assert(mrInfo.Status === 'Active' || mrInfo.Status === 'Building', `MaterializedResult status must be Active or Building, got: ${mrInfo.Status}`);
             }
 
