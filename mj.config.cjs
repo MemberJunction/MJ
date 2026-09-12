@@ -228,11 +228,6 @@ module.exports = {
     },
   ],
 
-  // Explicitly enable decision metadata recording for MemberJunction core
-  decisionMetadata: {
-    enabled: true,
-  },
-
   // Output directories specific to monorepo structure
   output: [
     { type: 'SQL', directory: './SQL Scripts/generated', appendOutputCode: true },
