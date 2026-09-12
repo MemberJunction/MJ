@@ -19,10 +19,11 @@
  * check (AC4) reimplements `GetActiveModelCost`'s selection independently so it is a genuine
  * cross-check, not a restatement.
  */
-import { RunView, RunQuery } from '@memberjunction/core';
+import { RunView, RunQuery, Metadata } from '@memberjunction/core';
 import type { AggregateResult } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
-import type { MJAIModelCostEntity } from '@memberjunction/core-entities';
+import type { MJAIModelCostEntity, MJMaterializedResultEntity } from '@memberjunction/core-entities';
+import { MaterializationRefresher } from '@memberjunction/materialization';
 import {
     AIEngineBase,
     BasePriceUnitType,
@@ -675,6 +676,40 @@ export const AiCostChecks: NamedCheck[] = [
             }, ctx.User);
             Assert(jobProbe.Success, `scheduled job probe failed: ${jobProbe.ErrorMessage}`);
             Assert((jobProbe.Results ?? []).length > 0, `scheduled job with JobType 'Materialization Refresh' must exist in metadata`);
+
+            // (a.2) Verify MaterializedResult exists, has RefreshSchedule IS NOT NULL, and after RefreshOne is Active
+            const mrRes = await rv.RunView<{
+                ID: string;
+                RefreshSchedule: string | null;
+                Status: string;
+                TableName: string;
+            }>({
+                EntityName: 'MJ: Materialized Results',
+                ExtraFilter: "TableName = 'materialized_aiusagehourly'",
+                MaxRows: 1
+            }, ctx.User);
+            Assert(mrRes.Success, `MaterializedResult lookup failed: ${mrRes.ErrorMessage}`);
+            Assert((mrRes.Results ?? []).length > 0, `MaterializedResult for AIUsageHourly must exist`);
+            const mrInfo = mrRes.Results![0];
+            Assert(mrInfo.RefreshSchedule !== null && mrInfo.RefreshSchedule.trim().length > 0, `AIUsageHourly MaterializedResult must have RefreshSchedule IS NOT NULL, got: ${mrInfo.RefreshSchedule}`);
+
+            const md = new Metadata();
+            const mrEntity = await md.GetEntityObject<MJMaterializedResultEntity>('MJ: Materialized Results', ctx.User);
+            const loaded = await mrEntity.Load(mrInfo.ID);
+            Assert(loaded, `failed to load MaterializedResult entity for ID: ${mrInfo.ID}`);
+
+            const exec = Metadata.Provider as unknown as { ExecuteSQL?: unknown };
+            if (typeof exec?.ExecuteSQL === 'function') {
+                const refresher = new MaterializationRefresher();
+                const refreshRes = await refresher.RefreshOne(mrEntity, ctx.User, Metadata.Provider);
+                Assert(refreshRes.Success, `RefreshOne failed for ${mrInfo.TableName}: ${refreshRes.ErrorMessage}`);
+
+                await mrEntity.Load(mrInfo.ID);
+                AssertEqual(mrEntity.Status, 'Active', `MaterializedResult status must be Active after RefreshOne, got: ${mrEntity.Status}`);
+            } else {
+                console.warn('  ⚠ AC12: Metadata.Provider does not implement ExecuteSQL (client provider run path) — skipping RefreshOne live execution');
+                Assert(mrInfo.Status === 'Active' || mrInfo.Status === 'Building', `MaterializedResult status must be Active or Building, got: ${mrInfo.Status}`);
+            }
 
             const rq = new RunQuery();
             const start = '2020-01-01';

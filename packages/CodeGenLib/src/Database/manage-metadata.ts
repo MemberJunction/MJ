@@ -166,6 +166,20 @@ export interface MaterializedBaseViewConfig {
 }
 
 /**
+ * Configuration for a query materialization in the additionalSchemaInfo config file.
+ * Supplies per-install operational parameters (cron refresh schedule, intended workload note)
+ * for queries flagged IsMaterialized=1 in metadata.
+ */
+export interface MaterializedQueryConfig {
+   /** Source query name. */
+   QueryName: string;
+   /** Optional cron expression for scheduled refresh; omit for manual-only. */
+   RefreshSchedule?: string;
+   /** Optional note for the selection contract (§8): what this snapshot is good for. */
+   IntendedWorkload?: string;
+}
+
+/**
  * Configuration for an IS-A (Table-Per-Type) relationship in the additionalSchemaInfo config file.
  * Declares that a child entity inherits from a parent entity. CodeGen sets Entity.ParentID
  * automatically, then manages virtual field records and view JOINs for the inheritance chain.
@@ -813,6 +827,24 @@ export class ManageMetadataBase {
          RefreshSchedule: (d.RefreshSchedule as string) || undefined,
          IntendedWorkload: (d.IntendedWorkload as string) || undefined,
       }));
+   }
+
+   /**
+    * Extracts the MaterializedQueries array from the additionalSchemaInfo config file.
+    * Supplies per-install operational parameters (cron refresh schedule, intended workload note)
+    * for queries flagged IsMaterialized=1 in metadata.
+    */
+   protected extractMaterializedQueriesFromConfig(config: Record<string, unknown>): MaterializedQueryConfig[] {
+      const decls = config.MaterializedQueries;
+      if (!Array.isArray(decls)) return [];
+
+      return decls
+         .map((d: Record<string, unknown>) => ({
+            QueryName: (d.QueryName as string) || '',
+            RefreshSchedule: (d.RefreshSchedule as string) || undefined,
+            IntendedWorkload: (d.IntendedWorkload as string) || undefined,
+         }))
+         .filter((d) => !!d.QueryName);
    }
 
    /**
@@ -1789,10 +1821,14 @@ export class ManageMetadataBase {
       await this.loadAPIKeyRowFilterTargets(pool);
 
       const esc = (s: string) => s.replace(/'/g, "''");
+      const lit = (s: string | undefined) => (s ? `'${esc(s)}'` : 'NULL');
       const idLit = (id: string | null | undefined) => (id ? `'${id}'` : 'NULL');
       const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       let processedCount = 0;
       let mintedCount = 0;
+
+      const softConfig = ManageMetadataBase.getSoftPKFKConfig();
+      const queryConfigs = softConfig ? this.extractMaterializedQueriesFromConfig(softConfig as Record<string, unknown>) : [];
 
       for (const q of flagged.recordset) {
          const queryId: string = q.ID;
@@ -1974,6 +2010,10 @@ export class ManageMetadataBase {
          //    link lives in the join table — there is no MaterializedResult.SourceQueryID or
          //    Query.MaterializedResultID column (those direct FKs formed a circular dependency CodeGen rejects;
          //    the join table carries the relationship with both FKs pointing outward).
+         const queryConfig = queryConfigs.find((c) => c.QueryName.trim().toLowerCase() === queryName.trim().toLowerCase());
+         const refreshSchedule = queryConfig?.RefreshSchedule;
+         const intendedWorkload = queryConfig?.IntendedWorkload;
+
          const existing = await this.runQueryWithParams(
             pool,
             `SELECT mr.ID FROM ${this.qs(coreSchema, 'MaterializedResult')} mr
@@ -1986,7 +2026,8 @@ export class ManageMetadataBase {
             matResultId = existing.recordset[0].ID;
             const sqlUpd = `UPDATE ${this.qs(coreSchema, 'MaterializedResult')}
                               SET GeneratedEntityID=${idLit(generatedEntityId)}, SchemaName='${esc(coreSchema)}', TableName='${esc(tableName)}', ViewName='${esc(viewName)}',
-                                  ${this.qi('ParamMode')}='${paramMode}', ${this.qi('RowFilterColumns')}=${rowFilterColumnsLit}, ${this.qi('BroadSQL')}=${broadSQLLit}, ${this.qi('ReadFilterSpec')}=${readFilterSpecLit}, ${this.qi('KeyColumns')}=${keyColumnsLit}, ${this.qi('RefreshStrategy')}='${refreshStrategy}'
+                                  ${this.qi('ParamMode')}='${paramMode}', ${this.qi('RowFilterColumns')}=${rowFilterColumnsLit}, ${this.qi('BroadSQL')}=${broadSQLLit}, ${this.qi('ReadFilterSpec')}=${readFilterSpecLit}, ${this.qi('KeyColumns')}=${keyColumnsLit}, ${this.qi('RefreshStrategy')}='${refreshStrategy}',
+                                  ${this.qi('RefreshSchedule')}=${lit(refreshSchedule)}, ${this.qi('IntendedWorkload')}=${lit(intendedWorkload)}
                             WHERE ID='${matResultId}'`;
             await this.LogSQLAndExecute(pool, sqlUpd, `Update MJ: Materialized Results for query "${queryName}"`);
          } else {
@@ -1994,9 +2035,9 @@ export class ManageMetadataBase {
             const c = (n: string) => this.qi(n);
             const sqlIns = `INSERT INTO ${this.qs(coreSchema, 'MaterializedResult')} (
                                  ${c('ID')}, ${c('SourceType')}, ${c('GeneratedEntityID')}, ${c('SchemaName')}, ${c('TableName')}, ${c('ViewName')},
-                                 ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('ReadFilterSpec')}, ${c('KeyColumns')}, ${c('RefreshStrategy')}, ${c('Status')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
+                                 ${c('ParamMode')}, ${c('RowFilterColumns')}, ${c('BroadSQL')}, ${c('ReadFilterSpec')}, ${c('KeyColumns')}, ${c('RefreshStrategy')}, ${c('RefreshSchedule')}, ${c('Status')}, ${c('IntendedWorkload')}, ${c('__mj_CreatedAt')}, ${c('__mj_UpdatedAt')} )
                             VALUES ( '${matResultId}', 'Query', ${idLit(generatedEntityId)}, '${esc(coreSchema)}', '${esc(tableName)}', '${esc(viewName)}',
-                                 '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, ${readFilterSpecLit}, ${keyColumnsLit}, '${refreshStrategy}', 'Building', ${this.utcNow()}, ${this.utcNow()} )`;
+                                 '${paramMode}', ${rowFilterColumnsLit}, ${broadSQLLit}, ${readFilterSpecLit}, ${keyColumnsLit}, '${refreshStrategy}', ${lit(refreshSchedule)}, 'Building', ${lit(intendedWorkload)}, ${this.utcNow()}, ${this.utcNow()} )`;
             await this.LogSQLAndExecute(pool, sqlIns, `Insert MJ: Materialized Results for query "${queryName}"`);
             // Link the new materialization to its source Query via the join table.
             const joinId = this.createNewUUID();
