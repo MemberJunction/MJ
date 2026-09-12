@@ -19,7 +19,7 @@ SELECT
 FROM [__mj].vwAIUsageFacts
 WHERE IsCompleted = 1
   {% if scopeEntityId %}
-  AND PrimaryScopeEntityID = {{ scopeEntityId | sqlString }}
+  AND PrimaryScopeEntityID = TRY_CONVERT(uniqueidentifier, {{ scopeEntityId | sqlString }})
   {% endif %}
   {% if scopeRecordId %}
   AND PrimaryScopeRecordID = {{ scopeRecordId | sqlString }}

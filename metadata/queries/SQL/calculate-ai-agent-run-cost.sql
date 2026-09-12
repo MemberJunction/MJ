@@ -3,7 +3,7 @@ WITH AgentRunHierarchy AS (
   -- Base case: Start with the specified agent run
   SELECT ID, AgentID, ParentRunID, 1 as Level
   FROM [__mj].vwAIAgentRuns
-  WHERE ID = {{ AIAgentRunID | sqlString }} -- Replace with the actual Agent Run ID parameter. This is a UUID.
+  WHERE ID = TRY_CONVERT(uniqueidentifier, {{ AIAgentRunID | sqlString }}) -- Replace with the actual Agent Run ID parameter. This is a UUID.
   
   UNION ALL
   
@@ -16,7 +16,7 @@ WITH AgentRunHierarchy AS (
 SELECT 
   {{ AIAgentRunID | sqlString }} AS AgentRunID,
   SUM(CASE WHEN f.IsPriced = 1 AND f.IsParallelParent = 0 THEN f.OwnCost END) AS TotalCost,
-  COUNT(f.PromptRunID) AS TotalPrompts,
+  SUM(CASE WHEN f.IsParallelParent = 0 THEN 1 ELSE 0 END) AS TotalPrompts,
   SUM(f.TokensPrompt) AS TotalTokensInput,
   SUM(f.TokensCompletion) AS TotalTokensOutput,
   SUM(f.TokensPrompt) + SUM(f.TokensCompletion) AS TotalTokens

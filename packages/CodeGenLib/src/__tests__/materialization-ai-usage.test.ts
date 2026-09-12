@@ -48,7 +48,7 @@ describe("AC11: AI Usage Materialization Qualification", () => {
 
             const render = (vals: Record<string, unknown>) => {
                 const res = QueryParameterProcessor.processQueryTemplate(
-                    { SQL: tc.sql, UsesTemplate: true, Parameters: [] as any },
+                    { SQL: tc.sql, UsesTemplate: true, Parameters: [] },
                     vals,
                     undefined,
                     true
@@ -166,4 +166,65 @@ describe("AC11: AI Usage Materialization Qualification", () => {
             });
         });
     }
+
+    describe("Materialization Refresh Scheduled Job Metadata Conformance", () => {
+        const jobsDir = path.resolve(__dirname, "../../../../metadata/scheduled-jobs");
+        const jobTypesDir = path.resolve(__dirname, "../../../../metadata/scheduled-job-types");
+
+        it("validates materialization refresh scheduled job and type metadata schemas", () => {
+            const jobFilePath = path.join(jobsDir, ".materialization-refresh-job.json");
+            expect(fs.existsSync(jobFilePath)).toBe(true);
+
+            const jobContent = JSON.parse(fs.readFileSync(jobFilePath, "utf8"));
+            expect(Array.isArray(jobContent)).toBe(true);
+            expect(jobContent.length).toBeGreaterThan(0);
+
+            const job = jobContent[0];
+            expect(job.primaryKey).toBeDefined();
+            expect(job.primaryKey.ID).toMatch(/^[0-9a-fA-F-]{36}$/);
+
+            const fields = job.fields;
+            expect(fields).toBeDefined();
+            expect(fields.Name).toBe("Materialization Refresh Sweep");
+            expect(fields.JobTypeID).toContain("MaterializationRefreshScheduledJobDriver");
+            expect(fields.CronExpression).toBe("0 */5 * * * *");
+            expect(fields.Status).toBe("Active");
+            expect(fields.ConcurrencyMode).toBe("Skip");
+
+            // Verify no deprecated or schema-invalid properties leaked
+            const validScheduledJobFields = new Set([
+                "Name",
+                "Description",
+                "JobTypeID",
+                "CronExpression",
+                "Timezone",
+                "StartAt",
+                "EndAt",
+                "Status",
+                "Configuration",
+                "OwnerUserID",
+                "NotifyOnSuccess",
+                "NotifyOnFailure",
+                "NotifyUserID",
+                "NotifyViaEmail",
+                "NotifyViaInApp",
+                "ConcurrencyMode",
+                "RunImmediatelyIfNeverRun",
+                "MaxRuntimeMinutes",
+                "MissedRunPolicy"
+            ]);
+
+            for (const key of Object.keys(fields)) {
+                expect(validScheduledJobFields.has(key)).toBe(true);
+            }
+
+            // Verify scheduled job type exists and specifies MaterializationRefreshScheduledJobDriver
+            const typeFilePath = path.join(jobTypesDir, ".materialization-refresh-type.json");
+            expect(fs.existsSync(typeFilePath)).toBe(true);
+            const typeContent = JSON.parse(fs.readFileSync(typeFilePath, "utf8"));
+            expect(typeContent[0].fields.DriverClass).toBe("MaterializationRefreshScheduledJobDriver");
+            expect(typeContent[0].fields.Name).toBe("Materialization Refresh");
+        });
+    });
 });
+

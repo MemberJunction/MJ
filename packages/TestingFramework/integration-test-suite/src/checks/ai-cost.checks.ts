@@ -670,11 +670,11 @@ export const AiCostChecks: NamedCheck[] = [
             const rv = new RunView();
             const jobProbe = await rv.RunView({
                 EntityName: 'MJ: Scheduled Jobs',
-                ExtraFilter: "DriverClass = 'MaterializationRefreshScheduledJobDriver'",
+                ExtraFilter: "JobType = 'Materialization Refresh'",
                 MaxRows: 1
             }, ctx.User);
             Assert(jobProbe.Success, `scheduled job probe failed: ${jobProbe.ErrorMessage}`);
-            Assert((jobProbe.Results ?? []).length > 0, `scheduled job with MaterializationRefreshScheduledJobDriver must exist in metadata`);
+            Assert((jobProbe.Results ?? []).length > 0, `scheduled job with JobType 'Materialization Refresh' must exist in metadata`);
 
             const rq = new RunQuery();
             const start = '2020-01-01';

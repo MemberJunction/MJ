@@ -247,7 +247,7 @@ BUILDER: after `mj codegen --skipfiles`, paste the full CodeGen log section arou
 - `AIModelRunner.ts` `createRunRecord` (`:281`): `UserID = params.ContextUser.ID`; add `AgentRunID?` to `EmbeddingRunParams` (`:30-51`) — and fix the misleading `ParentRunID` doc at `:41` (it is a *prompt-run* parent).
 - `base-agent.ts`: every `new AIPromptParams()` site sets `agentRunId = this._agentRun?.ID` and `userId = params.userId ?? params.contextUser?.ID`: `:3616` (main), `:6045` (summary tool), `:14587` (compaction). Realtime `createRealtimePromptRun` (`:2181`): set both directly on the entity. Co-agent run in `realtime-client-session-service.ts:944-961` and harness run in `HarnessAgentBase.ts:362-394`: set what is in scope.
 - The step link (`base-agent.ts:9064-9069`, `TargetLogID`) stays; it is the audit trail for non-prompt steps.
-- `metadata/queries/SQL/get-agent-run-tree.sql`: explicit `CAST(... AS DECIMAL(19,8))` on `Cost` in every CTE member (anchor and all recursive members) to match widened `AIAgentRun.TotalCost decimal(19,8)` precision while preserving own-cost semantics.
+- **`metadata/queries/SQL/get-agent-run-tree.sql` (and its `.pg.sql` dialect variant):** the precision change makes the recursive CTE's `Cost` column `decimal(19,8)` in one member and `decimal(18,6)` in others, which SQL Server rejects ("Types don't match between the anchor and the recursive part"). Add explicit `CAST(... AS DECIMAL(19,8))` on `Cost` in the anchor and every recursive member. Keep own-cost semantics (header `:21-32`). Verified by the existing `workflow-demo-agents` WD4/WD5 checks. (Found in CI on 2026-09-11.)
 
 ### 6.4 Tests
 - Unit: `createPromptRun` writes `AgentRunID`/`UserID` from params; `base-agent` main prompt params carry `agentRunId`.
@@ -291,7 +291,8 @@ BUILDER: how `MJ: Query Fields` rows get created for these queries must be verif
 
 ### 7.3 Materialization wiring
 - Set `"IsMaterialized": true` on `AIUsageHourly` and `AIUsageDaily`. CodeGen's `processQueryMaterializations` (`manage-metadata.ts:1746`) mints `materialized_AIUsageHourly` / `materialized_vwAIUsageHourly`, a read-only virtual entity, the `MJ: Materialized Results` row (`Status='Building'`) and the join row. The window params must classify as `RowFilterBroad` (they are plain `>=`/`<` predicates on a projected column); if CodeGen refuses with `broad.ambiguous`, simplify the predicate shape until it passes and record why.
-- `RefreshSchedule` (cron) and `KeyColumns` live on the minted `MJ: Materialized Results` row. BUILDER: find how `plans/query-entity-materialization.md` §9/§10 intend these to be authored (a Query-level hint CodeGen copies, or a metadata record for `MJ: Materialized Results` keyed by the minted ID); implement that way; if neither exists, add a metadata file under `metadata/materialized-results/` referenced by `@lookup:MJ: Queries.Name=AIUsageHourly` through the join and flag it for review. Hourly: `5 * * * *`; daily: `20 0 * * *` (staggered).
+- **Resolved 2026-09-11 (review of PR #4402):** CodeGen writes `KeyColumns`/`RefreshStrategy` for a Query materialization (`manage-metadata.ts:1989-1997`) but has **no authoring path for `RefreshSchedule`** — only `MaterializedBaseViews[].RefreshSchedule` in additionalSchemaInfo exists, and that is the base-view shape. Without a schedule the sweep driver never selects the row and the snapshot stays `Building`. Decision: add `Query.MaterializationRefreshSchedule` (+ `MaterializationIntendedWorkload`) as nullable columns in the §6 migration, have CodeGen copy them onto the minted row, and author the cron in the query JSON next to `IsMaterialized`. Fallback if time forbids the schema change: a `MaterializedQueries` config array mirroring `MaterializedBaseViews`.
+- ORIGINAL TEXT (superseded): `RefreshSchedule` (cron) and `KeyColumns` live on the minted `MJ: Materialized Results` row. BUILDER: find how `plans/query-entity-materialization.md` §9/§10 intend these to be authored (a Query-level hint CodeGen copies, or a metadata record for `MJ: Materialized Results` keyed by the minted ID); implement that way; if neither exists, add a metadata file under `metadata/materialized-results/` referenced by `@lookup:MJ: Queries.Name=AIUsageHourly` through the join and flag it for review. Hourly: `5 * * * *`; daily: `20 0 * * *` (staggered).
 - A scheduled job of type `MaterializationRefreshScheduledJobDriver` (`packages/Scheduling/engine/src/drivers/MaterializationRefreshScheduledJobDriver.ts:25`) must exist in `metadata/scheduled-jobs/`; add one (`*/5 * * * *`) if none ships.
 - The client reads with `DataSource: 'Materialized'`; the provider falls back to live on any uncertainty (`GenericDatabaseProvider.ts:3829-3870`), so nothing breaks before the first refresh.
 
@@ -329,6 +330,11 @@ REVIEWER: `grep -rn "?? 0\||| 0" dashboards/src/AI/services dashboards/src/AI/co
 ---
 
 ## 9. PR6 — budgets (`minor`, needs product sign-off before build)
+
+> **Deferred 2026-09-12.** Budgets ship as a follow-up issue, not in MJ#4402. The PR description
+> states this explicitly and links the follow-up. The generic `UsageBudget` design below stays here
+> as the spec for that issue. Sections §4–§8 meet the issue's definition of done without it.
+
 
 Per §2a.6 the entity is generic: the observed amount is produced by a saved Query, so the same table budgets AI spend today and anything else measurable by a Query tomorrow. Schema (migration + CodeGen tail; new table → `check:codegen-tail` is now meaningful):
 ```
@@ -377,7 +383,7 @@ own tests before the next begins, so a reviewer can read the PR commit by commit
                                                one CodeGen tail generated after both are applied
 §7 PR4 (queries + materialization)           — metadata/queries, IsMaterialized, scheduled job
 §8 PR5 (dashboards, coverage, pivot)         — reads the §7 queries
-§9 PR6 (budgets)                             — last; drops to a follow-up issue if the deadline hits
+§9 PR6 (budgets)                             — DEFERRED to a follow-up issue (decided 2026-09-12); not in #4402
 ```
 
 - §5 and §6 touch the same writer files; do §5 first so the §6 attribution columns are added to the
