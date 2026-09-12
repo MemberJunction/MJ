@@ -1924,6 +1924,24 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         }
     } as unknown as MJActionEntityExtended;
 
+    const mockFileStorageListObjectsAction = {
+        ID: 'act-5',
+        Name: 'File Storage: List Objects',
+        Description: 'Lists objects in a storage container.',
+        Params: {
+            Items: [
+                {
+                    Name: 'Path',
+                    Description: 'Folder path',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: false,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
     it('returns ONLY invoke-target-agent against ElevenLabs and Gemini even when directActions is enabled', () => {
         const service = new TestableService();
         service.TargetActions = [mockEmailAction, mockTaskAction];
@@ -2434,6 +2452,59 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             const WIRE_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
             expect(WIRE_NAME_REGEX.test(tools[0].Name)).toBe(true);
             expect(WIRE_NAME_REGEX.test(tools[1].Name)).toBe(true);
+        });
+
+        it('sanitizes colon-separated action names like File Storage: List Objects into wire-legal identifiers and dispatches them', async () => {
+            const WIRE_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+
+            const wireName = SanitizeWireToolName('File Storage: List Objects');
+            expect(wireName).toBe('File_Storage_List_Objects');
+            expect(WIRE_NAME_REGEX.test(wireName)).toBe(true);
+
+            const service = new TestableService();
+            service.TargetActions = [mockFileStorageListObjectsAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['File Storage: List Objects']
+                    }
+                }
+            };
+
+            const tools = service.buildDirectActionTools('target-1', cfg, 'OpenAIRealtime');
+            expect(tools).toHaveLength(1);
+            expect(tools[0].Name).toBe('File_Storage_List_Objects');
+            expect(WIRE_NAME_REGEX.test(tools[0].Name)).toBe(true);
+
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Listed 2 files';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-fs-1',
+                ToolName: 'File_Storage_List_Objects',
+                Arguments: JSON.stringify({ Path: '/docs' })
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'session-fs-1',
+                TargetAgentID: 'target-1',
+                DirectActions: cfg.realtime!.directActions,
+                Call: call
+            };
+
+            const execResult = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(execResult.Success).toBe(true);
+            expect(execResult.Output).toBe('Listed 2 files');
+            expect(runSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    Action: expect.objectContaining({ Name: 'File Storage: List Objects' }),
+                    Params: [{ Name: 'Path', Value: '/docs', Type: 'Input' }]
+                })
+            );
+            runSpy.mockRestore();
         });
 
         it('deduplicates tools in buildStableToolSet and ensures invoke-target-agent cannot be collided', () => {
