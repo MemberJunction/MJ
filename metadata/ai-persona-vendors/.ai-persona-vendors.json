@@ -95,7 +95,7 @@
       "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
       "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
       "APIName": "fable",
-      "Status": "Active",
+      "Status": "Inactive",
       "Priority": 0
     },
     "relatedEntities": {},
@@ -103,8 +103,8 @@
       "ID": "BF5EB69E-3B20-4DDD-877A-FECE0A8052E4"
     },
     "sync": {
-      "lastModified": "2026-09-11T18:26:10.818Z",
-      "checksum": "fd98ca91be28d8557cb59b5906daff54f9efc5e61a4e08ddcc7c3031473b3bb1"
+      "lastModified": "2026-09-12T00:47:35.420Z",
+      "checksum": "b9b6d58763430568f8f311140881897ce8101dc17ef5f56e57bf7ec198fedba2"
     }
   },
   {
@@ -113,7 +113,7 @@
       "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
       "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
       "APIName": "nova",
-      "Status": "Active",
+      "Status": "Inactive",
       "Priority": 0
     },
     "relatedEntities": {},
@@ -121,8 +121,8 @@
       "ID": "25DBA561-5AC3-48A9-B2AD-930BC759B2F4"
     },
     "sync": {
-      "lastModified": "2026-09-11T18:26:10.808Z",
-      "checksum": "29950b6f433aaf3678c70fe8a89c66b85fc63ed7a4f2ca2058e3948b8a7108e6"
+      "lastModified": "2026-09-12T00:47:35.420Z",
+      "checksum": "d93bf63d16a47a4862bb405accaef9b18bd11f7df5e618a842c2cdb3da621a6f"
     }
   },
   {
@@ -131,7 +131,7 @@
       "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
       "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
       "APIName": "onyx",
-      "Status": "Active",
+      "Status": "Inactive",
       "Priority": 0
     },
     "relatedEntities": {},
@@ -139,8 +139,8 @@
       "ID": "230FDE21-BABC-4AC5-8A5C-4E28612C4614"
     },
     "sync": {
-      "lastModified": "2026-09-11T18:26:10.809Z",
-      "checksum": "8e1fd43f5d47017011c8c6897fd4c2fb0edfbb13e1763d2009a47b29895c8c97"
+      "lastModified": "2026-09-12T00:47:35.421Z",
+      "checksum": "3035bfce6649e66f96f93234751a8f6d432dd0a802dae0ced0185c2ea77fdd44"
     }
   },
   {

@@ -65,6 +65,102 @@
   },
   {
     "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "455A8705-EA9A-4FE9-BD1E-7BEBB2B93CE2"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.495Z",
+      "checksum": "3f70e13fdbc778cdd370a04198da572f4725eec89dd32b83c60cd2621c062c7d"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AD0FCEC2-7906-479D-95F2-FE5212FEA761"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.495Z",
+      "checksum": "4583f050d6f1a717c372aeb5fd902c622c8f3d950a393ea7e989d2c3176ef33b"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C540224E-787F-441F-B646-BE6B65485D18"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.492Z",
+      "checksum": "c17328cae27884ce8e914f9ac11fc7cf69c99e27c56f8d78dc989540b7da122f"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3A271A0C-C4E9-4EA2-90D2-AC6B8668AA06"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.490Z",
+      "checksum": "e7125abb1f4ade027caec4b8d8c854aa8c59bf4883abdc74a0d75a0488658ee5"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "22E167E1-1611-4CA2-873E-D6E581D10366"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.492Z",
+      "checksum": "bf6e523a954dd83b1ed196f99a23c97558e5170cee40c9769e1ea44a79a0462f"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DD930085-0857-4527-A0F7-9DF75CAD93CF"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.496Z",
+      "checksum": "eed899c239ad8453ffef8341d9e1e54cc77f80cd1e54b088682ba0ae61bf126e"
+    }
+  },
+  {
+    "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
       "Sequence": 1,
@@ -179,55 +275,55 @@
     "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Fable",
-      "Sequence": 8,
-      "IsSupported": true
+      "Sequence": 11,
+      "IsSupported": false
     },
     "relatedEntities": {},
     "primaryKey": {
       "ID": "201B8028-682B-468F-BE37-DC7C61FF7B9B"
     },
     "sync": {
-      "lastModified": "2026-09-11T23:31:29.487Z",
-      "checksum": "fa1fc5916b278a7430857b4e10aed39892c70c2cb57cda9e27ae2b4d16aed435"
+      "lastModified": "2026-09-12T00:47:35.560Z",
+      "checksum": "ed71cc0e64a433ee40d9f2e19827f7e94edc4152f2d4fb9ab8eb8f05205bc9cd"
     }
   },
   {
     "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Nova",
-      "Sequence": 9,
-      "IsSupported": true
+      "Sequence": 12,
+      "IsSupported": false
     },
     "relatedEntities": {},
     "primaryKey": {
       "ID": "0BF839E0-CDD0-44FC-9393-75F0F85A547E"
     },
     "sync": {
-      "lastModified": "2026-09-11T23:31:29.484Z",
-      "checksum": "5e3f877991ac5bf8e33944ad15fa70ded3aeb3c4f33afbe8f08d390e5eb86ef3"
+      "lastModified": "2026-09-12T00:47:35.560Z",
+      "checksum": "37c2ad089f4010bb4b460256795cbb072b99bee4567b8469cfd1f6e2aed52dc4"
     }
   },
   {
     "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Onyx",
-      "Sequence": 10,
-      "IsSupported": true
+      "Sequence": 13,
+      "IsSupported": false
     },
     "relatedEntities": {},
     "primaryKey": {
       "ID": "E6B67C7A-6660-4526-8CC6-80A698F603D0"
     },
     "sync": {
-      "lastModified": "2026-09-11T23:31:29.486Z",
-      "checksum": "ddfc35fe74a1ba009d807377a10ae5868256c0e9cdd664ddd2d754b2c98b7f79"
+      "lastModified": "2026-09-12T00:47:35.559Z",
+      "checksum": "dfa8343e76959ba65bda446c46e9fc2e4744431f22afe644b991566f7d24ecc0"
     }
   },
   {
     "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
-      "Sequence": 11,
+      "Sequence": 8,
       "IsSupported": true
     },
     "relatedEntities": {},
@@ -235,15 +331,15 @@
       "ID": "57AA5A6B-84E9-454F-A643-6417D01ACB18"
     },
     "sync": {
-      "lastModified": "2026-09-11T23:31:29.479Z",
-      "checksum": "16cab9a431a92599c85737bd1c5a18a7c4ba9da3101a74a59b826b7adc1d018e"
+      "lastModified": "2026-09-12T00:47:35.592Z",
+      "checksum": "fc70dc5a3ab91cb4c9c2eae5a946c7c0674ea74c85286668af3f85263115232a"
     }
   },
   {
     "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
-      "Sequence": 12,
+      "Sequence": 9,
       "IsSupported": true
     },
     "relatedEntities": {},
@@ -251,15 +347,15 @@
       "ID": "E20CF858-17B9-49CE-994B-D298E8223FBC"
     },
     "sync": {
-      "lastModified": "2026-09-11T23:31:29.479Z",
-      "checksum": "d97f511b2c9a382f9424faddb1e02eb5928fedf0c50e21aacc4473f1c1dbd44e"
+      "lastModified": "2026-09-12T00:47:35.588Z",
+      "checksum": "9af84059360f7054a6826f09d841f727ba776e7c733c13f05f11bb91fa00785d"
     }
   },
   {
     "fields": {
       "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
       "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
-      "Sequence": 13,
+      "Sequence": 10,
       "IsSupported": true
     },
     "relatedEntities": {},
@@ -267,8 +363,8 @@
       "ID": "43423D62-6616-4AA9-9AF4-E9399F798B0C"
     },
     "sync": {
-      "lastModified": "2026-09-11T23:31:29.486Z",
-      "checksum": "d5a97be25da97214ac6074fb3a6e6b456d99b9cb2c4dbaa48ef2ab751b11f4e0"
+      "lastModified": "2026-09-12T00:47:35.592Z",
+      "checksum": "f5b1e9953855253187f410eb704b9e982de4eb2f742192cbd5eb45f05b0c612e"
     }
   },
   {
@@ -413,6 +509,326 @@
     "sync": {
       "lastModified": "2026-09-11T23:31:29.516Z",
       "checksum": "541a58166fb29ea19cdc2efd4146981c079a4ae675f324570b29fb7ac0780509"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3A6F65F0-67A3-413E-BAEF-348EFCB802E6"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.657Z",
+      "checksum": "33756629454c192058bb6f9214fac0e1096f61c96c368873d49a0f4b68e113b8"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A0B6BDB4-837B-4805-86DF-A3DB7817CB7C"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.654Z",
+      "checksum": "38e59fd564e98610a98c77856d54438e9f237c810643b622b7a7fa22c34c0b0c"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3DC1E859-1EFF-44BB-9DD6-CD631F2B2C89"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.645Z",
+      "checksum": "79345799882e092ebbb80feba8bd94f2ce8e9355252ffd61facfcc1d9c3b8537"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8547FBCE-008E-4ED5-9469-EE6A47EB90AD"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.655Z",
+      "checksum": "464036af914fcf19343f7c8fc83b9dd04baa24ea60759dc576dde6f8082b54a0"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "29EA1819-BCB6-4EEC-B145-C76515AA9569"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.650Z",
+      "checksum": "3a44f81c195c562eaf0175cea750526e7d36a9ca39a5a4236e70d49a9c8ace03"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "FC44B918-C0B5-4EBD-B7C2-F5FE9C64F515"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.655Z",
+      "checksum": "4b7e6e1b9c40a155d30cd0a27f87c230d938f0110eb6332dbcfff715e7699a8a"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "488BDB61-A42A-48E9-97DC-95EBC341803A"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.651Z",
+      "checksum": "1007af49370c89b559442c953fc785bff784825a1d6818814b34a3663738d46d"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4364FD26-25A4-47DC-94F3-B061E78C50E3"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.655Z",
+      "checksum": "2221951fe84ac242c8f6354895ff670ceef07de3a12b58262850537b6f915aa1"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EFFBACD8-A3E8-4544-8161-D7A2DBD09873"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.695Z",
+      "checksum": "4b8305545a3f1a0140cc5c5c3b40043b4d8b3534d14586198930229929518432"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "77E5802F-8A51-4CAF-85B9-382B3983BF23"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.695Z",
+      "checksum": "a8b1470537230b1ed830c125b6bc2d711e1b791f954f852d110321dcfe29b2e3"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "14949960-184B-4484-94BD-9FE478CA7597"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.714Z",
+      "checksum": "402c694d8d20ba3f0bae7ac645dfac32e472720256ee8d7b6ac58535ef0df2c0"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "56FBA8F5-06CD-40F8-B064-7F37B213520C"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.710Z",
+      "checksum": "e4aa18176fe3e2108d1c5de1f24b7de5cbed9ff071b8494914fbca01171a5c82"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "87E3201D-A3DC-4857-80E9-0924A30A5F4D"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.710Z",
+      "checksum": "8d40cd7e1327cf3a5ce28bb85b934cd82d2d98c098f79680fe8cce177073b8ae"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5FEC4B95-2291-44C4-8DBC-11A6EABE0374"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.714Z",
+      "checksum": "2ce814feca65a36c75d01e3137fb53d9d520121ab08d7a96281d83a1759d5c25"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "58DD2AE3-0623-468A-AF70-6F4F6F68EBE8"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.713Z",
+      "checksum": "d507fb55da0e75201aba83b4a106bebb5e70688ef7ea2d2da43549398ff442d1"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "615641FF-E1C6-4F05-831C-1F236773B25E"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.711Z",
+      "checksum": "63a6c1a0d6e5d753d4bba66d133255eea238abae9a8e29d7afd23f35e81706e0"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A8DE9540-6A67-44D0-8FD5-01279C2CD705"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.709Z",
+      "checksum": "0c2a2e3e2772322882ab4c3b0e438d517ad9a43843c83146c28f76382e7616e3"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "CC993A3B-D4B7-444D-BB48-AB364478C33A"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.712Z",
+      "checksum": "88fa78aa97fe734ae74e72cd1404292483a3122d577d262da5437768eecf1359"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "15131064-109D-4AF6-BF69-6CAD61B5A6EF"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.743Z",
+      "checksum": "d701165863b355a4c444f6cdcc41b590aa69cad1a9cc67e974a169f7a7e9c04b"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EDCE1311-6171-4439-B841-AA31B12F56F2"
+    },
+    "sync": {
+      "lastModified": "2026-09-12T00:47:35.742Z",
+      "checksum": "c8e62b6c7c2059242d3b802310d7d93bcfa4a2881d55da48c65486ca1ca3fbd2"
     }
   }
 ]

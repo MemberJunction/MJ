@@ -540,5 +540,31 @@ describe('OpenAILiveRealtime Driver & Session', () => {
                 sdp: 'v=0\r\no=local_offer_sdp',
             },
         });
+
+        // Test with Tools: tools MUST be placed under delegation.responses.tools, NEVER at session.tools
+        const configWithTools = await driver.CreateClientSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'WebRTC co-agent with tools',
+            Tools: [
+                {
+                    Name: 'test_tool',
+                    Description: 'A test tool',
+                    ParametersSchema: { type: 'object', properties: {} },
+                },
+            ],
+            Config: { Voice: 'marin' },
+        });
+
+        const sessionWithTools = configWithTools.SessionConfig as Record<string, unknown>;
+        expect(sessionWithTools['tools']).toBeUndefined(); // Live API rejects session.tools
+
+        const delegation = sessionWithTools['delegation'] as {
+            type: string;
+            responses?: { model: string; tools?: Array<{ name: string; type: string }> };
+        };
+        expect(delegation.type).toBe('responses');
+        expect(delegation.responses?.tools).toBeDefined();
+        expect(delegation.responses?.tools).toHaveLength(1);
+        expect(delegation.responses?.tools?.[0].name).toBe('test_tool');
     });
 });

@@ -935,11 +935,11 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
                                         max_output_tokens: reasoningConfig.Remote.MaxOutputTokens,
                                     }
                                   : {}),
+                              ...(hasTools ? { tools: mappedTools } : {}),
                           },
                       }
                     : {}),
             },
-            ...(hasTools ? { tools: mappedTools } : {}),
         };
 
         const ticket = RealtimeProxyRegistry.Instance.Issue({
