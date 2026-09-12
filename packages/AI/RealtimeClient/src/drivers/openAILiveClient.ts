@@ -71,6 +71,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private assistantSafetyBackstopTimer: ReturnType<typeof setTimeout> | null = null;
     private clientDelegationCallIds = new Set<string>();
     private toolBatchBarrier = new RealtimeToolBatchBarrier();
+    private outboundQueue: Array<Record<string, unknown>> = [];
 
     // ── BaseRealtimeClient implementation ──────────────────────────────────────
 
@@ -182,6 +183,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         this.pendingAssistantText = '';
         this.clientDelegationCallIds.clear();
         this.toolBatchBarrier.Clear();
+        this.outboundQueue = [];
 
         if (this.currentState !== 'error') {
             this.setState('closed');
@@ -269,7 +271,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         }
 
         this.sendDataChannelFrame({
-            type: 'response.item.create',
+            type: 'conversation.item.create',
             item: {
                 type: 'function_call_output',
                 call_id: callID,
@@ -448,6 +450,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         channel.onopen = () => {
             // Mechanics rule 4: never send session.start on the data channel
             this.setState('listening');
+            this.flushOutboundQueue();
         };
 
         channel.onmessage = (e: MessageEvent) => {
@@ -579,6 +582,29 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         }
     }
 
+    private handleFunctionCallArgumentsDone(itemOrEvent: Record<string, unknown> | undefined): void {
+        if (!itemOrEvent) {
+            return;
+        }
+        this.finalizeAssistantTranscript();
+        this.responseActive = false;
+        this.audioPlaying = false;
+        const callId = String(itemOrEvent.call_id ?? '');
+        if (callId) {
+            this.toolBatchBarrier.TrackPendingCall(callId, () => {
+                this.sendDataChannelFrame({
+                    type: 'response.create',
+                });
+            });
+        }
+        const call: RealtimeClientToolCall = {
+            CallID: callId,
+            ToolName: String(itemOrEvent.name ?? ''),
+            ArgumentsJson: String(itemOrEvent.arguments ?? '{}'),
+        };
+        this.emitToolCall(call);
+    }
+
     private handleResponseCompleted(respOrUsage: Record<string, unknown> | undefined): void {
         this.finalizeAssistantTranscript();
         const usage = (respOrUsage?.usage as Record<string, unknown> | undefined) ?? respOrUsage;
@@ -659,6 +685,8 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 const inner = event.event as Record<string, unknown> | undefined;
                 if (inner?.type === 'response.output_item.done') {
                     this.handleOutputItemDone(inner.item as Record<string, unknown> | undefined);
+                } else if (inner?.type === 'response.function_call_arguments.done') {
+                    this.handleFunctionCallArgumentsDone(inner);
                 } else if (inner?.type === 'response.completed' || inner?.type === 'response.done') {
                     this.handleResponseCompleted((inner.response as Record<string, unknown> | undefined) ?? inner);
                 }
@@ -736,6 +764,17 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 this.dataChannel.send(JSON.stringify(payload));
             } catch (err) {
                 console.warn('[OpenAILiveClient] Failed to send data channel frame:', err);
+            }
+        } else if (!this.dataChannel || this.dataChannel.readyState === 'connecting') {
+            this.outboundQueue.push(payload);
+        }
+    }
+
+    private flushOutboundQueue(): void {
+        while (this.outboundQueue.length > 0 && this.dataChannel && this.dataChannel.readyState === 'open') {
+            const frame = this.outboundQueue.shift();
+            if (frame) {
+                this.sendDataChannelFrame(frame);
             }
         }
     }

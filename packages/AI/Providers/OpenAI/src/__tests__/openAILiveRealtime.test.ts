@@ -384,7 +384,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(mockSocket.sentFrames.length).toBe(2);
 
         const itemCreateFrame = JSON.parse(mockSocket.sentFrames[0]);
-        expect(itemCreateFrame.type).toBe('response.item.create');
+        expect(itemCreateFrame.type).toBe('conversation.item.create');
         expect(itemCreateFrame.item.call_id).toBe('call_remote_999');
         expect(itemCreateFrame.item.output).toBe('{"available":true}');
 
@@ -459,14 +459,14 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         await session.SendToolResult('call_A', '{"a":1}');
         expect(mockSocket.sentFrames.length).toBe(1);
         const frameA = JSON.parse(mockSocket.sentFrames[0]);
-        expect(frameA.type).toBe('response.item.create');
+        expect(frameA.type).toBe('conversation.item.create');
         expect(frameA.item.call_id).toBe('call_A');
 
         // Return second tool result -> item.create sent AND response.create sent (batch complete)
         await session.SendToolResult('call_B', '{"b":2}');
         expect(mockSocket.sentFrames.length).toBe(3);
         const frameB = JSON.parse(mockSocket.sentFrames[1]);
-        expect(frameB.type).toBe('response.item.create');
+        expect(frameB.type).toBe('conversation.item.create');
         expect(frameB.item.call_id).toBe('call_B');
 
         const frameCreate = JSON.parse(mockSocket.sentFrames[2]);
@@ -653,17 +653,17 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         // Return c2 first (out of order)
         await session.SendToolResult('c2', '{"res":2}');
         expect(mockSocket.sentFrames.length).toBe(1);
-        expect(JSON.parse(mockSocket.sentFrames[0]).type).toBe('response.item.create');
+        expect(JSON.parse(mockSocket.sentFrames[0]).type).toBe('conversation.item.create');
 
         // Return c1 second
         await session.SendToolResult('c1', '{"res":1}');
         expect(mockSocket.sentFrames.length).toBe(2);
-        expect(JSON.parse(mockSocket.sentFrames[1]).type).toBe('response.item.create');
+        expect(JSON.parse(mockSocket.sentFrames[1]).type).toBe('conversation.item.create');
 
         // Return c3 last -> triggers response.create
         await session.SendToolResult('c3', '{"res":3}');
         expect(mockSocket.sentFrames.length).toBe(4);
-        expect(JSON.parse(mockSocket.sentFrames[2]).type).toBe('response.item.create');
+        expect(JSON.parse(mockSocket.sentFrames[2]).type).toBe('conversation.item.create');
         expect(JSON.parse(mockSocket.sentFrames[3]).type).toBe('response.create');
     });
 
@@ -698,7 +698,7 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         // Duplicate result for already-closed call_ok -> sends item.create but NO extra response.create
         await session.SendToolResult('call_ok', '{"ok":true}');
         expect(mockSocket.sentFrames.length).toBe(2);
-        expect(JSON.parse(mockSocket.sentFrames[1]).type).toBe('response.item.create');
+        expect(JSON.parse(mockSocket.sentFrames[1]).type).toBe('conversation.item.create');
 
         // Note: RealtimeToolBatchBarrier has a safety timeout so lost calls release the turn
     });

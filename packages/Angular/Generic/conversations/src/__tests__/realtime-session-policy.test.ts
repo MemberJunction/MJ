@@ -440,6 +440,23 @@ describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', 
       expect.objectContaining({ role: 'user', text: 'Hello world!', agentSessionId: 'sess-1' })
     );
   });
+
+  it('ignores whitespace-only interim deltas and whitespace-only final transcripts', async () => {
+    const t = transcriptInternals(service);
+
+    // Whitespace-only interim delta does not start an interim bubble
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    // Real interim delta creates the bubble
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello' }]);
+
+    // Whitespace-only final does not relay or overwrite
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: true, Kind: 'normal' });
+    expect(executeGQL).not.toHaveBeenCalled();
+  });
 });
 
 describe('RealtimeSessionService — per-turn recording timing across a tool-call gap', () => {

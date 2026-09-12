@@ -474,6 +474,16 @@ export function SanitizeWireToolName(name: string): string {
 }
 
 /**
+ * Sentinel error thrown when action tool arguments are present but cannot be parsed or are not a JSON object.
+ */
+export class ToolArgumentsError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'ToolArgumentsError';
+    }
+}
+
+/**
  * Server-agnostic service that prepares a client-direct realtime session and executes the tool
  * calls the browser relays back. Constructed per-request (a normal injectable service — NOT a
  * singleton) so the {@link UserInfo} and {@link IMetadataProvider} are always request-scoped.
@@ -500,18 +510,22 @@ export class RealtimeClientSessionService {
      */
     public buildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
         const map = new Map<string, MJActionEntityExtended>();
-        const seen = new Set<string>();
+        const seen = new Map<string, MJActionEntityExtended>();
         for (const action of actions) {
             if (!action.Name) {
                 continue;
             }
             const wireName = SanitizeWireToolName(action.Name);
             const lower = wireName.toLowerCase();
-            if (seen.has(lower)) {
-                // Colliding action name after sanitization — first action wins
+            const existing = seen.get(lower);
+            if (existing) {
+                // Colliding action name after sanitization — first action wins, log collision
+                LogError(
+                    `RealtimeClientSessionService.buildWireActionMap: wire name collision for '${wireName}' between action '${existing.Name}' and action '${action.Name}'. Keeping '${existing.Name}' (first wins).`
+                );
                 continue;
             }
-            seen.add(lower);
+            seen.set(lower, action);
             map.set(wireName, action);
         }
         return map;
@@ -2777,7 +2791,10 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Executes a non-target tool call: in this phase, projects target agent actions allowed for direct invocation.
+     * Routes a non-target tool call by resolving the action through the wire map, checking the
+     * direct-actions allowlist, and executing via `ActionEngineServer.Instance.RunAction` under a
+     * configured timeout. If the tool is unrecognized, disallowed, or target resolution fails,
+     * returns a structured "not available" result.
      *
      * @param call The non-target tool call.
      * @param input The optional relayed tool input context.
@@ -2899,25 +2916,23 @@ export class RealtimeClientSessionService {
      *
      * @param argumentsJson The raw arguments string emitted by the model.
      * @returns The parsed arguments record.
-     * @throws Error with actionable message when arguments are present but unparseable.
+     * @throws ToolArgumentsError with actionable message when arguments are present but unparseable.
      */
     protected parseActionParams(argumentsJson?: string): Record<string, unknown> {
         if (!argumentsJson || argumentsJson.trim() === '') {
             return {};
         }
+        let parsed: unknown;
         try {
-            const parsed = JSON.parse(argumentsJson);
-            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                return parsed as Record<string, unknown>;
-            }
-            throw new Error(`Tool arguments must be a JSON object, but received ${Array.isArray(parsed) ? 'an array' : typeof parsed}. Please format arguments as a JSON object.`);
+            parsed = JSON.parse(argumentsJson);
         } catch (err) {
-            if (err instanceof Error && err.message.startsWith('Tool arguments must be')) {
-                throw err;
-            }
             const syntaxMsg = err instanceof Error ? err.message : String(err);
-            throw new Error(`Unparseable JSON arguments: ${syntaxMsg}. Please provide valid JSON formatted arguments.`);
+            throw new ToolArgumentsError(`Unparseable JSON arguments: ${syntaxMsg}. Please provide valid JSON formatted arguments.`);
         }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+            return parsed as Record<string, unknown>;
+        }
+        throw new ToolArgumentsError(`Tool arguments must be a JSON object, but received ${Array.isArray(parsed) ? 'an array' : typeof parsed}. Please format arguments as a JSON object.`);
     }
 
     /**

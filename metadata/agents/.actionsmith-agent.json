@@ -21,7 +21,21 @@
       "PayloadSelfWritePaths": "[\"name\", \"description\", \"inputSchema\", \"outputSchema\", \"permissions\", \"resultCodes\", \"testCases\", \"limits\", \"code\", \"testResults\", \"iterationsUsed\", \"actionId\", \"approvalStatus\", \"status\", \"message\"]",
       "FinalPayloadValidation": "{\"status\": \"string:!empty\", \"actionId\": \"any\", \"testResults\": \"any\"}",
       "FinalPayloadValidationMode": "Warn",
-      "MaxIterationsPerRun": 20
+      "MaxIterationsPerRun": 20,
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Find Candidate Actions",
+              "Find Candidate Agents",
+              "Get Entity List",
+              "Get Entity Details"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -168,8 +182,8 @@
       "ID": "AF804075-E543-46E5-8D8F-2A0B8094628C"
     },
     "sync": {
-      "lastModified": "2026-04-23T23:50:59.984Z",
-      "checksum": "7998c7f1c9b16a43b1971328f80d5d8cccaf136ac3712789da904fa466d25105"
+      "lastModified": "2026-09-12T15:03:56.757Z",
+      "checksum": "20e19c356f5c074a49cc9c86bc4b77fbbeb53cae6b8e0bc9bfae70a080dbff12"
     }
   }
 ]

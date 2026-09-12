@@ -17,6 +17,7 @@ import {
     RealtimeToolDefinition
 } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
+import * as coreModule from '@memberjunction/core';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJActionParamEntity } from '@memberjunction/core-entities';
 import { MJGlobal } from '@memberjunction/global';
@@ -26,6 +27,7 @@ import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } 
 
 import {
     RealtimeClientSessionService,
+    ToolArgumentsError,
     SanitizeWireToolName,
     PrepareClientSessionInput,
     ExecuteRelayedToolInput,
@@ -2373,15 +2375,18 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         });
 
         it('throws actionable error for unparseable JSON syntax', () => {
+            expect(() => service.ExposeParseActionParams('{ broken json }')).toThrow(ToolArgumentsError);
             expect(() => service.ExposeParseActionParams('{ broken json }')).toThrow(
                 /Unparseable JSON arguments.*Please provide valid JSON formatted arguments/
             );
         });
 
         it('throws actionable error for non-object JSON values', () => {
+            expect(() => service.ExposeParseActionParams('[1, 2, 3]')).toThrow(ToolArgumentsError);
             expect(() => service.ExposeParseActionParams('[1, 2, 3]')).toThrow(
                 /Tool arguments must be a JSON object, but received an array/
             );
+            expect(() => service.ExposeParseActionParams('123')).toThrow(ToolArgumentsError);
             expect(() => service.ExposeParseActionParams('123')).toThrow(
                 /Tool arguments must be a JSON object, but received number/
             );
@@ -2446,6 +2451,21 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             expect(result[0].Description).toBe(INVOKE_TARGET_AGENT_DESCRIPTION);
             expect(result[1].Name).toBe('CustomTool');
             expect(result[2].Name).toBe('OtherTool');
+        });
+
+        it('buildWireActionMap logs collision when actions sanitize to same wire name and keeps first action', () => {
+            const service = new TestableService();
+            const action1 = { ...mockFindCandidateActionsAction, Name: 'Get_Record' };
+            const action2 = { ...mockFindCandidateActionsAction, Name: 'Get Record' };
+            const errorSpy = vi.spyOn(coreModule, 'LogError').mockImplementation(() => {});
+
+            const wireMap = service.buildWireActionMap([action1, action2]);
+            expect(wireMap.size).toBe(1);
+            expect(wireMap.get('Get_Record')).toBe(action1);
+            expect(errorSpy).toHaveBeenCalledWith(
+                expect.stringContaining("wire name collision for 'Get_Record' between action 'Get_Record' and action 'Get Record'")
+            );
+            errorSpy.mockRestore();
         });
 
         it('unifies config derivation: directActions on co-agent only projects tools AND executes them', async () => {

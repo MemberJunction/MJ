@@ -12,7 +12,20 @@
       "IconClass": "fa-solid fa-robot",
       "PayloadSelfWritePaths": [
         "ID"
-      ]
+      ],
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Find Candidate Actions",
+              "Find Candidate Agents",
+              "Load Agent Spec"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Data Sources": [
@@ -672,8 +685,8 @@
       "ID": "E1691AE0-00BB-4414-A74D-F7F36D348A06"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:48.006Z",
-      "checksum": "7766e1b59a251e6c0530d0f1a5b08d9775a983be325f1e159a1d99116ade9099"
+      "lastModified": "2026-09-12T15:03:56.820Z",
+      "checksum": "1a9b1d1e7807833866adfdba2e29bf7d85923f182f4582f638586eba15c259f5"
     }
   }
 ]

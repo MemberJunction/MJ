@@ -1748,6 +1748,9 @@ export class RealtimeSessionService {
       this.markTurnAudioStart(transcript.Kind);
       if (transcript.Role === 'User') {
         if (!this.hasActiveInterimUserCaption) {
+          if (transcript.Text.trim().length === 0) {
+            return;
+          }
           this.hasActiveInterimUserCaption = true;
           this.pendingUserCaption = transcript.Text;
           this.appendCaption({ Role: 'User', Text: this.pendingUserCaption });
@@ -1781,8 +1784,11 @@ export class RealtimeSessionService {
     } else if (this.hasActiveInterimUserCaption) {
       this.hasActiveInterimUserCaption = false;
       this.pendingUserCaption = '';
+      if (transcript.Text.trim().length === 0) {
+        return;
+      }
       this.replaceLastCaption('User', transcript.Text);
-      if (this.firstUserTranscript === null && transcript.Text.trim().length > 0) {
+      if (this.firstUserTranscript === null) {
         this.firstUserTranscript = transcript.Text;
       }
       await this.relayTranscript('user', transcript.Text);
@@ -1791,6 +1797,9 @@ export class RealtimeSessionService {
       // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
       // in-place User caption + persisted turn instead of stacking a new bubble per increment — the
       // same correction semantics the assistant branch uses. (Classic OpenAI Realtime sends one final → the else path.)
+      if (transcript.Text.trim().length === 0) {
+        return;
+      }
       this.replaceLastCaption('User', transcript.Text);
       await this.relayTranscript('user', transcript.Text, true);
     } else {

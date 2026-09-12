@@ -13,7 +13,19 @@
       "IconClass": "fa-solid fa-database",
       "PayloadSelfWritePaths": [
         "ID"
-      ]
+      ],
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Describe Entity",
+              "List My Entities"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -240,8 +252,8 @@
       "ID": "A3C9C16A-90C7-4DC5-AFA0-9922251A1756"
     },
     "sync": {
-      "lastModified": "2026-04-20T17:13:55.592Z",
-      "checksum": "3c59173515cb9a72ae9a28fb506ed16556f73c35c5d965b51f6e1698ea6cc93e"
+      "lastModified": "2026-09-12T15:03:57.061Z",
+      "checksum": "82d7ce76774a6be48eb2de0f3b6c7835a7027f75bfca297a7161b6225f377b72"
     }
   }
 ]

@@ -16,7 +16,18 @@
       "InjectNotes": false,
       "InjectExamples": true,
       "MaxExamplesToInject": 5,
-      "ExampleInjectionStrategy": "Semantic"
+      "ExampleInjectionStrategy": "Semantic",
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Get Record"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Modalities": [
@@ -89,8 +100,8 @@
       "ID": "3755AD2D-B267-4356-BA18-279840EF4B2F"
     },
     "sync": {
-      "lastModified": "2026-07-07T15:18:38.863Z",
-      "checksum": "2d39df5c496542549b01c2bf122497d0eb72ecf22aca68b6f67547365a24d899"
+      "lastModified": "2026-09-12T15:03:57.171Z",
+      "checksum": "2d15d1c5652789a4fcb0fe8de1705aab90ab88147caa937e206c79ccd4d82b00"
     }
   }
 ]
