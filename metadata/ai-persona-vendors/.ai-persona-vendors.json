@@ -1,0 +1,310 @@
+[
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "alloy",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5B433299-BE14-4940-9D9A-5A53E77AB0A3"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "ash",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6162BBCA-8A36-4A36-8DD8-C172BE09D8C0"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "ballad",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E7FAB7D1-E4A4-4B3D-87DF-0FD6AADD31A5"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "coral",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B6AA90E0-1492-48E8-8961-EE4A7BC42687"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "echo",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F21515FB-8E2D-446B-A60E-0B231CE4202E"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fable",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "fable",
+      "Status": "Inactive",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "BF5EB69E-3B20-4DDD-877A-FECE0A8052E4"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Nova",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "nova",
+      "Status": "Inactive",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "25DBA561-5AC3-48A9-B2AD-930BC759B2F4"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Onyx",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "onyx",
+      "Status": "Inactive",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "230FDE21-BABC-4AC5-8A5C-4E28612C4614"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "sage",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A514C6C6-B083-4047-9BE4-6E1D7BA2C671"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "shimmer",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E0C69CE9-3429-4DEB-BBE7-957407B1A2DD"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "verse",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "CAB0BA54-786A-4076-9E2A-49DDC2022552"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "cedar",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "96322C02-6906-4333-B63F-18689F29EE9E"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "marin",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3325857A-9B67-454C-8293-2EE77B447D51"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Puck",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Puck",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "565B9D69-15D7-4017-97F5-1CB5ED44601F"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Charon",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Charon",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C7D45702-18E8-4471-A8DB-630F39773C09"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Kore",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Kore",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "815D667F-0272-4F62-ABC4-A8C52A99285F"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fenrir",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Fenrir",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DE088865-BDC2-417F-BB39-191E68305237"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Aoede",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "Aoede",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7BD760FD-3C72-42D0-A8FE-6E573C242FEC"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ivy",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=AssemblyAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "ivy",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "091386C8-C359-4215-A24A-75C3B1DFB77E"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=James",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=AssemblyAI",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "james",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AB41DF68-FA22-458E-B0DA-FC4D5DDA7212"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Rachel",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "21m00Tcm4TlvDq8ikWAM",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "02F13023-B2FC-4935-BC7D-DDFC769324DB"
+    }
+  },
+  {
+    "fields": {
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Adam",
+      "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
+      "ModalityID": "@lookup:MJ: AI Modalities.Name=Audio",
+      "APIName": "pNInz6obpgDQGcFmaJgB",
+      "Status": "Active",
+      "Priority": 0
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6E2A7E85-ED5E-437D-8E9E-19FE8C5F588B"
+    }
+  }
+]

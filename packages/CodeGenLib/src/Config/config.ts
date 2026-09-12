@@ -493,16 +493,6 @@ const newEntityRelationshipDefaultsSchema = z.object({
   CreateOneToManyRelationships: z.boolean().default(true),
 });
 
-export const decisionMetadataConfigSchema = z.object({
-  /**
-   * Controls decision metadata persistence:
-   * - 'auto' (default): enabled if <metadataDirectory>/entities/.mj-sync.json exists
-   * - true: explicitly enabled
-   * - false: explicitly disabled
-   */
-  enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
-}).default({ enabled: 'auto' });
-export type DecisionMetadataConfig = z.infer<typeof decisionMetadataConfigSchema>;
 
 /**
  * Default settings applied when creating new entities
@@ -634,8 +624,6 @@ const configInfoSchema = z.object({
   forceRegeneration: forceRegenerationConfigSchema,
   /** Root directory containing metadata files for sync (e.g. './metadata') */
   metadataDirectory: z.string().optional(),
-  /** Decision metadata persistence settings */
-  decisionMetadata: decisionMetadataConfigSchema,
 
   /** Database platform: 'sqlserver' or 'postgresql'. */
   dbPlatform: z.enum(['sqlserver', 'postgresql']).default('sqlserver'),
@@ -916,7 +904,6 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   graphqlPort: 4000,
   verboseOutput: false,
   metadataDirectory: './metadata',
-  decisionMetadata: { enabled: 'auto' },
 
   settings: [
     { name: 'mj_core_schema', value: '__mj' },

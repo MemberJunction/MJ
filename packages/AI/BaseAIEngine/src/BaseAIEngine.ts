@@ -37,6 +37,10 @@ import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentNoteEntity, MJAIAgent
          MJAISkillSubAgentEntity,
          MJAIAgentSkillEntity,
          MJAISkillPermissionEntity,
+         MJAIPersonaEntity,
+         MJAIPersonaVendorEntity,
+         MJAIModelPersonaEntity,
+         MJAIAgentPersonaEntity,
          ArtifactMetadataEngine} from "@memberjunction/core-entities";
 import { BasePriceUnitType, NormalizedUsage } from "./PriceUnitTypes";
 import { AIAgentPermissionHelper, EffectiveAgentPermissions } from "./AIAgentPermissionHelper";
@@ -78,6 +82,45 @@ export interface AgentAttachmentLimits {
     acceptedFileTypes: string;
     /** Individual modality limits */
     modalities: Map<string, ModalityLimits>;
+}
+
+/**
+ * A resolved model persona: the abstract persona entity paired with its concrete vendor binding
+ * and optional model-level override.
+ */
+export interface ResolvedModelPersona {
+    /** The resolved persona entity */
+    Persona: MJAIPersonaEntity;
+    /** The active vendor binding for this persona */
+    PersonaVendor: MJAIPersonaVendorEntity;
+    /** The model persona override record, if explicitly configured */
+    ModelPersona?: MJAIModelPersonaEntity;
+}
+
+/**
+ * An agent persona junction mapping: the agent-persona record paired with its resolved persona.
+ */
+export interface ResolvedAgentPersona {
+    /** The agent persona junction record */
+    AgentPersona: MJAIAgentPersonaEntity;
+    /** The resolved persona entity */
+    Persona: MJAIPersonaEntity;
+}
+
+/**
+ * The effective persona configuration for an agent after resolving precedence and style overrides.
+ */
+export interface EffectiveAgentPersona {
+    /** The resolved persona entity */
+    Persona: MJAIPersonaEntity;
+    /** The active vendor binding for the agent's resolved model/vendor */
+    PersonaVendor?: MJAIPersonaVendorEntity;
+    /** The agent persona junction record, if present */
+    AgentPersona?: MJAIAgentPersonaEntity;
+    /** Effective tone, incorporating any agent-level style override */
+    Tone: string | null;
+    /** Effective speaking style, incorporating any agent-level style override */
+    SpeakingStyle: string | null;
 }
 
 // Default fallback values when no metadata is configured
@@ -163,6 +206,10 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _skillSubAgents: MJAISkillSubAgentEntity[] = [];
     private _agentSkills: MJAIAgentSkillEntity[] = [];
     private _skillPermissions: MJAISkillPermissionEntity[] = [];
+    private _personas: MJAIPersonaEntity[] = [];
+    private _personaVendors: MJAIPersonaVendorEntity[] = [];
+    private _modelPersonas: MJAIModelPersonaEntity[] = [];
+    private _agentPersonas: MJAIAgentPersonaEntity[] = [];
 
     /**
      * Cache for configuration inheritance chains.
@@ -453,6 +500,26 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             {
                 PropertyName: '_agentCoAgents',
                 EntityName: 'MJ: AI Agent Co Agents',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_personas',
+                EntityName: 'MJ: AI Personas',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_personaVendors',
+                EntityName: 'MJ: AI Persona Vendors',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_modelPersonas',
+                EntityName: 'MJ: AI Model Personas',
+                CacheLocal: true
+            },
+            {
+                PropertyName: '_agentPersonas',
+                EntityName: 'MJ: AI Agent Personas',
                 CacheLocal: true
             }
         ];
@@ -1597,6 +1664,34 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
+     * Gets all AI personas (abstract presentational identities).
+     */
+    public get Personas(): MJAIPersonaEntity[] {
+        return this.GetConfigData<MJAIPersonaEntity>('_personas');
+    }
+
+    /**
+     * Gets all AI persona vendor bindings (concrete vendor and modality mappings).
+     */
+    public get PersonaVendors(): MJAIPersonaVendorEntity[] {
+        return this.GetConfigData<MJAIPersonaVendorEntity>('_personaVendors');
+    }
+
+    /**
+     * Gets all AI model persona override records.
+     */
+    public get ModelPersonas(): MJAIModelPersonaEntity[] {
+        return this.GetConfigData<MJAIModelPersonaEntity>('_modelPersonas');
+    }
+
+    /**
+     * Gets all AI agent persona assignment records.
+     */
+    public get AgentPersonas(): MJAIAgentPersonaEntity[] {
+        return this.GetConfigData<MJAIAgentPersonaEntity>('_agentPersonas');
+    }
+
+    /**
      * Gets all client tool definitions (the catalog of reusable tools).
      */
     public get ClientToolDefinitions(): MJAIClientToolDefinitionEntity[] {
@@ -1639,103 +1734,232 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * Gets all modalities supported by an agent for a given direction
-     * @param agentId - The agent ID
-     * @param direction - 'Input' or 'Output'
-     * @returns Array of modality entities the agent supports
+     * Helper to resolve the model ID for an agent using precedence:
+     * 1. Explicit modelId override if provided
+     * 2. Agent-specific prompt model if ModelSelectionMode is 'Agent'
+     * 3. Agent type system prompt model
+     * 4. Agent-specific prompt model fallback
      */
-    public GetAgentModalities(agentId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
-        const agentModalityRecords = this._agentModalities.filter(
-            am => UUIDsEqual(am.AgentID, agentId) && am.Direction === direction
-        );
+    private resolveAgentModelId(agentId: string, modelId?: string): string | undefined {
+        if (modelId) {
+            return modelId;
+        }
+        const agent = this._agents.find(a => UUIDsEqual(a.ID, agentId));
+        if (!agent) {
+            return undefined;
+        }
 
-        return agentModalityRecords
-            .map(am => this._modalities.find(m => UUIDsEqual(m.ID, am.ModalityID)))
-            .filter((m): m is MJAIModalityEntity => m !== undefined);
+        // 1. If agent selects model via its own prompt
+        if (agent.ModelSelectionMode === 'Agent') {
+            const agentPrompt = this._agentPrompts
+                .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
+                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+            if (agentPrompt) {
+                const promptModels = this.PromptModelsByPromptID.get(NormalizeUUID(agentPrompt.PromptID));
+                if (promptModels && promptModels.length > 0) {
+                    return promptModels[0].ModelID;
+                }
+            }
+        }
+
+        // 2. Default: check agent type's system prompt
+        if (agent.TypeID) {
+            const agentType = this._agentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
+            if (agentType?.SystemPromptID) {
+                const promptModels = this.PromptModelsByPromptID.get(NormalizeUUID(agentType.SystemPromptID));
+                if (promptModels && promptModels.length > 0) {
+                    return promptModels[0].ModelID;
+                }
+            }
+        }
+
+        // 3. Fallback: check agent prompt if not checked in step 1
+        if (agent.ModelSelectionMode !== 'Agent') {
+            const agentPrompt = this._agentPrompts
+                .filter(ap => UUIDsEqual(ap.AgentID, agent.ID) && ap.Status === 'Active')
+                .sort((a, b) => a.ExecutionOrder - b.ExecutionOrder)[0];
+            if (agentPrompt) {
+                const promptModels = this.PromptModelsByPromptID.get(NormalizeUUID(agentPrompt.PromptID));
+                if (promptModels && promptModels.length > 0) {
+                    return promptModels[0].ModelID;
+                }
+            }
+        }
+
+        return undefined;
     }
 
     /**
-     * Gets all modalities supported by a model for a given direction
+     * Gets all modalities supported by an agent for a given direction.
+     * Follows precedence chain: Agent → Model → System → Default.
+     * If no explicit agent modality records exist, falls through to the agent's model's effective modalities.
+     * Any explicit AIAgentModality records override: IsAllowed = 1 adds/retains, IsAllowed = 0 acts as a hard veto.
+     * @param agentId - The agent ID
+     * @param direction - 'Input' or 'Output'
+     * @param modelId - Optional model ID override
+     * @returns Array of modality entities the agent supports
+     */
+    public GetAgentModalities(agentId: string, direction: 'Input' | 'Output', modelId?: string): MJAIModalityEntity[] {
+        const resolvedModelId = this.resolveAgentModelId(agentId, modelId);
+        const baseModalities = resolvedModelId
+            ? this.GetModelModalities(resolvedModelId, direction)
+            : this._modalities.filter(m => m.Name.toLowerCase() === 'text');
+
+        const resultMap = new Map<string, MJAIModalityEntity>();
+        for (const m of baseModalities) {
+            resultMap.set(NormalizeUUID(m.ID), m);
+        }
+
+        // Apply agent-level explicit overrides/vetoes
+        const agentRecords = this._agentModalities.filter(
+            am => UUIDsEqual(am.AgentID, agentId) && am.Direction === direction
+        );
+
+        for (const am of agentRecords) {
+            const normId = NormalizeUUID(am.ModalityID);
+            const isAllowed = am.IsAllowed !== false;
+            if (isAllowed) {
+                const modality = this._modalities.find(m => UUIDsEqual(m.ID, am.ModalityID));
+                if (modality) {
+                    resultMap.set(normId, modality);
+                }
+            } else {
+                // Hard veto at agent layer
+                resultMap.delete(normId);
+            }
+        }
+
+        return Array.from(resultMap.values());
+    }
+
+    /**
+     * Gets all modalities supported by a model for a given direction.
+     * Evaluates effective modalities according to the inheritance formula:
+     * InheritTypeModalities ? (type default for direction) ∪ junction(IsSupported = 1) \ junction(IsSupported = 0)
+     *                      : junction(IsSupported = 1)
      * @param modelId - The model ID
      * @param direction - 'Input' or 'Output'
      * @returns Array of modality entities the model supports
      */
     public GetModelModalities(modelId: string, direction: 'Input' | 'Output'): MJAIModalityEntity[] {
+        const model = this.ModelsByID.get(NormalizeUUID(modelId));
         const modelModalityRecords = this._modelModalities.filter(
             mm => UUIDsEqual(mm.ModelID, modelId) && mm.Direction === direction
         );
 
-        return modelModalityRecords
-            .map(mm => this._modalities.find(m => UUIDsEqual(m.ID, mm.ModalityID)))
-            .filter((m): m is MJAIModalityEntity => m !== undefined);
+        const resultMap = new Map<string, MJAIModalityEntity>();
+
+        // If InheritTypeModalities is true (default in DB when model exists), seed with model type default
+        const shouldInherit = model ? model.InheritTypeModalities !== false : false;
+        if (shouldInherit && model?.AIModelTypeID) {
+            const modelType = this.ModelTypesByID.get(NormalizeUUID(model.AIModelTypeID));
+            if (modelType) {
+                const defaultModalityId = direction === 'Input'
+                    ? modelType.DefaultInputModalityID
+                    : modelType.DefaultOutputModalityID;
+                if (defaultModalityId) {
+                    const defaultModality = this._modalities.find(m => UUIDsEqual(m.ID, defaultModalityId));
+                    if (defaultModality) {
+                        resultMap.set(NormalizeUUID(defaultModality.ID), defaultModality);
+                    }
+                }
+            }
+        }
+
+        // Process junction records
+        for (const mm of modelModalityRecords) {
+            const normModalityId = NormalizeUUID(mm.ModalityID);
+            const isExplicitlyDisabled = mm.IsSupported === false;
+            if (!isExplicitlyDisabled) {
+                const modality = this._modalities.find(m => UUIDsEqual(m.ID, mm.ModalityID));
+                if (modality) {
+                    resultMap.set(normModalityId, modality);
+                }
+            } else {
+                // Explicit veto / disable
+                resultMap.delete(normModalityId);
+            }
+        }
+
+        return Array.from(resultMap.values());
     }
 
     /**
      * Checks if an agent supports a specific modality for a given direction.
-     * If no agent modalities are configured, defaults to text-only.
+     * Follows precedence chain: Agent → Model → System → Default.
+     * 1. Explicit agent modality record (IsAllowed = 0 is a hard veto, IsAllowed = 1 is allowed)
+     * 2. If no explicit agent record for this modality, falls through to the agent's model's effective modalities
+     * 3. If no model resolvable, defaults to text-only
      * @param agentId - The agent ID
-     * @param modalityName - The modality name (e.g., 'Image', 'Audio')
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio', 'Text')
      * @param direction - 'Input' or 'Output'
+     * @param modelId - Optional model ID override
      * @returns True if the agent supports this modality
      */
-    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
-        // Check if agent has explicit modality records
-        const agentModalities = this.GetAgentModalities(agentId, direction);
+    public AgentSupportsModality(agentId: string, modalityName: string, direction: 'Input' | 'Output', modelId?: string): boolean {
+        const targetModality = this._modalities.find(m => m.Name.toLowerCase() === modalityName.toLowerCase());
 
-        if (agentModalities.length > 0) {
-            // Agent has explicit modality configuration - check it
-            return agentModalities.some(m => m.Name.toLowerCase() === modalityName.toLowerCase());
+        // Check if agent has an explicit record for this modality & direction
+        if (targetModality) {
+            const agentRecord = this._agentModalities.find(
+                am => UUIDsEqual(am.AgentID, agentId) &&
+                      am.Direction === direction &&
+                      UUIDsEqual(am.ModalityID, targetModality.ID)
+            );
+            if (agentRecord) {
+                // Explicit record exists: IsAllowed is authoritative (IsAllowed = false is a hard veto)
+                return agentRecord.IsAllowed !== false;
+            }
         }
 
-        // No explicit agent modalities configured - default to text-only
+        // No explicit agent record for this modality - fall through to model's effective modalities
+        const resolvedModelId = this.resolveAgentModelId(agentId, modelId);
+        if (resolvedModelId) {
+            return this.ModelSupportsModality(resolvedModelId, modalityName, direction);
+        }
+
+        // No model resolvable - default to text-only (system default for LLMs)
         return modalityName.toLowerCase() === 'text';
     }
 
     /**
-     * Checks if a model supports a specific modality for a given direction
+     * Checks if a model supports a specific modality for a given direction.
+     * Consults the model's effective modalities without an arbitrary hardcoded fallback.
      * @param modelId - The model ID
-     * @param modalityName - The modality name (e.g., 'Image', 'Audio')
+     * @param modalityName - The modality name (e.g., 'Image', 'Audio', 'Text')
      * @param direction - 'Input' or 'Output'
      * @returns True if the model supports this modality
      */
     public ModelSupportsModality(modelId: string, modalityName: string, direction: 'Input' | 'Output'): boolean {
         const modelModalities = this.GetModelModalities(modelId, direction);
-
-        if (modelModalities.length > 0) {
-            return modelModalities.some(m => m.Name.toLowerCase() === modalityName.toLowerCase());
-        }
-
-        // No explicit model modalities - assume text-only (default for LLMs)
-        return modalityName.toLowerCase() === 'text';
+        return modelModalities.some(m => m.Name.toLowerCase() === modalityName.toLowerCase());
     }
 
     /**
      * Checks if an agent supports any non-text input modalities (images, audio, video, files).
      * This is used to determine if attachment upload should be enabled in the UI.
      * @param agentId - The agent ID
+     * @param modelId - Optional model ID override
      * @returns True if the agent supports at least one non-text input modality
      */
-    public AgentSupportsAttachments(agentId: string): boolean {
+    public AgentSupportsAttachments(agentId: string, modelId?: string): boolean {
         const nonTextModalities = ['image', 'audio', 'video', 'file'];
         return nonTextModalities.some(modalityName =>
-            this.AgentSupportsModality(agentId, modalityName, 'Input')
+            this.AgentSupportsModality(agentId, modalityName, 'Input', modelId)
         );
     }
 
     /**
      * Gets all input modality names supported by an agent (for UI display/filtering)
      * @param agentId - The agent ID
+     * @param modelId - Optional model ID override
      * @returns Array of modality names the agent accepts as input
      */
-    public GetAgentSupportedInputModalities(agentId: string): string[] {
-        // Check explicit agent modalities
-        const agentModalities = this.GetAgentModalities(agentId, 'Input');
-
+    public GetAgentSupportedInputModalities(agentId: string, modelId?: string): string[] {
+        const agentModalities = this.GetAgentModalities(agentId, 'Input', modelId);
         if (agentModalities.length > 0) {
             return agentModalities.map(m => m.Name);
         }
-
-        // No explicit modalities configured - default to text-only
         return ['Text'];
     }
 
@@ -1927,6 +2151,269 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
                 return null;
         }
     }
+
+    // ==========================================
+    // Persona Accessors and Helper Methods
+    // ==========================================
+
+    /**
+     * Resolves the personas supported by a model for a specific modality (default: 'Audio').
+     *
+     * Precedence & Inheritance:
+     * - If explicit AIModelPersona records exist for the model:
+     *   - Only personas with IsSupported === true are included (IsSupported === false acts as an explicit disable).
+     *   - Ordered by AIModelPersona.Sequence.
+     * - If NO AIModelPersona records exist for the model:
+     *   - Inherits all active personas that have an active AIPersonaVendor binding for the model's vendor.
+     * In all cases, personas must have IsActive === true and an active AIPersonaVendor binding for the target vendor and modality.
+     *
+     * @param modelId - The model ID
+     * @param modalityName - The modality name (default 'Audio')
+     * @param vendorId - Optional vendor ID override. If not specified, resolved from the model's active inference provider vendors.
+     */
+    public GetModelPersonas(modelId: string, modalityName = 'Audio', vendorId?: string): ResolvedModelPersona[] {
+        const model = this._models.find(m => UUIDsEqual(m.ID, modelId));
+        if (!model) {
+            return [];
+        }
+
+        const modality = this.GetModalityByName(modalityName);
+        if (!modality) {
+            return [];
+        }
+
+        const candidateVendorIds: string[] = [];
+        if (vendorId) {
+            candidateVendorIds.push(NormalizeUUID(vendorId));
+        } else {
+            const activeVendors = this._modelVendors
+                .filter(mv => UUIDsEqual(mv.ModelID, modelId) && mv.Status === 'Active')
+                .sort((a, b) => {
+                    const aInf = this.IsInferenceProvider(a) ? 1 : 0;
+                    const bInf = this.IsInferenceProvider(b) ? 1 : 0;
+                    if (aInf !== bInf) return bInf - aInf;
+                    return (b.Priority ?? 0) - (a.Priority ?? 0);
+                });
+            for (const mv of activeVendors) {
+                if (mv.VendorID) {
+                    const norm = NormalizeUUID(mv.VendorID);
+                    if (!candidateVendorIds.includes(norm)) {
+                        candidateVendorIds.push(norm);
+                    }
+                }
+            }
+        }
+
+        if (candidateVendorIds.length === 0) {
+            return [];
+        }
+
+        const findPersonaVendor = (personaId: string): MJAIPersonaVendorEntity | undefined => {
+            const matches = this._personaVendors
+                .filter(pv =>
+                    UUIDsEqual(pv.PersonaID, personaId) &&
+                    UUIDsEqual(pv.ModalityID, modality.ID) &&
+                    pv.Status === 'Active' &&
+                    candidateVendorIds.some(vid => UUIDsEqual(vid, pv.VendorID))
+                )
+                .sort((a, b) => (b.Priority ?? 0) - (a.Priority ?? 0));
+            return matches[0];
+        };
+
+        const explicitModelPersonas = this._modelPersonas.filter(mp => UUIDsEqual(mp.ModelID, modelId));
+        const excludedPersonaIds = new Set(
+            explicitModelPersonas.filter(mp => mp.IsSupported === false).map(mp => NormalizeUUID(mp.PersonaID))
+        );
+
+        if (explicitModelPersonas.length > 0) {
+            const supported = explicitModelPersonas
+                .filter(mp => mp.IsSupported)
+                .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+
+            const explicitResult: ResolvedModelPersona[] = [];
+            for (const mp of supported) {
+                const persona = this._personas.find(p => UUIDsEqual(p.ID, mp.PersonaID) && p.IsActive);
+                if (!persona) continue;
+                const pv = findPersonaVendor(persona.ID);
+                if (pv) {
+                    explicitResult.push({
+                        Persona: persona,
+                        PersonaVendor: pv,
+                        ModelPersona: mp,
+                    });
+                }
+            }
+            if (explicitResult.length > 0) {
+                return explicitResult;
+            }
+        }
+
+        // Inherit all active personas bound to the vendor & modality, minus explicitly excluded personas
+        const result: ResolvedModelPersona[] = [];
+        for (const persona of this._personas) {
+            if (!persona.IsActive || excludedPersonaIds.has(NormalizeUUID(persona.ID))) continue;
+            const pv = findPersonaVendor(persona.ID);
+            if (pv) {
+                result.push({
+                    Persona: persona,
+                    PersonaVendor: pv,
+                });
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Gets provider API names for personas explicitly excluded (IsSupported = false)
+     * on the specified model for the requested modality and vendor.
+     *
+     * @param modelId - The model ID
+     * @param modalityName - The modality name (default 'Audio')
+     * @param vendorId - Optional vendor ID filter
+     * @returns Array of provider voice API names (e.g. ['fable', 'nova', 'onyx'])
+     */
+    public GetModelPersonaExclusions(modelId: string, modalityName = 'Audio', vendorId?: string): string[] {
+        const modality = this.GetModalityByName(modalityName);
+        if (!modality) return [];
+
+        const candidateVendorIds: string[] = [];
+        if (vendorId) {
+            candidateVendorIds.push(NormalizeUUID(vendorId));
+        } else {
+            const activeVendors = this._modelVendors
+                .filter(mv => UUIDsEqual(mv.ModelID, modelId) && mv.Status === 'Active')
+                .sort((a, b) => {
+                    const aInf = this.IsInferenceProvider(a) ? 1 : 0;
+                    const bInf = this.IsInferenceProvider(b) ? 1 : 0;
+                    if (aInf !== bInf) return bInf - aInf;
+                    return (b.Priority ?? 0) - (a.Priority ?? 0);
+                });
+            for (const mv of activeVendors) {
+                if (mv.VendorID) {
+                    const norm = NormalizeUUID(mv.VendorID);
+                    if (!candidateVendorIds.includes(norm)) {
+                        candidateVendorIds.push(norm);
+                    }
+                }
+            }
+        }
+        if (candidateVendorIds.length === 0) return [];
+
+        const excludedModelPersonas = this._modelPersonas.filter(
+            mp => UUIDsEqual(mp.ModelID, modelId) && mp.IsSupported === false
+        );
+        if (excludedModelPersonas.length === 0) return [];
+
+        const excludedPersonaIds = new Set(excludedModelPersonas.map(mp => NormalizeUUID(mp.PersonaID)));
+        const excludedApiNames: string[] = [];
+
+        for (const pv of this._personaVendors) {
+            if (
+                excludedPersonaIds.has(NormalizeUUID(pv.PersonaID)) &&
+                UUIDsEqual(pv.ModalityID, modality.ID) &&
+                pv.Status === 'Active' &&
+                candidateVendorIds.some(vid => UUIDsEqual(vid, pv.VendorID))
+            ) {
+                if (pv.APIName && !excludedApiNames.includes(pv.APIName)) {
+                    excludedApiNames.push(pv.APIName);
+                }
+            }
+        }
+
+        return excludedApiNames;
+    }
+
+    /**
+     * Gets all personas configured for an agent, ordered by Sequence.
+     * Only returns personas where IsAllowed is true and the persona record is active.
+     *
+     * @param agentId - The agent ID
+     * @returns Array of resolved agent personas
+     */
+    public GetAgentPersonas(agentId: string): ResolvedAgentPersona[] {
+        const agentRecords = this._agentPersonas
+            .filter(ap => UUIDsEqual(ap.AgentID, agentId) && ap.IsAllowed)
+            .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
+
+        const result: ResolvedAgentPersona[] = [];
+        for (const ap of agentRecords) {
+            const persona = this._personas.find(p => UUIDsEqual(p.ID, ap.PersonaID) && p.IsActive);
+            if (persona) {
+                result.push({
+                    AgentPersona: ap,
+                    Persona: persona,
+                });
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Resolves the effective persona for an agent using the precedence chain:
+     * 1. Agent's default persona (AIAgentPersona where IsDefault = 1 and IsAllowed = 1)
+     * 2. First allowed agent persona (by Sequence)
+     * 3. Model/vendor default persona (from GetModelPersonas)
+     *
+     * In all cases, merges agent-level StyleOverride (Tone, SpeakingStyle) over the persona's defaults.
+     *
+     * @param agentId - The agent ID
+     * @param options - Optional overrides for modelId, vendorId, modalityName
+     */
+    public ResolveAgentPersona(
+        agentId: string,
+        options?: { modelId?: string; vendorId?: string; modalityName?: string }
+    ): EffectiveAgentPersona | null {
+        const modalityName = options?.modalityName ?? 'Audio';
+        const agentPersonas = this.GetAgentPersonas(agentId);
+
+        let chosenPersona: MJAIPersonaEntity | null = null;
+        let chosenAgentPersona: MJAIAgentPersonaEntity | undefined = undefined;
+
+        if (agentPersonas.length > 0) {
+            const defaultAP = agentPersonas.find(ap => ap.AgentPersona.IsDefault);
+            const selected = defaultAP ?? agentPersonas[0];
+            chosenPersona = selected.Persona;
+            chosenAgentPersona = selected.AgentPersona;
+        }
+
+        const resolvedModelId = this.resolveAgentModelId(agentId, options?.modelId);
+
+        if (!chosenPersona && resolvedModelId) {
+            const modelPersonas = this.GetModelPersonas(resolvedModelId, modalityName, options?.vendorId);
+            if (modelPersonas.length > 0) {
+                chosenPersona = modelPersonas[0].Persona;
+            }
+        }
+
+        if (!chosenPersona) {
+            return null;
+        }
+
+        // Find vendor binding for this persona if we have a model/vendor
+        let personaVendor: MJAIPersonaVendorEntity | undefined = undefined;
+        if (resolvedModelId) {
+            const modelPersonas = this.GetModelPersonas(resolvedModelId, modalityName, options?.vendorId);
+            const match = modelPersonas.find(mp => UUIDsEqual(mp.Persona.ID, chosenPersona!.ID));
+            personaVendor = match?.PersonaVendor;
+        }
+
+        // Parse style override if present
+        let overrideTone: string | null = null;
+        let overrideSpeakingStyle: string | null = null;
+        if (chosenAgentPersona?.StyleOverrideObject) {
+            overrideTone = chosenAgentPersona.StyleOverrideObject.Tone ?? null;
+            overrideSpeakingStyle = chosenAgentPersona.StyleOverrideObject.SpeakingStyle ?? null;
+        }
+
+        return {
+            Persona: chosenPersona,
+            PersonaVendor: personaVendor,
+            AgentPersona: chosenAgentPersona,
+            Tone: overrideTone ?? chosenPersona.Tone ?? null,
+            SpeakingStyle: overrideSpeakingStyle ?? chosenPersona.SpeakingStyle ?? null,
+        };
+    }
+
 
     /**
      * Gets agent steps for a specific agent, optionally filtered by status

@@ -92,3 +92,15 @@ function parseArtifacts(raw: unknown): ParsedDelegationArtifact[] | undefined {
   }
   return artifacts.length > 0 ? artifacts : undefined;
 }
+
+/**
+ * Convert snake_case or colon-delimited tool names (e.g. `File_Storage_List_Objects` or `File Storage: List Objects`)
+ * to a clean human-readable title (e.g. `File Storage List Objects`).
+ */
+export function FormatToolName(toolName?: string): string {
+  if (!toolName) return 'Action';
+  return toolName
+    .replace(/[_\-:]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

@@ -6,27 +6,35 @@
  * a {@link MockRealtimeModel} (no provider SDK / DB), engine config is a no-op, and delegation is
  * stubbed. No network, no DB — fully deterministic.
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, beforeAll } from 'vitest';
 import {
     BaseRealtimeModel,
     ClientRealtimeSessionConfig,
     IRealtimeSession,
     JSONObject,
     RealtimeSessionParams,
-    RealtimeToolCall
+    RealtimeToolCall,
+    RealtimeToolDefinition
 } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
+import * as coreModule from '@memberjunction/core';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { MJActionParamEntity } from '@memberjunction/core-entities';
+import { MJGlobal } from '@memberjunction/global';
+import { ActionEngineServer } from '@memberjunction/actions';
+import { ActionResult, MJActionEntityExtended } from '@memberjunction/actions-base';
 import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
 import {
     RealtimeClientSessionService,
+    ToolArgumentsError,
+    SanitizeWireToolName,
     PrepareClientSessionInput,
     ExecuteRelayedToolInput,
     RealtimeModelResolution,
     CoAgentSystemPromptResolution
 } from '../realtime/realtime-client-session-service';
-import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
+import { INVOKE_TARGET_AGENT_TOOL_NAME, INVOKE_TARGET_AGENT_DESCRIPTION, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
 import { BuildAppRealtimeOverridesJson, RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 
 // Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
@@ -128,6 +136,10 @@ class TestableService extends RealtimeClientSessionService {
     }
     /** id → display name map for resolveTargetAgent (default keeps 'target-1' as 'Sales Agent'). */
     public TargetAgentNames: Record<string, string> = { 'target-1': 'Sales Agent' };
+    public TargetActions: MJActionEntityExtended[] = [];
+    protected override getTargetAgentActions(): MJActionEntityExtended[] {
+        return this.TargetActions;
+    }
     protected override resolveTargetAgent(targetAgentID: string): MJAIAgentEntityExtended | null {
         if (!targetAgentID) return null;
         const name = this.TargetAgentNames[targetAgentID] ?? targetAgentID;
@@ -140,6 +152,27 @@ class TestableService extends RealtimeClientSessionService {
     /** Public passthrough to exercise the multi-target delegation routing decision directly. */
     public ExposeResolveDelegationTarget(requested: string | undefined, input: ExecuteRelayedToolInput) {
         return this.resolveDelegationTarget(requested, input);
+    }
+    public ExposeBuildSessionParams(
+        input: PrepareClientSessionInput,
+        coAgent: MJAIAgentEntityExtended,
+        modelApiName: string,
+        user: UserInfo,
+        prov: IMetadataProvider,
+        cfg?: RealtimeCoAgentConfig,
+        driverClass?: string
+    ): Promise<RealtimeSessionParams> {
+        return this.buildSessionParams(input, coAgent, modelApiName, user, prov, cfg, driverClass);
+    }
+    public ExposeExecuteNonTargetTool(
+        call: RealtimeToolCall,
+        input?: ExecuteRelayedToolInput,
+        user?: UserInfo
+    ) {
+        return this.executeNonTargetTool(call, input, user);
+    }
+    public ExposeParseActionParams(argumentsJson?: string): Record<string, unknown> {
+        return this.parseActionParams(argumentsJson);
     }
     protected override async delegateToTarget(
         _input: ExecuteRelayedToolInput,
@@ -1793,5 +1826,793 @@ describe('model-catalog ModelConfiguration is the BASE layer of the session Conf
     it('a catalog with no Realtime section contributes nothing', () => {
         vi.spyOn(AIEngine.Instance, 'GetEffectiveModelConfiguration').mockReturnValue({ LLM: { effortLevel: 'high' } });
         expect(new CatalogBagService().Bag(EMPTY_INPUT, {}, 'OpenAIRealtime', 'model-1')).toBeUndefined();
+    });
+});
+
+describe('Direct Action Invocation (Section B / B-8)', () => {
+    class DynamicDriverModel extends BaseRealtimeModel {
+        public static override SupportsDynamicToolSet = true;
+    }
+    class StaticDriverModel extends BaseRealtimeModel {
+        public static override SupportsDynamicToolSet = false;
+    }
+
+    beforeAll(() => {
+        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, DynamicDriverModel, 'OpenAIRealtime', 10);
+        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, DynamicDriverModel, 'OpenAILiveRealtime', 10);
+        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, StaticDriverModel, 'ElevenLabsRealtime', 10);
+        MJGlobal.Instance.ClassFactory.Register(BaseRealtimeModel, StaticDriverModel, 'GeminiRealtime', 10);
+    });
+
+    const mockEmailAction = {
+        ID: 'act-1',
+        Name: 'SendEmail',
+        Description: 'Sends an email to a recipient.',
+        Params: {
+            Items: [
+                {
+                    Name: 'To',
+                    Description: 'Recipient email',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: true,
+                    IsArray: false
+                } as unknown as MJActionParamEntity,
+                {
+                    Name: 'Subject',
+                    Description: 'Email subject',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: false,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
+    const mockTaskAction = {
+        ID: 'act-2',
+        Name: 'CreateTask',
+        Description: 'Creates a task item.',
+        Params: {
+            Items: [
+                {
+                    Name: 'Title',
+                    Description: 'Task title',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: true,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
+    const mockFindCandidateActionsAction = {
+        ID: 'act-3',
+        Name: 'Find Candidate Actions',
+        Description: 'Finds candidate actions matching a query.',
+        Params: {
+            Items: [
+                {
+                    Name: 'Query',
+                    Description: 'Search string',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: true,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
+    const mockLearnWorldsCreateUserAction = {
+        ID: 'act-4',
+        Name: 'LearnWorlds - Create User',
+        Description: 'Creates a user in LearnWorlds.',
+        Params: {
+            Items: [
+                {
+                    Name: 'Email',
+                    Description: 'User email',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: true,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
+    const mockFileStorageListObjectsAction = {
+        ID: 'act-5',
+        Name: 'File Storage: List Objects',
+        Description: 'Lists objects in a storage container.',
+        Params: {
+            Items: [
+                {
+                    Name: 'Path',
+                    Description: 'Folder path',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: false,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
+    it('returns ONLY invoke-target-agent against ElevenLabs and Gemini even when directActions is enabled', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockEmailAction, mockTaskAction];
+
+        const cfg: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['SendEmail']
+                }
+            }
+        };
+
+        const elevenTools = service.buildDirectActionTools('target-1', cfg, 'ElevenLabsRealtime');
+        expect(elevenTools).toHaveLength(0);
+
+        const geminiTools = service.buildDirectActionTools('target-1', cfg, 'GeminiRealtime');
+        expect(geminiTools).toHaveLength(0);
+    });
+
+    it('returns direct action tools against OpenAIRealtime and OpenAILiveRealtime when enabled', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockEmailAction, mockTaskAction];
+
+        const cfg: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['SendEmail']
+                }
+            }
+        };
+
+        const openAITools = service.buildDirectActionTools('target-1', cfg, 'OpenAIRealtime');
+        expect(openAITools).toHaveLength(1);
+        expect(openAITools[0].Name).toBe('SendEmail');
+        expect(openAITools[0].Description).toBe('Sends an email to a recipient.');
+        expect(openAITools[0].ParametersSchema).toEqual({
+            type: 'object',
+            properties: {
+                To: { type: 'string', description: 'Recipient email' },
+                Subject: { type: 'string', description: 'Email subject' }
+            },
+            required: ['To']
+        });
+
+        const liveTools = service.buildDirectActionTools('target-1', cfg, 'OpenAILiveRealtime');
+        expect(liveTools).toHaveLength(1);
+        expect(liveTools[0].Name).toBe('SendEmail');
+    });
+
+    it('supports wildcard ["*"] to project all active actions assigned to the agent', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockEmailAction, mockTaskAction];
+
+        const cfg: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['*']
+                }
+            }
+        };
+
+        const tools = service.buildDirectActionTools('target-1', cfg, 'OpenAIRealtime');
+        expect(tools).toHaveLength(2);
+        expect(tools.map(t => t.Name)).toEqual(['SendEmail', 'CreateTask']);
+    });
+
+    it('returns 0 direct actions when enabled is false or actionNames is empty (default closed)', () => {
+        const service = new TestableService();
+        service.TargetActions = [mockEmailAction, mockTaskAction];
+
+        // absent config
+        expect(service.buildDirectActionTools('target-1', {}, 'OpenAIRealtime')).toHaveLength(0);
+
+        // enabled: false
+        expect(service.buildDirectActionTools('target-1', {
+            realtime: { directActions: { enabled: false, actionNames: ['SendEmail'] } }
+        }, 'OpenAIRealtime')).toHaveLength(0);
+
+        // empty actionNames
+        expect(service.buildDirectActionTools('target-1', {
+            realtime: { directActions: { enabled: true, actionNames: [] } }
+        }, 'OpenAIRealtime')).toHaveLength(0);
+    });
+
+    it('end-to-end buildSessionParams: ElevenLabs gets only invoke-target-agent while OpenAI gets direct actions', async () => {
+        const service = new TestableService();
+        service.TargetActions = [mockEmailAction];
+
+        const cfg: RealtimeCoAgentConfig = {
+            realtime: {
+                directActions: {
+                    enabled: true,
+                    actionNames: ['SendEmail']
+                }
+            }
+        };
+
+        const coAgent = makeCoAgent({ TypeConfiguration: JSON.stringify(cfg) });
+        const input = makePrepInput({ CoAgent: coAgent, TargetAgentID: 'target-1' });
+
+        // ElevenLabs session params
+        const elevenParams = await service.ExposeBuildSessionParams(
+            input, coAgent, 'eleven-model', contextUser, provider, cfg, 'ElevenLabsRealtime'
+        );
+        expect(elevenParams.Tools.map((t: RealtimeToolDefinition) => t.Name)).toEqual([INVOKE_TARGET_AGENT_TOOL_NAME]);
+        expect(elevenParams.SystemPrompt).toContain('do not attempt to do the work yourself');
+        expect(elevenParams.SystemPrompt).not.toContain('directly-available tools');
+
+        // OpenAI session params
+        const openAIParams = await service.ExposeBuildSessionParams(
+            input, coAgent, 'gpt-realtime', contextUser, provider, cfg, 'OpenAIRealtime'
+        );
+        expect(openAIParams.Tools.map((t: RealtimeToolDefinition) => t.Name)).toEqual([
+            INVOKE_TARGET_AGENT_TOOL_NAME,
+            'SendEmail'
+        ]);
+        expect(openAIParams.SystemPrompt).toContain('directly-available tools');
+        expect(openAIParams.SystemPrompt).not.toContain('do not attempt to do the work yourself');
+    });
+
+    describe('executeNonTargetTool', () => {
+        it('executes allowed direct action via ActionEngineServer.Instance.RunAction', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail']
+                    }
+                }
+            };
+            service.TargetAgentNames = { 'target-1': 'Sales Agent' };
+
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Sent email to test@domain.com successfully';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-101',
+                ToolName: 'SendEmail',
+                Arguments: JSON.stringify({ To: 'test@domain.com' })
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            // Inject effective config onto target agent in testable service
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(result.Success).toBe(true);
+            expect(result.Output).toBe('Sent email to test@domain.com successfully');
+            expect(runSpy).toHaveBeenCalled();
+            const calledRunParams = runSpy.mock.calls[0][0];
+            expect(calledRunParams.Action.Name).toBe('SendEmail');
+            expect(calledRunParams.Params).toEqual([{ Name: 'To', Value: 'test@domain.com', Type: 'Input' }]);
+        });
+
+        it('rejects execution when action is not in directActions allowlist', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction, mockTaskAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail'] // CreateTask not allowed
+                    }
+                }
+            };
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-102',
+                ToolName: 'CreateTask',
+                Arguments: JSON.stringify({ Title: 'Do thing' })
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(result.Success).toBe(false);
+            expect(result.Output).toContain('not enabled for direct voice invocation');
+        });
+
+        it('enforces timeout if action execution exceeds timeoutMs', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail'],
+                        timeoutMs: 50 // short timeout for test
+                    }
+                }
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            // Action hangs longer than 50ms
+            vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockImplementation(
+                () => new Promise(resolve => setTimeout(resolve, 200))
+            );
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-103',
+                ToolName: 'SendEmail',
+                Arguments: JSON.stringify({ To: 'test@domain.com' })
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(result.Success).toBe(false);
+            expect(result.Output).toContain('timed out after 50ms');
+        });
+
+        it('resolves and executes spaced action names (Find Candidate Actions and LearnWorlds - Create User)', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockFindCandidateActionsAction, mockLearnWorldsCreateUserAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['Find Candidate Actions', 'LearnWorlds - Create User']
+                    }
+                }
+            };
+            service.TargetAgentNames = { 'target-1': 'Operations Agent' };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Operations Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Action executed successfully';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            // Test 1: Inbound call using projected wire name 'Find_Candidate_Actions'
+            const call1: RealtimeToolCall = {
+                CallID: 'call-spaced-1',
+                ToolName: 'Find_Candidate_Actions',
+                Arguments: JSON.stringify({ Query: 'accounting' })
+            };
+            const input1: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-spaced-1',
+                TargetAgentID: 'target-1',
+                Call: call1
+            };
+
+            const result1 = await service.ExposeExecuteNonTargetTool(call1, input1, contextUser);
+            expect(result1.Success).toBe(true);
+            expect(result1.Output).toBe('Action executed successfully');
+            expect(runSpy).toHaveBeenCalled();
+            expect(runSpy.mock.calls[0][0].Action.Name).toBe('Find Candidate Actions');
+            expect(runSpy.mock.calls[0][0].Params).toEqual([{ Name: 'Query', Value: 'accounting', Type: 'Input' }]);
+
+            runSpy.mockClear();
+
+            // Test 2: Inbound call using projected wire name 'LearnWorlds_-_Create_User'
+            const call2: RealtimeToolCall = {
+                CallID: 'call-spaced-2',
+                ToolName: 'LearnWorlds_-_Create_User',
+                Arguments: JSON.stringify({ Email: 'newuser@domain.com' })
+            };
+            const input2: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-spaced-2',
+                TargetAgentID: 'target-1',
+                Call: call2
+            };
+
+            const result2 = await service.ExposeExecuteNonTargetTool(call2, input2, contextUser);
+            expect(result2.Success).toBe(true);
+            expect(result2.Output).toBe('Action executed successfully');
+            expect(runSpy).toHaveBeenCalled();
+            expect(runSpy.mock.calls[0][0].Action.Name).toBe('LearnWorlds - Create User');
+            expect(runSpy.mock.calls[0][0].Params).toEqual([{ Name: 'Email', Value: 'newuser@domain.com', Type: 'Input' }]);
+        });
+
+        it('refuses execution when contextUser is undefined (prevents privilege escalation to system)', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail']
+                    }
+                }
+            };
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-no-user',
+                ToolName: 'SendEmail',
+                Arguments: JSON.stringify({ To: 'test@domain.com' })
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, undefined);
+            expect(result.Success).toBe(false);
+            expect(result.Output).toContain('authenticated user context is required');
+        });
+
+        it('returns a helpful failure message when arguments are unparseable JSON', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail']
+                    }
+                }
+            };
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-bad-json',
+                ToolName: 'SendEmail',
+                Arguments: '{ not valid json: true }'
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(result.Success).toBe(false);
+            expect(result.Output).toContain("Action 'SendEmail' failed: Unparseable JSON arguments");
+            expect(result.Output).toContain('Please provide valid JSON formatted arguments.');
+        });
+
+        it('allows empty arguments string for zero-parameter action execution', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail']
+                    }
+                }
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Zero param action succeeded';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-empty-args',
+                ToolName: 'SendEmail',
+                Arguments: ''
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(result.Success).toBe(true);
+            expect(result.Output).toBe('Zero param action succeeded');
+            expect(runSpy).toHaveBeenCalled();
+            expect(runSpy.mock.calls[0][0].Params).toEqual([]);
+        });
+    });
+
+    describe('parseActionParams', () => {
+        const service = new TestableService();
+
+        it('returns empty object for empty, whitespace, or undefined input', () => {
+            expect(service.ExposeParseActionParams('')).toEqual({});
+            expect(service.ExposeParseActionParams('   ')).toEqual({});
+            expect(service.ExposeParseActionParams(undefined)).toEqual({});
+            expect(service.ExposeParseActionParams('{}')).toEqual({});
+        });
+
+        it('parses valid JSON object into key-value pairs', () => {
+            expect(service.ExposeParseActionParams('{"foo": "bar", "count": 42}')).toEqual({
+                foo: 'bar',
+                count: 42
+            });
+        });
+
+        it('throws actionable error for unparseable JSON syntax', () => {
+            expect(() => service.ExposeParseActionParams('{ broken json }')).toThrow(ToolArgumentsError);
+            expect(() => service.ExposeParseActionParams('{ broken json }')).toThrow(
+                /Unparseable JSON arguments.*Please provide valid JSON formatted arguments/
+            );
+        });
+
+        it('throws actionable error for non-object JSON values', () => {
+            expect(() => service.ExposeParseActionParams('[1, 2, 3]')).toThrow(ToolArgumentsError);
+            expect(() => service.ExposeParseActionParams('[1, 2, 3]')).toThrow(
+                /Tool arguments must be a JSON object, but received an array/
+            );
+            expect(() => service.ExposeParseActionParams('123')).toThrow(ToolArgumentsError);
+            expect(() => service.ExposeParseActionParams('123')).toThrow(
+                /Tool arguments must be a JSON object, but received number/
+            );
+        });
+    });
+
+    describe('SanitizeWireToolName and tool deduplication', () => {
+        it('sanitizes spaced and punctuated names into wire-legal function identifiers', () => {
+            const WIRE_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+
+            const name1 = SanitizeWireToolName('Find Candidate Actions');
+            expect(name1).toBe('Find_Candidate_Actions');
+            expect(WIRE_NAME_REGEX.test(name1)).toBe(true);
+
+            const name2 = SanitizeWireToolName('LearnWorlds - Create User');
+            expect(name2).toBe('LearnWorlds_-_Create_User');
+            expect(WIRE_NAME_REGEX.test(name2)).toBe(true);
+
+            const collapsed = SanitizeWireToolName('Get   Record   By   ID');
+            expect(collapsed).toBe('Get_Record_By_ID');
+            expect(WIRE_NAME_REGEX.test(collapsed)).toBe(true);
+
+            const capped = SanitizeWireToolName('A'.repeat(80));
+            expect(capped.length).toBe(64);
+        });
+
+        it('projects legal wire names for real spaced action fixtures in buildDirectActionTools', () => {
+            const service = new TestableService();
+            service.TargetActions = [mockFindCandidateActionsAction, mockLearnWorldsCreateUserAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['Find Candidate Actions', 'LearnWorlds - Create User']
+                    }
+                }
+            };
+
+            const tools = service.buildDirectActionTools('target-1', cfg, 'OpenAIRealtime');
+            expect(tools).toHaveLength(2);
+            expect(tools[0].Name).toBe('Find_Candidate_Actions');
+            expect(tools[1].Name).toBe('LearnWorlds_-_Create_User');
+
+            const WIRE_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+            expect(WIRE_NAME_REGEX.test(tools[0].Name)).toBe(true);
+            expect(WIRE_NAME_REGEX.test(tools[1].Name)).toBe(true);
+        });
+
+        it('sanitizes colon-separated action names like File Storage: List Objects into wire-legal identifiers and dispatches them', async () => {
+            const WIRE_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+
+            const wireName = SanitizeWireToolName('File Storage: List Objects');
+            expect(wireName).toBe('File_Storage_List_Objects');
+            expect(WIRE_NAME_REGEX.test(wireName)).toBe(true);
+
+            const service = new TestableService();
+            service.TargetActions = [mockFileStorageListObjectsAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['File Storage: List Objects']
+                    }
+                }
+            };
+
+            const tools = service.buildDirectActionTools('target-1', cfg, 'OpenAIRealtime');
+            expect(tools).toHaveLength(1);
+            expect(tools[0].Name).toBe('File_Storage_List_Objects');
+            expect(WIRE_NAME_REGEX.test(tools[0].Name)).toBe(true);
+
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Listed 2 files';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-fs-1',
+                ToolName: 'File_Storage_List_Objects',
+                Arguments: JSON.stringify({ Path: '/docs' })
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'session-fs-1',
+                TargetAgentID: 'target-1',
+                DirectActions: cfg.realtime!.directActions,
+                Call: call
+            };
+
+            const execResult = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(execResult.Success).toBe(true);
+            expect(execResult.Output).toBe('Listed 2 files');
+            expect(runSpy).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    Action: expect.objectContaining({ Name: 'File Storage: List Objects' }),
+                    Params: [{ Name: 'Path', Value: '/docs', Type: 'Input' }]
+                })
+            );
+            runSpy.mockRestore();
+        });
+
+        it('deduplicates tools in buildStableToolSet and ensures invoke-target-agent cannot be collided', () => {
+            const service = new TestableService();
+            const extraTools: RealtimeToolDefinition[] = [
+                { Name: 'invoke-target-agent', Description: 'Fake duplicate', ParametersSchema: {} },
+                { Name: 'CustomTool', Description: 'Tool 1', ParametersSchema: {} },
+                { Name: 'customtool', Description: 'Case-duplicate', ParametersSchema: {} },
+                { Name: 'OtherTool', Description: 'Tool 2', ParametersSchema: {} }
+            ];
+
+            const result = service.buildStableToolSet(extraTools);
+            expect(result).toHaveLength(3); // invoke-target-agent (original), CustomTool, OtherTool
+            expect(result[0].Name).toBe(INVOKE_TARGET_AGENT_TOOL_NAME);
+            expect(result[0].Description).toBe(INVOKE_TARGET_AGENT_DESCRIPTION);
+            expect(result[1].Name).toBe('CustomTool');
+            expect(result[2].Name).toBe('OtherTool');
+        });
+
+        it('buildWireActionMap logs collision when actions sanitize to same wire name and keeps first action', () => {
+            const service = new TestableService();
+            const action1 = { ...mockFindCandidateActionsAction, Name: 'Get_Record' };
+            const action2 = { ...mockFindCandidateActionsAction, Name: 'Get Record' };
+            const errorSpy = vi.spyOn(coreModule, 'LogError').mockImplementation(() => {});
+
+            const wireMap = service.buildWireActionMap([action1, action2]);
+            expect(wireMap.size).toBe(1);
+            expect(wireMap.get('Get_Record')).toBe(action1);
+            expect(errorSpy).toHaveBeenCalledWith(
+                expect.stringContaining("wire name collision for 'Get_Record' between action 'Get_Record' and action 'Get Record'")
+            );
+            errorSpy.mockRestore();
+        });
+
+        it('unifies config derivation: directActions on co-agent only projects tools AND executes them', async () => {
+            const svc = new TestableService();
+            svc.ResolveModelResult = {
+                Model: svc.Model,
+                ModelID: 'm1',
+                VendorID: 'v1',
+                APIName: 'gpt-realtime',
+                DriverClass: 'OpenAIRealtime'
+            };
+            svc.TargetActions = [mockEmailAction, mockTaskAction];
+
+            const coAgent = makeCoAgent({
+                TypeConfiguration: JSON.stringify({
+                    realtime: {
+                        directActions: {
+                            enabled: true,
+                            actionNames: ['SendEmail']
+                        }
+                    }
+                })
+            });
+
+            // Target agent has NO directActions configuration.
+            svc.TargetAgentNames = { 'target-1': 'Sales Agent' };
+
+            const prep = await svc.PrepareClientSession(
+                makePrepInput({ CoAgent: coAgent, AgentSessionID: 'session-unified-1' }),
+                contextUser,
+                provider
+            );
+
+            expect(prep.Success).toBe(true);
+
+            // 1. Projection: tool is present in SessionParams.Tools
+            const tools = prep.SessionParams!.Tools ?? [];
+            expect(tools.some(t => t.Name === 'SendEmail')).toBe(true);
+            expect(tools.some(t => t.Name === 'CreateTask')).toBe(false);
+
+            // 2. Execution: executing SendEmail via executeNonTargetTool succeeds
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Sent email to test@domain.com successfully';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            const emailCall: RealtimeToolCall = {
+                CallID: 'call-email',
+                ToolName: 'SendEmail',
+                Arguments: JSON.stringify({ To: 'test@domain.com' })
+            };
+            const emailInput: ExecuteRelayedToolInput = {
+                AgentSessionID: 'session-unified-1',
+                TargetAgentID: 'target-1',
+                Call: emailCall
+            };
+
+            const execResult = await svc.ExposeExecuteNonTargetTool(emailCall, emailInput, contextUser);
+            expect(execResult.Success).toBe(true);
+            expect(execResult.Output).toBe('Sent email to test@domain.com successfully');
+            expect(runSpy).toHaveBeenCalled();
+
+            // 3. Execution: executing CreateTask (not in co-agent allowlist) is rejected with clear message
+            const taskCall: RealtimeToolCall = {
+                CallID: 'call-task',
+                ToolName: 'CreateTask',
+                Arguments: JSON.stringify({ Title: 'Task' })
+            };
+            const taskInput: ExecuteRelayedToolInput = {
+                AgentSessionID: 'session-unified-1',
+                TargetAgentID: 'target-1',
+                Call: taskCall
+            };
+            const taskResult = await svc.ExposeExecuteNonTargetTool(taskCall, taskInput, contextUser);
+            expect(taskResult.Success).toBe(false);
+            expect(taskResult.Output).toContain('not enabled for direct voice invocation');
+        });
     });
 });

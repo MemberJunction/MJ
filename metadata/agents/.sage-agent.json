@@ -33,6 +33,27 @@
         "retrievalMultiplier": 3,
         "minRelevanceThreshold": 0.5,
         "fallbackOnError": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 8000,
+            "actionNames": [
+              "Get Record",
+              "Scoped Search",
+              "Calculate Expression",
+              "Get Weather",
+              "Query Scheduled Jobs",
+              "Get Scheduled Job Statistics",
+              "Web Page Content",
+              "URL Metadata Extractor",
+              "Google Custom Search",
+              "Perplexity Search",
+              "Preview Document"
+            ]
+          }
+        }
       }
     },
     "relatedEntities": {
@@ -937,8 +958,8 @@
       "ID": "3AB78346-897F-4238-AA6A-F10A131CC691"
     },
     "sync": {
-      "lastModified": "2026-08-07T23:58:28.494Z",
-      "checksum": "d669fe75a4f42203bbfd1eac02e42e6a82ec4524c09cdfbe9c61f3f7acc274ec"
+      "lastModified": "2026-09-12T15:03:57.464Z",
+      "checksum": "252dfb1129350a6c8d92f89a579b56e283ddfd318dc859ec5c32e9a0df928b5f"
     }
   }
 ]

@@ -111,12 +111,13 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (5 classes)
+// @memberjunction/ai-openai (6 classes)
 import {
     OpenAIAudioGenerator,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAILiveRealtime,
     OpenAIRealtime,
 } from '@memberjunction/ai-openai';
 
@@ -188,7 +189,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (411 classes)
+// @memberjunction/core-entities (415 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -218,6 +219,7 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -248,10 +250,13 @@ import {
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -1276,6 +1281,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAILiveRealtime,
     OpenAIRealtime,
     InceptionLLM,
     LlamaCppLLM,
@@ -1321,6 +1327,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -1351,10 +1358,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -1439,15 +1449,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
     MJContentItemAttributeEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJContentItemChunkEntity,
     MJContentItemDuplicateEntity,
     MJContentItemEntity,
     MJContentItemTagEntity,
     MJContentProcessRunDetailEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJContentProcessRunEntity,
     MJContentProcessRunPromptRunEntity,
     MJContentSourceEntity,
@@ -1643,15 +1653,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
     MJSearchScopeStorageAccountEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeTestQueryEntity,
     MJSignatureAccountEntity,
     MJSignatureProviderEntity,
     MJSignatureRequestDocumentEntity,
     MJSignatureRequestEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJSignatureRequestLogEntity,
     MJSignatureRequestRecipientEntity,
     MJSkillEntity,
@@ -1847,15 +1857,15 @@ const CLASS_REGISTRATIONS_2: any[] = [
     HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
     HootSuiteGetSocialProfilesAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     HootSuiteSearchPostsAction,
     HootSuiteUpdateScheduledPostAction,
     InstagramCreatePostAction,
     InstagramCreateStoryAction,
     InstagramGetAccountInsightsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     InstagramGetBusinessPostsAction,
     InstagramGetCommentsAction,
     InstagramGetPostInsightsAction,
@@ -2051,15 +2061,15 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
     APIRateLimiterAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
     AddRecordsToListAction,
     AddViewResultsToListAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     AggregateDataAction,
     AssignUserRolesAction,
     BulkUpdateListItemStatusAction,
@@ -2223,7 +2233,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 948;
+export const CLASS_REGISTRATIONS_COUNT = 953;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

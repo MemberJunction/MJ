@@ -414,6 +414,49 @@ describe('RealtimeSessionService — transcript correction (ReplacesPrevious)', 
       expect.objectContaining({ replacesPrevious: false })
     );
   });
+
+  it('renders interim user transcripts as an in-place caption, appending deltas and replacing on final without relaying interims', async () => {
+    const t = transcriptInternals(service);
+
+    // Three deltas
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    await t.onClientTranscript({ Role: 'User', Text: ' world', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    await t.onClientTranscript({ Role: 'User', Text: '!', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    // Final
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello world!', IsFinal: true, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(executeGQL).toHaveBeenCalledTimes(1);
+    expect(executeGQL).toHaveBeenLastCalledWith(
+      expect.stringContaining('RelayRealtimeTranscript'),
+      expect.objectContaining({ role: 'user', text: 'Hello world!', agentSessionId: 'sess-1' })
+    );
+  });
+
+  it('ignores whitespace-only interim deltas and whitespace-only final transcripts', async () => {
+    const t = transcriptInternals(service);
+
+    // Whitespace-only interim delta does not start an interim bubble
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([]);
+    expect(executeGQL).not.toHaveBeenCalled();
+
+    // Real interim delta creates the bubble
+    await t.onClientTranscript({ Role: 'User', Text: 'Hello', IsFinal: false, Kind: 'normal' });
+    expect(captionsOf(service)).toEqual([{ Role: 'User', Text: 'Hello' }]);
+
+    // Whitespace-only final does not relay or overwrite
+    await t.onClientTranscript({ Role: 'User', Text: '   ', IsFinal: true, Kind: 'normal' });
+    expect(executeGQL).not.toHaveBeenCalled();
+  });
 });
 
 describe('RealtimeSessionService — per-turn recording timing across a tool-call gap', () => {

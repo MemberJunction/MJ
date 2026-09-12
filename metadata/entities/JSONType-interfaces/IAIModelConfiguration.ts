@@ -59,6 +59,26 @@ export interface IAIModelConfiguration {
             /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
             SilenceDurationMs?: number | null;
         } | null;
+
+        /**
+         * Reasoning plane settings — dual delegation configuration.
+         * Absent defaults to 'local'.
+         */
+        Reasoning?: {
+            /**
+             * Which plane handles reasoning:
+             * - 'local' — application/agent loop (default).
+             * - 'remote' — delegated to remote model or hosted agent.
+             */
+            Plane?: 'local' | 'remote' | null;
+            /** Remote reasoning target configuration. */
+            Remote?: {
+                Kind?: 'model' | 'hostedAgent' | null;
+                Ref?: string | null;
+                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+                MaxOutputTokens?: number | null;
+            } | null;
+        } | null;
     } | null;
 
     /** Vision knobs. Reserved. */

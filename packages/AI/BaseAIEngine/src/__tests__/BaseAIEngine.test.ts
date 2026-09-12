@@ -94,6 +94,7 @@ vi.mock('@memberjunction/core-entities', () => {
         MJAIAgentDataSourceEntity: cls(), MJAIAgentConfigurationEntity: cls(),
         MJAIAgentExampleEntity: cls(), MJAICredentialBindingEntity: cls(),
         MJAIModalityEntity: cls(), MJAIAgentModalityEntity: cls(), MJAIModelModalityEntity: cls(),
+        MJAIPersonaEntity: cls(), MJAIPersonaVendorEntity: cls(), MJAIModelPersonaEntity: cls(), MJAIAgentPersonaEntity: cls(),
         MJCredentialEntity: cls(), MJAIAgentEntity: cls(),
     };
 });
@@ -102,8 +103,8 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
     MJAIPromptEntityExtended: class { ID = ''; Name = ''; CategoryID = '' },
     MJAIPromptCategoryEntityExtended: class { ID = ''; Name = ''; Prompts: unknown[] = [] },
     MJAIModelEntityExtended: class {
-        ID = ''; Name = ''; AIModelType = ''; Vendor = ''; PowerRank = 0;
-        IsActive = true; ModelVendors: unknown[] = [];
+        ID = ''; Name = ''; AIModelType = ''; AIModelTypeID = ''; Vendor = ''; PowerRank = 0;
+        IsActive = true; InheritTypeModalities = true; ModelVendors: unknown[] = [];
     },
     MJAIAgentEntityExtended: class {
         ID = ''; Name = ''; Status = 'Active'; ParentID: string | null = null;
@@ -933,65 +934,292 @@ describe('AIEngineBase', () => {
     describe('GetAgentModalities', () => {
         it('should return matching modalities by direction', () => {
             set('_modalities', [{ ID: 'mod1', Name: 'Image' }]);
-            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input' }]);
+            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input', IsAllowed: true }]);
             expect(AIEngineBase.Instance.GetAgentModalities('a1', 'Input')).toHaveLength(1);
         });
 
         it('should filter by direction', () => {
             set('_modalities', [{ ID: 'mod1', Name: 'Image' }]);
-            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Output' }]);
+            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Output', IsAllowed: true }]);
             expect(AIEngineBase.Instance.GetAgentModalities('a1', 'Input')).toHaveLength(0);
+        });
+
+        it('should fall through to agent model effective modalities when agent has no explicit rows', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-text', Name: 'Text' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm-live', Name: 'GPT Live', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_agents', [
+                { ID: 'a1', Name: 'Voice Agent', TypeID: 'at1' },
+            ]);
+            set('_agentModalities', []);
+            set('_modelModalities', []);
+
+            const modalities = AIEngineBase.Instance.GetAgentModalities('a1', 'Input', 'm-live');
+            expect(modalities).toHaveLength(1);
+            expect(modalities[0].Name).toBe('Audio');
+        });
+
+        it('should apply agent-level veto (IsAllowed = false) over model modality', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-text', Name: 'Text' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm-live', Name: 'GPT Live', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_agentModalities', [
+                { AgentID: 'a1', ModalityID: 'mod-audio', Direction: 'Input', IsAllowed: false },
+            ]);
+
+            const modalities = AIEngineBase.Instance.GetAgentModalities('a1', 'Input', 'm-live');
+            expect(modalities).toHaveLength(0);
+        });
+
+        it('should apply agent-level addition (IsAllowed = true)', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-image', Name: 'Image' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm-live', Name: 'GPT Live', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_agentModalities', [
+                { AgentID: 'a1', ModalityID: 'mod-image', Direction: 'Input', IsAllowed: true },
+            ]);
+
+            const modalities = AIEngineBase.Instance.GetAgentModalities('a1', 'Input', 'm-live');
+            expect(modalities).toHaveLength(2);
+            expect(modalities.map(m => m.Name)).toContain('Audio');
+            expect(modalities.map(m => m.Name)).toContain('Image');
         });
     });
 
     describe('GetModelModalities', () => {
-        it('should return matching model modalities', () => {
-            set('_modalities', [{ ID: 'mod1', Name: 'Audio' }]);
-            set('_modelModalities', [{ ModelID: 'm1', ModalityID: 'mod1', Direction: 'Input' }]);
-            expect(AIEngineBase.Instance.GetModelModalities('m1', 'Input')).toHaveLength(1);
+        it('should inherit model type default modality when InheritTypeModalities is true and no junction exists', () => {
+            set('_modalities', [{ ID: 'mod-audio', Name: 'Audio' }]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Realtime Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_modelModalities', []);
+
+            const inputModalities = AIEngineBase.Instance.GetModelModalities('m1', 'Input');
+            expect(inputModalities).toHaveLength(1);
+            expect(inputModalities[0].Name).toBe('Audio');
+        });
+
+        it('should union type default with additive junction row (IsSupported = 1)', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-text', Name: 'Text' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Live Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_modelModalities', [
+                { ModelID: 'm1', ModalityID: 'mod-text', Direction: 'Input', IsSupported: true },
+            ]);
+
+            const inputModalities = AIEngineBase.Instance.GetModelModalities('m1', 'Input');
+            expect(inputModalities).toHaveLength(2);
+            expect(inputModalities.map(m => m.Name)).toContain('Audio');
+            expect(inputModalities.map(m => m.Name)).toContain('Text');
+        });
+
+        it('should exclude type default when junction row has IsSupported = 0 (veto)', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-text', Name: 'Text' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Live Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_modelModalities', [
+                { ModelID: 'm1', ModalityID: 'mod-audio', Direction: 'Input', IsSupported: false },
+                { ModelID: 'm1', ModalityID: 'mod-text', Direction: 'Input', IsSupported: true },
+            ]);
+
+            const inputModalities = AIEngineBase.Instance.GetModelModalities('m1', 'Input');
+            expect(inputModalities).toHaveLength(1);
+            expect(inputModalities[0].Name).toBe('Text');
+        });
+
+        it('should not inherit type default when InheritTypeModalities is false', () => {
+            set('_modalities', [{ ID: 'mod-audio', Name: 'Audio' }]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Custom Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: false },
+            ]);
+            set('_modelModalities', []);
+
+            const inputModalities = AIEngineBase.Instance.GetModelModalities('m1', 'Input');
+            expect(inputModalities).toHaveLength(0);
+        });
+
+        it('should return only supported junction rows when InheritTypeModalities is false', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-text', Name: 'Text' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Custom Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: false },
+            ]);
+            set('_modelModalities', [
+                { ModelID: 'm1', ModalityID: 'mod-text', Direction: 'Input', IsSupported: true },
+            ]);
+
+            const inputModalities = AIEngineBase.Instance.GetModelModalities('m1', 'Input');
+            expect(inputModalities).toHaveLength(1);
+            expect(inputModalities[0].Name).toBe('Text');
         });
     });
 
     describe('AgentSupportsModality', () => {
-        it('should return true when explicit modality exists', () => {
+        it('should return true when explicit modality exists and is allowed', () => {
             set('_modalities', [{ ID: 'mod1', Name: 'Image' }]);
-            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input' }]);
+            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input', IsAllowed: true }]);
             expect(AIEngineBase.Instance.AgentSupportsModality('a1', 'Image', 'Input')).toBe(true);
         });
 
-        it('should default to text-only when no modalities configured', () => {
-            set('_modalities', []);
+        it('should return false when explicit modality has IsAllowed = false (veto)', () => {
+            set('_modalities', [{ ID: 'mod-audio', Name: 'Audio' }]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Live Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_agentModalities', [
+                { AgentID: 'a1', ModalityID: 'mod-audio', Direction: 'Input', IsAllowed: false },
+            ]);
+            // Even though model supports Audio, agent-level veto must return false
+            expect(AIEngineBase.Instance.AgentSupportsModality('a1', 'Audio', 'Input', 'm1')).toBe(false);
+        });
+
+        it('should fall through to model modalities when agent has no explicit modality rows', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-image', Name: 'Image' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Live Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
             set('_agentModalities', []);
+
+            expect(AIEngineBase.Instance.AgentSupportsModality('a1', 'Audio', 'Input', 'm1')).toBe(true);
+            expect(AIEngineBase.Instance.AgentSupportsModality('a1', 'Image', 'Input', 'm1')).toBe(false);
+        });
+
+        it('should default to text-only when no model resolvable and no modalities configured', () => {
+            set('_modalities', [{ ID: 'mod-text', Name: 'Text' }]);
+            set('_agentModalities', []);
+            set('_models', []);
             expect(AIEngineBase.Instance.AgentSupportsModality('a1', 'Text', 'Input')).toBe(true);
             expect(AIEngineBase.Instance.AgentSupportsModality('a1', 'Image', 'Input')).toBe(false);
         });
     });
 
     describe('ModelSupportsModality', () => {
-        it('should return true when explicit', () => {
-            set('_modalities', [{ ID: 'mod1', Name: 'Image' }]);
-            set('_modelModalities', [{ ModelID: 'm1', ModalityID: 'mod1', Direction: 'Input' }]);
-            expect(AIEngineBase.Instance.ModelSupportsModality('m1', 'Image', 'Input')).toBe(true);
+        it('should return true for inherited type default without explicit junction row', () => {
+            set('_modalities', [{ ID: 'mod-audio', Name: 'Audio' }]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Realtime Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_modelModalities', []);
+            expect(AIEngineBase.Instance.ModelSupportsModality('m1', 'Audio', 'Input')).toBe(true);
         });
 
-        it('should default to text-only', () => {
-            set('_modalities', []);
+        it('should return false for unsupported modality without falling back to text', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-text', Name: 'Text' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Realtime Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
             set('_modelModalities', []);
+            // Realtime model only has Audio default; text is NOT supported unless added
+            expect(AIEngineBase.Instance.ModelSupportsModality('m1', 'Text', 'Input')).toBe(false);
+        });
+
+        it('should return true for additive junction modality', () => {
+            set('_modalities', [
+                { ID: 'mod-audio', Name: 'Audio' },
+                { ID: 'mod-text', Name: 'Text' },
+            ]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Live Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_modelModalities', [
+                { ModelID: 'm1', ModalityID: 'mod-text', Direction: 'Input', IsSupported: true },
+            ]);
             expect(AIEngineBase.Instance.ModelSupportsModality('m1', 'Text', 'Input')).toBe(true);
-            expect(AIEngineBase.Instance.ModelSupportsModality('m1', 'Image', 'Input')).toBe(false);
+            expect(AIEngineBase.Instance.ModelSupportsModality('m1', 'Audio', 'Input')).toBe(true);
+        });
+
+        it('should return false for vetoed modality (IsSupported = 0)', () => {
+            set('_modalities', [{ ID: 'mod-audio', Name: 'Audio' }]);
+            set('_modelTypes', [
+                { ID: 'mt-realtime', Name: 'Realtime', DefaultInputModalityID: 'mod-audio', DefaultOutputModalityID: 'mod-audio' },
+            ]);
+            set('_models', [
+                { ID: 'm1', Name: 'Live Model', AIModelTypeID: 'mt-realtime', InheritTypeModalities: true },
+            ]);
+            set('_modelModalities', [
+                { ModelID: 'm1', ModalityID: 'mod-audio', Direction: 'Input', IsSupported: false },
+            ]);
+            expect(AIEngineBase.Instance.ModelSupportsModality('m1', 'Audio', 'Input')).toBe(false);
         });
     });
 
     describe('AgentSupportsAttachments', () => {
         it('should return true when agent supports non-text modality', () => {
             set('_modalities', [{ ID: 'mod1', Name: 'Image' }]);
-            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input' }]);
+            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input', IsAllowed: true }]);
             expect(AIEngineBase.Instance.AgentSupportsAttachments('a1')).toBe(true);
         });
 
         it('should return false for text-only agent', () => {
             set('_modalities', [{ ID: 'mod1', Name: 'Text' }]);
-            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input' }]);
+            set('_agentModalities', [{ AgentID: 'a1', ModalityID: 'mod1', Direction: 'Input', IsAllowed: true }]);
             expect(AIEngineBase.Instance.AgentSupportsAttachments('a1')).toBe(false);
         });
     });
@@ -1142,4 +1370,222 @@ describe('AIEngineBase', () => {
             expect(AIEngineBase.Instance.GetPathsFromStep('s1')).toHaveLength(2);
         });
     });
+
+    // -----------------------------------------------
+    // AI Personas: GetModelPersonas, GetAgentPersonas, ResolveAgentPersona
+    // -----------------------------------------------
+    describe('GetModelPersonas', () => {
+        const audioModality = { ID: 'mod-audio', Name: 'Audio' };
+        const videoModality = { ID: 'mod-video', Name: 'Video' };
+        const model = { ID: 'm1', Name: 'GPT-Live-1' };
+        const vendor = { ID: 'v1', Name: 'OpenAI' };
+        const modelVendor = { ID: 'mv1', ModelID: 'm1', VendorID: 'v1', Status: 'Active', Priority: 1 };
+
+        const persona1 = { ID: 'p1', Name: 'Alloy', IsActive: true, Tone: 'Warm', SpeakingStyle: 'Casual' };
+        const persona2 = { ID: 'p2', Name: 'Echo', IsActive: true, Tone: 'Calm', SpeakingStyle: 'Direct' };
+        const persona3 = { ID: 'p3', Name: 'Sage', IsActive: true, Tone: 'Friendly', SpeakingStyle: 'Conversational' };
+        const inactivePersona = { ID: 'p-inact', Name: 'Inactive', IsActive: false };
+
+        const pv1 = { ID: 'pv1', PersonaID: 'p1', VendorID: 'v1', ModalityID: 'mod-audio', APIName: 'alloy', Status: 'Active', Priority: 0 };
+        const pv2 = { ID: 'pv2', PersonaID: 'p2', VendorID: 'v1', ModalityID: 'mod-audio', APIName: 'echo', Status: 'Active', Priority: 0 };
+        const pv3 = { ID: 'pv3', PersonaID: 'p3', VendorID: 'v1', ModalityID: 'mod-audio', APIName: 'sage', Status: 'Active', Priority: 0 };
+        const pvVideo = { ID: 'pv-vid', PersonaID: 'p1', VendorID: 'v1', ModalityID: 'mod-video', APIName: 'alloy-avatar', Status: 'Active', Priority: 0 };
+
+        beforeEach(() => {
+            set('_modalities', [audioModality, videoModality]);
+            set('_models', [model]);
+            set('_modelVendors', [modelVendor]);
+            set('_personas', [persona1, persona2, persona3, inactivePersona]);
+            set('_personaVendors', [pv1, pv2, pv3, pvVideo]);
+            set('_modelPersonas', []);
+            set('_agentPersonas', []);
+        });
+
+        it('returns empty array when model is not found', () => {
+            const res = AIEngineBase.Instance.GetModelPersonas('non-existent');
+            expect(res).toEqual([]);
+        });
+
+        it('returns empty array when modality is not found', () => {
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Hologram');
+            expect(res).toEqual([]);
+        });
+
+        it('inherits all active vendor personas when no model personas exist', () => {
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Audio');
+            expect(res).toHaveLength(3);
+            expect(res.map(r => r.Persona.Name)).toEqual(['Alloy', 'Echo', 'Sage']);
+            expect(res.map(r => r.PersonaVendor.APIName)).toEqual(['alloy', 'echo', 'sage']);
+            // Inactive persona should be skipped
+            expect(res.some(r => r.Persona.ID === 'p-inact')).toBe(false);
+        });
+
+        it('filters by modality (e.g. Video vs Audio)', () => {
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Video');
+            expect(res).toHaveLength(1);
+            expect(res[0].Persona.Name).toBe('Alloy');
+            expect(res[0].PersonaVendor.APIName).toBe('alloy-avatar');
+        });
+
+        it('respects explicit AIModelPersona overrides and Sequence ordering', () => {
+            set('_modelPersonas', [
+                { ID: 'mp1', ModelID: 'm1', PersonaID: 'p3', Sequence: 1, IsSupported: true },
+                { ID: 'mp2', ModelID: 'm1', PersonaID: 'p1', Sequence: 2, IsSupported: true },
+                { ID: 'mp3', ModelID: 'm1', PersonaID: 'p2', Sequence: 3, IsSupported: false }, // Explicit veto
+            ]);
+
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Audio');
+            expect(res).toHaveLength(2);
+            // p3 (Sage) was Sequence 1, p1 (Alloy) was Sequence 2
+            expect(res[0].Persona.Name).toBe('Sage');
+            expect(res[0].ModelPersona?.Sequence).toBe(1);
+            expect(res[1].Persona.Name).toBe('Alloy');
+            expect(res[1].ModelPersona?.Sequence).toBe(2);
+            // p2 (Echo) was IsSupported = false, so it must be excluded
+            expect(res.some(r => r.Persona.ID === 'p2')).toBe(false);
+        });
+
+        it('Item A: falls back to inheritance when only IsSupported=false rows exist, and subtracts excluded IDs', () => {
+            // Only explicit row is an explicit disable for p1 (Alloy)
+            set('_modelPersonas', [
+                { ID: 'mp1', ModelID: 'm1', PersonaID: 'p1', IsSupported: false },
+            ]);
+
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Audio');
+            // Should inherit remaining active personas (Echo, Sage) and exclude Alloy (p1)
+            expect(res).toHaveLength(2);
+            expect(res.map(r => r.Persona.Name)).toEqual(['Echo', 'Sage']);
+            expect(res.some(r => r.Persona.ID === 'p1')).toBe(false);
+        });
+
+        it('Item A: falls back to inheritance when explicit personas have no active binding for requested vendor', () => {
+            // Explicit persona p-non-binding exists, but has no binding for vendor v1
+            set('_personas', [
+                { ID: 'p1', Name: 'Alloy', IsActive: true },
+                { ID: 'p2', Name: 'Echo', IsActive: true },
+                { ID: 'p-other', Name: 'Other', IsActive: true },
+            ]);
+            set('_modelPersonas', [
+                { ID: 'mp1', ModelID: 'm1', PersonaID: 'p-other', IsSupported: true },
+            ]);
+            // p-other has no PersonaVendor row for v1
+
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Audio');
+            // Since p-other resolved to 0 active bindings, it falls through to inheriting active personas (Alloy, Echo)
+            expect(res).toHaveLength(2);
+            expect(res.map(r => r.Persona.Name)).toEqual(['Alloy', 'Echo']);
+        });
+
+        it('Item B: GetModelPersonaExclusions returns provider API names for explicitly disabled personas', () => {
+            set('_modelPersonas', [
+                { ID: 'mp1', ModelID: 'm1', PersonaID: 'p1', IsSupported: false },
+                { ID: 'mp2', ModelID: 'm1', PersonaID: 'p2', IsSupported: true },
+            ]);
+
+            const exclusions = AIEngineBase.Instance.GetModelPersonaExclusions('m1', 'Audio');
+            expect(exclusions).toEqual(['alloy']);
+        });
+    });
+
+    describe('GetAgentPersonas', () => {
+        const p1 = { ID: 'p1', Name: 'Alloy', IsActive: true };
+        const p2 = { ID: 'p2', Name: 'Echo', IsActive: true };
+        const p3 = { ID: 'p3', Name: 'Sage', IsActive: true };
+        const pInact = { ID: 'p-inact', Name: 'Inactive', IsActive: false };
+
+        beforeEach(() => {
+            set('_personas', [p1, p2, p3, pInact]);
+            set('_agentPersonas', [
+                { ID: 'ap1', AgentID: 'a1', PersonaID: 'p2', Sequence: 2, IsAllowed: true, IsDefault: false },
+                { ID: 'ap2', AgentID: 'a1', PersonaID: 'p1', Sequence: 1, IsAllowed: true, IsDefault: true },
+                { ID: 'ap3', AgentID: 'a1', PersonaID: 'p3', Sequence: 3, IsAllowed: false, IsDefault: false },
+                { ID: 'ap4', AgentID: 'a1', PersonaID: 'p-inact', Sequence: 0, IsAllowed: true, IsDefault: false },
+            ]);
+        });
+
+        it('returns allowed active personas ordered by Sequence', () => {
+            const res = AIEngineBase.Instance.GetAgentPersonas('a1');
+            expect(res).toHaveLength(2);
+            expect(res[0].Persona.Name).toBe('Alloy');
+            expect(res[0].AgentPersona.Sequence).toBe(1);
+            expect(res[0].AgentPersona.IsDefault).toBe(true);
+            expect(res[1].Persona.Name).toBe('Echo');
+            expect(res[1].AgentPersona.Sequence).toBe(2);
+            // Disallowed (p3) and inactive (p-inact) must not be returned
+            expect(res.some(r => r.Persona.ID === 'p3')).toBe(false);
+            expect(res.some(r => r.Persona.ID === 'p-inact')).toBe(false);
+        });
+    });
+
+    describe('ResolveAgentPersona', () => {
+        const audioModality = { ID: 'mod-audio', Name: 'Audio' };
+        const model = { ID: 'm1', Name: 'GPT-Live-1' };
+        const vendor = { ID: 'v1', Name: 'OpenAI' };
+        const modelVendor = { ID: 'mv1', ModelID: 'm1', VendorID: 'v1', Status: 'Active', Priority: 1 };
+
+        const persona1 = { ID: 'p1', Name: 'Alloy', IsActive: true, Tone: 'Warm', SpeakingStyle: 'Casual' };
+        const persona2 = { ID: 'p2', Name: 'Echo', IsActive: true, Tone: 'Calm', SpeakingStyle: 'Direct' };
+
+        const pv1 = { ID: 'pv1', PersonaID: 'p1', VendorID: 'v1', ModalityID: 'mod-audio', APIName: 'alloy', Status: 'Active', Priority: 0 };
+        const pv2 = { ID: 'pv2', PersonaID: 'p2', VendorID: 'v1', ModalityID: 'mod-audio', APIName: 'echo', Status: 'Active', Priority: 0 };
+
+        beforeEach(() => {
+            set('_modalities', [audioModality]);
+            set('_models', [model]);
+            set('_modelVendors', [modelVendor]);
+            set('_personas', [persona1, persona2]);
+            set('_personaVendors', [pv1, pv2]);
+            set('_modelPersonas', []);
+            set('_agentPersonas', []);
+            set('_agents', [{ ID: 'a1', Name: 'TestAgent' }]);
+        });
+
+        it('resolves the default persona for an agent and applies style overrides', () => {
+            set('_agentPersonas', [
+                {
+                    ID: 'ap1',
+                    AgentID: 'a1',
+                    PersonaID: 'p1',
+                    Sequence: 1,
+                    IsAllowed: true,
+                    IsDefault: true,
+                    StyleOverrideObject: { Tone: 'Formal and Assertive' },
+                },
+                { ID: 'ap2', AgentID: 'a1', PersonaID: 'p2', Sequence: 2, IsAllowed: true, IsDefault: false },
+            ]);
+
+            const effective = AIEngineBase.Instance.ResolveAgentPersona('a1', { modelId: 'm1' });
+            expect(effective).not.toBeNull();
+            expect(effective!.Persona.Name).toBe('Alloy');
+            // Overridden tone wins over persona default Tone ('Warm')
+            expect(effective!.Tone).toBe('Formal and Assertive');
+            // SpeakingStyle falls through to persona default ('Casual')
+            expect(effective!.SpeakingStyle).toBe('Casual');
+            expect(effective!.PersonaVendor?.APIName).toBe('alloy');
+        });
+
+        it('falls back to first allowed persona by sequence when none is marked IsDefault', () => {
+            set('_agentPersonas', [
+                { ID: 'ap2', AgentID: 'a1', PersonaID: 'p2', Sequence: 5, IsAllowed: true, IsDefault: false },
+                { ID: 'ap1', AgentID: 'a1', PersonaID: 'p1', Sequence: 1, IsAllowed: true, IsDefault: false },
+            ]);
+
+            const effective = AIEngineBase.Instance.ResolveAgentPersona('a1', { modelId: 'm1' });
+            expect(effective).not.toBeNull();
+            expect(effective!.Persona.Name).toBe('Alloy');
+            expect(effective!.Tone).toBe('Warm');
+            expect(effective!.SpeakingStyle).toBe('Casual');
+        });
+
+        it('falls back to model/vendor default persona when agent has no AIAgentPersona records', () => {
+            set('_agentPersonas', []);
+
+            const effective = AIEngineBase.Instance.ResolveAgentPersona('a1', { modelId: 'm1' });
+            expect(effective).not.toBeNull();
+            expect(effective!.Persona.Name).toBe('Alloy');
+            expect(effective!.PersonaVendor?.APIName).toBe('alloy');
+            expect(effective!.AgentPersona).toBeUndefined();
+        });
+    });
 });
+

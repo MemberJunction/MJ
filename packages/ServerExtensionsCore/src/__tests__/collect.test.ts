@@ -409,4 +409,39 @@ describe('describeServerExtensionMount', () => {
         expect(line).toContain('PRE-AUTH');
         expect(line).toContain('Enabled: false');
     });
+
+    it('names POST-AUTH when Phase is post-auth', () => {
+        const line = describeServerExtensionMount({ ...checkout, Phase: 'post-auth' });
+        expect(line).toContain('POST-AUTH');
+    });
+});
+
+describe('Phase support in collect', () => {
+    it('normalizes valid Phase values', () => {
+        const normalized = normalizeServerExtensionConfigs([
+            { DriverClass: 'Pre', RootPath: '/pre', Phase: 'pre-auth' },
+            { DriverClass: 'Post', RootPath: '/post', Phase: 'post-auth' },
+        ]);
+        expect(normalized[0].Phase).toBe('pre-auth');
+        expect(normalized[1].Phase).toBe('post-auth');
+    });
+
+    it('rejects invalid Phase values and logs warning', () => {
+        const onInvalid = vi.fn();
+        const raw = [{ DriverClass: 'BadPhase', RootPath: '/bad', Phase: 'invalid-phase' }];
+        const normalized = normalizeServerExtensionConfigs(raw, { onInvalid });
+        expect(normalized[0].Phase).toBeUndefined();
+        expect(onInvalid).toHaveBeenCalledWith(expect.stringContaining("Phase must be 'pre-auth' or 'post-auth'"));
+    });
+
+    it('merges Phase with host overlay precedence', () => {
+        const discovered: ServerExtensionConfig[] = [
+            { Enabled: true, DriverClass: 'Ext', RootPath: '/ext', Phase: 'pre-auth', Settings: {} },
+        ];
+        const host: ServerExtensionConfig[] = [
+            { Enabled: true, DriverClass: 'Ext', RootPath: '/ext', Phase: 'post-auth', Settings: {} },
+        ];
+        const merged = mergeServerExtensionConfigs(discovered, host);
+        expect(merged[0].Phase).toBe('post-auth');
+    });
 });

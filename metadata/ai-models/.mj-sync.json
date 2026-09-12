@@ -54,6 +54,16 @@
             "field": "Name"
           }
         }
+      },
+      "MJ: AI Model Modalities": {
+        "entity": "MJ: AI Model Modalities",
+        "foreignKey": "ModelID",
+        "lookupFields": {
+          "ModalityID": {
+            "entity": "MJ: AI Modalities",
+            "field": "Name"
+          }
+        }
       }
     }
   }

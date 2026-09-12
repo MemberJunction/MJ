@@ -11124,6 +11124,9 @@ importers:
       '@memberjunction/sqlserver-dataprovider':
         specifier: 6.1.0-edge.6
         version: link:../SQLServerDataProvider
+      '@memberjunction/telephony-adapters':
+        specifier: 6.1.0-edge.6
+        version: link:../TelephonyAdapters
       '@memberjunction/templates':
         specifier: 6.1.0-edge.6
         version: link:../Templates/engine
@@ -14461,6 +14464,79 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.2.4
+        version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+
+  packages/TelephonyAdapters:
+    dependencies:
+      '@memberjunction/ai-agents':
+        specifier: 6.1.0-edge.6
+        version: link:../AI/Agents
+      '@memberjunction/ai-bridge-base':
+        specifier: 6.1.0-edge.6
+        version: link:../AI/RealtimeBridge/Base
+      '@memberjunction/ai-bridge-ringcentral':
+        specifier: 6.1.0-edge.6
+        version: link:../AI/RealtimeBridge/Providers/RingCentral
+      '@memberjunction/ai-bridge-server':
+        specifier: 6.1.0-edge.6
+        version: link:../AI/RealtimeBridge/Server
+      '@memberjunction/ai-bridge-teams':
+        specifier: 6.1.0-edge.6
+        version: link:../AI/RealtimeBridge/Providers/Teams
+      '@memberjunction/ai-bridge-twilio':
+        specifier: 6.1.0-edge.6
+        version: link:../AI/RealtimeBridge/Providers/Twilio
+      '@memberjunction/ai-bridge-vonage':
+        specifier: 6.1.0-edge.6
+        version: link:../AI/RealtimeBridge/Providers/Vonage
+      '@memberjunction/core':
+        specifier: 6.1.0-edge.6
+        version: link:../MJCore
+      '@memberjunction/core-entities':
+        specifier: 6.1.0-edge.6
+        version: link:../MJCoreEntities
+      '@memberjunction/generic-database-provider':
+        specifier: 6.1.0-edge.6
+        version: link:../GenericDatabaseProvider
+      '@memberjunction/global':
+        specifier: 6.1.0-edge.6
+        version: link:../MJGlobal
+      '@memberjunction/server-extensions-core':
+        specifier: 6.1.0-edge.6
+        version: link:../ServerExtensionsCore
+      cors:
+        specifier: ^2.8.5
+        version: 2.8.6
+      express:
+        specifier: ^5.2.1
+        version: 5.2.1
+      type-graphql:
+        specifier: 2.0.0-beta.3
+        version: 2.0.0-beta.3(patch_hash=4d3544a1e64ad80b22832bb91021718c73db40ae6c6ac140b86d22cacaab8c67)(class-validator@0.14.3)(graphql-scalars@1.25.0(graphql@16.12.0))(graphql@16.12.0)
+      ws:
+        specifier: ^8.19.0
+        version: 8.19.0
+    devDependencies:
+      '@types/cors':
+        specifier: ^2.8.17
+        version: 2.8.19
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/ws':
+        specifier: ^8.5.14
+        version: 8.18.1
+      tsc-alias:
+        specifier: ^1.8.16
+        version: 1.8.16
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite-tsconfig-paths:
+        specifier: ^5.1.4
+        version: 5.1.4(typescript@5.9.3)(vite@7.3.6(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      vitest:
+        specifier: ^3.1.1
         version: 3.2.6(@types/debug@4.1.12)(@types/node@24.10.11)(jiti@2.6.1)(jsdom@26.1.0)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/Templates/base-types:

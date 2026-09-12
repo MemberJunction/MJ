@@ -337,6 +337,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- AI Persona Vendors Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIPersonaVendors"
+        SectionName="AI Persona Vendors"
+        Icon="fa fa-robot"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIPersonaVendors')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Persona Vendors','VendorID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Persona Vendors','VendorID')"
+                [AllowLoad]="IsSectionExpanded('mJAIPersonaVendors')"
+                [ShowToolbar]="true"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIPersonaVendors', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <mj-form-panel-slot Entity="{{record.EntityInfo.Name}}" Slot="after-related" [Record]="record" [FormComponent]="this" [FormContext]="formContext"></mj-form-panel-slot>
 </mj-record-form-container>
         

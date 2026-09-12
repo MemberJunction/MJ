@@ -1,0 +1,626 @@
+[
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E7436AA4-049F-4687-B763-85539DAC7C6A"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "1F5171D9-E955-4425-872C-F3C7D6B44EB0"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "05E92098-C673-4A8D-8BD6-2B4D248144BF"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "36E5FDA7-0E19-44DE-828D-D3DA3AB1A3D3"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "455A8705-EA9A-4FE9-BD1E-7BEBB2B93CE2"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AD0FCEC2-7906-479D-95F2-FE5212FEA761"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C540224E-787F-441F-B646-BE6B65485D18"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3A271A0C-C4E9-4EA2-90D2-AC6B8668AA06"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "22E167E1-1611-4CA2-873E-D6E581D10366"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT-Live 1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "DD930085-0857-4527-A0F7-9DF75CAD93CF"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "371EE096-1145-4D0B-B47C-D8D828E0E57B"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AEFFCCE7-AF81-4B19-AAC4-A6FF3075C32A"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "959EA923-77EF-4476-B9B3-7B4F1CCD65AB"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A9BEAEBC-7093-481E-85B1-2914D7A2B68D"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "93A77B98-FC7B-4C2D-80FD-3CA6BC6CB5A3"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8A874BC1-06C9-490D-8029-E3129E5FFD26"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5919C57D-DFAE-41E8-8700-095E02587094"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fable",
+      "Sequence": 11,
+      "IsSupported": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "201B8028-682B-468F-BE37-DC7C61FF7B9B"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Nova",
+      "Sequence": 12,
+      "IsSupported": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "0BF839E0-CDD0-44FC-9393-75F0F85A547E"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Onyx",
+      "Sequence": 13,
+      "IsSupported": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E6B67C7A-6660-4526-8CC6-80A698F603D0"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "57AA5A6B-84E9-454F-A643-6417D01ACB18"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "E20CF858-17B9-49CE-994B-D298E8223FBC"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "43423D62-6616-4AA9-9AF4-E9399F798B0C"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Puck",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "9E162235-5431-4688-9E24-AE9E40BFFCF5"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Charon",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "93E60AC6-9837-4F03-ADA4-3BB1C934D6ED"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Kore",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AF5F07CF-4E69-4795-9764-CDADFC9F0A01"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Fenrir",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7F860777-A220-42F2-AE53-B89F6D9ECF2B"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash Live",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Aoede",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "FAC2E949-0B75-4B0A-A301-CFF7EED799AE"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=AssemblyAI Voice Agent",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ivy",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "1DB85FEA-B1AA-4FD5-8E2F-88060CD70610"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=AssemblyAI Voice Agent",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=James",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5DBC738B-5AEC-4449-8B6B-914FCB5E396A"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=ElevenLabs Agents",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Rachel",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AF433161-4AAE-42BF-85EF-1EB5A0912447"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=ElevenLabs Agents",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Adam",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "001E68AF-BBD7-41C7-8063-CE2D5BEF8BA7"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3A6F65F0-67A3-413E-BAEF-348EFCB802E6"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A0B6BDB4-837B-4805-86DF-A3DB7817CB7C"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3DC1E859-1EFF-44BB-9DD6-CD631F2B2C89"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8547FBCE-008E-4ED5-9469-EE6A47EB90AD"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "29EA1819-BCB6-4EEC-B145-C76515AA9569"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "FC44B918-C0B5-4EBD-B7C2-F5FE9C64F515"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "488BDB61-A42A-48E9-97DC-95EBC341803A"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4364FD26-25A4-47DC-94F3-B061E78C50E3"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EFFBACD8-A3E8-4544-8161-D7A2DBD09873"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "77E5802F-8A51-4CAF-85B9-382B3983BF23"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Cedar",
+      "Sequence": 1,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "14949960-184B-4484-94BD-9FE478CA7597"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Marin",
+      "Sequence": 2,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "56FBA8F5-06CD-40F8-B064-7F37B213520C"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Alloy",
+      "Sequence": 3,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "87E3201D-A3DC-4857-80E9-0924A30A5F4D"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ash",
+      "Sequence": 4,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5FEC4B95-2291-44C4-8DBC-11A6EABE0374"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Ballad",
+      "Sequence": 5,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "58DD2AE3-0623-468A-AF70-6F4F6F68EBE8"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Coral",
+      "Sequence": 6,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "615641FF-E1C6-4F05-831C-1F236773B25E"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Echo",
+      "Sequence": 7,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A8DE9540-6A67-44D0-8FD5-01279C2CD705"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Sage",
+      "Sequence": 8,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "CC993A3B-D4B7-444D-BB48-AB364478C33A"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Shimmer",
+      "Sequence": 9,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "15131064-109D-4AF6-BF69-6CAD61B5A6EF"
+    }
+  },
+  {
+    "fields": {
+      "ModelID": "@lookup:MJ: AI Models.Name=GPT Realtime 2.1-mini",
+      "PersonaID": "@lookup:MJ: AI Personas.Name=Verse",
+      "Sequence": 10,
+      "IsSupported": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EDCE1311-6171-4439-B841-AA31B12F56F2"
+    }
+  }
+]
