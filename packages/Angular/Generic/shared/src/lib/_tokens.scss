@@ -257,9 +257,58 @@
   --mj-search-highlight-bg: color-mix(in srgb, var(--mj-status-warning) 24%, transparent);
   --mj-search-highlight-text: var(--mj-text-primary);
 
-  /* Login Banner Gradient & Waves */
+  /* Login Surface — component tokens.
+     The sign-in page is themable end to end through this group, the same way every other
+     Explorer surface is: override tokens (a theme overlay, a host stylesheet, runtime
+     branding), never CSS against the login DOM. Defaults reproduce Login C (editorial
+     split) exactly. var() resolves at usage time, so the dark block's --mj-login-grad-*
+     overrides flow into --mj-login-banner-bg without it being redefined there — which is
+     also why a deployment can retheme the banner by overriding just the two grad stops,
+     or replace the gradient wholesale (flat color, image, different geometry) by
+     overriding --mj-login-banner-bg itself. */
   --mj-login-grad-start: var(--mj-color-brand-900);
   --mj-login-grad-mid:   var(--mj-color-brand-700);
+  --mj-login-banner-bg: linear-gradient(
+    160deg,
+    var(--mj-login-grad-start) 0%,
+    color-mix(in srgb, var(--mj-login-grad-start) 65%, var(--mj-login-grad-mid)) 60%,
+    var(--mj-login-grad-mid) 140%
+  );
+  /* The banner defaults dark in BOTH themes, so its text defaults white rather than to a
+     semantic text token (which would flip unreadable in dark mode). A light-panel brand
+     overrides these two alongside --mj-login-banner-bg. */
+  --mj-login-banner-text: var(--mj-color-neutral-0);
+  --mj-login-banner-text-secondary: color-mix(in srgb, var(--mj-login-banner-text) 82%, transparent);
+  /* The banner's brand image and its box. `contain` fit, so only the box needs sizing. */
+  --mj-login-banner-logo: var(--mj-logo-wordmark);
+  --mj-login-banner-logo-width: 297px;
+  --mj-login-banner-logo-height: 45px;
+  /* Login C's 1.05 : 1 editorial split between the story panel and the sign-in column. */
+  --mj-login-banner-flex: 1.05;
+  --mj-login-panel-bg: var(--mj-bg-surface);
+  /* Inherited text colour for the sign-in region — the pair to --mj-login-banner-text. Both
+     exist so that content a host PROJECTS into a slot lands readable without the host having to
+     know which token the surface behind it was painted from. */
+  --mj-login-panel-text: var(--mj-text-primary);
+  --mj-login-panel-flex: 1;
+  --mj-login-picker-max-width: 400px;
+  /* Width of the sign-in card in the 'centered' layout, where the panel stops being a column
+     and becomes a card floating on the banner background. */
+  --mj-login-centered-card-width: 440px;
+  /* Login cards — the optional tiles a deployment configures beside the sign-in options.
+     Two surfaces, because the two regions sit on different grounds: panel cards on the sign-in
+     surface, banner cards on the story panel's background. Both derive from tokens that already
+     swap with the theme, so neither needs a dark-mode entry of its own. */
+  --mj-login-card-bg: var(--mj-bg-surface-card);
+  --mj-login-card-border: var(--mj-border-default);
+  --mj-login-card-text: var(--mj-text-primary);
+  --mj-login-card-text-secondary: var(--mj-text-secondary);
+  --mj-login-card-radius: var(--mj-radius-md);
+  --mj-login-banner-card-bg: color-mix(in srgb, var(--mj-login-banner-text) 10%, transparent);
+  --mj-login-banner-card-border: color-mix(in srgb, var(--mj-login-banner-text) 24%, transparent);
+  --mj-login-banner-card-text: var(--mj-login-banner-text);
+  /* Legacy inputs from the pre-Login-C animated-waves banner. Nothing in-tree consumes
+     them any more; kept because downstream theme sheets may still set or read them. */
   --mj-login-grad-end:   var(--mj-color-brand-300);
   --mj-login-wave-1:     var(--mj-color-brand-500);
   --mj-login-wave-2:     var(--mj-color-accent-400);
@@ -511,7 +560,10 @@
   --mj-shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
   --mj-shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
 
-  /* Login Banner Gradient & Waves */
+  /* Login Surface — only the gradient stops need dark values; every other login token
+     either references a semantic token that swaps here on its own (--mj-login-panel-bg)
+     or is theme-constant by design (--mj-login-banner-text: the banner stays dark in
+     both themes). --mj-login-banner-bg picks these up through var() indirection. */
   --mj-login-grad-start: var(--mj-color-neutral-950);
   --mj-login-grad-mid:   var(--mj-color-brand-900);
   --mj-login-grad-end:   var(--mj-color-brand-700);

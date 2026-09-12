@@ -68,32 +68,64 @@
 
 /* ---- Left Banner Column ---- */
 
-/* Slightly wider than the form column, per Login C's 1.05fr / 1fr split. */
+/* Slightly wider than the form column by default — Login C's 1.05fr / 1fr split,
+   from the --mj-login-*-flex tokens. */
 .login-wrapper .main-banner {
-  flex: 1.05;
+  flex: var(--mj-login-banner-flex, 1.05);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
+  /* NOT justify-content: center — the brand block centres with auto margins below instead.
+     `overflow-y: auto` + centred justification is the classic clipping trap: once the content is
+     taller than the column, the overflow goes above the scroll origin and cannot be reached.
+     Auto margins centre while there is room and collapse to 0 when there is not. The app shell
+     sets `html, body { overflow: hidden }`, so a column that does not scroll its own content
+     simply loses it. */
+  justify-content: flex-start;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   /* dvh, not vh — mobile browsers include the collapsing URL bar in vh, which pushes the
      picker below the fold on first paint. */
   height: 100dvh;
   padding: var(--mj-space-14) clamp(var(--mj-space-10), 4vw, var(--mj-space-16)) var(--mj-space-12);
   box-sizing: border-box;
-  /* The panel is dark in BOTH themes, so its stops come from the login gradient tokens
-     (which already swap light/dark) rather than from surface tokens. No waves — Login C
-     replaced them with a quiet gradient so the surface can carry any brand. */
-  background: linear-gradient(
-    160deg,
-    var(--mj-login-grad-start) 0%,
-    color-mix(in srgb, var(--mj-login-grad-start) 65%, var(--mj-login-grad-mid)) 60%,
-    var(--mj-login-grad-mid) 140%
-  );
+  /* One token carries the whole surface: the default is Login C's quiet gradient (built
+     from the --mj-login-grad-* stops, which swap light/dark on their own), and a themed
+     deployment can retarget the stops or replace the value wholesale — flat color, image,
+     different geometry — without touching this rule. */
+  background: var(--mj-login-banner-bg);
+  /* Sets the INHERITED colour for the region, so markup a host projects into the banner slots
+     lands readable on this background by default. Without it, projected content inherits the
+     page's near-black body colour and disappears. The host can still override it. */
+  color: var(--mj-login-banner-text);
 }
 
-/* Brand block: logo, welcome, sub — centered as one group by the column's justify-content. */
+/* Brand block: logo, welcome, sub — centred as one group by its own auto margins, so a banner
+   with more content than fits scrolls instead of losing the top of it. */
+.login-wrapper .banner-brand {
+  margin-block: auto;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+/* Opt-in centering for a logo-led brand (host: [LoginBannerAlignment]="'center'"). The stacked
+   layout below already centers; this is the same choice on the wide layout, so a host does not
+   have to write rules against .main-banner's internals to get it. */
+.login-wrapper .main-banner--center {
+  align-items: center;
+}
+
+.login-wrapper .main-banner--center .banner-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-wrapper .main-banner--center .banner-welcome,
+.login-wrapper .main-banner--center .banner-sub {
+  text-align: center;
+}
 
 .login-wrapper .main-banner .banner-welcome {
   font-size: clamp(var(--mj-text-3xl), 3.2vw, var(--mj-text-4xl));
@@ -102,9 +134,11 @@
   letter-spacing: -0.4px;
   text-align: left;
   margin: var(--mj-space-8) 0 var(--mj-space-2);
-  /* Always white — the panel is dark in both themes, so the semantic inverse token
-     (which flips to near-black in dark mode) would be unreadable here. */
-  color: var(--mj-color-neutral-0);
+  /* From the login group, not a semantic text token: the banner defaults dark in both
+     themes, so --mj-text-inverse (which flips near-black in dark mode) would be
+     unreadable — and a light-panel brand overrides --mj-login-banner-text alongside
+     --mj-login-banner-bg. */
+  color: var(--mj-login-banner-text);
 }
 
 .login-wrapper .main-banner .banner-sub {
@@ -113,20 +147,26 @@
   font-weight: var(--mj-font-normal);
   line-height: var(--mj-leading-normal);
   text-align: left;
-  /* Always white — see .banner-welcome. */
-  color: var(--mj-color-neutral-0);
-  opacity: 0.82;
+  /* The token defaults to the banner text at 82% — the old opacity trick, but themable
+     independently of the headline. See .banner-welcome. */
+  color: var(--mj-login-banner-text-secondary);
 }
 
 /* ---- Right Login Column ---- */
 
 .login-wrapper .login-btn {
-  flex: 1;
+  flex: var(--mj-login-panel-flex, 1);
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  background: var(--mj-bg-surface);
+  /* See .main-banner — auto margins on the stack, not centred justification, so a deployment
+     that adds regions (or a tenant with many identity providers) can still reach the button. */
+  justify-content: flex-start;
+  overflow-y: auto;
+  background: var(--mj-login-panel-bg, var(--mj-bg-surface));
+  /* The sign-in region's counterpart to the banner's inherited colour — see .main-banner. It
+     starts mattering the moment a deployment themes --mj-login-panel-bg dark. */
+  color: var(--mj-login-panel-text, var(--mj-text-primary));
   /* dvh, not vh — see .main-banner. */
   height: 100dvh;
   box-sizing: border-box;
@@ -138,24 +178,179 @@
    live here was overriding the mjButton directive, which is why that CTA never picked up the
    standard focus ring or 44px hit target. */
 
+/* ---- Projected regions and configured cards ---- */
+
+/* One column in the sign-in pane, so a projected header/footer lines up with the picker's
+   edges instead of the pane's. Width comes from the same token the picker reads. */
+.login-wrapper .login-panel-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--mj-space-5);
+  width: 100%;
+  max-width: var(--mj-login-picker-max-width, 400px);
+  margin-block: auto;
+  flex-shrink: 0;
+}
+
+/* A slot's own wrapper. Deliberately nothing but flow: whatever the host projects is the
+   host's to style, and a margin here would be us second-guessing it. */
+.login-wrapper .login-region {
+  min-width: 0;
+}
+
+.login-wrapper .login-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  min-width: 0;
+}
+
+/* Cards under the brand block need separating from it; in the sign-in pane the stack's gap
+   already does that, so only the banner copy gets the extra top margin. */
+.login-wrapper .banner-brand .login-cards {
+  margin-top: var(--mj-space-8);
+}
+
+.login-wrapper .login-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border: 1px solid var(--mj-login-card-border);
+  border-radius: var(--mj-login-card-radius);
+  background: var(--mj-login-card-bg);
+  color: var(--mj-login-card-text);
+  text-align: left;
+}
+
+.login-wrapper .login-card--link {
+  transition: background-color var(--mj-transition-base), border-color var(--mj-transition-base);
+}
+
+.login-wrapper .login-card--link:hover {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-login-card-bg));
+}
+
+.login-wrapper .login-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--mj-radius-sm);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: var(--mj-text-sm);
+}
+
+.login-wrapper .login-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.login-wrapper .login-card__title {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+}
+
+.login-wrapper .login-card__text {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-login-card-text-secondary);
+}
+
+/* Stretched link: the anchor's ::after covers the card, so the whole tile is the click target
+   while the accessible name stays the title alone. */
+.login-wrapper .login-card__anchor {
+  color: inherit;
+  text-decoration: none;
+}
+
+.login-wrapper .login-card__anchor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.login-wrapper .login-card__anchor:focus-visible::after {
+  box-shadow: var(--mj-focus-ring);
+}
+
+.login-wrapper .login-card__chevron {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-login-card-text-secondary);
+}
+
+/* Screen-reader-only new-tab hint, scoped to this surface the way mj-dropdown scopes its own. */
+.login-wrapper .login-card__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Banner cards sit on the story panel's background rather than a surface, so they swap to the
+   translucent set derived from the banner's own text color. */
+.login-wrapper .login-cards--on-banner .login-card {
+  border-color: var(--mj-login-banner-card-border);
+  background: var(--mj-login-banner-card-bg);
+  color: var(--mj-login-banner-card-text);
+}
+
+.login-wrapper .login-cards--on-banner .login-card__text,
+.login-wrapper .login-cards--on-banner .login-card__chevron {
+  color: color-mix(in srgb, var(--mj-login-banner-card-text) 78%, transparent);
+}
+
+.login-wrapper .login-cards--on-banner .login-card--link:hover {
+  border-color: color-mix(in srgb, var(--mj-login-banner-card-text) 45%, transparent);
+  background: color-mix(in srgb, var(--mj-login-banner-card-text) 18%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-wrapper .login-card--link {
+    transition: none;
+  }
+}
+
 /* ---- Misc ---- */
 
-.mj-logo-mark-login {
-  width: 62px;
-  height: 35px;
-  background-image: var(--mj-logo-mark-inverse);
+/* The banner's brand image. Box and artwork both come from the login token group so a
+   themed deployment can swap in a logo of any shape without fighting a hardcoded frame;
+   `contain` keeps whatever lands here in aspect. (The old .mj-logo-mark-login block is
+   gone — nothing rendered it.) */
+.mj-logo-wordmark-login {
+  width: var(--mj-login-banner-logo-width, 297px);
+  height: var(--mj-login-banner-logo-height, 45px);
+  max-width: 100%;
+  background-image: var(--mj-login-banner-logo, var(--mj-logo-wordmark));
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
 }
 
-.mj-logo-wordmark-login {
-  width: 297px;
-  height: 45px;
-  background-image: var(--mj-logo-wordmark);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
+/* ---- Layout: split-reverse ---- */
+
+/* The mirrored editorial split. DOM order is untouched — the story stays first for a screen
+   reader and for the stacked layout — so only the visual order flips.
+   ORDERING: this sits BEFORE the breakpoints on purpose. The stacked rule below is
+   `.login-wrapper { flex-direction: column }` at the same specificity, so it must come later
+   to win; a mirrored split has no meaning once the panes stack. */
+.login-wrapper--split-reverse {
+  flex-direction: row-reverse;
 }
 
 /* ========================================
@@ -174,7 +369,12 @@
     width: 100%;
     padding: var(--mj-space-6);
     align-items: center;
-    justify-content: flex-end;
+  }
+
+  /* Stacked, the logo sits at the BOTTOM of the short banner (the old justify-content: flex-end).
+     `auto 0` keeps that while leaving the top reachable if the content ever outgrows 35dvh. */
+  .login-wrapper .main-banner .banner-brand {
+    margin-block: auto 0;
   }
 
   /* Login C collapses the story panel to just the logo once the panes stack — a stacked
@@ -210,11 +410,85 @@
   }
 
   .mj-logo-wordmark-login {
-    width: 200px;
+    width: min(var(--mj-login-banner-logo-width, 297px), 200px);
   }
 
   .theme-toggle {
     top: var(--mj-space-2);
     right: var(--mj-space-2);
+  }
+}
+
+/* ========================================
+   Layout: centered
+   ======================================== */
+
+/* The single-column sign-in page: story content on a full-bleed banner background, sign-in
+   options in a card on top of it. Everything the other layouts render still renders — a layout
+   moves the regions, it never drops one.
+   ORDERING: this block sits AFTER the breakpoints deliberately. The stacked rules above target
+   `.login-wrapper .main-banner` (0,2,0) and `.login-wrapper .main-banner .banner-welcome`
+   (0,3,0); these match that specificity and follow them, so the centered layout holds at every
+   width rather than reverting to a 35dvh banner on a phone. */
+.login-wrapper--centered {
+  flex-direction: column;
+  justify-content: flex-start;
+  /* The wrapper is the scroller in this layout (the app shell's `html, body { overflow: hidden }`
+     means the page itself never scrolls), and the two columns centre within it by auto margin —
+     same reason as the split layout: centred justification would put overflow out of reach. */
+  height: 100dvh;
+  overflow-y: auto;
+  padding: var(--mj-space-8) var(--mj-space-4);
+  box-sizing: border-box;
+  background: var(--mj-login-banner-bg);
+}
+
+.login-wrapper--centered .main-banner {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+  margin-top: auto;
+  /* The wrapper scrolls in this layout; a nested scroller here would trap the content. */
+  overflow: visible;
+  padding: 0 0 var(--mj-space-8);
+  align-items: center;
+  justify-content: flex-start;
+  /* The wrapper paints the background for the whole page in this layout. */
+  background: none;
+}
+
+.login-wrapper--centered .main-banner .banner-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The stacked layout hides the story copy because a 35dvh banner has no room for it. This one
+   is auto-height and does, so it comes back — centered, on the banner background it was
+   coloured for. */
+.login-wrapper--centered .main-banner .banner-welcome,
+.login-wrapper--centered .main-banner .banner-sub {
+  display: block;
+  text-align: center;
+}
+
+.login-wrapper--centered .login-btn {
+  flex: 0 0 auto;
+  width: min(100%, var(--mj-login-centered-card-width, 440px));
+  height: auto;
+  margin-bottom: auto;
+  overflow: visible;
+  padding: var(--mj-space-10) var(--mj-space-8);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-xl);
+}
+
+@media (max-width: 480px) {
+  .login-wrapper--centered {
+    padding: var(--mj-space-6) var(--mj-space-4);
+  }
+
+  .login-wrapper--centered .login-btn {
+    padding: var(--mj-space-8) var(--mj-space-5);
   }
 }

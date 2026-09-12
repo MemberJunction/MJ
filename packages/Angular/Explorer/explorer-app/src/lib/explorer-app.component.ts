@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -36,6 +36,8 @@ import { InstanceConfigEngine } from '@memberjunction/core-entities';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
+import { MJLoginSlotDirective, type MJLoginSlotName } from './login-slot.directive';
+import type { MJLoginCard, MJLoginLayout } from './login-screen.types';
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -51,6 +53,107 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * first-paint script all stay in sync.
    */
   private static readonly THEME_STORAGE_KEY = 'mj-theme';
+
+  /**
+   * The heading above the sign-in options, or `null` for none.
+   *
+   * Explorer's own login column already labels the action on the button itself, so an embedding app
+   * whose single provider renders one CTA sees the word twice ("Log in" over a "Log in" button).
+   * Passing `null` drops the heading. Default matches {@link MJLoginPickerComponent.Heading}.
+   * @since 6.1.0
+   */
+  @Input() LoginHeading: string | null = 'Log in';
+
+  /**
+   * Whether the sign-in panel carries MemberJunction's "Powered by" attribution. A white-labelled
+   * deployment turns it off here instead of hiding it with a CSS rule against the picker's internals.
+   * Default matches {@link MJLoginPickerComponent.ShowPoweredBy}.
+   * @since 6.1.0
+   */
+  @Input() LoginShowPoweredBy = true;
+
+  /**
+   * Where the story panel's brand block sits: `'start'` (Login C's editorial split, the default) or
+   * `'center'`. Centering is what a logo-led brand usually wants, and it is what the stacked (≤900px)
+   * layout already does — this makes the same choice available on the wide layout without a host
+   * reaching into `.main-banner`.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerAlignment: 'start' | 'center' = 'start';
+
+  /**
+   * The story panel's headline, or `null` for none. It was hardcoded ("Welcome back"), which made
+   * the one prominent line of copy on the page the one thing a host could not change. `null`
+   * collapses the element, so a logo-only banner is a binding, not a CSS hide.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerTitle: string | null = 'Welcome back';
+
+  /**
+   * The supporting line under {@link LoginBannerTitle}, or `null` for none.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerSubtitle: string | null = 'Sign in to continue.';
+
+  /**
+   * Accessible name for the banner's brand image. The artwork itself comes from the
+   * `--mj-login-banner-logo` token, which the component cannot read — so a deployment that swaps
+   * the logo sets the matching name here, or a screen reader keeps announcing the default brand.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerLogoLabel = 'MemberJunction Logo';
+
+  /**
+   * How the story panel and the sign-in column are arranged — see {@link MJLoginLayout}.
+   *
+   * The stock `'split'` is the editorial layout; `'split-reverse'` mirrors it; `'centered'` is the
+   * single-column sign-in page, where the story content sits on a full-bleed banner background and
+   * the sign-in column becomes a card on top of it. Every slot and every input still applies in
+   * each layout — a layout decides where the regions go, never whether they exist.
+   * @since 6.1.0
+   */
+  @Input() LoginLayout: MJLoginLayout = 'split';
+
+  /**
+   * Extra content for the login screen expressed as data rather than markup — a support route, a
+   * trust mark, a policy link. Each card names the region it belongs to (see {@link MJLoginCard}).
+   *
+   * This is the channel a *configured* deployment uses: nothing about the login screen can come
+   * from MJ metadata, because the screen renders before any authenticated call is possible (the
+   * only pre-auth server surface is the allow-listed public provider catalog). A host that keeps
+   * per-tenant branding somewhere resolves it itself — as Explorer already resolves the provider
+   * catalog before bootstrap — and binds it here.
+   *
+   * A host that needs richer content than a card projects a template into the region's slot
+   * instead, which takes over from the cards there.
+   * @since 6.1.0
+   */
+  @Input() LoginCards: MJLoginCard[] = [];
+
+  /**
+   * Templates projected by the host through the `mjLoginSlot` directive, resolved by
+   * {@link LoginSlotTemplate}.
+   */
+  @ContentChildren(MJLoginSlotDirective) private loginSlotChildren!: QueryList<MJLoginSlotDirective>;
+
+  /**
+   * Resolves a slot name to the host's `TemplateRef`, or `null` when nothing was projected for it
+   * — in which case the template renders that region's default (the stock brand block, the
+   * configured cards, or nothing, per {@link MJLoginSlotName}).
+   */
+  public LoginSlotTemplate(name: MJLoginSlotName): TemplateRef<unknown> | null {
+    return this.loginSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
+
+  /** Cards configured for the story panel. */
+  public get LoginBannerCards(): MJLoginCard[] {
+    return this.LoginCards.filter((c) => c.region === 'banner');
+  }
+
+  /** Cards configured for the sign-in column — the default region. */
+  public get LoginPanelCards(): MJLoginCard[] {
+    return this.LoginCards.filter((c) => c.region !== 'banner');
+  }
 
   public title = 'MJ Explorer';
   public initialPath = '/';

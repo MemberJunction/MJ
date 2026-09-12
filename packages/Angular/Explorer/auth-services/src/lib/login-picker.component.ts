@@ -108,7 +108,9 @@ const BRAND_ICON_CLASSES: Readonly<Record<string, string>> = {
         flex-direction: column;
         gap: var(--mj-space-3, 0.75rem);
         width: 100%;
-        max-width: 400px;
+        /* From the login token group so a themed deployment can widen or narrow the
+           sign-in column without reaching into this component's internals. */
+        max-width: var(--mj-login-picker-max-width, 400px);
       }
 
       /* Left-aligned per the locked Login C direction — the heading, lede and rows share
