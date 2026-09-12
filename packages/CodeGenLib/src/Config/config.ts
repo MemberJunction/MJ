@@ -288,6 +288,22 @@ export type IntegrityCheckConfig = z.infer<typeof integrityCheckConfigSchema>;
 const integrityCheckConfigSchema = z.object({
   enabled: z.boolean(),
   entityFieldsSequenceCheck: z.boolean(),
+  /**
+   * Whether a failing integrity check fails the CodeGen run.
+   *
+   * Until this existed the checks could not fail at all: `RunIntegrityChecks` built a result per
+   * check and `runCodeGen` discarded the array, printed a success tick, and reported
+   * `success: true, errors: []`. A check whose only failure path is a `console.log` is not a check —
+   * a nightly drift-gate run has carried `Integrity check FAILED: entityFieldsSequenceCheck` for
+   * seven `MJ: Entities` fields, on green, for weeks.
+   *
+   * Defaults to `false` rather than `true` ONLY because that condition is live on `next` today, and
+   * flipping it in the same change would red every CodeGen run before anyone could act on the
+   * finding. The reporting is truthful either way now (see `runCodeGen`). Flip this to `true` once
+   * the `MJ: Entities` Sequence drift is resolved; that is a one-line change and the last step of
+   * this fix.
+   */
+  failOnError: z.boolean().default(false),
 });
 
 export type ForceRegenerationConfig = z.infer<typeof forceRegenerationConfigSchema>;
@@ -992,6 +1008,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   integrityChecks: {
     enabled: true,
     entityFieldsSequenceCheck: true,
+    failOnError: false,
   },
   advancedGeneration: {
     enableAdvancedGeneration: true,

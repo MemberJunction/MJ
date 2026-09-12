@@ -128,11 +128,30 @@ and are unaffected. **Turning the flag on removes no statement a host needs.**
 
 A reconciler in a **versioned** migration replays from an intermediate schema state and is wrong there — the fix is omission, which the `omitRecurringScriptsFromLog` default now handles. A reconciler in the **repeatable** (`R__RefreshMetadata.sql`) runs after every versioned migration, at final schema state, and is correct there — leave it broad. Scoping the repeatable removes metadata maintenance for every non-core schema on every host, and after Phase 1 nothing else provides it.
 
-Historical context: **48 of core's 49** legacy prune invocations carried `@ExcludedSchemaNames='sys,staging'` and nothing else — no `@EntityIDs`, no `@IncludedSchemaNames`. Core has no `includeSchemas` configured (correct — it generates everything), so its emissions were global by construction.
+### What the prune actually deletes, and what follows from it
 
-Set that against the documented upgrade path — `npx mj migrate -t v<version>` against core, on a host that already has the apps installed. When versioned migrations execute global prunes against a database full of BizApps entities at intermediate states before their views are updated, they prune valid fields.
+`spDeleteUnneededEntityFields` left-joins `vwEntityFields` against `vwSQLColumnsAndEntityFields` on
+`EntityID` + field name and deletes where `actual.column_id IS NULL` — i.e. **only where no physical
+column backs the row at the moment it runs.** Two consequences, and they pull in opposite directions:
 
-**Consequence: omitting recurring reconcilers from versioned migration logs ensures heal migrations at the end of each app repo survive subsequent migrations.** Fixing omission across all repos is the precondition that makes heals durable.
+- **Mid-replay of a repo's own history it is destructive.** The `EntityField` INSERT has landed; the
+  `ALTER VIEW` that adds the column has not. The row has no column behind it, so it is deleted. That
+  is this defect, and it is why omission (Phase 1) is the fix.
+- **On a settled database it is a no-op.** Every healed field has a real column behind it, so the
+  prune matches and deletes nothing.
+
+**The heals are therefore durable, and an earlier draft of this section said otherwise.** It claimed
+a heal at the end of an app repo "does not survive a subsequent core upgrade." It does: the heal
+restores fields that *have* columns, and a later prune leaves them alone. The claim was asserted from
+the invocation count without reading the procedure — the count was right and the consequence was not.
+
+**The residual, stated at its real size.** Core's prune invocations are unscoped —
+measured on this branch: 60 committed migration files contain `spDeleteUnneededEntityFields`, **49
+`EXEC` blocks, 0 of them carrying `@IncludedSchemaNames`.** They evaluate every non-excluded schema,
+so they are a hazard for any ordering in which a core migration executes while an app's schema is
+half-built (a core migrate interleaved with an app install, not the documented sequential path).
+Scoping them to core's own schema would retire that class outright. It is worth doing and it is **not**
+a precondition for Phase 3 — that was the overstatement.
 
 ---
 
@@ -218,7 +237,19 @@ Port the guards to app repos **before** Phase 3 lands, so the gates catch any ba
   … fails only on fresh installs."
 - **T-SQL parse gate (`SET PARSEONLY ON`) in CI:** Convention gates inspect migrations purely as **text** (filenames, changesets, sequences, prune statements). Not one of them would catch syntax bugs like `V202609092230`'s unescaped single quote in `'item's'`, which was well-formed by all textual conventions but completely invalid T-SQL. The parse gate (`parse_migrations` job running against a SQL Server container with `SET PARSEONLY ON -b`) closes this entire defect class without requiring full schema execution or seed data.
 - **PostgreSQL parity gate assigned to release-time:** Feature PRs ship T-SQL only; PG counterparts are converter output the build engineer generates at release (`mj sql-convert`). The parity gate on `bizapps-orders` was moved off `pull_request` (retaining `workflow_dispatch` / release run) because 23 pre-existing migrations lacked PG counterparts on `next`, creating an unpassable PR gate.
-- **Gate scope completeness (`[VB]` and non-zero file counts):** A gate's scope is a claim about which files it can see, and it is the half nobody re-checks. Three separate instances in this workstream — the prune gate, the sequence gate (`check-migration-entityfield-sequence.mjs`), and the filename validator (`validate-migration-filenames.sh`) — all shared the same `V`-vs-`B` blind spot (ignoring baselines like `B202607141200`), remaining green while blind. All were widened to `[VB]`, pinned with scope test fixtures, and guarded with non-zero file count assertions (`COUNT > 0`).
+- **Gate scope is a claim, and the right claim differs per gate.** Three gates in this workstream were
+  examined for the same `V`-vs-`B` question and got three different answers. The **prune gate** must see
+  baselines: a reconciler replays from an intermediate state wherever it sits — widened to `[VB]`. The
+  **sequence gate** must not: a baseline is a wholesale snapshot of a finished schema and the first thing
+  to run, so its `EntityField` literals are self-consistent and have nothing to collide with (verified —
+  166 literals across 12 entities in more-cheese and 121 across 10 in bizapps-common, with **zero**
+  duplicate `(EntityID, Sequence)` pairs). It stays `V`-only, which is what its own SCOPE comment said all
+  along. The **filename validator** must see baselines — a baseline's *name* is not "literal by
+  construction" — and must additionally fail on `COUNT == 0`, because it was reporting *"All 0 migration
+  filenames are valid!"* over a directory with a migration in it. The lesson is not "widen scope": it is
+  **write the scope's reason into the fixture that pins it.** A fixture reading `'B-prefix is in scope'`
+  states a behaviour and pins nothing; one reading `'baselines are skipped — literal by construction'`
+  makes the next person argue with the reason instead of silently inverting it.
 - **Base SHA resolution in CI (`steps.base.outputs.sha`):** Replaced static `github.event.pull_request.base.sha` across all app repos with a fresh fetch of the base tip to avoid diffing against months-old base snapshots on long-lived branches.
 - **Do not** ship a migration that `RAISERROR`s on a view↔EntityField mismatch. It would brick a
   host upgrade on a benign difference. Put that assertion in the clean-room replay, where a

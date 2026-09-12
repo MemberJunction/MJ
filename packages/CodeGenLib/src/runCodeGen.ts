@@ -523,8 +523,42 @@ export class RunCodeGenBase {
       }
 
       startSpinner('Running system integrity checks...');
-      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      succeedSpinner('System integrity checks completed');
+      // The return value is the point. It used to be discarded: every check built a
+      // { Success, Message, Name } result, `RunIntegrityChecks` logged the failures, and this line
+      // threw the array away and printed a success tick regardless — so CodeGen reported
+      // `success: true, errors: []` over a run that had just printed `Integrity check FAILED`.
+      // Whether a failure STOPS the run is `integrityChecks.failOnError` (which, when true, returns
+      // before the AFTER commands and after-all SQL scripts below); whether it is reported honestly
+      // is not configurable.
+      const integrityResults = await SystemIntegrityBase.RunIntegrityChecks(conn, true);
+      const failedChecks = integrityResults.filter((r) => !r.Success);
+      if (integrityResults.length === 0) {
+        // Zero checks RAN — `RunIntegrityChecks(conn, true)` only runs those whose `Enabled` is
+        // true, i.e. `integrityChecks.enabled && integrityChecks.entityFieldsSequenceCheck`. A ✔
+        // here would be the same defect this block exists to fix, one line further along: a green
+        // tick over nothing measured. It matters precisely because the obvious way to quiet a
+        // failing check is to set `enabled: false`, and that must not read as a pass.
+        warnSpinner('No system integrity checks ran — integrityChecks.enabled/entityFieldsSequenceCheck is false');
+      } else if (failedChecks.length === 0) {
+        succeedSpinner(
+          `System integrity checks completed (${integrityResults.length} check${integrityResults.length === 1 ? '' : 's'})`,
+        );
+      } else {
+        const names = failedChecks.map((r) => r.Name).join(', ');
+        const summary = `System integrity checks FAILED: ${names}`;
+        failSpinner(summary);
+        for (const r of failedChecks) {
+          logError(`   ${r.Name}: ${r.Message}`);
+        }
+        if (configInfo.integrityChecks?.failOnError) {
+          pipelineSuccess = false;
+          return false;
+        }
+        logError(
+          `${summary} — continuing because integrityChecks.failOnError is false. ` +
+            `Set it to true to make this stop the run.`,
+        );
+      }
 
       const afterCommands = commands('AFTER');
       if (afterCommands && afterCommands.length > 0) {
