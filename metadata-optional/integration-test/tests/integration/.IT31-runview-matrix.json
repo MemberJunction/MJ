@@ -2,7 +2,7 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
     "Name": "IT31 - RunView Feature Matrix",
-    "Description": "RunView feature matrix swept across entities: count_only, full-width parity, Fields projection, entity_object semantics, OrderBy single+multi, ExtraFilter trio, injection guard, UserSearchString, MaxRows, IgnoreMaxRows, StartRow OFFSET walk, AfterKey keyset walk + guards, aggregates (COUNT parity + SUM/MIN/MAX vs independent computation), RunViews batch positional integrity, PlatformSQL poison-pill. 18 checks (RVM1-RVM18), read-only, client transport.",
+    "Description": "RunView feature matrix swept across entities: count_only, full-width parity, Fields projection, entity_object semantics, OrderBy single+multi, ExtraFilter trio, injection guard, UserSearchString, MaxRows, IgnoreMaxRows, StartRow OFFSET walk, AfterKey keyset walk + guards, aggregates (COUNT parity + SUM/MIN/MAX vs independent computation), RunViews batch positional integrity, PlatformSQL poison-pill, UserSearchString free-text shapes (#4392). 19 checks (RVM1-RVM19), read-only, client transport.",
     "InputDefinition": {},
     "ExpectedOutcomes": {
       "summary": "RunView feature matrix swept across entities: count_only, full-width parity, Fields projection, entity_object semantics, OrderBy single+multi, ExtraFilter trio, injection guard, UserSearchString, MaxRows, IgnoreMaxRows, StartRow OFFSET walk, AfterKey keyset walk + guards, aggregates (COUNT parity + SUM/MIN/MAX vs independent computation), RunViews batch positional integrity, PlatformSQL poison-pil"
@@ -22,7 +22,7 @@
     "ID": "02777724-EAD0-4BD9-AA9F-203AC65347AE"
   },
   "sync": {
-    "lastModified": "2026-08-08T01:12:44.070Z",
-    "checksum": "892e67d2a019bb6caf052a52f661446338fb94bc0ffa4b34f4b7f6583dcc5d3f"
+    "lastModified": "2026-09-11T15:55:52.714Z",
+    "checksum": "92ef27e116807695400cf6005c7912eef8e12ff52eb84a348c2dc5985c78a497"
   }
 }

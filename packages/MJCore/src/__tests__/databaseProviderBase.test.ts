@@ -402,7 +402,9 @@ describe('DatabaseProviderBase', () => {
 
     /**
      * 🚨 SECURITY REGRESSION SUITE — ValidateUserProvidedSQLClause screens caller-supplied
-     * `ExtraFilter` / `OrderBy` / `UserSearchString` fragments, which are raw SQL. It strips string
+     * `ExtraFilter` / `OrderBy` / `OverrideExcludeFilter` fragments, which are raw SQL. (It is NOT
+     * applied to `UserSearchString`: that is free search-box text, never a fragment — it is escaped
+     * into a string literal by createViewUserSearchSQL instead. See #4392.) It strips string
      * literals and then applies a keyword denylist, so the ONLY thing standing between a hostile
      * filter and the database is that the stripper agrees with the database about where literals
      * begin and end.
