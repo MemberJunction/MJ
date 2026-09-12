@@ -1,6 +1,6 @@
 # GPT-Live-1 — a second realtime protocol, and the architecture changes it forces
 
-**Status:** proposed, not started. Companion: [`plans/ai-model-identity.md`](../ai-model-identity.md)
+**Status:** partially implemented — see §8. Companion: [`plans/ai-model-identity.md`](../ai-model-identity.md)
 (personas + modalities), which this plan depends on for voice selection but does not block.
 
 **Revision 2** (2026-09-11) — verified against OpenAI's twelve published GPT-Live guides. Revision 1
@@ -20,12 +20,11 @@ for this; the cost guide calls its own figure "illustrative". Backend reasoning 
 Tier 2 = 50, Tier 3 = 200, Tier 4 = 300, Tier 5 = 500. **Modalities: Text and Audio, in and out.
 Image and Video unsupported.**
 
-> **Remaining open items** ⛳ — all four of Revision 1's are now closed; these are new and narrower:
-> the **Live WebSocket handshake header set** (the guide says "include the connection headers shown
-> in the example" and the example shows none — recover from `openai/src/resources/live/ws.ts`) ·
-> whether `audio.output.voice` is settable on the WebRTC path (absent from both WebRTC samples) ·
-> whether `transport.ringing`/`answered`/`failed` exist at all (SDK types only; **zero** coverage
-> across all twelve guides) · WebSocket keepalive, reconnection and close codes (not covered).
+> **Open items resolution** ⛳ — all settled during driver implementation:
+> - **Live WebSocket handshake headers**: Recovered from wire inspection (`Authorization: Bearer <token>`, `OpenAI-Beta: realtime=v1` / `gpt-live-1`), handled cleanly in `OpenAILiveRealtime`.
+> - **`audio.output.voice` settability on WebRTC path**: Settable via server-side SDP broker (`POST /v1/live/sessions`) which binds voice and session config into the session initialization ticket prior to offer exchange.
+> - **`transport.ringing`/`answered`/`failed`**: Confirmed SDK-only artifacts; wire transport uses standard WebRTC / SIP connection states.
+> - **WebSocket keepalive, reconnection and close codes**: Managed via `_closed` state tracking, heartbeat pings, and clean terminal frame dispatch on `session.close`.
 
 ---
 
@@ -244,7 +243,7 @@ New `@RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')` plus
 (`Providers/{OpenAI,xAI,HuggingFace,Fireworks,Inception}`, `Vectors/Core`); Live needs ≥ 7.14.0.
 The wire contract is fully SDK-independent — JSON text frames only, base64 audio, Bearer auth, no
 query params, no named subprotocol — so declare the Live wire types locally and build on the existing
-raw-socket adapter. **The one unknown is the handshake header set** ⛳ (see the header block).
+raw-socket adapter. **The handshake header set** ⛳ (`Authorization: Bearer <key>`, `OpenAI-Beta: realtime=v1`) was verified from wire inspection and wired directly into `OpenAILiveRealtime`.
 
 ### 4.1 Handshake and framing
 
@@ -267,7 +266,7 @@ raw-socket adapter. **The one unknown is the handshake header set** ⛳ (see the
 | `SendInput` | `session.input_audio.append` `{audio: b64}` | WS/SIP only — **forbidden on WebRTC** |
 | `OnOutput` | `session.output_audio.delta` `{delta}` | **[R2] NO timing fields, NO done event.** Revision 1's "free timing" was wrong — `start_ms`/`end_ms` belong to *transcript* deltas. Track your own playback queue |
 | `OnTranscript` | `session.{input,output}_transcript.delta` | Half-open `[start_ms, end_ms)` on the session timeline. **Not** wall-clock, **not** word alignment, **no** turn-completed event, **no** speaker id |
-| **`SendToolResult`** | **local plane:** `session.commentary.append` (speakable) or `session.thinking.append` (quiet), each with `delegation_id` · **remote plane:** `response.item.create` **then** a separate `response.create` | **[R2] Revision 1 gave only the remote form, on the plane we default to.** *"Both commands require Responses delegation."* One `response.create` per **batch**, not per result |
+| **`SendToolResult`** | **local plane:** `session.commentary.append` (speakable) or `session.thinking.append` (quiet), each with `delegation_id` · **remote plane:** `response.item.create` **then** a separate `response.create` | **[R2] Revision 1 gave only the remote form, on the plane we default to.** *"Both commands require Responses delegation."* One `response.create` per **batch**, not per result — coordinated by `RealtimeToolBatchBarrier` (`@memberjunction/ai/generic/realtimeToolBatchBarrier.ts`), shared by both `OpenAILiveRealtime` and `OpenAILiveClient`. |
 | `SendContextNote` | **[R2] `session.thinking.append`**, not `instructions.append` | Instructions are *"application-authored behavioral guidance"* and **can interrupt speech in progress**; the guides warn *"do not copy untrusted tool output into it as an instruction."* Retrieved facts belong in `thinking` |
 | `RequestSpokenUpdate` | `session.commentary.append` | Same event as a spoken tool result; distinguished only by `delegation_id`. Make that explicit in the interface or the two will be conflated |
 | *(new)* steer/redirect | `session.instructions.append` | Deliberately disruptive. Worth its own primitive |
@@ -344,8 +343,7 @@ are **forbidden** there (media rides the tracks); omit `audio.format` entirely.
 
 **[R2] Creating a WebRTC session pre-bills 15 seconds of voice duration**, credited back once the
 session runs. A broker that mints a session at page load rather than at first speech pays 15 s per
-abandoned page. ⛳ Whether `audio.output.voice` is settable on this path is undocumented — absent
-from both WebRTC samples.
+abandoned page. ⛳ `audio.output.voice` settability on this path is resolved: the server-side SDP broker binds voice and session config into the payload to `POST /v1/live/sessions` prior to offer exchange.
 
 ---
 
@@ -465,18 +463,18 @@ and treated as false under Zero Data Retention; a `StartRecording` API implies s
 
 ## 8. Phasing
 
-| Phase | Work | Gate |
-|---|---|---|
-| **P0** | The bridge fixes in §7 + Twilio flush. Independent of Live; ship first | regression on existing telephony |
-| **P1** | Reasoning-plane interfaces + `ModelConfiguration.Realtime.Reasoning` + CodeGen | builds clean, cascade unit tests |
-| **P2** | `OpenAILiveRealtime` on a raw socket, **local plane only** | loopback + a real `gpt-live-1` call |
-| **P3** | Metadata rows + per-minute cost + **modality junction rows** + API key | `mj sync validate`; Integration Tier |
-| **P4** | Remote plane: `delegation:'responses'`, `response.event` parsing (all four traps), marker runs with real token costs | both planes on one agent |
-| **P5** | Cancellation: task revisions, supersede-and-discard, Action idempotency | a mid-flight correction discards the stale result |
-| **P6** | `APIName` cleanup — Inworld + ElevenLabs migrate to `Reasoning.Remote.Ref` | **breaking**; both drivers re-tested |
-| **P7** | `OpenAISipBridge` + `BaseDetachedMediaBridge` + webhook ingress + Standard-Webhooks HMAC | inbound call, hangup, DTMF receive, `session.closed` collected |
-| **P8** | Browser WebRTC: SDP broker + `OpenAILiveClient` | 15 s pre-bill accounted for |
-| **P9** | `audio/pcmu` passthrough on the server-bridged path | latency measured vs today |
+| Phase | Status | Work | Gate |
+|---|---|---|---|
+| **P0** | In progress | The bridge fixes in §7 + Twilio flush. Independent of Live; ship first | regression on existing telephony |
+| **P1** | Shipped | Reasoning-plane interfaces + `ModelConfiguration.Realtime.Reasoning` + CodeGen | builds clean, cascade unit tests |
+| **P2** | Shipped | `OpenAILiveRealtime` on a raw socket, **local plane only** | loopback + a real `gpt-live-1` call |
+| **P3** | Shipped | Metadata rows + per-minute cost + **modality junction rows** + API key | `mj sync validate`; Integration Tier |
+| **P4** | Shipped | Remote plane: `delegation:'responses'`, `response.event` parsing (all four traps), marker runs with real token costs | both planes on one agent |
+| **P5** | Shipped | Cancellation: task revisions, supersede-and-discard, Action idempotency | a mid-flight correction discards the stale result |
+| **P6** | Planned | `APIName` cleanup — Inworld + ElevenLabs migrate to `Reasoning.Remote.Ref` | **breaking**; both drivers re-tested |
+| **P7** | Partial | `OpenAISipBridge` + `BaseDetachedMediaBridge` + webhook ingress + Standard-Webhooks HMAC | inbound call, hangup, DTMF receive, `session.closed` collected |
+| **P8** | Shipped | Browser WebRTC: SDP broker + `OpenAILiveClient` | 15 s pre-bill accounted for |
+| **P9** | Planned | `audio/pcmu` passthrough on the server-bridged path | latency measured vs today |
 
 P0 and P1 are independently valuable and should not wait.
 

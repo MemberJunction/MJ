@@ -164,7 +164,7 @@ export interface OpenAILiveSessionOptions {
     interruptionPolicy?: string;
     backchannelPolicy?: string;
     persona?: {
-        StyleDescriptors?: Record<string, unknown> | null;
+        StyleDescriptors?: string | Record<string, unknown> | null;
         StyleDescriptorsObject?: Record<string, unknown> | null;
         [key: string]: unknown;
     };
@@ -401,28 +401,64 @@ export class OpenAILiveSession implements IRealtimeSession {
         return sections.join('\n\n');
     }
 
+    private extractPolicyFromConfig(policyKey: 'interruptionPolicy' | 'backchannelPolicy'): string | undefined {
+        const direct = this._options[policyKey];
+        if (typeof direct === 'string' && direct.trim().length > 0) {
+            return direct.trim();
+        }
+
+        const fromStyle = this._options.styleDescriptors?.[policyKey];
+        if (typeof fromStyle === 'string' && fromStyle.trim().length > 0) {
+            return fromStyle.trim();
+        }
+
+        const personaStyleObj =
+            this._options.persona?.StyleDescriptorsObject ??
+            (typeof this._options.persona?.['StyleDescriptors'] === 'object' && this._options.persona?.['StyleDescriptors'] !== null
+                ? (this._options.persona['StyleDescriptors'] as Record<string, unknown>)
+                : undefined);
+        const fromPersona = personaStyleObj?.[policyKey];
+        if (typeof fromPersona === 'string' && fromPersona.trim().length > 0) {
+            return fromPersona.trim();
+        }
+
+        const config = this._params.Config;
+        if (config) {
+            const configDirect = config[policyKey];
+            if (typeof configDirect === 'string' && configDirect.trim().length > 0) {
+                return configDirect.trim();
+            }
+
+            const configStyle = config['styleDescriptors'];
+            if (configStyle && typeof configStyle === 'object' && policyKey in configStyle) {
+                const val = (configStyle as Record<string, unknown>)[policyKey];
+                if (typeof val === 'string' && val.trim().length > 0) {
+                    return val.trim();
+                }
+            }
+
+            const configPersona = config['persona'];
+            if (configPersona && typeof configPersona === 'object') {
+                const p = configPersona as Record<string, unknown>;
+                const sdo = p['StyleDescriptorsObject'] ?? (typeof p['StyleDescriptors'] === 'object' ? p['StyleDescriptors'] : undefined);
+                if (sdo && typeof sdo === 'object' && sdo !== null && policyKey in sdo) {
+                    const val = (sdo as Record<string, unknown>)[policyKey];
+                    if (typeof val === 'string' && val.trim().length > 0) {
+                        return val.trim();
+                    }
+                }
+            }
+        }
+
+        return undefined;
+    }
+
     private resolveInterruptionPolicy(): string | undefined {
-        const candidate =
-            this._options.interruptionPolicy ??
-            (this._options.styleDescriptors as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
-            (this._options.persona?.StyleDescriptorsObject as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
-            (this._options.persona?.StyleDescriptors as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
-            this._params.Config?.['interruptionPolicy'] ??
-            (this._params.Config?.['styleDescriptors'] as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
-            ((this._params.Config?.['persona'] as Record<string, unknown> | undefined)?.['StyleDescriptors'] as Record<string, unknown> | undefined)?.['interruptionPolicy'];
-        return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
+        return this.extractPolicyFromConfig('interruptionPolicy');
     }
 
     private resolveBackchannelPolicy(): string | undefined {
-        const candidate =
-            this._options.backchannelPolicy ??
-            (this._options.styleDescriptors as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
-            (this._options.persona?.StyleDescriptorsObject as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
-            (this._options.persona?.StyleDescriptors as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
-            this._params.Config?.['backchannelPolicy'] ??
-            (this._params.Config?.['styleDescriptors'] as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
-            ((this._params.Config?.['persona'] as Record<string, unknown> | undefined)?.['StyleDescriptors'] as Record<string, unknown> | undefined)?.['backchannelPolicy'];
-        return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
+        return this.extractPolicyFromConfig('backchannelPolicy');
     }
 
     private compileDelegationPolicy(tools: RealtimeToolDefinition[]): string {
