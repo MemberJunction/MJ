@@ -168,3 +168,44 @@ test('description truncates long first paragraphs', () => {
   assert.ok(description.length <= 200);
   assert.match(description, /…$/);
 });
+
+// Release notes put their summary under `## TL;DR`; their first paragraph is the
+// standing-context line, which is identical on every release page (see releases/README.md).
+test('description prefers TL;DR bullets over the first paragraph', () => {
+  const source = [
+    '# Identity Claims and hardened networking',
+    '',
+    '## TL;DR',
+    '- Guest users can now claim their records.',
+    '- PostgreSQL deployments unblocked.',
+    '',
+    'Edge builds are prereleases. They publish under the `edge` dist-tag.',
+    '',
+    '## Bug Fixes',
+    '- Something was fixed.',
+  ].join('\n');
+  const { description } = transformRepoMarkdown(source, makeCtx({ srcRepoPath: 'releases/v6.1.0-edge.4.md' }));
+  assert.equal(description, 'Guest users can now claim their records. PostgreSQL deployments unblocked.');
+  assert.doesNotMatch(description, /Edge builds are prereleases/);
+  // Bullets must not be concatenated without a separator.
+  assert.doesNotMatch(description, /records\.PostgreSQL/);
+});
+
+test('description reads a TL;DR written as a paragraph', () => {
+  const source = ['# A release', '', '## TL;DR', '', 'One paragraph summary.', '', '## Bug Fixes', '- x'].join('\n');
+  const { description } = transformRepoMarkdown(source, makeCtx({ srcRepoPath: 'releases/v5.52.0.md' }));
+  assert.equal(description, 'One paragraph summary.');
+});
+
+test('description falls back to the first paragraph without a TL;DR', () => {
+  // The 12 release files written before the TL;DR was required must keep working.
+  const source = ['# An older release', '', 'The fifth Edge build of the 6.1 line.', '', '## Bug Fixes', '- x'].join('\n');
+  const { description } = transformRepoMarkdown(source, makeCtx({ srcRepoPath: 'releases/v6.1.0-edge.4.md' }));
+  assert.equal(description, 'The fifth Edge build of the 6.1 line.');
+});
+
+test('description falls back when a TL;DR heading has no content', () => {
+  const source = ['# A release', '', '## TL;DR', '', '## Bug Fixes', '', 'Fallback paragraph.'].join('\n');
+  const { description } = transformRepoMarkdown(source, makeCtx({ srcRepoPath: 'releases/v5.52.0.md' }));
+  assert.equal(description, 'Fallback paragraph.');
+});
