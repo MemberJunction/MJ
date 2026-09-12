@@ -36,41 +36,6 @@ const domSetupFile = fileURLToPath(new URL('./vitest.dom.setup.ts', import.meta.
 const specTsconfig = resolve(process.cwd(), 'tsconfig.spec.json');
 const angularOptions = existsSync(specTsconfig) ? { jit: false, tsconfig: specTsconfig } : { jit: false };
 
-import { createRequire } from 'node:module';
-import { readdirSync } from 'node:fs';
-
-const req = createRequire(import.meta.url);
-
-// Locate the local pnpm store inside this checkout (MJ/node_modules/.pnpm) so all Angular
-// packages and their peer dependencies (foblex, etc.) resolve to the exact same module
-// instance rather than splitting across the parent M5 workspace store.
-const pnpmDir = resolve(fileURLToPath(new URL('.', import.meta.url)), 'node_modules/.pnpm');
-const resolvePaths: string[] = [];
-if (existsSync(pnpmDir)) {
-  const pbtEntry = readdirSync(pnpmDir).find((e) => e.startsWith('@angular+platform-browser@'));
-  if (pbtEntry) resolvePaths.push(resolve(pnpmDir, pbtEntry, 'node_modules'));
-  const coreEntry = readdirSync(pnpmDir).find((e) => e.startsWith('@angular+core@'));
-  if (coreEntry) resolvePaths.push(resolve(pnpmDir, coreEntry, 'node_modules'));
-}
-
-const angularPackages = [
-  '@angular/core/testing',
-  '@angular/core',
-  '@angular/platform-browser/testing',
-  '@angular/platform-browser/animations',
-  '@angular/platform-browser',
-  '@angular/common/http/testing',
-  '@angular/common/http',
-  '@angular/common/testing',
-  '@angular/common',
-  '@angular/compiler',
-  '@angular/forms',
-  '@angular/router/testing',
-  '@angular/router',
-  '@angular/animations/browser',
-  '@angular/animations',
-];
-
 export default defineConfig({
   plugins: [
     // AOT-compile Angular sources for the test bundle. `jit: false` keeps us on
@@ -78,21 +43,6 @@ export default defineConfig({
     angular(angularOptions),
     tsconfigPaths(),
   ],
-  resolve: {
-    dedupe: [
-      '@angular/core',
-      '@angular/common',
-      '@angular/compiler',
-      '@angular/platform-browser',
-      '@angular/forms',
-      '@angular/router',
-      '@angular/animations',
-    ],
-    alias: angularPackages.map((pkg) => ({
-      find: new RegExp(`^${pkg.replace('/', '\\/')}$`),
-      replacement: req.resolve(pkg, resolvePaths.length > 0 ? { paths: resolvePaths } : undefined),
-    })),
-  },
   test: {
     globals: true,
     environment: 'jsdom',
@@ -103,11 +53,6 @@ export default defineConfig({
     hookTimeout: 30000,
     restoreMocks: true,
     passWithNoTests: true,
-    server: {
-      deps: {
-        inline: [/@foblex/, /@memberjunction/],
-      },
-    },
     // Angular's compiled output references `globalThis` symbols, so we run in a
     // forked process (not threads). Each DOM spec file carries a full Angular AOT
     // compile + jsdom (~1.5 GB/worker); with the default (CPU-count workers) ONE

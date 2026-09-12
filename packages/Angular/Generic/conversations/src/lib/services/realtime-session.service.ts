@@ -23,7 +23,7 @@ import {
   RealtimeClientUsage
 } from '@memberjunction/ai-realtime-client';
 import { BuildNarrationInstructions } from './narration-template';
-import { ParseDelegationResultJson, ParsedDelegationArtifact } from './delegation-result-parser';
+import { ParseDelegationResultJson, ParsedDelegationArtifact, FormatToolName } from './delegation-result-parser';
 import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../components/realtime/channels/base-realtime-channel-client';
 import { RealtimeAudioRecorder } from './realtime-audio-recorder';
 
@@ -1934,7 +1934,7 @@ export class RealtimeSessionService {
         CallID: call.CallID,
         ToolName: call.ToolName,
         Step: 'direct_action',
-        Message: `Executing ${call.ToolName}`
+        Message: `Executing ${FormatToolName(call.ToolName)}`
       });
     }
 

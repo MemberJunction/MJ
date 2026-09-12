@@ -56,9 +56,9 @@ export class RealtimeDelegationCardComponent {
   /** Whether the done chip is expanded inline to show the full result text. */
   public Expanded = false;
 
-  /** The artifacts this (done) delegation produced (empty array while running / when none). */
+  /** The artifacts this (done) delegation produced (empty array while running / when none). Suppressed for direct actions. */
   public get Artifacts(): ParsedDelegationArtifact[] {
-    return this.Card.Done && this.Card.Artifacts ? this.Card.Artifacts : [];
+    return this.Card.Done && this.Card.Kind !== 'action' && this.Card.Artifacts ? this.Card.Artifacts : [];
   }
 
   /** Emits the open-artifact request for one of this card's produced artifacts. */

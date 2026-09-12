@@ -2,7 +2,7 @@ import { Observable, Subject, Subscription } from 'rxjs';
 import {
   RealtimeCaption, RealtimeDelegationProgress, RealtimeDelegationResult, RealtimeDelegationNarration
 } from '../../services/realtime-session.service';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact, FormatToolName } from '../../services/delegation-result-parser';
 
 /**
  * The four reactive session streams {@link RealtimeSessionState} merges — structurally
@@ -106,14 +106,7 @@ export interface RealtimeThreadDividerItem {
 /** One entry in the chronological thread: a caption bubble, a delegation card, or a leg divider. */
 export type RealtimeThreadItem = RealtimeThreadCaptionItem | RealtimeThreadDelegationItem | RealtimeThreadDividerItem;
 
-/**
- * Converts a sanitized wire tool name (e.g. "File_Storage_List_Objects" or "Get_Weather")
- * into a clean human-readable title ("File Storage List Objects", "Get Weather").
- */
-export function FormatToolName(toolName: string): string {
-  if (!toolName) return '';
-  return toolName.replace(/_/g, ' ').trim();
-}
+export { FormatToolName } from '../../services/delegation-result-parser';
 
 /**
  * Maps a raw delegation step id to a human-friendly phrase. Unknown steps fall back to
@@ -219,15 +212,16 @@ export class RealtimeSessionState {
    */
   public LoadHistoricalItems(items: RealtimeThreadItem[]): void {
     this.reset();
-    this.Items = [...items];
-    for (const item of items) {
+    this.Items = items.map(item => {
       if (item.Kind === 'delegation') {
-        if (!item.Card.Kind) {
-          item.Card.Kind = 'agent';
-        }
-        this.cardsByCallId.set(item.Card.CallID, item.Card);
+        const card: RealtimeDelegationCardVM = item.Card.Kind
+          ? item.Card
+          : { ...item.Card, Kind: 'agent' };
+        this.cardsByCallId.set(card.CallID, card);
+        return { Kind: 'delegation', Card: card };
       }
-    }
+      return item;
+    });
     this.rebuildCards();
     this.recomputeActive();
     this.Changed$.next();
@@ -383,7 +377,7 @@ export class RealtimeSessionState {
         Result: result.Output,
         RunRef: this.shortRunRef(result.CallID),
         RunID: result.RunID,
-        Artifacts: result.Artifacts,
+        Artifacts: isAction ? undefined : result.Artifacts,
         StartedAt: Date.now(),
         FinishedAt: Date.now()
       };
@@ -404,7 +398,7 @@ export class RealtimeSessionState {
       Success: result.Success,
       Result: result.Output,
       RunID: result.RunID ?? existing.RunID,
-      Artifacts: result.Artifacts ?? existing.Artifacts,
+      Artifacts: existing.Kind === 'action' ? undefined : (result.Artifacts ?? existing.Artifacts),
       FinishedAt: Date.now()
     });
     if (!this.HasRunningDelegation) {

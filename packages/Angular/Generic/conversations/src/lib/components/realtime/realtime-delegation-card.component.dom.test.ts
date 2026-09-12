@@ -130,19 +130,21 @@ describe('RealtimeDelegationCardComponent (DOM)', () => {
   });
 
   describe('direct action cards (Kind: action)', () => {
-    it('renders the working action card with action title, wrench icon, and no cancel button or open run link', () => {
+    it('renders the working action card with action title, wrench icon, formatted detail, and no cancel button or open run link', () => {
       const f = render(workingCard({
         Kind: 'action',
         AgentName: 'File Storage List Objects',
         ToolName: 'File_Storage_List_Objects',
         LatestStep: 'direct_action',
-        LatestMessage: 'Executing File_Storage_List_Objects',
+        LatestMessage: 'Executing File Storage List Objects',
         RunID: 'run-not-used'
       }), { DevMode: true });
 
       expect(query(f, '.work-card')).not.toBeNull();
       expect(text(f, '.work-card__title')).toBe('File Storage List Objects');
       expect(text(f, '.work-card__step')).toBe('Looking that up');
+      expect(text(f, '.work-card__detail')).toBe('Executing File Storage List Objects');
+      expect(text(f, '.work-card__detail')).not.toContain('_');
       expect(query(f, '.avatar--action')).not.toBeNull();
       expect(query(f, '.avatar--action .fa-wrench')).not.toBeNull();
       // Direct actions have no cancel button
@@ -151,12 +153,13 @@ describe('RealtimeDelegationCardComponent (DOM)', () => {
       expect(query(f, '.dev-link')).toBeNull();
     });
 
-    it('renders the done action card with tool badge, action provenance tooltip, and no open run link', () => {
+    it('renders the done action card with tool badge, action provenance tooltip, and no open run link or artifact chips', () => {
       const f = render(doneCard({
         Kind: 'action',
         AgentName: 'Get Weather',
         ToolName: 'Get_Weather',
         Result: '72°F and sunny in Dallas',
+        Artifacts: [artifact],
         RunID: 'run-not-used'
       }), { DevMode: true });
 
@@ -171,6 +174,8 @@ describe('RealtimeDelegationCardComponent (DOM)', () => {
       expect(shield?.getAttribute('title')).toBe('Result produced directly by the Get Weather action.');
       // No open run link
       expect(query(f, '.dev-link')).toBeNull();
+      // Direct actions never render artifact chips even if Artifacts were supplied in VM
+      expect(query(f, '.artifact-link')).toBeNull();
     });
   });
 });
