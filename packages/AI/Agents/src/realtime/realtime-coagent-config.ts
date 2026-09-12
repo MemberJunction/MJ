@@ -30,7 +30,12 @@
  *                               "elevenlabs": { "voice": "<voice id>" },
  *                               "assemblyai": { "voice": "…" } } },
  *     "allowUserModelOverride": true,
- *     "narration": { "paceMs": 8000 } } }
+ *     "narration": { "paceMs": 8000 },
+ *     "directActions": {
+ *         "enabled": true,
+ *         "actionNames": ["LookupOrder", "CheckInventory"],
+ *         "timeoutMs": 10000
+ *     } } }
  * ```
  *
  * @module @memberjunction/ai-agents
