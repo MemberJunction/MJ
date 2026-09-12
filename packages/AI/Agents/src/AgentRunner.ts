@@ -1378,6 +1378,7 @@ export class AgentRunner {
             const promptParams = new AIPromptParams();
             promptParams.prompt = prompt;
             promptParams.contextUser = contextUser;
+            promptParams.userId = contextUser?.ID;
             promptParams.conversationMessages = [{ role: 'user', content: userMessage }];
             promptParams.provider = provider || this._provider;
 

@@ -41,6 +41,7 @@
     "@memberjunction/generic-database-provider": "6.1.0-edge.6",
     "@memberjunction/global": "6.1.0-edge.6",
     "@memberjunction/graphql-dataprovider": "6.1.0-edge.6",
+    "@memberjunction/materialization": "6.1.0-edge.6",
     "@memberjunction/metadata-sync": "6.1.0-edge.6",
     "@memberjunction/notifications": "6.1.0-edge.6",
     "@memberjunction/open-app-engine": "6.1.0-edge.6",

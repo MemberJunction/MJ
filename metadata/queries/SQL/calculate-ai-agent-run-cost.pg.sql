@@ -4,7 +4,7 @@
 --     because PG folds unquoted PascalCase to lowercase and the actual views are
 --     case-preserved.
 --   * Column references inside CTE bodies and SELECT lists are also double-quoted
---     for the same reason — bare "pr.TotalCost" would fold to "pr.totalcost".
+--     for the same reason — bare "f.OwnCost" would fold to "f.owncost".
 --   * `WITH` → `WITH RECURSIVE` because the AgentRunHierarchy CTE self-references
 --     itself in the UNION ALL recursive case. PG requires RECURSIVE on the WITH
 --     keyword whenever any CTE in the list is recursive (T-SQL doesn't need it).
@@ -12,7 +12,7 @@ WITH RECURSIVE "AgentRunHierarchy" AS (
   -- Base case: Start with the specified agent run
   SELECT "ID", "AgentID", "ParentRunID", 1 AS "Level"
   FROM __mj."vwAIAgentRuns"
-  WHERE "ID" = {{ AIAgentRunID | sqlString }} -- Replace with the actual Agent Run ID parameter. This is a UUID.
+  WHERE "ID"::text = {{ AIAgentRunID | sqlString }} -- Replace with the actual Agent Run ID parameter. This is a UUID.
 
   UNION ALL
 
@@ -21,25 +21,14 @@ WITH RECURSIVE "AgentRunHierarchy" AS (
   FROM __mj."vwAIAgentRuns" ar
   INNER JOIN "AgentRunHierarchy" arh ON ar."ParentRunID" = arh."ID"
   WHERE arh."Level" < 20  -- Prevent infinite recursion
-),
-"PromptRunCosts" AS (
-  -- Get all prompt runs for the agent run hierarchy
-  SELECT
-    pr."ID" AS "PromptRunID",
-    pr."TotalCost",
-    pr."TokensPrompt",
-    pr."TokensCompletion",
-    ars."AgentRunID"
-  FROM __mj."vwAIAgentRunSteps" ars
-  INNER JOIN "AgentRunHierarchy" arh ON ars."AgentRunID" = arh."ID"
-  INNER JOIN __mj."vwAIPromptRuns" pr ON ars."TargetLogID" = pr."ID"
-  WHERE ars."StepType" = 'Prompt'
 )
 SELECT
   {{ AIAgentRunID | sqlString }} AS "AgentRunID",
-  COALESCE(SUM(prc."TotalCost"), 0) AS "TotalCost",
-  COUNT(prc."PromptRunID") AS "TotalPrompts",
-  COALESCE(SUM(prc."TokensPrompt"), 0) AS "TotalTokensInput",
-  COALESCE(SUM(prc."TokensCompletion"), 0) AS "TotalTokensOutput",
-  COALESCE(SUM(prc."TokensPrompt"), 0) + COALESCE(SUM(prc."TokensCompletion"), 0) AS "TotalTokens"
-FROM "PromptRunCosts" prc
+  SUM(CASE WHEN f."IsPriced" = 1 AND f."IsParallelParent" = 0 THEN f."OwnCost" END) AS "TotalCost",
+  SUM(CASE WHEN f."IsParallelParent" = 0 THEN 1 ELSE 0 END) AS "TotalPrompts",
+  SUM(f."TokensPrompt") AS "TotalTokensInput",
+  SUM(f."TokensCompletion") AS "TotalTokensOutput",
+  SUM(f."TokensPrompt") + SUM(f."TokensCompletion") AS "TotalTokens"
+FROM __mj."vwAIUsageFacts" f
+INNER JOIN "AgentRunHierarchy" arh ON f."AgentRunID" = arh."ID"
+WHERE f."IsCompleted" = 1

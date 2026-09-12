@@ -37,8 +37,10 @@ export interface EmbeddingRunParams {
     ModelID?: string;
     /** The user context for permissions and audit */
     ContextUser: UserInfo;
-    /** Optional: parent run ID (e.g., agent run, classification run) for hierarchical tracking */
+    /** Optional: parent prompt run ID (e.g. parent parallel run) for hierarchical tracking */
     ParentRunID?: string;
+    /** Optional: agent run ID if executed as part of an agent run */
+    AgentRunID?: string;
     /** Optional: human-readable description for the AIPromptRun record */
     Description?: string;
     /**
@@ -306,6 +308,8 @@ export class AIModelRunner {
             if (params.ParentRunID) {
                 promptRun.ParentID = params.ParentRunID;
             }
+            promptRun.AgentRunID = params.AgentRunID ?? null;
+            promptRun.UserID = params.ContextUser?.ID ?? null;
 
             // Store description in Messages field as context
             if (params.Description) {
