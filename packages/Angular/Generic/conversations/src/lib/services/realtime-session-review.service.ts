@@ -150,7 +150,7 @@ export interface RealtimeSessionReviewLeg {
   /** This leg's delegated-run previews (oldest first, minus its co-agent observability run). */
   DelegatedRuns: RealtimeSessionReviewRun[];
   /** This leg's direct action and channel tool executions. */
-  DirectActions: RealtimeSessionReviewAction[];
+  DirectActions?: RealtimeSessionReviewAction[];
 }
 
 /**
@@ -193,7 +193,7 @@ export interface RealtimeSessionReview {
   /** Delegated run previews (oldest first, all legs), minus each leg's co-agent observability run. */
   DelegatedRuns: RealtimeSessionReviewRun[];
   /** Direct action and channel tool executions (oldest first, all legs). */
-  DirectActions: RealtimeSessionReviewAction[];
+  DirectActions?: RealtimeSessionReviewAction[];
   /**
    * Saved channel states, one per session-channel row that carried a name. Channel state
    * (e.g. the whiteboard board) is the LATEST leg's only — earlier legs' states were
@@ -648,7 +648,7 @@ export class RealtimeSessionReviewService {
       RecordingMedia: session.RecordingMedia ?? null,
       Turns: legs.flatMap(l => l.Turns),
       DelegatedRuns: legs.flatMap(l => l.DelegatedRuns),
-      DirectActions: legs.flatMap(l => l.DirectActions),
+      DirectActions: legs.flatMap(l => l.DirectActions ?? []),
       // Multi-leg: newest leg with a SAVED state wins per channel — a final leg that
       // never touched the board no longer hides an earlier leg's drawing from review.
       ChannelStates: MergeChainChannelStates(chain.map(leg => this.mapChannels(leg.channels))),

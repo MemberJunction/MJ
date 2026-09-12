@@ -309,7 +309,7 @@ describe('RealtimeSessionReviewService', () => {
       expect(review?.Turns.map(t => t.Text)).toEqual(['hello', 'here are your files']);
       // DirectActions should contain the parsed action execution
       expect(review?.DirectActions).toHaveLength(1);
-      expect(review?.DirectActions[0]).toMatchObject({
+      expect(review?.DirectActions?.[0]).toMatchObject({
         ID: 'D-act-1',
         CallID: 'call-act-1',
         ToolName: 'File_Storage_List_Objects',
@@ -318,7 +318,7 @@ describe('RealtimeSessionReviewService', () => {
         Success: true,
         DurationMs: 250
       });
-      expect(review?.DirectActions[0].At?.toISOString()).toBe('2026-06-10T10:02:00.000Z');
+      expect(review?.DirectActions?.[0].At?.toISOString()).toBe('2026-06-10T10:02:00.000Z');
     });
   });
 
