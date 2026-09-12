@@ -165,10 +165,12 @@ class TestableService extends RealtimeClientSessionService {
     public ExposeExecuteNonTargetTool(
         call: RealtimeToolCall,
         input?: ExecuteRelayedToolInput,
-        user?: UserInfo,
-        prov?: IMetadataProvider
+        user?: UserInfo
     ) {
-        return this.executeNonTargetTool(call, input, user, prov);
+        return this.executeNonTargetTool(call, input, user);
+    }
+    public ExposeParseActionParams(argumentsJson?: string): Record<string, unknown> {
+        return this.parseActionParams(argumentsJson);
     }
     protected override async delegateToTarget(
         _input: ExecuteRelayedToolInput,
@@ -2082,7 +2084,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             } as unknown as MJAIAgentEntityExtended;
             vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
 
-            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser, provider);
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
             expect(result.Success).toBe(true);
             expect(result.Output).toBe('Sent email to test@domain.com successfully');
             expect(runSpy).toHaveBeenCalled();
@@ -2122,7 +2124,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             } as unknown as MJAIAgentEntityExtended;
             vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
 
-            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser, provider);
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
             expect(result.Success).toBe(false);
             expect(result.Output).toContain('not enabled for direct voice invocation');
         });
@@ -2164,7 +2166,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 Call: call
             };
 
-            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser, provider);
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
             expect(result.Success).toBe(false);
             expect(result.Output).toContain('timed out after 50ms');
         });
@@ -2207,7 +2209,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 Call: call1
             };
 
-            const result1 = await service.ExposeExecuteNonTargetTool(call1, input1, contextUser, provider);
+            const result1 = await service.ExposeExecuteNonTargetTool(call1, input1, contextUser);
             expect(result1.Success).toBe(true);
             expect(result1.Output).toBe('Action executed successfully');
             expect(runSpy).toHaveBeenCalled();
@@ -2228,12 +2230,161 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 Call: call2
             };
 
-            const result2 = await service.ExposeExecuteNonTargetTool(call2, input2, contextUser, provider);
+            const result2 = await service.ExposeExecuteNonTargetTool(call2, input2, contextUser);
             expect(result2.Success).toBe(true);
             expect(result2.Output).toBe('Action executed successfully');
             expect(runSpy).toHaveBeenCalled();
             expect(runSpy.mock.calls[0][0].Action.Name).toBe('LearnWorlds - Create User');
             expect(runSpy.mock.calls[0][0].Params).toEqual([{ Name: 'Email', Value: 'newuser@domain.com', Type: 'Input' }]);
+        });
+
+        it('refuses execution when contextUser is undefined (prevents privilege escalation to system)', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail']
+                    }
+                }
+            };
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-no-user',
+                ToolName: 'SendEmail',
+                Arguments: JSON.stringify({ To: 'test@domain.com' })
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, undefined);
+            expect(result.Success).toBe(false);
+            expect(result.Output).toContain('authenticated user context is required');
+        });
+
+        it('returns a helpful failure message when arguments are unparseable JSON', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail']
+                    }
+                }
+            };
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-bad-json',
+                ToolName: 'SendEmail',
+                Arguments: '{ not valid json: true }'
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(result.Success).toBe(false);
+            expect(result.Output).toContain("Action 'SendEmail' failed: Unparseable JSON arguments");
+            expect(result.Output).toContain('Please provide valid JSON formatted arguments.');
+        });
+
+        it('allows empty arguments string for zero-parameter action execution', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockEmailAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['SendEmail']
+                    }
+                }
+            };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Sales Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Zero param action succeeded';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            const call: RealtimeToolCall = {
+                CallID: 'call-empty-args',
+                ToolName: 'SendEmail',
+                Arguments: ''
+            };
+            const input: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-1',
+                TargetAgentID: 'target-1',
+                Call: call
+            };
+
+            const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser);
+            expect(result.Success).toBe(true);
+            expect(result.Output).toBe('Zero param action succeeded');
+            expect(runSpy).toHaveBeenCalled();
+            expect(runSpy.mock.calls[0][0].Params).toEqual([]);
+        });
+    });
+
+    describe('parseActionParams', () => {
+        const service = new TestableService();
+
+        it('returns empty object for empty, whitespace, or undefined input', () => {
+            expect(service.ExposeParseActionParams('')).toEqual({});
+            expect(service.ExposeParseActionParams('   ')).toEqual({});
+            expect(service.ExposeParseActionParams(undefined)).toEqual({});
+            expect(service.ExposeParseActionParams('{}')).toEqual({});
+        });
+
+        it('parses valid JSON object into key-value pairs', () => {
+            expect(service.ExposeParseActionParams('{"foo": "bar", "count": 42}')).toEqual({
+                foo: 'bar',
+                count: 42
+            });
+        });
+
+        it('throws actionable error for unparseable JSON syntax', () => {
+            expect(() => service.ExposeParseActionParams('{ broken json }')).toThrow(
+                /Unparseable JSON arguments.*Please provide valid JSON formatted arguments/
+            );
+        });
+
+        it('throws actionable error for non-object JSON values', () => {
+            expect(() => service.ExposeParseActionParams('[1, 2, 3]')).toThrow(
+                /Tool arguments must be a JSON object, but received an array/
+            );
+            expect(() => service.ExposeParseActionParams('123')).toThrow(
+                /Tool arguments must be a JSON object, but received number/
+            );
         });
     });
 
@@ -2352,7 +2503,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 Call: emailCall
             };
 
-            const execResult = await svc.ExposeExecuteNonTargetTool(emailCall, emailInput, contextUser, provider);
+            const execResult = await svc.ExposeExecuteNonTargetTool(emailCall, emailInput, contextUser);
             expect(execResult.Success).toBe(true);
             expect(execResult.Output).toBe('Sent email to test@domain.com successfully');
             expect(runSpy).toHaveBeenCalled();
@@ -2368,7 +2519,7 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
                 TargetAgentID: 'target-1',
                 Call: taskCall
             };
-            const taskResult = await svc.ExposeExecuteNonTargetTool(taskCall, taskInput, contextUser, provider);
+            const taskResult = await svc.ExposeExecuteNonTargetTool(taskCall, taskInput, contextUser);
             expect(taskResult.Success).toBe(false);
             expect(taskResult.Output).toContain('not enabled for direct voice invocation');
         });

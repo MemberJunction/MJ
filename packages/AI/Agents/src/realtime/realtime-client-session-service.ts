@@ -2348,7 +2348,7 @@ export class RealtimeClientSessionService {
     ): RealtimeToolBroker {
         const deps: RealtimeToolBrokerDeps = {
             DelegateToTarget: (request) => this.delegateToTarget(input, request, contextUser, provider),
-            ExecuteTool: (call) => this.executeNonTargetTool(call, input, contextUser, provider)
+            ExecuteTool: (call) => this.executeNonTargetTool(call, input, contextUser)
         };
         return new RealtimeToolBroker(deps);
     }
@@ -2778,22 +2778,17 @@ export class RealtimeClientSessionService {
     }
 
     /**
-     * Routes a non-target tool call. When dynamic tool sets are enabled and the tool matches an
-     * allowed direct action on the target agent, executes the action directly via
-     * {@link ActionEngineServer.Instance.RunAction} bounded by a timeout.
-     * Otherwise returns a structured "not available" result the model can narrate.
+     * Executes a non-target tool call: in this phase, projects target agent actions allowed for direct invocation.
      *
      * @param call The non-target tool call.
      * @param input The optional relayed tool input context.
      * @param contextUser The calling user context.
-     * @param provider The metadata provider.
      * @returns A {@link ToolExecutionResult} for the model's tool_response.
      */
     protected async executeNonTargetTool(
         call: RealtimeToolCall,
         input?: ExecuteRelayedToolInput,
-        contextUser?: UserInfo,
-        provider?: IMetadataProvider
+        contextUser?: UserInfo
     ): Promise<ToolExecutionResult> {
         if (!input?.TargetAgentID) {
             return {
@@ -2838,8 +2833,16 @@ export class RealtimeClientSessionService {
             };
         }
 
+        if (!contextUser) {
+            return {
+                CallID: call.CallID,
+                Success: false,
+                Output: `Execution of action '${action.Name}' refused: authenticated user context is required.`
+            };
+        }
+
         const timeoutMs = directConfig?.timeoutMs ?? 10_000;
-        const executingUser = contextUser ?? ActionEngineServer.Instance.ContextUser;
+        const executingUser = contextUser;
 
         try {
             const rawParams = this.parseActionParams(call.Arguments);
@@ -2891,17 +2894,31 @@ export class RealtimeClientSessionService {
         }
     }
 
-    /** Parses JSON arguments string into a key-value record of parameters. */
-    protected parseActionParams(argumentsJson: string): Record<string, unknown> {
+    /**
+     * Parses JSON arguments string into a key-value record of parameters.
+     * Distinguishes "no arguments" (valid for zero-param action) from "unparseable JSON".
+     *
+     * @param argumentsJson The raw arguments string emitted by the model.
+     * @returns The parsed arguments record.
+     * @throws Error with actionable message when arguments are present but unparseable.
+     */
+    protected parseActionParams(argumentsJson?: string): Record<string, unknown> {
+        if (!argumentsJson || argumentsJson.trim() === '') {
+            return {};
+        }
         try {
             const parsed = JSON.parse(argumentsJson);
             if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                 return parsed as Record<string, unknown>;
             }
-        } catch {
-            /* not JSON */
+            throw new Error(`Tool arguments must be a JSON object, but received ${Array.isArray(parsed) ? 'an array' : typeof parsed}. Please format arguments as a JSON object.`);
+        } catch (err) {
+            if (err instanceof Error && err.message.startsWith('Tool arguments must be')) {
+                throw err;
+            }
+            const syntaxMsg = err instanceof Error ? err.message : String(err);
+            throw new Error(`Unparseable JSON arguments: ${syntaxMsg}. Please provide valid JSON formatted arguments.`);
         }
-        return {};
     }
 
     /**
