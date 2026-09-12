@@ -54,7 +54,7 @@
     </button>
     <!-- Story panel. Per the locked Login C (Editorial Split) direction: a quiet gradient,
          no animated waves, so the surface carries any brand rather than MJ's. -->
-    <div class="main-banner">
+    <div class="main-banner" [class.main-banner--center]="LoginBannerAlignment === 'center'">
       <div class="banner-brand">
         <div class="mj-logo-wordmark-login" role="img" aria-label="MemberJunction Logo"></div>
         <h1 class="banner-welcome">Welcome back</h1>
@@ -69,7 +69,9 @@
            surrounding chrome is Explorer's; the rows are the same in every MJ app that embeds it. -->
       <mj-login-picker
         [Providers]="AuthProviderChoices"
+        [Heading]="LoginHeading"
         [Subheading]="ProviderPickerLede"
+        [ShowPoweredBy]="LoginShowPoweredBy"
         [Busy]="SigningIn"
         FallbackCtaLabel="Log in"
         (ProviderSelected)="OnAuthProviderSelected($event)"

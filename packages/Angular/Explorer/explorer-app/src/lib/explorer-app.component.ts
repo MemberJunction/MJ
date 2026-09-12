@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -51,6 +51,33 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * first-paint script all stay in sync.
    */
   private static readonly THEME_STORAGE_KEY = 'mj-theme';
+
+  /**
+   * The heading above the sign-in options, or `null` for none.
+   *
+   * Explorer's own login column already labels the action on the button itself, so an embedding app
+   * whose single provider renders one CTA sees the word twice ("Log in" over a "Log in" button).
+   * Passing `null` drops the heading. Default matches {@link MJLoginPickerComponent.Heading}.
+   * @since 6.1.0
+   */
+  @Input() LoginHeading: string | null = 'Log in';
+
+  /**
+   * Whether the sign-in panel carries MemberJunction's "Powered by" attribution. A white-labelled
+   * deployment turns it off here instead of hiding it with a CSS rule against the picker's internals.
+   * Default matches {@link MJLoginPickerComponent.ShowPoweredBy}.
+   * @since 6.1.0
+   */
+  @Input() LoginShowPoweredBy = true;
+
+  /**
+   * Where the story panel's brand block sits: `'start'` (Login C's editorial split, the default) or
+   * `'center'`. Centering is what a logo-led brand usually wants, and it is what the stacked (≤900px)
+   * layout already does — this makes the same choice available on the wide layout without a host
+   * reaching into `.main-banner`.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerAlignment: 'start' | 'center' = 'start';
 
   public title = 'MJ Explorer';
   public initialPath = '/';

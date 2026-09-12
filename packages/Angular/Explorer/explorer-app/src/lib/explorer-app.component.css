@@ -95,6 +95,24 @@
 
 /* Brand block: logo, welcome, sub — centered as one group by the column's justify-content. */
 
+/* Opt-in centering for a logo-led brand (host: [LoginBannerAlignment]="'center'"). The stacked
+   layout below already centers; this is the same choice on the wide layout, so a host does not
+   have to write rules against .main-banner's internals to get it. */
+.login-wrapper .main-banner--center {
+  align-items: center;
+}
+
+.login-wrapper .main-banner--center .banner-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.login-wrapper .main-banner--center .banner-welcome,
+.login-wrapper .main-banner--center .banner-sub {
+  text-align: center;
+}
+
 .login-wrapper .main-banner .banner-welcome {
   font-size: clamp(var(--mj-text-3xl), 3.2vw, var(--mj-text-4xl));
   font-weight: var(--mj-font-bold);
