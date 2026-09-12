@@ -767,6 +767,31 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect('userTurnTranscribed' in client).toBe(false);
     });
 
+    it('Step 2: finalizeUserTranscript does not emit an empty user transcript when pendingUserText is empty', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // Assistant starts speaking without any preceding user transcript delta
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Hello world',
+        });
+
+        // delegation.created triggers finalizeUserTranscript as well
+        client.Channel.EmitServer({
+            type: 'session.delegation.created',
+            delegation_id: 'del_empty',
+            target: 'responses',
+        });
+
+        // User transcript array must remain empty (no empty User events emitted)
+        const userTranscripts = transcripts.filter((t) => t.Role === 'User');
+        expect(userTranscripts.length).toBe(0);
+    });
+
     it('Step 3: batches three parallel tool calls arriving out of order with exactly one response.create', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();

@@ -20,11 +20,15 @@ for this; the cost guide calls its own figure "illustrative". Backend reasoning 
 Tier 2 = 50, Tier 3 = 200, Tier 4 = 300, Tier 5 = 500. **Modalities: Text and Audio, in and out.
 Image and Video unsupported.**
 
-> **Open items resolution** ⛳ — all settled during driver implementation:
-> - **Live WebSocket handshake headers**: Recovered from wire inspection (`Authorization: Bearer <token>`, `OpenAI-Beta: realtime=v1` / `gpt-live-1`), handled cleanly in `OpenAILiveRealtime`.
-> - **`audio.output.voice` settability on WebRTC path**: Settable via server-side SDP broker (`POST /v1/live/sessions`) which binds voice and session config into the session initialization ticket prior to offer exchange.
-> - **`transport.ringing`/`answered`/`failed`**: Confirmed SDK-only artifacts; wire transport uses standard WebRTC / SIP connection states.
-> - **WebSocket keepalive, reconnection and close codes**: Managed via `_closed` state tracking, heartbeat pings, and clean terminal frame dispatch on `session.close`.
+> **Open items status** ⛳:
+>
+> *Settled by implementation:*
+> - **Live WebSocket handshake headers**: The driver sends `Authorization: Bearer <key>` only (verified against `openai@7.15.0 src/resources/live/ws.ts`). Live does **not** use the classic Realtime `OpenAI-Beta: realtime=v1` header; bearer auth on the connection URL path (`/v1/live/sessions`) is sufficient.
+>
+> *Still open / pending live validation:*
+> - **`audio.output.voice` settability on WebRTC path**: We bind voice into the broker payload to `POST /v1/live/sessions`; unverified against a live session whether the provider honours or ignores it on WebRTC (published WebRTC samples omit voice).
+> - **`transport.ringing`/`answered`/`failed`**: SDK types declare them, but they have zero coverage across all twelve published guides; unverified against live inbound SIP traffic.
+> - **WebSocket keepalive, reconnection and close codes**: The driver tracks lifecycle via `_closed` state guards and clean `session.close` dispatch; wire ping/pong heartbeat handling is unverified and not currently implemented.
 
 ---
 
@@ -243,7 +247,7 @@ New `@RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')` plus
 (`Providers/{OpenAI,xAI,HuggingFace,Fireworks,Inception}`, `Vectors/Core`); Live needs ≥ 7.14.0.
 The wire contract is fully SDK-independent — JSON text frames only, base64 audio, Bearer auth, no
 query params, no named subprotocol — so declare the Live wire types locally and build on the existing
-raw-socket adapter. **The handshake header set** ⛳ (`Authorization: Bearer <key>`, `OpenAI-Beta: realtime=v1`) was verified from wire inspection and wired directly into `OpenAILiveRealtime`.
+raw-socket adapter. **The handshake header set** ⛳ was verified from `openai@7.15.0 src/resources/live/ws.ts`: `Authorization: Bearer <key>` only (no `OpenAI-Beta` header).
 
 ### 4.1 Handshake and framing
 
@@ -343,7 +347,7 @@ are **forbidden** there (media rides the tracks); omit `audio.format` entirely.
 
 **[R2] Creating a WebRTC session pre-bills 15 seconds of voice duration**, credited back once the
 session runs. A broker that mints a session at page load rather than at first speech pays 15 s per
-abandoned page. ⛳ `audio.output.voice` settability on this path is resolved: the server-side SDP broker binds voice and session config into the payload to `POST /v1/live/sessions` prior to offer exchange.
+abandoned page. ⛳ Whether `audio.output.voice` is honoured on this path remains unverified: the server-side SDP broker binds voice into the payload to `POST /v1/live/sessions`, but provider-side voice selection on WebRTC is absent from published samples.
 
 ---
 
@@ -465,7 +469,7 @@ and treated as false under Zero Data Retention; a `StartRecording` API implies s
 
 | Phase | Status | Work | Gate |
 |---|---|---|---|
-| **P0** | In progress | The bridge fixes in §7 + Twilio flush. Independent of Live; ship first | regression on existing telephony |
+| **P0** | Shipped | The bridge fixes in §7 + Twilio flush. Independent of Live; ship first | regression on existing telephony |
 | **P1** | Shipped | Reasoning-plane interfaces + `ModelConfiguration.Realtime.Reasoning` + CodeGen | builds clean, cascade unit tests |
 | **P2** | Shipped | `OpenAILiveRealtime` on a raw socket, **local plane only** | loopback + a real `gpt-live-1` call |
 | **P3** | Shipped | Metadata rows + per-minute cost + **modality junction rows** + API key | `mj sync validate`; Integration Tier |
@@ -474,7 +478,7 @@ and treated as false under Zero Data Retention; a `StartRecording` API implies s
 | **P6** | Planned | `APIName` cleanup — Inworld + ElevenLabs migrate to `Reasoning.Remote.Ref` | **breaking**; both drivers re-tested |
 | **P7** | Partial | `OpenAISipBridge` + `BaseDetachedMediaBridge` + webhook ingress + Standard-Webhooks HMAC | inbound call, hangup, DTMF receive, `session.closed` collected |
 | **P8** | Shipped | Browser WebRTC: SDP broker + `OpenAILiveClient` | 15 s pre-bill accounted for |
-| **P9** | Planned | `audio/pcmu` passthrough on the server-bridged path | latency measured vs today |
+| **P9** | Shipped | `audio/pcmu` passthrough on the server-bridged path | latency measured vs today |
 
 P0 and P1 are independently valuable and should not wait.
 

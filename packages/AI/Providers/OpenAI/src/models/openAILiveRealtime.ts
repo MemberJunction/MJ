@@ -412,6 +412,10 @@ export class OpenAILiveSession implements IRealtimeSession {
             return fromStyle.trim();
         }
 
+        // options.persona has an inline structural shape, so it may receive a plain deserialized
+        // object where StyleDescriptors is already parsed as an object (e.g. in test fixtures or
+        // JSON configs) rather than the entity class instance where StyleDescriptors is a raw
+        // JSON string and StyleDescriptorsObject is the parsed accessor.
         const personaStyleObj =
             this._options.persona?.StyleDescriptorsObject ??
             (typeof this._options.persona?.['StyleDescriptors'] === 'object' && this._options.persona?.['StyleDescriptors'] !== null
