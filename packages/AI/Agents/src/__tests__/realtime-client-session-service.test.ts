@@ -2292,5 +2292,81 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             expect(result[1].Name).toBe('CustomTool');
             expect(result[2].Name).toBe('OtherTool');
         });
+
+        it('unifies config derivation: directActions on co-agent only projects tools AND executes them', async () => {
+            const svc = new TestableService();
+            svc.ResolveModelResult = {
+                Model: svc.Model,
+                ModelID: 'm1',
+                VendorID: 'v1',
+                APIName: 'gpt-realtime',
+                DriverClass: 'OpenAIRealtime'
+            };
+            svc.TargetActions = [mockEmailAction, mockTaskAction];
+
+            const coAgent = makeCoAgent({
+                TypeConfiguration: JSON.stringify({
+                    realtime: {
+                        directActions: {
+                            enabled: true,
+                            actionNames: ['SendEmail']
+                        }
+                    }
+                })
+            });
+
+            // Target agent has NO directActions configuration.
+            svc.TargetAgentNames = { 'target-1': 'Sales Agent' };
+
+            const prep = await svc.PrepareClientSession(
+                makePrepInput({ CoAgent: coAgent, AgentSessionID: 'session-unified-1' }),
+                contextUser,
+                provider
+            );
+
+            expect(prep.Success).toBe(true);
+
+            // 1. Projection: tool is present in SessionParams.Tools
+            const tools = prep.SessionParams!.Tools ?? [];
+            expect(tools.some(t => t.Name === 'SendEmail')).toBe(true);
+            expect(tools.some(t => t.Name === 'CreateTask')).toBe(false);
+
+            // 2. Execution: executing SendEmail via executeNonTargetTool succeeds
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Sent email to test@domain.com successfully';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            const emailCall: RealtimeToolCall = {
+                CallID: 'call-email',
+                ToolName: 'SendEmail',
+                Arguments: JSON.stringify({ To: 'test@domain.com' })
+            };
+            const emailInput: ExecuteRelayedToolInput = {
+                AgentSessionID: 'session-unified-1',
+                TargetAgentID: 'target-1',
+                Call: emailCall
+            };
+
+            const execResult = await svc.ExposeExecuteNonTargetTool(emailCall, emailInput, contextUser, provider);
+            expect(execResult.Success).toBe(true);
+            expect(execResult.Output).toBe('Sent email to test@domain.com successfully');
+            expect(runSpy).toHaveBeenCalled();
+
+            // 3. Execution: executing CreateTask (not in co-agent allowlist) is rejected with clear message
+            const taskCall: RealtimeToolCall = {
+                CallID: 'call-task',
+                ToolName: 'CreateTask',
+                Arguments: JSON.stringify({ Title: 'Task' })
+            };
+            const taskInput: ExecuteRelayedToolInput = {
+                AgentSessionID: 'session-unified-1',
+                TargetAgentID: 'target-1',
+                Call: taskCall
+            };
+            const taskResult = await svc.ExposeExecuteNonTargetTool(taskCall, taskInput, contextUser, provider);
+            expect(taskResult.Success).toBe(false);
+            expect(taskResult.Output).toContain('not enabled for direct voice invocation');
+        });
     });
 });

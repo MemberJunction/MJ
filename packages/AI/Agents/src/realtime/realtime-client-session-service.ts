@@ -295,6 +295,12 @@ export interface ExecuteRelayedToolInput {
      * result. Absent/empty ⇒ classic single-target behavior (every call routes to {@link TargetAgentID}).
      */
     AllowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * Optional direct actions configuration for this session, derived once during session prep
+     * (cascade: co-agent + runtime overrides + target + app settings). When present, direct action
+     * enforcement checks this configuration instead of recomputing from target alone.
+     */
+    DirectActions?: RealtimeDirectActionsConfig;
     /** The tool call the browser relayed from the provider. */
     Call: RealtimeToolCall;
     /**
@@ -480,6 +486,9 @@ export class RealtimeClientSessionService {
 
     /** Maps targetAgentID -> (wireName -> MJActionEntityExtended) fallback built during tool projection. */
     protected readonly targetWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+
+    /** Maps session id -> direct actions config resolved during session prep. */
+    protected readonly sessionDirectConfigs = new Map<string, RealtimeDirectActionsConfig>();
 
     /**
      * Builds a wire-name to action map from candidate actions, sanitizing each
@@ -705,6 +714,7 @@ export class RealtimeClientSessionService {
                         ParentRunID: obs?.CoAgentRunID,
                         TargetAgentID: input.TargetAgentID,
                         AllowedAgents: prep.EffectiveConfig?.realtime?.allowedAgents,
+                        DirectActions: prep.EffectiveConfig?.realtime?.directActions,
                         Call: call,
                     },
                     contextUser, provider,
@@ -2702,6 +2712,9 @@ export class RealtimeClientSessionService {
         const wireMap = this.buildWireActionMap(allowedActions);
         if (agentSessionID) {
             this.sessionWireActionMaps.set(agentSessionID, wireMap);
+            if (directConfig) {
+                this.sessionDirectConfigs.set(agentSessionID, directConfig);
+            }
         }
         this.targetWireActionMaps.set(targetAgentID, wireMap);
 
@@ -2798,12 +2811,10 @@ export class RealtimeClientSessionService {
         }
 
         const candidateActions = this.getTargetAgentActions(target.ID);
-        const wireMap = (input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID) : undefined)
-            ?? this.targetWireActionMaps.get(target.ID)
-            ?? this.buildWireActionMap(candidateActions);
-
-        const action = wireMap.get(call.ToolName)
-            ?? Array.from(wireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];
+        const candidateWireMap = this.buildWireActionMap(candidateActions);
+        const action = (input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID)?.get(call.ToolName) : undefined)
+            ?? candidateWireMap.get(call.ToolName)
+            ?? Array.from(candidateWireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];
 
         if (!action) {
             return {
@@ -2813,8 +2824,9 @@ export class RealtimeClientSessionService {
             };
         }
 
-        const effectiveConfig = this.resolveEffectiveConfig(target, undefined, target);
-        const directConfig = GetDirectActionsConfig(effectiveConfig);
+        const directConfig = input?.DirectActions
+            ?? (input?.AgentSessionID ? this.sessionDirectConfigs.get(input.AgentSessionID) : undefined)
+            ?? GetDirectActionsConfig(this.resolveEffectiveConfig(target, undefined, target));
 
         if (!IsActionAllowedForDirectInvocation(action.Name, directConfig)) {
             return {

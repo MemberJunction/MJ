@@ -49,6 +49,7 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     RealtimeAllowedAgent,
+    RealtimeDirectActionsConfig,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
@@ -181,6 +182,11 @@ interface RealtimeSessionConfig {
      * model-named colleague against it without re-resolving the cascade. Absent ⇒ single-target behavior.
      */
     allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * The session's effective direct actions configuration (derived from the full config cascade at start).
+     * Persisted so each relayed direct action call enforces against the exact same config used for projection.
+     */
+    directActions?: RealtimeDirectActionsConfig;
     /**
      * Per-session override for the agent's media kit — a `MJ: Collections` id that takes precedence
      * over the agent's `DefaultMediaCollectionID` when the server-side `MediaChannelServer` resolves
@@ -532,6 +538,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
                 // colleague in the call is validated against this; absent ⇒ single-target behavior.
                 AllowedAgents: await this.filterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
+                DirectActions: config.directActions,
                 // Attribution follows the VISITOR even when `runUser` is elevated: the delegated run
                 // row and its context-memory scope must stay the person's, not the system user's.
                 AttributionUserID: contextUser.ID,
@@ -1701,6 +1708,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         await this.persistObservabilityRunIDs(
             session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID,
             applicationId, prep.EffectiveConfig?.realtime?.allowedAgents,
+            prep.EffectiveConfig?.realtime?.directActions,
         );
 
         const cfg = prep.ClientConfig;
@@ -1734,6 +1742,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         coAgentRunStepID?: string,
         applicationID?: string,
         allowedAgents?: RealtimeAllowedAgent[],
+        directActions?: RealtimeDirectActionsConfig,
     ): Promise<void> {
         // Preserve any server-authoritative voice deadline stamped at session start (this rebuilds the
         // full config, so read the existing value forward rather than dropping it).
@@ -1746,6 +1755,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             maxSessionDeadlineIso: existing?.maxSessionDeadlineIso,
             applicationID,
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
+            directActions,
         };
         session.Config_ = JSON.stringify(config);
         const saved = await session.Save();
@@ -2476,6 +2486,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                             typeof parsed.maxSessionDeadlineIso === 'string' ? parsed.maxSessionDeadlineIso : undefined,
                         applicationID: typeof parsed.applicationID === 'string' ? parsed.applicationID : undefined,
                         allowedAgents: Array.isArray(parsed.allowedAgents) ? parsed.allowedAgents : undefined,
+                        directActions:
+                            parsed.directActions && typeof parsed.directActions === 'object' && typeof parsed.directActions.enabled === 'boolean'
+                                ? (parsed.directActions as RealtimeDirectActionsConfig)
+                                : undefined,
                     };
                 }
             } catch {
