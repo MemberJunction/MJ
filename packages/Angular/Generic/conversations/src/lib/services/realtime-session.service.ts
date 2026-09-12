@@ -449,6 +449,10 @@ export class RealtimeSessionService {
   private sessionConversationId: string | null = null;
   /** First final user utterance of the live session (the naming seed). */
   private firstUserTranscript: string | null = null;
+  /** Buffer accumulating streaming user interim deltas into a single in-progress bubble. */
+  private pendingUserCaption = '';
+  /** Whether an in-place interim user caption is currently placed in `_captions$`. */
+  private hasActiveInterimUserCaption = false;
 
   /**
    * When the active/last session CREATED its conversation (started without one), the new
@@ -1742,9 +1746,21 @@ export class RealtimeSessionService {
       // silence gap is timed where its audio really is — not inherited from the prior
       // turn's end. Narration interims are ephemeral and excluded (Kind guard inside).
       this.markTurnAudioStart(transcript.Kind);
+      if (transcript.Role === 'User') {
+        if (!this.hasActiveInterimUserCaption) {
+          this.hasActiveInterimUserCaption = true;
+          this.pendingUserCaption = transcript.Text;
+          this.appendCaption({ Role: 'User', Text: this.pendingUserCaption });
+        } else {
+          this.pendingUserCaption += transcript.Text;
+          this.replaceLastCaption('User', this.pendingUserCaption);
+        }
+      }
       return;
     }
     if (transcript.Role === 'Assistant') {
+      this.hasActiveInterimUserCaption = false;
+      this.pendingUserCaption = '';
       if (transcript.Kind === 'narration') {
         this._delegationNarration$.next({ Text: transcript.Text });
         // Remember what was actually SAID so later updates build on it instead of repeating.
@@ -1762,6 +1778,14 @@ export class RealtimeSessionService {
         this.appendCaption({ Role: 'Assistant', Text: transcript.Text });
         await this.relayTranscript('assistant', transcript.Text);
       }
+    } else if (this.hasActiveInterimUserCaption) {
+      this.hasActiveInterimUserCaption = false;
+      this.pendingUserCaption = '';
+      this.replaceLastCaption('User', transcript.Text);
+      if (this.firstUserTranscript === null && transcript.Text.trim().length > 0) {
+        this.firstUserTranscript = transcript.Text;
+      }
+      await this.relayTranscript('user', transcript.Text);
     } else if (transcript.ReplacesPrevious) {
       // STREAMING user transcription: providers like Grok and OpenAI Live emit the growing utterance as repeated
       // events (each the full text so far), flagging all but the first ReplacesPrevious. Update the
@@ -2699,6 +2723,8 @@ export class RealtimeSessionService {
   /** Resets reactive + internal state at the start of a session. */
   private resetState(): void {
     this._captions$.next([]);
+    this.pendingUserCaption = '';
+    this.hasActiveInterimUserCaption = false;
     this.SetMinimized(false);
     this.stopSegmentFlushing();
     this.segmentIndex = 0;

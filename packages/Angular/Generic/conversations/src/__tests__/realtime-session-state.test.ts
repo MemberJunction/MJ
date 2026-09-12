@@ -128,5 +128,27 @@ describe('RealtimeSessionState — in-place caption updates', () => {
     expect(state.Items).toHaveLength(1);
     expect(state.Items[0]).toEqual({ Kind: 'caption', Role: 'User', Text: 'Hello world' });
   });
+
+  it('feeds three deltas plus a final and asserts ONE caption containing the full text', () => {
+    // Delta 1
+    harness.captions$.next([{ Role: 'User', Text: 'Hello' }]);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0]).toEqual({ Kind: 'caption', Role: 'User', Text: 'Hello' });
+
+    // Delta 2
+    harness.captions$.next([{ Role: 'User', Text: 'Hello world' }]);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0]).toEqual({ Kind: 'caption', Role: 'User', Text: 'Hello world' });
+
+    // Delta 3
+    harness.captions$.next([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0]).toEqual({ Kind: 'caption', Role: 'User', Text: 'Hello world!' });
+
+    // Final
+    harness.captions$.next([{ Role: 'User', Text: 'Hello world!' }]);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0]).toEqual({ Kind: 'caption', Role: 'User', Text: 'Hello world!' });
+  });
 });
 
