@@ -288,6 +288,21 @@
   --mj-login-panel-bg: var(--mj-bg-surface);
   --mj-login-panel-flex: 1;
   --mj-login-picker-max-width: 400px;
+  /* Width of the sign-in card in the 'centered' layout, where the panel stops being a column
+     and becomes a card floating on the banner background. */
+  --mj-login-centered-card-width: 440px;
+  /* Login cards — the optional tiles a deployment configures beside the sign-in options.
+     Two surfaces, because the two regions sit on different grounds: panel cards on the sign-in
+     surface, banner cards on the story panel's background. Both derive from tokens that already
+     swap with the theme, so neither needs a dark-mode entry of its own. */
+  --mj-login-card-bg: var(--mj-bg-surface-card);
+  --mj-login-card-border: var(--mj-border-default);
+  --mj-login-card-text: var(--mj-text-primary);
+  --mj-login-card-text-secondary: var(--mj-text-secondary);
+  --mj-login-card-radius: var(--mj-radius-md);
+  --mj-login-banner-card-bg: color-mix(in srgb, var(--mj-login-banner-text) 10%, transparent);
+  --mj-login-banner-card-border: color-mix(in srgb, var(--mj-login-banner-text) 24%, transparent);
+  --mj-login-banner-card-text: var(--mj-login-banner-text);
   /* Legacy inputs from the pre-Login-C animated-waves banner. Nothing in-tree consumes
      them any more; kept because downstream theme sheets may still set or read them. */
   --mj-login-grad-end:   var(--mj-color-brand-300);

@@ -237,13 +237,56 @@ against the login DOM. Defaults reproduce the stock design (Login C, editorial s
 | `--mj-login-banner-flex` / `--mj-login-panel-flex` | 1.05 / 1 | The editorial split between story panel and sign-in column |
 | `--mj-login-panel-bg` | `--mj-bg-surface` | The sign-in column's background |
 | `--mj-login-picker-max-width` | 400px | Width of the sign-in stack (`<mj-login-picker>`) |
+| `--mj-login-centered-card-width` | 440px | Width of the sign-in card in the `centered` layout |
+| `--mj-login-card-bg` / `-border` / `-text` / `-text-secondary` / `-radius` | Surface-card set | Configured cards in the sign-in region |
+| `--mj-login-banner-card-bg` / `-border` / `-text` | Translucent over the banner | Configured cards in the story region |
 
-The page's copy is host API rather than tokens: `MJExplorerAppComponent` takes `LoginHeading`,
-`LoginShowPoweredBy`, `LoginBannerAlignment`, `LoginBannerTitle`, `LoginBannerSubtitle` and
-`LoginBannerLogoLabel` as `@Input`s.
+Only `--mj-login-grad-start` / `-mid` carry dark-mode values. Everything else either references a
+semantic token that swaps on its own or is theme-constant by design (the banner stays dark in both
+themes), and `--mj-login-banner-bg` picks the dark stops up through `var()` indirection.
 
 (`--mj-login-grad-end` and `--mj-login-wave-1/2/3` are legacy inputs from the pre-Login-C animated
 banner; nothing in-tree consumes them.)
+
+### Composing the login screen (beyond color)
+
+Tokens restyle the login screen; two further mechanisms **rearrange and extend** it, so a
+deployment does not have to fork the component or write CSS against its internals.
+
+**Layout and content — `@Input`s on `<mj-explorer-app>`** (every default reproduces the stock
+screen): `LoginLayout` (`'split'` · `'split-reverse'` · `'centered'`), `LoginHeading`,
+`LoginShowPoweredBy`, `LoginBannerAlignment`, `LoginBannerTitle`, `LoginBannerSubtitle`,
+`LoginBannerLogoLabel`, and `LoginCards` — a `MJLoginCard[]` of tiles (icon, title, text, optional
+link) each naming the region it belongs to. Cards exist so content a deployment wants to *add*
+needs configuration rather than a template.
+
+**Arbitrary markup — the `mjLoginSlot` directive**, the same shape as `mjChatSlot` in
+`@memberjunction/ng-conversations`:
+
+```html
+<mj-explorer-app [LoginLayout]="'centered'" [LoginCards]="cards">
+  <ng-template mjLoginSlot="panelFooter">
+    <a href="/terms">Terms</a> · <a href="/privacy">Privacy</a>
+  </ng-template>
+</mj-explorer-app>
+```
+
+| Slot | Effect |
+|---|---|
+| `bannerContent` | **Replaces** the story panel's brand block (so the banner copy inputs no longer apply) |
+| `bannerFooter` | **Adds** below it — suppresses the `'banner'` cards, which are this region's stock content |
+| `panelHeader` | **Adds** above the sign-in options |
+| `panelFooter` | **Adds** below them — suppresses the `'panel'` cards |
+
+Two rules hold across all of it: a layout **moves** regions and never drops one, so content stays
+visible whichever layout is chosen; and `<mj-login-picker>` is deliberately not replaceable — a
+host surrounds sign-in rather than owning it.
+
+Note what is *not* here: unlike a dashboard, the login screen cannot be laid out from MJ metadata,
+because it renders before any authenticated call is possible — the only pre-auth server surface is
+the allow-listed public provider catalog. A deployment that keeps per-tenant login config somewhere
+resolves it itself (as Explorer already resolves that catalog before bootstrap) and binds the
+inputs above.
 
 ### Typography Tokens
 

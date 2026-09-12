@@ -75,9 +75,16 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
+  /* NOT justify-content: center — the brand block centres with auto margins below instead.
+     `overflow-y: auto` + centred justification is the classic clipping trap: once the content is
+     taller than the column, the overflow goes above the scroll origin and cannot be reached.
+     Auto margins centre while there is room and collapse to 0 when there is not. The app shell
+     sets `html, body { overflow: hidden }`, so a column that does not scroll its own content
+     simply loses it. */
+  justify-content: flex-start;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   /* dvh, not vh — mobile browsers include the collapsing URL bar in vh, which pushes the
      picker below the fold on first paint. */
   height: 100dvh;
@@ -90,7 +97,13 @@
   background: var(--mj-login-banner-bg);
 }
 
-/* Brand block: logo, welcome, sub — centered as one group by the column's justify-content. */
+/* Brand block: logo, welcome, sub — centred as one group by its own auto margins, so a banner
+   with more content than fits scrolls instead of losing the top of it. */
+.login-wrapper .banner-brand {
+  margin-block: auto;
+  flex-shrink: 0;
+  width: 100%;
+}
 
 /* Opt-in centering for a logo-led brand (host: [LoginBannerAlignment]="'center'"). The stacked
    layout below already centers; this is the same choice on the wide layout, so a host does not
@@ -142,7 +155,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* See .main-banner — auto margins on the stack, not centred justification, so a deployment
+     that adds regions (or a tenant with many identity providers) can still reach the button. */
+  justify-content: flex-start;
+  overflow-y: auto;
   background: var(--mj-login-panel-bg, var(--mj-bg-surface));
   /* dvh, not vh — see .main-banner. */
   height: 100dvh;
@@ -154,6 +170,154 @@
    the empty-catalog CTA in all three states. The bespoke `.login-btn button` block that used to
    live here was overriding the mjButton directive, which is why that CTA never picked up the
    standard focus ring or 44px hit target. */
+
+/* ---- Projected regions and configured cards ---- */
+
+/* One column in the sign-in pane, so a projected header/footer lines up with the picker's
+   edges instead of the pane's. Width comes from the same token the picker reads. */
+.login-wrapper .login-panel-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--mj-space-5);
+  width: 100%;
+  max-width: var(--mj-login-picker-max-width, 400px);
+  margin-block: auto;
+  flex-shrink: 0;
+}
+
+/* A slot's own wrapper. Deliberately nothing but flow: whatever the host projects is the
+   host's to style, and a margin here would be us second-guessing it. */
+.login-wrapper .login-region {
+  min-width: 0;
+}
+
+.login-wrapper .login-cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mj-space-2);
+  min-width: 0;
+}
+
+/* Cards under the brand block need separating from it; in the sign-in pane the stack's gap
+   already does that, so only the banner copy gets the extra top margin. */
+.login-wrapper .banner-brand .login-cards {
+  margin-top: var(--mj-space-8);
+}
+
+.login-wrapper .login-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mj-space-3);
+  padding: var(--mj-space-3) var(--mj-space-4);
+  border: 1px solid var(--mj-login-card-border);
+  border-radius: var(--mj-login-card-radius);
+  background: var(--mj-login-card-bg);
+  color: var(--mj-login-card-text);
+  text-align: left;
+}
+
+.login-wrapper .login-card--link {
+  transition: background-color var(--mj-transition-base), border-color var(--mj-transition-base);
+}
+
+.login-wrapper .login-card--link:hover {
+  border-color: var(--mj-brand-primary);
+  background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-login-card-bg));
+}
+
+.login-wrapper .login-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--mj-radius-sm);
+  background: color-mix(in srgb, currentColor 12%, transparent);
+  font-size: var(--mj-text-sm);
+}
+
+.login-wrapper .login-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.login-wrapper .login-card__title {
+  font-size: var(--mj-text-sm);
+  font-weight: var(--mj-font-semibold);
+}
+
+.login-wrapper .login-card__text {
+  font-size: var(--mj-text-xs);
+  color: var(--mj-login-card-text-secondary);
+}
+
+/* Stretched link: the anchor's ::after covers the card, so the whole tile is the click target
+   while the accessible name stays the title alone. */
+.login-wrapper .login-card__anchor {
+  color: inherit;
+  text-decoration: none;
+}
+
+.login-wrapper .login-card__anchor::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.login-wrapper .login-card__anchor:focus-visible::after {
+  box-shadow: var(--mj-focus-ring);
+}
+
+.login-wrapper .login-card__chevron {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  font-size: var(--mj-text-sm);
+  color: var(--mj-login-card-text-secondary);
+}
+
+/* Screen-reader-only new-tab hint, scoped to this surface the way mj-dropdown scopes its own. */
+.login-wrapper .login-card__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Banner cards sit on the story panel's background rather than a surface, so they swap to the
+   translucent set derived from the banner's own text color. */
+.login-wrapper .login-cards--on-banner .login-card {
+  border-color: var(--mj-login-banner-card-border);
+  background: var(--mj-login-banner-card-bg);
+  color: var(--mj-login-banner-card-text);
+}
+
+.login-wrapper .login-cards--on-banner .login-card__text,
+.login-wrapper .login-cards--on-banner .login-card__chevron {
+  color: color-mix(in srgb, var(--mj-login-banner-card-text) 78%, transparent);
+}
+
+.login-wrapper .login-cards--on-banner .login-card--link:hover {
+  border-color: color-mix(in srgb, var(--mj-login-banner-card-text) 45%, transparent);
+  background: color-mix(in srgb, var(--mj-login-banner-card-text) 18%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-wrapper .login-card--link {
+    transition: none;
+  }
+}
 
 /* ---- Misc ---- */
 
@@ -169,6 +333,17 @@
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
+}
+
+/* ---- Layout: split-reverse ---- */
+
+/* The mirrored editorial split. DOM order is untouched — the story stays first for a screen
+   reader and for the stacked layout — so only the visual order flips.
+   ORDERING: this sits BEFORE the breakpoints on purpose. The stacked rule below is
+   `.login-wrapper { flex-direction: column }` at the same specificity, so it must come later
+   to win; a mirrored split has no meaning once the panes stack. */
+.login-wrapper--split-reverse {
+  flex-direction: row-reverse;
 }
 
 /* ========================================
@@ -187,7 +362,12 @@
     width: 100%;
     padding: var(--mj-space-6);
     align-items: center;
-    justify-content: flex-end;
+  }
+
+  /* Stacked, the logo sits at the BOTTOM of the short banner (the old justify-content: flex-end).
+     `auto 0` keeps that while leaving the top reachable if the content ever outgrows 35dvh. */
+  .login-wrapper .main-banner .banner-brand {
+    margin-block: auto 0;
   }
 
   /* Login C collapses the story panel to just the logo once the panes stack — a stacked
@@ -229,5 +409,79 @@
   .theme-toggle {
     top: var(--mj-space-2);
     right: var(--mj-space-2);
+  }
+}
+
+/* ========================================
+   Layout: centered
+   ======================================== */
+
+/* The single-column sign-in page: story content on a full-bleed banner background, sign-in
+   options in a card on top of it. Everything the other layouts render still renders — a layout
+   moves the regions, it never drops one.
+   ORDERING: this block sits AFTER the breakpoints deliberately. The stacked rules above target
+   `.login-wrapper .main-banner` (0,2,0) and `.login-wrapper .main-banner .banner-welcome`
+   (0,3,0); these match that specificity and follow them, so the centered layout holds at every
+   width rather than reverting to a 35dvh banner on a phone. */
+.login-wrapper--centered {
+  flex-direction: column;
+  justify-content: flex-start;
+  /* The wrapper is the scroller in this layout (the app shell's `html, body { overflow: hidden }`
+     means the page itself never scrolls), and the two columns centre within it by auto margin —
+     same reason as the split layout: centred justification would put overflow out of reach. */
+  height: 100dvh;
+  overflow-y: auto;
+  padding: var(--mj-space-8) var(--mj-space-4);
+  box-sizing: border-box;
+  background: var(--mj-login-banner-bg);
+}
+
+.login-wrapper--centered .main-banner {
+  flex: 0 0 auto;
+  width: 100%;
+  height: auto;
+  margin-top: auto;
+  /* The wrapper scrolls in this layout; a nested scroller here would trap the content. */
+  overflow: visible;
+  padding: 0 0 var(--mj-space-8);
+  align-items: center;
+  justify-content: flex-start;
+  /* The wrapper paints the background for the whole page in this layout. */
+  background: none;
+}
+
+.login-wrapper--centered .main-banner .banner-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* The stacked layout hides the story copy because a 35dvh banner has no room for it. This one
+   is auto-height and does, so it comes back — centered, on the banner background it was
+   coloured for. */
+.login-wrapper--centered .main-banner .banner-welcome,
+.login-wrapper--centered .main-banner .banner-sub {
+  display: block;
+  text-align: center;
+}
+
+.login-wrapper--centered .login-btn {
+  flex: 0 0 auto;
+  width: min(100%, var(--mj-login-centered-card-width, 440px));
+  height: auto;
+  margin-bottom: auto;
+  overflow: visible;
+  padding: var(--mj-space-10) var(--mj-space-8);
+  border-radius: var(--mj-radius-lg);
+  box-shadow: var(--mj-shadow-xl);
+}
+
+@media (max-width: 480px) {
+  .login-wrapper--centered {
+    padding: var(--mj-space-6) var(--mj-space-4);
+  }
+
+  .login-wrapper--centered .login-btn {
+    padding: var(--mj-space-8) var(--mj-space-5);
   }
 }

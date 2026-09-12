@@ -8,7 +8,7 @@
  *   <mj-explorer-app></mj-explorer-app>
  */
 
-import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector } from '@angular/core';
+import { Component, OnInit, OnDestroy, Inject, Input, Optional, ViewEncapsulation, ChangeDetectorRef, ViewContainerRef, ComponentRef, Type, EnvironmentInjector, ContentChildren, QueryList, TemplateRef } from '@angular/core';
 import { DOCUMENT } from '@angular/common';
 import { Router, NavigationEnd } from '@angular/router';
 import { Subject } from 'rxjs';
@@ -36,6 +36,8 @@ import { InstanceConfigEngine } from '@memberjunction/core-entities';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJ_PRE_SHELL_GUARD, PreShellGuard } from './pre-shell-guard';
+import { MJLoginSlotDirective, type MJLoginSlotName } from './login-slot.directive';
+import type { MJLoginCard, MJLoginLayout } from './login-screen.types';
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -100,6 +102,58 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    * @since 6.1.0
    */
   @Input() LoginBannerLogoLabel = 'MemberJunction Logo';
+
+  /**
+   * How the story panel and the sign-in column are arranged — see {@link MJLoginLayout}.
+   *
+   * The stock `'split'` is the editorial layout; `'split-reverse'` mirrors it; `'centered'` is the
+   * single-column sign-in page, where the story content sits on a full-bleed banner background and
+   * the sign-in column becomes a card on top of it. Every slot and every input still applies in
+   * each layout — a layout decides where the regions go, never whether they exist.
+   * @since 6.1.0
+   */
+  @Input() LoginLayout: MJLoginLayout = 'split';
+
+  /**
+   * Extra content for the login screen expressed as data rather than markup — a support route, a
+   * trust mark, a policy link. Each card names the region it belongs to (see {@link MJLoginCard}).
+   *
+   * This is the channel a *configured* deployment uses: nothing about the login screen can come
+   * from MJ metadata, because the screen renders before any authenticated call is possible (the
+   * only pre-auth server surface is the allow-listed public provider catalog). A host that keeps
+   * per-tenant branding somewhere resolves it itself — as Explorer already resolves the provider
+   * catalog before bootstrap — and binds it here.
+   *
+   * A host that needs richer content than a card projects a template into the region's slot
+   * instead, which takes over from the cards there.
+   * @since 6.1.0
+   */
+  @Input() LoginCards: MJLoginCard[] = [];
+
+  /**
+   * Templates projected by the host through the `mjLoginSlot` directive, resolved by
+   * {@link LoginSlotTemplate}.
+   */
+  @ContentChildren(MJLoginSlotDirective) private loginSlotChildren!: QueryList<MJLoginSlotDirective>;
+
+  /**
+   * Resolves a slot name to the host's `TemplateRef`, or `null` when nothing was projected for it
+   * — in which case the template renders that region's default (the stock brand block, the
+   * configured cards, or nothing, per {@link MJLoginSlotName}).
+   */
+  public LoginSlotTemplate(name: MJLoginSlotName): TemplateRef<unknown> | null {
+    return this.loginSlotChildren?.find((s) => s.SlotName === name)?.Template ?? null;
+  }
+
+  /** Cards configured for the story panel. */
+  public get LoginBannerCards(): MJLoginCard[] {
+    return this.LoginCards.filter((c) => c.region === 'banner');
+  }
+
+  /** Cards configured for the sign-in column — the default region. */
+  public get LoginPanelCards(): MJLoginCard[] {
+    return this.LoginCards.filter((c) => c.region !== 'banner');
+  }
 
   public title = 'MJ Explorer';
   public initialPath = '/';

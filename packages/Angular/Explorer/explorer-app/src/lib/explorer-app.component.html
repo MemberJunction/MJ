@@ -48,39 +48,104 @@
 @if (!(authBase.isAuthenticated() | async) && !isOAuthCallback) {
   <!-- Show environment validation errors on login page -->
   <mj-system-validation-banner></mj-system-validation-banner>
-  <div class="login-wrapper">
+  <div class="login-wrapper"
+       [class.login-wrapper--split-reverse]="LoginLayout === 'split-reverse'"
+       [class.login-wrapper--centered]="LoginLayout === 'centered'">
     <button class="theme-toggle" (click)="ToggleTheme()" [attr.aria-label]="IsDarkMode ? 'Switch to light mode' : 'Switch to dark mode'">
       <i class="fa-solid" [class.fa-sun]="IsDarkMode" [class.fa-moon]="!IsDarkMode"></i>
     </button>
     <!-- Story panel. Per the locked Login C (Editorial Split) direction: a quiet gradient,
-         no animated waves, so the surface carries any brand rather than MJ's. -->
+         no animated waves, so the surface carries any brand rather than MJ's. Where it sits —
+         leading, trailing, or stacked above a centered card — is LoginLayout's call; what it
+         contains is the bannerContent slot's, falling back to the stock brand block. -->
     <div class="main-banner" [class.main-banner--center]="LoginBannerAlignment === 'center'">
       <div class="banner-brand">
-        <div class="mj-logo-wordmark-login" role="img" [attr.aria-label]="LoginBannerLogoLabel"></div>
-        @if (LoginBannerTitle) {
-          <h1 class="banner-welcome">{{ LoginBannerTitle }}</h1>
+        @if (LoginSlotTemplate('bannerContent'); as bannerContent) {
+          <ng-container [ngTemplateOutlet]="bannerContent"></ng-container>
+        } @else {
+          <div class="mj-logo-wordmark-login" role="img" [attr.aria-label]="LoginBannerLogoLabel"></div>
+          @if (LoginBannerTitle) {
+            <h1 class="banner-welcome">{{ LoginBannerTitle }}</h1>
+          }
+          @if (LoginBannerSubtitle) {
+            <p class="banner-sub">{{ LoginBannerSubtitle }}</p>
+          }
         }
-        @if (LoginBannerSubtitle) {
-          <p class="banner-sub">{{ LoginBannerSubtitle }}</p>
+
+        @if (LoginSlotTemplate('bannerFooter'); as bannerFooter) {
+          <div class="login-region"><ng-container [ngTemplateOutlet]="bannerFooter"></ng-container></div>
+        } @else if (LoginBannerCards.length) {
+          <ng-container [ngTemplateOutlet]="loginCards" [ngTemplateOutletContext]="{ $implicit: LoginBannerCards, onBanner: true }"></ng-container>
         }
       </div>
     </div>
     <div class="login-btn">
-      <!-- One component covers all three states: 2+ providers renders a list, exactly one
-           renders a single primary CTA naming it, and an empty catalog renders the generic
-           fallback CTA for deployments still configured through mj.config.cjs / AUTH_TYPE.
-           Every state is a real mjButton, so the focus ring and hit target are identical. The
-           surrounding chrome is Explorer's; the rows are the same in every MJ app that embeds it. -->
-      <mj-login-picker
-        [Providers]="AuthProviderChoices"
-        [Heading]="LoginHeading"
-        [Subheading]="ProviderPickerLede"
-        [ShowPoweredBy]="LoginShowPoweredBy"
-        [Busy]="SigningIn"
-        FallbackCtaLabel="Log in"
-        (ProviderSelected)="OnAuthProviderSelected($event)"
-        (FallbackSelected)="authBase.login()">
-      </mj-login-picker>
+      <!-- One column, so a projected region lines up with the sign-in options rather than with
+           the page. The picker owns every sign-in control in all three catalog states; the slots
+           deliberately surround it rather than replace it, because a host that replaced it would
+           own signing in. -->
+      <div class="login-panel-stack">
+        @if (LoginSlotTemplate('panelHeader'); as panelHeader) {
+          <div class="login-region"><ng-container [ngTemplateOutlet]="panelHeader"></ng-container></div>
+        }
+        <!-- One component covers all three states: 2+ providers renders a list, exactly one
+             renders a single primary CTA naming it, and an empty catalog renders the generic
+             fallback CTA for deployments still configured through mj.config.cjs / AUTH_TYPE.
+             Every state is a real mjButton, so the focus ring and hit target are identical. The
+             surrounding chrome is Explorer's; the rows are the same in every MJ app that embeds it. -->
+        <mj-login-picker
+          [Providers]="AuthProviderChoices"
+          [Heading]="LoginHeading"
+          [Subheading]="ProviderPickerLede"
+          [ShowPoweredBy]="LoginShowPoweredBy"
+          [Busy]="SigningIn"
+          FallbackCtaLabel="Log in"
+          (ProviderSelected)="OnAuthProviderSelected($event)"
+          (FallbackSelected)="authBase.login()">
+        </mj-login-picker>
+        @if (LoginSlotTemplate('panelFooter'); as panelFooter) {
+          <div class="login-region"><ng-container [ngTemplateOutlet]="panelFooter"></ng-container></div>
+        } @else if (LoginPanelCards.length) {
+          <ng-container [ngTemplateOutlet]="loginCards" [ngTemplateOutletContext]="{ $implicit: LoginPanelCards, onBanner: false }"></ng-container>
+        }
+      </div>
     </div>
   </div>
+
+  <!-- Configured cards, rendered the same way in both regions; only the surface they sit on
+       differs, and that is a class away rather than a second copy of the markup. A card with an
+       href stretches one anchor over the whole card (::after), so the click target is the card
+       while the accessible name stays the title. -->
+  <ng-template #loginCards let-cards let-onBanner="onBanner">
+    <div class="login-cards" [class.login-cards--on-banner]="onBanner">
+      @for (card of cards; track $index) {
+        <div class="login-card" [class.login-card--link]="card.href">
+          @if (card.icon) {
+            <span class="login-card__icon" aria-hidden="true"><i [class]="card.icon"></i></span>
+          }
+          <span class="login-card__body">
+            <span class="login-card__title">
+              @if (card.href) {
+                <a class="login-card__anchor"
+                   [href]="card.href"
+                   [attr.target]="card.newTab ? '_blank' : null"
+                   [attr.rel]="card.newTab ? 'noopener noreferrer' : null">{{ card.title }}<!--
+                   -->@if (card.newTab) {<span class="login-card__sr"> (opens in a new tab)</span>}</a>
+              } @else {
+                {{ card.title }}
+              }
+            </span>
+            @if (card.text) {
+              <span class="login-card__text">{{ card.text }}</span>
+            }
+          </span>
+          @if (card.href) {
+            <span class="login-card__chevron" aria-hidden="true">
+              <i class="fa-solid" [class.fa-arrow-up-right-from-square]="card.newTab" [class.fa-arrow-right]="!card.newTab"></i>
+            </span>
+          }
+        </div>
+      }
+    </div>
+  </ng-template>
 }
