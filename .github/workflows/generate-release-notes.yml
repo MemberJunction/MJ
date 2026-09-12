@@ -139,14 +139,29 @@ jobs:
           prompt: |
             You are a technical analyst working as a release coordinator for MemberJunction. Your task is to create release notes in markdown and update the PR description.
 
+            ## Format
+
+            **Read `releases/README.md` before writing anything.** It defines the template, the
+            required `## TL;DR` section and the house style, and it is the single source of that
+            format. This prompt deliberately does not restate it: the format used to be written
+            out in four places, and three of them had drifted to describe a shape no release had
+            used since v5.51.1. Follow that file — not your memory of what a release note looks
+            like, and not the opening structure of an older file in `releases/`.
+
+            The PR description you produce is pasted into Teams verbatim by the build engineer,
+            and most readers there stop after the TL;DR. It is the release announcement, not
+            just a PR body.
+
             ## Process
 
             1. Compare next HEAD to the latest published version tag (using repo tags, `git fetch --tags && git --no-pager tag -l "v*" --sort=-version:refname | head -n1`) to get the changes in this release.
             2. Figure out the next version (whether patch or minor) using `npx changeset status --since main`
             3. Use both the diff contents and git commit messages to build up the context.
             - The .changeset/ dir also has more focused human-entered notes you can use.
-            4. Write the release notes to tmp/release-<version>.md following the template given below.
+            4. Write the release notes to tmp/release-<version>.md following the format in `releases/README.md`.
             - You can add/remove bullets as needed and omit sections if there are no bullets.
+            - `## TL;DR` is the one section that is never omitted. A later CI step reads the
+              published PR body back and fails the run if it has no TL;DR.
             5. Use the GitHub MCP server to update the PR description with the release notes.
 
             ## Steps to complete:
@@ -156,26 +171,33 @@ jobs:
                - Set the PR title to the version number (e.g., "v2.73.0")
                - Set the PR description to the generated release notes (replace entire description)
 
-            <template>
-            # <6-10 word summary of the entire release>
+            The generated release notes should become the entire PR description, not appended to existing content.
 
-            ## New Features
-            - <Detail>
-            - <Detail>
-            - <Detail>
-
-            ## Improvements
-            - <Detail>
-            - <Detail>
-            - <Detail>
-
-            ## Bug Fixes
-            - <Detail>
-            - <Detail>
-            - <Detail>
-            </template>
-
-            The generated release notes following the template above should become the entire PR description, not appended to existing content.
+      # The agent's own report is not evidence — the sibling job below says exactly that and
+      # then checks its artifact. This job never did, which was survivable while the PR body
+      # was read only by release reviewers. It stopped being survivable when the body became
+      # the release announcement: the build engineer pastes it into Teams verbatim, so a run
+      # that quietly drops the TL;DR ships an announcement missing the part most readers stop
+      # at, and nobody finds out until it is in the channel.
+      #
+      # Check the body that actually shipped, NOT tmp/release-<version>.md. The agent writes
+      # the file and updates the PR in two separate steps; only one of them is the artifact.
+      #
+      # PR path only: a workflow_dispatch carries no PR context at all (see the changeset-gate
+      # note above), so there is no published body to read back.
+      - name: Verify the PR body carries a TL;DR
+        if: github.event_name == 'pull_request' && steps.gemini-release-notes.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          gh pr view "$PR" --json body --jq '.body' > "$RUNNER_TEMP/pr-body.md"
+          # The same shape check the line job runs, so the two generators cannot drift into
+          # producing differently-shaped notes. Unit tested — including the case a naive
+          # "is there a TL;DR heading" grep silently passes:
+          # .github/scripts/__tests__/check-release-notes-shape.test.mjs
+          node .github/scripts/check-release-notes-shape.mjs "$RUNNER_TEMP/pr-body.md"
 
 
   # ─────────────────────────────────────────────────────────────────────────────
@@ -323,26 +345,27 @@ jobs:
             changesets are the highest-quality source: they are what the engineer wrote
             about their own change. Prefer them over commit subjects.
 
-            Read `releases/README.md` for the house format, and `releases/v5.51.1.md` as a
-            worked example of the expected depth and tone.
+            Read `releases/README.md` for the house format — it is authoritative. Use
+            `releases/v5.51.1.md` for the expected depth and tone of the section BULLETS
+            only: it was written before `## TL;DR` was required, so its opening is not a
+            model to copy.
 
             You may run read-only git commands for more detail (`git log`, `git show`,
             `git diff --stat`). Do not modify the repository except for the one file below.
 
             ## Write exactly one file: `releases/v${{ github.event.inputs.version }}.md`
 
-            Follow the house template: an H1 of 6-10 words summarising the release, a short
-            intro paragraph, then `## New Features` / `## Improvements` / `## Bug Fixes`.
-            OMIT any section with no content — a patch release usually has only bug fixes.
+            Follow the template and house style in `releases/README.md` exactly. It is the
+            single definition of both, shared with the two other generators, so there is
+            nothing to reconcile against your own recollection of the format.
 
-            House style, taken from the existing files:
-            - Each bullet opens with a **bolded claim**, then the affected packages in
-              parentheses as backticked names, then the explanation.
-            - Explain the DEFECT and its user-visible consequence, not the code change.
-              "Scheduled jobs silently stopped honouring their activation windows" beats
-              "changed a comparison in isJobDue".
-            - Add an `## Upgrade Notes` section ONLY if a deployment could have depended on
-              the old behaviour. Most patches need none. Do not invent one.
+            The two things this format most often gets wrong:
+            - `## TL;DR` is required, comes FIRST, and is three to five one-sentence bullets
+              that lead with the consequence rather than the code change. Do not ALSO write
+              an unlabelled intro paragraph above the sections — the TL;DR replaces it.
+            - OMIT any section with no content. A patch release usually has only `## TL;DR`
+              and `## Bug Fixes`; an `## Upgrade Notes` section belongs there only if a
+              deployment could have depended on the old behaviour. Do not invent one.
 
             ## Rules
 
@@ -361,13 +384,13 @@ jobs:
           set -euo pipefail
           F="releases/v$VERSION.md"
           [ -f "$F" ] || { echo "::error::$F was not written."; exit 1; }
-          BYTES=$(wc -c < "$F")
-          [ "$BYTES" -ge 400 ] || { echo "::error::$F is only $BYTES bytes — too thin to publish."; exit 1; }
-          head -1 "$F" | grep -q '^# ' || { echo "::error::$F does not start with an H1 summary."; exit 1; }
-          grep -q '^## ' "$F" || { echo "::error::$F has no section headings."; exit 1; }
+          # Shape is checked by the script shared with the Edge job above; see its header
+          # for why "the first ## is TL;DR" is not a sufficient check on its own.
+          node .github/scripts/check-release-notes-shape.mjs "$F"
+          # Scope, which is this job's own concern rather than the format's: the agent was
+          # told to write exactly one file.
           git diff --name-only --exit-code -- . ":(exclude)$F" || {
             echo "::error::the agent modified files other than $F (listed above)."; exit 1; }
-          echo "::notice::$F looks well-formed ($BYTES bytes)"
 
       # Pre-labelled, because the label is the entire point: the docs site builds the
       # line branch, so notes that stop at `next` are published nowhere.

@@ -29,6 +29,10 @@ on:
       - '.github/scripts/backstop-alarm.mjs'
       - '.github/scripts/vitest.config.mts'
       - '.github/scripts/__tests__/**'
+      # The release-notes shape gate runs inside generate-release-notes.yml, not here, but
+      # its vitest suite lives in __tests__ — so an edit to the gate script alone must still
+      # run it. Without this entry the one change that most needs the suite skips it.
+      - '.github/scripts/check-release-notes-shape.mjs'
       # Same reasoning for the dynamic-replace guard (see that step). Without this
       # entry a PR editing only the gate script runs neither the gate nor its own
       # vitest suite — the one change that most needs both.

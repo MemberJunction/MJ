@@ -13,6 +13,7 @@ import { rewriteThemePictures } from './theme-picture.mjs';
 
 const STRINGIFY_OPTIONS = { bullet: '-', fences: true, rule: '-', emphasis: '*', strong: '*' };
 const DESCRIPTION_MAX = 200;
+const TLDR_HEADING = /^TL;?DR$/i;
 
 /**
  * Transform one repo markdown file into a Starlight page body.
@@ -40,13 +41,42 @@ export function extractTitle(tree) {
   return mdastToString(heading).trim();
 }
 
-/** Plain text of the first paragraph, truncated for SEO/search snippets. */
+/**
+ * Plain text for the SEO/search snippet, truncated.
+ *
+ * Prefers a `TL;DR` section's content when the document has one, because release notes
+ * put their summary there (see releases/README.md) and their *first paragraph* is the
+ * standing-context line — "Edge builds are prereleases…" — which is identical on every
+ * release page and useless as a description. Everything else still uses its first
+ * paragraph, and so do release files written before the TL;DR was required.
+ */
 export function extractDescription(tree) {
-  const paragraph = tree.children.find((node) => node.type === 'paragraph');
-  if (!paragraph) return '';
-  const text = mdastToString(paragraph).replace(/\s+/g, ' ').trim();
+  const raw = tldrText(tree) ?? firstParagraphText(tree);
+  const text = raw.replace(/\s+/g, ' ').trim();
+  if (!text) return '';
   if (text.length <= DESCRIPTION_MAX) return text;
   return `${text.slice(0, DESCRIPTION_MAX - 1).trimEnd()}…`;
+}
+
+/** Text under the first `TL;DR` heading, or null if there is none with content. */
+function tldrText(tree) {
+  const index = tree.children.findIndex(
+    (node) => node.type === 'heading' && TLDR_HEADING.test(mdastToString(node).trim()),
+  );
+  if (index === -1) return null;
+  const node = tree.children[index + 1];
+  if (!node || node.type === 'heading') return null;
+  // A list stringifies to its items concatenated with NO separator, which would run the
+  // bullets together ("…claim their records.PostgreSQL deployments…"). Join explicitly.
+  const text = node.type === 'list'
+    ? node.children.map((item) => mdastToString(item).trim()).join(' ')
+    : mdastToString(node);
+  return text.trim() ? text : null;
+}
+
+function firstParagraphText(tree) {
+  const paragraph = tree.children.find((node) => node.type === 'paragraph');
+  return paragraph ? mdastToString(paragraph) : '';
 }
 
 /**
