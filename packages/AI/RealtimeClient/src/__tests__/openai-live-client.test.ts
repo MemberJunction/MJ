@@ -350,7 +350,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         expect(toolCalls[0].ArgumentsJson).toBe('{"query":"SELECT 1"}');
     });
 
-    it('SendToolResult sends conversation.item.create followed by response.create', async () => {
+    it('SendToolResult sends response.item.create followed by response.create', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
         client.Channel.Sent = [];
@@ -375,7 +375,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         const sent = client.Channel.SentEvents();
         expect(sent.length).toBe(2);
         expect(sent[0]).toEqual({
-            type: 'conversation.item.create',
+            type: 'response.item.create',
             item: {
                 type: 'function_call_output',
                 call_id: 'call_123',
@@ -1130,19 +1130,19 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         client.SendToolResult('call_2', '{"res":2}');
         const sentAfter2 = client.Channel.SentEvents();
         expect(sentAfter2.length).toBe(1);
-        expect(sentAfter2[0].type).toBe('conversation.item.create');
+        expect(sentAfter2[0].type).toBe('response.item.create');
 
         // Return call_1 second
         client.SendToolResult('call_1', '{"res":1}');
         const sentAfter1 = client.Channel.SentEvents();
         expect(sentAfter1.length).toBe(2);
-        expect(sentAfter1[1].type).toBe('conversation.item.create');
+        expect(sentAfter1[1].type).toBe('response.item.create');
 
         // Return call_3 last -> triggers response.create
         client.SendToolResult('call_3', '{"res":3}');
         const sentAfter3 = client.Channel.SentEvents();
         expect(sentAfter3.length).toBe(4);
-        expect(sentAfter3[2].type).toBe('conversation.item.create');
+        expect(sentAfter3[2].type).toBe('response.item.create');
         expect(sentAfter3[3].type).toBe('response.create');
     });
 
@@ -1171,7 +1171,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
             // Duplicate result for already-closed call_a -> sends item.create but NO extra response.create
             client.SendToolResult('call_a', '{"a":1}');
             expect(client.Channel.SentEvents().length).toBe(2);
-            expect(client.Channel.SentEvents()[1].type).toBe('conversation.item.create');
+            expect(client.Channel.SentEvents()[1].type).toBe('response.item.create');
 
             // call_b never returns -> advance timers by 15s to trigger batch barrier safety timeout
             vi.advanceTimersByTime(15000);
@@ -1184,7 +1184,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         }
     });
 
-    it('Step 3: single tool call sends conversation.item.create followed by response.create', async () => {
+    it('Step 3: single tool call sends response.item.create followed by response.create', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
 
@@ -1201,7 +1201,7 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         const sent = client.Channel.SentEvents();
         expect(sent.length).toBe(2);
-        expect(sent[0].type).toBe('conversation.item.create');
+        expect(sent[0].type).toBe('response.item.create');
         expect(sent[1].type).toBe('response.create');
     });
 

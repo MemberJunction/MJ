@@ -278,7 +278,7 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         }
 
         this.sendDataChannelFrame({
-            type: 'conversation.item.create',
+            type: 'response.item.create',
             item: {
                 type: 'function_call_output',
                 call_id: callID,

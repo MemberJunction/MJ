@@ -89,7 +89,7 @@ export type LiveClientEvent =
       }
     | {
           event_id: string;
-          type: 'conversation.item.create';
+          type: 'response.item.create';
           item: {
               type: 'function_call_output';
               call_id: string;
@@ -751,7 +751,7 @@ export class OpenAILiveSession implements IRealtimeSession {
             // Requirement (§4.2): Exactly ONE response.create per batch, not per result.
             this.sendFrame({
                 event_id: randomUUID(),
-                type: 'conversation.item.create',
+                type: 'response.item.create',
                 item: {
                     type: 'function_call_output',
                     call_id: callID,
