@@ -262,8 +262,8 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         // User transcript
         client.Channel.EmitServer({
-            type: 'conversation.item.input_audio_transcription.completed',
-            transcript: 'Hello co-agent',
+            type: 'session.input_transcript.delta',
+            delta: 'Hello co-agent',
         });
         expect(transcripts.length).toBe(1);
         expect(transcripts[0].Role).toBe('User');
@@ -272,24 +272,29 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         // Assistant delta
         client.Channel.EmitServer({
-            type: 'response.audio_transcript.delta',
+            type: 'session.output_transcript.delta',
             delta: 'Hi there',
         });
         expect(client.IsBusy).toBe(true);
         expect(client.IsAudioPlaying).toBe(true);
-        expect(transcripts.length).toBe(2);
-        expect(transcripts[1].Role).toBe('Assistant');
-        expect(transcripts[1].Text).toBe('Hi there');
-        expect(transcripts[1].IsFinal).toBe(false);
+        expect(transcripts.length).toBe(3);
+        expect(transcripts[1].Role).toBe('User');
+        expect(transcripts[1].IsFinal).toBe(true);
+        expect(transcripts[2].Role).toBe('Assistant');
+        expect(transcripts[2].Text).toBe('Hi there');
+        expect(transcripts[2].IsFinal).toBe(false);
 
         // Assistant final
         client.Channel.EmitServer({
-            type: 'response.audio_transcript.done',
-            transcript: 'Hi there!',
+            type: 'response.event',
+            event: {
+                type: 'response.completed',
+                usage: { seconds: 15 },
+            },
         });
-        expect(transcripts.length).toBe(3);
-        expect(transcripts[2].IsFinal).toBe(true);
-        expect(transcripts[2].Text).toBe('Hi there!');
+        expect(transcripts.length).toBe(4);
+        expect(transcripts[3].IsFinal).toBe(true);
+        expect(transcripts[3].Text).toBe('Hi there');
     });
 
     it('handles tool calls with silent exit from speaking and busy flag release', async () => {
@@ -301,19 +306,22 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         // Start speaking
         client.Channel.EmitServer({
-            type: 'response.audio_transcript.delta',
+            type: 'session.output_transcript.delta',
             delta: 'Let me run that action',
         });
         expect(client.IsBusy).toBe(true);
 
         // Model emits tool call
         client.Channel.EmitServer({
-            type: 'response.output_item.done',
-            item: {
-                type: 'function_call',
-                call_id: 'call_123',
-                name: 'RunQuery',
-                arguments: '{"query":"SELECT 1"}',
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: {
+                    type: 'function_call',
+                    call_id: 'call_123',
+                    name: 'RunQuery',
+                    arguments: '{"query":"SELECT 1"}',
+                },
             },
         });
 
@@ -329,6 +337,21 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
     it('SendToolResult sends response.item.create followed by response.create', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
+        client.Channel.Sent = [];
+
+        // Inbound tool call opens batch
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: {
+                    type: 'function_call',
+                    call_id: 'call_123',
+                    name: 'RunQuery',
+                    arguments: '{"query":"SELECT 1"}',
+                },
+            },
+        });
         client.Channel.Sent = [];
 
         client.SendToolResult('call_123', '{"success":true}');
@@ -497,13 +520,13 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         // Delta should have Kind: 'narration'
         client.Channel.EmitServer({
-            type: 'response.audio_transcript.delta',
+            type: 'session.output_transcript.delta',
             delta: 'Still working...',
         });
         expect(transcripts[0].Kind).toBe('narration');
     });
 
-    it('detects barge-in on speech_started and cancels active response', async () => {
+    it('emits interruption and cancels active response on provider error mid-speech', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();
 
@@ -514,15 +537,19 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
 
         // Model speaking
         client.Channel.EmitServer({
-            type: 'response.audio_transcript.delta',
-            delta: 'Model speech',
+            type: 'session.output_transcript.delta',
+            delta: 'Model speaking...',
         });
         expect(client.IsBusy).toBe(true);
 
         client.Channel.Sent = [];
-        // Speech started while active
+        // Provider cut-off arrives as error mid-speech
         client.Channel.EmitServer({
-            type: 'input_audio_buffer.speech_started',
+            type: 'error',
+            error: {
+                message: 'Moderation policy triggered',
+                code: 'content_filter',
+            },
         });
 
         expect(interrupted).toBe(true);
@@ -539,11 +566,14 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         client.OnUsage((u) => usages.push(u));
 
         client.Channel.EmitServer({
-            type: 'response.completed',
-            usage: {
-                input_tokens: 100,
-                output_tokens: 50,
-                seconds: 8, // Less than 15s pre-bill -> reported as at least 15s
+            type: 'response.event',
+            event: {
+                type: 'response.completed',
+                usage: {
+                    input_tokens: 100,
+                    output_tokens: 50,
+                    seconds: 8, // Less than 15s pre-bill -> reported as at least 15s
+                },
             },
         });
 
@@ -576,5 +606,269 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         await client.Disconnect();
         expect(client.MockPC.Closed).toBe(true);
         expect(client.MockSink.Removed).toBe(true);
+    });
+
+    it('Step 1: ignores all nine dead Realtime-protocol events with no state change or emission', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const deadEvents = [
+            { type: 'input_audio_buffer.speech_started' },
+            { type: 'conversation.item.input_audio_transcription.completed', transcript: 'test' },
+            { type: 'response.audio_transcript.delta', delta: 'test' },
+            { type: 'response.audio_transcript.done', transcript: 'test' },
+            { type: 'response.output_audio_transcript.delta', delta: 'test' },
+            { type: 'response.output_audio_transcript.done', transcript: 'test' },
+            { type: 'response.output_item.done', item: { type: 'function_call', call_id: 'dead_1', name: 'fn', arguments: '{}' } },
+            { type: 'response.completed', usage: { seconds: 10 } },
+            { type: 'response.done' },
+        ];
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        const toolCalls: RealtimeClientToolCall[] = [];
+        const errors: RealtimeClientError[] = [];
+        let interrupted = false;
+
+        client.OnTranscript((t) => transcripts.push(t));
+        client.OnToolCall((c) => toolCalls.push(c));
+        client.OnError((e) => errors.push(e));
+        client.OnInterruption(() => { interrupted = true; });
+
+        for (const evt of deadEvents) {
+            client.Channel.Sent = [];
+            client.Channel.EmitServer(evt);
+
+            expect(transcripts.length).toBe(0);
+            expect(toolCalls.length).toBe(0);
+            expect(errors.length).toBe(0);
+            expect(interrupted).toBe(false);
+            expect(client.Channel.SentEvents().length).toBe(0);
+            expect(client.State).toBe('listening');
+        }
+    });
+
+    it('Step 1: session.delegation.created finalizes both assistant and user transcripts', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // User speaks
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Search for inventory',
+        });
+        expect(transcripts.length).toBe(1);
+        expect(transcripts[0].Role).toBe('User');
+
+        // Assistant speaks interim
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'Checking now...',
+        });
+        expect(transcripts.length).toBe(3);
+
+        // Delegation arrives without assistant ending or user ending explicitly
+        client.Channel.EmitServer({
+            type: 'session.delegation.created',
+            delegation_id: 'del_finalize_test',
+        });
+
+        // Both transcripts should be finalized
+        const finalTranscripts = transcripts.filter(t => t.IsFinal);
+        expect(finalTranscripts.some(t => t.Role === 'User' && t.Text === 'Search for inventory')).toBe(true);
+        expect(finalTranscripts.some(t => t.Role === 'Assistant' && t.Text === 'Checking now...')).toBe(true);
+    });
+
+    it('Step 2: two user turns with silent delegation between them have ReplacesPrevious: false on turn 2', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // Turn 1: user speaks and streams
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'First user command',
+        });
+        expect(transcripts.length).toBe(1);
+        expect(transcripts[0].Text).toBe('First user command');
+        expect(transcripts[0].ReplacesPrevious).toBe(false);
+
+        // Silent delegation occurs (model takes the floor to delegate; no output transcript spoken)
+        client.Channel.EmitServer({
+            type: 'session.delegation.created',
+            delegation_id: 'del_silent_1',
+        });
+
+        // Turn 2: user speaks second utterance
+        const turn2StartIndex = transcripts.length;
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Second user command',
+        });
+
+        expect(transcripts.length).toBe(turn2StartIndex + 1);
+        expect(transcripts[turn2StartIndex].Text).toBe('Second user command');
+        // Turn 2's FIRST delta MUST NOT replace the previous turn!
+        expect(transcripts[turn2StartIndex].ReplacesPrevious).toBe(false);
+    });
+
+    it('Step 2: within one turn, deltas 2..N carry ReplacesPrevious: true and cumulative text', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // Delta 1
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Four score',
+        });
+        expect(transcripts[0]).toEqual({
+            Role: 'User',
+            Text: 'Four score',
+            IsFinal: true,
+            Kind: 'normal',
+            ReplacesPrevious: false,
+        });
+
+        // Delta 2
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: ' and seven years',
+        });
+        expect(transcripts[1]).toEqual({
+            Role: 'User',
+            Text: 'Four score and seven years',
+            IsFinal: true,
+            Kind: 'normal',
+            ReplacesPrevious: true,
+        });
+
+        // Delta 3
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: ' ago',
+        });
+        expect(transcripts[2]).toEqual({
+            Role: 'User',
+            Text: 'Four score and seven years ago',
+            IsFinal: true,
+            Kind: 'normal',
+            ReplacesPrevious: true,
+        });
+    });
+
+    it('Step 2: asserts userTurnTranscribed field is completely eliminated from the client', () => {
+        expect('userTurnTranscribed' in client).toBe(false);
+    });
+
+    it('Step 3: batches three parallel tool calls arriving out of order with exactly one response.create', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const toolCalls: RealtimeClientToolCall[] = [];
+        client.OnToolCall((c) => toolCalls.push(c));
+
+        // Deliver 3 parallel tool calls via response.event
+        for (const id of ['call_1', 'call_2', 'call_3']) {
+            client.Channel.EmitServer({
+                type: 'response.event',
+                event: {
+                    type: 'response.output_item.done',
+                    item: {
+                        type: 'function_call',
+                        call_id: id,
+                        name: `fn_${id}`,
+                        arguments: '{}',
+                    },
+                },
+            });
+        }
+        expect(toolCalls.length).toBe(3);
+
+        client.Channel.Sent = [];
+
+        // Return call_2 first (out of order)
+        client.SendToolResult('call_2', '{"res":2}');
+        const sentAfter2 = client.Channel.SentEvents();
+        expect(sentAfter2.length).toBe(1);
+        expect(sentAfter2[0].type).toBe('response.item.create');
+
+        // Return call_1 second
+        client.SendToolResult('call_1', '{"res":1}');
+        const sentAfter1 = client.Channel.SentEvents();
+        expect(sentAfter1.length).toBe(2);
+        expect(sentAfter1[1].type).toBe('response.item.create');
+
+        // Return call_3 last -> triggers response.create
+        client.SendToolResult('call_3', '{"res":3}');
+        const sentAfter3 = client.Channel.SentEvents();
+        expect(sentAfter3.length).toBe(4);
+        expect(sentAfter3[2].type).toBe('response.item.create');
+        expect(sentAfter3[3].type).toBe('response.create');
+    });
+
+    it('Step 3: timeout releases turn if one tool result never arrives, and duplicate results do not re-trigger', async () => {
+        vi.useFakeTimers();
+        try {
+            await client.Connect(makeConfig(), micStream);
+            client.Channel.Open();
+
+            for (const id of ['call_a', 'call_b']) {
+                client.Channel.EmitServer({
+                    type: 'response.event',
+                    event: {
+                        type: 'response.output_item.done',
+                        item: { type: 'function_call', call_id: id, name: id, arguments: '{}' },
+                    },
+                });
+            }
+
+            client.Channel.Sent = [];
+
+            // Return call_a
+            client.SendToolResult('call_a', '{"a":1}');
+            expect(client.Channel.SentEvents().length).toBe(1);
+
+            // Duplicate result for already-closed call_a -> sends item.create but NO extra response.create
+            client.SendToolResult('call_a', '{"a":1}');
+            expect(client.Channel.SentEvents().length).toBe(2);
+            expect(client.Channel.SentEvents()[1].type).toBe('response.item.create');
+
+            // call_b never returns -> advance timers by 15s to trigger batch barrier safety timeout
+            vi.advanceTimersByTime(15000);
+
+            const sent = client.Channel.SentEvents();
+            expect(sent.length).toBe(3);
+            expect(sent[2].type).toBe('response.create');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('Step 3: single tool call sends response.item.create followed by response.create', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        client.Channel.EmitServer({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: { type: 'function_call', call_id: 'single_call', name: 'single_fn', arguments: '{}' },
+            },
+        });
+
+        client.Channel.Sent = [];
+        client.SendToolResult('single_call', '{"ok":true}');
+
+        const sent = client.Channel.SentEvents();
+        expect(sent.length).toBe(2);
+        expect(sent[0].type).toBe('response.item.create');
+        expect(sent[1].type).toBe('response.create');
     });
 });

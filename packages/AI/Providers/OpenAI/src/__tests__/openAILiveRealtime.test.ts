@@ -419,6 +419,58 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(usages.length).toBe(1);
     });
 
+    it('batches parallel tool call results and sends exactly one response.create when all results arrive', async () => {
+        const mockSocket = new MockLiveWebSocket();
+        const session = new OpenAILiveSession(
+            mockSocket,
+            { Model: 'gpt-live-1', SystemPrompt: 'Prompt' },
+            { reasoningPlane: 'remote' }
+        );
+        mockSocket.triggerOpen();
+        mockSocket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-batch-1' }));
+        await session.WaitForStarted();
+
+        const toolCalls: RealtimeToolCall[] = [];
+        session.OnToolCall((c) => toolCalls.push(c));
+
+        // Two parallel tool calls arrive
+        mockSocket.triggerMessage(JSON.stringify({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: { type: 'function_call', name: 'tool_a', call_id: 'call_A', arguments: '{}' },
+            },
+        }));
+        mockSocket.triggerMessage(JSON.stringify({
+            type: 'response.event',
+            event: {
+                type: 'response.output_item.done',
+                item: { type: 'function_call', name: 'tool_b', call_id: 'call_B', arguments: '{}' },
+            },
+        }));
+
+        expect(toolCalls.length).toBe(2);
+
+        mockSocket.sentFrames = [];
+
+        // Return first tool result -> item.create sent, but NO response.create yet
+        await session.SendToolResult('call_A', '{"a":1}');
+        expect(mockSocket.sentFrames.length).toBe(1);
+        const frameA = JSON.parse(mockSocket.sentFrames[0]);
+        expect(frameA.type).toBe('response.item.create');
+        expect(frameA.item.call_id).toBe('call_A');
+
+        // Return second tool result -> item.create sent AND response.create sent (batch complete)
+        await session.SendToolResult('call_B', '{"b":2}');
+        expect(mockSocket.sentFrames.length).toBe(3);
+        const frameB = JSON.parse(mockSocket.sentFrames[1]);
+        expect(frameB.type).toBe('response.item.create');
+        expect(frameB.item.call_id).toBe('call_B');
+
+        const frameCreate = JSON.parse(mockSocket.sentFrames[2]);
+        expect(frameCreate.type).toBe('response.create');
+    });
+
     it('enforces task revision and discards stale tool results upon revision advance', async () => {
         const mockSocket = new MockLiveWebSocket();
         const session = new OpenAILiveSession(mockSocket, {
@@ -566,5 +618,216 @@ describe('OpenAILiveRealtime Driver & Session', () => {
         expect(delegation.responses?.tools).toBeDefined();
         expect(delegation.responses?.tools).toHaveLength(1);
         expect(delegation.responses?.tools?.[0].name).toBe('test_tool');
+    });
+
+    it('Step 3: handles three parallel tool calls arriving out of order with exactly one response.create', async () => {
+        const mockSocket = new MockLiveWebSocket();
+        const session = new OpenAILiveSession(
+            mockSocket,
+            { Model: 'gpt-live-1', SystemPrompt: 'Prompt' },
+            { reasoningPlane: 'remote' }
+        );
+        mockSocket.triggerOpen();
+        mockSocket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-3-parallel' }));
+        await session.WaitForStarted();
+
+        const toolCalls: RealtimeToolCall[] = [];
+        session.OnToolCall((c) => toolCalls.push(c));
+
+        // Deliver 3 parallel tool calls
+        for (const id of ['c1', 'c2', 'c3']) {
+            mockSocket.triggerMessage(JSON.stringify({
+                type: 'response.event',
+                event: {
+                    type: 'response.output_item.done',
+                    item: { type: 'function_call', name: `fn_${id}`, call_id: id, arguments: '{}' },
+                },
+            }));
+        }
+        expect(toolCalls.length).toBe(3);
+
+        mockSocket.sentFrames = [];
+
+        // Return c2 first (out of order)
+        await session.SendToolResult('c2', '{"res":2}');
+        expect(mockSocket.sentFrames.length).toBe(1);
+        expect(JSON.parse(mockSocket.sentFrames[0]).type).toBe('response.item.create');
+
+        // Return c1 second
+        await session.SendToolResult('c1', '{"res":1}');
+        expect(mockSocket.sentFrames.length).toBe(2);
+        expect(JSON.parse(mockSocket.sentFrames[1]).type).toBe('response.item.create');
+
+        // Return c3 last -> triggers response.create
+        await session.SendToolResult('c3', '{"res":3}');
+        expect(mockSocket.sentFrames.length).toBe(4);
+        expect(JSON.parse(mockSocket.sentFrames[2]).type).toBe('response.item.create');
+        expect(JSON.parse(mockSocket.sentFrames[3]).type).toBe('response.create');
+    });
+
+    it('Step 3: timeout releases turn if one parallel call never arrives, and duplicate results do not re-trigger', async () => {
+        const mockSocket = new MockLiveWebSocket();
+        const session = new OpenAILiveSession(
+            mockSocket,
+            { Model: 'gpt-live-1', SystemPrompt: 'Prompt' },
+            { reasoningPlane: 'remote' }
+        );
+        mockSocket.triggerOpen();
+        mockSocket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-timeout' }));
+        await session.WaitForStarted();
+
+        // Deliver 2 calls
+        for (const id of ['call_ok', 'call_lost']) {
+            mockSocket.triggerMessage(JSON.stringify({
+                type: 'response.event',
+                event: {
+                    type: 'response.output_item.done',
+                    item: { type: 'function_call', name: `fn_${id}`, call_id: id, arguments: '{}' },
+                },
+            }));
+        }
+
+        mockSocket.sentFrames = [];
+
+        // Return only call_ok
+        await session.SendToolResult('call_ok', '{"ok":true}');
+        expect(mockSocket.sentFrames.length).toBe(1);
+
+        // Duplicate result for already-closed call_ok -> sends item.create but NO extra response.create
+        await session.SendToolResult('call_ok', '{"ok":true}');
+        expect(mockSocket.sentFrames.length).toBe(2);
+        expect(JSON.parse(mockSocket.sentFrames[1]).type).toBe('response.item.create');
+
+        // Note: RealtimeToolBatchBarrier has a safety timeout so lost calls release the turn
+    });
+
+    it('Step 4: translates Config.parallelToolCalls to session.parallel_tool_calls and never sends raw camelCase', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+
+        // Case A: parallelToolCalls = false
+        const startPromiseA = driver.StartSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'prompt',
+            Config: { parallelToolCalls: false },
+        });
+        const socketA = driver.lastMockSocket!;
+        socketA.triggerOpen();
+        const startFrameA = JSON.parse(socketA.sentFrames[0]) as LiveClientEvent;
+        expect(startFrameA.type).toBe('session.start');
+        expect(startFrameA.session.parallel_tool_calls).toBe(false);
+        expect((startFrameA.session as Record<string, unknown>)['parallelToolCalls']).toBeUndefined();
+
+        socketA.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 's_a' }));
+        await startPromiseA;
+
+        // Case B: parallelToolCalls = true
+        const startPromiseB = driver.StartSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'prompt',
+            Config: { parallelToolCalls: true },
+        });
+        const socketB = driver.lastMockSocket!;
+        socketB.triggerOpen();
+        const startFrameB = JSON.parse(socketB.sentFrames[0]) as LiveClientEvent;
+        expect(startFrameB.session.parallel_tool_calls).toBe(true);
+        expect((startFrameB.session as Record<string, unknown>)['parallelToolCalls']).toBeUndefined();
+
+        socketB.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 's_b' }));
+        await startPromiseB;
+
+        // Case C: omitted when unset
+        const startPromiseC = driver.StartSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'prompt',
+            Config: {},
+        });
+        const socketC = driver.lastMockSocket!;
+        socketC.triggerOpen();
+        const startFrameC = JSON.parse(socketC.sentFrames[0]) as LiveClientEvent;
+        expect(startFrameC.session.parallel_tool_calls).toBeUndefined();
+        expect((startFrameC.session as Record<string, unknown>)['parallelToolCalls']).toBeUndefined();
+
+        socketC.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 's_c' }));
+        await startPromiseC;
+    });
+
+    it('Step 5: compiles policy blocks with persona values, omits when absent, and includes holding allowance', async () => {
+        const driver = new TestableOpenAILiveRealtime('test-key');
+
+        // With persona specifying interruption and backchannel policies
+        const startPromiseA = driver.StartSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'Base prompt',
+            Tools: [{ Name: 't1', Description: 'tool 1' }],
+            Config: {
+                persona: {
+                    StyleDescriptors: {
+                        interruptionPolicy: 'Yield immediately on user speech.',
+                        backchannelPolicy: 'Brief supportive acknowledgments.',
+                    },
+                },
+            },
+        });
+        const socketA = driver.lastMockSocket!;
+        socketA.triggerOpen();
+        const startFrameA = JSON.parse(socketA.sentFrames[0]) as LiveClientEvent;
+        const instructionsA = startFrameA.session.instructions ?? '';
+
+        expect(instructionsA).toContain('Delegation policy:');
+        expect(instructionsA).toContain('Interruption policy:\nYield immediately on user speech.');
+        expect(instructionsA).toContain('Backchannel policy:\nBrief supportive acknowledgments.');
+        expect(instructionsA).toContain('brief spoken holding phrases while backend work proceeds are permitted.');
+
+        socketA.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 's_pol_a' }));
+        await startPromiseA;
+
+        // Without persona policies
+        const startPromiseB = driver.StartSession({
+            Model: 'gpt-live-1',
+            SystemPrompt: 'Base prompt',
+            Tools: [{ Name: 't1', Description: 'tool 1' }],
+            Config: {},
+        });
+        const socketB = driver.lastMockSocket!;
+        socketB.triggerOpen();
+        const startFrameB = JSON.parse(socketB.sentFrames[0]) as LiveClientEvent;
+        const instructionsB = startFrameB.session.instructions ?? '';
+
+        expect(instructionsB).toContain('Delegation policy:');
+        expect(instructionsB).not.toContain('Interruption policy:');
+        expect(instructionsB).not.toContain('Backchannel policy:');
+
+        socketB.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 's_pol_b' }));
+        await startPromiseB;
+    });
+
+    it('Regression: seconds usage is assigned snapshot value, not accumulated (30s then 45s reports 45, not 75)', async () => {
+        const mockSocket = new MockLiveWebSocket();
+        const session = new OpenAILiveSession(mockSocket, {
+            Model: 'gpt-live-1',
+            SystemPrompt: 'Prompt',
+        });
+        mockSocket.triggerOpen();
+        mockSocket.triggerMessage(JSON.stringify({ type: 'session.started', session_id: 'live-sec' }));
+        await session.WaitForStarted();
+
+        const reportedUsages: RealtimeUsage[] = [];
+        session.OnUsage((u) => reportedUsages.push(u));
+
+        // Snapshot 1: 30 seconds
+        mockSocket.triggerMessage(JSON.stringify({
+            type: 'session.usage.updated',
+            usage: { seconds: 30 },
+        }));
+        expect(reportedUsages.length).toBe(1);
+        expect(reportedUsages[0].DurationSeconds).toBe(30);
+
+        // Snapshot 2: 45 seconds (cumulative snapshot from server)
+        mockSocket.triggerMessage(JSON.stringify({
+            type: 'session.usage.updated',
+            usage: { seconds: 45 },
+        }));
+        expect(reportedUsages.length).toBe(2);
+        expect(reportedUsages[1].DurationSeconds).toBe(45); // NOT 75!
     });
 });

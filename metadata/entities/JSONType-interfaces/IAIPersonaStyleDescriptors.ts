@@ -8,6 +8,10 @@
  * beyond the primary Tone and SpeakingStyle scalar columns.
  */
 export interface IAIPersonaStyleDescriptors {
-    /** Open extension point until the first typed knob lands. */
+    /** Prose for GPT-Live's `Interruption policy:` prompt block (gpt-live-1.md §1). */
+    interruptionPolicy?: string;
+    /** Prose for GPT-Live's `Backchannel policy:` prompt block. */
+    backchannelPolicy?: string;
+    /** Open extension point for additional fine-grained style descriptors. */
     [key: string]: unknown;
 }

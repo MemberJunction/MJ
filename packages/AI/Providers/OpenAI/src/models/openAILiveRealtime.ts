@@ -18,6 +18,7 @@ import {
     RealtimeVoiceOption,
     RealtimeProxyRegistry,
     REALTIME_SDP_EXCHANGE_PATH,
+    RealtimeToolBatchBarrier,
 } from '@memberjunction/ai';
 import { MapUsageModalityDetail } from './openAIRealtime.js';
 
@@ -45,6 +46,7 @@ export type LiveClientEvent =
                   format?: { type: string; rate?: number };
                   output?: { voice?: string };
               };
+              parallel_tool_calls?: boolean;
               delegation?: {
                   type: 'client' | 'responses';
                   responses?: {
@@ -159,6 +161,14 @@ export interface OpenAILiveSessionOptions {
     voice?: string;
     audioCodec?: 'pcm16' | 'g711_ulaw' | 'g711_alaw';
     sampleRate?: number;
+    interruptionPolicy?: string;
+    backchannelPolicy?: string;
+    persona?: {
+        StyleDescriptors?: Record<string, unknown> | null;
+        StyleDescriptorsObject?: Record<string, unknown> | null;
+        [key: string]: unknown;
+    };
+    styleDescriptors?: Record<string, unknown>;
 }
 
 /**
@@ -178,7 +188,7 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _closed = false;
     private _closeRequested = false;
     private _trailingPcmBytes?: Uint8Array;
-    private _totalSeconds = 0;
+    private _lastReportedSeconds = 0;
     private _startPromise: Promise<void>;
     private _resolveStart!: () => void;
     private _rejectStart!: (err: Error) => void;
@@ -186,12 +196,13 @@ export class OpenAILiveSession implements IRealtimeSession {
     private _resolveClose?: () => void;
     private _countedResponseIds = new Set<string>();
     private _currentTaskRevision = 0;
+    private _toolBatchBarrier = new RealtimeToolBatchBarrier();
 
     private _outputHandlers: Array<(chunk: ArrayBuffer) => void> = [];
     private _transcriptHandlers: Array<(t: RealtimeTranscript) => void> = [];
     private _toolCallHandlers: Array<(call: RealtimeToolCall) => void> = [];
     private _errorHandlers: Array<(error: RealtimeSessionError) => void> = [];
-    private _usageHandlers: Array<(u: RealtimeUsage) => void> = [];
+    private _usageHandlers: Array<(usage: RealtimeUsage) => void> = [];
     private _interruptionHandlers: Array<() => void> = [];
     private _closeHandlers: Array<() => void> = [];
 
@@ -216,6 +227,7 @@ export class OpenAILiveSession implements IRealtimeSession {
             UsageBases: ['seconds', 'tokens'],
             ProvidesInputTranscription: true,
             ProvidesOutputTranscription: true,
+            SupportsParallelToolCalls: true,
         };
 
         this._startPromise = new Promise<void>((resolve, reject) => {
@@ -237,6 +249,7 @@ export class OpenAILiveSession implements IRealtimeSession {
      * Advances the task revision counter, causing in-flight tool results from prior revisions to be discarded.
      */
     public BumpTaskRevision(): number {
+        this._toolBatchBarrier.Clear();
         return ++this._currentTaskRevision;
     }
 
@@ -307,6 +320,9 @@ export class OpenAILiveSession implements IRealtimeSession {
         }));
         const hasTools = !!(mappedTools && mappedTools.length > 0);
 
+        const rawParallelToolCalls = this._params.Config?.['parallelToolCalls'] ?? this._params.Config?.['parallel_tool_calls'];
+        const parallelToolCalls = typeof rawParallelToolCalls === 'boolean' ? rawParallelToolCalls : undefined;
+
         const startFrame: LiveClientEvent = {
             event_id: randomUUID(),
             type: 'session.start',
@@ -319,6 +335,7 @@ export class OpenAILiveSession implements IRealtimeSession {
                         voice: this._options.voice ?? 'alloy',
                     },
                 },
+                ...(typeof parallelToolCalls === 'boolean' ? { parallel_tool_calls: parallelToolCalls } : {}),
                 delegation: {
                     type: plane === 'remote' || hasTools ? 'responses' : 'client',
                     ...(plane === 'remote' || hasTools
@@ -373,7 +390,39 @@ export class OpenAILiveSession implements IRealtimeSession {
         if (this._params.Tools && this._params.Tools.length > 0) {
             sections.push(this.compileDelegationPolicy(this._params.Tools));
         }
+        const interruptionPolicy = this.resolveInterruptionPolicy();
+        if (interruptionPolicy) {
+            sections.push(`Interruption policy:\n${interruptionPolicy}`);
+        }
+        const backchannelPolicy = this.resolveBackchannelPolicy();
+        if (backchannelPolicy) {
+            sections.push(`Backchannel policy:\n${backchannelPolicy}`);
+        }
         return sections.join('\n\n');
+    }
+
+    private resolveInterruptionPolicy(): string | undefined {
+        const candidate =
+            this._options.interruptionPolicy ??
+            (this._options.styleDescriptors as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
+            (this._options.persona?.StyleDescriptorsObject as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
+            (this._options.persona?.StyleDescriptors as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
+            this._params.Config?.['interruptionPolicy'] ??
+            (this._params.Config?.['styleDescriptors'] as Record<string, unknown> | undefined)?.['interruptionPolicy'] ??
+            ((this._params.Config?.['persona'] as Record<string, unknown> | undefined)?.['StyleDescriptors'] as Record<string, unknown> | undefined)?.['interruptionPolicy'];
+        return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
+    }
+
+    private resolveBackchannelPolicy(): string | undefined {
+        const candidate =
+            this._options.backchannelPolicy ??
+            (this._options.styleDescriptors as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
+            (this._options.persona?.StyleDescriptorsObject as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
+            (this._options.persona?.StyleDescriptors as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
+            this._params.Config?.['backchannelPolicy'] ??
+            (this._params.Config?.['styleDescriptors'] as Record<string, unknown> | undefined)?.['backchannelPolicy'] ??
+            ((this._params.Config?.['persona'] as Record<string, unknown> | undefined)?.['StyleDescriptors'] as Record<string, unknown> | undefined)?.['backchannelPolicy'];
+        return typeof candidate === 'string' && candidate.trim().length > 0 ? candidate.trim() : undefined;
     }
 
     private compileDelegationPolicy(tools: RealtimeToolDefinition[]): string {
@@ -391,7 +440,7 @@ export class OpenAILiveSession implements IRealtimeSession {
             'Do not delegate to the backend when:\n' +
             '- The user greets you or asks you to repeat a result already provided.\n\n' +
             'Delegate before giving an answer that depends on backend work.\n' +
-            'Do not guess the result while waiting.'
+            'Do not guess the result while waiting, but brief spoken holding phrases while backend work proceeds are permitted.'
         );
     }
 
@@ -453,11 +502,11 @@ export class OpenAILiveSession implements IRealtimeSession {
 
             case 'session.usage.updated': {
                 if (typeof event.usage?.seconds === 'number') {
-                    this._totalSeconds = event.usage.seconds;
+                    this._lastReportedSeconds = event.usage.seconds;
                     const u: RealtimeUsage = {
                         InputTokens: 0,
                         OutputTokens: 0,
-                        DurationSeconds: this._totalSeconds,
+                        DurationSeconds: this._lastReportedSeconds,
                     };
                     for (const handler of this._usageHandlers) {
                         handler(u);
@@ -489,6 +538,13 @@ export class OpenAILiveSession implements IRealtimeSession {
                 if (event.event.type === 'response.output_item.done') {
                     const item = event.event.item;
                     if (item?.type === 'function_call' && item.call_id && item.name) {
+                        this._toolBatchBarrier.TrackPendingCall(item.call_id, () => {
+                            RealtimeDiagLog(`[OpenAILiveSession][diag] Tool batch timed out with pending calls; flushing response.create`);
+                            this.sendFrame({
+                                event_id: randomUUID(),
+                                type: 'response.create',
+                            });
+                        });
                         const call: RealtimeToolCall = {
                             CallID: item.call_id,
                             ToolName: item.name,
@@ -513,7 +569,7 @@ export class OpenAILiveSession implements IRealtimeSession {
                         const u: RealtimeUsage = {
                             InputTokens: resp.usage.input_tokens ?? 0,
                             OutputTokens: resp.usage.output_tokens ?? 0,
-                            DurationSeconds: this._totalSeconds,
+                            DurationSeconds: this._lastReportedSeconds,
                             InputTokenDetails: MapUsageModalityDetail(resp.usage.input_token_details),
                             OutputTokenDetails: MapUsageModalityDetail(resp.usage.output_token_details),
                         };
@@ -663,7 +719,8 @@ export class OpenAILiveSession implements IRealtimeSession {
 
         if (this._options.reasoningPlane === 'remote') {
             // Trap 3: Appending a function result does not automatically continue the response:
-            // response.create is a required separate step, and response.item.create has no success ack
+            // response.create is a required separate step, and response.item.create has no success ack.
+            // Requirement (§4.2): Exactly ONE response.create per batch, not per result.
             this.sendFrame({
                 event_id: randomUUID(),
                 type: 'response.item.create',
@@ -673,10 +730,14 @@ export class OpenAILiveSession implements IRealtimeSession {
                     output,
                 },
             });
-            this.sendFrame({
-                event_id: randomUUID(),
-                type: 'response.create',
-            });
+
+            const isBatchComplete = this._toolBatchBarrier.RecordResult(callID);
+            if (isBatchComplete) {
+                this.sendFrame({
+                    event_id: randomUUID(),
+                    type: 'response.create',
+                });
+            }
         } else {
             this.sendFrame({
                 event_id: randomUUID(),
@@ -731,6 +792,7 @@ export class OpenAILiveSession implements IRealtimeSession {
     }
 
     public async Close(): Promise<void> {
+        this._toolBatchBarrier.Clear();
         if (this._closed) {
             return;
         }
@@ -866,6 +928,10 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
             voice: OpenAILiveRealtime.resolveVoice(config),
             audioCodec,
             sampleRate,
+            persona: config?.['persona'] as OpenAILiveSessionOptions['persona'],
+            styleDescriptors: config?.['styleDescriptors'] as OpenAILiveSessionOptions['styleDescriptors'],
+            interruptionPolicy: typeof config?.['interruptionPolicy'] === 'string' ? config['interruptionPolicy'] : undefined,
+            backchannelPolicy: typeof config?.['backchannelPolicy'] === 'string' ? config['backchannelPolicy'] : undefined,
         };
 
         const session = new OpenAILiveSession(socket, params, options);
@@ -908,6 +974,9 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
         const hasTools = !!(mappedTools && mappedTools.length > 0);
         const delegationType = plane === 'remote' || hasTools ? 'responses' : 'client';
 
+        const rawParallelToolCalls = config?.['parallelToolCalls'] ?? config?.['parallel_tool_calls'];
+        const parallelToolCalls = typeof rawParallelToolCalls === 'boolean' ? rawParallelToolCalls : undefined;
+
         // WebRTC session config: omit audio.format entirely (negotiated via SDP)
         const sessionPayload: Record<string, unknown> = {
             model: params.Model || 'gpt-live-1',
@@ -917,6 +986,7 @@ export class OpenAILiveRealtime extends BaseRealtimeModel {
                     voice: OpenAILiveRealtime.resolveVoice(config),
                 },
             },
+            ...(typeof parallelToolCalls === 'boolean' ? { parallel_tool_calls: parallelToolCalls } : {}),
             delegation: {
                 type: delegationType,
                 ...(delegationType === 'responses'

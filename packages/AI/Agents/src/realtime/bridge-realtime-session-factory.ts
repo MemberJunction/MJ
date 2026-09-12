@@ -262,18 +262,9 @@ export async function GetRealtimeModelVoices(
         }));
 
         // Collect explicitly excluded voice IDs (IsSupported === false) for this model and vendor
-        const excludedPersonaIds = new Set(
-            (AIEngine.Instance.ModelPersonas ?? [])
-                .filter((mp) => UUIDsEqual(mp.ModelID, model.ID) && mp.IsSupported === false)
-                .map((mp) => NormalizeUUID(mp.PersonaID))
-        );
         const excludedVoiceApiNames = new Set(
-            (AIEngine.Instance.PersonaVendors ?? [])
-                .filter((pv) =>
-                    excludedPersonaIds.has(NormalizeUUID(pv.PersonaID)) &&
-                    UUIDsEqual(pv.VendorID, selection.VendorID)
-                )
-                .map((pv) => (pv.APIName ?? '').toLowerCase())
+            AIEngine.Instance.GetModelPersonaExclusions(model.ID, 'Audio', selection.VendorID)
+                .map((name) => name.toLowerCase())
         );
 
         // 2. Union with driver SupportedVoices: append any driver voices not already present or explicitly excluded

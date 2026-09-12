@@ -347,6 +347,16 @@ export interface RealtimeSessionCapabilities {
      * Whether this driver provides text transcript events for model audio output.
      */
     ProvidesOutputTranscription?: boolean;
+
+    /**
+     * Whether the provider supports receiving multiple parallel tool calls and batched results (gpt-live-1.md §4.2).
+     */
+    SupportsParallelToolCalls?: boolean;
+
+    /**
+     * Maximum number of concurrent delegations supported by the provider, or undefined if unbounded.
+     */
+    MaxConcurrentDelegations?: number;
 }
 
 /** Parameters for {@link IRealtimeSession.Reconfigure} — a live turn-taking change. */

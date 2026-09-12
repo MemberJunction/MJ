@@ -1444,6 +1444,47 @@ describe('AIEngineBase', () => {
             // p2 (Echo) was IsSupported = false, so it must be excluded
             expect(res.some(r => r.Persona.ID === 'p2')).toBe(false);
         });
+
+        it('Item A: falls back to inheritance when only IsSupported=false rows exist, and subtracts excluded IDs', () => {
+            // Only explicit row is an explicit disable for p1 (Alloy)
+            set('_modelPersonas', [
+                { ID: 'mp1', ModelID: 'm1', PersonaID: 'p1', IsSupported: false },
+            ]);
+
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Audio');
+            // Should inherit remaining active personas (Echo, Sage) and exclude Alloy (p1)
+            expect(res).toHaveLength(2);
+            expect(res.map(r => r.Persona.Name)).toEqual(['Echo', 'Sage']);
+            expect(res.some(r => r.Persona.ID === 'p1')).toBe(false);
+        });
+
+        it('Item A: falls back to inheritance when explicit personas have no active binding for requested vendor', () => {
+            // Explicit persona p-non-binding exists, but has no binding for vendor v1
+            set('_personas', [
+                { ID: 'p1', Name: 'Alloy', IsActive: true },
+                { ID: 'p2', Name: 'Echo', IsActive: true },
+                { ID: 'p-other', Name: 'Other', IsActive: true },
+            ]);
+            set('_modelPersonas', [
+                { ID: 'mp1', ModelID: 'm1', PersonaID: 'p-other', IsSupported: true },
+            ]);
+            // p-other has no PersonaVendor row for v1
+
+            const res = AIEngineBase.Instance.GetModelPersonas('m1', 'Audio');
+            // Since p-other resolved to 0 active bindings, it falls through to inheriting active personas (Alloy, Echo)
+            expect(res).toHaveLength(2);
+            expect(res.map(r => r.Persona.Name)).toEqual(['Alloy', 'Echo']);
+        });
+
+        it('Item B: GetModelPersonaExclusions returns provider API names for explicitly disabled personas', () => {
+            set('_modelPersonas', [
+                { ID: 'mp1', ModelID: 'm1', PersonaID: 'p1', IsSupported: false },
+                { ID: 'mp2', ModelID: 'm1', PersonaID: 'p2', IsSupported: true },
+            ]);
+
+            const exclusions = AIEngineBase.Instance.GetModelPersonaExclusions('m1', 'Audio');
+            expect(exclusions).toEqual(['alloy']);
+        });
     });
 
     describe('GetAgentPersonas', () => {

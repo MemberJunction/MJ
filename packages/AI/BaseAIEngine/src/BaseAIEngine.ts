@@ -2221,32 +2221,37 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         };
 
         const explicitModelPersonas = this._modelPersonas.filter(mp => UUIDsEqual(mp.ModelID, modelId));
+        const excludedPersonaIds = new Set(
+            explicitModelPersonas.filter(mp => mp.IsSupported === false).map(mp => NormalizeUUID(mp.PersonaID))
+        );
 
         if (explicitModelPersonas.length > 0) {
             const supported = explicitModelPersonas
                 .filter(mp => mp.IsSupported)
                 .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0));
 
-            const result: ResolvedModelPersona[] = [];
+            const explicitResult: ResolvedModelPersona[] = [];
             for (const mp of supported) {
                 const persona = this._personas.find(p => UUIDsEqual(p.ID, mp.PersonaID) && p.IsActive);
                 if (!persona) continue;
                 const pv = findPersonaVendor(persona.ID);
                 if (pv) {
-                    result.push({
+                    explicitResult.push({
                         Persona: persona,
                         PersonaVendor: pv,
                         ModelPersona: mp,
                     });
                 }
             }
-            return result;
+            if (explicitResult.length > 0) {
+                return explicitResult;
+            }
         }
 
-        // Inherit all active personas bound to the vendor & modality
+        // Inherit all active personas bound to the vendor & modality, minus explicitly excluded personas
         const result: ResolvedModelPersona[] = [];
         for (const persona of this._personas) {
-            if (!persona.IsActive) continue;
+            if (!persona.IsActive || excludedPersonaIds.has(NormalizeUUID(persona.ID))) continue;
             const pv = findPersonaVendor(persona.ID);
             if (pv) {
                 result.push({
@@ -2256,6 +2261,66 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
             }
         }
         return result;
+    }
+
+    /**
+     * Gets provider API names for personas explicitly excluded (IsSupported = false)
+     * on the specified model for the requested modality and vendor.
+     *
+     * @param modelId - The model ID
+     * @param modalityName - The modality name (default 'Audio')
+     * @param vendorId - Optional vendor ID filter
+     * @returns Array of provider voice API names (e.g. ['fable', 'nova', 'onyx'])
+     */
+    public GetModelPersonaExclusions(modelId: string, modalityName = 'Audio', vendorId?: string): string[] {
+        const modality = this.GetModalityByName(modalityName);
+        if (!modality) return [];
+
+        const candidateVendorIds: string[] = [];
+        if (vendorId) {
+            candidateVendorIds.push(NormalizeUUID(vendorId));
+        } else {
+            const activeVendors = this._modelVendors
+                .filter(mv => UUIDsEqual(mv.ModelID, modelId) && mv.Status === 'Active')
+                .sort((a, b) => {
+                    const aInf = this.IsInferenceProvider(a) ? 1 : 0;
+                    const bInf = this.IsInferenceProvider(b) ? 1 : 0;
+                    if (aInf !== bInf) return bInf - aInf;
+                    return (b.Priority ?? 0) - (a.Priority ?? 0);
+                });
+            for (const mv of activeVendors) {
+                if (mv.VendorID) {
+                    const norm = NormalizeUUID(mv.VendorID);
+                    if (!candidateVendorIds.includes(norm)) {
+                        candidateVendorIds.push(norm);
+                    }
+                }
+            }
+        }
+        if (candidateVendorIds.length === 0) return [];
+
+        const excludedModelPersonas = this._modelPersonas.filter(
+            mp => UUIDsEqual(mp.ModelID, modelId) && mp.IsSupported === false
+        );
+        if (excludedModelPersonas.length === 0) return [];
+
+        const excludedPersonaIds = new Set(excludedModelPersonas.map(mp => NormalizeUUID(mp.PersonaID)));
+        const excludedApiNames: string[] = [];
+
+        for (const pv of this._personaVendors) {
+            if (
+                excludedPersonaIds.has(NormalizeUUID(pv.PersonaID)) &&
+                UUIDsEqual(pv.ModalityID, modality.ID) &&
+                pv.Status === 'Active' &&
+                candidateVendorIds.some(vid => UUIDsEqual(vid, pv.VendorID))
+            ) {
+                if (pv.APIName && !excludedApiNames.includes(pv.APIName)) {
+                    excludedApiNames.push(pv.APIName);
+                }
+            }
+        }
+
+        return excludedApiNames;
     }
 
     /**

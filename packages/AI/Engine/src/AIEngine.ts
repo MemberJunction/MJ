@@ -368,6 +368,9 @@ export class AIEngine extends BaseSingleton<AIEngine> implements IStartupSink {
     public GetModelPersonas(modelId: string, modalityName = 'Audio', vendorId?: string): ResolvedModelPersona[] {
         return this.Base.GetModelPersonas(modelId, modalityName, vendorId);
     }
+    public GetModelPersonaExclusions(modelId: string, modalityName = 'Audio', vendorId?: string): string[] {
+        return this.Base.GetModelPersonaExclusions(modelId, modalityName, vendorId);
+    }
     public GetAgentPersonas(agentId: string): ResolvedAgentPersona[] {
         return this.Base.GetAgentPersonas(agentId);
     }

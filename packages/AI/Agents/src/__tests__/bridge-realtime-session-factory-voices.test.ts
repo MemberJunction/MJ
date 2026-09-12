@@ -31,6 +31,13 @@ const mockPersonaVendors = [
     { PersonaID: 'p-fable', VendorID: 'v1', APIName: 'fable' },
 ];
 
+const mockGetModelPersonaExclusions = vi.fn((modelId: string, _modality?: string, _vendorId?: string) => {
+    if (modelId === 'm1') {
+        return ['fable'];
+    }
+    return [];
+});
+
 vi.mock('@memberjunction/aiengine', () => ({
     AIEngine: {
         get Instance() {
@@ -38,6 +45,7 @@ vi.mock('@memberjunction/aiengine', () => ({
                 Models: mockModels,
                 Config: vi.fn(async () => undefined),
                 GetModelPersonas: mockGetModelPersonas,
+                GetModelPersonaExclusions: mockGetModelPersonaExclusions,
                 ModelPersonas: mockModelPersonas,
                 PersonaVendors: mockPersonaVendors,
             };

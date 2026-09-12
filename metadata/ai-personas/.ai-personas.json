@@ -5,6 +5,10 @@
       "Description": "Versatile and balanced voice with neutral tone and clear delivery.",
       "Tone": "Balanced",
       "SpeakingStyle": "Direct and clear",
+      "StyleDescriptors": {
+        "interruptionPolicy": "Yield the floor immediately when the user begins speaking, preserving natural backchannel listening cues.",
+        "backchannelPolicy": "Provide brief, natural acknowledgments when the user pauses or explains a point without taking over the floor."
+      },
       "Source": "BuiltIn",
       "IsActive": true
     },
@@ -61,6 +65,10 @@
       "Description": "Resonant and confident voice with steady delivery.",
       "Tone": "Confident",
       "SpeakingStyle": "Deep and measured",
+      "StyleDescriptors": {
+        "interruptionPolicy": "Allow the user to conclude their thought before responding unless directly addressed.",
+        "backchannelPolicy": "Listen attentively with minimal verbal backchannel."
+      },
       "Source": "BuiltIn",
       "IsActive": true
     },

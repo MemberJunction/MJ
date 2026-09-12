@@ -1210,8 +1210,10 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
 
   // ─── Realtime WebRTC SDP broker (ticket-gated, registered BEFORE auth) ───────
-  app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), createRealtimeSdpBrokerRouter());
-  startupLog.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${REALTIME_SDP_EXCHANGE_PATH}`);
+  if (configInfo.realtime?.enabled) {
+    app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), createRealtimeSdpBrokerRouter());
+    startupLog.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${REALTIME_SDP_EXCHANGE_PATH}`);
+  }
 
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the

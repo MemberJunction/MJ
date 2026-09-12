@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
+import { ClientRealtimeSessionConfig, JSONObject, RealtimeToolBatchBarrier } from '@memberjunction/ai';
 import { RealtimeAudioMeter } from '../audio/audioMeter';
 import {
     BaseRealtimeClient,
@@ -60,10 +60,10 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     private pendingNarration = false;
     private totalDurationSeconds = OpenAILiveClient.PREBILL_DURATION_SECONDS;
     private pendingUserText = '';
-    private userTurnTranscribed = false;
     private pendingAssistantText = '';
     private assistantDoneTimer: ReturnType<typeof setTimeout> | null = null;
     private clientDelegationCallIds = new Set<string>();
+    private toolBatchBarrier = new RealtimeToolBatchBarrier();
 
     // ── BaseRealtimeClient implementation ──────────────────────────────────────
 
@@ -77,6 +77,10 @@ export class OpenAILiveClient extends BaseRealtimeClient {
 
     public get PrebillSeconds(): number {
         return OpenAILiveClient.PREBILL_DURATION_SECONDS;
+    }
+
+    public get State(): RealtimeClientState {
+        return this.currentState;
     }
 
     /**
@@ -168,9 +172,9 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             this.assistantDoneTimer = null;
         }
         this.pendingUserText = '';
-        this.userTurnTranscribed = false;
         this.pendingAssistantText = '';
         this.clientDelegationCallIds.clear();
+        this.toolBatchBarrier.Clear();
 
         if (this.currentState !== 'error') {
             this.setState('closed');
@@ -268,9 +272,13 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 output: outputJson,
             },
         });
-        this.sendDataChannelFrame({
-            type: 'response.create',
-        });
+
+        const isBatchComplete = this.toolBatchBarrier.RecordResult(callID);
+        if (isBatchComplete) {
+            this.sendDataChannelFrame({
+                type: 'response.create',
+            });
+        }
     }
 
     /**
@@ -477,16 +485,17 @@ export class OpenAILiveClient extends BaseRealtimeClient {
     }
 
     private finalizeUserTranscript(): void {
-        if (this.pendingUserText.trim().length > 0) {
-            this.emitTranscript({
-                Role: 'User',
-                Text: this.pendingUserText,
-                IsFinal: true,
-                Kind: 'normal',
-                ReplacesPrevious: this.userTurnTranscribed,
-            });
+        try {
+            if (this.pendingUserText.trim().length > 0) {
+                this.emitTranscript({
+                    Role: 'User',
+                    Text: this.pendingUserText,
+                    IsFinal: true,
+                    Kind: 'normal',
+                });
+            }
+        } finally {
             this.pendingUserText = '';
-            this.userTurnTranscribed = false;
         }
     }
 
@@ -505,8 +514,16 @@ export class OpenAILiveClient extends BaseRealtimeClient {
             this.finalizeAssistantTranscript();
             this.responseActive = false;
             this.audioPlaying = false;
+            const callId = String(item.call_id ?? '');
+            if (callId) {
+                this.toolBatchBarrier.TrackPendingCall(callId, () => {
+                    this.sendDataChannelFrame({
+                        type: 'response.create',
+                    });
+                });
+            }
             const call: RealtimeClientToolCall = {
-                CallID: String(item.call_id ?? ''),
+                CallID: callId,
                 ToolName: String(item.name ?? ''),
                 ArgumentsJson: String(item.arguments ?? '{}'),
             };
@@ -553,28 +570,19 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 if (this.pendingAssistantText) {
                     this.finalizeAssistantTranscript();
                 }
+                const isContinuation = this.pendingUserText.length > 0;
                 this.pendingUserText += delta;
                 this.emitTranscript({
                     Role: 'User',
                     Text: this.pendingUserText,
                     IsFinal: true,
                     Kind: 'normal',
-                    ReplacesPrevious: this.userTurnTranscribed,
+                    ReplacesPrevious: isContinuation,
                 });
-                this.userTurnTranscribed = true;
                 break;
             }
 
-            case 'conversation.item.input_audio_transcription.completed': {
-                const text = typeof event.transcript === 'string' ? event.transcript : '';
-                this.pendingUserText = text;
-                this.finalizeUserTranscript();
-                break;
-            }
-
-            case 'session.output_transcript.delta':
-            case 'response.audio_transcript.delta':
-            case 'response.output_audio_transcript.delta': {
+            case 'session.output_transcript.delta': {
                 const delta = typeof event.delta === 'string' ? event.delta : typeof event.text === 'string' ? event.text : '';
                 if (!delta) {
                     break;
@@ -598,33 +606,19 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 break;
             }
 
-            case 'response.audio_transcript.done':
-            case 'response.output_audio_transcript.done': {
-                const text = typeof event.transcript === 'string' ? event.transcript : '';
-                if (text) {
-                    this.pendingAssistantText = text;
-                }
-                this.finalizeAssistantTranscript();
-                break;
-            }
-
             case 'response.event': {
                 const inner = event.event as Record<string, unknown> | undefined;
                 if (inner?.type === 'response.output_item.done') {
                     this.handleOutputItemDone(inner.item as Record<string, unknown> | undefined);
                 } else if (inner?.type === 'response.completed' || inner?.type === 'response.done') {
-                    this.handleResponseCompleted(inner.response as Record<string, unknown> | undefined);
+                    this.handleResponseCompleted((inner.response as Record<string, unknown> | undefined) ?? inner);
                 }
-                break;
-            }
-
-            case 'response.output_item.done': {
-                this.handleOutputItemDone(event.item as Record<string, unknown> | undefined);
                 break;
             }
 
             case 'session.delegation.created': {
                 this.finalizeAssistantTranscript();
+                this.finalizeUserTranscript();
                 const delegationId = String(event.delegation_id ?? '');
                 if (delegationId) {
                     this.clientDelegationCallIds.add(delegationId);
@@ -655,26 +649,16 @@ export class OpenAILiveClient extends BaseRealtimeClient {
                 break;
             }
 
-            case 'response.completed':
-            case 'response.done': {
-                this.handleResponseCompleted(event.usage as Record<string, unknown> | undefined);
-                break;
-            }
-
-            case 'input_audio_buffer.speech_started': {
-                // True barge-in detection
-                if (this.responseActive || this.audioPlaying) {
-                    this.emitInterruption();
-                    this.CancelActiveResponse();
-                }
-                break;
-            }
-
             case 'error': {
                 const err = event.error as Record<string, unknown> | undefined;
                 const message = typeof err?.message === 'string' ? err.message : 'Unknown OpenAI Live error';
                 const code = typeof err?.code === 'string' ? err.code : undefined;
                 const isFatal = !this.isActive() || code === 'session_expired' || code === 'unauthorized';
+                // Provider cut-off signal (moderation or provider abort mid-speech)
+                if (this.responseActive || this.audioPlaying) {
+                    this.emitInterruption();
+                    this.CancelActiveResponse();
+                }
                 this.emitError({ Message: message, Code: code, Fatal: isFatal });
                 if (isFatal) {
                     this.setState('error');
