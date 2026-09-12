@@ -55,6 +55,7 @@ import {
     RealtimeToolBroker,
     RealtimeToolBrokerDeps,
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    INVOKE_TARGET_AGENT_DESCRIPTION,
     BuildRealtimeAgentFraming,
     RealtimeColleague,
     DelegateToTargetRequest,
@@ -448,6 +449,24 @@ export function WarnOnUnmatchedProviderVoice(
 }
 
 /**
+ * Sanitizes an action or tool name to conform to provider wire constraints
+ * (e.g. OpenAI function naming: ^[a-zA-Z0-9_-]{1,64}$).
+ *
+ * Replaces non-alphanumeric/hyphen/underscore characters with underscores,
+ * collapses consecutive runs of underscores into a single underscore, and
+ * truncates to 64 characters.
+ *
+ * @param name The original action or tool name.
+ * @returns The sanitized wire-safe name.
+ */
+export function SanitizeWireToolName(name: string): string {
+    return name
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .replace(/_+/g, '_')
+        .slice(0, 64);
+}
+
+/**
  * Server-agnostic service that prepares a client-direct realtime session and executes the tool
  * calls the browser relays back. Constructed per-request (a normal injectable service — NOT a
  * singleton) so the {@link UserInfo} and {@link IMetadataProvider} are always request-scoped.
@@ -456,6 +475,37 @@ export function WarnOnUnmatchedProviderVoice(
  * reaches for the global default provider, so it is safe in multi-provider/multi-tenant servers.
  */
 export class RealtimeClientSessionService {
+    /** Maps session id -> (wireName -> MJActionEntityExtended) built during tool projection. */
+    protected readonly sessionWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+
+    /** Maps targetAgentID -> (wireName -> MJActionEntityExtended) fallback built during tool projection. */
+    protected readonly targetWireActionMaps = new Map<string, Map<string, MJActionEntityExtended>>();
+
+    /**
+     * Builds a wire-name to action map from candidate actions, sanitizing each
+     * action's name and deduplicating collisions (first action wins).
+     *
+     * @param actions The action entities to index by wire name.
+     * @returns Map of wire-name to action entity.
+     */
+    public buildWireActionMap(actions: MJActionEntityExtended[]): Map<string, MJActionEntityExtended> {
+        const map = new Map<string, MJActionEntityExtended>();
+        const seen = new Set<string>();
+        for (const action of actions) {
+            if (!action.Name) {
+                continue;
+            }
+            const wireName = SanitizeWireToolName(action.Name);
+            const lower = wireName.toLowerCase();
+            if (seen.has(lower)) {
+                // Colliding action name after sanitization — first action wins
+                continue;
+            }
+            seen.add(lower);
+            map.set(wireName, action);
+        }
+        return map;
+    }
     /**
      * The seeded name of the `MJ: AI Prompts` row whose `TemplateText` carries the first-person
      * progress-narration instructions (with a `{{ progressMessage }}` placeholder). Resolved at
@@ -1765,7 +1815,7 @@ export class RealtimeClientSessionService {
     ): Promise<RealtimeSessionParams> {
         const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
         const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
-        const directTools = this.buildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass);
+        const directTools = this.buildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
@@ -2235,9 +2285,7 @@ export class RealtimeClientSessionService {
     protected buildStableToolSet(extraTools?: RealtimeToolDefinition[]): RealtimeToolDefinition[] {
         const invokeTarget: RealtimeToolDefinition = {
             Name: INVOKE_TARGET_AGENT_TOOL_NAME,
-            Description:
-                'Invoke the target agent to perform complex, multi-step, or background work (seconds to minutes). ' +
-                'Use this whenever work is needed beyond conversation and your directly-available tools; narrate while it runs.',
+            Description: INVOKE_TARGET_AGENT_DESCRIPTION,
             ParametersSchema: {
                 type: 'object',
                 properties: {
@@ -2256,7 +2304,20 @@ export class RealtimeClientSessionService {
             }
         };
 
-        return extraTools && extraTools.length > 0 ? [invokeTarget, ...extraTools] : [invokeTarget];
+        const result: RealtimeToolDefinition[] = [invokeTarget];
+        const seenNames = new Set<string>([INVOKE_TARGET_AGENT_TOOL_NAME.toLowerCase()]);
+
+        if (extraTools && extraTools.length > 0) {
+            for (const tool of extraTools) {
+                const key = tool.Name.toLowerCase();
+                if (!seenNames.has(key)) {
+                    seenNames.add(key);
+                    result.push(tool);
+                }
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -2621,7 +2682,8 @@ export class RealtimeClientSessionService {
     public buildDirectActionTools(
         targetAgentID: string | undefined,
         effectiveConfig?: RealtimeCoAgentConfig,
-        driverClass?: string
+        driverClass?: string,
+        agentSessionID?: string
     ): RealtimeToolDefinition[] {
         if (!targetAgentID || !this.driverSupportsDynamicToolSet(driverClass)) {
             return [];
@@ -2637,16 +2699,27 @@ export class RealtimeClientSessionService {
             IsActionAllowedForDirectInvocation(action.Name, directConfig)
         );
 
-        return allowedActions.map(action => this.mapActionToToolDefinition(action));
+        const wireMap = this.buildWireActionMap(allowedActions);
+        if (agentSessionID) {
+            this.sessionWireActionMaps.set(agentSessionID, wireMap);
+        }
+        this.targetWireActionMaps.set(targetAgentID, wireMap);
+
+        const tools: RealtimeToolDefinition[] = [];
+        for (const [wireName, action] of wireMap.entries()) {
+            tools.push(this.mapActionToToolDefinition(action, wireName));
+        }
+        return tools;
     }
 
     /**
      * Maps an action entity and its metadata parameters to a RealtimeToolDefinition.
      *
      * @param action The action entity to map.
+     * @param wireName Optional pre-sanitized wire name. If omitted, derives via {@link SanitizeWireToolName}.
      * @returns The constructed tool definition.
      */
-    protected mapActionToToolDefinition(action: MJActionEntityExtended): RealtimeToolDefinition {
+    protected mapActionToToolDefinition(action: MJActionEntityExtended, wireName?: string): RealtimeToolDefinition {
         const rawParams: readonly MJActionParamEntity[] = (action.Params?.Items && action.Params.Items.length > 0)
             ? action.Params.Items
             : (ActionEngineServer.Instance.ActionParams ?? []).filter(p => UUIDsEqual(p.ActionID, action.ID));
@@ -2683,7 +2756,7 @@ export class RealtimeClientSessionService {
         };
 
         return {
-            Name: action.Name,
+            Name: wireName ?? SanitizeWireToolName(action.Name),
             Description: action.Description || `Execute the ${action.Name} action.`,
             ParametersSchema: parametersSchema
         };
@@ -2725,10 +2798,12 @@ export class RealtimeClientSessionService {
         }
 
         const candidateActions = this.getTargetAgentActions(target.ID);
-        const action = candidateActions.find(a =>
-            a.Name?.trim().toLowerCase() === call.ToolName.trim().toLowerCase() ||
-            a.Name?.replace(/\s+/g, '_').toLowerCase() === call.ToolName.trim().toLowerCase()
-        );
+        const wireMap = (input?.AgentSessionID ? this.sessionWireActionMaps.get(input.AgentSessionID) : undefined)
+            ?? this.targetWireActionMaps.get(target.ID)
+            ?? this.buildWireActionMap(candidateActions);
+
+        const action = wireMap.get(call.ToolName)
+            ?? Array.from(wireMap.entries()).find(([w]) => w.toLowerCase() === call.ToolName.trim().toLowerCase())?.[1];
 
         if (!action) {
             return {

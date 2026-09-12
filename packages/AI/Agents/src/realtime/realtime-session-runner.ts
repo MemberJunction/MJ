@@ -37,6 +37,7 @@ import { RealtimeRecordingController } from './realtime-recording-capture';
 import {
     RealtimeToolBroker,
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    INVOKE_TARGET_AGENT_DESCRIPTION,
     DelegateToTargetRequest,
     DelegatedResult,
     ToolExecutionResult,
@@ -49,6 +50,7 @@ import { BuildServerNarrationInstructions } from './realtime-narration';
 // keep their import paths. The single source of truth is `realtime-tool-broker.ts`.
 export {
     INVOKE_TARGET_AGENT_TOOL_NAME,
+    INVOKE_TARGET_AGENT_DESCRIPTION,
     DelegateToTargetRequest,
     DelegatedResult,
     ToolExecutionResult,
@@ -384,9 +386,7 @@ export class RealtimeSessionRunner {
 
         const invokeTargetTool: RealtimeToolDefinition = {
             Name: INVOKE_TARGET_AGENT_TOOL_NAME,
-            Description:
-                'Invoke the target agent to perform complex, multi-step, or background work (seconds to minutes). ' +
-                'Use this whenever work is needed beyond conversation and your directly-available tools; narrate while it runs.',
+            Description: INVOKE_TARGET_AGENT_DESCRIPTION,
             ParametersSchema: invokeTargetSchema
         };
 

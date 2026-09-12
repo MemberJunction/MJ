@@ -26,12 +26,13 @@ import { MJAIAgentEntityExtended, MJAIModelEntityExtended, AppContextSnapshot } 
 
 import {
     RealtimeClientSessionService,
+    SanitizeWireToolName,
     PrepareClientSessionInput,
     ExecuteRelayedToolInput,
     RealtimeModelResolution,
     CoAgentSystemPromptResolution
 } from '../realtime/realtime-client-session-service';
-import { INVOKE_TARGET_AGENT_TOOL_NAME, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
+import { INVOKE_TARGET_AGENT_TOOL_NAME, INVOKE_TARGET_AGENT_DESCRIPTION, DelegateToTargetRequest, DelegatedResult, DelegatedRunArtifact, RealtimeColleague } from '../realtime/realtime-tool-broker';
 import { BuildAppRealtimeOverridesJson, RealtimeCoAgentConfig } from '../realtime/realtime-coagent-config';
 
 // Mock AgentRunner so the REAL delegateToTarget path (below) can be exercised without DB/SDK.
@@ -1883,6 +1884,42 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
         }
     } as unknown as MJActionEntityExtended;
 
+    const mockFindCandidateActionsAction = {
+        ID: 'act-3',
+        Name: 'Find Candidate Actions',
+        Description: 'Finds candidate actions matching a query.',
+        Params: {
+            Items: [
+                {
+                    Name: 'Query',
+                    Description: 'Search string',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: true,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
+    const mockLearnWorldsCreateUserAction = {
+        ID: 'act-4',
+        Name: 'LearnWorlds - Create User',
+        Description: 'Creates a user in LearnWorlds.',
+        Params: {
+            Items: [
+                {
+                    Name: 'Email',
+                    Description: 'User email',
+                    Type: 'Input',
+                    ValueType: 'Scalar',
+                    IsRequired: true,
+                    IsArray: false
+                } as unknown as MJActionParamEntity
+            ]
+        }
+    } as unknown as MJActionEntityExtended;
+
     it('returns ONLY invoke-target-agent against ElevenLabs and Gemini even when directActions is enabled', () => {
         const service = new TestableService();
         service.TargetActions = [mockEmailAction, mockTaskAction];
@@ -2126,6 +2163,134 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             const result = await service.ExposeExecuteNonTargetTool(call, input, contextUser, provider);
             expect(result.Success).toBe(false);
             expect(result.Output).toContain('timed out after 50ms');
+        });
+
+        it('resolves and executes spaced action names (Find Candidate Actions and LearnWorlds - Create User)', async () => {
+            const service = new TestableService();
+            service.TargetActions = [mockFindCandidateActionsAction, mockLearnWorldsCreateUserAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['Find Candidate Actions', 'LearnWorlds - Create User']
+                    }
+                }
+            };
+            service.TargetAgentNames = { 'target-1': 'Operations Agent' };
+
+            const targetAgent = {
+                ID: 'target-1',
+                Name: 'Operations Agent',
+                TypeConfiguration: JSON.stringify(cfg)
+            } as unknown as MJAIAgentEntityExtended;
+            vi.spyOn(service as unknown as { resolveTargetAgent: (id: string) => MJAIAgentEntityExtended | null }, 'resolveTargetAgent').mockReturnValue(targetAgent);
+
+            const actionResult = new ActionResult();
+            actionResult.Success = true;
+            actionResult.Message = 'Action executed successfully';
+            const runSpy = vi.spyOn(ActionEngineServer.Instance, 'RunAction').mockResolvedValue(actionResult);
+
+            // Test 1: Inbound call using projected wire name 'Find_Candidate_Actions'
+            const call1: RealtimeToolCall = {
+                CallID: 'call-spaced-1',
+                ToolName: 'Find_Candidate_Actions',
+                Arguments: JSON.stringify({ Query: 'accounting' })
+            };
+            const input1: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-spaced-1',
+                TargetAgentID: 'target-1',
+                Call: call1
+            };
+
+            const result1 = await service.ExposeExecuteNonTargetTool(call1, input1, contextUser, provider);
+            expect(result1.Success).toBe(true);
+            expect(result1.Output).toBe('Action executed successfully');
+            expect(runSpy).toHaveBeenCalled();
+            expect(runSpy.mock.calls[0][0].Action.Name).toBe('Find Candidate Actions');
+            expect(runSpy.mock.calls[0][0].Params).toEqual([{ Name: 'Query', Value: 'accounting', Type: 'Input' }]);
+
+            runSpy.mockClear();
+
+            // Test 2: Inbound call using projected wire name 'LearnWorlds_-_Create_User'
+            const call2: RealtimeToolCall = {
+                CallID: 'call-spaced-2',
+                ToolName: 'LearnWorlds_-_Create_User',
+                Arguments: JSON.stringify({ Email: 'newuser@domain.com' })
+            };
+            const input2: ExecuteRelayedToolInput = {
+                AgentSessionID: 'sess-spaced-2',
+                TargetAgentID: 'target-1',
+                Call: call2
+            };
+
+            const result2 = await service.ExposeExecuteNonTargetTool(call2, input2, contextUser, provider);
+            expect(result2.Success).toBe(true);
+            expect(result2.Output).toBe('Action executed successfully');
+            expect(runSpy).toHaveBeenCalled();
+            expect(runSpy.mock.calls[0][0].Action.Name).toBe('LearnWorlds - Create User');
+            expect(runSpy.mock.calls[0][0].Params).toEqual([{ Name: 'Email', Value: 'newuser@domain.com', Type: 'Input' }]);
+        });
+    });
+
+    describe('SanitizeWireToolName and tool deduplication', () => {
+        it('sanitizes spaced and punctuated names into wire-legal function identifiers', () => {
+            const WIRE_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+
+            const name1 = SanitizeWireToolName('Find Candidate Actions');
+            expect(name1).toBe('Find_Candidate_Actions');
+            expect(WIRE_NAME_REGEX.test(name1)).toBe(true);
+
+            const name2 = SanitizeWireToolName('LearnWorlds - Create User');
+            expect(name2).toBe('LearnWorlds_-_Create_User');
+            expect(WIRE_NAME_REGEX.test(name2)).toBe(true);
+
+            const collapsed = SanitizeWireToolName('Get   Record   By   ID');
+            expect(collapsed).toBe('Get_Record_By_ID');
+            expect(WIRE_NAME_REGEX.test(collapsed)).toBe(true);
+
+            const capped = SanitizeWireToolName('A'.repeat(80));
+            expect(capped.length).toBe(64);
+        });
+
+        it('projects legal wire names for real spaced action fixtures in buildDirectActionTools', () => {
+            const service = new TestableService();
+            service.TargetActions = [mockFindCandidateActionsAction, mockLearnWorldsCreateUserAction];
+
+            const cfg: RealtimeCoAgentConfig = {
+                realtime: {
+                    directActions: {
+                        enabled: true,
+                        actionNames: ['Find Candidate Actions', 'LearnWorlds - Create User']
+                    }
+                }
+            };
+
+            const tools = service.buildDirectActionTools('target-1', cfg, 'OpenAIRealtime');
+            expect(tools).toHaveLength(2);
+            expect(tools[0].Name).toBe('Find_Candidate_Actions');
+            expect(tools[1].Name).toBe('LearnWorlds_-_Create_User');
+
+            const WIRE_NAME_REGEX = /^[a-zA-Z0-9_-]{1,64}$/;
+            expect(WIRE_NAME_REGEX.test(tools[0].Name)).toBe(true);
+            expect(WIRE_NAME_REGEX.test(tools[1].Name)).toBe(true);
+        });
+
+        it('deduplicates tools in buildStableToolSet and ensures invoke-target-agent cannot be collided', () => {
+            const service = new TestableService();
+            const extraTools: RealtimeToolDefinition[] = [
+                { Name: 'invoke-target-agent', Description: 'Fake duplicate', ParametersSchema: {} },
+                { Name: 'CustomTool', Description: 'Tool 1', ParametersSchema: {} },
+                { Name: 'customtool', Description: 'Case-duplicate', ParametersSchema: {} },
+                { Name: 'OtherTool', Description: 'Tool 2', ParametersSchema: {} }
+            ];
+
+            const result = service.buildStableToolSet(extraTools);
+            expect(result).toHaveLength(3); // invoke-target-agent (original), CustomTool, OtherTool
+            expect(result[0].Name).toBe(INVOKE_TARGET_AGENT_TOOL_NAME);
+            expect(result[0].Description).toBe(INVOKE_TARGET_AGENT_DESCRIPTION);
+            expect(result[1].Name).toBe('CustomTool');
+            expect(result[2].Name).toBe('OtherTool');
         });
     });
 });

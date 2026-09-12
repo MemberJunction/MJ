@@ -38,6 +38,11 @@ import { RealtimeDisclosurePolicy } from './realtime-coagent-config';
  */
 export const INVOKE_TARGET_AGENT_TOOL_NAME = 'invoke-target-agent';
 
+/** The shared description for the `invoke-target-agent` tool. */
+export const INVOKE_TARGET_AGENT_DESCRIPTION =
+    'Invoke the target agent to perform complex, multi-step, or background work (seconds to minutes). ' +
+    'Use this whenever work is needed beyond conversation and your directly-available tools; narrate while it runs.';
+
 /**
  * **The single producer of the realtime co-agent's identity framing.** Builds the opening of the companion
  * system prompt that makes the agent speak first-person **AS the target agent** (Sage, Marketing Agent, …),
