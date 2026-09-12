@@ -198,7 +198,7 @@ test('description reads a TL;DR written as a paragraph', () => {
 });
 
 test('description falls back to the first paragraph without a TL;DR', () => {
-  // The 13 release files written before the TL;DR was required must keep working.
+  // The 12 release files written before the TL;DR was required must keep working.
   const source = ['# An older release', '', 'The fifth Edge build of the 6.1 line.', '', '## Bug Fixes', '- x'].join('\n');
   const { description } = transformRepoMarkdown(source, makeCtx({ srcRepoPath: 'releases/v6.1.0-edge.4.md' }));
   assert.equal(description, 'The fifth Edge build of the 6.1 line.');
