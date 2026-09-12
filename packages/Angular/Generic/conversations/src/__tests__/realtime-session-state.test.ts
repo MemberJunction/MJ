@@ -107,3 +107,26 @@ describe('RealtimeSessionState — RunID threading', () => {
     expect(state.Items).not.toBe(itemsBefore);
   });
 });
+
+describe('RealtimeSessionState — in-place caption updates', () => {
+  let harness: ReturnType<typeof buildStreams>;
+  let state: RealtimeSessionState;
+
+  beforeEach(() => {
+    harness = buildStreams();
+    state = new RealtimeSessionState();
+    state.Attach(harness.streams);
+  });
+
+  it('updates the last caption item in place when a streaming delta extends the current turn', () => {
+    harness.captions$.next([{ Role: 'User', Text: 'Hel' }]);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0]).toEqual({ Kind: 'caption', Role: 'User', Text: 'Hel' });
+
+    // Same array length (1 caption), updated in-place text
+    harness.captions$.next([{ Role: 'User', Text: 'Hello world' }]);
+    expect(state.Items).toHaveLength(1);
+    expect(state.Items[0]).toEqual({ Kind: 'caption', Role: 'User', Text: 'Hello world' });
+  });
+});
+

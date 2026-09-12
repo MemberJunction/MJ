@@ -247,23 +247,60 @@ export class RealtimeSessionState {
     this.Changed$.next();
   }
 
-  /** Appends any newly-arrived captions, keeping order relative to delegation cards. */
+  /** Appends any newly-arrived captions, keeping order relative to delegation cards, and updates streaming captions in place. */
   private onCaptions(captions: RealtimeCaption[]): void {
-    if (captions.length <= this.placedCaptionCount) {
+    if (captions.length < this.placedCaptionCount) {
       // Captions are cleared on a fresh session — reset all merge state.
-      if (captions.length < this.placedCaptionCount) {
-        this.reset();
-        this.Changed$.next();
-      }
+      this.reset();
+      this.Changed$.next();
       return;
     }
-    const appended: RealtimeThreadItem[] = [];
-    for (let i = this.placedCaptionCount; i < captions.length; i++) {
-      appended.push({ Kind: 'caption', Role: captions[i].Role, Text: captions[i].Text });
+
+    // Find the indices in this.Items of the captions already placed in the current session.
+    // They are the last `placedCaptionCount` caption items in this.Items.
+    const liveCaptionIndices: number[] = [];
+    for (let idx = this.Items.length - 1; idx >= 0 && liveCaptionIndices.length < this.placedCaptionCount; idx--) {
+      if (this.Items[idx].Kind === 'caption') {
+        liveCaptionIndices.unshift(idx);
+      }
     }
-    this.placedCaptionCount = captions.length;
-    this.Items = [...this.Items, ...appended];
-    this.Changed$.next();
+
+    let nextItems = this.Items;
+    let hasChanges = false;
+
+    // 1. Update any already-placed captions in place if their text or role changed (e.g. streaming deltas or corrections)
+    const updateCount = Math.min(this.placedCaptionCount, liveCaptionIndices.length);
+    for (let i = 0; i < updateCount; i++) {
+      const itemIdx = liveCaptionIndices[i];
+      const current = nextItems[itemIdx] as RealtimeThreadCaptionItem;
+      const incoming = captions[i];
+      if (current.Role !== incoming.Role || current.Text !== incoming.Text) {
+        if (nextItems === this.Items) {
+          nextItems = [...this.Items];
+        }
+        nextItems[itemIdx] = { Kind: 'caption', Role: incoming.Role, Text: incoming.Text };
+        hasChanges = true;
+      }
+    }
+
+    // 2. Append newly-arrived captions
+    if (captions.length > this.placedCaptionCount) {
+      const appended: RealtimeThreadItem[] = [];
+      for (let i = this.placedCaptionCount; i < captions.length; i++) {
+        appended.push({ Kind: 'caption', Role: captions[i].Role, Text: captions[i].Text });
+      }
+      if (nextItems === this.Items) {
+        nextItems = [...this.Items];
+      }
+      nextItems = [...nextItems, ...appended];
+      this.placedCaptionCount = captions.length;
+      hasChanges = true;
+    }
+
+    if (hasChanges) {
+      this.Items = nextItems;
+      this.Changed$.next();
+    }
   }
 
   /** Inserts a new working card, or immutably replaces the existing one for this CallID. */
