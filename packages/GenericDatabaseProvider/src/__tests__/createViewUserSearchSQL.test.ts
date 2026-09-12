@@ -8,6 +8,7 @@
  *   - UserSearchParamFormatAPI overrides the predicate path
  *   - LIKE metacharacters (%, _, [, ], \) are escaped with ESCAPE '\'
  *   - Single-quote escaping is preserved on Exact (which doesn't use LIKE escaping)
+ *   - SQL keywords in the search text are ordinary literal content, never a refusal (#4392)
  *   - Non-text fields are skipped
  *   - Unbounded text fields (nvarchar(MAX)) are skipped on non-FTX entities
  *   - Multiple eligible fields produce an OR'd predicate wrapped in parentheses
@@ -22,6 +23,7 @@ import {
     DeleteSQLResult,
     EntityInfo,
     EntityFieldInfo,
+    UserInfo,
     UserInfo,
     ProviderType,
     PotentialDuplicateResponse,
@@ -61,8 +63,8 @@ class SearchSQLTestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 
-    public buildSQL(entityInfo: EntityInfo, userSearchString: string): string {
-        return this.createViewUserSearchSQL(entityInfo, userSearchString);
+    public buildSQL(entityInfo: EntityInfo, userSearchString: string, contextUser?: UserInfo): string {
+        return this.createViewUserSearchSQL(entityInfo, userSearchString, contextUser);
     }
 
     // --- Abstract-member implementations (just enough to satisfy the type system) ---
@@ -237,6 +239,53 @@ describe('createViewUserSearchSQL — escaping', () => {
     });
 });
 
+describe('createViewUserSearchSQL — SQL keywords are ordinary search text (#4392)', () => {
+    // UserSearchString used to be screened by ValidateUserProvidedSQLClause, a denylist meant for
+    // caller-supplied SQL FRAGMENTS. Word-boundary-matched against free search-box text it refused
+    // real searches — "Union Pacific", "Update Request", "drop shipment" — and the grid showed a
+    // null error message. The screen is gone; these tests pin what replaces it: the term lands
+    // INSIDE a quoted literal with every quote doubled, where no keyword it contains can be parsed
+    // as SQL. That is the correct protection for a literal, and it never rejects a real search.
+
+    const keywordTerms = [
+        'Union Pacific',
+        'Update Request',
+        'drop shipment',
+        'delete',
+        'insert',
+        'exec',
+        'execute',
+        'waitfor',
+    ];
+
+    it.each(keywordTerms)('%j is emitted as a literal, not refused', (term) => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, term);
+        // The term appears verbatim inside the LIKE literal (no metacharacters in these terms).
+        expect(sql).toBe(`(([Name]  LIKE N'%${term}%' ESCAPE '\\'))`);
+    });
+
+    it("xp_ prefixed text searches normally (the _ is LIKE-escaped, as any literal underscore is)", () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, 'xp_test');
+        expect(sql).toBe(`(([Name]  LIKE N'%xp\\_test%' ESCAPE '\\'))`);
+    });
+
+    it('a term carrying a statement terminator stays inside the literal', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, "a; DROP TABLE Users--");
+        expect(sql).toBe(`(([Name]  LIKE N'%a; DROP TABLE Users--%' ESCAPE '\\'))`);
+        // Exactly two unescaped quotes: the literal's own delimiters. Nothing escaped out.
+        expect(sql.replace(/''/g, '').match(/'/g)?.length).toBe(4); // 2 for the literal + 2 for ESCAPE '\'
+    });
+
+    it("a quote-breaking payload is neutralized by doubling, not by refusal", () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        const sql = provider.buildSQL(e, "x' OR '1'='1");
+        expect(sql).toBe(`(([Name]  LIKE N'%x'' OR ''1''=''1%' ESCAPE '\\'))`);
+    });
+});
+
 describe('createViewUserSearchSQL — UserSearchParamFormatAPI override', () => {
     it('Custom format wins over predicate', () => {
         const e = makeEntity({ fields: [makeField({
@@ -278,6 +327,91 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI override', () => 
             expect(sql).toBe(`(([Phone]  = '${escaped}'))`);
         });
     }
+});
+
+describe('createViewUserSearchSQL — the custom-format denylist follows field-level security (#4392 + FLS)', () => {
+    // The denylist is re-applied only because UserSearchParamFormatAPI may splice the term into
+    // SQL unquoted. Field-level security can exclude that very field from the search — and a
+    // field that never reaches the SQL cannot carry the term into it. Screening on behalf of an
+    // excluded field would refuse ordinary searches ("Union Pacific") for precisely the users
+    // with the LEAST access, which is the wrong way round. Participation, not configuration,
+    // is what makes the screen necessary.
+
+    /** An entity whose ONLY custom-format field is denied to the caller. */
+    function entityWithDeniedCustomFormat(denied: string[]): EntityInfo {
+        const e = makeEntity({ fields: [
+            makeField({ name: 'Year', type: 'int', predicate: 'Contains', paramFormat: ' = {0}' }),
+            makeField({ name: 'Name', predicate: 'Contains' }),
+        ] });
+        Object.assign(e, {
+            EnableFieldLevelSecurity: true,
+            GetDeniedReadFields: () => new Set(denied.map(d => d.toLowerCase())),
+        });
+        return e;
+    }
+
+    const someUser = { Email: 'x@y.com' } as unknown as UserInfo;
+
+    it('screens when the custom-format field IS searchable by this user', () => {
+        expect(() => provider.buildSQL(entityWithDeniedCustomFormat([]), '2026)) UNION SELECT 1 --', someUser))
+            .toThrow(/UserSearchParamFormatAPI/);
+    });
+
+    it('does NOT screen when field security excludes the custom-format field', () => {
+        // 'Year' is denied, so only the quoted LIKE predicate on 'Name' is built — the term is
+        // confined to a literal again and the ordinary-search fix applies.
+        const sql = provider.buildSQL(entityWithDeniedCustomFormat(['year']), 'Union Pacific', someUser);
+        expect(sql).toBe(`(([Name]  LIKE N'%Union Pacific%' ESCAPE '\\'))`);
+        expect(sql).not.toContain('[Year]');
+    });
+
+    it('a denied custom-format field also cannot smuggle the term into SQL', () => {
+        const sql = provider.buildSQL(entityWithDeniedCustomFormat(['year']), "2026)) UNION SELECT 1 --", someUser);
+        // No unquoted splice anywhere: the payload sits inside the LIKE literal on Name.
+        expect(sql).not.toContain('[Year]');
+        expect(sql).toContain(`LIKE N'%2026)) UNION SELECT 1 --%'`);
+    });
+});
+
+describe('createViewUserSearchSQL — UserSearchParamFormatAPI still gets the fragment denylist (#4392)', () => {
+    // #4392 removed ValidateUserProvidedSQLClause from UserSearchString because the term is
+    // normally confined to a string literal. UserSearchParamFormatAPI breaks that premise: the
+    // admin-authored format may splice {0} in UNQUOTED (` = {0}` on a numeric field is a
+    // supported, tested case just above), and then the term IS SQL. Without the screen,
+    // `2026)) UNION SELECT 1,2,3 --` became a UNION injection in the view's WHERE clause.
+
+    const customFormatEntity = () => makeEntity({ fields: [makeField({
+        name: 'Year', type: 'int', predicate: 'Contains', paramFormat: ' = {0}',
+    })] });
+
+    for (const payload of [
+        '2026)) UNION SELECT 1,2,3 --',
+        '2026; DROP TABLE Users--',
+        '2026) OR 1=1 --',
+        "2026 /* comment */",
+        '2026; EXEC xp_cmdshell',
+    ]) {
+        it(`refuses ${JSON.stringify(payload)} when a field splices the term into SQL`, () => {
+            expect(() => provider.buildSQL(customFormatEntity(), payload)).toThrow(/UserSearchParamFormatAPI/);
+        });
+    }
+
+    it('still allows an ordinary term on a custom-format entity', () => {
+        expect(provider.buildSQL(customFormatEntity(), '2026')).toBe(`(([Year]  = 2026))`);
+    });
+
+    it('a QUOTED custom format keeps working for terms with punctuation', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Phone', predicate: 'Exact', paramFormat: " = '{0}'" })] });
+        expect(provider.buildSQL(e, "O'Leary")).toBe(`(([Phone]  = 'O''Leary'))`);
+    });
+
+    it('does NOT screen entities without a custom format — that is the #4392 fix', () => {
+        const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
+        // "union"/"drop"/";" are ordinary words here; the term lands inside a literal.
+        expect(() => provider.buildSQL(e, 'Union Pacific')).not.toThrow();
+        expect(() => provider.buildSQL(e, 'drop shipment')).not.toThrow();
+        expect(() => provider.buildSQL(e, 'a; b')).not.toThrow();
+    });
 });
 
 describe('createViewUserSearchSQL — type guards', () => {
@@ -334,6 +468,32 @@ describe('createViewUserSearchSQL — multiple fields', () => {
             `([LastName]  LIKE N'%foo%' ESCAPE '\\') OR ` +
             `([Email]  LIKE N'foo%' ESCAPE '\\'))`
         );
+    });
+});
+
+describe('createViewUserSearchSQL — FTX operator detection is word-boundary, not substring (#4392)', () => {
+    // As SUBSTRINGS, `OR` matches "C-OR-PORATE" and `AND` matches "ST-AND-ARD", so ordinary
+    // two-word searches were emitted as `Corporate%Office`. `%` is not a full-text operator —
+    // that is a syntax error, not a search. Only a standalone AND/OR/NOT is an operator.
+    const ftsEntity = () => makeEntity({ ftx: true, ftxFunction: 'fnSearchAccount', fields: [] });
+
+    for (const [term, expected] of [
+        ['Corporate Office', 'Corporate AND Office'],   // "cORporate" — was Corporate%Office
+        ['Standard Rate', 'Standard AND Rate'],         // "stANDard"  — was Standard%Rate
+        ['North America', 'North AND America'],         // "nORth"     — was North%America
+        ['Marcus Chen', 'Marcus AND Chen'],             // no operator substring — already worked
+    ] as [string, string][]) {
+        it(`${JSON.stringify(term)} becomes ${JSON.stringify(expected)}`, () => {
+            expect(provider.buildSQL(ftsEntity(), term)).toBe(
+                `[ID] IN (SELECT [ID] FROM [crm].[fnSearchAccount]('${expected}'))`,
+            );
+        });
+    }
+
+    it('a STANDALONE operator is still honored as a boolean expression', () => {
+        const sql = provider.buildSQL(ftsEntity(), 'foo AND bar');
+        expect(sql).toContain(' AND ');
+        expect(sql).not.toContain('%');
     });
 });
 
