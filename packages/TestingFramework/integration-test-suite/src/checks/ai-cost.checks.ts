@@ -724,7 +724,7 @@ export const AiCostChecks: NamedCheck[] = [
             Assert(hourlyRes.Success, `AIUsageHourly live query failed: ${hourlyRes.ErrorMessage}`);
 
             const hourlyTotal = (hourlyRes.Results ?? []).reduce(
-                (sum: number, r: Record<string, unknown>) => sum + Number(r.TotalCost ?? 0),
+                (sum: number, r: Record<string, unknown>) => sum + Number(r.OwnCost ?? r.TotalCost ?? 0),
                 0
             );
 
@@ -749,7 +749,7 @@ export const AiCostChecks: NamedCheck[] = [
             Assert(matRes.Success, `AIUsageHourly with DataSource: 'Materialized' failed: ${matRes.ErrorMessage}`);
 
             const matTotal = (matRes.Results ?? []).reduce(
-                (sum: number, r: Record<string, unknown>) => sum + Number(r.TotalCost ?? 0),
+                (sum: number, r: Record<string, unknown>) => sum + Number(r.OwnCost ?? r.TotalCost ?? 0),
                 0
             );
             const diffMat = Math.abs(matTotal - hourlyTotal);
