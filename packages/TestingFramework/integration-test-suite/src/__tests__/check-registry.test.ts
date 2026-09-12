@@ -225,7 +225,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-skills-live': 5,
         'agent-wire-callback': 2,
         'aggregates-cache': 3,
-        'ai-cost': 11,
+        'ai-cost': 10,
         'ai-embeddings': 5,
         'ai-permissions': 6,
         'ai-providers': 3,
