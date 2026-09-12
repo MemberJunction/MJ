@@ -80,6 +80,7 @@ import {
     JSONObjectLike,
     RealtimeAllowedAgent,
     RealtimeCoAgentConfig,
+    RealtimeDirectActionsConfig,
     ResolveEffectiveRealtimeConfig,
     MatchProviderVoiceSettings,
     GetDirectActionsConfig,
@@ -1823,9 +1824,9 @@ export class RealtimeClientSessionService {
         modelID?: string,
         modelVendorID?: string
     ): Promise<RealtimeSessionParams> {
-        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig);
-        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
         const directTools = this.buildDirectActionTools(input.TargetAgentID, effectiveConfig, driverClass, input.AgentSessionID);
+        const systemPrompt = await this.buildCompanionSystemPrompt(input, coAgent, contextUser, provider, effectiveConfig, directTools.length > 0);
+        const memoryContext = await this.assembleMemoryContext(input, coAgent, contextUser, provider);
         const combinedExtra = directTools.length > 0
             ? [...(input.ExtraTools ?? []), ...directTools]
             : input.ExtraTools;
@@ -1930,7 +1931,8 @@ export class RealtimeClientSessionService {
         coAgent: MJAIAgentEntityExtended,
         contextUser: UserInfo,
         provider: IMetadataProvider,
-        effectiveConfig?: RealtimeCoAgentConfig
+        effectiveConfig?: RealtimeCoAgentConfig,
+        hasDirectTools = false
     ): Promise<string> {
         const target = this.resolveTargetAgent(input.TargetAgentID);
         const targetName = target?.Name ?? 'the configured target agent';
@@ -1940,7 +1942,7 @@ export class RealtimeClientSessionService {
         // browser/whiteboard); bridges pass none. Colleagues come from the effective allowed-agent union
         // (Move 4) so the lead knows who it can delegate to and how to narrate each handoff.
         const colleagues = this.buildColleaguesFromConfig(effectiveConfig, input.TargetAgentID);
-        const framing = BuildRealtimeAgentFraming(targetName, this.buildInteractiveSurfaceFraming(input.ExtraTools), colleagues);
+        const framing = BuildRealtimeAgentFraming(targetName, this.buildInteractiveSurfaceFraming(input.ExtraTools), colleagues, hasDirectTools);
 
         const meetingFraming = this.buildMeetingFraming(input);
         const coAgentPrompt = this.getCoAgentSystemPromptText(coAgent);

@@ -2028,6 +2028,8 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             input, coAgent, 'eleven-model', contextUser, provider, cfg, 'ElevenLabsRealtime'
         );
         expect(elevenParams.Tools.map((t: RealtimeToolDefinition) => t.Name)).toEqual([INVOKE_TARGET_AGENT_TOOL_NAME]);
+        expect(elevenParams.SystemPrompt).toContain('do not attempt to do the work yourself');
+        expect(elevenParams.SystemPrompt).not.toContain('directly-available tools');
 
         // OpenAI session params
         const openAIParams = await service.ExposeBuildSessionParams(
@@ -2037,6 +2039,8 @@ describe('Direct Action Invocation (Section B / B-8)', () => {
             INVOKE_TARGET_AGENT_TOOL_NAME,
             'SendEmail'
         ]);
+        expect(openAIParams.SystemPrompt).toContain('directly-available tools');
+        expect(openAIParams.SystemPrompt).not.toContain('do not attempt to do the work yourself');
     });
 
     describe('executeNonTargetTool', () => {

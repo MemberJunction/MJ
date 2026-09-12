@@ -193,4 +193,20 @@ describe('BuildRealtimeAgentFraming / BuildColleaguesClause', () => {
         expect(BuildColleaguesClause([{ name: 'Skip', disclosure: 'hand-voice' }]))
             .toContain('hand the conversation over to them');
     });
+
+    it('asserts framing for a no-direct-tools session contains strict delegation wording and does not mention directly-available tools', () => {
+        const framingNoTools = BuildRealtimeAgentFraming('Sage', '', [], false);
+        expect(framingNoTools).toContain("When actual work is required, call the 'invoke-target-agent' tool and narrate progress while it runs — do not attempt to do the work yourself.");
+        expect(framingNoTools).not.toContain('directly-available tools');
+
+        // Default hasDirectTools is false
+        const framingDefault = BuildRealtimeAgentFraming('Sage');
+        expect(framingDefault).toBe(framingNoTools);
+    });
+
+    it('asserts framing for a session with direct tools mentions directly-available tools and omits strict do-not-attempt wording', () => {
+        const framingWithTools = BuildRealtimeAgentFraming('Sage', '', [], true);
+        expect(framingWithTools).toContain("When work is required that matches one of your directly-available tools, invoke it directly for fast execution. For complex, multi-step, or background work, call the 'invoke-target-agent' tool and narrate progress while it runs.");
+        expect(framingWithTools).not.toContain('do not attempt to do the work yourself');
+    });
 });
