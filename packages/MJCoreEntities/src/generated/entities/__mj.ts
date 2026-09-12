@@ -7254,6 +7254,12 @@ export const MJAISkillActionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ExposeToModel: z.boolean().describe(`
+        * * Field Name: ExposeToModel
+        * * Display Name: Expose to Model
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply.`),
     Skill: z.string().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
@@ -54503,6 +54509,20 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
     */
     get __mj_UpdatedAt(): Date {
         return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ExposeToModel
+    * * Display Name: Expose to Model
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply.
+    */
+    get ExposeToModel(): boolean {
+        return this.Get('ExposeToModel');
+    }
+    set ExposeToModel(value: boolean) {
+        this.Set('ExposeToModel', value);
     }
 
     /**

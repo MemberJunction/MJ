@@ -12064,6 +12064,13 @@ The context is now within limits. Please retry your request with the recovered c
      * Because `params` is the same object reference used for the rest of this run, every subsequent
      * turn's `gatherPromptTemplateData()` call picks up the change automatically — no extra plumbing.
      *
+     * Which actions: the skill's `ExposeToModel` rows only ({@link AIEngine.GetSkillExposedActionIDs}).
+     * A bundled action with the flag off is left OUT of the run: the effective action set is both the
+     * prompt's tool surface and the execution allow-list, so the model neither sees it nor can call it
+     * by name, and no agent path (PreProcessActionStep, a loop's action lookup) can reach it either.
+     * It stays bundled for SKILL.md export and tooling; application code invokes it through the
+     * Actions API. Skill attribution therefore never applies to it — the agent never runs it.
+     *
      * Override to change propagation scope (e.g. a subclass that wants skill-granted capabilities
      * to cascade to sub-agents could push `scope: 'all-subagents'` instead).
      *
@@ -12072,7 +12079,10 @@ The context is now within limits. Please retry your request with the recovered c
     protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
         const activatingAgentIds = [params.agent.ID];
 
-        const actionIds = AIEngine.Instance.GetSkillActionIDs(skill.ID);
+        // Only the actions the skill exposes (AISkillAction.ExposeToModel) join the run. A bundled
+        // action with the flag off is not described to the model and not executable by the agent;
+        // the application invokes it (a menu button in the skill's reply) through the Actions API.
+        const actionIds = AIEngine.Instance.GetSkillExposedActionIDs(skill.ID);
         if (actionIds.length > 0) {
             if (!params.actionChanges) {
                 params.actionChanges = [];
