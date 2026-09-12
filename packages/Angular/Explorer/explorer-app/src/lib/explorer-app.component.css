@@ -95,6 +95,10 @@
      deployment can retarget the stops or replace the value wholesale — flat color, image,
      different geometry — without touching this rule. */
   background: var(--mj-login-banner-bg);
+  /* Sets the INHERITED colour for the region, so markup a host projects into the banner slots
+     lands readable on this background by default. Without it, projected content inherits the
+     page's near-black body colour and disappears. The host can still override it. */
+  color: var(--mj-login-banner-text);
 }
 
 /* Brand block: logo, welcome, sub — centred as one group by its own auto margins, so a banner
@@ -160,6 +164,9 @@
   justify-content: flex-start;
   overflow-y: auto;
   background: var(--mj-login-panel-bg, var(--mj-bg-surface));
+  /* The sign-in region's counterpart to the banner's inherited colour — see .main-banner. It
+     starts mattering the moment a deployment themes --mj-login-panel-bg dark. */
+  color: var(--mj-login-panel-text, var(--mj-text-primary));
   /* dvh, not vh — see .main-banner. */
   height: 100dvh;
   box-sizing: border-box;

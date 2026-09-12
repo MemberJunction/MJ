@@ -235,7 +235,7 @@ against the login DOM. Defaults reproduce the stock design (Login C, editorial s
 | `--mj-login-banner-logo` | `--mj-logo-wordmark` | The banner's brand image |
 | `--mj-login-banner-logo-width` / `-height` | 297px / 45px | The image's box (`contain` fit) |
 | `--mj-login-banner-flex` / `--mj-login-panel-flex` | 1.05 / 1 | The editorial split between story panel and sign-in column |
-| `--mj-login-panel-bg` | `--mj-bg-surface` | The sign-in column's background |
+| `--mj-login-panel-bg` / `--mj-login-panel-text` | `--mj-bg-surface` / `--mj-text-primary` | The sign-in column's background, and the colour its content inherits |
 | `--mj-login-picker-max-width` | 400px | Width of the sign-in stack (`<mj-login-picker>`) |
 | `--mj-login-centered-card-width` | 440px | Width of the sign-in card in the `centered` layout |
 | `--mj-login-card-bg` / `-border` / `-text` / `-text-secondary` / `-radius` | Surface-card set | Configured cards in the sign-in region |
@@ -277,6 +277,10 @@ needs configuration rather than a template.
 | `bannerFooter` | **Adds** below it — suppresses the `'banner'` cards, which are this region's stock content |
 | `panelHeader` | **Adds** above the sign-in options |
 | `panelFooter` | **Adds** below them — suppresses the `'panel'` cards |
+
+Each region sets the colour its content **inherits** (`--mj-login-banner-text` on the story panel,
+`--mj-login-panel-text` on the sign-in column), so markup projected into a slot is readable against
+whatever that surface was painted with, without the host having to know which token that was.
 
 Two rules hold across all of it: a layout **moves** regions and never drops one, so content stays
 visible whichever layout is chosen; and `<mj-login-picker>` is deliberately not replaceable — a

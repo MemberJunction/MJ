@@ -286,6 +286,10 @@
   /* Login C's 1.05 : 1 editorial split between the story panel and the sign-in column. */
   --mj-login-banner-flex: 1.05;
   --mj-login-panel-bg: var(--mj-bg-surface);
+  /* Inherited text colour for the sign-in region — the pair to --mj-login-banner-text. Both
+     exist so that content a host PROJECTS into a slot lands readable without the host having to
+     know which token the surface behind it was painted from. */
+  --mj-login-panel-text: var(--mj-text-primary);
   --mj-login-panel-flex: 1;
   --mj-login-picker-max-width: 400px;
   /* Width of the sign-in card in the 'centered' layout, where the panel stops being a column
