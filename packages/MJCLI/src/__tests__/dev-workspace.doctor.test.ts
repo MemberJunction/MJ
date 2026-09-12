@@ -201,6 +201,51 @@ describe('open app client packages check', () => {
     expect(checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages').Severity).toBe('skip');
   });
 
+  // doctor is the tool you reach for when something is ALREADY wrong, so one unreadable
+  // mj-app.json must not cost you the other nine checks — the one-copy census and standalone-install
+  // detection have nothing to do with that file. `generate` still refuses, because it writes a
+  // manifest and must not do so from a declaration it could not read (rkihm-BC re-approval note).
+  it('reports an unreadable member mj-app.json as a failed check, not an abort', () => {
+    parent = CreateFixtureParent({
+      'bizapps-caliber': {
+        RootPackageJson: { name: 'caliber' },
+        Files: { 'mj-app.json': '{ now broken' },
+        Packages: { Angular: { name: '@mj-biz-apps/caliber-ng' } },
+      },
+    });
+    writeGeneratedWorkspace(parent, ['bizapps-caliber']);
+    mkdirSync(path.join(parent, 'node_modules'), { recursive: true });
+
+    const report = CollectDoctorReport(parent, '10.33.0', 'flag');
+    const check = checkNamed(report, 'open app client packages');
+    expect(check.Severity).toBe('fail');
+    expect(check.Detail).toContain('bizapps-caliber');
+    expect(DoctorHasFailures(report)).toBe(true);
+    // the point of the fix: every other check still ran
+    expect(report.Checks).toHaveLength(10);
+    expect(checkNamed(report, 'member dirs').Severity).toBe('pass');
+    expect(checkNamed(report, 'sentinel').Severity).toBe('pass');
+  });
+
+  it('still censuses the readable members when another member is unreadable', () => {
+    parent = CreateFixtureParent({
+      'bizapps-caliber': {
+        RootPackageJson: { name: 'caliber' },
+        MjAppJson: { packages: { client: [{ name: '@mj-biz-apps/caliber-ng', role: 'bootstrap' }] } },
+        Packages: { Angular: { name: '@mj-biz-apps/caliber-ng' } },
+      },
+      'bizapps-rotten': { RootPackageJson: { name: 'rotten' }, Files: { 'mj-app.json': '{ broken' } },
+    });
+    writeGeneratedWorkspace(parent, ['bizapps-caliber', 'bizapps-rotten']);
+    mkdirSync(path.join(parent, 'node_modules', '@mj-biz-apps', 'caliber-ng'), { recursive: true });
+
+    const check = checkNamed(CollectDoctorReport(parent, '10.33.0', 'flag'), 'open app client packages');
+    expect(check.Severity).toBe('fail');
+    expect(check.Detail).toContain('bizapps-rotten');
+    // caliber-ng IS linked, so the readable half was still judged rather than abandoned
+    expect(check.Detail).toContain('@mj-biz-apps/caliber-ng');
+  });
+
   // A parent that was never generated has no member list to judge against, and checkGeneratedFiles
   // / checkSentinel already fail loudly there — so this check stays quiet instead of adding noise.
   it('skips on a parent that was never generated', () => {

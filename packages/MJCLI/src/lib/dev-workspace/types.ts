@@ -150,6 +150,16 @@ export interface DuplicateClientPackage {
 /** Which declared client-side packages are linked at the parent root. */
 export interface ClientPackageCensus {
   Entries: Array<{ Package: string; Repo: string; Provided: boolean; Linked: boolean }>;
+  /**
+   * Members whose `mj-app.json` could not be parsed, so their declarations are unknown.
+   *
+   * Carried rather than thrown because `doctor` diagnoses where `generate` writes: aborting the
+   * whole report over one unreadable file costs the nine checks that have nothing to do with it —
+   * the one-copy census and standalone-install detection especially, which are the reason someone
+   * runs doctor in the first place. `generate` still refuses outright, which is correct: it emits a
+   * manifest and must not do so from a declaration it could not read.
+   */
+  Unreadable: Array<{ Repo: string; Message: string }>;
 }
 
 /** One dependency resolution read from a member's committed lockfile. */

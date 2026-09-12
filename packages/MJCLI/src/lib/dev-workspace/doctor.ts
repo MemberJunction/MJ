@@ -424,8 +424,14 @@ function checkOneCopyCensus(census: StoreCensus): DoctorCheck {
 export function CollectClientPackageCensus(parentDir: string, memberNames: readonly string[]): ClientPackageCensus {
   const inWorkspace = new Set(memberNames);
   const members = DetectCandidates(parentDir).filter((candidate) => inWorkspace.has(candidate.Name));
-  const clients = CollectOpenAppClientPackages(members, IndexWorkspacePackages(members)).Packages;
+  // Partitioned rather than caught: the collector throws on the FIRST unreadable member, so catching
+  // around it would discard every readable member's declarations too. A member whose mj-app.json is
+  // unreadable still PROVIDES its packages, so the provision index is built from all of them.
+  const unreadable = members.filter((m) => m.MjAppJsonError);
+  const readable = members.filter((m) => !m.MjAppJsonError);
+  const clients = CollectOpenAppClientPackages(readable, IndexWorkspacePackages(members)).Packages;
   return {
+    Unreadable: unreadable.map((m) => ({ Repo: m.Name, Message: m.MjAppJsonError ?? 'unknown error' })),
     Entries: clients.map((client) => ({
       Package: client.Package,
       Repo: client.Repo,
@@ -442,6 +448,24 @@ export function CollectClientPackageCensus(parentDir: string, memberNames: reado
  */
 function checkClientPackages(census: ClientPackageCensus, installed: boolean): DoctorCheck {
   const name = 'open app client packages';
+  // Checked before everything else: an unreadable declaration is a real defect whether or not the
+  // parent has been installed, and it means this check cannot answer fully for that member.
+  if (census.Unreadable.length > 0) {
+    const linked = census.Entries.filter((e) => e.Linked).map((e) => e.Package);
+    const readableNote =
+      census.Entries.length === 0
+        ? 'no other member declares one'
+        : `the readable members' packages were still checked: ${linked.length}/${census.Entries.length} linked` +
+          (linked.length > 0 ? ` (${linked.join(', ')})` : '');
+    return {
+      Name: name,
+      Severity: 'fail',
+      Detail:
+        `could not read ${census.Unreadable.map((u) => `${u.Repo}/mj-app.json`).join(', ')} — ` +
+        `${census.Unreadable.map((u) => u.Message).join('; ')}. Fix that file, then re-run doctor; ` +
+        `${readableNote}.`,
+    };
+  }
   if (census.Entries.length === 0) {
     return { Name: name, Severity: 'skip', Detail: 'no member declares a client or shared package in its mj-app.json' };
   }
