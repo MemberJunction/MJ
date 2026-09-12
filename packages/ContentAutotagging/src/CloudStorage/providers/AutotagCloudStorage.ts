@@ -37,6 +37,9 @@ interface ICloudStorageSourceConfig {
  */
 @RegisterClass(AutotagBase, 'AutotagCloudStorage')
 export class AutotagCloudStorage extends AutotagBase {
+    /** Maximum folder depth ListModifiedObjects will descend below PathPrefix. */
+    private static readonly MAX_LIST_DEPTH = 16;
+
     private contextUser!: UserInfo;
     private engine!: AutotagBaseEngine;
     protected contentSourceTypeID!: string;
@@ -177,12 +180,28 @@ export class AutotagCloudStorage extends AutotagBase {
         lastRunDate: Date,
         includeExtensions?: string[]
     ): Promise<StorageObjectMetadata[]> {
-        const result = await driver.ListObjects(prefix);
         const extSet = includeExtensions?.length
             ? new Set(includeExtensions.map(ext => ext.toLowerCase()))
             : null;
 
-        return result.objects.filter(obj => {
+        // Walk the tree under the prefix: ListObjects returns one level (objects + child prefixes), so
+        // recurse into every child prefix. Guard against pathological depth and prefix loops.
+        const objects: StorageObjectMetadata[] = [];
+        const seen = new Set<string>();
+        const walk = async (current: string, depth: number): Promise<void> => {
+            const key = current.replace(/\/+$/, '');
+            if (seen.has(key) || depth > AutotagCloudStorage.MAX_LIST_DEPTH) return;
+            seen.add(key);
+            const result = await driver.ListObjects(current);
+            objects.push(...result.objects);
+            for (const child of result.prefixes ?? []) {
+                if (child.replace(/\/+$/, '') === key) continue; // provider echoed the folder itself
+                await walk(child, depth + 1);
+            }
+        };
+        await walk(prefix, 0);
+
+        return objects.filter(obj => {
             if (obj.isDirectory) return false;
             if (obj.lastModified <= lastRunDate) return false;
             if (extSet) {

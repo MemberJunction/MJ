@@ -323,7 +323,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         vectorDBInstance.TryWireColocatedHost(this.Provider);
         if (vectorDBInstance.SupportsColocatedQuery) {
             const colocated = await vectorDBInstance.ColocatedQuery({
-                indexName: vectorIndex.Name,
+                indexName: vectorIndex.ExternalID?.trim() || vectorIndex.Name, // provider-side index name; Name is the MJ label
                 vector: queryVector,
                 keyword: queryText,
                 topK,
@@ -344,7 +344,7 @@ export class VectorSearchProvider extends BaseSearchProvider {
         // use it to honor server-side row-level security when loading vectors
         // via RunView.
         const response: BaseResponse = await vectorDBInstance.QueryIndex({
-            id: vectorIndex.Name,
+            id: vectorIndex.ExternalID?.trim() || vectorIndex.Name,
             vector: queryVector,
             topK,
             includeMetadata: true,
