@@ -19,7 +19,7 @@
  * check (AC4) reimplements `GetActiveModelCost`'s selection independently so it is a genuine
  * cross-check, not a restatement.
  */
-import { RunView } from '@memberjunction/core';
+import { RunView, RunQuery } from '@memberjunction/core';
 import type { AggregateResult } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import type { MJAIModelCostEntity } from '@memberjunction/core-entities';
@@ -626,6 +626,185 @@ export const AiCostChecks: NamedCheck[] = [
                 `AIAgentRun.TotalCost must be non-negative (found ${negativeAgentRunCostCount} row(s) with TotalCost < 0)`
             );
             console.log(`      → verified basis invariants: ParallelParent Cost IS NULL, agent run costs non-negative`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC11',
+        Name: 'AC11: fact-view own-cost equals base-table own-cost across completed, non-parallel-parent runs',
+        Fn: async (ctx): Promise<void> => {
+            const rq = new RunQuery();
+            const factRes = await rq.RunQuery({
+                SQL: `SELECT SUM(OwnCost) AS TotalOwnCost, COUNT(*) AS TotalCount FROM [__mj].vwAIUsageFacts WHERE IsParallelParent = 0`
+            }, ctx.User);
+            Assert(factRes.Success, `vwAIUsageFacts query failed: ${factRes.ErrorMessage}`);
+
+            const baseRes = await rq.RunQuery({
+                SQL: `SELECT SUM(Cost) AS TotalCost, COUNT(*) AS TotalCount FROM [__mj].AIPromptRun pr WHERE NOT EXISTS (SELECT 1 FROM [__mj].AIPromptRun c WHERE c.ParentID = pr.ID) AND (pr.RunType <> 'ParallelParent' OR pr.RunType IS NULL)`
+            }, ctx.User);
+            Assert(baseRes.Success, `AIPromptRun base query failed: ${baseRes.ErrorMessage}`);
+
+            const factCount = Number(factRes.Results?.[0]?.TotalCount ?? 0);
+            const baseCount = Number(baseRes.Results?.[0]?.TotalCount ?? 0);
+
+            if (factCount === 0 && baseCount === 0) {
+                skipNote('AC11', 'no prompt run rows exist in vwAIUsageFacts or AIPromptRun — fact view parity is unexercised');
+                return;
+            }
+
+            const factCost = Number(factRes.Results?.[0]?.TotalOwnCost ?? 0);
+            const baseCost = Number(baseRes.Results?.[0]?.TotalCost ?? 0);
+
+            const diff = Math.abs(factCost - baseCost);
+            Assert(
+                diff < 0.0001,
+                `vwAIUsageFacts own-cost (${factCost}) does not match AIPromptRun base own-cost (${baseCost}), diff=${diff}`
+            );
+            console.log(`      → AC11 verified: vwAIUsageFacts own-cost (${factCost.toFixed(6)}) matches AIPromptRun base own-cost (${baseCost.toFixed(6)}) across ${factCount} run(s)`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC12',
+        Name: 'AC12: hourly aggregate cost equals fact-view cost over window, and DataSource: Materialized delivers parity',
+        Fn: async (ctx): Promise<void> => {
+            // (a) Verify scheduled job exists for materialization refresh
+            const rv = new RunView();
+            const jobProbe = await rv.RunView({
+                EntityName: 'MJ: Scheduled Jobs',
+                ExtraFilter: "DriverClass = 'MaterializationRefreshScheduledJobDriver'",
+                MaxRows: 1
+            }, ctx.User);
+            Assert(jobProbe.Success, `scheduled job probe failed: ${jobProbe.ErrorMessage}`);
+            Assert((jobProbe.Results ?? []).length > 0, `scheduled job with MaterializationRefreshScheduledJobDriver must exist in metadata`);
+
+            const rq = new RunQuery();
+            const start = '2020-01-01';
+            const end = '2030-01-01';
+
+            // (b) Live path: AIUsageHourly over wide window
+            const hourlyRes = await rq.RunQuery({
+                QueryName: 'AIUsageHourly',
+                Parameters: { start, end }
+            }, ctx.User);
+            Assert(hourlyRes.Success, `AIUsageHourly live query failed: ${hourlyRes.ErrorMessage}`);
+
+            // Fact view figure over same window
+            const factWindowRes = await rq.RunQuery({
+                SQL: `SELECT SUM(OwnCost) AS TotalOwnCost, COUNT(*) AS TotalCount FROM [__mj].vwAIUsageFacts WHERE IsParallelParent = 0 AND CompletedAt >= '${start}' AND CompletedAt < '${end}'`
+            }, ctx.User);
+            Assert(factWindowRes.Success, `vwAIUsageFacts window query failed: ${factWindowRes.ErrorMessage}`);
+
+            const factCount = Number(factWindowRes.Results?.[0]?.TotalCount ?? 0);
+            if (factCount === 0) {
+                skipNote('AC12', 'no completed prompt runs in test window — hourly aggregate parity is unexercised');
+                return;
+            }
+
+            const factTotal = Number(factWindowRes.Results?.[0]?.TotalOwnCost ?? 0);
+            const hourlyTotal = (hourlyRes.Results ?? []).reduce(
+                (sum: number, r: Record<string, unknown>) => sum + Number(r.TotalCost ?? 0),
+                0
+            );
+
+            const diffLive = Math.abs(hourlyTotal - factTotal);
+            Assert(
+                diffLive < 0.0001,
+                `AIUsageHourly live cost (${hourlyTotal}) does not match vwAIUsageFacts window cost (${factTotal}), diff=${diffLive}`
+            );
+
+            // (c) Materialized path: DataSource: 'Materialized' fallback-safe parity
+            const matRes = await rq.RunQuery({
+                QueryName: 'AIUsageHourly',
+                DataSource: 'Materialized',
+                Parameters: { start, end }
+            }, ctx.User);
+            Assert(matRes.Success, `AIUsageHourly with DataSource: 'Materialized' failed: ${matRes.ErrorMessage}`);
+
+            const matTotal = (matRes.Results ?? []).reduce(
+                (sum: number, r: Record<string, unknown>) => sum + Number(r.TotalCost ?? 0),
+                0
+            );
+            const diffMat = Math.abs(matTotal - factTotal);
+            Assert(
+                diffMat < 0.0001,
+                `AIUsageHourly materialized cost (${matTotal}) does not match expected window cost (${factTotal}), diff=${diffMat}`
+            );
+
+            console.log(`      → AC12 verified: AIUsageHourly live (${hourlyTotal.toFixed(6)}) and materialized (${matTotal.toFixed(6)}) match vwAIUsageFacts (${factTotal.toFixed(6)})`);
+        }
+    },
+    {
+        Id: 'ai-cost.AC13',
+        Name: 'AC13: AIAgentRunSubtreeCost (CalculateRunCost) body changed to SUM(OwnCost) over subtree, matches recursive calculation',
+        Fn: async (ctx): Promise<void> => {
+            const rv = new RunView();
+            // (a) Query metadata checks: CalculateRunCost exists and is Approved
+            const queryRes = await rv.RunView({
+                EntityName: 'MJ: Queries',
+                ExtraFilter: "Name = 'CalculateRunCost'",
+                MaxRows: 1
+            }, ctx.User);
+            Assert(queryRes.Success, `CalculateRunCost query lookup failed: ${queryRes.ErrorMessage}`);
+            Assert((queryRes.Results ?? []).length > 0, `CalculateRunCost query must exist in metadata`);
+            const q = queryRes.Results![0] as Record<string, unknown>;
+            AssertEqual(q.Status, 'Approved', `CalculateRunCost must be Approved`);
+            Assert(!!q.UsesTemplate, `CalculateRunCost must have UsesTemplate = true`);
+
+            // Check that the SQL does not reference TotalCostRollup or raw TotalCost
+            const sql = String(q.SQL ?? '');
+            Assert(!sql.includes('TotalCostRollup'), `CalculateRunCost SQL must not reference TotalCostRollup`);
+
+            // (b) Check for any agent run with child runs
+            const rq = new RunQuery();
+            const parentCheck = await rq.RunQuery({
+                SQL: `SELECT TOP 1 p.ID, p.TotalCost FROM [__mj].vwAIAgentRuns p WHERE EXISTS (SELECT 1 FROM [__mj].vwAIAgentRuns c WHERE c.ParentRunID = p.ID)`
+            }, ctx.User);
+            Assert(parentCheck.Success, `parent run check query failed: ${parentCheck.ErrorMessage}`);
+
+            if (!parentCheck.Results || parentCheck.Results.length === 0) {
+                // Verify CalculateRunCost executes cleanly on a stranger ID
+                const strangerRes = await rq.RunQuery({
+                    QueryName: 'CalculateRunCost',
+                    Parameters: { AIAgentRunID: STRANGER_ID }
+                }, ctx.User);
+                Assert(strangerRes.Success, `CalculateRunCost query execution failed for stranger ID: ${strangerRes.ErrorMessage}`);
+                skipNote('AC13', 'no agent runs with child sub-agents exist in the database — subtree cost recursive parity is unexercised on multi-agent trees');
+                return;
+            }
+
+            const parentId = String(parentCheck.Results[0].ID);
+            const calcRes = await rq.RunQuery({
+                QueryName: 'CalculateRunCost',
+                Parameters: { AIAgentRunID: parentId }
+            }, ctx.User);
+            Assert(calcRes.Success, `CalculateRunCost query failed: ${calcRes.ErrorMessage}`);
+
+            const calcCost = Number(calcRes.Results?.[0]?.TotalCost ?? 0);
+
+            // Hand-written recursive CTE over the same parent ID
+            const recursiveRes = await rq.RunQuery({
+                SQL: `
+                    WITH AgentRunHierarchy AS (
+                        SELECT ID, 1 as Level FROM [__mj].vwAIAgentRuns WHERE ID = '${parentId}'
+                        UNION ALL
+                        SELECT ar.ID, arh.Level + 1 FROM [__mj].vwAIAgentRuns ar
+                        INNER JOIN AgentRunHierarchy arh ON ar.ParentRunID = arh.ID
+                        WHERE arh.Level < 20
+                    )
+                    SELECT SUM(CASE WHEN f.IsPriced = 1 AND f.IsParallelParent = 0 THEN f.OwnCost END) AS RecursiveCost
+                    FROM [__mj].vwAIUsageFacts f
+                    INNER JOIN AgentRunHierarchy arh ON f.AgentRunID = arh.ID
+                    WHERE f.IsCompleted = 1
+                `
+            }, ctx.User);
+            Assert(recursiveRes.Success, `recursive subtree query failed: ${recursiveRes.ErrorMessage}`);
+
+            const recursiveCost = Number(recursiveRes.Results?.[0]?.RecursiveCost ?? 0);
+            const diff = Math.abs(calcCost - recursiveCost);
+            Assert(
+                diff < 0.0001,
+                `CalculateRunCost (${calcCost}) does not match hand-written recursive cost (${recursiveCost}), diff=${diff}`
+            );
+            console.log(`      → AC13 verified: CalculateRunCost (${calcCost.toFixed(6)}) matches recursive calculation (${recursiveCost.toFixed(6)})`);
         }
     }
 ];

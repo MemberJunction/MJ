@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageErrorRateByModel",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is the error rate and failure frequency for each AI model and vendor?",
+      "Description": "Calculates execution success and failure volumes and computes error rate percentages across models and vendors.",
+      "SQL": "@file:SQL/ai-usage-error-rate-by-model.sql",
+      "TechnicalDescription": "Aggregates vwAIUsageFacts by VendorID and ModelID, measuring total runs, succeeded runs, failed runs, and ErrorRatePct. Supports optional start and end date filtering.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": false
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "F4A74E70-2CE9-4670-A219-62806FD178BE"
+    }
+  }
+]

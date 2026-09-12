@@ -12,25 +12,14 @@ WITH AgentRunHierarchy AS (
   FROM [__mj].vwAIAgentRuns ar
   INNER JOIN AgentRunHierarchy arh ON ar.ParentRunID = arh.ID
   WHERE arh.Level < 20  -- Prevent infinite recursion
-),
-PromptRunCosts AS (
-  -- Get all prompt runs for the agent run hierarchy
-  SELECT 
-    pr.ID as PromptRunID, 
-    pr.TotalCost,
-    pr.TokensPrompt,
-    pr.TokensCompletion,
-    ars.AgentRunID
-  FROM [__mj].vwAIAgentRunSteps ars
-  INNER JOIN AgentRunHierarchy arh ON ars.AgentRunID = arh.ID
-  INNER JOIN [__mj].vwAIPromptRuns pr ON ars.TargetLogID = pr.ID
-  WHERE ars.StepType = 'Prompt'
 )
 SELECT 
   {{ AIAgentRunID | sqlString }} AS AgentRunID,
-  COALESCE(SUM(prc.TotalCost), 0) AS TotalCost,
-  COUNT(prc.PromptRunID) AS TotalPrompts,
-  COALESCE(SUM(prc.TokensPrompt), 0) AS TotalTokensInput,
-  COALESCE(SUM(prc.TokensCompletion), 0) AS TotalTokensOutput,
-  COALESCE(SUM(prc.TokensPrompt), 0) + COALESCE(SUM(prc.TokensCompletion), 0) AS TotalTokens
-FROM PromptRunCosts prc
+  SUM(CASE WHEN f.IsPriced = 1 AND f.IsParallelParent = 0 THEN f.OwnCost END) AS TotalCost,
+  COUNT(f.PromptRunID) AS TotalPrompts,
+  SUM(f.TokensPrompt) AS TotalTokensInput,
+  SUM(f.TokensCompletion) AS TotalTokensOutput,
+  SUM(f.TokensPrompt) + SUM(f.TokensCompletion) AS TotalTokens
+FROM [__mj].vwAIUsageFacts f
+INNER JOIN AgentRunHierarchy arh ON f.AgentRunID = arh.ID
+WHERE f.IsCompleted = 1

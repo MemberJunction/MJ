@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageDaily",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our daily AI usage and cost broken down by model, agent, user, and scope?",
+      "Description": "Primary daily aggregation of AI usage facts. Computes run counts, token volumes, latencies (P50/P95), cache reads, and spend across all dimensional attributes.",
+      "SQL": "@file:SQL/ai-usage-daily.sql",
+      "TechnicalDescription": "Materialized analytical query over [__mj].vwAIUsageFacts. Parameterized by start and end window boundaries ({{ start | sqlString }} and {{ end | sqlString }}) on DayBucket, qualifying as RowFilterBroad. Broad source SQL strips the date window while preserving WHERE IsCompleted = 1 and grouping across the 10 dimensional columns with 15 measures. Materialized table refreshed daily.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "360AAF50-A00C-4B27-B66A-37D455238E8D"
+    }
+  }
+]

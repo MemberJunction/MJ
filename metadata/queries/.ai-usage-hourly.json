@@ -1,0 +1,21 @@
+[
+  {
+    "fields": {
+      "Name": "AIUsageHourly",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=AI",
+      "UserQuestion": "What is our hourly AI usage and cost broken down by model, agent, user, and scope?",
+      "Description": "Primary hourly aggregation of AI usage facts. Computes run counts, token volumes, latencies (P50/P95), cache reads, and spend across all dimensional attributes.",
+      "SQL": "@file:SQL/ai-usage-hourly.sql",
+      "TechnicalDescription": "Materialized analytical query over [__mj].vwAIUsageFacts. Parameterized by start and end window boundaries ({{ start | sqlString }} and {{ end | sqlString }}) on HourBucket, qualifying as RowFilterBroad. Broad source SQL strips the date window while preserving WHERE IsCompleted = 1 and grouping across the 10 dimensional columns with 15 measures. Materialized table refreshed hourly.",
+      "Status": "Approved",
+      "QualityRank": 9,
+      "ExecutionCostRank": 3,
+      "UsesTemplate": true,
+      "IsMaterialized": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "00B15E3C-A9F1-4E0A-A3D2-BC34FB585931"
+    }
+  }
+]

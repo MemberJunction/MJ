@@ -1,0 +1,26 @@
+[
+  {
+    "fields": {
+      "Name": "Materialization Refresh Sweep",
+      "Description": "Sweeps due materialized query and entity results on a cron schedule, executing full rebuilds with atomic wrapper-view swaps via MaterializationRefreshScheduledJobDriver.",
+      "JobTypeID": "9F3C2A10-7B4D-4E58-9C21-3A5E1D8F0B62",
+      "CronExpression": "0 */5 * * * *",
+      "Timezone": "UTC",
+      "Status": "Active",
+      "RunCount": 0,
+      "SuccessCount": 0,
+      "FailureCount": 0,
+      "NotifyOnSuccess": false,
+      "NotifyOnFailure": true,
+      "NotifyViaEmail": false,
+      "NotifyViaInApp": true,
+      "ConcurrencyMode": "Skip",
+      "RunImmediatelyIfNeverRun": false,
+      "MissedRunPolicy": "RunOnce",
+      "SkipEmbeddings": false
+    },
+    "primaryKey": {
+      "ID": "D2165B3A-9CB5-45AD-A3A0-B214F3EDF116"
+    }
+  }
+]
