@@ -221,6 +221,30 @@ In dark mode, `-bg` tokens use `rgba()` at 15% opacity for translucent status ba
 | `--mj-app-accent-hover` | App accent hover |
 | `--mj-app-accent-subtle` | Subtle app accent background |
 
+### Login Surface Tokens
+
+The pre-auth sign-in page is themable end to end through this group — override tokens, never CSS
+against the login DOM. Defaults reproduce the stock design (Login C, editorial split) exactly.
+
+| Token | Default | Purpose |
+|---|---|---|
+| `--mj-login-banner-bg` | Quiet 160° gradient over the two stops below | The story panel's whole background — override for a flat color, an image, or different geometry |
+| `--mj-login-grad-start` / `--mj-login-grad-mid` | Brand ramp (swaps in dark) | The default gradient's stops — the cheap retheme when the gradient's shape is fine |
+| `--mj-login-banner-text` | White | Banner headline. Theme-constant by default because the banner is dark in both themes; a light-panel brand overrides it with `--mj-login-banner-bg` |
+| `--mj-login-banner-text-secondary` | Banner text at 82% | The supporting line |
+| `--mj-login-banner-logo` | `--mj-logo-wordmark` | The banner's brand image |
+| `--mj-login-banner-logo-width` / `-height` | 297px / 45px | The image's box (`contain` fit) |
+| `--mj-login-banner-flex` / `--mj-login-panel-flex` | 1.05 / 1 | The editorial split between story panel and sign-in column |
+| `--mj-login-panel-bg` | `--mj-bg-surface` | The sign-in column's background |
+| `--mj-login-picker-max-width` | 400px | Width of the sign-in stack (`<mj-login-picker>`) |
+
+The page's copy is host API rather than tokens: `MJExplorerAppComponent` takes `LoginHeading`,
+`LoginShowPoweredBy`, `LoginBannerAlignment`, `LoginBannerTitle`, `LoginBannerSubtitle` and
+`LoginBannerLogoLabel` as `@Input`s.
+
+(`--mj-login-grad-end` and `--mj-login-wave-1/2/3` are legacy inputs from the pre-Login-C animated
+banner; nothing in-tree consumes them.)
+
 ### Typography Tokens
 
 | Token | Value | Purpose |

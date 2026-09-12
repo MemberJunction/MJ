@@ -56,9 +56,13 @@
          no animated waves, so the surface carries any brand rather than MJ's. -->
     <div class="main-banner" [class.main-banner--center]="LoginBannerAlignment === 'center'">
       <div class="banner-brand">
-        <div class="mj-logo-wordmark-login" role="img" aria-label="MemberJunction Logo"></div>
-        <h1 class="banner-welcome">Welcome back</h1>
-        <p class="banner-sub">Sign in to continue.</p>
+        <div class="mj-logo-wordmark-login" role="img" [attr.aria-label]="LoginBannerLogoLabel"></div>
+        @if (LoginBannerTitle) {
+          <h1 class="banner-welcome">{{ LoginBannerTitle }}</h1>
+        }
+        @if (LoginBannerSubtitle) {
+          <p class="banner-sub">{{ LoginBannerSubtitle }}</p>
+        }
       </div>
     </div>
     <div class="login-btn">

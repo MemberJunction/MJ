@@ -68,9 +68,10 @@
 
 /* ---- Left Banner Column ---- */
 
-/* Slightly wider than the form column, per Login C's 1.05fr / 1fr split. */
+/* Slightly wider than the form column by default — Login C's 1.05fr / 1fr split,
+   from the --mj-login-*-flex tokens. */
 .login-wrapper .main-banner {
-  flex: 1.05;
+  flex: var(--mj-login-banner-flex, 1.05);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -82,15 +83,11 @@
   height: 100dvh;
   padding: var(--mj-space-14) clamp(var(--mj-space-10), 4vw, var(--mj-space-16)) var(--mj-space-12);
   box-sizing: border-box;
-  /* The panel is dark in BOTH themes, so its stops come from the login gradient tokens
-     (which already swap light/dark) rather than from surface tokens. No waves — Login C
-     replaced them with a quiet gradient so the surface can carry any brand. */
-  background: linear-gradient(
-    160deg,
-    var(--mj-login-grad-start) 0%,
-    color-mix(in srgb, var(--mj-login-grad-start) 65%, var(--mj-login-grad-mid)) 60%,
-    var(--mj-login-grad-mid) 140%
-  );
+  /* One token carries the whole surface: the default is Login C's quiet gradient (built
+     from the --mj-login-grad-* stops, which swap light/dark on their own), and a themed
+     deployment can retarget the stops or replace the value wholesale — flat color, image,
+     different geometry — without touching this rule. */
+  background: var(--mj-login-banner-bg);
 }
 
 /* Brand block: logo, welcome, sub — centered as one group by the column's justify-content. */
@@ -120,9 +117,11 @@
   letter-spacing: -0.4px;
   text-align: left;
   margin: var(--mj-space-8) 0 var(--mj-space-2);
-  /* Always white — the panel is dark in both themes, so the semantic inverse token
-     (which flips to near-black in dark mode) would be unreadable here. */
-  color: var(--mj-color-neutral-0);
+  /* From the login group, not a semantic text token: the banner defaults dark in both
+     themes, so --mj-text-inverse (which flips near-black in dark mode) would be
+     unreadable — and a light-panel brand overrides --mj-login-banner-text alongside
+     --mj-login-banner-bg. */
+  color: var(--mj-login-banner-text);
 }
 
 .login-wrapper .main-banner .banner-sub {
@@ -131,20 +130,20 @@
   font-weight: var(--mj-font-normal);
   line-height: var(--mj-leading-normal);
   text-align: left;
-  /* Always white — see .banner-welcome. */
-  color: var(--mj-color-neutral-0);
-  opacity: 0.82;
+  /* The token defaults to the banner text at 82% — the old opacity trick, but themable
+     independently of the headline. See .banner-welcome. */
+  color: var(--mj-login-banner-text-secondary);
 }
 
 /* ---- Right Login Column ---- */
 
 .login-wrapper .login-btn {
-  flex: 1;
+  flex: var(--mj-login-panel-flex, 1);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: var(--mj-bg-surface);
+  background: var(--mj-login-panel-bg, var(--mj-bg-surface));
   /* dvh, not vh — see .main-banner. */
   height: 100dvh;
   box-sizing: border-box;
@@ -158,19 +157,15 @@
 
 /* ---- Misc ---- */
 
-.mj-logo-mark-login {
-  width: 62px;
-  height: 35px;
-  background-image: var(--mj-logo-mark-inverse);
-  background-repeat: no-repeat;
-  background-position: center;
-  background-size: contain;
-}
-
+/* The banner's brand image. Box and artwork both come from the login token group so a
+   themed deployment can swap in a logo of any shape without fighting a hardcoded frame;
+   `contain` keeps whatever lands here in aspect. (The old .mj-logo-mark-login block is
+   gone — nothing rendered it.) */
 .mj-logo-wordmark-login {
-  width: 297px;
-  height: 45px;
-  background-image: var(--mj-logo-wordmark);
+  width: var(--mj-login-banner-logo-width, 297px);
+  height: var(--mj-login-banner-logo-height, 45px);
+  max-width: 100%;
+  background-image: var(--mj-login-banner-logo, var(--mj-logo-wordmark));
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -228,7 +223,7 @@
   }
 
   .mj-logo-wordmark-login {
-    width: 200px;
+    width: min(var(--mj-login-banner-logo-width, 297px), 200px);
   }
 
   .theme-toggle {

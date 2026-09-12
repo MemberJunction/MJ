@@ -79,6 +79,28 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
    */
   @Input() LoginBannerAlignment: 'start' | 'center' = 'start';
 
+  /**
+   * The story panel's headline, or `null` for none. It was hardcoded ("Welcome back"), which made
+   * the one prominent line of copy on the page the one thing a host could not change. `null`
+   * collapses the element, so a logo-only banner is a binding, not a CSS hide.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerTitle: string | null = 'Welcome back';
+
+  /**
+   * The supporting line under {@link LoginBannerTitle}, or `null` for none.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerSubtitle: string | null = 'Sign in to continue.';
+
+  /**
+   * Accessible name for the banner's brand image. The artwork itself comes from the
+   * `--mj-login-banner-logo` token, which the component cannot read — so a deployment that swaps
+   * the logo sets the matching name here, or a screen reader keeps announcing the default brand.
+   * @since 6.1.0
+   */
+  @Input() LoginBannerLogoLabel = 'MemberJunction Logo';
+
   public title = 'MJ Explorer';
   public initialPath = '/';
   public HasError = false;
