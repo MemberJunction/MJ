@@ -4,7 +4,8 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogStatus } from '@memberjunction/core';
+import { LogStatus, Metadata } from '@memberjunction/core';
+import { UserCache } from '@memberjunction/generic-database-provider';
 import cors from 'cors';
 import {
     BaseServerExtension,
@@ -21,6 +22,8 @@ import {
     SetTeamsMeetingsService,
     TeamsMeetingsService,
     TeamsAcsMediaRegistry,
+    StartCalendarScheduler,
+    type CalendarSchedulerHandle,
 } from '../telephony/index.js';
 
 @RegisterClass(BaseServerExtension, 'TeamsMeetingsExtension')
@@ -32,6 +35,7 @@ export class TeamsMeetingsExtension extends BaseServerExtension {
     private service: TeamsMeetingsService | null = null;
     private registry: TeamsAcsMediaRegistry | null = null;
     private config: TeamsMeetingsConfig | null = null;
+    private schedulerHandle: CalendarSchedulerHandle | null = null;
 
     public async Initialize(
         contextOrApp: ServerExtensionInitContext,
@@ -86,7 +90,27 @@ export class TeamsMeetingsExtension extends BaseServerExtension {
         };
     }
 
+    public override async OnAllExtensionsMounted(_context: ServerExtensionInitContext): Promise<void> {
+        if (!this.service || !this.config) {
+            return;
+        }
+        const systemUser = UserCache.Instance.GetSystemUser();
+        if (systemUser && Metadata.Provider) {
+            this.schedulerHandle = StartCalendarScheduler({
+                Provider: Metadata.Provider,
+                ContextUser: systemUser,
+                TeamsService: this.service,
+                TeamsConfig: this.config,
+            });
+            LogStatus('[Meetings] Teams calendar scheduler started');
+        }
+    }
+
     public async Shutdown(): Promise<void> {
+        if (this.schedulerHandle) {
+            this.schedulerHandle.Stop();
+            this.schedulerHandle = null;
+        }
         SetTeamsMeetingsService(undefined);
         this.service = null;
         this.registry = null;

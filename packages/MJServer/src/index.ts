@@ -48,17 +48,6 @@ import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.j
 import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
-import {
-  RESOLVER_PATHS as TELEPHONY_RESOLVER_PATHS,
-  LoadTelephonyAdapters,
-  InstallMediaUpgradeDispatcher,
-  IsGraphQLWsPath,
-  GetTeamsMeetingsService,
-  StartCalendarScheduler,
-} from '@memberjunction/telephony-adapters';
-
-LoadTelephonyAdapters();
-
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
@@ -88,7 +77,7 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount } from '@memberjunction/server-extensions-core';
+import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
 import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
@@ -308,7 +297,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
 
   const localResolverPaths = ['resolvers/**/*Resolver.{js,ts}', 'generic/*Resolver.{js,ts}', 'generated/generated.{js,ts}'].map(localPath);
 
-  const combinedResolverPaths = [...resolverPaths, ...localResolverPaths, ...TELEPHONY_RESOLVER_PATHS];
+  const combinedResolverPaths = [...resolverPaths, ...localResolverPaths];
 
   const isWindows = sep === '\\';
   const globs = combinedResolverPaths.flatMap((path) => (isWindows ? path.replace(/\\/g, '/') : path));
@@ -1600,22 +1589,6 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }
 
-  // Launch the calendar / scheduled-bridge loop (M2): poll agent calendars for meeting invites and
-  // start due meeting bridges. Mirrors the SessionJanitor lifecycle (run-once + interval, timer
-  // unref'd). Gated on Teams meetings being enabled (the provider whose scheduled-join is wired) and
-  // reuses the SAME meetings service as the ingress; identities without configured calendar creds are
-  // skipped, so this is a harmless no-op until a Graph-backed identity + token are configured.
-  if (resumeUser) { // global-provider-ok: server-owned background poller under the server's provider + system user
-    const teamsMeetingsService = GetTeamsMeetingsService();
-    if (teamsMeetingsService) {
-      StartCalendarScheduler({
-        Provider: Metadata.Provider, // global-provider-ok: server-owned background poller under the server's single default provider + system user
-        ContextUser: resumeUser,
-        TeamsService: teamsMeetingsService,
-        TeamsConfig: teamsMeetingsService.Config,
-      });
-    }
-  }
 
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { IsGraphQLWsPath } from '../telephony/media-upgrade-router.js';
+import { IsGraphQLWsPath } from '../mediaUpgradeRouter.js';
 
 describe('IsGraphQLWsPath', () => {
     describe('bare-root default (GRAPHQL_ROOT_PATH unset — the stock-install case)', () => {

@@ -4,27 +4,39 @@
  * Why this exists: in `ws` 8.x, every `new WebSocketServer({ server })` attaches its OWN `upgrade`
  * listener that calls `handleUpgrade` UNCONDITIONALLY, and `handleUpgrade` does `abortHandshake(400)` for
  * any request whose path it doesn't own. So two `{server}`-bound servers on one HTTP server (e.g. the
- * GraphQL subscriptions socket on `/` AND a telephony Media-Streams socket on `/telephony/.../media`)
- * fight on every upgrade — the non-owning server 400s the request. That's exactly what made Twilio's
- * `<Connect><Stream>` fail with error 31920 ("Stream WebSocket failed to connect").
+ * GraphQL subscriptions socket on `/` AND a server extension WebSocket socket) fight on every upgrade —
+ * the non-owning server 400s the request.
  *
- * The fix: telephony/meetings media servers are created with `{ noServer: true }` (no auto-listener) and
+ * The fix: extension WebSocket servers are created with `{ noServer: true }` (no auto-listener) and
  * register their path here; at boot we strip the auto-listeners and install ONE `upgrade` listener that
- * routes by path — GraphQL on its root path, each media socket on its own. When no media routes are
- * registered (telephony disabled), we leave the GraphQL server's own listener untouched (zero change).
+ * routes by path — GraphQL on its root path, each extension socket on its own. When no extension routes are
+ * registered, we leave the GraphQL server's own listener untouched (zero change).
  *
- * @module @memberjunction/telephony-adapters
+ * @module @memberjunction/server-extensions-core
  */
 
 import type { IncomingMessage, Server as HttpServer } from 'node:http';
 import type { Duplex } from 'node:stream';
-import type { WebSocketServer } from 'ws';
 
-/** path → the `{ noServer:true }` WebSocketServer that owns it. */
-const mediaRoutes = new Map<string, WebSocketServer>();
+/**
+ * Structural interface representing a WebSocketServer target for upgrade handling.
+ * Duck-typed so callers don't need a direct dependency on the `ws` package.
+ */
+export interface IWebSocketUpgradeTarget {
+    handleUpgrade(
+        req: IncomingMessage,
+        socket: Duplex,
+        head: Buffer,
+        callback: (ws: unknown) => void
+    ): void;
+    emit(event: string, ...args: unknown[]): boolean;
+}
 
-/** Registers a media WebSocket route. Called by each vendor router's attach step. */
-export function RegisterMediaUpgradeRoute(path: string, wss: WebSocketServer): void {
+/** path → the `{ noServer:true }` WebSocket server that owns it. */
+const mediaRoutes = new Map<string, IWebSocketUpgradeTarget>();
+
+/** Registers a media/extension WebSocket route. Called by extension routers during setup. */
+export function RegisterMediaUpgradeRoute(path: string, wss: IWebSocketUpgradeTarget): void {
     mediaRoutes.set(path, wss);
 }
 
@@ -36,19 +48,19 @@ export function IsGraphQLWsPath(pathname: string, graphqlPath: string): boolean 
 }
 
 /**
- * Installs the single path-routing `upgrade` dispatcher. No-op when no media routes are registered, so
+ * Installs the single path-routing `upgrade` dispatcher. No-op when no extension routes are registered, so
  * the GraphQL server keeps its own listener untouched. Otherwise it removes the auto-attached listeners
- * (GraphQL's included) and dispatches every upgrade by pathname — GraphQL on `graphqlPath`, each media
+ * (GraphQL's included) and dispatches every upgrade by pathname — GraphQL on `graphqlPath`, each extension
  * socket on its registered path; unknown paths are destroyed.
  *
  * @param httpServer  the shared HTTP server.
- * @param graphqlWss  the GraphQL subscriptions WebSocketServer (kept, re-dispatched on its path).
+ * @param graphqlWss  the GraphQL subscriptions WebSocket server (kept, re-dispatched on its path).
  * @param graphqlPath the GraphQL root path (the path GraphQL's socket listens on).
- * @param preUpgradeHandler optional handler to try before routing to GraphQL or media sockets (e.g. RealtimeProxyServer).
+ * @param preUpgradeHandler optional handler to try before routing to GraphQL or extension sockets.
  */
 export function InstallMediaUpgradeDispatcher(
     httpServer: HttpServer,
-    graphqlWss: WebSocketServer,
+    graphqlWss: IWebSocketUpgradeTarget,
     graphqlPath: string,
     preUpgradeHandler?: (req: IncomingMessage, socket: Duplex, head: Buffer) => boolean
 ): void {
@@ -56,7 +68,7 @@ export function InstallMediaUpgradeDispatcher(
         return;
     }
     httpServer.removeAllListeners('upgrade');
-    const dispatch = (wss: WebSocketServer, req: IncomingMessage, socket: Duplex, head: Buffer): void => {
+    const dispatch = (wss: IWebSocketUpgradeTarget, req: IncomingMessage, socket: Duplex, head: Buffer): void => {
         wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     };
     httpServer.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {

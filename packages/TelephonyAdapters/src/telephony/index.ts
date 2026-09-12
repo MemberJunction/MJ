@@ -4,9 +4,6 @@
  * @module @memberjunction/telephony-adapters
  */
 
-// ── Shared WebSocket-upgrade dispatcher (routes GraphQL + all media sockets by path) ──────
-export * from './media-upgrade-router.js';
-
 // ── Twilio Programmable Voice + Media Streams ──────────────────────────────────────────
 export { TwilioCallMediaRegistry } from './twilioMediaRegistry.js';
 export { TwilioTelephonyService, type TwilioTelephonyServiceDeps } from './TwilioTelephonyService.js';

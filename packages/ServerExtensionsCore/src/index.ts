@@ -57,3 +57,9 @@ export {
     validateServerExtensionRootPath,
 } from './collect.js';
 export type { NormalizeServerExtensionOptions, PrepareServerExtensionOptions } from './collect.js';
+export {
+    RegisterMediaUpgradeRoute,
+    InstallMediaUpgradeDispatcher,
+    IsGraphQLWsPath,
+    type IWebSocketUpgradeTarget,
+} from './mediaUpgradeRouter.js';

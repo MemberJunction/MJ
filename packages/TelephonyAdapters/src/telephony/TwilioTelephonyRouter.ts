@@ -13,7 +13,7 @@
 
 import { Router, urlencoded, type Request, type Response } from 'express';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { RegisterMediaUpgradeRoute } from './media-upgrade-router.js';
+import { RegisterMediaUpgradeRoute } from '@memberjunction/server-extensions-core';
 import { LogError, LogStatus, UserInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
 import { UserCache } from '@memberjunction/generic-database-provider';
 import {
