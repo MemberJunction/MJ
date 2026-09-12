@@ -436,6 +436,64 @@ describe('OpenAILiveClient (Browser WebRTC Driver)', () => {
         });
     });
 
+    it('finalizes pending user and assistant transcripts on Disconnect', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // Emit user delta
+        client.Channel.EmitServer({
+            type: 'session.input_transcript.delta',
+            delta: 'Hello world',
+        });
+        expect(transcripts.length).toBe(1);
+        expect(transcripts[0]).toEqual({
+            Role: 'User',
+            Text: 'Hello world',
+            IsFinal: false,
+            Kind: 'normal',
+        });
+
+        // Disconnect while user text is pending
+        await client.Disconnect();
+
+        expect(transcripts.length).toBe(2);
+        expect(transcripts[1]).toEqual({
+            Role: 'User',
+            Text: 'Hello world',
+            IsFinal: true,
+            Kind: 'normal',
+        });
+    });
+
+    it('finalizes pending assistant transcript on Disconnect', async () => {
+        await client.Connect(makeConfig(), micStream);
+        client.Channel.Open();
+
+        const transcripts: RealtimeClientTranscript[] = [];
+        client.OnTranscript((t) => transcripts.push(t));
+
+        // Model speaking delta
+        client.Channel.EmitServer({
+            type: 'session.output_transcript.delta',
+            delta: 'I am responding',
+        });
+        expect(transcripts.length).toBe(1);
+        expect(transcripts[0].IsFinal).toBe(false);
+
+        await client.Disconnect();
+
+        expect(transcripts.length).toBe(2);
+        expect(transcripts[1]).toEqual({
+            Role: 'Assistant',
+            Text: 'I am responding',
+            IsFinal: true,
+            Kind: 'normal',
+        });
+    });
+
     it('processes session.output_transcript.delta and handles tool call via nested response.event', async () => {
         await client.Connect(makeConfig(), micStream);
         client.Channel.Open();

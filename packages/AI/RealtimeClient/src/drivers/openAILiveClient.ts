@@ -140,6 +140,9 @@ export class OpenAILiveClient extends BaseRealtimeClient {
      * Tears down the connection, data channel, audio tracks, and audio sink.
      */
     public async Disconnect(): Promise<void> {
+        this.finalizeUserTranscript();
+        this.finalizeAssistantTranscript();
+
         this.closeAudioMeters();
         this.micStream?.getTracks().forEach((t) => t.stop());
         this.micStream = null;
