@@ -1566,8 +1566,28 @@ $$ LANGUAGE sql STABLE;
     generateFullTextSearchPermissions(entity: EntityInfo, functionName: string): string {
         const roles = this.collectPermissionRoles(entity.Permissions);
         if (roles.length === 0) return '';
+        // Each GRANT is guarded by an existence check rather than issued bare.
+        // The permissions file is replayed for EVERY full-text-enabled entity,
+        // including entities whose DDL phase did not run in this pass, and the
+        // 42P16 view-recovery fallback's `DROP ... CASCADE` can take the search
+        // function with it. A GRANT on a function that is not there raises 42883,
+        // which aborts the ENTIRE CodeGen run — an absent function now logs a
+        // NOTICE and the run carries on.
+        const schemaLiteral = entity.SchemaName.replace(/'/g, "''");
+        const functionLiteral = functionName.replace(/'/g, "''");
         return roles.map((role: string) =>
-            `GRANT EXECUTE ON FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, functionName)} TO ${pgDialect.QuoteIdentifier(role)};`
+            `DO $mjfts$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = '${schemaLiteral}' AND p.proname = '${functionLiteral}'
+    ) THEN
+        GRANT EXECUTE ON FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, functionName)} TO ${pgDialect.QuoteIdentifier(role)};
+    ELSE
+        RAISE NOTICE 'Skipping GRANT on missing full-text search function %.%', '${schemaLiteral}', '${functionLiteral}';
+    END IF;
+END $mjfts$;`
         ).join('\n');
     }
 
@@ -2353,17 +2373,19 @@ WHERE p.prokind IN ('f', 'p')
     }
 
     /**
-     * Phased per-entity execution for PG. Runs view → CRUD functions → view
-     * permissions against the target DB, guaranteeing phase 2 is skipped if
-     * phase 1 failed (so we never leave `fn_create_*` functions pointing at
-     * a missing or stale view's rowtype).
+     * Phased per-entity execution for PG. Runs view → CRUD functions →
+     * full-text search → view permissions against the target DB, guaranteeing
+     * phase 2 is skipped if phase 1 failed (so we never leave `fn_create_*`
+     * functions pointing at a missing or stale view's rowtype).
      *
      * Phase 1 routes through `executeWithFallback` so a 42P16 triggers the
      * capture/drop/recreate/restore flow rather than blowing up. Phase 2 runs
      * each CRUD function's CREATE individually — we do NOT concatenate them
      * because node-pg's simple query protocol would then abort the whole
      * batch on the first failure; running them separately gives a per-routine
-     * error signal. Phase 3 applies view-level GRANTs.
+     * error signal. Phase 3 installs the full-text objects, whose search
+     * function returns the base view's rowtype and so depends on phase 1.
+     * Phase 4 applies view-level GRANTs.
      */
     override async executeEntityPhased(opts: {
         entity: EntityInfo;
@@ -2372,6 +2394,7 @@ WHERE p.prokind IN ('f', 'p')
         crudCreateSQL: string;
         crudUpdateSQL: string;
         crudDeleteSQL: string;
+        ftsSQL: string;
         viewPermSQL: string;
         willRegenerate?: Set<string>;
     }): Promise<PhasedExecutionResult> {
@@ -2433,7 +2456,25 @@ WHERE p.prokind IN ('f', 'p')
                 }
             }
 
-            // ── Phase 3: view permissions ────────────────────────────────
+            // ── Phase 3: full-text search DDL ────────────────────────────
+            // The search function is declared `RETURNS SETOF <baseview>`, so it
+            // can only be created once phase 1 has put the view in place — and it
+            // must be created before the permissions replay, which GRANTs EXECUTE
+            // on it. Before this phase existed the generated full-text SQL was
+            // written to a file and never executed on PostgreSQL at all.
+            if (opts.ftsSQL && opts.ftsSQL.trim()) {
+                try {
+                    await client.query(opts.ftsSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'fulltext',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            // ── Phase 4: view permissions ────────────────────────────────
             if (opts.viewPermSQL && opts.viewPermSQL.trim()) {
                 try {
                     await client.query(opts.viewPermSQL);
