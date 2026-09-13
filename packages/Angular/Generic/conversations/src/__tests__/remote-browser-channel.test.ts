@@ -5,7 +5,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { JSONValue } from '@memberjunction/ai';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import {
   LoadRealtimeRemoteBrowserChannel, RemoteBrowserChannel
 } from '../lib/components/realtime/remote-browser/remote-browser-channel';
