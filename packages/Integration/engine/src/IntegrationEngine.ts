@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { RunInCatalogScope } from './CatalogScope.js';
 import { CompositeKey, DatabaseProviderBase, IMetadataProvider, LogError, LogStatusEx, Metadata, RunView, type UserInfo, TransactionGroupBase, BaseEntity, EntitySaveOptions, EntityDeleteOptions } from '@memberjunction/core';
 import { RunOwnershipLostError, RunOwnershipService, type TerminalRunStatus } from './RunOwnershipService.js';
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
@@ -944,6 +945,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         rv: RunView,
         contextUser: UserInfo
     ): Promise<void> {
+        // A resumed run reads the same catalog the original did — its own connection's.
+        return RunInCatalogScope(run.CompanyIntegrationID, async () => {
         const companyIntegrationID = run.CompanyIntegrationID;
         const runID = run.ID;
         const lockKey = companyIntegrationID.toLowerCase();
@@ -1118,6 +1121,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 RecordsSkipped: 0, Errors: [], EntityMapResults: [], Duration: 0,
             });
         }
+        });
     }
 
     /**
@@ -1141,7 +1145,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         options?: IntegrationSyncOptions,
         provider?: IMetadataProvider
     ): Promise<SyncResult> {
-        return this.runWithOwnedContext(companyIntegrationID, contextUser, triggerType, onProgress, onNotification, options, provider);
+        // The connection's catalog is in scope for the WHOLE run: the DAG, the excluded-field
+        // resolution and every connector-side GetCachedObject resolve to this connection's own
+        // rows once it has them, and to the shared declared rows until it does.
+        return RunInCatalogScope(companyIntegrationID, () =>
+            this.runWithOwnedContext(companyIntegrationID, contextUser, triggerType, onProgress, onNotification, options, provider));
     }
 
     /**

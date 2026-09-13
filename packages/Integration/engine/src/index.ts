@@ -165,3 +165,16 @@ export { OAuth1aSigner, percentEncodeRFC3986 } from './auth-helpers/index.js';
 export type { OAuth1aSignRequest, OAuth1aSignatureMethod } from './auth-helpers/index.js';
 export { buildBasicAuthHeaderValue, buildBasicAuthHeader } from './auth-helpers/index.js';
 export type { BasicAuthRequest } from './auth-helpers/index.js';
+export {
+    CurrentCatalogCI,
+    RunInCatalogScope,
+    WithCatalogScope,
+    RunOutsideCatalogScope,
+    InstallCatalogScopeResolver,
+} from './CatalogScope.js';
+export type { CatalogScopeState } from './CatalogScope.js';
+export { CatalogRow, CompanyIntegrationCatalogStore } from './CompanyIntegrationCatalogStore.js';
+export { BuildCatalogWriter, GlobalCatalogSourceOverride, ResolveCatalogSource } from './CatalogSource.js';
+export type { CatalogSource } from './CatalogSource.js';
+export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
+export type { CatalogWriter } from './CatalogWriter.js';
