@@ -4,11 +4,58 @@ type RunViewResult = { Success: boolean; Results?: unknown[]; ErrorMessage?: str
 
 const state = vi.hoisted(() => ({
     runView: (): { Success: boolean; Results?: unknown[]; ErrorMessage?: string } => ({ Success: true, Results: [] }),
+    lastProcessMessage: null as unknown,
+    processMessageResult: { success: true } as unknown,
+    saveResult: true,
+    savedDetails: [] as Array<Record<string, unknown>>,
+}));
+
+// sendMessage now delegates orchestration to ConversationsRuntime. Mocking that boundary keeps
+// this suite about the part mobile still owns — framing a turn as two Conversation Detail rows —
+// and stops the real runtime (and the whole MJ entity layer behind it) loading under Node.
+vi.mock('@memberjunction/conversations-runtime', () => ({
+    ConversationsRuntime: {
+        Instance: {
+            Config: async () => undefined,
+            AgentRunner: {
+                processMessage: async (input: unknown) => {
+                    state.lastProcessMessage = input;
+                    return state.processMessageResult;
+                },
+            },
+        },
+    },
 }));
 
 vi.mock('@memberjunction/core', () => {
+    let seq = 0;
+    class FakeDetail {
+        ID = `detail-${++seq}`;
+        ConversationID = '';
+        Message = '';
+        Role = '';
+        Status = '';
+        ParentID: string | undefined;
+        AgentID: string | undefined;
+        UserID: string | undefined;
+        HiddenToUser = false;
+        LatestResult = { CompleteMessage: 'save blew up' };
+        NewRecord(): void {}
+        async Save(): Promise<boolean> {
+            if (!state.saveResult) return false;
+            state.savedDetails.push({
+                ID: this.ID, Role: this.Role, Status: this.Status, Message: this.Message,
+                ParentID: this.ParentID, AgentID: this.AgentID, UserID: this.UserID,
+                ConversationID: this.ConversationID,
+            });
+            return true;
+        }
+    }
     class Metadata {
         CurrentUser = { ID: 'user-1' };
+        async GetEntityObject(): Promise<FakeDetail> {
+            return new FakeDetail();
+        }
     }
     class RunView {
         async RunView(): Promise<RunViewResult> {
@@ -18,12 +65,7 @@ vi.mock('@memberjunction/core', () => {
     return { Metadata, RunView };
 });
 
-// agents.ts imports GraphQLDataProvider at module load; stub it out.
-vi.mock('@memberjunction/graphql-dataprovider', () => ({
-    GraphQLDataProvider: { Instance: null },
-}));
-
-import { loadAgents, resolveTargetAgent } from '@/data/services/agents';
+import { loadAgents, resolveTargetAgent, sendMessage } from '@/data/services/agents';
 
 function agentRows(...rows: Array<{ ID: string; Name: string; Description?: string | null }>): void {
     state.runView = () => ({ Success: true, Results: rows });
@@ -86,5 +128,64 @@ describe('resolveTargetAgent', () => {
         agentRows({ ID: '9', Name: 'Analyst' }, { ID: '8', Name: 'Forecaster' });
         const agent = await resolveTargetAgent('plain message');
         expect(agent?.id).toBe('9');
+    });
+});
+
+describe('sendMessage', () => {
+    beforeEach(() => {
+        state.savedDetails = [];
+        state.lastProcessMessage = null;
+        state.processMessageResult = { success: true };
+        state.saveResult = true;
+    });
+
+    it('frames a turn as a user row plus an in-progress AI row', async () => {
+        const result = await sendMessage({ conversationId: 'conv-1', text: 'hello' });
+        expect(result.success).toBe(true);
+
+        const [user, ai] = state.savedDetails;
+        expect(user).toMatchObject({ Role: 'User', Status: 'Complete', Message: 'hello', UserID: 'user-1' });
+        expect(ai).toMatchObject({ Role: 'AI', Status: 'In-Progress', Message: '', ParentID: user.ID });
+    });
+
+    it('hands the AI row — not the user row — to the runtime', async () => {
+        // The server writes the answer INTO the detail it is given. Passing the user row lands
+        // the reply on it as Role='User' and renders it as plain text in a user bubble.
+        await sendMessage({ conversationId: 'conv-1', text: 'hi' });
+        const input = state.lastProcessMessage as { conversationDetailId: string; message: { ID: string } };
+        const [user, ai] = state.savedDetails;
+        expect(input.conversationDetailId).toBe(ai.ID);
+        expect(input.message.ID).toBe(user.ID);
+    });
+
+    it('passes an explicit agent through, and leaves resolution to the runtime otherwise', async () => {
+        await sendMessage({ conversationId: 'c', text: 'x', agentId: 'agent-7' });
+        expect((state.lastProcessMessage as { explicitAgentId: string }).explicitAgentId).toBe('agent-7');
+        expect(state.savedDetails[1]).toMatchObject({ AgentID: 'agent-7' });
+
+        state.savedDetails = [];
+        await sendMessage({ conversationId: 'c', text: 'x' });
+        expect((state.lastProcessMessage as { explicitAgentId: string | null }).explicitAgentId).toBeNull();
+    });
+
+    it('reports both detail ids so a caller can attach files and track the reply', async () => {
+        const result = await sendMessage({ conversationId: 'c', text: 'x' });
+        const [user, ai] = state.savedDetails;
+        expect(result.userMessageId).toBe(user.ID);
+        expect(result.aiMessageId).toBe(ai.ID);
+    });
+
+    it('fails cleanly when the user message cannot be saved', async () => {
+        state.saveResult = false;
+        const result = await sendMessage({ conversationId: 'c', text: 'x' });
+        expect(result.success).toBe(false);
+        expect(state.lastProcessMessage).toBeNull();
+    });
+
+    it('surfaces a runtime throw as an error rather than propagating it', async () => {
+        state.processMessageResult = null;
+        const result = await sendMessage({ conversationId: 'c', text: 'x' });
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toContain('No agent');
     });
 });

@@ -89,18 +89,14 @@ export default function ChatThreadScreen() {
                 setSendError(result.errorMessage ?? 'Send failed.');
                 return;
             }
-            // The push WebSocket may not deliver completion on this client; poll the
-            // AI response detail until it finalizes, refreshing the thread as it does.
+            // `processMessage` resolves only once the run has completed — the fire-and-forget
+            // helper awaits the push-status WebSocket, which delivers reliably on this client
+            // under Expo SDK 54 (verified: "Completion event received"). The 2.5s x 24 polling
+            // loop this replaces existed because that WebSocket used to be unreliable here.
             if (result.aiMessageId) {
-                for (let i = 0; i < 24; i++) {
-                    await new Promise((r) => setTimeout(r, 2500));
-                    const status = await getConversationDetailStatus(result.aiMessageId).catch(() => null);
-                    await refresh();
-                    if (status && status !== 'In-Progress') {
-                        if (status === 'Error') setSendError('The agent could not complete this request.');
-                        break;
-                    }
-                }
+                const status = await getConversationDetailStatus(result.aiMessageId).catch(() => null);
+                if (status === 'Error') setSendError('The agent could not complete this request.');
+                await refresh();
                 void refreshList();
             }
         } catch (e) {

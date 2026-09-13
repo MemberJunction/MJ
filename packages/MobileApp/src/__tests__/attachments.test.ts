@@ -58,7 +58,6 @@ vi.mock('expo-file-system', () => ({
 import {
     capturePhoto,
     composeMessageWithAttachment,
-    attachCapturedFile,
     describeAttachment,
     attachCapturedFile,
     pickDocument,

@@ -37,11 +37,17 @@ export const Env = {
   msalScopes: ['openid', 'profile', 'User.Read', 'offline_access'] as const,
 
   /**
-   * Optional dev JWT fallback for ad-hoc API testing. Leave empty in
-   * committed code — paste a token only in your local working copy if
-   * you need to bypass the OAuth flow temporarily.
+   * Optional dev JWT fallback for ad-hoc API testing and automated QA.
+   *
+   * Sourced from `EXPO_PUBLIC_MJ_DEV_JWT`, which Expo inlines at bundle time. Supplying it
+   * through the environment rather than pasting it here is deliberate: a token in source is one
+   * `git add -A` away from being published, and the previous instruction — "paste a token only in
+   * your local working copy" — depended entirely on the developer remembering to take it out.
+   *
+   * Unset in CI and production, where the value is simply an empty string and the normal OAuth
+   * flow runs.
    */
-  devAuthToken: '',
+  devAuthToken: process.env.EXPO_PUBLIC_MJ_DEV_JWT ?? '',
 
   /**
    * Optional companions to `devAuthToken` for auto-refresh (dev-only). When both an
