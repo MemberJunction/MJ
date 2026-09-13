@@ -65,4 +65,23 @@ describe('DescribeUnbindableFieldMaps', () => {
         expect(msg).toContain('id -> ExternalID (KEY)');
         expect(msg).toContain('re-created');
     });
+
+    it('says the maps were deactivated only when they were', () => {
+        const one = [{ SourceFieldName: 'middle', DestinationFieldName: 'MiddleName', IsKeyField: false }];
+        // No outcome supplied = the caller only looked. The message must not claim an action.
+        expect(DescribeUnbindableFieldMaps(one, 'contacts', 'Contacts')).not.toContain('DEACTIVATED');
+        expect(DescribeUnbindableFieldMaps(one, 'contacts', 'Contacts', { Deactivated: 1, DeactivationFailed: 0 }))
+            .toContain('1 of them has been DEACTIVATED');
+    });
+
+    it('reports a FAILED deactivation apart from a successful one — the map is still dropping values', () => {
+        const two = [
+            { SourceFieldName: 'middle', DestinationFieldName: 'MiddleName', IsKeyField: false },
+            { SourceFieldName: 'nick', DestinationFieldName: 'Nickname', IsKeyField: false },
+        ];
+        const msg = DescribeUnbindableFieldMaps(two, 'contacts', 'Contacts', { Deactivated: 1, DeactivationFailed: 1 });
+        expect(msg).toContain('1 of them has been DEACTIVATED');
+        expect(msg).toContain('1 could NOT be deactivated');
+        expect(msg).toContain('still Active');
+    });
 });

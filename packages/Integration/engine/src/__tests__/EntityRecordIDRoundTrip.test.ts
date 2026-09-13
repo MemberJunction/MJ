@@ -18,12 +18,18 @@ const { IntegrationEngine } = await import('../IntegrationEngine.js');
 
 type PkField = { Name: string };
 type ChangeRow = { RecordID: string; Type: string; ChangedAt: string; Fields: Record<string, unknown> };
-type RecordMapRows = { Rows: Array<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>; Complete: boolean };
+type RecordMapRow = { ID: string; EntityRecordID: string; ExternalSystemRecordID: string };
+type RecordMapRows = { Rows: RecordMapRow[]; RowsRead: number; Complete: boolean };
 type KeyHost = {
     ComposeEntityRecordID: (row: Record<string, unknown>, pkFields: PkField[]) => string;
     BuildEntityPrimaryKey: (recordID: string, pkFields: PkField[]) => CompositeKey;
     LoadAllMJRecords: (entityMap: unknown, companyIntegration: unknown, contextUser: unknown) => Promise<ChangeRow[]>;
-    LoadAllRecordMaps: (companyIntegrationID: string, entityID: string, contextUser: unknown) => Promise<RecordMapRows>;
+    LoadAllRecordMaps: (
+        companyIntegrationID: string,
+        entityID: string,
+        contextUser: unknown,
+        onPage?: (rows: ReadonlyArray<RecordMapRow>) => void,
+    ) => Promise<RecordMapRows>;
 };
 
 /**
@@ -36,10 +42,16 @@ function makeHost(pkFields: PkField[], existingMaps: Array<{ EntityRecordID: str
         value: { EntityByName: () => ({ PrimaryKeys: pkFields }) },
         configurable: true,
     });
-    host.LoadAllRecordMaps = async () => ({
-        Complete: true,
-        Rows: existingMaps.map((m, i) => ({ ID: `map-${i}`, EntityRecordID: m.EntityRecordID, ExternalSystemRecordID: `ext-${i}` })),
-    });
+    // The loader STREAMS: the push path passes a per-page consumer and builds its own lookup, so a
+    // stub that only resolved rows would hand it an empty map and every row would read as a Create.
+    // Feed the page through the callback exactly as the real loader does.
+    host.LoadAllRecordMaps = async (_ci, _entityID, _user, onPage) => {
+        const rows = existingMaps.map((m, i) => ({
+            ID: `map-${i}`, EntityRecordID: m.EntityRecordID, ExternalSystemRecordID: `ext-${i}`,
+        }));
+        onPage?.(rows);
+        return { Complete: true, RowsRead: rows.length, Rows: onPage ? [] : rows };
+    };
     return host;
 }
 
