@@ -421,6 +421,22 @@ class RefreshConnectorSchemaOutput {
     @Field({ nullable: true }) FailureMessage?: string;
 }
 
+/**
+ * The reply to a DETACHED discovery start. Deliberately a different shape from
+ * RefreshConnectorSchemaOutput: that one reports real counts because it waited, and handing back
+ * placeholder zeros from a run that has not begun is exactly the confusion this type avoids.
+ */
+@ObjectType()
+class StartSchemaRefreshOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    /** Tail this with IntegrationTailRunEvents. 'not-started' when Success is false. */
+    @Field() RunID: string;
+    @Field() InProgress: boolean;
+    /** Set when the refusal was a lock: names what is holding it, so the UI can say why. */
+    @Field({ nullable: true }) BlockedBy?: string;
+}
+
 // ─── Generate Integration Action (on-demand Integration-as-Actions) ─────────
 // Generates + persists a strongly-typed Action (DriverClass='IntegrationActionExecutor')
 // for one integration/object/verb (or all applicable verbs when verb is omitted) via
@@ -876,6 +892,10 @@ class SyncHistoryOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [SyncRunSummaryOutput], { nullable: true }) Runs?: SyncRunSummaryOutput[];
+    /** Total runs for this connection, so a pager can size itself without fetching every row. */
+    @Field({ nullable: true }) TotalKnown?: number;
+    /** True when rows exist beyond this page. */
+    @Field({ nullable: true }) HasMore?: boolean;
 }
 
 @ObjectType()
@@ -891,6 +911,8 @@ class OperationProgressOutput {
     @Field({ nullable: true }) RecordsCreated?: number;
     @Field({ nullable: true }) RecordsUpdated?: number;
     @Field({ nullable: true }) RecordsErrored?: number;
+    /** Records the sync chose not to write because the content hash matched. */
+    @Field({ nullable: true }) RecordsSkipped?: number;
     @Field({ nullable: true }) RSUStep?: string;
     @Field({ nullable: true }) RSURunning?: boolean;
     /** U11 — 1-based index of the current RSU step (determinate stepper). */
@@ -899,6 +921,40 @@ class OperationProgressOutput {
     @Field(() => Int, { nullable: true }) RSUStepTotal?: number;
     @Field({ nullable: true }) ElapsedMs?: number;
     @Field({ nullable: true }) StartedAt?: string;
+}
+
+@ObjectType()
+class ActiveOperationOutput {
+    /** 'sync' | 'rsu' | 'discovery' | 'maintenance' */
+    @Field() Kind: string;
+    /**
+     * 'connection' when this operation provably belongs to the requested connection;
+     * 'workspace' when it is process-wide and cannot be attributed to one. The UI must not claim a
+     * workspace-scoped RSU belongs to the connector being viewed - that mislabelling is why an
+     * unrelated schema update read as "your connector is building".
+     */
+    @Field() Scope: string;
+    @Field() Label: string;
+    @Field({ nullable: true }) RunID?: string;
+    @Field({ nullable: true }) StartedAt?: Date;
+    @Field({ nullable: true }) StepLabel?: string;
+    @Field(() => Int, { nullable: true }) StepIndex?: number;
+    @Field(() => Int, { nullable: true }) StepTotal?: number;
+    @Field(() => Int, { nullable: true }) RecordsCreated?: number;
+    @Field(() => Int, { nullable: true }) RecordsUpdated?: number;
+    @Field(() => Int, { nullable: true }) RecordsSkipped?: number;
+    @Field(() => Int, { nullable: true }) RecordsErrored?: number;
+    /** Only a sync can be cancelled, and only from the process running it. */
+    @Field() Cancellable: boolean;
+}
+
+@ObjectType()
+class ActiveOperationsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ActiveOperationOutput], { nullable: true }) Operations?: ActiveOperationOutput[];
+    /** What holds this connection's maintenance lock, if anything. */
+    @Field({ nullable: true }) MaintenanceLockReason?: string;
 }
 
 // ── STRUCTURED RUN ARTIFACTS (durable JSONL progress streams) ─────────
@@ -967,6 +1023,10 @@ class IntegrationListRunsOutput {
     @Field() Success: boolean;
     @Field() Message: string;
     @Field(() => [IntegrationRunSummaryArtifactOutput], { nullable: true }) Runs?: IntegrationRunSummaryArtifactOutput[];
+    /** Feed back as `offset` for the next page. Absent when there is no next page. */
+    @Field({ nullable: true }) NextOffset?: number;
+    /** True when the store holds more runs past this page. */
+    @Field({ nullable: true }) HasMore?: boolean;
 }
 
 @ObjectType()
@@ -1349,6 +1409,192 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Tests credentials that have NOT been saved anywhere.
+     *
+     * ── Why this exists ───────────────────────────────────────────────────────
+     *
+     * `IntegrationTestConnection` takes a `companyIntegrationID`, so it can only test a
+     * connection that already exists. That forces every setup wizard into create-then-test:
+     * the workspace writes a Credential and a CompanyIntegration, THEN finds out the
+     * password was wrong, and something has to go back and delete them. Two cases escape
+     * that cleanup — a credential test that outlives the caller's gateway (most likely
+     * precisely when a host or tenant id is wrong, because that is what makes a vendor call
+     * hang rather than refuse), and a test that passes before a later step fails. Both leave
+     * a connection that answers every listing and syncs nothing.
+     *
+     * This inverts the order. Nothing is written, so there is nothing to clean up.
+     *
+     * ── How it can work without persisting ────────────────────────────────────
+     *
+     * The connector is resolved from the INTEGRATION row, not from a connection —
+     * `ConnectorFactory.Resolve` already only needs the former. The credentials then ride in
+     * on a transient CompanyIntegration that is constructed with `NewRecord()` and
+     * DELIBERATELY NEVER SAVED, carrying the values in `Configuration`.
+     *
+     * That works because every connector resolves its auth material the same way: prefer the
+     * linked Credential when `CredentialID` is set, otherwise fall back to the
+     * `Configuration` JSON. It is a de-facto framework convention rather than a documented
+     * one — verified across all seven connectors this was written for (NetSuite, Totara,
+     * Nimble AMS, OpenWater, PheedLoop, PropFuel, Elevate), each of which reads
+     * `CredentialID` first and `Configuration` second. A connector that reads ONLY
+     * `CredentialID` would report missing credentials here rather than misbehave, which is
+     * the safe direction to fail: the caller learns the probe cannot help and falls back to
+     * create-then-test, exactly as before.
+     *
+     * ── Rules this endpoint holds itself to ───────────────────────────────────
+     *
+     *  - NOTHING IS PERSISTED. No Credential, no CompanyIntegration, no Company. The
+     *    transient entity is a local and never leaves this method.
+     *  - THE VALUES ARE NEVER LOGGED. Not on success, not on failure, not inside an error
+     *    message. Only the integration id and the outcome are ever written down.
+     *  - IT CANNOT HANG. A hard deadline applies regardless of what the connector does,
+     *    because a probe that inherits the gateway-timeout problem solves nothing. A
+     *    timeout is reported as a timeout, which is itself the diagnosis for an unreachable
+     *    host.
+     *  - IT IS RATE LIMITED per (user, integration). The endpoint turns caller-supplied
+     *    input into an outbound vendor request, so an unbounded one is a request amplifier.
+     */
+    @Query(() => ConnectionTestOutput)
+    async IntegrationProbeCredentials(
+        @Arg("integrationID") integrationID: string,
+        @Arg("credentialValues") credentialValues: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ConnectionTestOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+
+            const limited = IntegrationDiscoveryResolver.probeRateLimited(user.ID, integrationID, Date.now());
+            if (limited) {
+                return { Success: false, Message: limited };
+            }
+
+            // Must be a JSON OBJECT. A connector's parser is entitled to assume that much, and
+            // handing it a bare string or an array is a way to reach a parse path nobody tests.
+            let parsed: unknown;
+            try {
+                parsed = JSON.parse(credentialValues);
+            } catch {
+                return { Success: false, Message: 'The credentials could not be read as JSON.' };
+            }
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+                return { Success: false, Message: 'The credentials must be a JSON object of field names to values.' };
+            }
+
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+
+            const integration = await provider.GetEntityObject<MJIntegrationEntity>('MJ: Integrations', user);
+            if (!(await integration.Load(integrationID))) {
+                return { Success: false, Message: `Integration with ID "${integrationID}" not found` };
+            }
+            const connector = ConnectorFactory.Resolve(integration);
+
+            // The transient carrier. NewRecord() and never Save() — see the header.
+            const probeCI = await provider.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
+            probeCI.NewRecord();
+            probeCI.Set('IntegrationID', integrationID);
+            probeCI.Set('Configuration', credentialValues);
+
+            const testConnection = connector.TestConnection.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<ConnectionTestResult>;
+
+            const result = await IntegrationDiscoveryResolver.withProbeDeadline(
+                testConnection(probeCI, user),
+                integration.Name
+            );
+
+            return {
+                Success: result.Success,
+                Message: result.Message,
+                ServerVersion: result.ServerVersion
+            };
+        } catch (e) {
+            // formatError only ever sees the thrown message. The credential values are not in
+            // scope of anything logged here, and must never be added to it.
+            LogError(`IntegrationProbeCredentials error for integration ${integrationID}: ${this.formatError(e)}`);
+            return {
+                Success: false,
+                Message: `Error: ${this.formatError(e)}`
+            };
+        }
+    }
+
+    /**
+     * The probe's hard deadline.
+     *
+     * `TestConnectionMs` exists on the connector config but is advisory — an implementation
+     * that does not consult it can block for as long as the vendor's socket does, which is
+     * the whole failure this endpoint exists to avoid. So the bound is applied here, where it
+     * cannot be opted out of.
+     *
+     * 20 seconds: comfortably longer than any healthy handshake, comfortably shorter than the
+     * ~240s gateway ceiling that create-then-test keeps running into.
+     */
+    private static readonly PROBE_DEADLINE_MS = 20_000;
+
+    private static withProbeDeadline(
+        work: Promise<ConnectionTestResult>,
+        vendorName: string
+    ): Promise<ConnectionTestResult> {
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const deadline = new Promise<ConnectionTestResult>(resolve => {
+            timer = setTimeout(
+                () =>
+                    resolve({
+                        Success: false,
+                        // A timeout IS the diagnosis for an unreachable host or a wrong
+                        // tenant path, so it says that rather than "unknown error".
+                        Message:
+                            `${vendorName} did not respond within ` +
+                            `${Math.round(IntegrationDiscoveryResolver.PROBE_DEADLINE_MS / 1000)} seconds. ` +
+                            `Check the host and any account or organization identifier in the values above.`
+                    }),
+                IntegrationDiscoveryResolver.PROBE_DEADLINE_MS
+            );
+            timer.unref?.();
+        });
+        return Promise.race([work, deadline]).finally(() => {
+            if (timer) {
+                clearTimeout(timer);
+            }
+        });
+    }
+
+    /**
+     * Per (user, integration) rate limit.
+     *
+     * This endpoint converts caller-supplied input into an outbound request to a third party,
+     * which makes an unbounded version a request amplifier pointed at somebody else's API —
+     * and the fastest way to get a tenant's key rate-limited by its own vendor. In-process
+     * and per-instance on purpose: it is a courtesy bound on a human typing into a form, not
+     * a security boundary, and giving it a durable store would buy nothing a form's own pace
+     * does not already provide.
+     */
+    private static readonly PROBE_WINDOW_MS = 60_000;
+    private static readonly PROBE_MAX_PER_WINDOW = 10;
+    private static readonly probeHits = new Map<string, number[]>();
+
+    private static probeRateLimited(userID: string, integrationID: string, now: number): string | null {
+        const key = `${userID}:${integrationID}`.toLowerCase();
+        const window = now - IntegrationDiscoveryResolver.PROBE_WINDOW_MS;
+        const hits = (IntegrationDiscoveryResolver.probeHits.get(key) ?? []).filter(t => t > window);
+        if (hits.length >= IntegrationDiscoveryResolver.PROBE_MAX_PER_WINDOW) {
+            return 'Too many credential checks in the last minute — wait a moment and try again.';
+        }
+        hits.push(now);
+        IntegrationDiscoveryResolver.probeHits.set(key, hits);
+        // Bound the map so a long-lived process cannot accumulate a key per (user, integration)
+        // pair forever. Anything with no hits inside the window is already spent.
+        if (IntegrationDiscoveryResolver.probeHits.size > 500) {
+            for (const [k, v] of IntegrationDiscoveryResolver.probeHits) {
+                if (!v.some(t => t > window)) {
+                    IntegrationDiscoveryResolver.probeHits.delete(k);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
      * Tests connectivity to the external system.
      */
     @Query(() => ConnectionTestOutput)
@@ -1396,6 +1642,54 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      * both on stdout (visible in the MJAPI log file) and in a per-run
      * `<cwd>/logs/integration-runs/<runID>/progress.jsonl` artifact.
      */
+    /**
+     * Start discovery and return immediately with a tailable RunID.
+     *
+     * plan.md is emphatic that this must exist: "going to a page should NEVER, NEVER trigger such
+     * things automatically, it must in a very clean way tell the user to click a button to start
+     * discovery of tables". A button needs a call that returns at once; the synchronous mutation
+     * runs the whole pipeline inline and times out at the gateway on a large catalog, which is why
+     * both surfaces ended up auto-triggering on page entry and adopting whatever run they found.
+     *
+     * A DISTINCT mutation rather than a flag on the synchronous one: that reply promises real
+     * counts because it waited, and a detached launch can only offer placeholder zeros.
+     *
+     * The lock is PROBED here so a second click is refused with a reason the UI can show. The
+     * pipeline still acquires it for real - this probe is not the guard, it is the clean answer in
+     * the common case. Losing the race just means the launch fails on the run stream instead.
+     */
+    @Mutation(() => StartSchemaRefreshOutput)
+    @RequireSystemUser()
+    async IntegrationStartSchemaRefresh(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("universalPKConvention", { nullable: true, description: "Optional vendor-wide PK convention hint (e.g. 'id' for HubSpot)" }) universalPKConvention: string | undefined,
+        @Ctx() ctx: AppContext
+    ): Promise<StartSchemaRefreshOutput> {
+        const user = this.GetUserFromPayload(ctx.userPayload);
+        // The pipeline WRITES the catalog, so it needs the read-write provider - the same one the
+        // synchronous refresh mutation uses. A read-only provider here would fail at the first save.
+        const md = GetReadWriteProvider(ctx.providers) as unknown as IMetadataProvider;
+
+        const held = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+        if (held) {
+            return {
+                Success: false,
+                InProgress: false,
+                RunID: 'not-started',
+                BlockedBy: held.Reason,
+                Message: `Discovery not started: ${held.Reason} is already running for this connection. It will be available when that finishes.`,
+            };
+        }
+
+        const summary = this.startSchemaRefreshPipelineDetached(companyIntegrationID, user, md, universalPKConvention);
+        return {
+            Success: true,
+            InProgress: true,
+            RunID: summary.RunID,
+            Message: 'Discovery started.',
+        };
+    }
+
     @Mutation(() => RefreshConnectorSchemaOutput)
     @RequireSystemUser()
     async IntegrationRefreshConnectorSchema(
@@ -5114,6 +5408,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     RecordsCreated: syncProgress.RecordsCreated,
                     RecordsUpdated: syncProgress.RecordsUpdated,
                     RecordsErrored: syncProgress.RecordsErrored,
+                    RecordsSkipped: syncProgress.RecordsSkipped,
                     StartedAt: syncProgress.StartedAt.toISOString(),
                     ElapsedMs: Date.now() - syncProgress.StartedAt.getTime(),
                 };
@@ -5193,29 +5488,174 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Paged run history, newest first.
+     *
+     * plan.md: "history must show a paginated list with all runs (25 per page) in the history, it
+     * should not shwo just aprt of it". Both surfaces used to fake paging by re-fetching with a
+     * DOUBLED limit and slicing client-side, which cannot reach past the cap and re-transfers
+     * everything already shown.
+     *
+     * `offset` maps to RunView's StartRow. TotalKnown comes from a separate count so a pager can
+     * size itself without fetching every row.
+     */
+    /**
+     * Everything running for a connection, in one call.
+     *
+     * plan.md: "In the UI for the integration ... there shouldbe an area that shows thigns that are
+     * running actively, this can be syncs, rsu, discovery, etc." and "Let us say i clear browser
+     * cache and then i go to that integration page, i should see the same steps i mentioned
+     * hapepning there to". Every field here is derived SERVER-side, so a cleared browser sees the
+     * same thing — nothing depends on client state.
+     *
+     * Previously a surface had to fan out to four queries and stitch them, and each got the
+     * attribution wrong in its own way. The two rules that fan-out kept breaking are encoded here:
+     *
+     *  - RSU status from GetStatus is PROCESS-WIDE. It is only attributed to this connection when
+     *    an RSU run artifact actually names it; otherwise it is reported Scope='workspace'.
+     *  - A ConnectorCreation run is discovery, never a sync. Narrating it as a sync is what made a
+     *    first-time setup claim it was syncing records it had not fetched.
+     */
+    @Query(() => ActiveOperationsOutput)
+    async IntegrationGetActiveOperations(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ActiveOperationsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const authCache = new Map<string, boolean>();
+            if (!(await this.userCanReadCompanyIntegration(companyIntegrationID, user, authCache))) {
+                return { Success: false, Message: this.notAuthorizedForCompanyIntegrationMessage(companyIntegrationID) };
+            }
+
+            const ops: ActiveOperationOutput[] = [];
+
+            // ── the sync, from the DURABLE snapshot so any process can answer ──
+            // GetSyncProgressAsync prefers the durable run-row snapshot and falls back to this
+            // process's own — necessary because the ProgressJSON column arrives in MJ 6.1.x and
+            // every tenant here is 5.51, where the durable read silently finds nothing.
+            const syncProgress = await IntegrationEngine.GetSyncProgressAsync(companyIntegrationID, user);
+            if (syncProgress) {
+                ops.push({
+                    Kind: 'sync',
+                    Scope: 'connection',
+                    Label: `Syncing ${syncProgress.CurrentEntity || 'data'}`,
+                    StartedAt: syncProgress.StartedAt,
+                    StepLabel: syncProgress.CurrentEntity || undefined,
+                    StepIndex: syncProgress.EntityMapsCompleted,
+                    StepTotal: syncProgress.EntityMapsTotal,
+                    RecordsCreated: syncProgress.RecordsCreated,
+                    RecordsUpdated: syncProgress.RecordsUpdated,
+                    RecordsSkipped: syncProgress.RecordsSkipped,
+                    RecordsErrored: syncProgress.RecordsErrored,
+                    Cancellable: true,
+                });
+            }
+
+            // ── in-flight run artifacts for THIS connection ──
+            const reader = new IntegrationProgressReader();
+            const inFlight = await reader.ListRuns({ companyIntegrationID, inFlightOnly: true }, 25);
+            let rsuNamesThisConnection = false;
+            for (const snap of inFlight) {
+                const kind = snap.manifest.runKind;
+                // 'SyncRun' is already reported above from the durable snapshot. Everything else
+                // that is not RSU is a discovery-shaped run - ConnectorCreation especially, which
+                // must NEVER be narrated as a sync: it fetches nothing.
+                if (kind === 'SyncRun') continue;
+                if (kind === 'RSU') rsuNamesThisConnection = true;
+                ops.push({
+                    Kind: kind === 'RSU' ? 'rsu' : 'discovery',
+                    Scope: 'connection',
+                    Label: kind === 'RSU' ? 'Updating your workspace schema' : 'Discovering tables and columns',
+                    RunID: snap.manifest.runID,
+                    StartedAt: new Date(snap.manifest.startedAt),
+                    StepLabel: snap.latestEvent?.message ?? undefined,
+                    Cancellable: false,
+                });
+            }
+
+            // ── RSU reported by the process, when no artifact tied it to this connection ──
+            const rsu = RuntimeSchemaManager.Instance.GetStatus();
+            if (rsu?.Running && !rsuNamesThisConnection) {
+                ops.push({
+                    Kind: 'rsu',
+                    Scope: 'workspace',
+                    Label: 'Your workspace is updating',
+                    StepLabel: rsu.CurrentStepName ?? undefined,
+                    StepIndex: rsu.CurrentStepIndex ?? undefined,
+                    StepTotal: rsu.StepTotal ?? undefined,
+                    Cancellable: false,
+                });
+            }
+
+            const lock = IntegrationEngine.GetMaintenanceLock(companyIntegrationID);
+            return {
+                Success: true,
+                Message: `${ops.length} active operation(s)`,
+                Operations: ops,
+                MaintenanceLockReason: lock?.Reason,
+            };
+        } catch (e) {
+            LogError(`IntegrationGetActiveOperations error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
     @Query(() => SyncHistoryOutput)
     async IntegrationGetSyncHistory(
         @Arg("companyIntegrationID") companyIntegrationID: string,
-        @Arg("limit", { defaultValue: 20 }) limit: number,
+        @Arg("limit", { defaultValue: 25 }) limit: number,
+        @Arg("offset", { nullable: true, defaultValue: 0, description: 'Rows to skip. With limit, this is the page.' }) offset: number,
         @Ctx() ctx: AppContext
     ): Promise<SyncHistoryOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
+            const filter = `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}'`;
             const rv = new RunView();
             const result = await rv.RunView<SyncRunSummaryOutput>({
                 EntityName: 'MJ: Company Integration Runs',
-                ExtraFilter: `CompanyIntegrationID='${companyIntegrationID}'`,
+                ExtraFilter: filter,
                 OrderBy: 'StartedAt DESC',
                 MaxRows: limit,
+                StartRow: Math.max(0, offset ?? 0),
                 ResultType: 'simple',
                 Fields: ['ID', 'Status', 'StartedAt', 'EndedAt', 'TotalRecords', 'RunByUserID']
             }, user);
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
+
+            // A separate count, not result.TotalRowCount: the row query is capped by MaxRows, so its
+            // count reflects the PAGE. A pager needs the whole set.
+            let totalKnown: number | undefined;
+            const countRes = await new RunView().RunView({
+                EntityName: 'MJ: Company Integration Runs',
+                ExtraFilter: filter,
+                ResultType: 'count_only',
+            }, user);
+            if (countRes?.Success) totalKnown = countRes.TotalRowCount;
+
+            // Per-entity created / updated / skipped / errored, recovered from each run's artifact.
+            // The run ROW carries only TotalRecords, so EntityDetails existed on this type and was
+            // never populated — the empty breakdown thing.txt reports. Artifacts are pruned by the
+            // retention cap and are node-local, so an old run yields nothing; that is left ABSENT
+            // rather than zeroed, so the UI can say "not recorded" instead of claiming zero.
+            const reader = new IntegrationProgressReader();
+            await Promise.all(result.Results.map(async (run) => {
+                try {
+                    const outcomes = await reader.EntityOutcomes(run.ID);
+                    if (outcomes.length > 0) run.EntityDetails = outcomes;
+                } catch { /* a missing or pruned artifact is not an error */ }
+            }));
+
+            const start = Math.max(0, offset ?? 0);
             return {
                 Success: true,
                 Message: `${result.Results.length} runs`,
-                Runs: result.Results
+                Runs: result.Results,
+                TotalKnown: totalKnown,
+                HasMore: totalKnown === undefined
+                    ? result.Results.length === limit
+                    : start + result.Results.length < totalKnown,
             };
         } catch (e) {
             LogError(`IntegrationGetSyncHistory error: ${e}`);
@@ -5238,6 +5678,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("runKind", { nullable: true }) runKind?: string,
         @Arg("inFlightOnly", { nullable: true }) inFlightOnly?: boolean,
         @Arg("limit", { defaultValue: 50 }) limit?: number,
+        @Arg("offset", { nullable: true, defaultValue: 0, description: 'Runs to skip in the underlying store. Use NextOffset from the previous page.' }) offset?: number,
     ): Promise<IntegrationListRunsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
@@ -5253,18 +5694,43 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
 
             const reader = new IntegrationProgressReader();
-            const snaps = await reader.ListRuns({
+            const want = limit ?? 50;
+            const filter = {
                 companyIntegrationID,
                 runKind: runKind as IntegrationRunKind | undefined,
                 inFlightOnly: inFlightOnly ?? false,
-            }, limit ?? 50);
+            };
 
-            // Filter to only the runs the caller is authorized to read. When
-            // scoped to a single (already-authorized) connector this is a no-op;
-            // for the cross-connector listing it prevents one tenant from seeing
-            // another tenant's runs.
-            const authorizedSnaps = await this.filterAuthorizedRuns(snaps, user, authCache);
-            return { Success: true, Message: `${authorizedSnaps.length} run(s)`, Runs: authorizedSnaps.map(s => this.toRunSummaryArtifact(s)) };
+            // AUTHORIZE-THEN-PAGE. Authorization happens after the store returns, so a page can
+            // come back short because the caller could not read some of it — not because the store
+            // ran out. Returning that short page as if it were the end is what made "load older
+            // runs" stop early. So refill from the next offset until the page is full or the store
+            // is genuinely exhausted.
+            //
+            // The refill is BOUNDED: an unauthorized caller would otherwise walk the entire store
+            // one page at a time on a single request.
+            const MAX_REFILLS = 5;
+            let cursor = Math.max(0, offset ?? 0);
+            let exhausted = false;
+            const authorizedSnaps: IntegrationRunSnapshot[] = [];
+            for (let round = 0; round <= MAX_REFILLS && authorizedSnaps.length < want; round++) {
+                const batch = await reader.ListRuns(filter, want, cursor);
+                if (batch.length === 0) { exhausted = true; break; }
+                cursor += batch.length;
+                if (batch.length < want) exhausted = true;
+                const ok = await this.filterAuthorizedRuns(batch, user, authCache);
+                authorizedSnaps.push(...ok);
+                if (exhausted) break;
+            }
+            const page = authorizedSnaps.slice(0, want);
+            const hasMore = !exhausted || authorizedSnaps.length > want;
+            return {
+                Success: true,
+                Message: `${page.length} run(s)`,
+                Runs: page.map(s => this.toRunSummaryArtifact(s)),
+                NextOffset: hasMore ? cursor : undefined,
+                HasMore: hasMore,
+            };
         } catch (e) {
             LogError(`IntegrationListRuns error: ${e}`);
             return { Success: false, Message: this.formatError(e) };

@@ -580,6 +580,21 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
 
     /**
+     * Live progress for runs owned by THIS process, keyed like activeSyncs.
+     *
+     * Progress moved to the run row's ProgressJSON so any process could read it — but that column
+     * arrives in MJ 6.1.x, and the in-process map was deleted at the same time. On every earlier
+     * tenant that left NO source at all: the async reader silently finds nothing (RunView drops the
+     * unknown field) and the synchronous accessor was left returning undefined by contract. A sync
+     * could run for an hour with the UI showing nothing running.
+     *
+     * This is the floor. GetSyncProgressAsync prefers the durable row and falls back here, so a
+     * single-process tenant answers correctly today and a multi-process one still answers from the
+     * row once the column exists.
+     */
+    private static readonly liveProgress = new Map<string, SyncProgressSnapshot>();
+
+    /**
      * Maintenance locks: while a metadata refresh / schema evolution / RSU pipeline is
      * running for a CompanyIntegration, data syncs MUST NOT start ("locks of sync and scheduled
      * sync must occur" — the refresh is rewriting the very metadata, field maps and DDL the sync
@@ -761,11 +776,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             BypassCache: true, // live liveness/progress read — must see the current row
         }, contextUser);
         const row = result.Success ? result.Results?.[0] : undefined;
-        if (!row) return undefined;
+        // No readable row is not proof there is no sync: before MJ 6.1.x the run row has no
+        // ProgressJSON column at all, and RunView drops the unknown field silently rather than
+        // failing. Fall back to this process's own snapshot.
+        if (!row) return IntegrationEngine.liveProgress.get(companyIntegrationID.toLowerCase());
         if (row.LeaseExpiresAt != null && new Date(row.LeaseExpiresAt).getTime() < Date.now()) {
             return undefined; // owner's lease lapsed — not live progress
         }
-        if (!row.ProgressJSON) return undefined;
+        if (!row.ProgressJSON) return IntegrationEngine.liveProgress.get(companyIntegrationID.toLowerCase());
         try {
             const snapshot = JSON.parse(row.ProgressJSON) as SyncProgressSnapshot & { StartedAt: string | Date };
             return { ...snapshot, StartedAt: new Date(snapshot.StartedAt) };
@@ -1060,11 +1078,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                 RecordsCreated: 0,
                 RecordsUpdated: 0,
                 RecordsErrored: 0,
+                RecordsSkipped: 0,
                 // The run's OWN trigger type, recovered above — not a hardcoded 'Scheduled'. This is
                 // what IntegrationGetSyncProgress reports back ("Sync in progress (Manual)"), so a
                 // hardcoded value mislabels every adopted run.
                 TriggerType: resumeTriggerType,
             };
+            // Same reason as the main path: without this a resumed run reports no progress at all
+            // on any tenant whose run row has no ProgressJSON column.
+            IntegrationEngine.liveProgress.set(lockKey, progressSnapshot);
             const runCtx: EngineRunContext = {
                 provider: prov,
                 ownership,
@@ -1115,6 +1137,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // `existing`). Resolve with the real result when we have one, else a benign empty result so no
             // waiter hangs. Promise resolve is idempotent and the early-exit `return`s also land here.
             IntegrationEngine.activeSyncs.delete(lockKey);
+            IntegrationEngine.liveProgress.delete(lockKey);
             resolveResumeLock(resumeResult ?? {
                 Success: false, ErrorMessage: 'Resume produced no result', RecordsProcessed: 0,
                 RecordsCreated: 0, RecordsUpdated: 0, RecordsDeleted: 0, RecordsErrored: 0,
@@ -1302,6 +1325,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             RecordsCreated: 0,
             RecordsUpdated: 0,
             RecordsErrored: 0,
+            RecordsSkipped: 0,
             TriggerType: triggerType,
         };
         const runCtx: EngineRunContext = {
@@ -1329,10 +1353,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             companyIntegrationID, contextUser, triggerType, wrappedProgress, onNotification, options, abortController.signal, existingRun
         ));
         IntegrationEngine.activeSyncs.set(lockKey, syncPromise);
+        IntegrationEngine.liveProgress.set(lockKey, progressSnapshot);
         try {
             return await syncPromise;
         } finally {
             IntegrationEngine.activeSyncs.delete(lockKey);
+            IntegrationEngine.liveProgress.delete(lockKey);
             runCtx.ownership?.StopHeartbeat();
         }
     }
@@ -6057,6 +6083,28 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Bound the retained error SAMPLE: only the first MAX_AGGREGATE_ERRORS are ever persisted
         // (FinalizeRun slices to 100). Accumulating every per-record error across a multi-million-row
         // failing run would hold the whole set in RAM for no gain — RecordsErrored already has the count.
+        // Feed the LIVE snapshot from the same accumulation.
+        //
+        // These four fields existed on the snapshot and on OperationProgressOutput, and the
+        // resolver returned them, but NOTHING ever wrote them — they were initialised to 0 and
+        // stayed 0 for the whole run. That is why the UI showed a bare "+" for created and "~"
+        // for updated with no breakdown: the numbers were always zero, not mis-rendered.
+        //
+        // Here rather than on the progress tick because SyncProgress carries no outcome counts at
+        // all; it only knows position. This is the one place a map's real outcome is folded, and
+        // the aggregate is already monotonic, so the snapshot inherits that for free.
+        const snap = this.currentRunContext?.progressSnapshot;
+        if (snap) {
+            snap.RecordsProcessed = aggregate.RecordsProcessed;
+            snap.RecordsCreated = aggregate.RecordsCreated;
+            snap.RecordsUpdated = aggregate.RecordsUpdated;
+            snap.RecordsErrored = aggregate.RecordsErrored;
+            snap.RecordsSkipped = aggregate.RecordsSkipped;
+            // Persist now as well as on the next tick: the final map has no tick after it, so
+            // without this the run's last counts never reach a reader in another process.
+            void this.currentRunContext?.ownership?.WriteProgress(JSON.stringify(snap));
+        }
+
         if (aggregate.Errors.length < MAX_AGGREGATE_ERRORS && mapResult.Errors.length > 0) {
             const room = MAX_AGGREGATE_ERRORS - aggregate.Errors.length;
             aggregate.Errors.push(...mapResult.Errors.slice(0, room));
