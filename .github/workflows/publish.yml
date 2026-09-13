@@ -1247,6 +1247,37 @@ jobs:
             echo "::notice::Verified: @memberjunction/core@$NEW is live under '$PUBLISH_TAG'; latest unmoved at ${PREV_LATEST:-<unset>}"
           fi
 
+      # EX-2026-003 closes the `lts-lines` ruleset's blanket repository-administrator
+      # bypass and replaces it with the named break-glass team, matching what `next-protect`
+      # has done since 2026-09-03. This job runs as MJ-GH-bot, which IS a repository admin
+      # and so bypasses `lts-lines` today — but it is an OUTSIDE COLLABORATOR and cannot be
+      # added to a team (that needs org membership, and the org is at 42/42 seats). The
+      # moment the role bypass goes, the push below fails with GH013, exactly as the release
+      # to `next` did in v6.1.0-edge.6 before it was recovered by hand in #4382.
+      #
+      # So the line push moves onto the App the same way the `next` pushes already have.
+      # A separate mint rather than reusing `next_token` further down: that one is minted
+      # late on purpose, because an installation token lives one hour and this job's budget
+      # is far longer. Minting it up here to serve both would put the `next` push at the end
+      # of the job on an expired token.
+      - name: Mint the App token for the push to the line branch
+        id: line_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          # contents -> the push to lts/**. No pull-requests grant: unlike the `next` path
+          # there is no back-merge fallback PR to open from here.
+          permission-contents: write
+
+      - name: Add the App-authenticated remote for the line branch
+        env:
+          APP_TOKEN: ${{ steps.line_token.outputs.token }}
+        run: |
+          git remote remove line-push 2>/dev/null || true
+          git remote add line-push "https://x-access-token:$APP_TOKEN@github.com/${GITHUB_REPOSITORY}"
+          echo "::notice::line-push remote configured as ${{ steps.line_token.outputs.app-slug }}"
+
       # Tag and release steps tolerate a re-run of a partially completed publish
       # (publish succeeded, a later step failed): the publish step's "already
       # published" evidence passes, and these skip instead of dying on collisions.
@@ -1255,7 +1286,11 @@ jobs:
           VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           set -euo pipefail
-          git push origin "HEAD:$LINE"
+          # Branch push goes through the App (see the mint step above). The TAG pushes stay
+          # on `origin`: the two tag rulesets govern only the five moving dist-tag refs
+          # (alpha, beta, latest, next, stable), and a version tag like $VERSION matches
+          # neither, so nothing bypasses and nothing blocks.
+          git push line-push "HEAD:$LINE"
           if git ls-remote --tags origin "refs/tags/$VERSION" | grep -q .; then
             echo "::notice::Tag $VERSION already exists on origin - skipping (re-run of a partially completed publish)"
           else
@@ -1513,9 +1548,10 @@ jobs:
       # `next` is protected and only the release App may push to it — see the edge path's
       # remote step for the full reasoning. Minted here, immediately before the only step in
       # this job that writes to `next`, because an installation token lives one hour and this
-      # job's budget is far longer. The line branch's own pushes above keep using `origin`
-      # on the PAT: `lts-lines` still bypasses on the repository-admin role, so they were
-      # never affected by the 2026-09-03 change.
+      # job's budget is far longer. The line branch's own BRANCH push above now mints its own
+      # App token for the same reason (`lts-lines` no longer bypasses on the repository-admin
+      # role — see EX-2026-003 at that step); its TAG pushes stay on `origin`, which the tag
+      # rulesets do not govern for version tags.
       - name: Mint the App token for pushes to next
         id: next_token
         uses: actions/create-github-app-token@v2
@@ -1800,9 +1836,9 @@ jobs:
       #
       # --remote moves BOTH the fetch and the push onto the App-authenticated remote, which
       # is required: pushNext() merges `<remote>/next` between attempts, so the ref it reads
-      # and the ref it writes must be the same remote. The tag push and branch creation in
-      # the step below deliberately stay on `origin` — those are not covered by next-protect
-      # and the App has no reason to hold them.
+      # and the ref it writes must be the same remote. The tag push in the step below stays
+      # on `origin` — version tags are not covered by either tag ruleset, which govern only
+      # the five moving dist-tag refs.
       - name: Push next
         run: node ci/candidate-cut.mjs push-next --remote next-push
 
@@ -1813,7 +1849,14 @@ jobs:
         run: |
           set -euo pipefail
           git push origin "refs/tags/$TAG"
-          git push origin "refs/tags/$TAG:refs/heads/$BRANCH"
+          # BRANCH is `lts/<major>.<minor>` (ci/candidate-cut.mjs), so creating it lands
+          # inside the `lts-lines` ruleset's `refs/heads/lts/**` condition. This previously
+          # went out on `origin` and survived on the repository-administrator bypass that
+          # EX-2026-003 removes, so it moves onto the App like the branch push in the
+          # publish-lts job. The `required_status_checks` rule added to `lts-lines` must
+          # carry `do_not_enforce_on_create: true`, or this creation blocks on a check that
+          # cannot have run against a branch that does not exist yet.
+          git push next-push "refs/tags/$TAG:refs/heads/$BRANCH"
           echo "::notice::$BRANCH created at $TAG"
 
       - name: Create GitHub Release (never latest; certification promotes)

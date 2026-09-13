@@ -5,6 +5,23 @@ on:
     branches:
       - next
       - main
+      # LTS release lines, for EX-2026-003: a status check cannot be REQUIRED on a branch
+      # it never runs on, because the required context would never arrive and the pull
+      # request would sit at "Expected" forever.
+      #
+      # SCOPE OF THIS ENTRY. A `pull_request` run uses the workflow file from the merge
+      # commit — the BASE branch's copy plus the PR's own changes — so this entry governs
+      # pull requests into release lines CUT FROM `next` AFTER it lands. It does nothing
+      # for `lts/5`, which was cut earlier and carries its own older copy of this file;
+      # that line needs the same two changes backported to it directly (this trigger, and
+      # the per-ref concurrency group below, which on `lts/5` is still the constant
+      # `group: "changes"` that lets concurrent runs cancel each other — a cancelled run
+      # reports no status, which against a required check is a stuck pull request).
+      #
+      # Safe to widen: the concurrency group below keys on `github.ref`, which on a pull
+      # request is that PR's own `refs/pull/N/merge`, so LTS runs cannot cancel `next` runs
+      # or each other.
+      - 'lts/**'
 
 # Keyed by ref, like every other PR-scoped workflow here (test.yml, integration.yml,
 # docs-site-ci.yml). A constant group makes the group REPO-WIDE: with cancel-in-progress,
