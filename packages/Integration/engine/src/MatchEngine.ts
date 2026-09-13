@@ -413,7 +413,7 @@ export class MatchEngine {
      */
     private primaryKeyFieldsFor(mjEntityName: string): Array<{ Name: string }> {
         const entityInfo = this.ProviderToUse.EntityByName(mjEntityName);
-        return entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        return entityInfo?.PrimaryKeys ?? [];
     }
 
     /** True when the mapped data carries a value for EVERY PK field — i.e. it asserts an identity. */

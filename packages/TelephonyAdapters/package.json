@@ -1,0 +1,50 @@
+{
+  "name": "@memberjunction/telephony-adapters",
+  "version": "6.1.0-edge.6",
+  "description": "MemberJunction: Telephony and meeting platform adapters (Twilio, Vonage, RingCentral, Teams) for routing voice calls and meetings to MJ AI agents via the Server Extension framework",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "files": [
+    "/dist"
+  ],
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "author": "MemberJunction.com",
+  "license": "BUSL-1.1",
+  "dependencies": {
+    "@memberjunction/ai-agents": "6.1.0-edge.6",
+    "@memberjunction/ai-bridge-base": "6.1.0-edge.6",
+    "@memberjunction/ai-bridge-ringcentral": "6.1.0-edge.6",
+    "@memberjunction/ai-bridge-server": "6.1.0-edge.6",
+    "@memberjunction/ai-bridge-teams": "6.1.0-edge.6",
+    "@memberjunction/ai-bridge-twilio": "6.1.0-edge.6",
+    "@memberjunction/ai-bridge-vonage": "6.1.0-edge.6",
+    "@memberjunction/core": "6.1.0-edge.6",
+    "@memberjunction/core-entities": "6.1.0-edge.6",
+    "@memberjunction/generic-database-provider": "6.1.0-edge.6",
+    "@memberjunction/global": "6.1.0-edge.6",
+    "@memberjunction/server-extensions-core": "6.1.0-edge.6",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "type-graphql": "2.0.0-beta.3",
+    "ws": "^8.19.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.6",
+    "@types/ws": "^8.5.14",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

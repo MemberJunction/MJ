@@ -1,27 +1,19 @@
 import { ApplicationInfo, DatabaseProviderBase, EntitySaveOptions, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { RegisterClass } from "@memberjunction/global";
-import { UserCache } from "@memberjunction/generic-database-provider";
+import { ResolveConfiguredPrincipal } from "./principals.js";
 import { configInfo } from "../config.js";
 import { MJUserEntity, MJUserRoleEntity, MJUserApplicationEntity, MJUserApplicationEntityEntity, MJApplicationEntityType, MJApplicationEntityEntityType, UserInfoEngine } from "@memberjunction/core-entities";
 
 export class NewUserBase {
     public async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
         try {
-            let contextUser: UserInfo | null = null;
-
-            const contextUserForNewUserCreation: string = configInfo?.userHandling?.contextUserForNewUserCreation;
-            if(contextUserForNewUserCreation){
-                contextUser = UserCache.Instance.UserByName(contextUserForNewUserCreation);
-            }
-
+            const contextUser: UserInfo | null = ResolveConfiguredPrincipal(
+                configInfo?.userHandling?.contextUserForNewUserCreation,
+                'NewUser',
+            );
             if (!contextUser) {
-                LogError(`Failed to load context user ${configInfo?.userHandling?.contextUserForNewUserCreation}, using an existing user with the Owner role instead`);
-
-                contextUser = UserCache.Users.find(user => user.Type.trim().toLowerCase() ==='owner')!;
-                if (!contextUser) {
-                    LogError(`No existing users found in the database with the Owner role, cannot create a new user`);
-                    return null;
-                }
+                LogError(`No system user or active Owner found in the database, cannot create a new user`);
+                return null;
             }
 
             const md: Metadata = new Metadata(); // global-provider-ok: new-user creation runs in the JWT auth flow, before AppContext.providers is built

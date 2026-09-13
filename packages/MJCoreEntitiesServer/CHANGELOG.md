@@ -1,5 +1,117 @@
 # @memberjunction/core-entities-server
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 512bb53: Security: close the role-elevation path on `MJ: Roles` and `MJ: User Roles` (issue #4282).
+
+  Issue #4260 closed the `User.Type` route to elevated capability. Role assignment is the platform's other authority mechanism and was unguarded: no server-side entity subclass existed for either entity, so `ClassFactory` resolved the generated classes, whose `Validate()` knows nothing about who is calling. On a baseline seed — and verified against a live database — the `Developer` and `Integration` roles hold unfiltered `CanCreate`/`CanUpdate`/`CanDelete` on both entities. Reproduced end to end on the real stack before the fix: a caller whose `Type` is `'User'`, holding only `Developer` and `UI`, inserted a row granting itself `Integration` (`Validate()` passed, `Save()` returned `true`), and separately created a brand-new role.
+
+  **`MJUserRoleEntityServer`** — a non-Owner may only grant, move or revoke a role they themselves hold. That subset rule is a ceiling: whatever a non-Owner does through this entity, the authority they hand out is authority they already had, so no sequence of calls lets a caller exceed their own grant. Delegated administration, IdP/group sync and onboarding automation — the legitimate non-Owner uses `User.Type` does not have — all keep working. On an update the pre-save `RoleID` is checked as well as the new one, so an assignment cannot be repointed to strip someone of a role the caller does not hold. `UserID` is deliberately not frozen: moving a grant between users stays inside the same ceiling. One consequence of that is chosen knowingly rather than incidental — because revocation shares the granting ceiling, a non-Owner may repoint or delete **any** user's assignment of a role the caller also holds, including an Owner's. That is not escalation: Owner authority lives in `User.Type`, which #4260 froze, and not in a role. It does let one non-Owner strip peers of a role they share, which is deprivation rather than elevation — reversible by an Owner and recorded in Record Changes. Narrowing revocation to the caller's own row would close it only by breaking delegated administration, the legitimate non-Owner use this rule exists to preserve.
+
+  **`MJRoleEntityServer`** — a non-Owner may not create, change or delete a role. Every field on this entity is authority-bearing: `Name` is what user/role synchronization matches on, `DirectoryID` maps an external directory group to the role, and `SQLName` decides which database role CodeGen grants object rights to.
+
+  Both guards override `Save()` and `Delete()` alongside `Validate()`, so the rules hold on every write path — GraphQL resolvers, Remote Operations, the Create/Update/Delete Record actions, metadata sync, one-off scripts — and cannot be switched off by the `ReplayOnly` save option, which skips `Validate()` while still performing the write. Both are pure: they read only the record's own field state and the caller's already-cached roles, so they cost nothing per save and are unit-testable without a database.
+
+  **Upgrade notes.**
+  - **Explorer's role-management screen stops working for non-Owner administrators.** It has no Owner gate of its own today, so a Developer-role non-Owner reaches it in practice; creating, renaming and deleting roles from it are now refused with a message naming the rule. This is the same trade-off #4260 accepted for the user-management screen.
+  - **Explorer's bulk role assignment now checks each `Save()` return.** `executeBulkRoleAssign` enrols each row in a transaction group, where `Save()` reports only _enrolment_ — the provider queues the item locally and returns `true` without a round trip. A row refused **client-side** (a `CheckPermissions` denial or a field-rule failure) does return `false` and is never enrolled; that return was ignored, so an all-refused batch left the group empty, and an empty group's `Submit()` returns `true` for having nothing to do — the screen reported success having assigned nothing. It now collects each such refusal with the user it applies to and surfaces them.
+
+    To be precise about what this does **not** cover: the role-elevation guard added here is server-side only (`@memberjunction/core-entities-server` is not a browser dependency), so it refuses during `Submit()`, not during `Save()` — and that refusal currently reaches the user nowhere at all. `ExecuteTransactionGroup` on the server discards its own `Save()`/`Delete()` return values, so a refused row never enrols in the server's group either; an all-refused batch submits an empty group, whose `Submit()` returns `true` for having nothing to do, and the screen closes with no message. Verified end to end against a live server: a non-Owner assigning a role they do not hold is correctly **refused** — no row is written, the guard works — but is **reported as success**. This is a pre-existing gap in that resolver (it predates this PR and equally affects `MJ: Users` via issue #4260), tracked as issue #4309 and deliberately not closed here.
+
+  - **`AssignUserRolesAction` now fails the whole batch when the caller does not hold the role.** The core action (`CoreActions/src/custom/user-management/assign-user-roles.action.ts`) builds its `MJ: User Roles` object with `params.ContextUser` and assigns atomically, so a refused `Save()` rolls the transaction back and the action returns `Success: false` with `ResultCode: 'FAILED'` carrying the guard's message. Nothing is partially assigned and nothing is swallowed — unlike the transaction-group paths above, this one already reports its refusal. The "onboarding automation" the subset rule preserves is therefore preserved exactly where the automation's context user holds the role being granted: an automation running as a non-Owner that grants roles its own context user does not hold must be given those roles, or an Owner context user.
+  - **`SyncRoles` / `SyncUsers` / `SyncRolesAndUsers` are unaffected on a default install** — all three carry `@RequireSystemUser()`, and `getSystemUser()` resolves the seeded `Type='Owner'` system user. A deployment whose system user is **not** an Owner will see those sync paths fail closed at the save, loudly rather than silently, for the same reason #4260 documented.
+  - **Not closed by this change:** `MJ: Entity Permissions` carries the same unfiltered `Developer`/`Integration` grant, so a holder of either role can still widen a role's permissions directly. That is an independent route with its own decision to make about the invariant, so it is deliberately out of scope here rather than fixed in passing; this changeset does not claim to close it.
+
+  New unit coverage in MJCoreEntitiesServer (41 tests across both guards, including the pre-fix reproduction) and a new deterministic integration bundle, **IT89 — Role Privilege Elevation Guard** (`role-elevation`, RE1–RE6), which proves the ClassFactory wiring and both guards against a real provider the way IT88 does for `MJ: Users`.
+
+- 041865c: Fix mixed-provider deadlocks on nested mj sync push (Action + Action Params).
+
+  `GetEntityObject` now always `BindProvider(this)` after construct so a 1-arg subclass (`MJActionEntityServer` et al.) cannot silently drop the graph instance and Save on the global host. Every `BaseEntity` instance RunView uses `ProviderToUse`. MetadataSync isolates one provider per JSON-root graph; it drains a graph when its last level finishes or when TransactionDepth is already 0 (Save settled — a fresh instance at the next level is safe). Leftover depth is committed on success and explicitly rolled back on failure; always release. Fail-fast on the first thrown record error. A non-throwing `status: 'error'` no longer commits. If the first CreateIndependentInstance in a file fails, every graph uses the host; if it fails after independents already exist, the file aborts — never a mix. GeoCodeSyncService writes RecordGeoCode on the owning entity's provider.
+
+- d0eab88: Security: a non-Owner can no longer create, delete, or change privileged fields on `MJ: Users` rows (#4260)
+
+  `MJ: Users` now has a server-side entity subclass enforcing, for any caller whose `Type` is not `'Owner'`:
+  - **Create is refused outright.** The two config-driven creators of a `MJ: Users` row (JWT auto-provisioning, magic-link provisioning) resolve their creating user against the deployment's `contextUserForNewUserCreation` / `contextUserForProvisioning` setting, which — under the shipped default — names the seeded Owner-type system user. This closes a bypass where a non-Owner could instead create a row with a chosen `Name` (which has no unique index) matching that configured string, and win the "lowest ID" tiebreak `resolvePrincipalFrom` uses to pick which user the server provisions as.
+  - **`Type` may not be changed** on an existing row — it is the column every Owner check in the platform reads, so writing it was equivalent to granting yourself superuser.
+  - **Only the caller's own row may be modified**, compared against the pre-save `ID` so that rewriting `ID` cannot bypass it. If the pre-save identity cannot be established at all, the save is now refused rather than silently allowed.
+  - **`Name` may not be changed** on an existing row — the same `resolvePrincipalFrom` matching described above runs on update too, so renaming yourself is an equally valid path to the same redirection.
+  - **Delete is refused outright.** MJ deactivates users via `IsActive`; it does not delete them, and an unguarded delete let a non-Owner remove any account, Owners included.
+
+  Owner-type callers — admins, and the seeded system user that auto-provisioning and magic-link provisioning run as under the shipped default — are exempt from all of the above, so user administration and JWT/magic-link provisioning are unaffected for a default install. `FirstName`, `LastName`, `Title` and `Email` remain freely editable by their owner.
+
+  **Upgrade note — read before upgrading if you have customized user provisioning or administer users through a non-Owner role:**
+  - **The broadest change: a non-Owner can no longer modify any OTHER user's row at all**, not merely the `Type` and `Name` fields (both of which are themselves _new_ restrictions in this same changeset, not pre-existing ones — see above). Every field on a row that is not the caller's own is now refused for a non-Owner caller. Concretely, this breaks Explorer's user-management screen for any role but Owner: `user-management.component.ts` has no Owner-only gate of its own, so a `Developer`-role admin who already reaches it today edits other users via `user-dialog.component.ts:181` and deactivates them via `toggleUserStatus` (`user-management.component.ts:570`) — after this change, **every one of those saves is refused** for a non-Owner. That is the screen's primary function.
+  - If your `contextUserForNewUserCreation` or `contextUserForProvisioning` setting names a **non-Owner** user's `Name` or `Email` (the resolution ladder matches those two rungs without checking `Type`; only its System-by-ID and lowest-ID-Owner rungs guarantee an Owner), JWT auto-provisioning and magic-link provisioning will now **fail closed** at save time instead of silently creating rows as that non-Owner. Point the setting at an Owner-type user before upgrading.
+  - **Deployments that grant non-Owner roles (e.g. `Developer`, `Integration`) update/create/delete access on `MJ: Users` should treat all of the above — create, delete, editing another user's row, and the `Type`/`Name` restrictions — as new behavior for that role**, not as pre-existing restrictions this release only tightens.
+
+  This closes the capability half of #4260. The reachability half was fixed separately by narrowing the shipped `newUserRoles` default to `['UI']`. The guard is the durable fix of the two: it holds for any role a deployment grants, including custom ones, on every write path, whereas the config default only governs who gets the seeded roles. Enforcement is in `Validate()` plus `Save()` and `Delete()` overrides — the overrides matter because `BaseEntity.Save()` skips `Validate()` entirely for a `ReplayOnly` save without suppressing the write, so a validation-only guard would have been switchable off by a save option.
+
+- Updated dependencies [634aa8c]
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [b8c2e33]
+- Updated dependencies [d38845a]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [b9de989]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [806e7f2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [0db6105]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai-core-plus@6.1.0-edge.6
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/communication-types@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/sql-parser@6.1.0-edge.6
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.6
+  - @memberjunction/integration-engine@6.1.0-edge.6
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.6
+  - @memberjunction/ai-engine-base@6.1.0-edge.6
+  - @memberjunction/tag-engine@6.1.0-edge.6
+  - @memberjunction/ai-prompts@6.1.0-edge.6
+  - @memberjunction/scheduling-engine@6.1.0-edge.6
+  - @memberjunction/templates@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/communication-engine@6.1.0-edge.6
+  - @memberjunction/doc-utils@6.1.0-edge.6
+  - @memberjunction/integration-pk-classifier@6.1.0-edge.6
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.6
+  - @memberjunction/ai-vectordb@6.1.0-edge.6
+  - @memberjunction/sql-converter@6.1.0-edge.6
+  - @memberjunction/predictive-studio-core@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Minor Changes

@@ -9,7 +9,23 @@
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
       "AgentTypePromptParams": {},
-      "IconClass": "fa-solid fa-infinity"
+      "IconClass": "fa-solid fa-infinity",
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 8000,
+            "actionNames": [
+              "Web Page Content",
+              "Get Weather",
+              "Census Data Lookup",
+              "Get Stock Price",
+              "Google Custom Search",
+              "Perplexity Search"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [
@@ -120,8 +136,8 @@
       "ID": "55399C30-C59B-47D2-A856-640DA89C46E4"
     },
     "sync": {
-      "lastModified": "2026-06-14T22:05:07.319Z",
-      "checksum": "ee3d81d2f2d59ae055413bc5215b2c09bee8d4275fa73e20bcead78004a6f3b4"
+      "lastModified": "2026-09-12T15:03:56.944Z",
+      "checksum": "7ffff15e6c88985d97e6a2dbf3b433e392134f100b9e774aaa5d89659b77960c"
     }
   },
   {
@@ -149,6 +165,22 @@
         "includeMessageExpansionDocs": false,
         "includeVariableRefsDocs": false,
         "includePayloadInPrompt": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 8000,
+            "actionNames": [
+              "Web Page Content",
+              "Get Weather",
+              "Census Data Lookup",
+              "Get Stock Price",
+              "Google Custom Search",
+              "Perplexity Search"
+            ]
+          }
+        }
       }
     },
     "relatedEntities": {
@@ -260,8 +292,8 @@
       "ID": "2E081955-B2FD-4E13-81DF-5DC7C59126BE"
     },
     "sync": {
-      "lastModified": "2026-03-13T19:10:48.447Z",
-      "checksum": "c866b0168549aee6b1098b0e2afbdedf0cbf30ef2337c0e405083cc38b34598e"
+      "lastModified": "2026-09-12T15:03:56.938Z",
+      "checksum": "acf0a1ec635a19a6a622eb6e5f4e8ad20dc634a33fcfcd1830eb81cb8d7f03d5"
     }
   },
   {
@@ -273,7 +305,23 @@
       "Status": "Active",
       "ExecutionOrder": 0,
       "ExposeAsAction": true,
-      "IconClass": "fa-solid fa-diagram-project"
+      "IconClass": "fa-solid fa-diagram-project",
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 8000,
+            "actionNames": [
+              "Web Page Content",
+              "Get Weather",
+              "Census Data Lookup",
+              "Get Stock Price",
+              "Google Custom Search",
+              "Perplexity Search"
+            ]
+          }
+        }
+      }
     },
     "relatedEntities": {
       "MJ: AI Agent Prompts": [],
@@ -566,8 +614,8 @@
       "ID": "9B89A9E8-2BBB-46DE-A51A-A548FA9796C3"
     },
     "sync": {
-      "lastModified": "2026-08-20T22:30:09.106Z",
-      "checksum": "2a0b3ea8e311a9d4c5eedbf0fb1c406f5d9302d5459ff52d380f1845abed8d65"
+      "lastModified": "2026-09-12T15:03:56.943Z",
+      "checksum": "7012e0dbf788340399978a6703f3af4255cf4469a152471e5ccd889d4531230e"
     }
   },
   {

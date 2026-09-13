@@ -118,6 +118,7 @@ vi.mock('@memberjunction/ai-vector-sync', () => ({
 vi.mock('@memberjunction/templates', () => ({
     TemplateEngineServer: {
         Instance: {
+            Config: vi.fn().mockResolvedValue(undefined),
             Templates: [
                 {
                     ID: 'tmpl-1',
@@ -407,6 +408,41 @@ describe('AutotagEntity', () => {
             const result = await provider.SetContentItemsToProcess([mockContentSource as never]);
             // Since checksum matches, UpsertContentItem returns null → no items to process
             expect(result).toHaveLength(0);
+        });
+
+        it('stores a composite-keyed record\'s whole key as the ERD RecordID (never just the first column)', async () => {
+            // Configured (non-MJ) entity keyed by (OrderID, LineNo) — there is no ID column at all.
+            const compositeEntity = {
+                ID: 'ent-1', Name: 'Order Lines',
+                PrimaryKeys: [{ Name: 'OrderID' }, { Name: 'LineNo' }],
+                Fields: [{ Name: 'OrderID', IsNameField: false }, { Name: 'LineNo', IsNameField: false }, { Name: 'Product', IsNameField: true, Sequence: 1 }],
+                NameField: undefined,
+            };
+            Object.defineProperty(provider, 'ProviderToUse', {
+                configurable: true,
+                get: () => ({ EntityByID: () => compositeEntity, GetEntityObject: mockGetEntityObject }),
+            });
+            // Autotag() normally wires the engine before SetContentItemsToProcess runs; seed it directly here.
+            (provider as unknown as { engine: typeof mockEngineInstance }).engine = mockEngineInstance;
+            const row = { OrderID: '11055', LineNo: 3, Product: 'Widget' };
+            // Earlier pipeline tests queue *Once values they never consume; start from a clean queue.
+            mockRunView.mockReset();
+            mockParse.mockReset();
+            mockParse.mockResolvedValue('Rendered template text for the record.');
+            mockRunView
+                .mockResolvedValueOnce({ Success: true, Results: [mockEntityDoc] }) // LoadEntityDocument
+                .mockResolvedValueOnce({ Success: true, Results: [row] })           // GetModifiedRecords
+                .mockResolvedValueOnce({ Success: true, Results: [] })              // LoadExistingERDs
+                .mockResolvedValueOnce({ Success: true, Results: [] });             // LoadExistingContentItems
+
+            const result = await provider.SetContentItemsToProcess([mockContentSource as never]);
+
+            expect(result).toHaveLength(1);
+            // First GetEntityObject call in the pipeline creates the EntityRecordDocument.
+            const erd = await mockGetEntityObject.mock.results[0].value as { RecordID?: string; EntityID?: string };
+            expect(erd.EntityID).toBe('ent-1');
+            expect(erd.RecordID).toBe('OrderID|11055||LineNo|3');
+            expect(result[0].Name).toBe('Widget');
         });
     });
 });

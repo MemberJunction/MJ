@@ -231,7 +231,7 @@ export class MCPServerDialogComponent extends BaseAngularComponent implements On
             const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
 
             if (this.IsEditMode && this.server) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.server.ID }]));
+                await entity.InnerLoad(CompositeKey.FromID(this.server.ID));
             } else {
                 entity.NewRecord();
             }

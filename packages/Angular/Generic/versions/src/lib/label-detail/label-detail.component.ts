@@ -218,7 +218,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         try {
             const md = this.ProviderToUse;
             const label = await md.GetEntityObject<MJVersionLabelEntity>('MJ: Version Labels');
-            await label.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.Label.ID }]));
+            await label.InnerLoad(CompositeKey.FromID(this.Label.ID));
             label.Status = 'Archived';
             const saved = await label.Save();
             if (saved) {
@@ -299,7 +299,9 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         try {
             const input = new EntityRecordNameInput();
             input.EntityName = entityName;
-            input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+            // RecordID is a CompositeKey segment ("ID|<uuid>", or composite) — parse it against the
+            // entity's real key column(s) rather than stripping the prefix and assuming `ID`.
+            input.CompositeKey = CompositeKey.FromURLSegment(this.metadata.EntityByName(entityName), this.Label.RecordID ?? '');
 
             const results = await this.metadata.GetEntityRecordNames([input]);
             const recordName = results.length > 0 && results[0].Success ? results[0].RecordName : undefined;
@@ -528,13 +530,19 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
                 {
                     EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${oldChangeId}'`,
-                    Fields: ['FullRecordJSON'],
+                    // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+                    // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot
+                    // be resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+                    Fields: ['EntityID', 'FullRecordJSON'],
                     ResultType: 'simple'
                 },
                 {
                     EntityName: 'MJ: Record Changes',
                     ExtraFilter: `ID = '${newChangeId}'`,
-                    Fields: ['FullRecordJSON'],
+                    // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+                    // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot
+                    // be resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+                    Fields: ['EntityID', 'FullRecordJSON'],
                     ResultType: 'simple'
                 }
             ]);
@@ -738,11 +746,11 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         this.cdr.markForCheck();
 
         try {
+            const groupEntity = this.metadata.EntityByName(group.EntityName);
             const inputs: EntityRecordNameInput[] = group.Items.map(item => {
-                const rawId = this.extractRawRecordId(item.RecordID);
                 const input = new EntityRecordNameInput();
                 input.EntityName = group.EntityName;
-                input.CompositeKey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+                input.CompositeKey = CompositeKey.FromURLSegment(groupEntity, item.RecordID);
                 return input;
             });
 
@@ -868,7 +876,7 @@ export class MjLabelDetailComponent extends BaseAngularComponent implements OnIn
         if (!this.Label.EntityID || !this.Label.RecordID) return;
         const entityName = this.resolveEntityName(this.Label.EntityID);
         const rawId = this.extractRawRecordId(this.Label.RecordID);
-        const pkey = new CompositeKey([{ FieldName: 'ID', Value: rawId }]);
+        const pkey = CompositeKey.FromURLSegment(this.metadata.EntityByName(entityName), this.Label.RecordID);
         this.EntityLinkClick.emit({
             EntityName: entityName,
             RecordID: rawId,

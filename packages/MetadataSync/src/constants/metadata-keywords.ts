@@ -118,6 +118,18 @@ export const METADATA_KEYWORDS = {
   TEMPLATE: '@template:',
 
   /**
+   * @owner: - References a field from the in-memory owner record
+   *
+   * In composition axes (collections, extensions), accesses a field value from the
+   * in-memory owner entity instance before save.
+   *
+   * @example
+   * "@owner:ShipToPersonID"
+   * "@owner:ID"
+   */
+  OWNER: '@owner:',
+
+  /**
    * @include or @include.* - Includes content from another file
    *
    * Special directive (not a field value) that merges content from external files.
@@ -139,7 +151,7 @@ export type MetadataKeyword = typeof METADATA_KEYWORDS[keyof typeof METADATA_KEY
 /**
  * Type representing metadata keyword types (without the colon for keywords that have it).
  */
-export type MetadataKeywordType = 'file' | 'lookup' | 'parent' | 'root' | 'env' | 'url' | 'template' | 'include';
+export type MetadataKeywordType = 'file' | 'lookup' | 'parent' | 'root' | 'owner' | 'env' | 'url' | 'template' | 'include';
 
 /**
  * Array of all metadata keyword prefixes for iteration.
@@ -307,6 +319,7 @@ export function extractKeywordValue(value: string): string | null {
 export const CONTEXT_DEPENDENT_KEYWORDS = [
   METADATA_KEYWORDS.PARENT,
   METADATA_KEYWORDS.ROOT,
+  METADATA_KEYWORDS.OWNER,
 ] as const;
 
 /**

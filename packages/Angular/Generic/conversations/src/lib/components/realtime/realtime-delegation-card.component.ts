@@ -56,9 +56,9 @@ export class RealtimeDelegationCardComponent {
   /** Whether the done chip is expanded inline to show the full result text. */
   public Expanded = false;
 
-  /** The artifacts this (done) delegation produced (empty array while running / when none). */
+  /** The artifacts this (done) delegation produced (empty array while running / when none). Suppressed for direct actions. */
   public get Artifacts(): ParsedDelegationArtifact[] {
-    return this.Card.Done && this.Card.Artifacts ? this.Card.Artifacts : [];
+    return this.Card.Done && this.Card.Kind !== 'action' && this.Card.Artifacts ? this.Card.Artifacts : [];
   }
 
   /** Emits the open-artifact request for one of this card's produced artifacts. */
@@ -67,9 +67,9 @@ export class RealtimeDelegationCardComponent {
     this.OpenArtifactRequested.emit(artifact);
   }
 
-  /** True when the dev "Open run" link should render (gear on + run id known). */
+  /** True when the dev "Open run" link should render (gear on + run id known). Suppressed for direct actions. */
   public get ShowOpenRun(): boolean {
-    return this.DevMode && !!this.Card.RunID;
+    return this.DevMode && this.Card.Kind !== 'action' && !!this.Card.RunID;
   }
 
   /** Emits the open-run request for this card's delegated run. */
@@ -105,7 +105,9 @@ export class RealtimeDelegationCardComponent {
   public get ResultText(): string {
     return this.Card.Result
       || this.Card.LatestMessage
-      || `${this.Card.AgentName} completed the delegated work.`;
+      || (this.Card.Kind === 'action'
+        ? `${this.Card.AgentName} executed.`
+        : `${this.Card.AgentName} completed the delegated work.`);
   }
 
   /** One-line, ~120-char preview of the result for the collapsed chip. */
@@ -117,6 +119,9 @@ export class RealtimeDelegationCardComponent {
 
   /** Tooltip text for the provenance shield icon. */
   public get ProvenanceTitle(): string {
+    if (this.Card.Kind === 'action') {
+      return `Result produced directly by the ${this.Card.AgentName} action.`;
+    }
     const run = this.Card.RunRef ? ` (run ${this.Card.RunRef})` : '';
     return `Result produced by ${this.Card.AgentName}'s own agent run${run} — not invented by the voice co-agent.`;
   }

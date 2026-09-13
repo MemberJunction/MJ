@@ -259,17 +259,15 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
      * placeholders substituted above are likewise left alone: they are request-level parameters,
      * already globally numbered, and intentionally shared across the batch.
      *
-     * Only `DECLARE @name` is recognised, which covers every shape the generators emit today (one
-     * variable per DECLARE). A comma-separated declaration list would leave its second and later
-     * variables unscoped — that degrades to the SAME loud duplicate-name error rather than to
-     * silent corruption, so it fails visibly if a generator ever starts emitting them.
+     * Every name in a `DECLARE` list is recognised, including comma-separated continuations
+     * (`DECLARE @a INT,\n    @b NVARCHAR(50)`), which is the shape `RenderSaveCallBinding` emits
+     * for every save. Commas inside a type (`DECIMAL(18, 4)`, a table-variable column list) are
+     * not separators. Until this was fixed only the FIRST name of a list was scoped and the rest
+     * stayed distinct only because each item's save-call suffix happened to differ.
      */
     public static scopeItemVariables(sql: string, index: number): string {
         const masked = SQLServerTransactionGroup.maskNonCode(sql);
-        const declared = new Set<string>();
-        for (const m of masked.matchAll(/\bDECLARE\s+@([A-Za-z_][A-Za-z0-9_$#@]*)/gi)) {
-            declared.add(m[1].toLowerCase());
-        }
+        const declared = SQLServerTransactionGroup.collectDeclaredNames(masked);
         if (declared.size === 0) return sql;
 
         // Positions where an `@name` is a CALLEE'S PARAMETER NAME rather than a reference to one of
@@ -308,6 +306,53 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
             cursor = e.end;
         }
         return out + sql.slice(cursor);
+    }
+
+    /**
+     * Names declared by every `DECLARE` statement in `masked` (comments and strings already
+     * blanked by {@link maskNonCode}), lower-cased. Walks the whole declaration list: a name is
+     * declared when it directly follows `DECLARE` or a top-level comma. Parentheses are tracked so
+     * commas inside `DECIMAL(18, 4)` or a table-variable column list do not start a new entry, and
+     * `DECLARE @x INT = @y` does not claim `@y`. A list ends at `;`, at a blank line, or at a line
+     * whose first token is neither `@` nor `,` — the next statement.
+     */
+    private static collectDeclaredNames(masked: string): Set<string> {
+        const declared = new Set<string>();
+        const nameAt = /@([A-Za-z_][A-Za-z0-9_$#@]*)/y;
+        const nextTokenAt = /[ \t\r]*(\S)/y;
+        for (const d of masked.matchAll(/\bDECLARE\b/gi)) {
+            let i = d.index! + d[0].length;
+            let depth = 0;
+            let expectName = true;
+            while (i < masked.length) {
+                const ch = masked[i];
+                if (ch === '(') { depth++; i++; continue; }
+                if (ch === ')') { depth = Math.max(0, depth - 1); i++; continue; }
+                if (depth === 0 && ch === ';') break;
+                if (depth === 0 && ch === ',') { expectName = true; i++; continue; }
+                if (depth === 0 && ch === '\n') {
+                    nextTokenAt.lastIndex = i + 1;
+                    const next = nextTokenAt.exec(masked);
+                    if (!next || (next[1] !== '@' && next[1] !== ',')) break;
+                    i++;
+                    continue;
+                }
+                if (ch === '@') {
+                    nameAt.lastIndex = i;
+                    const name = nameAt.exec(masked);
+                    if (name) {
+                        if (expectName) {
+                            declared.add(name[1].toLowerCase());
+                            expectName = false;
+                        }
+                        i = nameAt.lastIndex;
+                        continue;
+                    }
+                }
+                i++;
+            }
+        }
+        return declared;
     }
 
     /**

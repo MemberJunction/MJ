@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 // ---------------------------------------------------------------------------
 // Mock node:fs/promises, node:fs, node:os, and adm-zip
 // ---------------------------------------------------------------------------
@@ -127,7 +129,105 @@ describe('FileSystemAdapter', () => {
 
       await adapter.ExtractZip('/tmp/release.zip', '/new/path/target');
 
-      expect(mockFsPromises.mkdir).toHaveBeenCalledWith('/new/path/target', { recursive: true });
+      // The directory is created under its resolved name (a drive-letter path on Windows).
+      expect(mockFsPromises.mkdir).toHaveBeenCalledWith(path.resolve('/new/path/target'), { recursive: true });
+    });
+
+    describe('zip slip protection', () => {
+      beforeEach(() => {
+        mockFsPromises.writeFile.mockClear();
+        mockFsPromises.mkdir.mockClear();
+      });
+
+      function entry(entryName: string, isDirectory = false) {
+        return { entryName, isDirectory, getData: () => Buffer.from(isDirectory ? '' : 'data') };
+      }
+      function writtenPaths(): string[] {
+        return mockFsPromises.writeFile.mock.calls.map((c: [string, ...unknown[]]) => c[0]);
+      }
+
+      it.each([
+        ['a leading ..', [entry('safe.txt'), entry('../escape.txt')]],
+        [
+          'an escape hidden under a single root folder',
+          [entry('MJ-abc/', true), entry('MJ-abc/package.json'), entry('MJ-abc/../../escape.txt')],
+        ],
+        ['an absolute entry name', [entry('a.txt'), entry('/etc/passwd')]],
+        ['an escaping directory entry', [entry('ok/', true), entry('../outside/', true)]],
+        ['a sibling directory sharing the target prefix', [entry('a.txt'), entry('../target2/x.txt')]],
+        ['an entry that is exactly ..', [entry('a.txt'), entry('..', true)]],
+        ['an archive whose only root is ..', [entry('../a.sh'), entry('../b.sh')]],
+        ['an archive whose every entry is absolute', [entry('/etc/passwd'), entry('/etc/shadow')]],
+      ])('should refuse %s without writing anything', async (_label, entries) => {
+        mockGetEntries.mockReturnValue(entries);
+
+        await expect(adapter.ExtractZip('/tmp/evil.zip', '/target')).rejects.toThrow(
+          /resolves outside the target directory/
+        );
+        expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+        expect(mockFsPromises.mkdir).not.toHaveBeenCalled();
+      });
+
+      it('should refuse a hostile entry placed last before any earlier entry is written', async () => {
+        mockGetEntries.mockReturnValue([
+          entry('a/', true),
+          entry('a/one.txt'),
+          entry('a/two.txt'),
+          entry('a/../../late.txt'),
+        ]);
+
+        await expect(adapter.ExtractZip('/tmp/evil.zip', '/target')).rejects.toThrow(
+          /resolves outside the target directory/
+        );
+        expect(mockFsPromises.writeFile).not.toHaveBeenCalled();
+        expect(mockFsPromises.mkdir).not.toHaveBeenCalled();
+      });
+
+      it('should still extract well-formed entries that merely contain dots', async () => {
+        // Two top-level names, so the single-root-folder stripping does not apply.
+        mockGetEntries.mockReturnValue([
+          entry('README.md'),
+          entry('a/', true),
+          entry('a/.env.example'),
+          entry('a/b..c/file.txt'),
+          entry('a/..hidden/x'),
+        ]);
+        mockFsPromises.readdir.mockResolvedValue(['README.md', 'a']);
+
+        await expect(adapter.ExtractZip('/tmp/ok.zip', '/target')).resolves.toEqual(['README.md', 'a']);
+        expect(writtenPaths()).toEqual([
+          path.resolve('/target', 'README.md'),
+          path.resolve('/target', 'a/.env.example'),
+          path.resolve('/target', 'a/b..c/file.txt'),
+          path.resolve('/target', 'a/..hidden/x'),
+        ]);
+      });
+
+      it('should extract into a filesystem root without refusing anything', async () => {
+        mockGetEntries.mockReturnValue([entry('README.md'), entry('a/', true), entry('a/file.txt')]);
+        mockFsPromises.readdir.mockResolvedValue(['README.md', 'a']);
+
+        await expect(adapter.ExtractZip('/tmp/ok.zip', '/')).resolves.toEqual(['README.md', 'a']);
+        expect(writtenPaths()).toEqual([path.resolve('/', 'README.md'), path.resolve('/', 'a/file.txt')]);
+      });
+
+      it('should not leak control characters from a hostile entry name into the error message', async () => {
+        mockGetEntries.mockReturnValue([entry('a.txt'), entry('../x\u001b[2K\u001b[1AExtraction complete\n')]);
+
+        await expect(adapter.ExtractZip('/tmp/evil.zip', '/target')).rejects.toSatisfy((err: Error) => {
+          expect(err.message).toContain('resolves outside the target directory');
+          expect(err.message).not.toMatch(/[\u0000-\u001f\u007f]/);
+          return true;
+        });
+      });
+
+      it('should skip entries that resolve to the target directory itself', async () => {
+        mockGetEntries.mockReturnValue([entry('.'), entry('./', true), entry('a.txt')]);
+        mockFsPromises.readdir.mockResolvedValue(['a.txt']);
+
+        await expect(adapter.ExtractZip('/tmp/ok.zip', '/target')).resolves.toEqual(['a.txt']);
+        expect(writtenPaths()).toEqual([path.resolve('/target', 'a.txt')]);
+      });
     });
   });
 

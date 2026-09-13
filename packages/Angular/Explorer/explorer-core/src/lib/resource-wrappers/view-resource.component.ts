@@ -320,7 +320,10 @@ export class UserViewResource extends BaseResourceComponent {
      */
     public onOpenRelatedRecord(nav: ViewRelatedRecordNavigation): void {
         if (nav?.entityName && nav.recordKey != null) {
-            this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromID(String(nav.recordKey)));
+            // The related entity is arbitrary, so its key column can have any name — resolve the key
+            // against its metadata rather than hardcoding `ID` via FromID.
+            const entityInfo = this.metadata.EntityByName(nav.entityName);
+            this.navigationService.OpenEntityRecord(nav.entityName, CompositeKey.FromURLSegment(entityInfo, String(nav.recordKey)));
         }
     }
 
@@ -424,7 +427,7 @@ export class UserViewResource extends BaseResourceComponent {
      */
     override async GetResourceDisplayName(data: ResourceData): Promise<string> {
         if (data.ResourceRecordID) {
-            const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
+            const compositeKey = CompositeKey.FromID(data.ResourceRecordID); // first-pk-ok: ResourceRecordID of a User Views resource — core entity keyed by ID
             const name = await this.metadata.GetEntityRecordName('MJ: User Views', compositeKey);
             return name ? name : `View: ${data.ResourceRecordID}`;
         }
@@ -499,7 +502,7 @@ export class UserViewResource extends BaseResourceComponent {
                     'success',
                     3000,
                 );
-                this.navigationService.OpenEntityRecord('MJ: Lists', new CompositeKey([{ FieldName: 'ID', Value: result.CreatedListId }]));
+                this.navigationService.OpenEntityRecord('MJ: Lists', CompositeKey.FromID(result.CreatedListId));
             } else {
                 this.showNotification(`Save failed: ${result.Message}`, 'error', 5000);
             }

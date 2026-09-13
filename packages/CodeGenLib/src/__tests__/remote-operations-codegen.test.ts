@@ -11,7 +11,7 @@
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import fs from 'fs';
-import { RemoteOperationGeneratorBase, DEFAULT_REMOTE_OP_LIBRARY_ITEMS } from '../Misc/remote_operations_codegen';
+import { RemoteOperationGeneratorBase, DEFAULT_REMOTE_OP_LIBRARY_ITEMS, resolveRemoteOperationSchema } from '../Misc/remote_operations_codegen';
 import type { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 
 vi.mock('@memberjunction/core-entities', () => ({ MJRemoteOperationEntity: class {} }));
@@ -25,6 +25,7 @@ vi.mock('fs', () => ({
 type OpShape = Partial<{
     Status: string;
     OperationKey: string;
+    SchemaName?: string;
     Name: string;
     Description: string | null;
     GenerationType: string;
@@ -165,6 +166,24 @@ describe('RemoteOperationGeneratorBase', () => {
             expect(out).toContain('export class RecordProcessResumeRunOperation');
             expect(out).toContain('export class RecordProcessCancelRunOperation');
         });
+        it('de-duplicates shared auxiliary types embedded in multi-declaration blocks', async () => {
+            const op1Out = 'export type SharedStatus = "A" | "B";\nexport interface Op1Output {\n    status: SharedStatus;\n}';
+            const op2Out = 'export type SharedStatus = "A" | "B";\nexport interface Op2Output {\n    status: SharedStatus;\n}';
+            const out = await generate([
+                makeOp({ OperationKey: 'Test.Op1', OutputTypeName: 'Op1Output', OutputTypeDefinition: op1Out }),
+                makeOp({ OperationKey: 'Test.Op2', OutputTypeName: 'Op2Output', OutputTypeDefinition: op2Out }),
+            ]);
+            expect(out.match(/export type SharedStatus/g)?.length).toBe(1);
+            expect(out).toContain('export interface Op1Output');
+            expect(out).toContain('export interface Op2Output');
+        });
+        it('preserves inner comments and closing braces within interfaces', async () => {
+            const opOut = 'export interface OpWithCommentsOutput {\n    id: string;\n    /** Inner comment */\n    amount?: number;\n}';
+            const out = await generate([
+                makeOp({ OperationKey: 'Test.OpComments', OutputTypeName: 'OpWithCommentsOutput', OutputTypeDefinition: opOut }),
+            ]);
+            expect(out).toContain('export interface OpWithCommentsOutput {\n    id: string;\n    /** Inner comment */\n    amount?: number;\n}');
+        });
     });
 
     describe('header imports', () => {
@@ -208,6 +227,69 @@ describe('RemoteOperationGeneratorBase', () => {
         it('emits ops sorted by OperationKey', async () => {
             const out = await generate([makeOp({ OperationKey: 'Z.Op' }), makeOp({ OperationKey: 'A.Op' })]);
             expect(out.indexOf('AOpOperation')).toBeLessThan(out.indexOf('ZOpOperation'));
+        });
+    });
+
+    describe('resolveRemoteOperationSchema', () => {
+        const entities = [
+            { Name: 'MJ: Record Processes', BaseTable: 'RecordProcess', SchemaName: '__mj' },
+            { Name: 'MJ: Templates', BaseTable: 'Template', SchemaName: '__mj' },
+            { Name: 'MJ: AI Skills', BaseTable: 'AISkill', SchemaName: '__mj' },
+            { Name: 'MJ_BizApps_Orders: Order Headers', BaseTable: 'OrderHeader', SchemaName: '__mj_BizAppsOrders' },
+            { Name: 'MJ_BizApps_Orders: Orders', BaseTable: 'Order', SchemaName: '__mj_BizAppsOrders' },
+            { Name: 'MJ_BizApps_Sales: Deals', BaseTable: 'Deal', SchemaName: '__mj_BizAppsSales' },
+        ];
+        const schemas = ['__mj', '__mj_BizAppsOrders', '__mj_BizAppsSales', 'app_custom'];
+
+        it('returns explicit SchemaName if present on the entity', () => {
+            const op = Object.assign(makeOp({ OperationKey: 'Orders.PreviewPrice' }), { SchemaName: 'custom_orders' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('custom_orders');
+        });
+
+        it('prioritizes entity match over fuzzy schema name match', () => {
+            // Suppose an entity 'RecordProcess' lives in __mj, even if a schema '__mj_bizappsrecordprocess' existed
+            const entitiesWithCore = [
+                { Name: 'MJ: Record Processes', BaseTable: 'RecordProcess', SchemaName: '__mj' },
+            ];
+            const testSchemas = ['__mj', '__mj_bizappsrecordprocess'];
+            const op = makeOp({ OperationKey: 'RecordProcess.RunNow' });
+            expect(resolveRemoteOperationSchema(op, entitiesWithCore, testSchemas, '__mj')).toBe('__mj');
+        });
+
+        it('resolves schema matching OpenApp namespace (e.g. Orders -> __mj_BizAppsOrders)', () => {
+            const op = makeOp({ OperationKey: 'Orders.PreviewPrice' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
+        });
+
+        it('resolves schema matching OpenApp namespace for Sales -> __mj_BizAppsSales', () => {
+            const op = makeOp({ OperationKey: 'Sales.CloseDeal' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsSales');
+        });
+
+        it('resolves schema via entity BaseTable match (e.g. RecordProcess -> __mj)', () => {
+            const op = makeOp({ OperationKey: 'RecordProcess.RunNow' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
+        });
+
+        it('resolves schema via entity Name match (e.g. AISkill -> __mj)', () => {
+            const op = makeOp({ OperationKey: 'AISkill.ExportMarkdown' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
+        });
+
+        it('core ops without a same-named entity reach core via fallback', () => {
+            const op = makeOp({ OperationKey: 'PredictiveStudio.TrainModel' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj');
+        });
+
+        it('non-core op with resolvable schema does not fall back to core', () => {
+            const op = makeOp({ OperationKey: 'Orders.RefundPayment' });
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).not.toBe('__mj');
+            expect(resolveRemoteOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
+        });
+
+        it('generator method delegates to resolveRemoteOperationSchema', () => {
+            const op = makeOp({ OperationKey: 'Orders.CheckEntitlement' });
+            expect(gen.resolveOperationSchema(op, entities, schemas, '__mj')).toBe('__mj_BizAppsOrders');
         });
     });
 });

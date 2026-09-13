@@ -416,4 +416,229 @@ describe('PayloadManager', () => {
             expect(result.result.level1.level2.level3.other).toBe('preserved');
         });
     });
+
+    // ════════════════════════════════════════════════════════════════════
+    // mergeUpstreamPayload — shells left by deletions vs. legitimately empty data
+    // ════════════════════════════════════════════════════════════════════
+
+    describe('mergeUpstreamPayload — array elements vacated by deletion', () => {
+        interface Dependency {
+            name?: string;
+            namespace?: string;
+            dataRequirements?: { entities: string[] };
+            typeDefinitions?: Record<string, { properties: Record<string, string> }>;
+            properties?: Array<{ name: string; constraints: Array<{ config: Record<string, number> }> }>;
+        }
+        interface DashboardPayload {
+            name: string;
+            dependencies: Dependency[];
+        }
+
+        /**
+         * A sub-agent that legitimately drops one element returns a SHORTER array. Every scalar
+         * under the now-vacant trailing index is deleted, and `_.unset` leaves the containers
+         * that held them. The element must not survive as a nameless shell: downstream consumers
+         * read array elements as real records.
+         */
+        it('should drop an element whose scalars were all deleted, leaving only empty containers', () => {
+            const parent: DashboardPayload = {
+                name: 'Dashboard',
+                dependencies: [
+                    { name: 'Cards', namespace: 'ns' },
+                    { name: 'Chart', namespace: 'ns' },
+                    {
+                        name: 'Grid',
+                        namespace: 'ns2',
+                        dataRequirements: { entities: ['Events'] },
+                        typeDefinitions: { ColumnDef: { properties: { field: 'string' } } },
+                        properties: [{ name: 'columns', constraints: [{ config: { min: 1 } }] }],
+                    },
+                ],
+            };
+            // The sub-agent removed 'Cards' and returned the two survivors.
+            const subAgent: Partial<DashboardPayload> = {
+                name: 'Dashboard',
+                dependencies: [
+                    { name: 'Chart', namespace: 'ns' },
+                    { name: 'Grid', namespace: 'ns2' },
+                ],
+            };
+
+            const merged = pm.mergeUpstreamPayload<DashboardPayload>('TPM', parent, subAgent, ['dependencies.*']);
+
+            expect(merged.result.dependencies.map((d) => d?.name)).toEqual(['Chart', 'Grid']);
+        });
+
+        it('should still drop a literally empty object element', () => {
+            interface Item {
+                keep?: string;
+                gone?: string;
+            }
+            const parent: { items: Item[] } = { items: [{ keep: 'yes' }, { gone: 'value' }] };
+            const subAgent: Partial<{ items: Item[] }> = { items: [{ keep: 'yes' }] };
+
+            const merged = pm.mergeUpstreamPayload<{ items: Item[] }>('sub', parent, subAgent, ['items.*']);
+
+            expect(merged.result.items).toEqual([{ keep: 'yes' }]);
+        });
+
+        it('should preserve elements holding falsy primitives, which are content', () => {
+            interface Flag {
+                enabled: boolean;
+                label?: string;
+            }
+            const parent: { flags: Flag[] } = { flags: [{ enabled: true }, { enabled: false, label: '' }] };
+            const subAgent: Partial<{ flags: Flag[] }> = {
+                flags: [{ enabled: true }, { enabled: false, label: '' }],
+            };
+
+            const merged = pm.mergeUpstreamPayload<{ flags: Flag[] }>('sub', parent, subAgent, ['flags.*']);
+
+            expect(merged.result.flags).toEqual([{ enabled: true }, { enabled: false, label: '' }]);
+        });
+
+        // ─── Regression: the vacancy criterion must never leave its scope ───
+        //
+        // Recursive vacancy ("no primitive content anywhere inside") is the right question to ask
+        // about an element THIS merge just emptied, and the wrong question to ask about anything
+        // else. An all-null query row, an element whose only fields are an empty array and an
+        // empty object, a record under a path the sub-agent cannot write — every one of those is
+        // data the parent owns. Applying the criterion as a global sweep silently deleted them.
+
+        it('should preserve an all-null row through an identity merge', () => {
+            interface OrderRow {
+                MemberName: string | null;
+                OrderTotal: number | null;
+            }
+            const parent: { rows: OrderRow[] } = {
+                rows: [
+                    { MemberName: 'Acme', OrderTotal: 1200 },
+                    { MemberName: null, OrderTotal: null },
+                    { MemberName: 'Zeta', OrderTotal: 300 },
+                ],
+            };
+            // Byte-identical: the sub-agent changed nothing, so the merge must change nothing.
+            const subAgent: Partial<{ rows: OrderRow[] }> = structuredClone(parent);
+
+            const merged = pm.mergeUpstreamPayload<{ rows: OrderRow[] }>('sub', parent, subAgent, ['rows.*']);
+
+            expect(merged.result.rows).toHaveLength(3);
+            expect(merged.result).toEqual(parent);
+        });
+
+        it('should preserve an untouched element whose only fields are [], {} and null', () => {
+            interface Node {
+                name: string | null;
+                tags: string[];
+                config?: Record<string, unknown>;
+                parentId?: string | null;
+            }
+            const parent: { rows: Node[] } = {
+                rows: [
+                    { name: 'keep', tags: ['x'] },
+                    { name: null, tags: [], config: {}, parentId: null },
+                ],
+            };
+            const subAgent: Partial<{ rows: Node[] }> = structuredClone(parent);
+
+            const merged = pm.mergeUpstreamPayload<{ rows: Node[] }>('sub', parent, subAgent, ['rows.*']);
+
+            expect(merged.result.rows).toHaveLength(2);
+            expect(merged.result.rows[1]).toEqual({ name: null, tags: [], config: {}, parentId: null });
+        });
+
+        it('should preserve an empty-looking element under a path the sub-agent cannot write', () => {
+            interface AuditEntry {
+                note: string | null;
+                extras: Record<string, unknown>;
+            }
+            interface GuardedPayload {
+                rows: Array<{ name: string }>;
+                audit: AuditEntry[];
+            }
+            const parent: GuardedPayload = {
+                rows: [{ name: 'Acme' }],
+                audit: [{ note: null, extras: {} }],
+            };
+            // 'audit' is absent from the sub-agent payload, which reads as a deletion attempt —
+            // but 'audit' is not in upstreamPaths, so the guardrail must block it.
+            const subAgent: Partial<GuardedPayload> = { rows: [{ name: 'Acme' }] };
+
+            const merged = pm.mergeUpstreamPayload<GuardedPayload>('sub', parent, subAgent, ['rows.*']);
+
+            expect(merged.result.audit).toEqual([{ note: null, extras: {} }]);
+            // The guardrail recorded the refusal; the payload must agree with the record.
+            expect(merged.blockedOperations?.map((op) => op.operation)).toEqual(['delete', 'delete']);
+            expect(merged.blockedOperations?.every((op) => op.reason === 'path not allowed')).toBe(true);
+        });
+
+        it('should prune a nested array element vacated by deletion, not leave a [null, null] hole', () => {
+            // `_.unset` on an array index deletes the slot without shortening the array, so the
+            // vacated row survives as holes that serialize to nulls. The global sweep exempts
+            // arrays; the scoped prune must not.
+            const parent: { rows: string[][] } = { rows: [['a', 'b'], ['c', 'd']] };
+            const subAgent: Partial<{ rows: string[][] }> = { rows: [['a', 'b']] };
+
+            const merged = pm.mergeUpstreamPayload<{ rows: string[][] }>('sub', parent, subAgent, ['rows.*']);
+
+            expect(merged.result.rows).toHaveLength(1);
+            expect(JSON.stringify(merged.result)).toBe('{"rows":[["a","b"]]}');
+        });
+
+        it('should close the hole when a scalar array is shortened, not leave a trailing null', () => {
+            // The vacated position IS the deleted leaf here — there is no emptied container above
+            // it — so pruning only the leaf's ancestors would leave `["a","c",null]` behind.
+            const parent: { tags: string[] } = { tags: ['a', 'b', 'c'] };
+            const subAgent: Partial<{ tags: string[] }> = { tags: ['a', 'c'] };
+
+            const merged = pm.mergeUpstreamPayload<{ tags: string[] }>('sub', parent, subAgent, ['tags.*']);
+
+            expect(merged.result.tags).toEqual(['a', 'c']);
+            expect(JSON.stringify(merged.result)).toBe('{"tags":["a","c"]}');
+        });
+
+        it('should keep surviving elements in order when non-adjacent elements are pruned', () => {
+            interface Row {
+                tags?: string[];
+                a?: number;
+                b?: number;
+                c?: number;
+                d?: number;
+            }
+            const parent: { rows: Row[] } = {
+                rows: [{ a: 1 }, { tags: ['x'], b: 2 }, { c: 3 }, { tags: ['y'], d: 4 }],
+            };
+            // Rows 1 and 3 are emptied while row 2 survives between them. Pruning lowest index
+            // first would shift row 3 down into slot 2, so the queued index 3 would run off the
+            // end of the array and strand a shell — hence the descending removal order.
+            const subAgent: Partial<{ rows: Row[] }> = {
+                rows: [{ a: 1 }, { tags: [] }, { c: 3 }, { tags: [] }],
+            };
+
+            const merged = pm.mergeUpstreamPayload<{ rows: Row[] }>('sub', parent, subAgent, ['rows.*']);
+
+            expect(merged.result.rows).toEqual([{ a: 1 }, { c: 3 }]);
+        });
+
+        it('should still remove a literal {} element under a path the merge never touched', () => {
+            // Pre-existing global behavior, unrelated to this merge's deletions: a key-less object
+            // element is swept wherever it sits. Kept for backward compatibility.
+            interface Untouched {
+                real?: number;
+            }
+            interface MixedPayload {
+                rows: Array<{ name: string }>;
+                untouched: Untouched[];
+            }
+            const parent: MixedPayload = {
+                rows: [{ name: 'Acme' }],
+                untouched: [{ real: 1 }, {}],
+            };
+            const subAgent: Partial<MixedPayload> = { rows: [{ name: 'Acme' }] };
+
+            const merged = pm.mergeUpstreamPayload<MixedPayload>('sub', parent, subAgent, ['rows.*']);
+
+            expect(merged.result.untouched).toEqual([{ real: 1 }]);
+        });
+    });
 });

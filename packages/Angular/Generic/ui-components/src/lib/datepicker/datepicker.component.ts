@@ -61,7 +61,15 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
   @Input() Max: Date | null = null;
   @Input() Format = 'MM/dd/yyyy';
   @Input() Placeholder = '';
-  @Input() Disabled = false;
+  /**
+   * Host-driven disable. Composed with Angular Forms' `setDisabledState()` into `IsDisabled`
+   * (the actual gate) — see `syncDisabled`. A setter, not a bare field, because this input is
+   * routinely bound to an expression that changes over the control's lifetime, and the gate has
+   * to follow it every time.
+   */
+  @Input()
+  set Disabled(value: boolean) { this.disabledInput = value; this.syncDisabled(); }
+  get Disabled(): boolean { return this.disabledInput; }
   @Output() ValueChange = new EventEmitter<Date | null>();
   @ViewChild('trigger') private triggerEl!: ElementRef<HTMLElement>;
   @HostBinding('class.mj-datepicker-host') readonly hostClass = true;
@@ -87,6 +95,31 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
     this.Weeks = BuildCalendarWeeks(this.viewDate); this.IsOpen = true; this.cdr.detectChanges();
   }
   Close(): void { if (!this.IsOpen) return; this.IsOpen = false; this.cdr.detectChanges(); }
+
+  /** Backing field for the `Disabled` input. */
+  private disabledInput = false;
+  /** The forms-driven disabled state, kept SEPARATE so neither source can stomp the other. */
+  private formDisabled = false;
+
+  /**
+   * Recompute the gate from both of its sources. Called whenever either changes.
+   *
+   * `IsDisabled` is derived state, and the only thing that assigned it was `setDisabledState()`.
+   * The forms-driven half was in fact fine — `setUpControl` also wires `registerOnDisabledChange`,
+   * so that hook fires on every `control.disable()`/`enable()`, not just at registration. What had
+   * no recompute path at all was the `Disabled` @Input: a plain field, so the gate froze at
+   * whatever the first compose produced and every later change to the input was dropped.
+   *
+   * Closes the calendar directly rather than via `Close()`: this can run from an @Input setter,
+   * i.e. DURING the parent's CD pass, where a nested `detectChanges()` trips NG0100.
+   */
+  private syncDisabled(): void {
+    const disabled = this.disabledInput || this.formDisabled;
+    if (disabled === this.IsDisabled) return;
+    this.IsDisabled = disabled;
+    if (disabled) this.IsOpen = false;
+    this.cdr.markForCheck();
+  }
   PreviousMonth(): void { this.viewDate = new Date(this.viewDate.getFullYear(), this.viewDate.getMonth() - 1, 1); this.Weeks = BuildCalendarWeeks(this.viewDate); }
   NextMonth(): void { this.viewDate = new Date(this.viewDate.getFullYear(), this.viewDate.getMonth() + 1, 1); this.Weeks = BuildCalendarWeeks(this.viewDate); }
 
@@ -125,6 +158,6 @@ export class MJDatepickerComponent implements ControlValueAccessor, OnDestroy {
   }
   registerOnChange(fn: (value: Date | null) => void): void { this.onChange = fn; }
   registerOnTouched(fn: () => void): void { this.onTouched = fn; }
-  setDisabledState(isDisabled: boolean): void { this.IsDisabled = isDisabled || this.Disabled; }
+  setDisabledState(isDisabled: boolean): void { this.formDisabled = isDisabled; this.syncDisabled(); }
   ngOnDestroy(): void { this.Close(); }
 }

@@ -85,7 +85,9 @@ export async function applyOutputMapping(opts: {
             out.previewFields = resolved;
         } else {
             const obj = await provider.GetEntityObject<BaseEntity>(entity.Name, contextUser);
-            const loaded = await obj.InnerLoad(CompositeKey.FromKeyValuePair(entity.FirstPrimaryKey.Name, record.RecordID));
+            // RecordID is the compact CompositeKey segment sourceUtil.serializeRecordId wrote (bare value
+            // for a single column, "F1|v1||F2|v2" for composite) — parse it, don't assume one column.
+            const loaded = await obj.InnerLoad(CompositeKey.FromURLSegment(entity, record.RecordID));
             if (!loaded) {
                 throw new Error(`applyOutputMapping: record '${record.RecordID}' of '${entity.Name}' not found`);
             }
@@ -119,7 +121,9 @@ export async function applyOutputMapping(opts: {
             if (!saved) {
                 throw new Error(`applyOutputMapping: failed creating '${outputMapping.childRecord.entity}' child: ${child.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             }
-            out.createdChildID = child.FirstPrimaryKey?.Value != null ? String(child.FirstPrimaryKey.Value) : undefined;
+            // The child entity is configured — serialize its whole key (bare value for one column, 'F1|v1||F2|v2' for composite).
+            const childKey = child.PrimaryKey.ToCompactURLSegment();
+            out.createdChildID = childKey.length > 0 ? childKey : undefined;
         }
     }
 

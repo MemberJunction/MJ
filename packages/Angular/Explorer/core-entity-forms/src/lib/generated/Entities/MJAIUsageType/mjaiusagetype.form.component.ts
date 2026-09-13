@@ -17,8 +17,8 @@ export class MJAIUsageTypeFormComponent extends BaseFormComponent {
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
-            { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false },
-            { sectionKey: 'mJAIModelPriceUnitTypes', sectionName: 'AI Model Price Unit Types', isExpanded: false }
+            { sectionKey: 'mJAIModelPriceUnitTypes', sectionName: 'AI Model Price Unit Types', isExpanded: false },
+            { sectionKey: 'mJAIPromptRuns', sectionName: 'AI Prompt Runs', isExpanded: false }
         ]);
     }
 }

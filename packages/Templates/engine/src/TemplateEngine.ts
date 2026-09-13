@@ -141,7 +141,9 @@ export class TemplateEngineServer extends BaseSingleton<TemplateEngineServer> {
      * @param autoescape whether the environment HTML-escapes rendered output
      */
     private createConfiguredNunjucksEnv(autoescape: boolean): nunjucks.Environment {
-        const env = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: true });
+        // SECURITY: dev must stay false — nunjucks dev mode includes full stack traces in
+        // rendering errors, which can leak server internals to whoever sees template output.
+        const env = new nunjucks.Environment(this._templateLoader as unknown as nunjucks.ILoader, { autoescape, dev: false });
         this.addCustomFilters(env);
         return env;
     }

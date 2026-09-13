@@ -60,11 +60,17 @@ AZURE_ACCOUNT_EMAIL=mailbox@yourdomain.com
 | `Mail.Send` | SendSingleMessage, ForwardMessage, ReplyToMessage |
 | `Mail.Read` | GetMessages, GetSingleMessage, SearchMessages, ListFolders, ListAttachments, DownloadAttachment |
 | `Mail.ReadWrite` | CreateDraft, DeleteMessage, MoveMessage, MarkAsRead, ArchiveMessage |
+| `Calendars.Read` | GetEvents |
 | `User.Read.All` | GetServiceAccount (user lookup, optional) |
+
+`Calendars.Read` is sufficient for `GetEvents`; `Calendars.ReadWrite` is not required, since nothing
+here creates or modifies an event. As **Application** permissions these are granted against the
+tenant, not against one mailbox — narrowing an app to specific mailboxes is done in Exchange with
+RBAC for Applications, not by these grants.
 
 ## Supported Operations
 
-This provider supports all 14 operations defined in `BaseCommunicationProvider`:
+This provider supports all 15 operations defined in `BaseCommunicationProvider`:
 
 | Operation | Description |
 |-----------|-------------|
@@ -82,6 +88,7 @@ This provider supports all 14 operations defined in `BaseCommunicationProvider`:
 | `SearchMessages` | Full-text search with KQL syntax and date filtering |
 | `ListAttachments` | List attachments on a message |
 | `DownloadAttachment` | Download attachment content as base64/Buffer |
+| `GetEvents` | Read calendar events for one mailbox |
 
 ## Usage
 
@@ -150,6 +157,39 @@ result.Messages.forEach(msg => {
     console.log(`Thread: ${msg.ThreadID}`);
 });
 ```
+
+### Reading Calendar Events
+
+Requires `Calendars.Read`. **Whether you pass a window changes what comes back**, so `GetEvents`
+reports which it did via `RecurrenceExpanded` rather than leaving you to guess:
+
+```typescript
+const provider = engine.GetProvider('Microsoft Graph');
+
+// With a window -> /calendarView: a recurring series is EXPANDED into one entry per occurrence.
+const occurrences = await provider.GetEvents({
+    Identifier: 'rep@example.com',
+    NumEvents: 50,
+    StartDateTime: new Date('2026-09-01T00:00:00Z'),
+    EndDateTime: new Date('2026-09-08T00:00:00Z')
+});
+console.log(occurrences.RecurrenceExpanded); // true
+
+// Without one -> /events: a weekly stand-up is ONE row, the series master, whose start time is
+// whenever the series began — possibly years ago.
+const masters = await provider.GetEvents({ Identifier: 'rep@example.com', NumEvents: 50 });
+console.log(masters.RecurrenceExpanded); // false
+```
+
+Three things worth knowing before syncing on this:
+
+- **The window selects overlap, not start times.** An event that began before `StartDateTime` and is
+  still running when the window opens is returned. An event straddling a boundary therefore appears
+  in both adjacent windows — dedupe on the event id.
+- **`NumEvents` is one page.** It becomes `$top`; there is no `@odata.nextLink` following. To cover a
+  period completely, narrow the window rather than raise the number.
+- **Cancelled events are excluded by default** and cannot be recovered after the fact — Graph does not
+  return them once filtered. Pass `IncludeCancelled: true` if you are logging history.
 
 ### Searching Messages
 

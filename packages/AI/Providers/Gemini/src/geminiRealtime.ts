@@ -32,6 +32,7 @@ import {
     type JSONObject,
     type JSONValue,
     type RealtimeSessionCapabilities,
+    type RealtimeVoiceOption,
     REALTIME_SHARED_CONFIG_KEYS,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
@@ -129,6 +130,45 @@ export class GeminiRealtime extends BaseRealtimeModel {
         super(apiKey);
         // Client is created lazily in connectLiveSession so subclasses (and tests overriding the
         // seam) never trigger an unused live client construction.
+    }
+
+    /**
+     * The voices Gemini Live can speak with — used to populate the voice picker.
+     * Includes all 30 built-in Gemini voices supported in prebuiltVoiceConfig.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: 'Puck', Name: 'Puck' },
+            { ID: 'Charon', Name: 'Charon' },
+            { ID: 'Kore', Name: 'Kore' },
+            { ID: 'Fenrir', Name: 'Fenrir' },
+            { ID: 'Aoede', Name: 'Aoede' },
+            { ID: 'Zephyr', Name: 'Zephyr' },
+            { ID: 'Leda', Name: 'Leda' },
+            { ID: 'Orus', Name: 'Orus' },
+            { ID: 'Callirrhoe', Name: 'Callirrhoe' },
+            { ID: 'Autonoe', Name: 'Autonoe' },
+            { ID: 'Enceladus', Name: 'Enceladus' },
+            { ID: 'Iapetus', Name: 'Iapetus' },
+            { ID: 'Umbriel', Name: 'Umbriel' },
+            { ID: 'Algieba', Name: 'Algieba' },
+            { ID: 'Despina', Name: 'Despina' },
+            { ID: 'Erinome', Name: 'Erinome' },
+            { ID: 'Algenib', Name: 'Algenib' },
+            { ID: 'Rasalgethi', Name: 'Rasalgethi' },
+            { ID: 'Laomedeia', Name: 'Laomedeia' },
+            { ID: 'Achernar', Name: 'Achernar' },
+            { ID: 'Alnilam', Name: 'Alnilam' },
+            { ID: 'Schedar', Name: 'Schedar' },
+            { ID: 'Gacrux', Name: 'Gacrux' },
+            { ID: 'Pulcherrima', Name: 'Pulcherrima' },
+            { ID: 'Achird', Name: 'Achird' },
+            { ID: 'Zubenelgenubi', Name: 'Zubenelgenubi' },
+            { ID: 'Vindemiatrix', Name: 'Vindemiatrix' },
+            { ID: 'Sadachbia', Name: 'Sadachbia' },
+            { ID: 'Sadaltager', Name: 'Sadaltager' },
+            { ID: 'Sulafat', Name: 'Sulafat' },
+        ];
     }
 
     /**

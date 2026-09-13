@@ -1,5 +1,13 @@
 # @memberjunction/sql-converter
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- Updated dependencies [9f73528]
+  - @memberjunction/sql-dialect@6.1.0-edge.6
+  - @memberjunction/sqlglot-ts@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Minor Changes

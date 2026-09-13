@@ -864,7 +864,8 @@ describe('xAIRealtime edge coverage (shared-driver surface)', () => {
 
     it('inherits live Reconfigure with the Grok transcription model', async () => {
         const session = (await driver.StartSession({ Model: 'grok-voice', SystemPrompt: 'sys' })) as xAIRealtimeSession;
-        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true });
+        expect(session.Capabilities).toEqual({ CanReconfigureTurnMode: true, SupportsDynamicToolSet: true });
+        expect(xAIRealtime.SupportsDynamicToolSet).toBe(true);
         const before = driver.Fake.Sent.length;
         session.Reconfigure({ DisableAutoResponse: true });
         const frame = driver.Fake.Sent.slice(before)[0];

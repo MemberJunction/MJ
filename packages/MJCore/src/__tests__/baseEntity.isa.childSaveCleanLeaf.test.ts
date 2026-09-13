@@ -163,11 +163,14 @@ describe('BaseEntity IS-A: child save succeeds when only parent field is modifie
         child.Set('Name', 'Updated Product Name');
         expect(parent.Dirty).toBe(true);
 
-        // Parent virtuals appear in the child's merged GetAll() even when the
-        // child does not define them. Value may be null if the virtual was not
-        // writable through LoadFromData; the key is what used to throw.
+        // The child's LoadFromData re-hydrated the parent from a source that OMITS
+        // CategoryName, so under the not-loaded contract (D-3: keys a hydration source
+        // omitted are not-loaded and stay out of GetAll, or a construction default would
+        // masquerade as data) the key is ABSENT from the merged payload. Absence satisfies
+        // this test's original point even more strongly: a parent virtual the child does
+        // not own can no longer reach SetMany at all, so it cannot throw there.
         const merged = child.GetAll() as Record<string, unknown>;
-        expect(Object.prototype.hasOwnProperty.call(merged, 'CategoryName')).toBe(true);
+        expect(Object.prototype.hasOwnProperty.call(merged, 'CategoryName')).toBe(false);
 
         const saveSuccess = await child.Save();
         expect(saveSuccess).toBe(true);

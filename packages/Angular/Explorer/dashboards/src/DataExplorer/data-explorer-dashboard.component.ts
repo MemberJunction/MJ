@@ -6,7 +6,7 @@ import { takeUntil, debounceTime, distinctUntilChanged } from 'rxjs/operators';
 import { BaseDashboard, NavigationService } from '@memberjunction/ng-shared';
 import { RecentAccessService } from '@memberjunction/ng-shared-generic';
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
-import { EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, RunView, EntityFieldTSType, ApplicationInfo } from '@memberjunction/core';
 // CompositeKey is used via buildCompositeKey from ng-entity-viewer
 import { MJApplicationEntityEntity, ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import {
@@ -1848,9 +1848,9 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       // Try to find the record by primary key or concatenated string
       const entity = this.selectedEntity;
       const record = event.records.find(r => {
-        const pkString = buildPkString(r, entity);
-        const pkValue = entity.PrimaryKeys[0] ? String(r[entity.PrimaryKeys[0].Name] ?? '') : '';
-        return pkString === recordId || pkValue === recordId;
+        // Match either the concatenated "F|v" form or the compact segment (raw value for a single-column key)
+        const key = buildCompositeKey(r, entity);
+        return key.ToConcatenatedString() === recordId || key.ToCompactURLSegment() === recordId;
       });
 
       if (record) {
@@ -2021,9 +2021,11 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     try {
       // Load the record
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      // recordId may be a bare value or a composite "F1|v1||F2|v2" segment — build the predicate
+      // from the entity's real key column(s) rather than a hardcoded ID.
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
-        ExtraFilter: `ID='${recordId}'`,
+        ExtraFilter: CompositeKey.FromURLSegment(entityInfo, recordId).ToWhereClause(),
         ResultType: 'simple',
         MaxRows: 1
       });
@@ -2338,9 +2340,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
             // Entity is the same - find record from already-loaded data
             const entity = this.selectedEntity;
             const record = this.loadedRecords.find(r => {
-              const pkString = buildPkString(r, entity);
-              const pkValue = entity.PrimaryKeys[0] ? String(r[entity.PrimaryKeys[0].Name] ?? '') : '';
-              return pkString === urlState.record || pkValue === urlState.record;
+              const key = buildCompositeKey(r, entity);
+              return key.ToConcatenatedString() === urlState.record || key.ToCompactURLSegment() === urlState.record;
             });
 
             if (record) {

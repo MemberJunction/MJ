@@ -1,6 +1,7 @@
 export * from './ai-bridge-engine';
 export * from './multi-agent-room-coordinator';
 export * from './loopback-bridge';
+export * from './openai-sip-bridge';
 export * from './join-url-resolver';
 export * from './calendar-source';
 export * from './calendar-clients';

@@ -441,6 +441,20 @@ export abstract class BaseResourceComponent extends BaseNavigationComponent impl
         }
     }
 
+    /**
+     * True when this resource holds in-progress user edits that a silent
+     * replacement would destroy. Consulted by the shell before consuming a
+     * temporary record tab under the preview-tab model (see
+     * TabRequest.TempScope): an editing tab is never replaced — the next open
+     * lands in its own tab instead, so the edit survives.
+     *
+     * Default false: most resources are read-only surfaces with nothing to
+     * lose. Resources that host an editable form override it.
+     */
+    public IsEditing(): boolean {
+        return false;
+    }
+
     abstract GetResourceDisplayName(data: ResourceData): Promise<string>
 
     abstract GetResourceIconClass(data: ResourceData): Promise<string>

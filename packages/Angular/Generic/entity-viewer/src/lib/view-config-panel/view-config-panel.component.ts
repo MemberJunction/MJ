@@ -18,7 +18,7 @@ import {
   CompositeFilterDescriptor,
   FilterFieldInfo,
   FilterFieldType,
-  createEmptyFilter
+  CreateEmptyFilter
 } from '@memberjunction/ng-filter-builder';
 import { ViewConfigSummary } from '../types';
 
@@ -204,7 +204,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   public SmartFilterExplanation: string = '';
 
   // Traditional Filter state
-  public FilterState: CompositeFilterDescriptor = createEmptyFilter();
+  public FilterState: CompositeFilterDescriptor = CreateEmptyFilter();
   public FilterFields: FilterFieldInfo[] = [];
 
   // Filter mode: 'smart' or 'traditional' (mutually exclusive)
@@ -217,7 +217,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
 
   // Saved filter state for mode switching (BUG-006: preserve both modes' data)
   private savedSmartFilterPrompt: string = '';
-  private savedTraditionalFilter: CompositeFilterDescriptor = createEmptyFilter();
+  private savedTraditionalFilter: CompositeFilterDescriptor = CreateEmptyFilter();
 
   // Filter mode switch confirmation (BUG-006)
   public ShowFilterModeSwitchConfirm: boolean = false;
@@ -395,6 +395,22 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Field names field-level security denies the current user READ on, lowercased. Empty when
+   * there is no entity or resolved user, when the entity has field security off, or when nothing
+   * is denied — so callers can treat it as "nothing to filter".
+   *
+   * Uses the BULK primitive rather than the per-field form: `GetDeniedReadFields` aggregates the
+   * user's roles once, where the per-field call would repeat that for every field.
+   */
+  private deniedReadFields(): Set<string> {
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!this.Entity || !user) {
+      return new Set<string>();
+    }
+    return this.Entity.GetDeniedReadFields(user);
+  }
+
+  /**
    * Initialize form state from entity and view
    * Priority for column state: currentGridState > viewEntity.Columns > entity defaults
    */
@@ -404,8 +420,17 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       return;
     }
 
-    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info)
+    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info).
+    //
+    // Field security: a field the user cannot READ is not offered as a column at all. The grid
+    // already refuses to render its values, so listing it here would only advertise the NAME of a
+    // column they can never populate — and invite them to "fix" a column that will always be
+    // blank. This is a rendering surface, so filtering is correct here; the saved view's stored
+    // column preferences are deliberately left alone (see EntityDataGrid.filterToExistingFields —
+    // a denial is reversible, and dropping the preference would not restore it on re-grant).
+    const denied = this.deniedReadFields();
     this.Columns = this.Entity.Fields
+      .filter(field => !denied.has(field.Name.trim().toLowerCase()))
       .map((field, index) => ({
         fieldId: field.ID,
         fieldName: field.Name,
@@ -519,7 +544,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       }
       this.SmartFilterPrompt = '';
       this.SmartFilterExplanation = '';
-      this.FilterState = createEmptyFilter();
+      this.FilterState = CreateEmptyFilter();
       // Default to smart mode (promote AI filtering)
       this.FilterMode = 'smart';
       this.SmartFilterEnabled = true;
@@ -584,7 +609,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    */
   private parseFilterState(filterStateJson: string | null | undefined): CompositeFilterDescriptor {
     if (!filterStateJson) {
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     }
     try {
       const parsed = JSON.parse(filterStateJson);
@@ -592,9 +617,9 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       if (parsed && typeof parsed === 'object' && 'logic' in parsed && 'filters' in parsed) {
         return parsed as CompositeFilterDescriptor;
       }
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     } catch {
-      return createEmptyFilter();
+      return CreateEmptyFilter();
     }
   }
 
@@ -653,7 +678,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
    * Clear all filters
    */
   ClearFilters(): void {
-    this.FilterState = createEmptyFilter();
+    this.FilterState = CreateEmptyFilter();
     this.cdr.detectChanges();
   }
 
@@ -1590,7 +1615,7 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
     if (mode === 'smart') {
       this.SmartFilterEnabled = true;
       this.SmartFilterPrompt = this.savedSmartFilterPrompt;
-      this.FilterState = createEmptyFilter();
+      this.FilterState = CreateEmptyFilter();
     } else {
       this.SmartFilterEnabled = false;
       this.SmartFilterPrompt = '';

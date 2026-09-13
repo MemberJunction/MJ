@@ -60,7 +60,7 @@ demand otherwise. Startup registration is an optimization, not a correctness req
 
 ### Mode resolution precedence (highest wins)
 
-1. **`MJ_STARTUP_MODE` env var** — per-invocation override, e.g. `MJ_STARTUP_MODE=full npx mj sync push`. Invalid values warn and fall through (never crash).
+1. **`MJ_STARTUP_MODE` env var** — per-invocation override, e.g. `MJ_STARTUP_MODE=full pnpm mj sync push`. Invalid values warn and fall through (never crash).
 2. **Programmatic option** passed by the entry point (e.g. `setupSQLServerClient(cfg, { mode: 'task' })`).
 3. **`mj.config.cjs` → `startup.mode`** — note this file is shared by every process in a repo, which is why the env var and programmatic levels outrank it.
 4. **Entry-point default** — `full` for MJAPI, `task` for CLI-style processes.
@@ -86,6 +86,17 @@ module.exports = {
 - **Opt-up escape hatch**: a process booted in `task` mode can later run `StartupManager.Instance.Startup(true, user, provider, { mode: 'full' })` (`forceRefresh` bypasses the cached result). Client-side startup (`GraphQLDataProvider`, Angular shell) passes no options and always gets `full`.
 
 ---
+
+## Open App packages (`dynamicPackages` / `MJ_DYNAMIC_PACKAGES`)
+
+At boot, after the class-registration manifest, MJAPI imports the host's generated packages
+(`codeGeneration.packages`) and every installed Open App's server package (`dynamicPackages.server[]`,
+written by `mj app install`) through `@memberjunction/dynamic-packages`, runs each `StartupExport`,
+and globs the packages' `RESOLVER_PATHS` into the GraphQL schema. MJAPI's process ID is `mjapi`; an
+entry can be scoped away from it with `ExcludeProcesses: ['mjapi']`. `MJ_DYNAMIC_PACKAGES=none` boots
+without any of them (core classes still load). The same loader runs in the `mj` CLI, MCP/A2A and the
+test bootstraps — full model, scoping and troubleshooting:
+[`guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`](../../guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md).
 
 ## MJAPI Public URL Configuration
 

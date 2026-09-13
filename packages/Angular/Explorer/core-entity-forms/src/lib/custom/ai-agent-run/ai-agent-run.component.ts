@@ -433,12 +433,12 @@ export class MJAIAgentRunFormComponentExtended extends MJAIAgentRunFormComponent
   
   openEntityRecord(entityName: string, recordId: string | null) {
     if (recordId) {
-      SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromID(recordId));
+      SharedService.Instance.OpenEntityRecord(entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(entityName), recordId));
     }
   }
   
   navigateToEntityRecord(event: { entityName: string; recordId: string }) {
-    SharedService.Instance.OpenEntityRecord(event.entityName, CompositeKey.FromID(event.recordId));
+    SharedService.Instance.OpenEntityRecord(event.entityName, CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.entityName), event.recordId));
   }
 
   /**

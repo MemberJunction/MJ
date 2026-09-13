@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProvider, DoomedTransactionError } from '../GenericDatabaseProvider';
 import { SqlLoggingSessionImpl } from '../SqlLogger';
 import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 
@@ -67,9 +67,19 @@ class TestGenericProvider extends GenericDatabaseProvider {
         return `LIMIT ${maxRows} OFFSET ${startRow}`;
     }
 
-    async BeginTransaction(): Promise<void> {}
-    async CommitTransaction(): Promise<void> {}
-    async RollbackTransaction(): Promise<void> {}
+    protected override get HasPhysicalTransaction(): boolean {
+        return this.physicalOpen;
+    }
+    protected physicalOpen = false;
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = true;
+    }
+    protected override async CommitPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
+    protected override async RollbackPhysicalTransaction(): Promise<void> {
+        this.physicalOpen = false;
+    }
 
     // Expose protected virtual methods for testing
     public testBuildTopClause(maxRows: number): string { return this.BuildTopClause(maxRows); }
@@ -146,7 +156,10 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public executeSQLResults: Array<Record<string, unknown>[]> = [];
     private executeSQLCallIndex = 0;
 
-    override async ExecuteSQL<T>(sql?: string, params?: unknown[]): Promise<Array<T>> {
+    override async ExecuteSQL<T>(sql?: string, params?: unknown[], options?: { connectionSource?: unknown }): Promise<Array<T>> {
+        if (!options?.connectionSource) {
+            this.AssertAmbientTransactionUsable();
+        }
         this.executeSQLCalls.push({ sql: sql ?? '', params });
         const result = this.executeSQLResults[this.executeSQLCallIndex] ?? [];
         this.executeSQLCallIndex++;
@@ -175,6 +188,15 @@ class TestGenericProvider extends GenericDatabaseProvider {
     }
     protected WrapSaveCallWithRecordChange(): SaveSQLFragment {
         throw new Error('Not supported in test double — GenerateSaveSQL is stubbed and never delegates here.');
+    }
+
+    public AllocateSaveCallSuffixForPk(
+        group: object | null,
+        schemaName: string,
+        baseTable: string,
+        pkValues: unknown[],
+    ): string {
+        return this.allocateSaveCallSuffixForPk(group, schemaName, baseTable, pkValues);
     }
 }
 
@@ -1804,5 +1826,326 @@ ORDER BY Cnt DESC`,
         expect(result.ErrorMessage).toBeTruthy();
         // RenderedSQL is undefined because the rendering step itself failed
         expect(result.RenderedSQL).toBeUndefined();
+    });
+});
+
+class RecordingProvider extends TestGenericProvider {
+    public beginCount = 0;
+
+    protected override async BeginPhysicalTransaction(): Promise<void> {
+        this.beginCount++;
+        this.physicalOpen = true;
+    }
+}
+
+describe('GenericDatabaseProvider nested transactions', () => {
+    it('outermost begin starts a physical transaction and issues no savepoint SQL', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('nested begin with a live physical TX issues a dialect savepoint', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested begin with leaked depth and no physical TX is corruption, not a new TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        p.physicalOpen = false;
+        await expect(p.BeginTransaction()).rejects.toThrow(/Transaction state corrupted/);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('ENOTBEGUN on a published handle is a doomed TX, not a recovery-begin', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        p.beginCount = 0;
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('Transaction has not begun. Call begin() first.'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toThrow(/rolled back by the server/);
+        expect(p.beginCount).toBe(0);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('ResetTransactionState drops a leaked handle so the next begin is outermost', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        p.physicalOpen = false;
+        await p.ResetTransactionState();
+        expect(p.TransactionDepth).toBe(0);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.beginCount).toBe(2);
+        expect(p.executeSQLCalls).toEqual([]);
+    });
+
+    it('exposes deprecated camelCase savepointStack alias for one release', () => {
+        const p = new RecordingProvider();
+        expect(p.savepointStack).toEqual(p.SavepointStack);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('nested commit is a no-op SQL on SQL Server (no RELEASE) and decrements depth', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.CommitTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.executeSQLCalls).toEqual([]);
+        expect(p.physicalOpen).toBe(true);
+        await p.CommitTransaction();
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('two concurrent BeginTransactions serialize to one physical begin and one savepoint', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['SAVE TRANSACTION SavePoint_1']);
+    });
+
+    it('nested rollback issues ROLLBACK TO the savepoint and keeps the outer TX', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.resetExecuteSQLState();
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+        expect(p.executeSQLCalls.map((c) => c.sql)).toEqual(['ROLLBACK TRANSACTION SavePoint_1']);
+    });
+
+    it('AfterPhysicalCommit runs after the lock is released so it can begin again', async () => {
+        class AfterCommitProvider extends RecordingProvider {
+            public afterCalls = 0;
+            protected override async AfterPhysicalCommit(): Promise<void> {
+                this.afterCalls++;
+                if (this.afterCalls > 1) return;
+                await this.BeginTransaction();
+                await this.CommitTransaction();
+            }
+        }
+        const p = new AfterCommitProvider();
+        await p.BeginTransaction();
+        await p.CommitTransaction();
+        expect(p.afterCalls).toBe(2);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('begin failing at depth 1 restores depth 0 so the next begin is outermost (A1)', async () => {
+        class FailingBegin extends RecordingProvider {
+            public onBeginFailed = 0;
+            public failNext = true;
+            protected override async BeginPhysicalTransaction(): Promise<void> {
+                if (this.failNext) {
+                    this.failNext = false;
+                    throw new Error('pool exhausted');
+                }
+                this.beginCount++;
+                this.physicalOpen = true;
+            }
+            protected override async OnBeginFailedAtDepthZero(): Promise<void> {
+                this.onBeginFailed++;
+                this.physicalOpen = false;
+            }
+        }
+        const p = new FailingBegin();
+        await expect(p.BeginTransaction()).rejects.toThrow(/pool exhausted/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.onBeginFailed).toBe(1);
+        await p.BeginTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(true);
+    });
+
+    it('nested rollback that fails the savepoint handler keeps the outer frame doomed (A8/H5)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            p.physicalOpen = false;
+            throw new Error('savepoint missing');
+        };
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(1);
+        expect(p.physicalOpen).toBe(false);
+        await p.RollbackTransaction();
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('outermost commit failure still ends at depth 0 even if rollback also fails (A10)', async () => {
+        class FailBoth extends RecordingProvider {
+            protected override async CommitPhysicalTransaction(): Promise<void> {
+                throw new Error('commit rejected');
+            }
+            protected override async RollbackPhysicalTransaction(): Promise<void> {
+                this.physicalOpen = false;
+                throw new Error('rollback rejected');
+            }
+        }
+        const p = new FailBoth();
+        await p.BeginTransaction();
+        await expect(p.CommitTransaction()).rejects.toThrow(/commit rejected/);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('three concurrent BeginTransactions serialize to one physical begin and two savepoints (A12)', async () => {
+        const p = new RecordingProvider();
+        await Promise.all([p.BeginTransaction(), p.BeginTransaction(), p.BeginTransaction()]);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(3);
+        expect(p.SavepointStack).toEqual(['SavePoint_1', 'SavePoint_2']);
+    });
+
+    it('DoomedTransactionError is thrown when ENOTBEGUN hits a published handle', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        await p.BeginTransaction();
+        p.ExecuteSQL = async () => {
+            throw Object.assign(new Error('wrapped'), { code: 'ENOTBEGUN' });
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(2);
+        expect(p.physicalOpen).toBe(false);
+        await p.CommitTransaction();
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+    });
+
+    it('queued nested begin after doom cannot open a second physical TX (H5)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[]) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params);
+        };
+        const results = await Promise.allSettled([p.BeginTransaction(), p.BeginTransaction()]);
+        expect(results.every((r) => r.status === 'rejected')).toBe(true);
+        expect(p.beginCount).toBe(1);
+        expect(p.TransactionDepth).toBe(1);
+        await expect(p.CommitTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.TransactionDepth).toBe(0);
+        expect(p.physicalOpen).toBe(false);
+    });
+
+    it('ExecuteSQL without connectionSource throws while doomed (H6)', async () => {
+        const p = new RecordingProvider();
+        await p.BeginTransaction();
+        let firstSave = true;
+        const orig = p.ExecuteSQL.bind(p);
+        p.ExecuteSQL = async (sql?: string, params?: unknown[], options?: { connectionSource?: unknown }) => {
+            if (typeof sql === 'string' && sql.includes('SAVE TRANSACTION') && firstSave) {
+                firstSave = false;
+                throw Object.assign(new Error('Transaction has not begun'), { code: 'ENOTBEGUN' });
+            }
+            return orig(sql, params, options);
+        };
+        await expect(p.BeginTransaction()).rejects.toBeInstanceOf(DoomedTransactionError);
+        p.resetExecuteSQLState();
+        await expect(p.ExecuteSQL('UPDATE Orders SET Status=Confirmed')).rejects.toBeInstanceOf(DoomedTransactionError);
+        expect(p.executeSQLCalls.map((c) => c.sql)).not.toContain('UPDATE Orders SET Status=Confirmed');
+        await p.ExecuteSQL('SELECT 1', undefined, { connectionSource: {} });
+        expect(p.executeSQLCalls.map((c) => c.sql)).toContain('SELECT 1');
+    });
+});
+
+describe('GenericDatabaseProvider save-call variable suffix (loom #12 WP3)', () => {
+    const HEX12 = /^_[0-9a-f]{12}$/;
+
+    it('hashes schema.table|pk deterministically to 12 lowercase hex', () => {
+        expect(GenericDatabaseProvider.SaveCallVariableHashLength).toBe(12);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001'])).toBe('6679d1fd77d5');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001'])).toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['w-0001']),
+        );
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['a'])).not.toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['b']),
+        );
+        // These pairs collided on the first 8 hex (031e1622 / 37ccdac1); 12 hex tells them apart.
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-42236'])).toBe('031e16225f91');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-64356'])).toBe('031e16223663');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-101514'])).toBe('37ccdac16ab3');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['id-104669'])).toBe('37ccdac1057e');
+    });
+
+    it('normalizes key values before hashing: UUID case, Date, null/undefined', () => {
+        const lower = GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', ['a1000000-0000-0000-0000-000000000001']);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', ['A1000000-0000-0000-0000-000000000001'])).toBe(lower);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('__mj', 'Entity', [' A1000000-0000-0000-0000-000000000001 '])).toBe(lower);
+        expect(lower).toBe('774f612ccbb5');
+        // A non-UUID string keeps its case: it is the record's actual key text.
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['ABC'])).not.toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', ['abc']),
+        );
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', [new Date('2026-01-01T00:00:00Z')])).toBe('892c6aa6d2c3');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', [new Date('2026-01-01T00:00:00Z')])).toBe(
+            GenericDatabaseProvider.SaveCallVariableHash('dbo', 'T', ['2026-01-01T00:00:00.000Z']),
+        );
+        const empty = GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [null]);
+        expect(empty).toBe('b7d71d1c9508');
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [undefined])).toBe(empty);
+        expect(GenericDatabaseProvider.SaveCallVariableHash('dbo', 'Widget', [])).toBe(empty);
+    });
+
+    it('same PK twice in one group → _hash then _hash_2; no ordinal outside a group', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const a = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
+        const b = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', ['w-0001']);
+        expect(a).toMatch(HEX12);
+        expect(b).toBe(`${a}_2`);
+        expect(p.AllocateSaveCallSuffixForPk(null, 'dbo', 'Widget', ['w-0001'])).toBe(a);
+        expect(p.AllocateSaveCallSuffixForPk(null, 'dbo', 'Widget', ['w-0001'])).toBe(a);
+    });
+
+    it('PK-less inserts in one group share the per-table hash and are told apart by the ordinal', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const first = p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [null]);
+        expect(first).toBe('_b7d71d1c9508');
+        expect(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [undefined])).toBe('_b7d71d1c9508_2');
+        expect(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [])).toBe('_b7d71d1c9508_3');
+        // A different group starts counting again.
+        expect(p.AllocateSaveCallSuffixForPk({}, 'dbo', 'Widget', [null])).toBe('_b7d71d1c9508');
+    });
+
+    it('120_000 unique PKs in one group: 120_000 distinct bare suffixes, no sha1[:12] collisions', () => {
+        const p = new TestGenericProvider();
+        const group = {};
+        const suffixes: string[] = [];
+        for (let i = 0; i < 120_000; i++) {
+            suffixes.push(p.AllocateSaveCallSuffixForPk(group, 'dbo', 'Widget', [`id-${i}`]));
+        }
+        expect(new Set(suffixes).size).toBe(120_000);
+        expect(suffixes.every((s) => HEX12.test(s))).toBe(true);
     });
 });

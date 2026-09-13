@@ -1,5 +1,206 @@
 # Change Log - @memberjunction/core-entities
 
+## 6.1.0-edge.6
+
+### Minor Changes
+
+- 2c826f7: AI model metadata refresh — week of 2026-09-07
+
+  Weekly AI model/vendor research pass over `metadata/ai-models/` and `metadata/ai-vendors/`. Four new
+  models, one new vendor, one rate card resolved, one retirement recorded.
+
+  **New models**
+  - **Claude Fable 5.1** (Anthropic, 2026-09-01) — `claude-fable-5-1`, 1M context / 128K output,
+    $10/$50 per 1M unchanged from Fable 5, but cache reads cut 75% to $0.25/1M. Anthropic direct,
+    Amazon Bedrock and OpenRouter routes.
+  - **GPT-6 Astra** (OpenAI, 2026-09-03) — `gpt-6-astra`, 1.05M context / 128K output, $10/$50 at the
+    short-context tier. Requests above 272K input tokens are rebilled entirely at $20/$75; that second
+    tier is documented in the cost record's Comments rather than given its own row. OpenAI direct plus
+    a Microsoft Foundry/Azure route (Limited Access Program). No Bedrock or OpenRouter row — neither
+    was serving it at the time of research.
+  - **Gemini 3.8 Flash** (Google, 2026-09-02) — `gemini-3.8-flash`, 1M context / 64K output, holding
+    3.7 Flash's $0.75/$3.75 introductory rate through 2026-12-31 before stepping to $1.50/$7.50.
+    Google, Vertex AI and OpenRouter routes.
+  - **Muse Spark 1.3** (Meta, 2026-09-02) — 1,048,576-token context, $1.25/$4.25 Standard tier.
+
+  **New vendor**
+  - **Meta**, credential type `API Key`, added as a Model Developer only. Muse Spark 1.3 reaches
+    inference through OpenRouter (`meta/muse-spark-1.3`, `OpenRouterLLM`), so no new driver class is
+    required. The cheaper Contributor tier is intentionally not recorded — it grants Meta training
+    rights over submitted data.
+
+  **Pricing**
+  - **GLM 5.3** gains a Z.AI Inference Provider row (`glm-5.3`, 1M context / 128K output) and its
+    first cost record at $1.40/$4.40 per 1M with $0.26/1M cached input, resolving the "pricing TBD"
+    placeholder left when the model was added on 2026-08-24.
+
+  **Deprecation**
+  - **Claude Opus 4.1** was retired on the Anthropic API on 2026-08-05. Its Anthropic Inference
+    Provider row moves to `Inactive` and its Anthropic cost row to `Expired` with
+    `EndedAt: 2026-08-05`. The Model Developer row stays `Active`, and the Amazon Bedrock and
+    OpenRouter rows are untouched — those platforms set their own retirement schedules and still serve
+    the model.
+
+  The full report, including everything flagged for human review rather than applied, is in
+  `reports/ai-model-research/2026-09-07-weekly-report.md`.
+
+- 0d3094c: **A skill can stay active for a conversation, not just a run.**
+
+  A skill activates for one run: `requestedSkillIDs` is a per-call input and the activated set dies
+  with the run. That is right for a one-shot capability and wrong for a skill that behaves as a
+  mode — a persona, or an assistant whose reply carries a menu that is pressed on the NEXT turn, when
+  nothing would re-activate it. Every conversational agent with a mode was re-implementing a
+  (conversation, skill) table and merging it into the request by hand.
+
+  Two additive, opt-in pieces (migration `V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation`):
+  - `AISkill.ActivationScope` — `Run` (default, today's behaviour) or `Conversation`.
+  - `MJ: Conversation Skills` — one row per (conversation, skill), `Active` or `Ended`, with the run
+    that activated it as provenance.
+
+  `BaseAgent` does the rest. At the start of every root run that has a `conversationId`, the
+  conversation's Active skills join `requestedSkillIDs` (every availability gate still applies on
+  every run). When a `Conversation`-scoped skill activates — by request or by the agent's own choice —
+  its row is written or re-activated. A persisted skill that a gate refuses this turn is simply not
+  activated and gets no note (the user never mentioned it); its row stays Active, because a gate miss
+  can be transient and ending the row would be silent, permanent loss of a mode. Retiring a mode is an
+  explicit act. An explicitly requested skill that is refused still gets the system note.
+  `BaseAgent.EndConversationSkill(conversationId, skillId, user)` is the app's "leave the mode"
+  gesture. All three steps are protected/public and fail soft: losing a persisted skill means the user
+  re-invokes it, never that the turn fails.
+
+  Precedent: `UserRoutine.RequestedSkillIDs` (v5.45) persists a pre-selection on the owning record and
+  threads it per run; this is the same idea keyed on the conversation. First-adopter feedback (Betty).
+  A composer chip that shows the conversation's active skills and ends one on removal is the natural
+  UI follow-up; the server side works for every client and bridge without it.
+
+  Also: `mj sync pull` now round-trips a skill's `MJ: AI Skill Search Scopes` rows (under
+  `metadata/ai-skills`) and an agent's `MJ: AI Agent Skills` grants (under `metadata/agents`, for the
+  agents that directory pulls) — pull-config additions only; push already accepted both.
+
+- 43f9133: Add `Entity.SubtypeSelector` column, JSONType metadata, and CodeGen artifacts for prospective IsA subtype resolution.
+  - **Schema & Migration**: Migration `V202609081111__v6.1.x__Entity_SubtypeSelector.sql` adds nullable `SubtypeSelector NVARCHAR(MAX)` on `__mj.Entity` with extended property documentation, regenerated CRUD stored procedures, and view refresh.
+  - **Metadata**: Created `IEntitySubtypeSelectorConfig` interface (`metadata/entities/JSONType-interfaces/IEntitySubtypeSelectorConfig.ts`) and configured JSONType metadata on `Entity.SubtypeSelector` via `metadata/entities/.entity-field-jsontype-entity-subtype-selector.json`.
+  - **Generated Code**: Generated `SubtypeSelector` and typed `SubtypeSelectorObject: MJEntityEntity_IEntitySubtypeSelectorConfig | null` accessor on `MJEntityEntity` in `@memberjunction/core-entities`, GraphQL schema definitions in `@memberjunction/server`, and updated Angular entity forms in `@memberjunction/ng-core-entity-forms`.
+
+- 2cc08e1: Migration `V202609031400__v6.1.x__Conversation_Scoped_Skill_Activation` no longer inserts `EntityField` rows with a literal `Sequence`.
+
+  Twelve `EntityField` INSERTs carried literal sequence numbers (1–11 on `MJ: Conversation Skills`, 14 on `MJ: AI Skills`). Each was preceded by the `+100000` sequence park, which is why a from-scratch `mj migrate` still succeeds today — but the park is the mechanism `#4292` removed, and its own changeset records why: it "could be made idempotent within one run but not across two migrations replayed on a fresh database." Its `NOT EXISTS (Sequence >= 100000)` guard makes a _second_ migration's park a silent no-op, and the next literal insert then collides on `UQ_EntityField_EntityID_Sequence` — surfacing as an unrelated foreign-key error against `EntityFieldValue`, and only ever on a fresh install.
+
+  The literals are replaced with the apply-time expression CodeGen now emits, one per INSERT:
+
+  ```sql
+  (SELECT COALESCE(MAX([Sequence]), 0) + 1
+     FROM [${flyway:defaultSchema}].[EntityField]
+    WHERE [EntityID] = '<entity-id>')
+  ```
+
+  The parks are left in place, matching `V202609081111__v6.1.x__Entity_SubtypeSelector`, which already pairs a park with an apply-time expression. Park-plus-expression is safe where park-plus-literal was not: `MAX + 1` avoids a collision whatever the park did.
+
+  This migration merged to `next` on 2026-09-03; the CI gate that detects the pattern landed on 2026-09-08, and it diffs against the PR's base — so on PRs into `next` the file is already present and invisible to it. It surfaces for the first time on a release PR into `main`, which is where it was caught.
+
+  No behaviour change on a fresh install: verified that the resulting sequences are identical, because the repeatable renumber normalises them either way.
+
+- e9e9873: fix(metadata): the retired Kimi K2.5 Moonshot cost record uses a Status its entity actually allows
+
+  `MJ: AI Model Costs.Status` is a value list of `Active | Expired | Invalid | Pending`. The Kimi K2.5 / Moonshot AI cost record was set to `Inactive` — valid on `MJ: AI Model Vendors`, where 34 rows legitimately use it, but not on `MJ: AI Model Costs` — so `mj sync push --ci` failed validation and took the deterministic integration tier red on `next`:
+
+  ```
+  Field "Status" has invalid value "Inactive"
+    → Allowed values are: Pending, Expired, Invalid, Active
+  ```
+
+  This is the same defect as the GLM-4.7 Cerebras record fixed in `1fa6f6b08b`, reintroduced by the AI-model research routine in #4110. The research pass writes `Inactive` for a retired cost row because that is the word a human would reach for, and nothing in the authoring path rejects it — the value list is only enforced at push time, on a branch nobody validates until CI runs.
+
+  The record now reads `Status: "Expired"` and carries `EndedAt: "2026-08-31T00:00:00.000Z"`. `EndedAt` is documented as "when this pricing expired… NULL indicates currently active pricing", so an expired row without it would contradict itself — the same pairing the GLM-4.7 fix used. The date is the one the record's own `Comments` already gave for Moonshot's sunset of `moonshotai/Kimi-K2.5`. That comment said "STATUS FLIPPED TO INACTIVE", which would have described a value the row no longer holds, so it now reads "STATUS SET TO EXPIRED, ENDEDAT".
+
+  The sibling `MJ: AI Model Vendors` rows keep `Inactive`, which is correct there.
+
+- 0677595: Restore the 56 generated `Validate()` overrides on `MJCoreEntities`, absent since `197fdf8376`.
+
+  `v6.1.0-edge.5` shipped `packages/MJCoreEntities/src/generated/entities/__mj.ts` with 56 `public override Validate()` methods, covering 46 entity classes. `197fdf8376` ("100% CodeGen idempotency, field change tracking, and churn elimination") regenerated that file and emitted none, and the follow-up `9ef9321847` did not restore them. Neither commit's message nor its changeset mentions validation, so the removal was silent — no consumer of `@memberjunction/core-entities` had any signal that entity validation had stopped running for those classes.
+
+  Restored by regenerating from a database built only from this repo's own migrations and metadata. The regenerated set is byte-identical in membership to what `v6.1.0-edge.5` shipped — diffing the validator class sets between the tag and the regeneration returns nothing — and the file diff is purely additive: 2,854 insertions, 0 deletions.
+
+  Not included: `MJFormChromeRuleEntity`'s validator, added by `0654f69462` after the edge.5 tag and removed before any release, so it has never shipped. It cannot be regenerated on a fresh install because its `GeneratedCode` record was never seeded by a migration — a separate pre-existing gap, tracked independently rather than hand-patched into generated output.
+
+### Patch Changes
+
+- b7819d2: Add Authorization.Check remotable operation: evaluate named MJ: Authorizations (including ancestor grants) over ExecuteRemoteOperation. Unknown names fail closed. UseAuditLog rows write MJ: Audit Logs.
+- 197fdf8: Achieve 100% CodeGen idempotency relative to database state and eliminate metadata churn across SQL Server and PostgreSQL:
+  - **Idempotency (No-Change Runs)**: Running CodeGen against an unchanged schema produces zero diffs and zero surviving migration artifacts. The run report confirms `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`. Empty capture files are cleaned up automatically.
+  - **Minimal Blast Radius (Single-Column Changes)**: Adding a column to an entity modifies only that entity's artifacts (`__mj.ts`, specific entity zod/schema files, `generated.ts` type block, and `mjentity.form.component.*`). Sibling fields and other entities are strictly untouched.
+  - **Decision Metadata Persistence**: Categorization, display name, and form layout decisions are persisted to `metadata/entities/decisions/` and committed to version control, ensuring clean-room runs match warm runs.
+  - **Stable Form Submodule Partitioning**: Replaced array index-chunking in Angular form submodule generation with stable hash buckets of entity names, preventing unrelated form files from shifting when an entity is added or removed.
+  - **Deterministic Ordering**: Unified entity, field, and relationship sorting around `OrdinalCompare` across TypeScript and SQL, eliminating locale and database collation discrepancies.
+  - **MetadataSync Preservation**: Preserved runtime and CodeGen-managed fields during push synchronization while maintaining deterministic lookup index caching.
+  - **Description Lock Protection**: Corrected inverted `AutoUpdateDescription` logic in `MJEntityFieldEntityExtended` and `MJEntityEntityExtended` so that user edits to `Description` flip `AutoUpdateDescription` to `false`, preventing subsequent CodeGen runs from overwriting customized descriptions.
+
+- 38d4482: Filter JSON can name fields as `Source.Field` (always written when the builder is given `sources`). Read path accepts dotted and bare names. `CompositeFilter` (`FromJSON` / `Evaluate` / `SummaryText`) lives in `@memberjunction/core` for in-memory eval and compact/grid copy. Views still compile to SQL and strip the prefix. Multi-entity field picker is a two-pane UI; single-entity views are unchanged.
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 7fefca2: Fix Smart Filter doing nothing when a User View is first created.
+
+  `MJUserViewEntityExtended.Save()` detected a brand-new view with `!this.ID`. Since `NewRecord()` began pre-assigning a UUID primary key that check is never true, and because the first value written to a fresh field also seeds its `OldValue`, neither `SmartFilterEnabled` nor `SmartFilterPrompt` reads as Dirty on create. The net effect was that the AI Smart Filter pass never ran on create: the prompt was stored but no `WhereClause` was generated. Editing an existing view still worked.
+  - Newness is now detected with `IsSaved`, in both `Save()` and `UpdateWhereClause()`.
+  - On a new record, the empty `FilterState` seeded by `NewRecord()` no longer erases a `WhereClause` that a caller set directly (programmatic view creation without `CustomWhereClause`).
+  - A saved view whose `SmartFilterWhereClause` was never generated (e.g. created while this bug was live) is regenerated on its next `UpdateWhereClause()`.
+  - The `UpdateWhereClause` GraphQL query now awaits and forces the regeneration, uses the read-write provider for its save, and fails clearly if the view cannot be loaded.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0ec1980]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/interactive-component-types@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Minor Changes

@@ -152,3 +152,32 @@ describe('GraphQLServerGeneratorBase — external-data-source gating (H4)', () =
     });
   });
 });
+
+describe('GraphQLServerGeneratorBase — record-access audit log key', () => {
+  let gen: TestableGenerator;
+  beforeEach(() => {
+    gen = new TestableGenerator();
+    metadataEntities.length = 0;
+  });
+
+  it('single-column key: passes the bare resolver argument, named after the PK CodeName', () => {
+    const out = gen.resolver(makeEntity({ AuditRecordAccess: true, PrimaryKeys: [pk('order_id')], FirstPrimaryKey: pk('order_id') }), 'DemoOrders_');
+    expect(out).toContain("this.createRecordAccessAuditLogRecord(provider, userPayload, 'Demo Orders', order_id)");
+  });
+
+  it('composite key: serializes every key column with ToConcatenatedString() instead of truncating to the first', () => {
+    const out = gen.resolver(
+      makeEntity({ AuditRecordAccess: true, PrimaryKeys: [pk('order_id'), pk('line_no')], FirstPrimaryKey: pk('order_id') }),
+      'DemoOrders_',
+    );
+    expect(out).toContain(
+      "this.createRecordAccessAuditLogRecord(provider, userPayload, 'Demo Orders', new CompositeKey([{ FieldName: 'order_id', Value: order_id }, { FieldName: 'line_no', Value: line_no }]).ToConcatenatedString())",
+    );
+    expect(out).not.toMatch(/createRecordAccessAuditLogRecord\([^\n]*'Demo Orders', order_id\)/);
+  });
+
+  it('emits no audit call when AuditRecordAccess is off', () => {
+    const out = gen.resolver(makeEntity({ AuditRecordAccess: false, PrimaryKeys: [pk('order_id'), pk('line_no')] }), 'DemoOrders_');
+    expect(out).not.toContain('createRecordAccessAuditLogRecord');
+  });
+});

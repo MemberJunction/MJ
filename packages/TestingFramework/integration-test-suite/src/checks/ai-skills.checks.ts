@@ -8,7 +8,7 @@
  *     the Limited×Auto grant intersection.
  *   - The v5.45 observability round-trip (AIAgentRun.PlanMode + AIAgentRunStep.Skills JSON).
  *   - Skill permissions (grantee-exclusivity validator + GetSkillsForAgent user filter).
- *   - GetSkillActionIDs / GetSkillSubAgentIDs bundle resolution.
+ *   - GetSkillActionIDs / GetSkillSubAgentIDs bundle resolution, and GetSkillExposedActionIDs ⊆ bundled.
  *   - SkillImportExportService SKILL.md round-trip + unknown-name warnings.
  *   - AISkill.ExportMarkdown / AISkill.ImportMarkdown Remote Operations.
  *
@@ -120,6 +120,10 @@ export const AiSkillsChecks: NamedCheck[] = [
             const subIds = AIEngine.Instance.GetSkillSubAgentIDs(f.SkillActive.ID);
             Assert(actionIds.some(id => UUIDsEqual(id, f.AnyAction.ID)), 'bundled action ID must be returned');
             Assert(subIds.some(id => UUIDsEqual(id, f.BundledSubAgent.ID)), 'bundled sub-agent ID must be returned');
+            // ExposeToModel defaults to 1, so a freshly bundled action is also in the exposed subset.
+            const exposedIds = AIEngine.Instance.GetSkillExposedActionIDs(f.SkillActive.ID);
+            Assert(exposedIds.some(id => UUIDsEqual(id, f.AnyAction.ID)), 'a bundled action with the default ExposeToModel must be in the exposed subset');
+            Assert(exposedIds.every(id => actionIds.some(a => UUIDsEqual(a, id))), 'the exposed subset must be a subset of the bundled IDs');
         }
     },
     // ── v5.45 double activation gate (availability vs. trigger) ─────────────────────────────────

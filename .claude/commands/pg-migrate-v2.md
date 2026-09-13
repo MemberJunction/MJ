@@ -228,7 +228,7 @@ docker cp migrations-pg/v5/. claude-dev:/workspace/MJ/migrations-pg/v5/
 ### Step 1b: Run the converter
 
 ```bash
-docker exec claude-dev bash -lc 'cd /workspace/MJ && MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate convert --split --verbose 2>&1 | tee /tmp/v2-convert.log'
+docker exec claude-dev bash -lc 'cd /workspace/MJ && MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 pnpm mj migrate convert --split --verbose 2>&1 | tee /tmp/v2-convert.log'
 #   --file V2026..__x.sql   convert one file
 #   --dry-run               classify only, write nothing
 #   --allow-gaps            exit 0 despite gaps (still emits .needs-hand + report)
@@ -271,7 +271,7 @@ cd /workspace/MJ
 export DB_PLATFORM=postgresql PG_HOST=postgres-claude PG_PORT=5432 \
   PG_DATABASE=MJ_PG_Rebake PG_USERNAME=mj_admin PG_PASSWORD=Claude2Pg99 \
   CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 MJ_CORE_SCHEMA=__mj
-MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate convert --split --bake-codegen --verbose
+MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 pnpm mj migrate convert --split --bake-codegen --verbose
 '
 ```
 
@@ -334,7 +334,7 @@ V202606040230 AgentRunWatchdog_Maintenance_Sprocs                   PROCEDURE
 Prioritize routines with confirmed runtime impact: spAcquireScheduledJobLock, spSweepStaleAIAgentRuns, spStampAIAgentRunHeartbeat, spExtendScheduledJobLease.
 
 ## Step 4: Confirm structural cleanliness
-  cd /workspace/MJ && MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 npx mj migrate convert --split --verbose
+  cd /workspace/MJ && MJ_SQLGLOT_PYTHON=/tmp/sqlglot-venv/bin/python3 pnpm mj migrate convert --split --verbose
 Then verify NO .needs-hand files remain:
   ls migrations-pg/v5/*.pg.sql.needs-hand 2>/dev/null && echo STILL_HAVE_GAPS || echo NO_GAPS_REMAIN
 
@@ -399,10 +399,10 @@ export DB_PLATFORM=postgresql DB_HOST=postgres-claude DB_PORT=5432 \
   CODEGEN_DB_USERNAME=mj_admin CODEGEN_DB_PASSWORD=Claude2Pg99 MJ_CORE_SCHEMA=__mj
 
 # 1. Apply schema + inline-baked CodeGen objects (all .pg.sql, in order, via Skyway). No codegen.
-npx mj migrate --verbose 2>&1 | tee /tmp/v2-migrate.log
+pnpm mj migrate --verbose 2>&1 | tee /tmp/v2-migrate.log
 
 # 2. Seed metadata to current state (--ci = non-interactive)
-npx mj sync push --dir metadata --ci 2>&1 | tee /tmp/v2-syncpush.log
+pnpm mj sync push --dir metadata --ci 2>&1 | tee /tmp/v2-syncpush.log
 '
 ```
 
@@ -450,7 +450,7 @@ docker exec claude-dev bash -lc '
 cd /workspace/MJ
 DB_PLATFORM=sqlserver DB_HOST=sql-claude DB_PORT=1433 DB_DATABASE=MJ_SQL_Compare \
   DB_ENCRYPT=false DB_TRUST_SERVER_CERTIFICATE=true \
-  CODEGEN_DB_USERNAME=sa CODEGEN_DB_PASSWORD=Claude2Sql99 npx mj migrate --verbose
+  CODEGEN_DB_USERNAME=sa CODEGEN_DB_PASSWORD=Claude2Sql99 pnpm mj migrate --verbose
 '
 ```
 

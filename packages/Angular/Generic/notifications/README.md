@@ -77,6 +77,29 @@ MJNotificationService.Instance.CreateSimpleNotification(
 );
 ```
 
+### Rich Notifications
+
+A toast with an image (or icon), a bold title and a line of detail, drawn on the surface tokens with the brand colour as its accent — so a white-label brand ramp themes it. Used for agent completions.
+
+```typescript
+MJNotificationService.Instance.CreateRichNotification({
+  title: 'Sage finished',
+  message: 'in Quarterly planning',
+  imageUrl: agent.LogoURL,            // falls back to iconClass, then a generic robot icon
+  hideAfter: 5000,
+  dedupeKey: `agent-completion:${conversationId}`,
+  context: { conversationId, agentId: agent.ID, agentName: agent.Name }
+});
+```
+
+Toasts sharing a `dedupeKey` collapse into one: a toast already on screen is kept (a repeat only extends it), and one still held back by `deferMs` is superseded by the later call. The server's Agent Completion notification arrives deferred; the client that ran the agent announces the same completion a moment later, and that wording is the one shown.
+
+Hosts that brand the assistant themselves set `CompletionImageUrlResolver` so the toast wears the same face as the chat bubbles:
+
+```typescript
+MJNotificationService.Instance.CompletionImageUrlResolver = () => this.AssistantAvatarUrl;
+```
+
 ### Persistent (Database) Notifications
 
 ```typescript
@@ -113,6 +136,8 @@ await MJNotificationService.RefreshUserNotifications();
 | Method | Description |
 |--------|-------------|
 | `CreateSimpleNotification(message, style?, hideAfter?)` | Display a temporary toast notification |
+| `CreateRichNotification(options)` | Display a rich toast (image/icon, title, detail) with per-key de-duplication and optional deferral — see `MJRichNotificationOptions` |
+| `CompletionImageUrlResolver` (property) | Host hook returning the image for agent-completion toasts; wins over the caller's `imageUrl` |
 | `CreateNotification(title, message, resourceTypeId?, resourceRecordId?, config?, displayToUser?)` | Create a persistent notification in the database |
 | `PushStatusUpdates()` | Returns an Observable for real-time push notifications |
 

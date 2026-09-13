@@ -163,6 +163,8 @@ interface ScriptedActionResult {
 interface RunActionCall {
     actionName: string;
     params: ScriptedActionParam[];
+    /** What BaseAgent.ExecuteSingleAction stamped as Context.ActiveSkillIDs (the run's active skills). */
+    activeSkillIDs?: unknown;
 }
 
 /** Save-queue flush diagnostics (shape from AgentRunStepSaveQueue.Flush). */
@@ -345,8 +347,8 @@ class LoopHarness {
                     ResultCodes: { Items: [] },
                 },
             ],
-            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[] }): Promise<ScriptedActionResult> => {
-                const call: RunActionCall = { actionName: input.Action.Name, params: input.Params };
+            RunAction: async (input: { Action: { Name: string }; Params: ScriptedActionParam[]; Context?: { ActiveSkillIDs?: unknown } }): Promise<ScriptedActionResult> => {
+                const call: RunActionCall = { actionName: input.Action.Name, params: input.Params, activeSkillIDs: input.Context?.ActiveSkillIDs };
                 this.runActionCalls.push(call);
                 return this.runAction(call);
             },
@@ -604,7 +606,9 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
 
         // The LLM's action params were converted to the ActionParam array shape
         expect(harness.runActionCalls).toEqual([
-            { actionName: ACTION_NAME, params: [{ Name: 'foo', Value: 'bar', Type: 'Input' }] },
+            // ActiveSkillIDs is ALWAYS stamped inside a run — an empty array here means "in a run, no
+            // skill active", which Scoped Search treats differently from "no run at all" (undefined).
+            { actionName: ACTION_NAME, params: [{ Name: 'foo', Value: 'bar', Type: 'Input' }], activeSkillIDs: [] },
         ]);
 
         // The ActionExecutionLog ID was stamped onto the Actions step (index 2: after Validation + Prompt)
@@ -616,6 +620,19 @@ describe('BaseAgent.Execute — full loop: prompt → actions → prompt → fin
         expect(contents.some((c) => c.includes(`You invoked the **${ACTION_NAME}** action`))).toBe(true);
         expect(contents.some((c) => c.startsWith('Action results:'))).toBe(true);
         expect(runner.Calls[1].conversationMessages).toBe(params.conversationMessages);
+    });
+});
+
+describe('BaseAgent.Execute — Context.ActiveSkillIDs carries the run\'s active skills to every action', () => {
+    it('merges the parent run\'s activated skills (parentActivatedSkillIDs) into the stamp, so a sub-agent\'s actions see the root\'s skill', async () => {
+        const PARENT_SKILL = 'aaaaaaaa-5555-4000-8000-000000000001';
+        harness.runAction = () => ({ Success: true, Message: 'ok', Params: [], Result: { ResultCode: 'SUCCESS' }, LogEntry: null });
+        const { agent } = makeAgent([
+            () => llmEnvelope(actionsEnvelope()),
+            () => llmEnvelope(successEnvelope()),
+        ]);
+        await agent.Execute(makeParams({ parentActivatedSkillIDs: [PARENT_SKILL] }));
+        expect(harness.runActionCalls[0].activeSkillIDs).toEqual([PARENT_SKILL]);
     });
 });
 

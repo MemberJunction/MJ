@@ -192,3 +192,11 @@ MJ-idiomatic keys are extracted (`ExtractRealtimeFeatures`), translated to provi
 - `WaitForConfigApplied()` resolves once the initial config is on the socket (deferred to `session.created` on OpenAI). A **15s readiness deadline** (`configReadinessTimeoutMs`, overridable) rejects awaiting callers on a silent endpoint WITHOUT cancelling the deferred apply.
 - `response.done` usage surfaces **per-modality token detail** (`RealtimeUsage.InputTokenDetails`/`OutputTokenDetails`: text/audio/image/cached) — required for multi-channel cost attribution (audio-in bills ~8× text-in on GPT Realtime 2.1).
 - `Capabilities.CanReconfigureTurnMode` is profile-gated (`supportsLiveReconfigure`); `Reconfigure` no-ops on profiles that declare no support.
+
+## OpenAI Live driver (`OpenAILiveRealtime`)
+
+`OpenAILiveRealtime` (`@RegisterClass(BaseRealtimeModel, 'OpenAILiveRealtime')`) implements the server model driver for the **OpenAI Live API (`gpt-live-1`)**:
+- **Endpoint**: `https://api.openai.com/v1/realtime/calls` WebRTC SDP exchange and session minting.
+- **Client Session Minting**: Generates client session configurations for browser WebRTC direct connection via `OpenAILiveClient`.
+- **Wire Event Compliance**: Enforces OpenAI Live wire protocol — tool outputs are delivered as `response.item.create` (type `function_call_output`), followed by `response.create` coordinated by `RealtimeToolBatchBarrier`. Does not emit `conversation.item.create` (which is rejected by OpenAI Live).
+- **Tool Projection & Execution**: Direct actions and subagent delegations (`invoke-target-agent`) are projected directly into the Live session tools schema, allowing the model to invoke direct tools and target agents concurrently.

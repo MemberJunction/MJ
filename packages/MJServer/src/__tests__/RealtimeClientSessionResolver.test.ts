@@ -2769,6 +2769,26 @@ describe('RealtimeClientSessionResolver — app awareness (applicationId / appCo
         const relayArg = executeRelayedToolMock.mock.calls[0][0] as { AllowedAgents?: Array<{ agentId: string }> };
         expect(relayArg.AllowedAgents?.map(a => a.agentId)).toEqual(['skip-1']);
     });
+
+    it('passes the persisted directActions from the session config into ExecuteRelayedTool', async () => {
+        currentProvider = makeProvider(() =>
+            makeSessionEntity({
+                Config_: JSON.stringify({
+                    targetAgentID: 'lead-1',
+                    directActions: { enabled: true, actionNames: ['SendEmail'] },
+                }),
+            }),
+        );
+        executeRelayedToolMock.mockResolvedValue({ ResultJson: '{"ok":true}', Success: true });
+        const resolver = makeResolver();
+
+        await resolver.ExecuteRealtimeSessionTool(
+            'session-1', 'call-1', 'SendEmail', '{"To":"user@test.com"}', makeCtx(), makePubSub(),
+        );
+
+        const relayArg = executeRelayedToolMock.mock.calls[0][0] as { DirectActions?: { enabled: boolean; actionNames: string[] } };
+        expect(relayArg.DirectActions).toEqual({ enabled: true, actionNames: ['SendEmail'] });
+    });
 });
 
 describe('RealtimeClientSessionResolver — scoped-anonymous elevation (issue #3371)', () => {

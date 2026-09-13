@@ -21,6 +21,7 @@ describe('METADATA_KEYWORDS', () => {
     expect(METADATA_KEYWORDS.FILE).toBe('@file:');
     expect(METADATA_KEYWORDS.LOOKUP).toBe('@lookup:');
     expect(METADATA_KEYWORDS.PARENT).toBe('@parent:');
+    expect(METADATA_KEYWORDS.OWNER).toBe('@owner:');
     expect(METADATA_KEYWORDS.ROOT).toBe('@root:');
     expect(METADATA_KEYWORDS.ENV).toBe('@env:');
     expect(METADATA_KEYWORDS.URL).toBe('@url:');
@@ -29,7 +30,7 @@ describe('METADATA_KEYWORDS', () => {
   });
 
   it('should be frozen/readonly (const assertion)', () => {
-    expect(Object.keys(METADATA_KEYWORDS)).toHaveLength(8);
+    expect(Object.keys(METADATA_KEYWORDS)).toHaveLength(9);
   });
 });
 
@@ -38,6 +39,7 @@ describe('METADATA_KEYWORD_PREFIXES', () => {
     expect(METADATA_KEYWORD_PREFIXES).toContain('@file:');
     expect(METADATA_KEYWORD_PREFIXES).toContain('@lookup:');
     expect(METADATA_KEYWORD_PREFIXES).toContain('@parent:');
+    expect(METADATA_KEYWORD_PREFIXES).toContain('@owner:');
     expect(METADATA_KEYWORD_PREFIXES).toContain('@root:');
     expect(METADATA_KEYWORD_PREFIXES).toContain('@env:');
     expect(METADATA_KEYWORD_PREFIXES).toContain('@url:');
@@ -61,6 +63,10 @@ describe('isMetadataKeyword', () => {
 
   it('should return true for @parent: references', () => {
     expect(isMetadataKeyword('@parent:ID')).toBe(true);
+  });
+
+  it('should return true for @owner: references', () => {
+    expect(isMetadataKeyword('@owner:ShipToPersonID')).toBe(true);
   });
 
   it('should return true for @root: references', () => {
@@ -120,6 +126,10 @@ describe('getMetadataKeywordType', () => {
     expect(getMetadataKeywordType('@parent:ID')).toBe('parent');
   });
 
+  it('should return "owner" for @owner: references', () => {
+    expect(getMetadataKeywordType('@owner:ShipToPersonID')).toBe('owner');
+  });
+
   it('should return "root" for @root: references', () => {
     expect(getMetadataKeywordType('@root:ID')).toBe('root');
   });
@@ -164,6 +174,10 @@ describe('extractKeywordValue', () => {
 
   it('should extract value from @parent: reference', () => {
     expect(extractKeywordValue('@parent:ID')).toBe('ID');
+  });
+
+  it('should extract value from @owner: reference', () => {
+    expect(extractKeywordValue('@owner:ShipToPersonID')).toBe('ShipToPersonID');
   });
 
   it('should extract value from @root: reference', () => {
@@ -230,6 +244,10 @@ describe('isContextDependentKeyword', () => {
     expect(isContextDependentKeyword('@root:Name')).toBe(true);
   });
 
+  it('should return true for @owner: keywords', () => {
+    expect(isContextDependentKeyword('@owner:ShipToPersonID')).toBe(true);
+  });
+
   it('should return false for @file: keywords', () => {
     expect(isContextDependentKeyword('@file:test.md')).toBe(false);
   });
@@ -263,6 +281,10 @@ describe('isExternalReferenceKeyword', () => {
   it('should return false for @parent: keywords', () => {
     expect(isExternalReferenceKeyword('@parent:ID')).toBe(false);
   });
+
+  it('should return false for @owner: keywords', () => {
+    expect(isExternalReferenceKeyword('@owner:ShipToPersonID')).toBe(false);
+  });
 });
 
 describe('createKeywordReference', () => {
@@ -276,6 +298,10 @@ describe('createKeywordReference', () => {
 
   it('should create @parent: reference', () => {
     expect(createKeywordReference('parent', 'ID')).toBe('@parent:ID');
+  });
+
+  it('should create @owner: reference', () => {
+    expect(createKeywordReference('owner', 'ShipToPersonID')).toBe('@owner:ShipToPersonID');
   });
 
   it('should create @root: reference', () => {
@@ -300,10 +326,11 @@ describe('createKeywordReference', () => {
 });
 
 describe('Keyword category arrays', () => {
-  it('CONTEXT_DEPENDENT_KEYWORDS should contain @parent: and @root:', () => {
+  it('CONTEXT_DEPENDENT_KEYWORDS should contain @parent:, @root:, and @owner:', () => {
     expect(CONTEXT_DEPENDENT_KEYWORDS).toContain(METADATA_KEYWORDS.PARENT);
     expect(CONTEXT_DEPENDENT_KEYWORDS).toContain(METADATA_KEYWORDS.ROOT);
-    expect(CONTEXT_DEPENDENT_KEYWORDS).toHaveLength(2);
+    expect(CONTEXT_DEPENDENT_KEYWORDS).toContain(METADATA_KEYWORDS.OWNER);
+    expect(CONTEXT_DEPENDENT_KEYWORDS).toHaveLength(3);
   });
 
   it('EXTERNAL_REFERENCE_KEYWORDS should contain @file:, @url:, and @template:', () => {

@@ -20,6 +20,10 @@ export * from './lib/types/form-events';
 export * from './lib/types/form-toolbar-item';
 export * from './lib/types/entity-form-config';
 
+// Section indicators (unsaved-changes dot + invalid-field count on panels and the chrome rail)
+export * from './lib/section-indicators/form-section-indicators';
+export * from './lib/section-indicators/form-section-indicator-coordinator.service';
+
 // Form resolution (form-variant / interactive-override picker — Generic, no Explorer deps)
 export * from './lib/resolver/form-resolver.service';
 

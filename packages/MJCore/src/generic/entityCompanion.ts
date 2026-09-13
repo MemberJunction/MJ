@@ -44,7 +44,7 @@
 import { BaseEntity } from './baseEntity';
 import { ValidationResult } from './entityInfo';
 import type { EntitySavePlan } from './entitySavePlan';
-import type { EntitySaveOptions } from './interfaces';
+import type { EntitySaveOptions, IEntityDataProvider } from './interfaces';
 
 /**
  * The serialized form of a single companion as it crosses the wire.
@@ -265,6 +265,14 @@ export abstract class EntityCompanion<TWire = unknown> {
      * tracking, and so on. Called after the graph commits successfully.
      */
     public AcceptChanges(): void {
+        /* no-op by default */
+    }
+
+    /**
+     * Rebinds the provider used by this companion and its child entities.
+     * Subclasses with child entities override this to propagate the provider.
+     */
+    public BindProvider(_provider: IEntityDataProvider | null): void {
         /* no-op by default */
     }
 }

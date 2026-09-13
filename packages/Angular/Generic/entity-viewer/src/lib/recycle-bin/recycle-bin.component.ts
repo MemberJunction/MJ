@@ -493,7 +493,12 @@ export class RecycleBinComponent extends BaseAngularComponent implements OnInit 
       const v = snapshot[f.Name];
       if (typeof v === 'string' && v.trim().length > 0) return v;
     }
-    return `Record ${snapshot[entityInfo.PrimaryKeys[0]?.Name] ?? ''}`;
+    // Last resort: every primary-key column's value (the entity is arbitrary and may be composite-keyed)
+    const keyValues = entityInfo.PrimaryKeys
+      .map((pk) => snapshot[pk.Name])
+      .filter((v) => v != null && v !== '')
+      .map((v) => String(v));
+    return `Record ${keyValues.join(', ')}`;
   }
 
   /**

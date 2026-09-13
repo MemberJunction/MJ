@@ -26,12 +26,28 @@ export interface TabRequest {
   /**
    * When true, opening this tab must NOT mutate other tabs' pin state.
    * OpenTabForced normally pins all existing temporary tabs (the classic
-   * "only one temp tab at a time" rule); record tabs under the records-style
-   * record-open model live in their own layout region, so opening one must
-   * leave the nav tab's temp status untouched — otherwise the pinned nav tab
-   * forces the main tab bar visible on every nav page forever after.
+   * "only one temp tab at a time" rule).
+   *
+   * Record opens no longer need this: `TempScope: 'records'` scopes both the
+   * consumption pool and the pin cascade to the records region, which leaves
+   * the nav tab's temp status untouched while still enforcing one temp tab
+   * per region. (A pinned nav tab forces the main tab bar visible on every
+   * nav page forever after, which is what the blunt opt-out was avoiding.)
+   * It remains for callers that genuinely want no cascade at all.
    */
   PreservePinState?: boolean;
+
+  /**
+   * Which "single temporary tab" pool this request participates in, for both
+   * consumption (OpenTab) and the pin cascade (OpenTabForced). Defaults to
+   * `'main'`, the classic single-pool behavior.
+   *
+   * `'records'` targets the records region: a plain record open consumes the
+   * region's temporary record tab and leaves nav tabs alone, and vice versa.
+   * The two pools are disjoint, which is what lets records get preview-tab
+   * behavior without a nav click ever replacing an open record.
+   */
+  TempScope?: 'main' | 'records';
 
   /** Tab-specific configuration */
   Configuration?: Record<string, unknown>;

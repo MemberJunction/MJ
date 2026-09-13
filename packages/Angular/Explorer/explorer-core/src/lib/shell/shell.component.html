@@ -390,8 +390,12 @@
 <!-- Command Palette -->
 <mj-command-palette (AppSelected)="onAppSwitch($event)"></mj-command-palette>
 
-<!-- Unified command palette (Shell.Omnibar.Enabled) -->
-<mj-omnibar-palette #omnibarPalette (SettingsRequested)="OnPaletteSettingsRequested()"></mj-omnibar-palette>
+<!-- Unified command palette (Shell.Omnibar.Enabled). Rendered only while the search bar is:
+     when Instance Config or the host's chrome policy hides search, the palette must not
+     remain reachable through Ctrl/Cmd+K. -->
+@if (ShowSearchBar) {
+  <mj-omnibar-palette #omnibarPalette (SettingsRequested)="OnPaletteSettingsRequested()"></mj-omnibar-palette>
+}
 
 <!-- Legacy universal search as a Spotlight-style overlay — omnibar-off MOBILE only
      (on desktop the inline header composite owns the experience; this opens from

@@ -34,7 +34,13 @@ vi.mock('@memberjunction/core', () => ({
         RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] })
     })),
     UserInfo: class UserInfo {},
-    CompositeKey: { FromID: vi.fn().mockReturnValue({}) },
+    CompositeKey: {
+        FromID: vi.fn().mockReturnValue({}),
+        // Records the (entity, row) pair so tests can assert the key was built from the entity's real PK columns.
+        FromEntityRecord: vi.fn((entity: { PrimaryKeys: { Name: string }[] }, row: Record<string, unknown>) => ({
+            KeyValuePairs: entity.PrimaryKeys.map(pk => ({ FieldName: pk.Name, Value: row[pk.Name] })),
+        })),
+    },
     RunViewResult: class RunViewResult {}
 }));
 
@@ -223,5 +229,94 @@ describe('ApolloEnrichmentContactsAction', () => {
         it('should return false for empty/null title', () => {
             expect((action as unknown as Record<string, (t: string) => boolean>).IsExcludedTitle(null as unknown as string)).toBe(false);
         });
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Primary-key handling on the CONFIGURED account / contact entities (not MJ core entities):
+// keys must come from the entity's real primary key column(s), never a literal `ID`.
+// ---------------------------------------------------------------------------
+
+describe('ApolloEnrichmentAccountsAction primary-key handling', () => {
+    it('updateAccountEnrichedTimestamp loads the configured account entity by its real (composite) key', async () => {
+        const action = new ApolloEnrichmentAccountsAction();
+        const accountsEntityInfo = { Name: 'Accounts', PrimaryKeys: [{ Name: 'OrgID' }, { Name: 'Region' }] };
+        const accountEntity = { Set: vi.fn(), Save: vi.fn().mockResolvedValue(true), LatestResult: null };
+        const md = {
+            EntityByName: vi.fn().mockReturnValue(accountsEntityInfo),
+            GetEntityObject: vi.fn().mockResolvedValue(accountEntity),
+        };
+        const record = { OrgID: 42, Region: 'EMEA', Domain: 'example.com' };
+        const params = { AccountEntity: { EntityName: 'Accounts', EnrichedAtField: 'EnrichedAt' }, Record: record };
+
+        type TimestampUpdater = {
+            updateAccountEnrichedTimestamp(p: unknown, r: Record<string, unknown>, m: unknown, u: unknown): Promise<boolean>;
+        };
+        const ok = await (action as unknown as TimestampUpdater).updateAccountEnrichedTimestamp(params, record, md, {});
+
+        expect(ok).toBe(true);
+        expect(md.EntityByName).toHaveBeenCalledWith('Accounts');
+        const [entityName, key] = md.GetEntityObject.mock.calls[0];
+        expect(entityName).toBe('Accounts');
+        expect(key).toEqual({ KeyValuePairs: [{ FieldName: 'OrgID', Value: 42 }, { FieldName: 'Region', Value: 'EMEA' }] });
+        expect(accountEntity.Set).toHaveBeenCalledWith('EnrichedAt', expect.any(Date));
+    });
+});
+
+describe('ApolloEnrichmentContactsAction primary-key handling', () => {
+    type HistoryUpserter = {
+        UpsertContactEmploymentAndEducationHistory(contact: unknown, contactEntity: unknown, params: unknown): Promise<void>;
+    };
+    const employment = { organization_name: 'Acme', title: 'Engineer', current: true, start_date: null, end_date: null, degree: null };
+    const baseParams = {
+        EmploymentHistoryEntityName: 'Employment History',
+        EmploymentHistoryContactIDFieldName: 'ContactKey',
+        EmploymentHistoryOrganizationFieldName: 'Organization',
+        EmploymentHistoryTitleFieldName: 'Title',
+        CurrentUser: {},
+    };
+
+    it("filters history by the contact's real primary key value and column type, not a literal ID", async () => {
+        const action = new ApolloEnrichmentContactsAction();
+        const runView = vi.fn().mockResolvedValue({ Success: true, Results: [] });
+        const { RunView } = await import('@memberjunction/core');
+        (RunView as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () { return { RunView: runView }; });
+        const historyEntity = { NewRecord: vi.fn(), Set: vi.fn(), Save: vi.fn().mockResolvedValue(true), LatestResult: null };
+        const params = { ...baseParams, Md: { GetEntityObject: vi.fn().mockResolvedValue(historyEntity), EntityByName: vi.fn() } };
+        const contactEntity = {
+            PrimaryKeys: [{ Name: 'individual_id' }],
+            FirstPrimaryKey: { Name: 'individual_id', Value: 9001, NeedsQuotes: false },
+            EntityInfo: { Name: 'Contacts' },
+            Get: vi.fn(() => { throw new Error('Get("ID") must not be used for the contact key'); }),
+        };
+
+        await (action as unknown as HistoryUpserter).UpsertContactEmploymentAndEducationHistory(
+            { employment_history: [employment] }, contactEntity, params
+        );
+
+        expect(runView).toHaveBeenCalledTimes(1);
+        expect(runView.mock.calls[0][0].ExtraFilter).toContain('ContactKey = 9001');
+        expect(historyEntity.Set).toHaveBeenCalledWith('ContactKey', 9001);
+    });
+
+    it('refuses to build a single-column FK filter for a composite-keyed contact entity', async () => {
+        const action = new ApolloEnrichmentContactsAction();
+        const runView = vi.fn();
+        const { RunView, LogError } = await import('@memberjunction/core');
+        (RunView as unknown as ReturnType<typeof vi.fn>).mockImplementation(function () { return { RunView: runView }; });
+        const params = { ...baseParams, Md: { GetEntityObject: vi.fn(), EntityByName: vi.fn() } };
+        const contactEntity = {
+            PrimaryKeys: [{ Name: 'OrgID' }, { Name: 'PersonNo' }],
+            FirstPrimaryKey: { Name: 'OrgID', Value: 1, NeedsQuotes: false },
+            EntityInfo: { Name: 'Org People' },
+        };
+
+        await (action as unknown as HistoryUpserter).UpsertContactEmploymentAndEducationHistory(
+            { employment_history: [employment] }, contactEntity, params
+        );
+
+        expect(runView).not.toHaveBeenCalled();
+        expect(params.Md.GetEntityObject).not.toHaveBeenCalled();
+        expect(LogError).toHaveBeenCalledWith(expect.stringContaining('composite primary key'));
     });
 });

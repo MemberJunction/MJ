@@ -251,7 +251,13 @@ function writePackagesIndex(packageEntries) {
 }
 
 function mdCell(text) {
-  return (text ?? '').replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim();
+  // One pass over both characters that break a GFM table cell, so there is no
+  // escape ordering to get wrong (a trailing backslash must not neutralise the
+  // escaped pipe after it).
+  return (text ?? '')
+    .replace(/[\\|]/g, '\\$&')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function writeReleasesIndex(releaseEntries, written) {

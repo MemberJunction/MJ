@@ -302,3 +302,43 @@ describe('SQLServerTransactionGroup.Submit', () => {
     expect(notifications[0].results?.[0].Success).toBe(true);
   });
 });
+
+describe('SQLServerTransactionGroup.scopeItemVariables', () => {
+  it('scopes every name in a comma-separated DECLARE list, not just the first', () => {
+    const sql = [
+      'DECLARE @ID_h UNIQUEIDENTIFIER,',
+      '        @Name_h NVARCHAR(255),',
+      '        @Amount_h DECIMAL(18, 4)',
+      '',
+      "SET @ID_h = 'w-1'",
+      "SET @Name_h = N'x'",
+      'SET @Amount_h = 1.5',
+      '',
+      'EXEC [dbo].spCreateWidget @ID=@ID_h,',
+      '                @Name=@Name_h,',
+      '                @Amount=@Amount_h',
+    ].join('\n');
+    const out = SQLServerTransactionGroup.scopeItemVariables(sql, 3);
+    expect(out).toContain('DECLARE @ID_h_mjb3 UNIQUEIDENTIFIER,');
+    expect(out).toContain('@Name_h_mjb3 NVARCHAR(255),');
+    expect(out).toContain('@Amount_h_mjb3 DECIMAL(18, 4)'); // the comma inside the type is not a separator
+    expect(out).toContain("SET @Name_h_mjb3 = N'x'");
+    expect(out).toContain('@Name=@Name_h_mjb3'); // argument VALUE renamed …
+    expect(out).not.toMatch(/@Name_mjb3\s*=/); // … argument NAME untouched
+    expect(out).not.toMatch(/@(ID|Name|Amount)_h(?!_mjb3)/); // no bare reference survives
+  });
+
+  it('ends a declaration list at the next statement and leaves table-variable column lists alone', () => {
+    const sql = [
+      'DECLARE @T TABLE (ID INT, Name NVARCHAR(50))',
+      'DECLARE @n INT = @seed',
+      "INSERT INTO @T (ID, Name) VALUES (1, N'a')",
+      'SELECT @n = COUNT(*) FROM @T',
+    ].join('\n');
+    const out = SQLServerTransactionGroup.scopeItemVariables(sql, 0);
+    expect(out).toContain('DECLARE @T_mjb0 TABLE (ID INT, Name NVARCHAR(50))');
+    expect(out).toContain('DECLARE @n_mjb0 INT = @seed'); // an initializer's right-hand side is not a declaration
+    expect(out).toContain('INSERT INTO @T_mjb0 (ID, Name)');
+    expect(out).toContain('SELECT @n_mjb0 = COUNT(*) FROM @T_mjb0');
+  });
+});

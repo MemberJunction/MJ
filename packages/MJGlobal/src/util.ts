@@ -1948,3 +1948,15 @@ export function ToEpochMs(value: Date | string | number | null | undefined): num
     const ms = value instanceof Date ? value.getTime() : new Date(value).getTime();
     return Number.isNaN(ms) ? 0 : ms;
 }
+
+/**
+ * Locale-independent total order on strings (UTF-16 code units). Use for every sort whose
+ * result is EMITTED (generated code, SQL, file names, migration captures). Not for UI display —
+ * users expect locale collation there. `localeCompare` without a locale argument follows the
+ * process ICU default and is not reproducible across machines.
+ */
+export function ordinalCompare(a: string | null | undefined, b: string | null | undefined): number {
+    const sa = a ?? '';
+    const sb = b ?? '';
+    return sa < sb ? -1 : sa > sb ? 1 : 0;
+}

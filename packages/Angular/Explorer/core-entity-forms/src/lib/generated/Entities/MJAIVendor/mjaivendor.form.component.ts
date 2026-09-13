@@ -28,7 +28,8 @@ export class MJAIVendorFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIVendorTypes', sectionName: 'AI Vendor Types', isExpanded: false },
             { sectionKey: 'mJAIAgentRuns', sectionName: 'AI Agent Runs', isExpanded: false },
             { sectionKey: 'mJScopedPromptConfigs', sectionName: 'Scoped Prompt Configs', isExpanded: false },
-            { sectionKey: 'mJAIAgentHarnesses', sectionName: 'AI Agent Harnesses', isExpanded: false }
+            { sectionKey: 'mJAIAgentHarnesses', sectionName: 'AI Agent Harnesses', isExpanded: false },
+            { sectionKey: 'mJAIPersonaVendors', sectionName: 'AI Persona Vendors', isExpanded: false }
         ]);
     }
 }

@@ -17,6 +17,8 @@ export abstract class BaseAuthProvider implements IAuthProvider {
   jwksUri: string;
   /** OAuth client ID for this provider (used by OAuth proxy for upstream auth) */
   clientId?: string;
+  /** Provider domain hosting the OAuth endpoints when they aren't on the issuer (used by OAuth proxy) */
+  domain?: string;
   protected config: AuthProviderConfig;
   protected jwksClient: jwksClient.JwksClient;
 
@@ -27,6 +29,7 @@ export abstract class BaseAuthProvider implements IAuthProvider {
     this.audience = config.audience;
     this.jwksUri = config.jwksUri;
     this.clientId = config.clientId;
+    this.domain = config.domain;
 
     // Create HTTP agent with keep-alive to prevent socket hangups
     const agent = this.jwksUri.startsWith('https')

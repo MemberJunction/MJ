@@ -1,0 +1,13 @@
+{
+  "name": "@mj-fixture/app-server",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Test fixture: the server bootstrap package of a fake Open App. Registers a server-side BaseEntity subclass on import and exposes a startup export.",
+  "type": "module",
+  "main": "index.js",
+  "memberjunction": {
+    "serverExtensions": [
+      { "Enabled": true, "DriverClass": "FixtureAppEdge", "RootPath": "/fixture-app", "Settings": { "via": "package.json" } }
+    ]
+  }
+}

@@ -49,6 +49,17 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
     'force-advanced-gen': Flags.boolean({
       description: 'Bypass entity scoping in Pass 2 and force advanced generation to re-run for all entities.',
     }),
+    'no-ai': Flags.boolean({
+      description: 'Disable AI-driven advanced generation (descriptions, categories, search ranking). Overrides config and credential checks. Can also be set with MJ_CODEGEN_NO_AI=1.',
+    }),
+    'sql-output-dir': Flags.string({
+      description:
+        'Directory for CodeGen_Run_*.sql (EntityField INSERTs and other metadata SQL). Open Apps default to ./migrations/codegen. Do not point this at MJ/migrations/v*.',
+    }),
+    'skip-commands': Flags.boolean({
+      description:
+        'Skip running BEFORE and AFTER shell commands configured in mj.config. Can also be set with MJ_CODEGEN_SKIP_COMMANDS=1.',
+    }),
   };
 
   static Usage: PluginUsage = {
@@ -61,9 +72,12 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
       { name: '--skipdb', type: 'boolean', description: 'Regenerate code from existing metadata only (no DB operations)' },
       { name: '--skipfiles', type: 'boolean', description: 'Run DB-side operations only (no code files)' },
       { name: '--force-advanced-gen', type: 'boolean', description: 'Re-run advanced generation for all entities' },
+      { name: '--no-ai', type: 'boolean', description: 'Disable AI-driven advanced generation (same as MJ_CODEGEN_NO_AI=1)' },
+      { name: '--skip-commands', type: 'boolean', description: 'Skip running BEFORE/AFTER commands (same as MJ_CODEGEN_SKIP_COMMANDS=1)' },
+      { name: '--sql-output-dir', type: 'string', description: 'Directory for CodeGen_Run metadata SQL (Open Apps: ./migrations/codegen)' },
       { name: '--format', type: 'text|json|md', description: 'Output format (json for machine-readable result)' },
     ],
-    examples: ['mj codegen', 'mj codegen --skipdb', 'mj codegen --format=json'],
+    examples: ['mj codegen', 'mj codegen --skipdb', 'mj codegen --skip-commands', 'mj codegen --format=json'],
     runtime: { class: 'slow', typicalSeconds: 45, note: 'scales with entity count; full run far slower than a single-entity change' },
   };
 
@@ -85,6 +99,9 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
 
     initializeConfig(process.cwd());
 
+    const { SQLLogging } = await import('../Misc/sql_logging.js');
+    SQLLogging.sqlOutputDirFlag = flags['sql-output-dir'];
+
     // --force-advanced-gen bypasses Pass 2 scoping by toggling the existing
     // forceRegeneration.enabled config flag (honored by both sql_codegen.ts and
     // manage-metadata.ts), giving a uniform "process all entities" override.
@@ -95,6 +112,20 @@ advanced generation for ALL entities (bypasses changed-entity scoping).`;
         configInfo.forceRegeneration.enabled = true;
       }
       this.Host.Log('--force-advanced-gen: bypassing entity scoping; advanced generation will re-run for all entities.');
+    }
+
+    if (flags['no-ai'] || process.env.MJ_CODEGEN_NO_AI === '1' || process.env.MJ_CODEGEN_NO_AI === 'true') {
+      if (!configInfo.advancedGeneration) {
+        (configInfo as { advancedGeneration: { enableAdvancedGeneration: boolean } }).advancedGeneration = { enableAdvancedGeneration: false };
+      } else {
+        configInfo.advancedGeneration.enableAdvancedGeneration = false;
+      }
+      this.Host.Log('--no-ai: advanced generation disabled.');
+    }
+
+    if (flags['skip-commands'] || process.env.MJ_CODEGEN_SKIP_COMMANDS === '1' || process.env.MJ_CODEGEN_SKIP_COMMANDS === 'true') {
+      process.env.MJ_CODEGEN_SKIP_COMMANDS = '1';
+      this.Host.Log('--skip-commands: before/after shell commands skipped.');
     }
 
     return runMemberJunctionCodeGenerationWithResult(flags.skipdb, flags.skipfiles);

@@ -6,10 +6,17 @@
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Application } from 'express';
+import type { Server as HttpServer } from 'http';
 import { MJGlobal } from '@memberjunction/global';
-import { ServerExtensionLoader } from '../ServerExtensionLoader.js';
+import { ServerExtensionLoader, DefaultServerExtensionServiceRegistry } from '../ServerExtensionLoader.js';
 import { BaseServerExtension } from '../BaseServerExtension.js';
-import { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '../types.js';
+import {
+    ServerExtensionConfig,
+    ServerExtensionInitContext,
+    ServerExtensionPhase,
+    ExtensionInitResult,
+    ExtensionHealthResult,
+} from '../types.js';
 
 // ─── Test doubles ────────────────────────────────────────────────────────────
 
@@ -97,6 +104,48 @@ class OrderTrackingExtension extends BaseServerExtension {
     }
     async HealthCheck(): Promise<ExtensionHealthResult> {
         return { Healthy: true, Name: this.Name };
+    }
+}
+
+class ContextAwareExtension extends BaseServerExtension {
+    public ReceivedContext: ServerExtensionInitContext | null = null;
+    public MountedContext: ServerExtensionInitContext | null = null;
+    public ServiceInstance = { id: 'svc-123', doWork: () => true };
+
+    async Initialize(context: ServerExtensionInitContext): Promise<ExtensionInitResult> {
+        this.ReceivedContext = context;
+        return {
+            Success: true,
+            Message: 'ContextAwareExtension loaded',
+            Service: this.ServiceInstance,
+        };
+    }
+    async Shutdown(): Promise<void> {}
+    async HealthCheck(): Promise<ExtensionHealthResult> {
+        return { Healthy: true, Name: 'ContextAwareExtension' };
+    }
+    async OnAllExtensionsMounted(context: ServerExtensionInitContext): Promise<void> {
+        this.MountedContext = context;
+    }
+}
+
+class PostAuthExtension extends BaseServerExtension {
+    public override get DefaultPhase(): ServerExtensionPhase {
+        return 'post-auth';
+    }
+    public MountedContext: ServerExtensionInitContext | null = null;
+    public FoundPreAuthService: object | undefined = undefined;
+
+    async Initialize(_app: Application, _config: ServerExtensionConfig): Promise<ExtensionInitResult> {
+        return { Success: true, Message: 'PostAuthExtension loaded' };
+    }
+    async Shutdown(): Promise<void> {}
+    async HealthCheck(): Promise<ExtensionHealthResult> {
+        return { Healthy: true, Name: 'PostAuthExtension' };
+    }
+    async OnAllExtensionsMounted(context: ServerExtensionInitContext): Promise<void> {
+        this.MountedContext = context;
+        this.FoundPreAuthService = context.services.GetService('ContextAwareExtension');
     }
 }
 
@@ -409,6 +458,137 @@ describe('ServerExtensionLoader', () => {
         it('should be read-only (returns frozen reference)', async () => {
             const extensions = loader.Extensions;
             expect(Array.isArray(extensions)).toBe(true);
+        });
+    });
+
+    describe('DefaultServerExtensionServiceRegistry', () => {
+        it('registers and retrieves services', () => {
+            const registry = new DefaultServerExtensionServiceRegistry();
+            const service = { foo: 'bar' };
+            registry.RegisterService('MyService', service);
+
+            expect(registry.HasService('MyService')).toBe(true);
+            expect(registry.GetService('MyService')).toBe(service);
+            expect(registry.GetService('NonExistent')).toBeUndefined();
+        });
+
+        it('throws on empty key', () => {
+            const registry = new DefaultServerExtensionServiceRegistry();
+            expect(() => registry.RegisterService('', {})).toThrow('Service key cannot be empty');
+            expect(() => registry.RegisterService('   ', {})).toThrow('Service key cannot be empty');
+        });
+
+        it('replaces service with warning when key already registered', () => {
+            const registry = new DefaultServerExtensionServiceRegistry();
+            const first = { version: 1 };
+            const second = { version: 2 };
+
+            registry.RegisterService('Key', first);
+            registry.RegisterService('Key', second);
+
+            expect(registry.GetService('Key')).toBe(second);
+        });
+
+        it('returns all registered services via GetAllServices', () => {
+            const registry = new DefaultServerExtensionServiceRegistry();
+            registry.RegisterService('S1', { s1: true });
+            registry.RegisterService('S2', { s2: true });
+
+            const all = registry.GetAllServices();
+            expect(all.size).toBe(2);
+            expect(all.get('S1')).toEqual({ s1: true });
+            expect(all.get('S2')).toEqual({ s2: true });
+        });
+    });
+
+    describe('Phased Loading & Modern InitContext', () => {
+        it('passes ServerExtensionInitContext with services, httpServer, and publicUrl to modern extensions', async () => {
+            const ext = new ContextAwareExtension();
+            registerExtensionInFactory('ContextAware', ext);
+
+            const mockHttpServer = {} as HttpServer;
+            await loader.LoadExtensions(
+                mockApp,
+                [{ Enabled: true, DriverClass: 'ContextAware', RootPath: '/ctx', Settings: { foo: 'bar' } }],
+                { httpServer: mockHttpServer, publicUrl: 'https://example.com' }
+            );
+
+            expect(ext.ReceivedContext).not.toBeNull();
+            expect(ext.ReceivedContext!.app).toBe(mockApp);
+            expect(ext.ReceivedContext!.httpServer).toBe(mockHttpServer);
+            expect(ext.ReceivedContext!.publicUrl).toBe('https://example.com');
+            expect(ext.ReceivedContext!.phase).toBe('pre-auth');
+            expect(ext.ReceivedContext!.services).toBe(loader.Services);
+
+            // Verifies automatic registration of ExtensionInitResult.Service
+            expect(loader.Services.HasService('ContextAware')).toBe(true);
+            expect(loader.Services.GetService('ContextAware')).toBe(ext.ServiceInstance);
+        });
+
+        it('loads only matching phase when options.phase is provided', async () => {
+            const preExt = new ContextAwareExtension();
+            const postExt = new PostAuthExtension();
+
+            registerExtensionInFactory('PreExt', preExt);
+            registerExtensionInFactory('PostExt', postExt);
+
+            const configs: ServerExtensionConfig[] = [
+                { Enabled: true, DriverClass: 'PreExt', RootPath: '/pre', Settings: {} },
+                { Enabled: true, DriverClass: 'PostExt', RootPath: '/post', Settings: {} },
+            ];
+
+            // Pass 1: pre-auth only
+            await loader.LoadExtensions(mockApp, configs, { phase: 'pre-auth' });
+            expect(loader.ExtensionCount).toBe(1);
+            expect(loader.Extensions[0].DriverClass).toBe('PreExt');
+            expect(preExt.ReceivedContext).not.toBeNull();
+            expect(postExt.MountedContext).toBeNull();
+
+            // Pass 2: post-auth only
+            await loader.LoadExtensions(mockApp, configs, { phase: 'post-auth' });
+            expect(loader.ExtensionCount).toBe(2);
+            expect(loader.Extensions[1].DriverClass).toBe('PostExt');
+
+            // Pass 3: duplicate load does not re-initialize already loaded extensions
+            await loader.LoadExtensions(mockApp, configs, { phase: 'pre-auth' });
+            expect(loader.ExtensionCount).toBe(2);
+        });
+
+        it('honors config.Phase override over extension DefaultPhase', async () => {
+            const ext = new PostAuthExtension(); // DefaultPhase is 'post-auth'
+            registerExtensionInFactory('OverridePhase', ext);
+
+            const configs: ServerExtensionConfig[] = [
+                { Enabled: true, DriverClass: 'OverridePhase', RootPath: '/override', Phase: 'pre-auth', Settings: {} },
+            ];
+
+            // Loading pre-auth should pick it up because of the config override
+            await loader.LoadExtensions(mockApp, configs, { phase: 'pre-auth' });
+            expect(loader.ExtensionCount).toBe(1);
+            expect(loader.Extensions[0].DriverClass).toBe('OverridePhase');
+            expect(loader.Extensions[0].Config.Phase).toBe('pre-auth');
+        });
+
+        it('invokes OnAllExtensionsMounted across all mounted extensions with access to services from all phases', async () => {
+            const preExt = new ContextAwareExtension();
+            const postExt = new PostAuthExtension();
+
+            registerExtensionInFactory('ContextAwareExtension', preExt);
+            registerExtensionInFactory('PostAuthExtension', postExt);
+
+            const configs: ServerExtensionConfig[] = [
+                { Enabled: true, DriverClass: 'ContextAwareExtension', RootPath: '/pre', Settings: {} },
+                { Enabled: true, DriverClass: 'PostAuthExtension', RootPath: '/post', Settings: {} },
+            ];
+
+            await loader.LoadExtensions(mockApp, configs, { phase: 'pre-auth' });
+            await loader.LoadExtensions(mockApp, configs, { phase: 'post-auth' });
+
+            await loader.NotifyAllExtensionsMounted({ publicUrl: 'https://api.example.com' });
+
+            expect(preExt.MountedContext).not.toBeNull();
+            expect(postExt.MountedContext).not.toBeNull();
+            expect(postExt.FoundPreAuthService).toBe(preExt.ServiceInstance);
         });
     });
 });

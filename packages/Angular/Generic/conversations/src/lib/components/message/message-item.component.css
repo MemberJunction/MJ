@@ -263,6 +263,14 @@
   border-radius: 50%;
 }
 
+/* Container for the standard mj-loading indicator while an artifact's rows load. Layout only —
+   the indicator owns its own animation, so there is no bespoke shimmer to keep re-themed. */
+.artifact-pending {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+}
+
 /* System artifact styling - subtle visual distinction */
 .artifact-wrapper.system-artifact {
   opacity: 0.85;

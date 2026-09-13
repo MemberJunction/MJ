@@ -83,25 +83,19 @@ export function buildCompositeKeyFromRecord(
     entityInfo: EntityInfo,
     record: Record<string, unknown>
 ): CompositeKey {
-    const pairs = entityInfo.PrimaryKeys.map(pk => ({
-        FieldName: pk.Name,
-        Value: record[pk.Name],
-    }));
-    return new CompositeKey(pairs);
+    return CompositeKey.FromEntityRecord(entityInfo, record);
 }
 
 /**
- * Build a CompositeKey for loading by ID (single-field PK).
- * Uses the entity's actual first primary key name rather than hardcoding 'ID'.
+ * Build a CompositeKey for loading from a stored record id. Accepts the bare value of a
+ * single-column key (any column name) or the `Field1|Value1||Field2|Value2` segment Record
+ * Changes / Version Label Items persist, so composite keys load too.
  */
 export function buildPrimaryKeyForLoad(
     entityInfo: EntityInfo,
     value: string
 ): CompositeKey {
-    return new CompositeKey([{
-        FieldName: entityInfo.FirstPrimaryKey.Name,
-        Value: value,
-    }]);
+    return CompositeKey.FromURLSegment(entityInfo, value);
 }
 
 /**
@@ -110,7 +104,7 @@ export function buildPrimaryKeyForLoad(
  * where we control the schema and know the PK is always 'ID'.
  */
 export function buildIdKey(id: string): CompositeKey {
-    return new CompositeKey([{ FieldName: 'ID', Value: id }]);
+    return CompositeKey.FromID(id); // first-pk-ok: documented for MJ system entities only (Version Labels / Label Items / Restores / Record Changes), whose key is ID
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +126,15 @@ export async function loadRecordChangeSnapshot(
     const result = await rv.RunView<Record<string, unknown>>({
         EntityName: ENTITY_RECORD_CHANGES,
         ExtraFilter: sqlEquals('ID', recordChangeId),
-        Fields: ['ID', 'FullRecordJSON'],
+        // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+        // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot be
+        // resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+        //
+        // For a restricted caller on a field-secured entity the snapshot comes back NARROWED, which
+        // is what both consumers want: RestoreEngine skips fields the snapshot omits (so a denied
+        // column keeps its stored value rather than being overwritten), and DiffEngine simply has
+        // nothing to show for them.
+        Fields: ['ID', 'EntityID', 'FullRecordJSON'],
         MaxRows: 1,
         ResultType: 'simple',
     }, contextUser);

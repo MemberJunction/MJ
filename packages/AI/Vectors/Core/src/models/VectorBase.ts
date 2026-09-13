@@ -96,7 +96,7 @@ export class VectorBase {
             // so every page is a fresh DB read.
             BypassCache: true,
             ...(useKeyset
-                ? { AfterKey: params.AfterKey, OrderBy: entity.FirstPrimaryKey!.Name }
+                ? { AfterKey: params.AfterKey, OrderBy: entity.FirstPrimaryKey!.Name } // first-pk-ok: keyset AfterKey/OrderBy is single-column by design; callers gate on CanUseKeysetPagination (PrimaryKeys.length === 1)
                 : { StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize) }),
             ExtraFilter: params.Filter
         }, this.CurrentUser);
@@ -115,10 +115,10 @@ export class VectorBase {
      */
     protected CanUseKeysetPagination(entityID: string | number): boolean {
         const entity = this.Metadata.Entities.find(e => UUIDsEqual(e.ID, entityID as string));
-        if (!entity || !entity.FirstPrimaryKey) return false;
+        if (!entity || !entity.FirstPrimaryKey) return false; // first-pk-ok: keyset-eligibility check; an entity without a key column cannot be seek-paginated
         if (entity.PrimaryKeys.length !== 1) return false;
         // Inline allowlist check (avoid pulling in the helper here)
-        const t = (entity.FirstPrimaryKey.Type || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+        const t = (entity.FirstPrimaryKey.Type || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase(); // first-pk-ok: guarded by PrimaryKeys.length === 1 above
         // Same set as KEYSET_PAGINATION_ORDERABLE_PK_TYPES in @memberjunction/core
         return ['uniqueidentifier','uuid','int','bigint','smallint','tinyint','decimal','numeric','money','smallmoney',
             'float','real','double precision','char','varchar','nchar','nvarchar','text','ntext',

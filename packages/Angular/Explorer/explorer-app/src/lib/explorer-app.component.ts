@@ -814,12 +814,7 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
         if (invalid) {
           return { Success: false, ErrorMessage: invalid };
         }
-        const pkey = new CompositeKey();
-        if (entityInfo) {
-          pkey.LoadFromURLSegment(entityInfo, recordId);
-        } else {
-          pkey.KeyValuePairs = [{ FieldName: 'ID', Value: recordId }];
-        }
+        const pkey = CompositeKey.FromURLSegment(entityInfo, recordId);
         // The AGENT opened this, from the chat — same origin as overlay
         // clicks, never the page the user happens to be standing on.
         this.navigationService.OpenEntityRecord(entityName, pkey, {

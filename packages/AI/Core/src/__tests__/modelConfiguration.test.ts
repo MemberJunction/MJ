@@ -124,4 +124,40 @@ describe('ResolveEffectiveModelConfiguration — the three-level cascade', () =>
         const bogus = ['not', 'a', 'bag'] as unknown as AIModelConfiguration;
         expect(ResolveEffectiveModelConfiguration(bogus, model, bogus)).toEqual(model);
     });
+
+    it('merges Realtime.Reasoning configuration properly across layers', () => {
+        const type: AIModelConfiguration = {
+            Realtime: {
+                Reasoning: {
+                    Plane: 'local',
+                },
+            },
+        };
+        const vendor: AIModelConfiguration = {
+            Realtime: {
+                Reasoning: {
+                    Plane: 'remote',
+                    Remote: {
+                        Kind: 'model',
+                        Ref: 'gpt-5.6-terra',
+                        Effort: 'medium',
+                    },
+                },
+            },
+        };
+        const merged = ResolveEffectiveModelConfiguration(type, vendor);
+        expect(merged).toEqual({
+            Realtime: {
+                Reasoning: {
+                    Plane: 'remote',
+                    Remote: {
+                        Kind: 'model',
+                        Ref: 'gpt-5.6-terra',
+                        Effort: 'medium',
+                    },
+                },
+            },
+        });
+    });
 });
+

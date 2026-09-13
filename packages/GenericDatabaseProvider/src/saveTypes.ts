@@ -41,11 +41,11 @@ export type SaveCallBinding =
      */
     | {
           kind: 'mssql-declare-exec';
-          /** `DECLARE @x_uuid type, @y_uuid type` — empty if no params. */
+          /** `DECLARE @x_<suffix> type, @y_<suffix> type` — empty if no params. Suffix: GenericDatabaseProvider.allocateSaveCallSuffix. */
           preambleSQL: string;
-          /** `SET @x_uuid = N'value'\nSET @y_uuid = 1` — empty if no params. */
+          /** `SET @x_<suffix> = N'value'\nSET @y_<suffix> = 1` — empty if no params. */
           setSQL: string;
-          /** Comma-joined `@CodeName=@x_uuid, ...` for the EXEC line. */
+          /** Comma-joined `@CodeName=@x_<suffix>, ...` for the EXEC line. */
           callArgsSQL: string;
           /** Back-compat inline single-line `@CodeName=N'value', ...` form. */
           simpleParamsSQL: string;

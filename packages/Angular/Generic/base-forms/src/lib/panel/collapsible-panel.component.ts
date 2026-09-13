@@ -12,8 +12,21 @@ import { IsFormSectionHidden } from '../types/entity-form-config';
 import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
 import { CompositeKey } from '@memberjunction/core';
-import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
+import { EscapeHTML, HighlightSearchMatches, type ValidationErrorInfo } from '@memberjunction/global';
 import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service';
+import { FormSectionIndicatorCoordinator, type FormSectionIndicatorSource } from '../section-indicators/form-section-indicator-coordinator.service';
+import {
+  ClaimedCollectionErrors,
+  DescribeSectionDirty,
+  DescribeSectionErrors,
+  DescribeSectionWarnings,
+  SectionOwnsValidationSource,
+  SumSectionIndicators,
+  TallyValidationErrors,
+  type FormSectionIndicators,
+  type ParsedValidationSource,
+  type SectionValidationScope,
+} from '../section-indicators/form-section-indicators';
 
 /**
  * Reusable collapsible panel for form sections.
@@ -29,6 +42,10 @@ import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service
  * - Drag-to-reorder sections
  * - Inheritable "Inherited from X" badge with navigation event
  * - Row count badge for related entity sections
+ * - Section indicators: an unsaved-changes dot and an invalid-field count derived
+ *   live from the projected `mj-form-field`s (plus anything a custom section
+ *   supplies through `[Indicators]`), published to the form's chrome rail
+ *   through {@link FormSectionIndicatorCoordinator}
  *
  * @example
  * ```html
@@ -53,14 +70,41 @@ import { FormChromeCoordinator } from '../chrome/form-chrome-coordinator.service
   templateUrl: './collapsible-panel.component.html',
   styleUrls: ['./collapsible-panel.component.css']
 })
-export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterContentInit, AfterViewInit, OnDestroy {
+export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterContentInit, AfterViewInit, OnDestroy, FormSectionIndicatorSource {
   private cdr = inject(ChangeDetectorRef);
   private elementRef = inject(ElementRef);
   private ngZone = inject(NgZone);
   private chrome = inject(FormChromeCoordinator, { optional: true });
+  private indicators = inject(FormSectionIndicatorCoordinator, { optional: true });
 
   /** Unique key for state persistence */
   @Input() SectionKey = '';
+
+  /**
+   * Indicator counts a custom section supplies for content that is NOT rendered by
+   * `mj-form-field` — a designer, an inline grid, a hand-built editor. Added to the
+   * counts this panel derives from its own fields, so a section that mixes both
+   * reports the union. Omit for ordinary field panels: their state is derived.
+   *
+   * ```html
+   * <mj-collapsible-panel SectionKey="lines" [Indicators]="{ DirtyCount: LineEditor.EditedRows, ErrorCount: LineEditor.InvalidRows }">
+   * ```
+   */
+  @Input() Indicators?: Partial<FormSectionIndicators> | null;
+
+  /**
+   * Graph-path collection names whose validation failures belong to THIS panel —
+   * `ValidationSources="Modifications"` claims `Modifications[2].ProvisionID`.
+   *
+   * Only needed when a panel hosts a child collection whose path name differs from
+   * its `SectionKey`: plain field failures are joined automatically from the panel's
+   * `mj-form-field` children, and a graph path whose leading segment already matches
+   * the `SectionKey` is claimed without any declaration. Declared HERE, on the panel
+   * that owns the collection, rather than in an app-side `fieldName -> sectionKey`
+   * map that duplicates a fact the panel owns and drifts silently when a
+   * `SectionKey` is renamed. Accepts a single name or a list.
+   */
+  @Input() ValidationSources?: string | readonly string[] | null;
 
   /** Display name shown in the panel header */
   @Input() SectionName = '';
@@ -169,12 +213,30 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return this.Icon;
   }
 
+  /**
+   * Indicator counts mirrored onto the host element, so CSS and any DOM sweep can
+   * read a section's state without a component reference.
+   */
+  @HostBinding('attr.data-dirty-count')
+  get HostDirtyCount(): number {
+    return this.SectionIndicators.DirtyCount;
+  }
+
+  @HostBinding('attr.data-error-count')
+  get HostErrorCount(): number {
+    return this.SectionIndicators.ErrorCount;
+  }
+
   @HostBinding('class')
   get HostClass(): string {
     const classes = [`mj-panel--${this.Variant}`];
     if (!this.IsVisible) classes.push('mj-search-hidden');
     if (this.IsDragging) classes.push('mj-dragging');
     if (this.IsDragOver) classes.push('mj-drag-over');
+    const indicators = this.SectionIndicators;
+    if (indicators.DirtyCount > 0) classes.push('mj-panel-dirty');
+    if (indicators.ErrorCount > 0) classes.push('mj-panel-has-errors');
+    else if (indicators.WarningCount > 0) classes.push('mj-panel-has-warnings');
     if (this.chrome?.Spec.RelatedRoles.get(this.SectionKey) === 'Detail') {
       classes.push('mj-form-role-detail');
     }
@@ -256,6 +318,126 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     return formRef?.IsSectionExpanded ? formRef.IsSectionExpanded(this.SectionKey, this.DefaultExpanded) : true;
   }
 
+  // ---- Section indicators (unsaved-changes dot + invalid-field count) ----
+
+  /**
+   * Live state of this section: fields edited since the last save, fields that are
+   * invalid or required-and-empty, and fields carrying warnings. Derived from the
+   * projected `mj-form-field`s on every read — the same state those fields use for
+   * their own amber dot and red underline, so the section can never disagree with
+   * its fields — plus graph-path validation failures this section claims, plus
+   * whatever a custom section supplies through `[Indicators]`.
+   *
+   * Read during change detection (host bindings, the header template, the rail via
+   * the coordinator). Pure and cheap: one pass over the field list.
+   */
+  public get SectionIndicators(): FormSectionIndicators {
+    return SumSectionIndicators(
+      this.fieldIndicators(),
+      TallyValidationErrors(this.claimedGraphErrors()),
+      this.Indicators,
+    );
+  }
+
+  public get SectionDirtyCount(): number {
+    return this.SectionIndicators.DirtyCount;
+  }
+
+  public get SectionErrorCount(): number {
+    return this.SectionIndicators.ErrorCount;
+  }
+
+  public get SectionWarningCount(): number {
+    return this.SectionIndicators.WarningCount;
+  }
+
+  public get SectionDirtyTitle(): string {
+    return DescribeSectionDirty(this.SectionDirtyCount);
+  }
+
+  public get SectionErrorTitle(): string {
+    return DescribeSectionErrors(this.SectionErrorCount);
+  }
+
+  public get SectionWarningTitle(): string {
+    return DescribeSectionWarnings(this.SectionWarningCount);
+  }
+
+  /** {@link FormSectionIndicatorSource} — the rail reads this through the coordinator. */
+  public GetSectionIndicators(): FormSectionIndicators {
+    return this.SectionIndicators;
+  }
+
+  /** {@link FormSectionIndicatorSource} — whether a form-level error belongs to this section. */
+  public OwnsValidationSource(source: ParsedValidationSource): boolean {
+    return SectionOwnsValidationSource(source, this.SectionKey, this.validationScope());
+  }
+
+  /** Normalized {@link ValidationSources}. */
+  public get ValidationCollectionNames(): string[] {
+    const raw = this.ValidationSources;
+    if (!raw) return [];
+    return (typeof raw === 'string' ? [raw] : [...raw]).map((n) => n.trim()).filter((n) => n.length > 0);
+  }
+
+  /** Field names this panel renders — the join between a plain-field error and this section. */
+  private renderedFieldNames(): string[] {
+    const names: string[] = [];
+    this.FieldComponents?.forEach((field) => {
+      if (field.FieldName) names.push(field.FieldName);
+    });
+    return names;
+  }
+
+  private validationScope(): SectionValidationScope {
+    return { FieldNames: this.renderedFieldNames(), CollectionNames: this.ValidationCollectionNames };
+  }
+
+  /**
+   * Counts of FIELDS (not messages) in each state. A field is invalid when it shows a
+   * failure OR is required and empty in edit mode — exactly the two conditions that
+   * paint its underline red. Warnings count only on fields with no failure, mirroring
+   * `MjFormFieldComponent.ShowWarnings`.
+   */
+  private fieldIndicators(): FormSectionIndicators {
+    let DirtyCount = 0;
+    let ErrorCount = 0;
+    let WarningCount = 0;
+    this.FieldComponents?.forEach((field) => {
+      if (field.IsDirty) DirtyCount++;
+      // Only a field that renders an EDITOR can be invalid: a read-only field renders its
+      // value as text and never paints an underline, so it is skipped even when
+      // `IsRequiredEmpty` would say otherwise (a NOT NULL `__mj_CreatedAt` on a new record
+      // is empty and read-only — the user cannot fix it, and it fills itself on save).
+      if (!field.EditMode || field.IsFieldReadOnly) return;
+      if (field.ShowErrors || field.IsRequiredEmpty) ErrorCount++;
+      // The field paints its amber underline on EITHER of these — a stored date the input
+      // cannot parse warns on its own, outside the validation pipeline.
+      else if (field.ShowWarnings || field.StoredDateIsUnreadable) WarningCount++;
+    });
+    return { DirtyCount, ErrorCount, WarningCount };
+  }
+
+  /**
+   * Graph-path failures (`Lines[2].Amount`) this section owns, once the form has asked
+   * for validation to show. Plain field-name failures are NOT counted here — the field
+   * that renders them already reports through {@link fieldIndicators}.
+   */
+  private claimedGraphErrors(): ValidationErrorInfo[] {
+    const ctx = this.FormContext;
+    if (!ctx?.showValidation || !ctx.validationErrors?.length) return [];
+    return ClaimedCollectionErrors(ctx.validationErrors, this.SectionKey, this.validationScope());
+  }
+
+  /** (Re)declare this section with the container-scoped registry the rail reads. */
+  private registerIndicatorSource(previousKey?: string): void {
+    if (!this.indicators) return;
+    if (previousKey && previousKey !== this.SectionKey) {
+      this.indicators.Unregister(this, previousKey);
+    }
+    this.indicators.Register(this);
+  }
+
   // ---- Lifecycle ----
 
   ngOnInit(): void {
@@ -263,6 +445,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     this.chrome?.Changes.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.UpdateVisibilityAndHighlighting();
     });
+    this.registerIndicatorSource();
   }
 
   ngAfterContentInit(): void {
@@ -271,12 +454,18 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     this.FieldComponents.changes.subscribe(() => {
       this.UpdateFieldNames();
       this.SubscribeToFieldNavigateEvents();
+      // The set of fields changed, so the section's counts (and which errors it
+      // claims) may have too — let the rail re-read.
+      this.indicators?.NotifyChanged();
     });
   }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['SectionName']) {
       this.DisplayName = this.SectionName;
+    }
+    if (changes['SectionKey'] && !changes['SectionKey'].firstChange) {
+      this.registerIndicatorSource(changes['SectionKey'].previousValue as string | undefined);
     }
     if (changes['SectionName'] || changes['FormContext']) {
       this.UpdateVisibilityAndHighlighting();
@@ -293,6 +482,7 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
   }
 
   ngOnDestroy(): void {
+    this.indicators?.Unregister(this);
     this.fieldNavReset$.next();
     this.fieldNavReset$.complete();
     this.destroy$.next();
@@ -454,13 +644,19 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
 
   /**
    * Subscribes to Navigate events from all child form-field components
-   * and relays them through this panel's Navigate output.
+   * and relays them through this panel's Navigate output. Also listens for
+   * value edits so the section indicators (and the rail reading them) refresh
+   * on the same tick as the keystroke rather than on the container's next poll.
    */
   private SubscribeToFieldNavigateEvents(): void {
     this.fieldNavReset$.next(); // tear down previous subscriptions
     this.FieldComponents.forEach(field => {
       field.Navigate.pipe(takeUntil(this.fieldNavReset$)).subscribe((event: FormNavigationEvent) => {
         this.Navigate.emit(event);
+      });
+      field.ValueChange.pipe(takeUntil(this.fieldNavReset$)).subscribe(() => {
+        this.cdr.markForCheck();
+        this.indicators?.NotifyChanged();
       });
     });
   }
@@ -512,12 +708,39 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     }, 500);
   }
 
+  /**
+   * True when this panel projects form fields and field-level security denies the user EVERY one
+   * of them.
+   *
+   * Deliberately false when the panel projects no `mj-form-field` at all — related-entity grids,
+   * IS-A cards and slot-injected panels all legitimately have none, and hiding those would remove
+   * sections field security has nothing to say about. "No fields" and "no readable fields" are
+   * different states and only the second one should hide the section.
+   */
+  private get AllProjectedFieldsDenied(): boolean {
+    const fields = this.FieldComponents;
+    if (!fields || fields.length === 0) {
+      return false;
+    }
+    return fields.toArray().every(f => !f.IsFieldReadableByUser);
+  }
+
   private UpdateVisibilityAndHighlighting(): void {
     // Hard hide takes precedence over search state. Driven by an explicit
     // `Hidden` input OR the form config's section-visibility rules carried on
     // FormContext (which also reach slot-injected BaseFormPanels, since every
     // panel receives FormContext).
     if (this._hidden || IsFormSectionHidden(this.FormContext, this.SectionKey, this.Variant) || this.isHiddenByChrome()) {
+      this.IsVisible = false;
+      this.DisplayName = EscapeHTML(this.SectionName);
+      this.cdr.markForCheck();
+      return;
+    }
+
+    // A section whose every field is denied by field-level security renders as a heading over
+    // nothing — the fields hide themselves individually, leaving an empty card that reads like a
+    // broken screen rather than a permissions boundary. Hide the section instead.
+    if (this.AllProjectedFieldsDenied) {
       this.IsVisible = false;
       this.DisplayName = EscapeHTML(this.SectionName);
       this.cdr.markForCheck();

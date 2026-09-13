@@ -1,5 +1,41 @@
 # @memberjunction/credentials
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- a77afac: Fix a lost-update race in CredentialEngine: getCredential()'s fire-and-forget LastUsedAt touch performed a full-row entity save from a stale snapshot, silently reverting any updateCredential() that committed in between (both paths reported success). Every write that goes through CredentialEngine — updateCredential and both timestamp touches — now serializes through a per-credential promise chain, so each save writes a current snapshot; writes remain ordinary entity saves and getCredential latency is unchanged. Two limits worth knowing: code that loads and saves the MJ: Credentials entity directly rather than calling the engine is not part of that chain, and separate processes can still clobber each other's columns — the latter is a property of MJ's write-all-columns spUpdate semantics affecting every entity, tracked by the sparse-update work in #2552.
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

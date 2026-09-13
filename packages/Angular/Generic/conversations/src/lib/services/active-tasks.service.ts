@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { RunView, UserInfo, Metadata, IMetadataProvider, LogStatusEx } from '@memberjunction/core';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { ConversationEngine } from '@memberjunction/core-entities';
 
@@ -104,9 +104,11 @@ export class ActiveTasksService {
       this.updateConversationIdsSet();
     }
 
-    console.log(`➕ Task added:`, {id, conversationId: fullTask.conversationId, agentName: fullTask.agentName});
-    console.log(`📊 Total tasks:`, this._tasks$.value.size);
-    console.log(`🗂️ Conversation IDs with tasks:`, Array.from(this._conversationIdsWithTasks$.value));
+    // verboseOnly: three lines per add()/remove() is a lot of console for "a Map changed size", but
+    // it is genuinely useful when tracing task lifecycle, so it stays available rather than going.
+    LogStatusEx({ message: `➕ Task added:`, additionalArgs: [{id, conversationId: fullTask.conversationId, agentName: fullTask.agentName}], verboseOnly: true });
+    LogStatusEx({ message: `📊 Total tasks:`, additionalArgs: [this._tasks$.value.size], verboseOnly: true });
+    LogStatusEx({ message: `🗂️ Conversation IDs with tasks:`, additionalArgs: [Array.from(this._conversationIdsWithTasks$.value)], verboseOnly: true });
 
     return id;
   }
@@ -126,9 +128,9 @@ export class ActiveTasksService {
       this.updateConversationIdsSet();
     }
 
-    console.log(`➖ Task removed:`, {id, conversationId: task?.conversationId, agentName: task?.agentName});
-    console.log(`📊 Total tasks remaining:`, this._tasks$.value.size);
-    console.log(`🗂️ Conversation IDs with tasks:`, Array.from(this._conversationIdsWithTasks$.value));
+    LogStatusEx({ message: `➖ Task removed:`, additionalArgs: [{id, conversationId: task?.conversationId, agentName: task?.agentName}], verboseOnly: true });
+    LogStatusEx({ message: `📊 Total tasks remaining:`, additionalArgs: [this._tasks$.value.size], verboseOnly: true });
+    LogStatusEx({ message: `🗂️ Conversation IDs with tasks:`, additionalArgs: [Array.from(this._conversationIdsWithTasks$.value)], verboseOnly: true });
   }
 
   /**

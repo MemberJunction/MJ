@@ -1,0 +1,25 @@
+{
+  "entity": "MJ: AI Personas",
+  "filePattern": "**/.*.json",
+  "defaults": {
+    "Source": "BuiltIn",
+    "IsActive": true
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".ai-personas.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {},
+    "relatedEntities": {}
+  }
+}

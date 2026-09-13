@@ -1,8 +1,22 @@
 import { EntityInfo, EntityFieldInfo, GeneratedFormSectionType, EntityFieldTSType, EntityFieldValueListType, Metadata, UserInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, FieldCategoryInfo } from '@memberjunction/core';
-import { logError, logStatus } from '../Misc/status_logging';
-import { UUIDsEqual } from '@memberjunction/global';
+import { logError, logStatus, logWarning } from '../Misc/status_logging';
+import { UUIDsEqual, ordinalCompare } from '@memberjunction/global';
 import fs from 'fs';
 import path from 'path';
+
+/** FNV-1a 32-bit over UTF-16 code units — stable across Node versions and machines. */
+export function stableHash32(s: string): number {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 0x01000193) >>> 0;
+    }
+    return h >>> 0;
+}
+
+export function assignSubModule(componentClassName: string, submoduleCount: number): number {
+    return stableHash32(componentClassName) % submoduleCount;
+}
 import { mjCoreSchema, outputOptionValue, configInfo, resolveEntityPackageName } from '../Config/config';
 import { GenerationResult, RelatedEntityDisplayComponentGeneratorBase } from './related-entity-components';
 import { sortBySequenceAndCreatedAt, sortRelatedEntities } from '../Misc/util';
@@ -179,7 +193,7 @@ export class AngularClientGeneratorBase {
      * @param contextUser The user context for permission checking and personalization
      * @returns Promise<boolean> True if generation was successful, false otherwise
      */
-    public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo): Promise<boolean> {
+    public async generateAngularCode(entities: EntityInfo[], directory: string, modulePrefix: string, contextUser: UserInfo, outputType: 'Angular' | 'AngularCoreEntities' = 'Angular'): Promise<boolean> {
         try {
           const entityPath = path.join(directory, 'Entities');
 
@@ -253,9 +267,10 @@ export class AngularClientGeneratorBase {
               }
           }
       
-          const maxComponentsPerModule = outputOptionValue('Angular', 'maxComponentsPerModule', 25);
+          const maxComponentsPerModule = outputOptionValue(outputType, 'maxComponentsPerModule', 25);
+          const submoduleCount = outputOptionValue(outputType, 'submoduleCount', 32);
       
-          const moduleCode = this.generateAngularModule(componentImports, componentNames, relatedEntityModuleImports, sections, modulePrefix, maxComponentsPerModule);
+          const moduleCode = this.generateAngularModule(componentImports, componentNames, relatedEntityModuleImports, sections, modulePrefix, maxComponentsPerModule, submoduleCount);
           fs.writeFileSync(path.join(directory, 'generated-forms.module.ts'), moduleCode);
       
           return true;
@@ -280,9 +295,10 @@ export class AngularClientGeneratorBase {
       protected generateAngularModule(componentImports: string[], 
                                       componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[], 
                                       relatedEntityModuleImports: {library: string, modules: string[]}[], 
-                                      sections: AngularFormSectionInfo[], 
+                                      sections: AngularFormSectionInfo[] | undefined, 
                                       modulePrefix: string, 
-                                      maxComponentsPerModule: number = 25): string {
+                                      maxComponentsPerModule: number = 25,
+                                      submoduleCount: number = 32): string {
           // this function will generate the overall code for the module file.
           // there is one master angular module called GeneratedFormsModule, and this module will include all of the sub-modules
           // the reason we do this is because of limits in the size of the types you can create in TypeScript and if we have a very large 
@@ -290,7 +306,18 @@ export class AngularClientGeneratorBase {
           // smaller modules and then import those modules into the master module, which is what this function does
       
           // first, generate the sub-modules
-          const moduleCode: string = this.generateAngularModuleCode(componentNames, sections, maxComponentsPerModule, modulePrefix);
+          const moduleCode: string = this.generateAngularModuleCode(componentNames, maxComponentsPerModule, modulePrefix, submoduleCount);
+
+          const sortedRelatedEntityImports = [...relatedEntityModuleImports]
+              .filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-entity-viewer')
+              .sort((a, b) => ordinalCompare(a.library, b.library));
+
+          const relatedEntityImportLines = sortedRelatedEntityImports
+              .map(remi => {
+                  const sortedModules = [...remi.modules].sort(ordinalCompare);
+                  return `import { ${sortedModules.join(', ')} } from "${remi.library}"`;
+              })
+              .join('\n');
       
           return `/**********************************************************************************
 * GENERATED FILE - This file is automatically managed by the MJ CodeGen tool, 
@@ -309,12 +336,8 @@ import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { LinkDirectivesModule } from '@memberjunction/ng-link-directives';
 
 // Import Generated Components
-${componentImports.join('\n')}
-${
-    relatedEntityModuleImports.filter(remi => remi.library.trim().toLowerCase() !== '@memberjunction/ng-entity-viewer' )
-                                 .map(remi => `import { ${remi.modules.map(m => m).join(', ')} } from "${remi.library}"`)
-                                .join('\n')
-}   
+${[...componentImports].sort(ordinalCompare).join('\n')}
+${relatedEntityImportLines}   
 ${moduleCode}
     
 // Note: LoadXXXGeneratedForms() functions have been removed. Tree-shaking prevention
@@ -324,58 +347,82 @@ ${moduleCode}
       }
       
       /**
-       * Generates sub-modules to handle large numbers of components by breaking them into smaller chunks
+       * Generates sub-modules to handle large numbers of components by breaking them into stable hash buckets
        * @param componentNames Array of component names with their required related entity items
-       * @param sections Array of form section information
-       * @param maxComponentsPerModule Maximum components per sub-module
+       * @param maxComponentsPerModule Maximum components per sub-module (soft limit)
        * @param modulePrefix Prefix for module naming
+       * @param submoduleCount Number of hash buckets (default: 32)
        * @returns Generated TypeScript code for all sub-modules and the master module
        */
       protected generateAngularModuleCode(componentNames: {componentName: string, relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[]}[],
-                                          sections: AngularFormSectionInfo[],
                                           maxComponentsPerModule: number,
-                                          modulePrefix: string): string {
-          // this function breaks up the componentNames into sub-modules, we only want to have a max of maxComponentsPerModule components per module
-          // Note: sections are now inline in the HTML templates, so we don't include them in the module declarations
+                                          modulePrefix: string,
+                                          submoduleCount: number = 32): string {
+          // Stable bucket assignment by component class name (FNV-1a hash % submoduleCount)
+          const buckets = new Map<number, {
+              componentName: string;
+              relatedEntityItemsRequired: {itemClassName: string, moduleClassName: string}[];
+          }[]>();
 
-          // Just use the component names - sections are inline HTML now, not separate components
-          const simpleComponentNames = componentNames.map(c => c.componentName);
-          const combinedArray: string[] = simpleComponentNames;
+          for (const item of componentNames) {
+              const bucketIndex = assignSubModule(item.componentName, submoduleCount);
+              let bucket = buckets.get(bucketIndex);
+              if (!bucket) {
+                   bucket = [];
+                   buckets.set(bucketIndex, bucket);
+              }
+              bucket.push(item);
+          }
+
+          // Sort bucket indices numerically for deterministic iteration
+          const activeBucketIndices = [...buckets.keys()].sort((a, b) => a - b);
+
           const subModules: string[] = [];
-          let currentComponentCount: number = 0;
-          const subModuleStarter: string =   `
+          const subModuleNames: string[] = [];
+
+          for (const bucketIndex of activeBucketIndices) {
+              const itemsInBucket = buckets.get(bucketIndex)!;
+
+              // Soft limit warning if a bucket exceeds maxComponentsPerModule
+              if (itemsInBucket.length > maxComponentsPerModule) {
+                   logWarning(
+                       `Angular submodule ${this.SubModuleBaseName}${bucketIndex} has ${itemsInBucket.length} components, ` +
+                       `exceeding maxComponentsPerModule (${maxComponentsPerModule}). Consider increasing submoduleCount.`
+                   );
+              }
+
+              // Within a bucket, sort components deterministically with ordinalCompare
+              itemsInBucket.sort((a, b) => ordinalCompare(a.componentName, b.componentName));
+
+              // Collect distinct additional modules required for related entities in this bucket
+              const additionalModulesSet = new Set<string>();
+              for (const item of itemsInBucket) {
+                   if (item.relatedEntityItemsRequired) {
+                       for (const req of item.relatedEntityItemsRequired) {
+                            if (req.moduleClassName) {
+                                additionalModulesSet.add(req.moduleClassName);
+                            }
+                       }
+                   }
+              }
+              // Sort additional modules deterministically with ordinalCompare
+              const sortedAdditionalModules = [...additionalModulesSet].sort(ordinalCompare);
+
+              const subModuleName = `${this.SubModuleBaseName}${bucketIndex}`;
+              subModuleNames.push(subModuleName);
+
+              const componentDeclarations = itemsInBucket.map(c => `    ${c.componentName}`).join(',\n');
+              const subModuleCode = `
 @NgModule({
 declarations: [
-`
-        let currentSubModuleCode: string = subModuleStarter;
-    
-        // loop through the combined array which is the combination of the componentNames and the sections
-        let currentSubModuleAdditionalModulesToImport: string[] = [];
-        for (let i: number = 0; i < combinedArray.length; ++i) {
-            currentSubModuleCode += (currentComponentCount === 0 ? '' : ',\n') +  '    ' + combinedArray[i]; // prepend a comma if this isn't the first component in the module
-            // lookup the componentName and see if we have any relatedEntityItemsRequired, if so, add them to the currentSubModuleAdditionalModulesToImport array
-            const relatedEntityItemsRequired = componentNames.find(c => c.componentName === combinedArray[i])?.relatedEntityItemsRequired;
-            if (relatedEntityItemsRequired && relatedEntityItemsRequired.length > 0) {
-                relatedEntityItemsRequired.forEach(r => {
-                    if (!currentSubModuleAdditionalModulesToImport.includes(r.moduleClassName))
-                        currentSubModuleAdditionalModulesToImport.push(r.moduleClassName);
-                });
-            }
-            if ((currentComponentCount === maxComponentsPerModule - 1) || (i === combinedArray.length - 1)) {
-                // we have reached the max number of components for this module, so generate the module code and reset the counters
-                currentSubModuleCode += this.generateSubModuleEnding(subModules.length, currentSubModuleAdditionalModulesToImport);
-                subModules.push(currentSubModuleCode);
-                currentSubModuleCode = subModuleStarter; // reset
-                currentSubModuleAdditionalModulesToImport = []; // reset
-                currentComponentCount = 0;
-            }
-            else    
-                currentComponentCount++;
-        }            
-    
-        // at this point, we have a list of sub-modules that are generated into the subModules array, now we need to generate the main module that imports each of the sub-modules.
-        const subModuleNames = subModules.map((s, i) => `${this.SubModuleBaseName}${i}`);
-        const masterModuleCode: string = `
+${componentDeclarations}
+${this.generateSubModuleEnding(bucketIndex, sortedAdditionalModules)}`;
+
+              subModules.push(subModuleCode);
+          }
+
+          // at this point, we have a list of sub-modules that are generated into the subModules array, now we need to generate the main module that imports each of the sub-modules.
+          const masterModuleCode: string = `
 @NgModule({
 declarations: [
 ],
@@ -384,11 +431,8 @@ imports: [
 ]
 })
 export class ${modulePrefix}GeneratedFormsModule { }`;
-      
-          // now we have the sub-modules generated into the subModules array, and we have the master module code generated into the masterModuleCode variable
-          // so we need to combine the two into a single return value and send back to the caller
+
           return subModules.join('\n\n') + '\n\n' + masterModuleCode; 
-          
       }
       
       /**
@@ -631,10 +675,10 @@ export class ${entity.ClassName}FormComponent extends BaseFormComponent {
               if (aIsInherited && !bIsInherited) return 1;
               if (!aIsInherited && bIsInherited) return -1;
 
-              // Otherwise sort by sequence
+              // Otherwise sort by sequence, tiebreak by Name
               const aSeq = a.MinSequence ?? Number.MAX_SAFE_INTEGER;
               const bSeq = b.MinSequence ?? Number.MAX_SAFE_INTEGER;
-              return aSeq - bSeq;
+              return (aSeq - bSeq) || ordinalCompare(a.Name, b.Name);
           });
 
           // now we have a distinct list of section names set, generate HTML for each section

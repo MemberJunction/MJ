@@ -368,8 +368,23 @@ export const PayloadGuardsChecks: NamedCheck[] = [
                     await settle();
                     return track(fx, runIdOf(r));
                 },
-                // Phase P: the agent's raw response attempted the restricted path.
-                async (id) => /config\.?b|IT-CONFIG-ATTEMPT/i.test(await selfAgentText(ctx, id, fx.SelfWrite!.ID)),
+                // Phase P: the agent's raw response attempted BOTH scripted writes.
+                //
+                // Both markers are required, not just the restricted one. The agent's prompt demands
+                // `notes.a` and `config.b` in a SINGLE payloadChangeRequest, and the assertions below
+                // read the ALLOWED half (`notes.a` landed) while this gate historically watched only
+                // the RESTRICTED half. A model that emitted `config.b` and dropped `notes.a` therefore
+                // satisfied compliance and then failed `notes.a did not land` — a bare value assertion
+                // that reads as a product defect. It is not one: driving this agent directly, a fully
+                // compliant response yields FinalPayload {"notes":{"a":"IT-NOTES-OK"}} with `config`
+                // correctly absent, so partial application works exactly as designed.
+                //
+                // Gating on both markers makes that case report `model-noncompliance:` like every
+                // other check in this bundle, instead of accusing the engine.
+                async (id) => {
+                    const text = await selfAgentText(ctx, id, fx.SelfWrite!.ID);
+                    return /config\.?b|IT-CONFIG-ATTEMPT/i.test(text) && /IT-NOTES-OK/i.test(text);
+                },
                 'PG7 self-write'
             );
             const run = await readRun(ctx.Provider, ctx.User, selfRunId);

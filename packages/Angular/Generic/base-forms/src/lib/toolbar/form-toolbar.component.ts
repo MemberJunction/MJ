@@ -413,11 +413,19 @@ export class MjFormToolbarComponent extends BaseAngularComponent implements DoCh
     });
   }
 
-  /** Display name for the edit banner */
+  /**
+   * Display name for the edit banner.
+   *
+   * The Name field is readable by the current user in almost every case, but it is an ordinary
+   * field and field-level security can deny it. `BaseEntity.Get()` THROWS on a denied field, and
+   * this getter runs on every change-detection cycle for the toolbar that sits on top of every
+   * form — so an unguarded read here does not hide a title, it takes the whole form down. Fall
+   * back to the primary key, which is unrestrictable by construction.
+   */
   get RecordDisplayName(): string {
     if (!this.Record) return '';
     const info = this.Record.EntityInfo;
-    if (info?.NameField) {
+    if (info?.NameField && info.IsFieldReadableByUser(info.NameField.Name, this.ProviderToUse?.CurrentUser)) {
       const name = this.Record.Get(info.NameField.Name);
       if (name) return String(name);
     }

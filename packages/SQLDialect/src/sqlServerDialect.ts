@@ -335,6 +335,18 @@ export class SQLServerDialect extends SQLDialect {
         return 'GO';
     }
 
+    CreateSavepointSQL(name: string): string {
+        return `SAVE TRANSACTION ${name}`;
+    }
+
+    ReleaseSavepointSQL(_name: string): string | null {
+        return null;
+    }
+
+    RollbackToSavepointSQL(name: string): string {
+        return `ROLLBACK TRANSACTION ${name}`;
+    }
+
     ExistenceCheckSQL(objectType: string, schema: string, name: string): string {
         const normalizedType = objectType.toUpperCase();
         switch (normalizedType) {

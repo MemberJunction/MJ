@@ -11,6 +11,7 @@ import {
   classifyMergeConflicts,
   mergeMainIntoNext,
   refreshLockfile,
+  nextPushRemote,
   LOCKFILE,
 } from './back-merge.mjs';
 
@@ -146,4 +147,43 @@ test('refreshLockfile: an unchanged lockfile produces no commit', async () => {
   const { client, calls } = fakeGit({ status: { modified: [], not_added: [] } });
   assert.equal(await refreshLockfile(client, { required: false, runInstall: () => {} }), false);
   assert.deepEqual(calls, []);
+});
+
+// --- nextPushRemote -------------------------------------------------------------------
+// `next` is protected and the release PAT's account can never hold a ruleset bypass (it is
+// an outside collaborator, and bypass accepts only roles, teams and Apps). The push is
+// therefore redirected to an App-authenticated remote in CI — but a developer running
+// `pnpm run mergemain` by hand must keep the old behaviour.
+
+test('nextPushRemote defaults to origin so a local mergemain is unchanged', () => {
+  const prior = process.env.MJ_NEXT_PUSH_REMOTE;
+  delete process.env.MJ_NEXT_PUSH_REMOTE;
+  try {
+    assert.equal(nextPushRemote(), 'origin');
+  } finally {
+    if (prior !== undefined) process.env.MJ_NEXT_PUSH_REMOTE = prior;
+  }
+});
+
+test('nextPushRemote honours the override CI sets', () => {
+  const prior = process.env.MJ_NEXT_PUSH_REMOTE;
+  process.env.MJ_NEXT_PUSH_REMOTE = 'next-push';
+  try {
+    assert.equal(nextPushRemote(), 'next-push');
+  } finally {
+    if (prior === undefined) delete process.env.MJ_NEXT_PUSH_REMOTE;
+    else process.env.MJ_NEXT_PUSH_REMOTE = prior;
+  }
+});
+
+test('nextPushRemote treats an empty or blank override as unset', () => {
+  // An unset secret or a `with:` that resolved to nothing yields '' — falling back to
+  // origin fails loudly on the protection rather than pushing to a remote named ''.
+  const prior = process.env.MJ_NEXT_PUSH_REMOTE;
+  for (const blank of ['', '   ']) {
+    process.env.MJ_NEXT_PUSH_REMOTE = blank;
+    assert.equal(nextPushRemote(), 'origin');
+  }
+  if (prior === undefined) delete process.env.MJ_NEXT_PUSH_REMOTE;
+  else process.env.MJ_NEXT_PUSH_REMOTE = prior;
 });

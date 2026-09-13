@@ -11,8 +11,14 @@
  * ERR_MODULE_NOT_FOUND shipping-bug class (published code importing a package consumers
  * can't install), so the modules to load are declared in configuration:
  *
- *   // mj.config.cjs (repo root)
- *   testing: { checkModules: ['@memberjunction/integration-test-suite'] }
+ *   // an ADOPTER's mj.config.cjs — a bare name resolves from a normal install
+ *   testing: { checkModules: ['@their-org/their-check-suite'] }
+ *
+ * MJ's own repo root cannot use a bare name: nothing creates a workspace-root node_modules
+ * link for the private suite, and this loader COLLECTS failures rather than throwing, so a
+ * bare specifier would degrade every dispatch to "Unknown integration check bundle" with no
+ * error. It therefore passes an absolute `path.join(__dirname, ...)` path to the built
+ * dist/index.js instead.
  *
  * plus an ad-hoc `--checks-module` flag (parity with `--oracles-module`). Deployments
  * without the key simply load nothing extra — external adopters point it at their own

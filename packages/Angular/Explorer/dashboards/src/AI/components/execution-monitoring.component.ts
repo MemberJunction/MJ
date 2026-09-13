@@ -2063,7 +2063,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         : 'MJ: AI Agent Runs';
 
       // Open the record using NavigationService
-      const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: this.selectedExecution.id }]);
+      const compositeKey = CompositeKey.FromID(this.selectedExecution.id);
       this.navigationService.OpenEntityRecord(entityName, compositeKey);
 
       // Close the modal

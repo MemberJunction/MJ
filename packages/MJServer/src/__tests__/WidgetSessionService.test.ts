@@ -10,7 +10,10 @@ vi.mock('../config.js', () => ({
 }));
 vi.mock('@memberjunction/generic-database-provider', () => ({
   UserCache: {
-    Instance: { Users: [], UserByName: () => undefined, GetSystemUser: () => undefined },
+    // The subject reads exactly these two through `ResolveConfiguredPrincipal`. It no longer
+    // calls `UserByName`/`GetSystemUser`, and stubbing members nobody calls hides the day a
+    // test does reach `resolveLookupUser` and trips the resolver's missing-system-id guard.
+    Instance: { Users: [], SYSTEM_USER_ID: 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' },
     Users: [],
   },
 }));

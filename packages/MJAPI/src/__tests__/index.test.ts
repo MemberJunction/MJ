@@ -5,6 +5,7 @@ import { describe, it, expect, vi } from 'vitest';
 // entry exercises its import graph without starting a server or touching a DB.
 
 const createMJServerMock = vi.fn().mockResolvedValue(undefined);
+const loadTelephonyAdaptersMock = vi.fn();
 
 vi.mock('@memberjunction/server-bootstrap', () => ({
   createMJServer: createMJServerMock,
@@ -14,15 +15,21 @@ vi.mock('mj_generatedentities', () => ({}));
 vi.mock('mj_generatedactions', () => ({}));
 vi.mock('@memberjunction/server-bootstrap/mj-class-registrations', () => ({}));
 vi.mock('../generated/class-registrations-manifest.js', () => ({}));
+vi.mock('@memberjunction/telephony-adapters', () => ({
+  RESOLVER_PATHS: ['/mock/telephony/*Resolver.js'],
+  LoadTelephonyAdapters: loadTelephonyAdaptersMock,
+}));
 
 describe('mj_api entry point', () => {
   it('imports cleanly and boots via createMJServer with resolver paths', async () => {
     await import('../index');
 
+    expect(loadTelephonyAdaptersMock).toHaveBeenCalledTimes(1);
     expect(createMJServerMock).toHaveBeenCalledTimes(1);
     const options = createMJServerMock.mock.calls[0][0] as { resolverPaths: string[] };
     expect(Array.isArray(options.resolverPaths)).toBe(true);
-    expect(options.resolverPaths.length).toBeGreaterThan(0);
+    expect(options.resolverPaths.length).toBeGreaterThan(1);
     expect(options.resolverPaths[0]).toContain('generated');
+    expect(options.resolverPaths).toContain('/mock/telephony/*Resolver.js');
   });
 });

@@ -11,7 +11,7 @@ import {
   Metadata, RunViewParams, LogError,
   RecordDependency, BaseEntityEvent, CompositeKey, RunView, RunViewResult
 } from '@memberjunction/core';
-import { MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
+import { DeserializeValidationErrors, MJEventType, MJGlobal, ValidationErrorInfo } from '@memberjunction/global';
 import { FormEditingCompleteEvent, PendingRecordItem, BaseFormComponentEventCodes } from '@memberjunction/ng-base-types';
 import { MJListEntity } from '@memberjunction/core-entities';
 
@@ -464,22 +464,21 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
           } else {
             const serverMsg = this.record.LatestResult?.Message || '';
             const errorMsg = serverMsg ? `Save failed: ${serverMsg}` : 'Error saving record';
-            this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
+            // A server-side Validate()/ValidateAsync() refusal comes back with its field-named
+            // reasons in LatestResult.Errors (rehydrated by the provider). When any of them names a
+            // field on this record, publish them through the SAME path the local Validate() branch
+            // uses below, so the field paints red with its message instead of the user getting a
+            // toast and a form with nothing marked. Errors with no field source stay toast-only.
+            const serverErrors = this.fieldSourcedServerErrors();
+            if (serverErrors.length > 0) {
+              this.publishValidationFailure(serverErrors);
+            } else {
+              this.Notification.emit({ Message: errorMsg, Type: 'error', Duration: 5000 });
+            }
             this.RecordSaveFailed.emit({ EntityName: this.record.EntityInfo.Name, ErrorMessage: errorMsg });
           }
         } else {
-          // Broadcast validation errors to all fields via FormContext
-          this._showValidation = true;
-          this._validationErrors = valResults.Errors;
-          this.cdr.markForCheck();
-
-          const errorMessages = valResults.Errors.map(x => x.Message);
-          this.Notification.emit({
-            Message: 'Validation Errors\n' + errorMessages.join('\n'),
-            Type: 'warning',
-            Duration: 5000
-          });
-          this.ValidationFailed.emit({ EntityName: this.record.EntityInfo.Name, Errors: errorMessages });
+          this.publishValidationFailure(valResults.Errors);
         }
       }
 
@@ -955,6 +954,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       showEmptyFields: this.showEmptyFields,
       showValidation: this._showValidation,
       validationErrors: this._validationErrors,
+      validationRevision: this._validationRevision,
       collapsibleSections: this.Config?.CollapsibleSections,
       enableRecordLinks: this.Config?.EnableRecordLinks,
       showRelatedEntities: this.Config?.ShowRelatedEntities,
@@ -996,6 +996,50 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
     if (!this.Config) return true;
     if (this.Config.Toolbar === null) return false;
     return this.Config.Toolbar?.AllowSectionReorder ?? true;
+  }
+
+  /**
+   * Bumped on every {@link publishValidationFailure}; published as `FormContext.validationRevision`
+   * so a field can tell an edit made before the failure from one made after it.
+   */
+  private _validationRevision = 0;
+
+  /**
+   * The ONE way validation errors reach the fields and the user — used by both the local
+   * `Validate()` refusal and a server-side refusal that came back on `LatestResult.Errors`, so the
+   * two cannot drift: broadcast through `FormContext` (fields match `Source === FieldName`), bump
+   * the revision, toast the messages, and raise `ValidationFailed`.
+   */
+  private publishValidationFailure(errors: ValidationErrorInfo[]): void {
+    this._showValidation = true;
+    this._validationErrors = errors;
+    this._validationRevision++;
+    this.cdr.markForCheck();
+
+    const errorMessages = errors.map(x => x.Message);
+    this.Notification.emit({
+      Message: 'Validation Errors\n' + errorMessages.join('\n'),
+      Type: 'warning',
+      Duration: 5000
+    });
+    this.ValidationFailed.emit({ EntityName: this.record.EntityInfo.Name, Errors: errorMessages });
+  }
+
+  /**
+   * The structured errors of the last failed save, when at least one names a field on this record.
+   *
+   * `LatestResult.Errors` is untyped and may hold anything a provider put there, so it is normalised
+   * through `DeserializeValidationErrors` first. Returns `[]` unless some entry's `Source` is one of
+   * this record's field names — a refusal that is purely record-level ("the database timed out",
+   * "not authorised") has nothing to paint and keeps the plain error toast. When there IS a
+   * field-sourced entry, the WHOLE set is returned: field-agnostic entries paint nothing (no field
+   * matches an empty Source) but still belong in the toast.
+   */
+  private fieldSourcedServerErrors(): ValidationErrorInfo[] {
+    const errors = DeserializeValidationErrors(this.record?.LatestResult?.Errors);
+    if (errors.length === 0) return [];
+    const fieldNames = new Set(this.record.EntityInfo.Fields.map(f => f.Name));
+    return errors.some(e => e.Source.length > 0 && fieldNames.has(e.Source)) ? errors : [];
   }
 
   /** Clears all validation display state (called on save success, cancel, end edit) */

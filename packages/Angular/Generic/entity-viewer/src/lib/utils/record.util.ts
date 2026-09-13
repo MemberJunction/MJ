@@ -6,11 +6,7 @@ import { ViewGridState } from '../types';
  * Works with both plain objects (from ResultType: 'simple') and BaseEntity instances.
  */
 export function buildCompositeKey(record: Record<string, unknown>, entityInfo: EntityInfo): CompositeKey {
-    const kvps = entityInfo.PrimaryKeys.map(pk => ({
-        FieldName: pk.Name,
-        Value: record[pk.Name]
-    }));
-    return new CompositeKey(kvps);
+    return CompositeKey.FromEntityRecord(entityInfo, record);
 }
 
 /**

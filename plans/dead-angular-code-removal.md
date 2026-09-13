@@ -45,7 +45,7 @@ These packages have **no imports, no selector usage, and no package.json referen
 | # | File | Package | Issue | Size |
 |---|------|---------|-------|------|
 | 1 | `custom/AIAgents/agent-advanced-settings-dialog.component.ts` | `core-entity-forms` | Entire file is commented out (every line) | ~200 lines |
-| 2 | `conversations/initial-prototype-now-old/` | `ng-conversations` | Old prototype directory with HTML mockup, SQL migration, proposal docs | 688K |
+| 2 | `conversations/initial-prototype-now-old/` | `ng-conversations` | Old prototype directory with HTML mockup, SQL migration, proposal docs — **done, removed in #4312** | 688K |
 
 ---
 
@@ -92,7 +92,7 @@ packages/Angular/Generic/tab-strip/
 ### Phase 2: Delete Dead Files (Low Risk)
 
 1. Delete `packages/Angular/Explorer/core-entity-forms/src/lib/custom/AIAgents/agent-advanced-settings-dialog.component.ts`
-2. Delete `packages/Angular/Generic/conversations/initial-prototype-now-old/` directory
+2. ~~Delete `packages/Angular/Generic/conversations/initial-prototype-now-old/` directory~~ — done in #4312
 
 ### Phase 3: Deprecation Cleanup (Medium Risk, Separate PR)
 

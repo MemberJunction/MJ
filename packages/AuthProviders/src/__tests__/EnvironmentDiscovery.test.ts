@@ -67,6 +67,19 @@ describe('ConfigFromEnvironment — parity with the previous hard-coded block', 
       userPoolId: 'pool'
     });
   });
+
+  it('Cognito carries COGNITO_DOMAIN through as the provider domain', () => {
+    // The hosted-UI domain is the only host serving /oauth2/authorize and /oauth2/token —
+    // anything initiating a Cognito login (the MCP OAuth proxy) reads it off the provider.
+    const config = CognitoProvider.ConfigFromEnvironment({
+      COGNITO_USER_POOL_ID: 'pool',
+      COGNITO_CLIENT_ID: 'ccid',
+      AWS_REGION: 'us-east-1',
+      COGNITO_DOMAIN: 'my-pool.auth.us-east-1.amazoncognito.com'
+    });
+    expect(config?.domain).toBe('my-pool.auth.us-east-1.amazoncognito.com');
+    expect(new CognitoProvider(config!).domain).toBe('my-pool.auth.us-east-1.amazoncognito.com');
+  });
 });
 
 describe('ConfigFromEnvironment — incomplete configuration', () => {

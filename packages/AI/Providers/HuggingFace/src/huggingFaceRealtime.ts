@@ -80,6 +80,9 @@ export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
     supportsVoiceOutput: true,
     // The compat layer has no create_response gating — no live turn-mode reconfiguration.
     supportsLiveReconfigure: false,
+    // Self-hosted speech-to-speech compat layers use fixed toolsets declared at session start.
+    // Dynamic tool set projection (per-agent direct actions) is not supported.
+    supportsDynamicToolSet: false,
     unexpectedCloseMessage: 'HuggingFace realtime session closed unexpectedly',
     // The cascade's own VAD stage governs turn taking — no wire-level turn modes to request, so
     // a normalized `turnDetection` request from the catalog/config cascade is diag-logged + dropped.
@@ -116,6 +119,7 @@ export const HUGGINGFACE_REALTIME_PROFILE: OpenAIRealtimeProfile = {
  */
 @RegisterClass(BaseRealtimeModel, 'HuggingFaceRealtime')
 export class HuggingFaceRealtime extends OpenAIRealtime {
+    public static override readonly SupportsDynamicToolSet = HUGGINGFACE_REALTIME_PROFILE.supportsDynamicToolSet;
     /**
      * @param apiKey The upstream key, or a keyless sentinel (`none` / `self-hosted` / `local` / `n/a`)
      * for unauthenticated self-hosted endpoints. The inherited SDK client is never used for the

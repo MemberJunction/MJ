@@ -278,7 +278,7 @@ Full 25-test suite: approximately **$10-12** per run. Parallel execution (4 work
 
 ### Container Details
 
-**Dockerfile.db-setup** -- One-shot init container that creates the database, installs AssociationDB (2,000 members, 21 events, 60 courses, 50 forum threads, 100 resources, 413 certifications, 110 products), runs `mj migrate` (Flyway migrations, 290+ entities), runs `mj codegen`, then patches a known CodeGen drift issue with the `__mj_CreatedAt`/`__mj_UpdatedAt` EntityField rows. MJAPI depends on it via `service_completed_successfully`.
+**Dockerfile.db-setup** -- One-shot init container that creates the database, installs AssociationDB (2,000 members, 21 events, 60 courses, 50 forum threads, 100 resources, 413 certifications, 110 products), runs `mj migrate` (Flyway migrations, 290+ entities), and runs `mj codegen`. MJAPI depends on it via `service_completed_successfully`.
 
 **Dockerfile.explorer** -- Two-stage build: Angular AOT build + nginx:alpine. The nginx config (a static `nginx.conf`) uses a `map` block to conditionally set `Connection: upgrade` only for WebSocket requests (critical -- unconditionally setting it causes GraphQL POST requests to hang). `GRAPHQL_URI` must be an absolute URL (`http://localhost:4200/api/`) because `graphql-request` v7+ validates with `new URL()`.
 

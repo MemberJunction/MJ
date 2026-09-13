@@ -1787,28 +1787,21 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * source, prompt run, entity record document). The host owns NavigationService.
      */
     public OpenDrilldownRecord(event: { entityName: string; recordID: string }): void {
-        const pkey = new CompositeKey();
-        pkey.KeyValuePairs = [{ FieldName: 'ID', Value: event.recordID }];
+        // The drilldown can name any entity — resolve its key column(s) from metadata.
+        const pkey = CompositeKey.FromURLSegment(this.ProviderToUse.EntityByName(event.entityName), event.recordID);
         this.navigationService.OpenEntityRecord(event.entityName, pkey);
     }
 
     public OpenRecordFromItem(item: ContentItemDetail): void {
         const md = this.ProviderToUse;
-        const pkey = new CompositeKey();
 
         // For entity sources: navigate to the actual entity record, not the ContentItem
         if (item.EntityName && item.EntityRecordID) {
-            const entityInfo = md.Entities.find(e => e.Name === item.EntityName);
-            if (entityInfo) {
-                pkey.LoadFromURLSegment(entityInfo, item.EntityRecordID);
-            } else {
-                pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.EntityRecordID }];
-            }
+            const pkey = CompositeKey.FromURLSegment(md.EntityByName(item.EntityName), item.EntityRecordID);
             this.navigationService.OpenEntityRecord(item.EntityName, pkey);
         } else {
             // For non-entity sources: open the ContentItem record
-            pkey.KeyValuePairs = [{ FieldName: 'ID', Value: item.ID }];
-            this.navigationService.OpenEntityRecord('MJ: Content Items', pkey);
+            this.navigationService.OpenEntityRecord('MJ: Content Items', CompositeKey.FromID(item.ID));
         }
     }
 

@@ -18,7 +18,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 import {
     SaveSQLResult,
     DeleteSQLResult,
@@ -61,7 +61,7 @@ vi.mock('@memberjunction/encryption', () => ({
 // Minimal concrete subclass that exposes the protected methods we want to test
 // and lets us inject entity metadata without running Config().
 // ---------------------------------------------------------------------------
-class FieldSelectionTestProvider extends GenericDatabaseProvider {
+class FieldSelectionTestProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 

@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, ChangeDetectorRef, Component, inject } from '@angular/core';
 import { NormalizeUUID, RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { LogError, RunView, UserInfo } from '@memberjunction/core';
+import { CompositeKey, LogError, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationEntity, MJEnvironmentEntityExtended, MJMLModelEntity, MJProcessRunDetailEntity, MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { trustDots, trustEvidenceLine } from '@memberjunction/predictive-studio-core';
@@ -10,6 +10,7 @@ import { buildBusinessCatalog, type BusinessPredictionCard } from '../business-p
 import { parseAtRiskRows, topGlobalDrivers, labelFromRecord, type AtRiskRow } from '../at-risk.view-models';
 import { buildPredictionsAgentContext, resolvePSRecord, buildPSNotFoundError } from '../predictive-studio-agent-context';
 import { validateStringParam } from '../../shared/agent-tool-validation';
+import { BuildRecordIdFilter } from '../../shared/record-id-filter';
 import { buildImprovePrompt, PS_CAPABILITY_CARDS, type PSCapabilityCard } from '../predictive-studio-copilot.view-models';
 
 const PREDICTIVE_STUDIO_APP_ID = '299C9272-8D38-40CA-85D4-0980F2C9FAD1';
@@ -516,18 +517,21 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       const target = this.targetEntityForModel(model);
       if (!target || this.atRiskRows.length === 0) return;
       const entity = this.ProviderToUse.EntityByName(target.name);
+      if (!entity) return;
+      // The target entity is arbitrary — its key can have any column name(s), including a composite key.
+      const pkNames = entity.PrimaryKeys.map((pk) => pk.Name);
       const targets = this.atRiskRows.slice(0, 200); // the rows a user actually acts on
-      const ids = targets.map((r) => `'${r.recordId.replace(/'/g, "''")}'`);
+      const ids = targets.map((r) => r.recordId);
       // Only fetch the columns labelFromRecord can actually use — a broad no-Fields fetch pulls every
       // column (incl. large text/JSON) of an arbitrary entity just to render a display name. Fall back
       // to the broad fetch only when the entity has none of the candidate label fields.
       const candidates = ['Name', 'FirstName', 'LastName', 'Email'];
-      const labelFields = entity ? candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase())) : [];
+      const labelFields = candidates.filter((c) => entity.Fields.some((f) => f.Name.toLowerCase() === c.toLowerCase()));
       const res = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<Record<string, unknown>>(
         {
           EntityName: target.name,
-          ExtraFilter: `ID IN (${ids.join(',')})`,
-          ...(labelFields.length > 0 ? { Fields: ['ID', ...labelFields] } : {}),
+          ExtraFilter: BuildRecordIdFilter(entity, ids),
+          ...(labelFields.length > 0 ? { Fields: [...pkNames, ...labelFields] } : {}),
           ResultType: 'simple',
           MaxRows: ids.length,
         },
@@ -535,7 +539,7 @@ export class PSPredictionsResourceComponent extends PSResourceBase {
       );
       if (!res.Success) return;
       const byId = new Map<string, Record<string, unknown>>();
-      for (const row of res.Results ?? []) byId.set(NormalizeUUID(String((row as { ID?: unknown }).ID ?? '')), row);
+      for (const row of res.Results ?? []) byId.set(NormalizeUUID(CompositeKey.FromEntityRecord(entity, row).ToCompactURLSegment()), row);
       for (const r of this.atRiskRows) {
         const rec = byId.get(NormalizeUUID(r.recordId));
         if (rec) r.label = labelFromRecord(rec);

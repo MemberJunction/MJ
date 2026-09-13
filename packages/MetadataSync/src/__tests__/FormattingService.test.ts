@@ -118,6 +118,35 @@ describe('FormattingService', () => {
     });
   });
 
+  describe('formatValidationResultAsCLIErrors', () => {
+    it('should carry entity, field, file, message and suggestion per error', () => {
+      const errors = formatter.formatValidationResultAsCLIErrors(createInvalidResult(), 'push');
+
+      // Generic head + one entry per validation error.
+      expect(errors).toHaveLength(3);
+      expect(errors[0].message).toBe('Validation failed. Cannot proceed with push.');
+
+      expect(errors[1].context).toBe('Users.Email');
+      expect(errors[1].message).toBe('Field "Email" does not exist on entity "Users" — /path/to/users.json');
+      expect(errors[1].suggestion).toBe('Check field name spelling');
+      expect(errors[1].code).toBe('E_VALIDATION_FAILED');
+
+      expect(errors[2].context).toBe('Prompts.TemplateFile');
+      expect(errors[2].message).toContain('/path/to/prompts.json');
+    });
+
+    it('should fall back to the file when entity/field are absent', () => {
+      const result = createInvalidResult();
+      result.errors = [{ type: 'validation', severity: 'error', file: '/path/to/a.json', message: 'Bad JSON' }];
+
+      const errors = formatter.formatValidationResultAsCLIErrors(result, 'pull');
+
+      expect(errors[0].message).toBe('Validation failed. Cannot proceed with pull.');
+      expect(errors[1].context).toBe('/path/to/a.json');
+      expect(errors[1].message).toBe('Bad JSON — /path/to/a.json');
+    });
+  });
+
   describe('formatValidationResult', () => {
     it('should return a string for valid results', () => {
       const result = createValidResult();

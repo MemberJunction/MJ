@@ -12,6 +12,19 @@
       "IconClass": "fa-solid fa-database",
       "AgentTypePromptParams": {
         "enableTaskGraphs": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Get Entity Details",
+              "Search Query Catalog",
+              "Scoped Search"
+            ]
+          }
+        }
       }
     },
     "relatedEntities": {
@@ -196,8 +209,8 @@
       "ID": "746CD1E8-CB8D-49A4-BE69-D0F208A0B462"
     },
     "sync": {
-      "lastModified": "2026-08-07T23:58:28.319Z",
-      "checksum": "8fbb1f306cb9efc2f8c07d99fc9549dca4ad8dc95a57c2a51900ef18a4772ec3"
+      "lastModified": "2026-09-12T15:03:57.387Z",
+      "checksum": "907033717d59456d319ab551e8539325566b317765d783df09004ac39829ffe0"
     }
   },
   {
@@ -213,6 +226,22 @@
       "IconClass": "fa-solid fa-folder-open",
       "AgentTypePromptParams": {
         "enableTaskGraphs": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 8000,
+            "actionNames": [
+              "List Storage Providers",
+              "Search Storage Files",
+              "File Storage: List Objects",
+              "File Storage: Get Object Metadata",
+              "File Storage: Get Download URL",
+              "Scoped Search"
+            ]
+          }
+        }
       }
     },
     "relatedEntities": {
@@ -360,8 +389,8 @@
       "ID": "63070640-7E8E-4953-B13C-9F840D6BDD81"
     },
     "sync": {
-      "lastModified": "2026-08-07T23:58:28.348Z",
-      "checksum": "6cd8f51d4dded600439162078e096c49e09b82839d5196167e132b613979d323"
+      "lastModified": "2026-09-12T15:03:57.385Z",
+      "checksum": "441ecdad0b63c7530f44ed1dbd27d5d880105577169ab96a6984badc7e90b293"
     }
   },
   {
@@ -377,6 +406,18 @@
       "IconClass": "fa-solid fa-globe",
       "AgentTypePromptParams": {
         "enableTaskGraphs": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 8000,
+            "actionNames": [
+              "Google Custom Search",
+              "Perplexity Search"
+            ]
+          }
+        }
       }
     },
     "relatedEntities": {
@@ -468,8 +509,8 @@
       "ID": "5DDF4F5D-B977-42B0-BED5-4A2F0021BC58"
     },
     "sync": {
-      "lastModified": "2026-08-07T23:58:28.375Z",
-      "checksum": "ae8ebbd7c0a94e7d7303367e7af39d6f7579e7cd0ddaa1770737334451b9243a"
+      "lastModified": "2026-09-12T15:03:57.386Z",
+      "checksum": "3f543eb8d48711ba3c595f7b7006bd2e7c67a02e18f2f2838f179007421d1452"
     }
   },
   {
@@ -499,6 +540,17 @@
       "FinalPayloadValidationMaxRetries": 3,
       "AgentTypePromptParams": {
         "enableTaskGraphs": true
+      },
+      "TypeConfiguration": {
+        "realtime": {
+          "directActions": {
+            "enabled": true,
+            "timeoutMs": 5000,
+            "actionNames": [
+              "Scoped Search"
+            ]
+          }
+        }
       }
     },
     "relatedEntities": {
@@ -875,8 +927,8 @@
       "ID": "E614D2BF-7C52-4A71-B90A-8C8DBB55BCFB"
     },
     "sync": {
-      "lastModified": "2026-08-07T23:58:28.398Z",
-      "checksum": "6ae771fbef62e753c923698b029202b5f4322604923fb6fac03e8d5fdad74f87"
+      "lastModified": "2026-09-12T15:03:57.388Z",
+      "checksum": "69e2e0607d96ee6380c9326fc6429d1f05042bc31fbe0444b639c20cf9ab5bee"
     }
   }
 ]

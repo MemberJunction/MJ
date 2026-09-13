@@ -66,6 +66,23 @@ export interface MessageArtifactRef {
 }
 
 /**
+ * An artifact known to be attached to a message whose entity rows are still loading.
+ *
+ * These fields all come off `LazyArtifactInfo`, which the conversation query populates
+ * synchronously — only the artifact and version ENTITIES are lazy, because a version's `Content`
+ * can be arbitrarily large. Carrying the display data rather than a bare count means the
+ * placeholder can name what is arriving and match its final styling.
+ */
+export interface MessagePendingArtifactRef {
+  artifactId: string;
+  artifactName: string;
+  visibility: string;
+}
+
+/** Shared empty result so the placeholder getter allocates nothing once loading has finished. */
+const NO_PENDING_ARTIFACTS: readonly MessagePendingArtifactRef[] = Object.freeze([]);
+
+/**
  * Component for displaying a single message in a conversation
  * Follows the dynamic rendering pattern from skip-chat for optimal performance
  * This component is created dynamically via ViewContainerRef.createComponent()
@@ -98,6 +115,20 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   @Input() public ratings?: RatingJSON[]; // Pre-loaded ratings from parent (RatingsJSON from query)
   @Input() public isLastMessage: boolean = false; // Whether this is the last message in the conversation
   @Input() public attachments: MessageAttachment[] = []; // Attachments for this message
+
+  /**
+   * Artifacts attached to this message whose entity rows have not arrived yet.
+   *
+   * The parent knows these synchronously — the message-to-artifact map is already in memory —
+   * while loading each artifact and version row is not. Without them the message rendered as
+   * finished with nothing where the image belonged, then the card appeared unannounced seconds
+   * later, which reads as "generation failed" rather than "still loading".
+   *
+   * Set alongside, not instead of, {@link artifacts}: on a message that already shows a report and
+   * is still loading an image, both render at once. Entries whose artifact has since loaded are
+   * filtered out by {@link pendingArtifactPlaceholders}.
+   */
+  @Input() public pendingArtifacts: readonly MessagePendingArtifactRef[] = [];
 
   /**
    * Optional additive per-message slot template (forwarded from chat-area's
@@ -900,6 +931,36 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
 
   public get hasArtifact(): boolean {
     return this.displayArtifacts.length > 0;
+  }
+
+  /**
+   * Label for a pending artifact. Says what is happening as well as to what — a bare artifact name
+   * beside a spinner reads as a title, not as progress, which is the confusion this whole change
+   * exists to remove. Matches the media previews' "Loading image..." phrasing.
+   */
+  public pendingLabel(pending: MessagePendingArtifactRef): string {
+    return pending.artifactName ? `Loading ${pending.artifactName}...` : 'Loading attachment...';
+  }
+
+  /**
+   * The pending artifacts that still have no card of their own, filtered per artifact rather than
+   * suppressed wholesale: a message can hold a loaded report and an in-flight image at once, and
+   * gating on `displayArtifacts.length` would leave that image's window silent.
+   */
+  public get pendingArtifactPlaceholders(): readonly MessagePendingArtifactRef[] {
+    // Shared constant in the steady state, which the parent now keeps us in most of the time by
+    // only publishing artifacts that are genuinely still loading. The component is CheckAlways and
+    // runs a per-second refresh while an agent run is active, so allocating here would cost for
+    // the life of every message.
+    if (this.pendingArtifacts.length === 0) {
+      return NO_PENDING_ARTIFACTS;
+    }
+    // UUIDsEqual, not string equality: these two IDs come from different sources — one from the
+    // conversation query, one off a loaded entity — and SQL Server returns upper-case UUIDs where
+    // PostgreSQL returns lower-case. A case-sensitive match left a placeholder sitting above the
+    // very card it was waiting for. See guides/UUID_COMPARISON_GUIDE.md.
+    const loaded = this.displayArtifacts;
+    return this.pendingArtifacts.filter(p => !loaded.some(a => UUIDsEqual(a.artifact.ID, p.artifactId)));
   }
 
   /**

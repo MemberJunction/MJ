@@ -139,6 +139,9 @@ describe('BaseEntity IS-A: parent save failure is reported on the child', () => 
 
         expect(child.LatestResult.Message).toContain('Name cannot be null');
         expect(child.LatestResult.Message).toContain('Description cannot be null');
+        // Message was built FROM Errors, so the producer says so and CompleteMessage does not repeat them.
+        expect(child.LatestResult.MessageIncludesErrors).toBe(true);
+        expect(child.LatestResult.CompleteMessage.split('Name cannot be null').length - 1, 'once, not twice').toBe(1);
     });
 
     it("names the parent entity so the caller knows WHICH save failed", async () => {
@@ -148,5 +151,7 @@ describe('BaseEntity IS-A: parent save failure is reported on the child', () => 
 
         expect(child.LatestResult.Message).toContain(productEntityInfo.Name);
         expect(child.LatestResult.Message).toContain('db exploded');
+        // The detail came from the parent's Message, not its Errors — nothing to mark.
+        expect(child.LatestResult.MessageIncludesErrors).toBe(false);
     });
 });

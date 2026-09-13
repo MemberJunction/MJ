@@ -1,3 +1,4 @@
+import { ValidationErrorInfo } from '@memberjunction/global';
 /**
  * Composite graph behaviour not covered by `baseEntity.companions.test.ts`: the delete graph,
  * nesting, transaction-scope interaction, and the client (non-transactional) routing decision.
@@ -433,6 +434,37 @@ describe('tier routing', () => {
 
         expect(ok).toBe(false);
         expect(parent.LatestResult?.Message).toContain('debits must equal credits');
+    });
+
+    it('rehydrates the server\'s ValidationErrors onto LatestResult.Errors, and CompleteMessage says each once', async () => {
+        supportsTransactions = false;
+        const provider = makeProvider();
+        const parent = new ParentEntity(productEntityInfo, provider as unknown as IEntityDataProvider);
+        parent.NewRecord();
+        parent.Set('Name', 'Parent');
+        label(parent, 'Parent');
+        label(await parent.Lines.Create(), 'Child0');
+
+        // What SaveEntityGraphOperation returns on a ValidateAsync refusal: ErrorMessage is the
+        // root's CompleteMessage (the errors joined) and ValidationErrors the same entries, flattened.
+        routeOperationResult = {
+            Success: true,
+            ResultCode: 'SUCCESS',
+            Output: {
+                Success: false,
+                ErrorMessage: 'debits must equal credits',
+                ValidationErrors: [{ Source: 'Lines', Message: 'debits must equal credits', Value: null, Type: 'Failure' }],
+                Fields: {},
+                Companions: [],
+            },
+        };
+
+        expect(await parent.Save()).toBe(false);
+        const result = parent.LatestResult!;
+        expect(result.Errors).toHaveLength(1);
+        expect(result.Errors?.[0]).toBeInstanceOf(ValidationErrorInfo);
+        expect(result.Errors?.[0]).toMatchObject({ Source: 'Lines', Message: 'debits must equal credits' });
+        expect(result.CompleteMessage.split('debits must equal credits').length - 1, 'once, not twice').toBe(1);
     });
 
     it('executes locally when the provider CAN transact', async () => {

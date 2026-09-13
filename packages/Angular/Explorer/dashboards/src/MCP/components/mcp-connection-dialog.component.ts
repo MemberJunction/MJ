@@ -235,7 +235,7 @@ export class MCPConnectionDialogComponent extends BaseAngularComponent implement
             const entity = await md.GetEntityObject<MJMCPServerConnectionEntity>('MJ: MCP Server Connections');
 
             if (this.IsEditMode && this.connection) {
-                await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.connection.ID }]));
+                await entity.InnerLoad(CompositeKey.FromID(this.connection.ID));
             } else {
                 entity.NewRecord();
             }

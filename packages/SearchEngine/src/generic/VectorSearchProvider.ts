@@ -820,10 +820,13 @@ export class VectorSearchProvider extends BaseSearchProvider {
     }
 
     /**
-     * Extract a plain record ID from a CompositeKey URL segment string.
-     * Vector metadata stores RecordID in format "FieldName|Value" or "F1|V1||F2|V2".
-     * For deduplication with entity search results, we need just the value(s).
-     * Uses CompositeKey.SimpleLoadFromURLSegment for proper multi-field parsing.
+     * Normalize the RecordID stored in vector metadata to the compact CompositeKey segment the
+     * other lanes emit, so fusion dedups the same record across lanes and the UI can open it.
+     * Vector metadata stores the always-prefixed form ("FieldName|Value" or "F1|V1||F2|V2"):
+     *  - single-column key → just the value (matches the entity/fulltext lanes, whatever the column is called)
+     *  - composite key     → the segment unchanged, field names intact, so
+     *    `CompositeKey.FromURLSegment(entity, RecordID)` can rebuild it. (Joining the bare values
+     *    with `||`, as this used to, produced a string nothing could parse.)
      */
     private extractRecordIDFromCompositeKey(raw: string): string {
         if (!raw.includes('|')) {
@@ -838,11 +841,11 @@ export class VectorSearchProvider extends BaseSearchProvider {
         }
 
         if (ck.KeyValuePairs.length === 1) {
-            return ck.KeyValuePairs[0].Value; // Single-key: just the UUID
+            return ck.KeyValuePairs[0].Value; // Single-key: just the value
         }
 
-        // Multi-key: join values with || for consistent dedup key
-        return ck.KeyValuePairs.map(kv => kv.Value).join('||');
+        // Multi-key: the prefixed segment IS the compact form for a composite key
+        return raw;
     }
 
 }

@@ -1,7 +1,7 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError, EntityInfo, CompositeKey } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
@@ -431,10 +431,11 @@ export class AutotagEntity extends AutotagBase {
         // Process each record: render template → create/update ERD → create/update ContentItem
         const contentItems: MJContentItemEntity[] = [];
         const parser = EntityDocumentTemplateParser.CreateInstance();
-        const pkFieldName = entityInfo.FirstPrimaryKey.Name;
 
         for (const record of modifiedRecords) {
-            const recordID = String(record[pkFieldName] ?? '');
+            // RecordID identifies the record for ANY key shape: the bare value for a single-column key
+            // (unchanged), 'F1|v1||F2|v2' for a composite key — never just the first column.
+            const recordID = CompositeKey.FromEntityRecord(entityInfo, record).ToCompactURLSegment();
             try {
                 const recordName = this.buildContentItemName(entityInfo, record);
                 const contentItem = await this.ProcessSingleRecord(

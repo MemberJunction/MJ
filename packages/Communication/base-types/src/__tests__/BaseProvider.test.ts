@@ -237,6 +237,19 @@ describe('BaseCommunicationProvider', () => {
             expect(result.ErrorMessage).toContain('does not support ListFolders');
         });
 
+        /**
+         * The distinction this pins is the one `GetEvents` is built around: a provider that cannot
+         * look at a calendar must not be indistinguishable from one reporting an empty calendar. A
+         * caller advancing a watermark on `Events: []` would skip the window it never actually read.
+         */
+        it('GetEvents should return not supported, with an empty list rather than a missing one', async () => {
+            const result = await provider.GetEvents({ Identifier: 'someone@example.com', NumEvents: 10 });
+            expect(result.Success).toBe(false);
+            expect(result.ErrorMessage).toContain('does not support GetEvents');
+            expect(result.ErrorMessage).toContain('someone@example.com');
+            expect(result.Events).toEqual([]);
+        });
+
         it('MarkAsRead should return not supported', async () => {
             const result = await provider.MarkAsRead({ MessageIDs: ['msg-1', 'msg-2'], IsRead: true });
             expect(result.Success).toBe(false);

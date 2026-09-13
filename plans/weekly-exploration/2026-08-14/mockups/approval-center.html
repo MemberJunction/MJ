@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Approval Center</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa; --mj-bg-surface: white; --mj-bg-surface-card: #f5f7fa; --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155; --mj-text-secondary: #64748b; --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF; --mj-border-default: #e2e8f0; --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a; --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c; --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626; --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7; --mj-status-info-bg: #f0f9ff;
+    --mj-status-purple: #7c3aed; --mj-status-purple-bg: #f5f3ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px; }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+  .nav-item .badge { margin-left: auto; background: var(--mj-status-error); color: white; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .btn-success { background: var(--mj-status-success); border-color: var(--mj-status-success); color: white; }
+  .btn-danger { background: var(--mj-status-error); border-color: var(--mj-status-error); color: white; }
+  .btn-sm { padding: 5px 11px; font-size: 12px; }
+
+  .content { padding: 22px 28px 40px; display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; align-items: start; }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); font-size: 13px; }
+  .card-body { padding: 4px 0; }
+
+  .kpi-row { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 15px 18px; }
+  .kpi .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 7px; }
+  .kpi .value { font-size: 25px; font-weight: 800; }
+  .kpi .value.warn { color: var(--mj-status-warning); }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .value.ok { color: var(--mj-status-success); }
+  .kpi .sub { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 3px; }
+
+  .gate-item { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .gate-item:last-child { border-bottom: none; }
+  .gate-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .gate-title { font-weight: 700; font-size: 13.5px; display: flex; align-items: center; gap: 8px; }
+  .type-chip { font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; text-transform: uppercase; letter-spacing: .03em; }
+  .type-action { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+  .type-agent { background: var(--mj-status-purple-bg); color: var(--mj-status-purple); }
+  .type-workflow { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .gate-meta { font-size: 12px; color: var(--mj-text-secondary); margin-bottom: 4px; }
+  .gate-params { background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 7px; padding: 9px 12px; font-size: 12.5px; margin: 8px 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px 16px; }
+  .gate-params .pk { color: var(--mj-text-muted); }
+  .gate-params .pv { font-weight: 600; }
+  .gate-actions { display: flex; gap: 8px; margin-top: 10px; }
+  .timer { font-size: 11.5px; color: var(--mj-status-warning); font-weight: 600; display:flex; align-items:center; gap:5px; white-space: nowrap; }
+  .timer.urgent { color: var(--mj-status-error); }
+
+  .rule-item { padding: 13px 18px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .rule-item:last-child { border-bottom: none; }
+  .rule-name { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+  .rule-cond { font-family: 'SF Mono', Consolas, monospace; font-size: 11.5px; background: var(--mj-bg-surface-sunken); padding: 3px 8px; border-radius: 5px; color: var(--mj-brand-primary); display: inline-block; margin: 4px 0; }
+  .rule-meta { font-size: 11.5px; color: var(--mj-text-muted); }
+  .toggle { width: 34px; height: 19px; border-radius: 999px; background: var(--mj-status-success); position: relative; display: inline-block; flex-shrink:0; }
+  .toggle::after { content:''; position:absolute; width:15px; height:15px; background:white; border-radius:50%; top:2px; right:2px; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .rule-head { display:flex; align-items:center; justify-content: space-between; }
+
+  .empty-note { padding: 30px 18px; text-align: center; color: var(--mj-text-muted); font-size: 12.5px; }
+  .form-note { padding: 14px 18px; background: var(--mj-status-info-bg); color: var(--mj-status-info); font-size: 12px; border-top: 1px solid var(--mj-border-default); display:flex; gap:8px; align-items:flex-start; }
+  .form-note i { margin-top: 1px; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cubes"></i> MemberJunction</div>
+    <div class="nav-section">Workspace</div>
+    <div class="nav-item"><i class="fa-solid fa-house"></i> Home</div>
+    <div class="nav-item"><i class="fa-solid fa-database"></i> Entities</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> AI Agents</div>
+    <div class="nav-item"><i class="fa-solid fa-bolt"></i> Actions</div>
+    <div class="nav-item"><i class="fa-solid fa-diagram-project"></i> Workflows</div>
+    <div class="nav-section">Governance</div>
+    <div class="nav-item active"><i class="fa-solid fa-clipboard-check"></i> Approval Center <span class="badge">4</span></div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Resource Budgets</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Consent &amp; Privacy</div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-users-gear"></i> Roles &amp; Permissions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-clipboard-check"></i> Approval Center</h1>
+        <div class="sub">4 requests awaiting your decision · across Actions, AI Agents &amp; Workflows</div>
+      </div>
+      <button class="btn"><i class="fa-solid fa-clock-rotate-left"></i> Decision History</button>
+    </div>
+
+    <div class="content">
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Pending</div><div class="value warn">4</div><div class="sub">2 due within the hour</div></div>
+        <div class="kpi"><div class="label">Approved (30d)</div><div class="value ok">212</div><div class="sub">avg. 6 min to decide</div></div>
+        <div class="kpi"><div class="label">Rejected (30d)</div><div class="value err">9</div><div class="sub">mostly refund overrides</div></div>
+        <div class="kpi"><div class="label">Auto-Expired (30d)</div><div class="value">3</div><div class="sub">defaulted to Reject on timeout</div></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-inbox"></i> Pending Approvals</h2><button class="btn btn-sm"><i class="fa-solid fa-filter"></i> Filter</button></div>
+        <div class="card-body">
+
+          <div class="gate-item">
+            <div class="gate-top">
+              <div class="gate-title"><span class="type-chip type-action">Action</span> Issue Membership Refund</div>
+              <div class="timer urgent"><i class="fa-solid fa-hourglass-half"></i> 22 min left</div>
+            </div>
+            <div class="gate-meta">Requested by <strong>System</strong> on behalf of <strong>Dana Kowalski (Member Services)</strong> · Gate: "Refunds over $500 need Director sign-off"</div>
+            <div class="gate-params">
+              <div><span class="pk">Member</span> <span class="pv">Priya Anand (#48213)</span></div>
+              <div><span class="pk">Amount</span> <span class="pv" style="color:var(--mj-status-error)">$1,240.00</span></div>
+              <div><span class="pk">Reason</span> <span class="pv">Duplicate dues payment</span></div>
+              <div><span class="pk">Refund Method</span> <span class="pv">Original card</span></div>
+            </div>
+            <div class="gate-actions">
+              <button class="btn btn-success btn-sm"><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn-danger btn-sm"><i class="fa-solid fa-xmark"></i> Reject</button>
+              <button class="btn btn-sm"><i class="fa-regular fa-comment"></i> Ask a question</button>
+            </div>
+          </div>
+
+          <div class="gate-item">
+            <div class="gate-top">
+              <div class="gate-title"><span class="type-chip type-agent">AI Agent</span> Renewal Outreach Agent · bulk send</div>
+              <div class="timer"><i class="fa-solid fa-hourglass-half"></i> 3h 10m left</div>
+            </div>
+            <div class="gate-meta">Requested by <strong>Renewal Outreach Agent</strong> mid-run · Gate: "Any agent send to &gt;1,000 recipients needs approval"</div>
+            <div class="gate-params">
+              <div><span class="pk">Recipients</span> <span class="pv" style="color:var(--mj-status-error)">6,842 lapsed members</span></div>
+              <div><span class="pk">Channel</span> <span class="pv">Email</span></div>
+              <div><span class="pk">Template</span> <span class="pv">"We miss you — renew today"</span></div>
+              <div><span class="pk">Est. tone score</span> <span class="pv">Friendly (0.91)</span></div>
+            </div>
+            <div class="gate-actions">
+              <button class="btn btn-success btn-sm"><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn-danger btn-sm"><i class="fa-solid fa-xmark"></i> Reject</button>
+              <button class="btn btn-sm"><i class="fa-solid fa-eye"></i> Preview email</button>
+            </div>
+          </div>
+
+          <div class="gate-item">
+            <div class="gate-top">
+              <div class="gate-title"><span class="type-chip type-workflow">Workflow</span> Chapter Data Merge · Step 4 of 6</div>
+              <div class="timer"><i class="fa-solid fa-hourglass-half"></i> 1d 4h left</div>
+            </div>
+            <div class="gate-meta">Requested by <strong>Marcus Yee (IT)</strong> · Gate: "Any merge affecting &gt;50 records needs a second admin"</div>
+            <div class="gate-params">
+              <div><span class="pk">Entity</span> <span class="pv">Contacts</span></div>
+              <div><span class="pk">Records affected</span> <span class="pv">318</span></div>
+              <div><span class="pk">Merge strategy</span> <span class="pv">Keep most-recently-updated</span></div>
+              <div><span class="pk">Reversible</span> <span class="pv">Yes, 30 days</span></div>
+            </div>
+            <div class="gate-actions">
+              <button class="btn btn-success btn-sm"><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn-danger btn-sm"><i class="fa-solid fa-xmark"></i> Reject</button>
+              <button class="btn btn-sm"><i class="fa-solid fa-table-list"></i> View affected records</button>
+            </div>
+          </div>
+
+          <div class="gate-item">
+            <div class="gate-top">
+              <div class="gate-title"><span class="type-chip type-action">Action</span> Waive Dues Balance</div>
+              <div class="timer"><i class="fa-solid fa-hourglass-half"></i> 1d 22h left</div>
+            </div>
+            <div class="gate-meta">Requested by <strong>Sam Torres (Member Services)</strong> · Gate: "Any waiver over $250 needs Director sign-off"</div>
+            <div class="gate-params">
+              <div><span class="pk">Member</span> <span class="pv">Riverbend Historical Society (Org #902)</span></div>
+              <div><span class="pk">Amount</span> <span class="pv">$300.00</span></div>
+              <div><span class="pk">Reason</span> <span class="pv">Hardship request, board-approved</span></div>
+              <div><span class="pk">Prior waivers (12mo)</span> <span class="pv">0</span></div>
+            </div>
+            <div class="gate-actions">
+              <button class="btn btn-success btn-sm"><i class="fa-solid fa-check"></i> Approve</button>
+              <button class="btn btn-danger btn-sm"><i class="fa-solid fa-xmark"></i> Reject</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2><i class="fa-solid fa-sliders"></i> Approval Rules</h2><button class="btn btn-sm btn-primary"><i class="fa-solid fa-plus"></i> New Rule</button></div>
+        <div class="card-body">
+          <div class="rule-item">
+            <div class="rule-head"><div class="rule-name">Refunds over $500 need Director sign-off</div><div class="toggle"></div></div>
+            <div class="rule-cond">Action = "Issue Membership Refund" AND Amount &gt; 500</div>
+            <div class="rule-meta">Approver: Director role · Timeout: 4h → auto-reject</div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-head"><div class="rule-name">Bulk agent sends over 1,000 recipients</div><div class="toggle"></div></div>
+            <div class="rule-cond">AIAgent.ToolCall = "SendCommunication" AND Recipients.Count &gt; 1000</div>
+            <div class="rule-meta">Approver: Communications Lead role · Timeout: 24h → escalate to ED</div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-head"><div class="rule-name">Large record merges need a second admin</div><div class="toggle"></div></div>
+            <div class="rule-cond">TaskGraphStep.Type = "RecordMerge" AND AffectedCount &gt; 50</div>
+            <div class="rule-meta">Approver: any Admin ≠ requester · Timeout: 48h → auto-reject</div>
+          </div>
+          <div class="rule-item">
+            <div class="rule-head"><div class="rule-name">Dues waivers over $250</div><div class="toggle"></div></div>
+            <div class="rule-cond">Action = "Waive Dues Balance" AND Amount &gt; 250</div>
+            <div class="rule-meta">Approver: Director role · Timeout: 72h → auto-reject</div>
+          </div>
+        </div>
+        <div class="form-note"><i class="fa-solid fa-circle-info"></i> Approved requests re-run with the exact parameters shown at approval time — never re-evaluated against live data.</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

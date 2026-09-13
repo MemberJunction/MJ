@@ -1,4 +1,4 @@
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, ordinalCompare } from '@memberjunction/global';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
@@ -182,6 +182,11 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
   /** True if a run is currently in progress. */
   public get IsActive(): boolean {
     return this._active;
+  }
+
+  /** Current counters for this run. */
+  public get counters(): Readonly<RunCounters> {
+    return this._counters;
   }
 
   /** Begin capturing a new run. Resets all state from any prior run. */
@@ -533,7 +538,7 @@ export class CodeGenReporter extends BaseSingleton<CodeGenReporter> {
       }
     }
 
-    summaries.sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+    summaries.sort((a, b) => ordinalCompare(b.startedAt, a.startedAt));
     return typeof limit === 'number' ? summaries.slice(0, limit) : summaries;
   }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { EntityInfo, type FormRole } from '@memberjunction/core';
-import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection } from '../form-chrome';
+import { DETAILS_SECTION_KEY, MORE_SECTION_KEY, HumanizeEntityTitle, IsAccordionFormChrome, IsAlwaysMoreSection, IsDetailsSectionKey, DetailsCardEdges } from '../form-chrome';
 import { ApplyFormChromeRuleTitles, ApplyUserChromeMembership, BuildDefaultChromeSpec, MoveChromeGroupInSectionOrder, OrderChromeGroups, OrderMoreSectionKeys, OverlayChromeSectionOrder, ResolveFormChrome, StabilizeFirstClassGroupOrder, TakeDecoratedChrome } from '../resolve-form-chrome';
 import type { FormChromeGroup, FormChromeSpec } from '../form-chrome';
 import { FormChromeCoordinator } from '../form-chrome-coordinator.service';
@@ -27,6 +27,48 @@ describe('HumanizeEntityTitle', () => {
     it('leaves ordinary section names alone', () => {
         expect(HumanizeEntityTitle('Personal Identity')).toBe('Personal Identity');
         expect(HumanizeEntityTitle('Order Headers (Bill To Person)')).toBe('Order Headers (Bill To Person)');
+    });
+});
+
+describe('IsDetailsSectionKey', () => {
+    const groups: FormChromeGroup[] = [
+        { Key: 'overview', Title: 'Overview', Icon: 'fa fa-eye', SectionKeys: ['overview'], IsMore: false, IsLead: true },
+        { Key: DETAILS_SECTION_KEY, Title: 'Details', Icon: 'fa fa-id-card', SectionKeys: ['animalIdentity', 'shelterHistory'], IsMore: false },
+        { Key: 'careLogs', Title: 'Care Logs', Icon: 'fa fa-notes-medical', SectionKeys: ['careLogs'], IsMore: false },
+        { Key: MORE_SECTION_KEY, Title: 'More', Icon: 'fa fa-folder', SectionKeys: ['systemMetadata'], IsMore: true },
+    ];
+
+    it('is true only for panels grouped under the Details rail item', () => {
+        expect(IsDetailsSectionKey({ Groups: groups }, 'animalIdentity')).toBe(true);
+        expect(IsDetailsSectionKey({ Groups: groups }, 'shelterHistory')).toBe(true);
+    });
+
+    it('is false for single-panel rail items, More children, and unknown keys', () => {
+        expect(IsDetailsSectionKey({ Groups: groups }, 'overview')).toBe(false);
+        expect(IsDetailsSectionKey({ Groups: groups }, 'careLogs')).toBe(false);
+        expect(IsDetailsSectionKey({ Groups: groups }, 'systemMetadata')).toBe(false);
+        expect(IsDetailsSectionKey({ Groups: groups }, 'nope')).toBe(false);
+    });
+
+    it('is false when the spec has no Details group at all', () => {
+        expect(IsDetailsSectionKey({ Groups: groups.filter((g) => g.Key !== DETAILS_SECTION_KEY) }, 'animalIdentity')).toBe(false);
+    });
+});
+
+describe('DetailsCardEdges', () => {
+    it('follows the display order, not DOM order', () => {
+        const order: Record<string, number> = { animalIdentity: 2, shelterHistory: 0, physical: 1 };
+        expect(DetailsCardEdges(['animalIdentity', 'shelterHistory', 'physical'], (k) => order[k]))
+            .toEqual({ First: 'shelterHistory', Last: 'animalIdentity' });
+    });
+
+    it('keeps DOM order on ties and handles a single panel', () => {
+        expect(DetailsCardEdges(['a', 'b', 'c'], () => 0)).toEqual({ First: 'a', Last: 'c' });
+        expect(DetailsCardEdges(['only'], () => 5)).toEqual({ First: 'only', Last: 'only' });
+    });
+
+    it('returns nulls when nothing is shown', () => {
+        expect(DetailsCardEdges([], () => 0)).toEqual({ First: null, Last: null });
     });
 });
 

@@ -30,8 +30,12 @@ export {
     IntegrationCheckRegistry,
     bootstrapIntegrationServer,
     bootstrapIntegrationClient,
-    createRunQueryFixtures,
-    teardownRunQueryFixtures,
+    // NOTE: createRunQueryFixtures / teardownRunQueryFixtures are deliberately NOT forwarded.
+    // They live in @memberjunction/integration-test-suite (src/checks/runquery-cache.checks.ts),
+    // not in the package below — forwarding them violated this file's own rule two lines up and
+    // made the whole module throw `SyntaxError: does not provide an export named
+    // 'createRunQueryFixtures'` at load, killing every rig that imports this shim. Nothing
+    // consumed them through here. Import them from the suite package directly if ever needed.
     // RLS two-user discovery (the rls-isolation bundle's fixture) — DISCOVERED, not minted.
     discoverRlsFixture,
     // Tier gate predicate — the ONE source of truth honored by both the scripts and the driver.

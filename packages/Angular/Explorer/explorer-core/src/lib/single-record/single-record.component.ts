@@ -1,6 +1,6 @@
-import { Component, EventEmitter, inject, Input, Output } from '@angular/core';
+import { Component, EventEmitter, inject, Input, Output, ViewChild } from '@angular/core';
 import { CompositeKey, BaseEntity } from '@memberjunction/core';
-import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService } from '@memberjunction/ng-base-forms';
+import { FormNavigationEvent, FormNotificationEvent, MJFormPresenterService, MjEntityFormHostComponent } from '@memberjunction/ng-base-forms';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
@@ -33,6 +33,20 @@ export class SingleRecordComponent extends BaseAngularComponent {
   @Output() public recordSaved: EventEmitter<BaseEntity> = new EventEmitter<BaseEntity>();
   /** Emitted when the hosted form asks to be dismissed (e.g. Discard on a new record). */
   @Output() public recordDismissed: EventEmitter<void> = new EventEmitter<void>();
+
+  @ViewChild(MjEntityFormHostComponent) private formHost?: MjEntityFormHostComponent;
+
+  /**
+   * True while the hosted form is in edit mode. The host already exposes the
+   * live form instance, so this is a read, not a new event pipeline.
+   *
+   * MJ forms are read-only until the user explicitly clicks Edit, so edit mode
+   * is a deliberate gesture and a sound proxy for "there is work in here worth
+   * protecting" — which is all the preview-tab replacement guard needs.
+   */
+  public IsEditing(): boolean {
+    return this.formHost?.Form?.EditMode === true;
+  }
 
   private navigationService = inject(NavigationService);
   private sharedService = inject(SharedService);

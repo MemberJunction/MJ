@@ -4,11 +4,26 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// Hoisted: `vi.mock` factories run before normal imports are evaluated, so the shared module has
+// to be pulled in during that same phase. The Graph client mock below stays local on purpose —
+// it is a flat post/get/patch/delete stub, a different shape from the chain recorder GetEvents
+// needs, and the tests here assert against its call args directly.
+const shared = await vi.hoisted(async () => await import('./graph-mocks'));
+
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
 
-vi.mock('@memberjunction/communication-types', () => ({
+vi.mock('@memberjunction/communication-types', async () => {
+  // Pull the REAL clause combiner from source rather than stubbing it. It is pure and
+  // dependency-free for exactly this reason (same rationale as AddressUtils in the Gmail suite):
+  // a stub would agree with whatever these tests expect, so the composition that fixes the
+  // silent-overwrite bug would never actually be exercised.
+  const filterUtils = await vi.importActual<{
+    CombineFilterClauses: (clauses: (string | null | undefined)[], operator: string) => string;
+  }>('../../../../base-types/src/FilterUtils');
+  return {
+  ...filterUtils,
   BaseCommunicationProvider: class {
     getSupportedOperations() { return []; }
   },
@@ -24,7 +39,8 @@ vi.mock('@memberjunction/communication-types', () => ({
       }
     }
   },
-}));
+  };
+});
 
 vi.mock('@memberjunction/global', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/global')>();
@@ -39,26 +55,7 @@ vi.mock('@memberjunction/core', () => ({
   LogStatus: vi.fn(),
 }));
 
-vi.mock('env-var', () => {
-  const envMap: Record<string, string> = {
-    AZURE_CLIENT_ID: 'env-client-id',
-    AZURE_CLIENT_SECRET: 'env-client-secret',
-    AZURE_TENANT_ID: 'env-tenant-id',
-    AZURE_ACCOUNT_EMAIL: 'test@example.com',
-    AZURE_ACCOUNT_ID: 'env-user-id',
-    AZURE_AAD_ENDPOINT: 'https://login.microsoftonline.com',
-    AZURE_GRAPH_ENDPOINT: 'https://graph.microsoft.com',
-  };
-  return {
-    default: {
-      get: (key: string) => ({
-        default: (def: string) => ({
-          asString: () => envMap[key] ?? def,
-        }),
-      }),
-    },
-  };
-});
+vi.mock('env-var', () => shared.envVarMock());
 
 // Mock @azure/identity
 // NOTE: the implementation MUST be a regular function, not an arrow - MS Graph's auth
@@ -186,6 +183,94 @@ describe('MSGraphProvider', () => {
     });
   });
 
+  describe('GetMessages narrowing — what actually reaches Graph', () => {
+    /** Runs GetMessages and hands back the `$filter` string the Graph client was given. */
+    const filterFor = async (params: Record<string, unknown>): Promise<{ filter: string; applied: unknown }> => {
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue({ value: [] }),
+      };
+      mockGraphApi.mockReturnValueOnce(chain);
+      const result = (await provider.GetMessages({ NumMessages: 10, ...params } as never)) as {
+        AppliedFilters?: unknown;
+      };
+      return { filter: chain.filter.mock.calls[0][0] as string, applied: result.AppliedFilters };
+    };
+
+    it('asks for everything when the caller narrows nothing', async () => {
+      const { filter } = await filterFor({});
+      expect(filter).toBe('');
+    });
+
+    it('pushes ReceivedAfter down as an inclusive receivedDateTime comparison', async () => {
+      const { filter } = await filterFor({ ReceivedAfter: new Date('2026-08-30T12:00:00.000Z') });
+      // `ge`, not `gt`: the param is documented as inclusive. Unquoted: quoting the instant makes
+      // Graph compare a datetime to a string and reject the request.
+      expect(filter).toBe('(receivedDateTime ge 2026-08-30T12:00:00.000Z)');
+    });
+
+    it('pushes ReceivedBefore down as an inclusive upper bound', async () => {
+      const { filter } = await filterFor({ ReceivedBefore: new Date('2026-08-31T00:00:00.000Z') });
+      expect(filter).toBe('(receivedDateTime le 2026-08-31T00:00:00.000Z)');
+    });
+
+    it('combines both bounds into a single range', async () => {
+      const { filter } = await filterFor({
+        ReceivedAfter: new Date('2026-08-30T00:00:00.000Z'),
+        ReceivedBefore: new Date('2026-08-31T00:00:00.000Z'),
+      });
+      expect(filter).toBe(
+        '(receivedDateTime ge 2026-08-30T00:00:00.000Z) and (receivedDateTime le 2026-08-31T00:00:00.000Z)',
+      );
+    });
+
+    it('converts a non-UTC Date to UTC rather than sending local time', async () => {
+      // A caller can hand over any Date. Graph has no idea what timezone the caller sits in, so an
+      // unconverted local instant would silently shift the boundary by the UTC offset.
+      const { filter } = await filterFor({ ReceivedAfter: new Date(Date.UTC(2026, 7, 30, 5, 30, 0)) });
+      expect(filter).toBe('(receivedDateTime ge 2026-08-30T05:30:00.000Z)');
+    });
+
+    describe('a caller-supplied ContextData.Filter NARROWS, it does not replace', () => {
+      /**
+       * THE REGRESSION THIS FILE EXISTS FOR. The old code assigned `filter = ContextData.Filter`
+       * unconditionally, so asking for unread mail AND a custom clause returned READ mail — the
+       * caller's first constraint vanished with nothing reported. Both must survive.
+       */
+      it('keeps UnreadOnly when a custom filter is also supplied', async () => {
+        const { filter } = await filterFor({ UnreadOnly: true, ContextData: { Filter: "(from/emailAddress/address eq 'a@b.com')" } });
+        expect(filter).toContain('(isRead eq false)');
+        expect(filter).toContain("(from/emailAddress/address eq 'a@b.com')");
+        expect(filter).toBe("(isRead eq false) and (from/emailAddress/address eq 'a@b.com')");
+      });
+
+      it('keeps the date bounds too', async () => {
+        const { filter } = await filterFor({
+          ReceivedAfter: new Date('2026-08-30T00:00:00.000Z'),
+          ContextData: { Filter: '(hasAttachments eq true)' },
+        });
+        expect(filter).toBe('(receivedDateTime ge 2026-08-30T00:00:00.000Z) and (hasAttachments eq true)');
+      });
+    });
+
+    it('reports exactly which narrowings it applied', async () => {
+      const { applied } = await filterFor({ ReceivedAfter: new Date('2026-08-30T00:00:00.000Z'), UnreadOnly: true });
+      expect(applied).toEqual({ ReceivedAfter: true, ReceivedBefore: false, UnreadOnly: true });
+    });
+
+    it('reports false for narrowings the caller never asked for', async () => {
+      // AppliedFilters answers "is this result set narrowed", not "what was requested" — a caller
+      // deciding whether to filter again needs the former.
+      const { applied } = await filterFor({});
+      expect(applied).toEqual({ ReceivedAfter: false, ReceivedBefore: false, UnreadOnly: false });
+    });
+
+    it('declares both capabilities, because Graph really does filter server-side', async () => {
+      expect(provider.MessageRetrieval).toEqual({ FilterByReceivedDate: true, FilterByUnread: true });
+    });
+  });
+
   describe('credential resolution', () => {
     it('should return failure when required credentials are missing with fallback disabled', async () => {
       const message = {
@@ -201,6 +286,130 @@ describe('MSGraphProvider', () => {
 
       const result = await provider.SendSingleMessage(message, { disableEnvironmentFallback: true }) as Record<string, unknown>;
       expect(result.Success).toBe(false);
+    });
+
+    /**
+     * THE DEFECT THIS BLOCK EXISTS FOR. The `Azure Service Principal` credential type declares three
+     * fields and requires all three. `resolveCredentials` used to validate FOUR, demanding an
+     * `accountEmail` the type has no way to carry, so a credential stored through the Credentials
+     * engine could not drive a single operation — it failed before doing any work. It went unnoticed
+     * only because the AZURE_ACCOUNT_EMAIL environment fallback covered for it.
+     */
+    /** GetMessages chains .filter().top().get(); the default api mock is deliberately not chainable. */
+    const expectChainedCall = () => {
+      const chain = {
+        filter: vi.fn().mockReturnThis(),
+        top: vi.fn().mockReturnThis(),
+        get: vi.fn().mockResolvedValue({ value: [] }),
+      };
+      mockGraphApi.mockReturnValueOnce(chain);
+    };
+
+    const PRINCIPAL = {
+      tenantId: '00000000-0000-0000-0000-000000000001',
+      clientId: '00000000-0000-0000-0000-000000000002',
+      clientSecret: 'secret',
+      disableEnvironmentFallback: true,
+    };
+
+    /**
+     * Reply used to pass NO request-level candidate, so it could only resolve `creds.accountEmail` —
+     * a property the `Azure Service Principal` type declares nowhere, and whose environment source
+     * `disableEnvironmentFallback` removes. It was therefore unreachable on precisely the stored
+     * credential the mailbox rework exists to support, and no test saw it: the suite only covered
+     * operations that already named their own mailbox.
+     */
+    it('resolves the Reply mailbox from ContextData, not only from the credential', async () => {
+      const chain = { post: vi.fn().mockResolvedValue({}) };
+      mockGraphApi.mockReturnValueOnce(chain);
+
+      const result = await provider.ReplyToMessage({
+        MessageID: 'msg-1',
+        Message: { ProcessedBody: 'body', ProcessedHTMLBody: '' },
+        ContextData: { Email: 'named@example.com' },
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+      expect(String(mockGraphApi.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('named@example.com'));
+    });
+
+    /**
+     * And still refuses, by name, when neither the request nor the credential carries one.
+     *
+     * Reply RETURNS that refusal rather than throwing, because unlike `GetMessages` it has a
+     * try/catch — and the catch carries the exception message, so the operation and both ways to
+     * supply a mailbox reach the caller instead of being flattened to "Error sending message".
+     */
+    it('refuses Reply when no mailbox resolves anywhere, and says why', async () => {
+      const result = await provider.ReplyToMessage({
+        MessageID: 'msg-1',
+        Message: { ProcessedBody: 'body', ProcessedHTMLBody: '' },
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(false);
+      expect(result.ErrorMessage).toContain('ReplyToMessage');
+      expect(result.ErrorMessage).toContain('needs a mailbox');
+    });
+
+    it('accepts a three-field service principal when the operation names its own mailbox', async () => {
+      expectChainedCall();
+      const result = await provider.GetMessages({
+        Identifier: 'named@example.com',
+        NumMessages: 5,
+      }, PRINCIPAL) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+    });
+
+    /**
+     * A mailbox is still required — it is just demanded where it is needed rather than up front.
+     *
+     * It REJECTS rather than returning a failure result because `GetMessages` has no try/catch: a
+     * credential problem has always propagated as an exception from this method, since
+     * `resolveCredentials` throws too. Pinning the existing contract rather than quietly changing it.
+     */
+    it('refuses, naming the operation and the way out, when no mailbox resolves anywhere', async () => {
+      await expect(provider.GetMessages({ NumMessages: 5 }, PRINCIPAL)).rejects.toThrow(
+        /GetMessages needs a mailbox.*accountEmail/s
+      );
+    });
+
+    /**
+     * The failure must never be a mailbox literally named "undefined". This package does not enable
+     * strictNullChecks, so nothing but the guard stands between a missing mailbox and a Graph 404
+     * that reads like "message not found" — a wrong answer wearing the costume of a real one.
+     */
+    it('refuses before calling Graph at all, rather than requesting mailbox "undefined"', async () => {
+      const before = mockGraphApi.mock.calls.length;
+      await expect(provider.GetMessages({ NumMessages: 5 }, PRINCIPAL)).rejects.toThrow(/needs a mailbox/);
+
+      expect(mockGraphApi.mock.calls.length).toBe(before);
+      for (const call of mockGraphApi.mock.calls) {
+        expect(String(call[0])).not.toContain('undefined');
+      }
+    });
+
+    it('still uses accountEmail as the default when the request names no mailbox', async () => {
+      expectChainedCall();
+      const result = await provider.GetMessages({ NumMessages: 5 }, {
+        ...PRINCIPAL,
+        accountEmail: 'default@example.com',
+      }) as Record<string, unknown>;
+
+      expect(result.Success).toBe(true);
+      expect(String(mockGraphApi.mock.calls.at(-1)?.[0])).toContain(encodeURIComponent('default@example.com'));
+    });
+
+    it('lets the request outrank that default', async () => {
+      expectChainedCall();
+      await provider.GetMessages({ Identifier: 'named@example.com', NumMessages: 5 }, {
+        ...PRINCIPAL,
+        accountEmail: 'default@example.com',
+      });
+
+      const path = String(mockGraphApi.mock.calls.at(-1)?.[0]);
+      expect(path).toContain(encodeURIComponent('named@example.com'));
+      expect(path).not.toContain(encodeURIComponent('default@example.com'));
     });
   });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
+import { GenericDatabaseProviderTestBase } from './helpers/GenericDatabaseProviderTestBase';
 
 // Mock sql-formatter (used by SqlLoggingSessionImpl)
 vi.mock('sql-formatter', () => ({
@@ -31,7 +31,7 @@ const OTHER_UUID = '99999999-9999-9999-9999-999999999999';
  * Concrete test subclass that exposes protected methods for testing.
  * Mirrors the TestGenericProvider pattern from GenericDatabaseProvider.test.ts.
  */
-class TestGenericProvider extends GenericDatabaseProvider {
+class TestGenericProvider extends GenericDatabaseProviderTestBase {
     private static readonly _uuidPattern = /^\s*(gen_random_uuid|uuid_generate_v4)\s*\(\s*\)\s*$/i;
     private static readonly _defaultPattern = /^\s*(now|current_timestamp)\s*\(\s*\)\s*$/i;
 

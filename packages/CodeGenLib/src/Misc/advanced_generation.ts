@@ -1,5 +1,5 @@
 import { AdvancedGenerationFeature, configInfo } from "../Config/config";
-import { FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { EntityFieldExtendedType, FieldCategoryInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { SafeJSONParse } from "@memberjunction/global";
 import { AIPromptRunner } from "@memberjunction/ai-prompts";
 import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus";
@@ -81,7 +81,7 @@ export type VirtualEntityDecorationResult = {
     fieldDescriptions: Array<{
         fieldName: string;
         description: string;
-        extendedType: string | null;
+        extendedType: EntityFieldExtendedType | null;
         category: string | null;
         displayName: string | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
@@ -100,7 +100,7 @@ export type FormLayoutResult = {
         category: string;
         reason: string;
         displayName: string;
-        extendedType: 'Code' | 'Email' | 'FaceTime' | 'Geo' | 'GeoLatitude' | 'GeoLongitude' | 'GeoCountry' | 'GeoStateProvince' | 'GeoCity' | 'GeoPostalCode' | 'GeoAddress' | 'MSTeams' | 'SIP' | 'SMS' | 'Skype' | 'Tel' | 'URL' | 'WhatsApp' | 'ZoomMtg' | null;
+        extendedType: EntityFieldExtendedType | null;
         codeType: 'CSS' | 'HTML' | 'JavaScript' | 'SQL' | 'TypeScript' | 'Other' | null;
     }>;
     /** @deprecated Use categoryInfo instead */
@@ -206,7 +206,7 @@ export class AdvancedGeneration {
      * Load a prompt by name from metadata.
      * Prompts include their model configuration via the MJ: AI Prompt Models relationship.
      */
-    private async getPromptEntity(promptName: string, contextUser: UserInfo): Promise<MJAIPromptEntityExtended> {
+    protected async getPromptEntity(promptName: string, contextUser: UserInfo): Promise<MJAIPromptEntityExtended> {
         const prompt = AIEngine.Instance.Prompts.find(p => p.Name.trim().toLowerCase() === promptName?.trim().toLowerCase());
 
         if (!prompt) {
@@ -220,7 +220,7 @@ export class AdvancedGeneration {
      * Execute a prompt using AIPromptRunner.
      * Model selection and failover is handled automatically by the prompt's configuration.
      */
-    private async executePrompt<T>(
+    protected async executePrompt<T>(
         params: AIPromptParams
     ): Promise<AIPromptRunResult<T>> {
         // Defense-in-depth: once the credential circuit is open, skip the round-trip entirely.
@@ -500,23 +500,31 @@ export class AdvancedGeneration {
             const isChildEntity = entity.IsChildEntity === true && parentChain.length > 0;
 
             // Map fields with FK flag for statistics calculation
-            const mappedFields = entity.Fields.map((f: any) => ({
-                Name: f.Name,
-                Type: f.Type,
-                IsNullable: f.AllowsNull,
-                IsPrimaryKey: f.IsPrimaryKey,
-                IsForeignKey: f.EntityIDFieldName != null,
-                RelatedEntity: f.RelatedEntity,
-                Description: f.Description,
-                // Include existing category information for ALL fields
-                ExistingCategory: f.Category || null,
-                // HasExistingCategory=true means locked (don't update), false means can update
-                HasExistingCategory: !f.AutoUpdateCategory && f.Category != null,
-                IsNewField: f.AutoUpdateCategory === true && !f.Category,
-                // IS-A inheritance: which parent entity this field was inherited from (null if own field)
-                InheritedFromEntityName: f.InheritedFromEntityName || null,
-                InheritedFromEntityID: f.InheritedFromEntityID || null
-            }));
+            const mappedFields = entity.Fields.map((f: Record<string, unknown>) => {
+                const hasCategory = f.Category != null && String(f.Category).trim().length > 0;
+                const isNewField = f.IsNew === true;
+                const categoryLocked = !isNewEntity && !isNewField && hasCategory; // §3.2 row 1, mirrored for the prompt
+                const reviewOnly = categoryLocked && (f.DescriptionReopened === true || f.TypeReopened === true); // §3.4
+                return {
+                    Name: f.Name,
+                    Type: f.Type,
+                    IsNullable: f.AllowsNull,
+                    IsPrimaryKey: f.IsPrimaryKey,
+                    IsForeignKey: f.EntityIDFieldName != null,
+                    RelatedEntity: f.RelatedEntity,
+                    Description: f.Description,
+                    // Include existing category information for ALL fields
+                    ExistingCategory: hasCategory ? (f.Category as string) : null,
+                    // HasExistingCategory=true means locked (don't update), false means can update
+                    HasExistingCategory: categoryLocked || !f.AutoUpdateCategory,
+                    IsNewField: isNewEntity || isNewField,
+                    ReviewDisplayName: reviewOnly && f.DescriptionReopened === true,
+                    ReviewExtendedType: reviewOnly && f.TypeReopened === true,
+                    // IS-A inheritance: which parent entity this field was inherited from (null if own field)
+                    InheritedFromEntityName: f.InheritedFromEntityName || null,
+                    InheritedFromEntityID: f.InheritedFromEntityID || null
+                };
+            });
 
             // Calculate FK statistics for entity importance analysis
             const fkStats = this.calculateFkStatistics(mappedFields);
@@ -538,7 +546,8 @@ export class AdvancedGeneration {
                 existingCategories: existingInfo.categories,
                 fieldsByCategory: existingInfo.fieldsByCategory,
                 hasExistingCategories: hasExistingCategories,
-                // Pass existing category info (icons + descriptions) so LLM can reference them
+                // Pass both existingCategoryInfo and existingFieldCategoryInfo (FM2)
+                existingCategoryInfo: existingInfo.categoryInfo || {},
                 existingFieldCategoryInfo: existingInfo.categoryInfo || {},
                 // Flag to tell LLM whether to bother with entityImportance
                 isExistingEntity: !isNewEntity,
@@ -559,13 +568,15 @@ export class AdvancedGeneration {
                 // Merge category info - preserve ALL existing categories, only add new ones
                 if (existingInfo.categoryInfo) {
                     const newFieldCategoryInfo = result.result.categoryInfo || {};
-                    result.result.categoryInfo = {
-                        ...newFieldCategoryInfo  // Only new categories from LLM
+                    const mergedCategoryInfo: Record<string, FieldCategoryInfo> = {
+                        ...existingInfo.categoryInfo
                     };
-                    // Preserve existing - don't let LLM overwrite
-                    for (const [category, info] of Object.entries(existingInfo.categoryInfo)) {
-                        result.result.categoryInfo[category] = info;
+                    for (const [category, info] of Object.entries(newFieldCategoryInfo)) {
+                        if (!mergedCategoryInfo[category]) {
+                            mergedCategoryInfo[category] = info;
+                        }
                     }
+                    result.result.categoryInfo = mergedCategoryInfo;
                 }
 
                 // Handle legacy categoryIcons format for backwards compatibility

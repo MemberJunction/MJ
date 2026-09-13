@@ -1,0 +1,318 @@
+[
+  {
+    "fields": {
+      "Name": "Alloy",
+      "Description": "Versatile and balanced voice with neutral tone and clear delivery.",
+      "Tone": "Balanced",
+      "SpeakingStyle": "Direct and clear",
+      "StyleDescriptors": {
+        "interruptionPolicy": "Yield the floor immediately when the user begins speaking, preserving natural backchannel listening cues.",
+        "backchannelPolicy": "Provide brief, natural acknowledgments when the user pauses or explains a point without taking over the floor."
+      },
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "430E5C17-AC61-4939-A4A6-71E088033238"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ash",
+      "Description": "Casual and conversational male voice.",
+      "Tone": "Casual",
+      "SpeakingStyle": "Conversational and relaxed",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B7FB7475-3EE0-46B3-A062-9F6A34596B8D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ballad",
+      "Description": "Warm, engaging, and expressive voice with melodic pacing.",
+      "Tone": "Warm",
+      "SpeakingStyle": "Engaging and expressive",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "EC902A09-A6AD-4FC3-8A91-D92BD9437BFE"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Coral",
+      "Description": "Friendly, approachable, and animated female voice.",
+      "Tone": "Friendly",
+      "SpeakingStyle": "Approachable and clear",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B46B80F9-2BE1-4B6E-8143-4353703D655A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Echo",
+      "Description": "Resonant and confident voice with steady delivery.",
+      "Tone": "Confident",
+      "SpeakingStyle": "Deep and measured",
+      "StyleDescriptors": {
+        "interruptionPolicy": "Allow the user to conclude their thought before responding unless directly addressed.",
+        "backchannelPolicy": "Listen attentively with minimal verbal backchannel."
+      },
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6C10F8B6-33F6-48A0-95C1-7B3A61AA4FFB"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fable",
+      "Description": "Storyteller-style voice with British accent nuance and expressive cadence.",
+      "Tone": "Expressive",
+      "SpeakingStyle": "Narrative and articulate",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "0B33E0E1-24B3-4674-9240-C651DE032D2B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Nova",
+      "Description": "Energetic and crisp female voice with brisk cadence.",
+      "Tone": "Energetic",
+      "SpeakingStyle": "Crisp and brisk",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "077971E4-AF0C-44E6-B638-A010BC167E70"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Onyx",
+      "Description": "Deep, authoritative, and calm male voice.",
+      "Tone": "Authoritative",
+      "SpeakingStyle": "Calm and measured",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "C2E533E1-02B0-4CAC-9A43-966E9517CE12"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Sage",
+      "Description": "Thoughtful, articulate, and calm voice with gentle pacing.",
+      "Tone": "Thoughtful",
+      "SpeakingStyle": "Articulate and gentle",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4A7F6A9D-0AB2-48AA-969D-13AFED76F40C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Shimmer",
+      "Description": "Bright, uplifting, and cheerful voice.",
+      "Tone": "Bright",
+      "SpeakingStyle": "Upbeat and clear",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "73EF19EA-C655-49A2-AA47-0420975AC6A1"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Verse",
+      "Description": "Dynamic and versatile voice with focused, natural delivery.",
+      "Tone": "Dynamic",
+      "SpeakingStyle": "Natural and direct",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "A6CD4025-9B88-400D-82DB-BAD2992C78D9"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Cedar",
+      "Description": "Calm, melodic, and polished voice with natural pacing.",
+      "Tone": "Calm",
+      "SpeakingStyle": "Melodic and clear",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8F6B18D3-A504-4C72-835A-617F9A0A1011"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Marin",
+      "Description": "Warm, natural, and expressive voice with clear articulation.",
+      "Tone": "Warm",
+      "SpeakingStyle": "Expressive and conversational",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "9C4B2E15-D84B-4E31-9A74-123456789ABC"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Puck",
+      "Description": "Upbeat, energetic, and engaging voice with bright delivery.",
+      "Tone": "Upbeat",
+      "SpeakingStyle": "Energetic and friendly",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "3E2A1B70-5F11-4654-8B6F-71A2D3C4E5F6"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Charon",
+      "Description": "Informative, steady, and measured voice with deep resonance.",
+      "Tone": "Informative",
+      "SpeakingStyle": "Measured and authoritative",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "4F3B2C81-6E22-4765-9C70-82B3E4D5F607"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kore",
+      "Description": "Firm, clear, and confident voice with direct phrasing.",
+      "Tone": "Firm",
+      "SpeakingStyle": "Clear and focused",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "5A4C3D92-7F33-4876-AD81-93C4F5E60718"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Fenrir",
+      "Description": "Excitable, dynamic, and passionate voice with lively pacing.",
+      "Tone": "Excitable",
+      "SpeakingStyle": "Passionate and fast-paced",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "6B5D4E03-8044-4987-BE92-04D506F71829"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Aoede",
+      "Description": "Breezy, relaxed, and smooth voice with natural warmth.",
+      "Tone": "Breezy",
+      "SpeakingStyle": "Relaxed and easy-going",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "7C6E5F14-9155-4A98-CF03-15E61708293A"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Ivy",
+      "Description": "Clear, friendly, and natural female voice optimized for conversation.",
+      "Tone": "Friendly",
+      "SpeakingStyle": "Natural and articulate",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "8D7F6025-A266-4BA9-D014-26F728193A4B"
+    }
+  },
+  {
+    "fields": {
+      "Name": "James",
+      "Description": "Professional, articulate, and steady male voice.",
+      "Tone": "Professional",
+      "SpeakingStyle": "Articulate and confident",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "9E807136-B377-4CBA-E125-3708392A4B5C"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Rachel",
+      "Description": "Calm, warm, and natural conversational female voice.",
+      "Tone": "Warm",
+      "SpeakingStyle": "Conversational and polished",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "AF918247-C488-4DCB-F236-48194A3B5C6D"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Adam",
+      "Description": "Deep, authoritative, and expressive male voice.",
+      "Tone": "Authoritative",
+      "SpeakingStyle": "Deep and measured",
+      "Source": "BuiltIn",
+      "IsActive": true
+    },
+    "relatedEntities": {},
+    "primaryKey": {
+      "ID": "B0A29358-D599-4EDC-0347-592A5B4C6D7E"
+    }
+  }
+]

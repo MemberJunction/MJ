@@ -121,6 +121,13 @@ export interface ITwilioClientBindings {
      * @param cb Invoked when the call ends.
      */
     onCallStatus(callSid: string, cb: () => void): void;
+
+    /**
+     * Flushes buffered outbound audio on Twilio's side (Media Streams 'clear' event).
+     *
+     * @param callSid The Call SID whose playback buffer to clear.
+     */
+    flushOutbound(callSid: string): void;
 }
 
 /** The default bindings used when none are supplied — every operation throws the bind-me error. */
@@ -134,6 +141,7 @@ const UNBOUND_BINDINGS: ITwilioClientBindings = {
     onDigits: () => throwUnboundVoid('onDigits (receive DTMF)'),
     redirectCall: () => throwUnbound('redirectCall (transfer)'),
     onCallStatus: () => throwUnboundVoid('onCallStatus (call ended)'),
+    flushOutbound: () => throwUnboundVoid('flushOutbound (clear playback buffer)'),
 };
 
 function throwUnbound(op: string): never {
@@ -229,6 +237,13 @@ export class TwilioCallSdk implements ITelephonyCallSdk {
         this.endedCb = cb;
         if (this.activeCallSid) {
             this.bindings.onCallStatus(this.activeCallSid, cb);
+        }
+    }
+
+    /** @inheritdoc */
+    public flushOutbound(): void {
+        if (this.activeCallSid) {
+            this.bindings.flushOutbound(this.activeCallSid);
         }
     }
 

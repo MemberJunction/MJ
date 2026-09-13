@@ -21,6 +21,11 @@
  */
 import { describe, it, expect } from 'vitest';
 import { MJGlobal } from '@memberjunction/global';
+import { ElevenLabsRealtime } from '@memberjunction/ai-elevenlabs';
+import { GeminiRealtime } from '@memberjunction/ai-gemini';
+import { InworldRealtime } from '@memberjunction/ai-inworld';
+import { AssemblyAIRealtime } from '@memberjunction/ai-assemblyai';
+import { HuggingFaceRealtime } from '@memberjunction/ai-huggingface';
 import { CLASS_REGISTRATIONS } from '../generated/mj-class-registrations';
 
 describe('class-registration manifest (real generated module)', () => {
@@ -58,5 +63,13 @@ describe('class-registration manifest (real generated module)', () => {
             missing,
             `Manifest entries with NO live ClassFactory registration (decorator lost?): ${missing.join(', ')}`
         ).toEqual([]);
+    });
+
+    it('SupportsDynamicToolSet is falsy for ElevenLabs, Gemini, Inworld, AssemblyAI and HuggingFace', () => {
+        expect(ElevenLabsRealtime.SupportsDynamicToolSet).toBeFalsy();
+        expect(GeminiRealtime.SupportsDynamicToolSet).toBeFalsy();
+        expect(InworldRealtime.SupportsDynamicToolSet).toBeFalsy();
+        expect(AssemblyAIRealtime.SupportsDynamicToolSet).toBeFalsy();
+        expect(HuggingFaceRealtime.SupportsDynamicToolSet).toBeFalsy();
     });
 });

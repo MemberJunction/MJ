@@ -139,13 +139,19 @@ export class MjIsaRelatedCardComponent extends BaseAngularComponent implements O
     if (!this.RelatedRecord || !this.EntityInfoRef) return;
 
     const parentFieldNames = this.EntityInfoRef.ParentEntityFieldNames;
+    // Field-level security is filtered here rather than at render time because BuildFieldDisplay
+    // calls Get(), which THROWS on a denied field — one denied column would take out the whole
+    // card instead of omitting a row. This is the IS-A sibling's entity, not the host form's, so
+    // its permissions are independent of anything the form has already checked.
+    const user = this.ProviderToUse?.CurrentUser;
     const ownFields = this.EntityInfoRef.Fields.filter(f =>
       !f.IsPrimaryKey &&
       !f.IsVirtual &&
       !parentFieldNames.has(f.Name) &&
       f.Name !== '__mj_CreatedAt' &&
       f.Name !== '__mj_UpdatedAt' &&
-      f.IncludeInGeneratedForm
+      f.IncludeInGeneratedForm &&
+      this.EntityInfoRef!.IsFieldReadableByUser(f.Name, user)
     );
 
     const defaultFields: IsaCardFieldDisplay[] = [];

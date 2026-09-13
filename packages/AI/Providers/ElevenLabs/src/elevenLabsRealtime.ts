@@ -15,6 +15,7 @@ import {
     type JSONObject,
     type JSONValue,
     type RealtimeTurnDetectionSettings,
+    type RealtimeVoiceOption,
 } from '@memberjunction/ai';
 import { RegisterClass } from '@memberjunction/global';
 
@@ -438,6 +439,23 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     }
 
     /**
+     * The built-in default voices available in ElevenLabs — used to populate the voice picker.
+     */
+    public override get SupportedVoices(): RealtimeVoiceOption[] {
+        return [
+            { ID: '21m00Tcm4TlvDq8ikWAM', Name: 'Rachel' },
+            { ID: 'pNInz6obpgDQGcFmaJgB', Name: 'Adam' },
+            { ID: 'AZnzlk1XvdvUeBnXmlld', Name: 'Domi' },
+            { ID: 'EXAVITQu4vr4xnSDxMaL', Name: 'Bella' },
+            { ID: 'ErXwobaYiN019PkySvjV', Name: 'Antoni' },
+            { ID: 'MF3mGyEYCl7XYWbV9V6O', Name: 'Elli' },
+            { ID: 'TxGEqnHWrfWFTfGW9XjX', Name: 'Josh' },
+            { ID: 'VR6AewLTigWG4xSOukaG', Name: 'Arnold' },
+            { ID: 'yoZ06aMxZJJ28mfd3POQ', Name: 'Sam' },
+        ];
+    }
+
+    /**
      * ElevenLabs supports the client-direct topology natively: the signed websocket URL is a
      * short-lived, agent-scoped credential the browser can open directly.
      */
@@ -456,9 +474,15 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
     public override async CreateClientSession(params: RealtimeSessionParams): Promise<ClientRealtimeSessionConfig> {
         const agentId = await this.ensureAgent(params);
         const signedUrl = await this.mintSignedUrl(agentId);
+        const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        const resolvedModel = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
+            ? reasoning.Remote.Ref
+            : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
         return {
             Provider: 'elevenlabs',
-            Model: params.Model,
+            Model: resolvedModel,
             EphemeralToken: signedUrl,
             ExpiresAt: new Date(Date.now() + ELEVENLABS_SIGNED_URL_TTL_MS).toISOString(),
             SessionConfig: {
@@ -565,7 +589,12 @@ export class ElevenLabsRealtime extends BaseRealtimeModel {
      *   deliberately NOT per voice, which is a per-session override rather than agent state.
      */
     protected async ensureAgent(params: RealtimeSessionParams): Promise<string> {
-        const model = params.Model;
+        const reasoning = (params.Config as Record<string, unknown> | undefined)?.Reasoning as
+            | { Remote?: { Ref?: string } }
+            | undefined;
+        const model = (reasoning?.Remote?.Ref && reasoning.Remote.Ref.length > 0)
+            ? reasoning.Remote.Ref
+            : (params.Model && params.Model.length > 0 ? params.Model : 'MJ Realtime Co-Agent');
         if (model.startsWith(ELEVENLABS_AGENT_ID_PREFIX)) {
             return model;
         }

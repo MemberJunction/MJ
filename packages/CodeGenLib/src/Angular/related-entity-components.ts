@@ -194,6 +194,32 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
         const f = this.GetForeignKey(entityName, relatedEntityName);
         return f.Name;
     }
+
+    /**
+     * Returns the name of the parent-record property that a related entity's foreign key points
+     * at — the value to bind into a `'<fk>=' + record.<property>` filter. A foreign key references
+     * exactly one column: for a single-column parent key that is the key itself; for a composite
+     * parent key it is the key column named by `fk.RelatedEntityFieldName`.
+     * @param parentEntity The entity whose form hosts the related-entity component
+     * @param fk The foreign key field on the related entity that links back to `parentEntity`
+     * @returns The parent key column the FK references
+     * @throws Error if a composite-key parent's FK does not resolve to one of its key columns
+     */
+    protected GetParentKeyFieldName(parentEntity: EntityInfo, fk: EntityFieldInfo): string {
+        if (parentEntity.PrimaryKeys.length === 1) {
+            return parentEntity.FirstPrimaryKey.Name; // first-pk-ok: single-column parent key; an FK targets exactly one column so it is this one
+        }
+        const referenced = (fk.RelatedEntityFieldName ?? '').trim().toLowerCase();
+        const match = parentEntity.PrimaryKeys.find(k => k.Name.trim().toLowerCase() === referenced);
+        if (!match) {
+            throw new Error(
+                `Cannot bind related-entity filter: foreign key "${fk.Name}" references composite-key entity "${parentEntity.Name}" ` +
+                `via ${referenced.length > 0 ? `"${fk.RelatedEntityFieldName}"` : 'an unknown column (RelatedEntityFieldName is empty)'}, ` +
+                `which is not one of its primary key columns (${parentEntity.PrimaryKeys.map(k => k.Name).join(', ')}).`
+            );
+        }
+        return match.Name;
+    }
     /**
      * Helper method that returns the EntityFieldInfo object for the foreign key field
      * in the specified entity that links to the related entity. Provides full field metadata.

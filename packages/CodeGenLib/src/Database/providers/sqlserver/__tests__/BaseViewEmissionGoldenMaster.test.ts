@@ -6,6 +6,7 @@ import type { SQLDialect } from '@memberjunction/sql-dialect';
 import { SQLServerCodeGenProvider } from '../SQLServerCodeGenProvider';
 import { SQLCodeGenBase } from '../../../sql_codegen';
 import type { CodeGenConnection, CodeGenQueryResult, CodeGenTransaction } from '../../../codeGenDatabaseProvider';
+import { SQLLogging } from '../../../../Misc/sql_logging';
 
 /**
  * Golden-master suite for BASE VIEW EMISSION through the full orchestrator path —
@@ -213,12 +214,17 @@ function installMetadata(entities: EntityInfo[]): void {
     Metadata.Provider = buildProviderStub(entities) as IMetadataProvider;
 }
 
+// These cases run the emitter against a recording connection with no CodeGen_Run file open.
+let restoreSQLOutput: () => void;
+
 beforeAll(() => {
     originalProvider = Metadata.Provider;
+    restoreSQLOutput = SQLLogging.suppressOutputForTests();
 });
 
 afterAll(() => {
     Metadata.Provider = originalProvider;
+    restoreSQLOutput();
 });
 
 beforeEach(() => {
@@ -530,7 +536,8 @@ describe('base view emission — geo virtual columns', () => {
         // display fields present the block is appended after ',\n' and aligns
         // normally. A formatting fix here would change every geo entity's stored
         // view text and force a one-time regeneration wave — hence pinned, not fixed.
-        const entity = sitesEntity([pk('SITES-ENTITY-0006')]);
+        // ShouldJoinRecordGeoCodes needs SupportsGeoCoding AND a writable Geo* field (no native lat/lng).
+        const entity = sitesEntity([pk('SITES-ENTITY-0006'), nameField('SITES-ENTITY-0006', { Name: 'Address', ExtendedType: 'GeoAddress', IsNameField: false })]);
         const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
 
         expect(viewSQL).toContain(`SELECT
@@ -547,6 +554,14 @@ LEFT OUTER JOIN
 GO`);
     });
 
+    it('GM-VIEW-10c: SupportsGeoCoding without a writable Geo field does NOT join vwRecordGeoCodes', async () => {
+        // ShouldJoinRecordGeoCodes requires a writable Geo* field, not just the entity flag.
+        const entity = sitesEntity([pk('SITES-ENTITY-0006')]);
+        const { viewSQL } = await generator.generateBaseViewPieces(pool, entity);
+        expect(viewSQL).not.toContain('vwRecordGeoCodes');
+        expect(viewSQL).not.toContain('__mj_Latitude');
+    });
+
     it('GM-VIEW-10b: with FK display fields present, the geo block is appended after ",\\n" and aligns on its own lines', async () => {
         const entity = new EntityInfo({
             ID: 'SITES-ENTITY-0006',
@@ -558,7 +573,7 @@ GO`);
             BaseViewGenerated: true,
             DeleteType: 'Hard',
             SupportsGeoCoding: true,
-            EntityFields: [pk('SITES-ENTITY-0006'), customerFK({ EntityID: 'SITES-ENTITY-0006' })],
+            EntityFields: [pk('SITES-ENTITY-0006'), nameField('SITES-ENTITY-0006', { Name: 'Address', ExtendedType: 'GeoAddress', IsNameField: false }), customerFK({ EntityID: 'SITES-ENTITY-0006' })],
             EntityPermissions: [],
         });
         installMetadata([entity, customersEntity()]);

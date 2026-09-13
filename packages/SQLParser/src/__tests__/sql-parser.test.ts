@@ -37,6 +37,19 @@ describe('SQLParser', () => {
             expect(tables[0].SchemaName).toBe('__mj');
         });
 
+        it('extracts the FROM of an IN (SELECT …) subquery (ExtraFilter shape)', () => {
+            const sql = `SELECT 1 FROM __mj_clause_screen WHERE (ID IN (SELECT TaskID FROM [__mj_BizAppsTasks].[vwTaskAssignments] WHERE AssigneeRecordID = 'x'))`;
+            const names = extractTableRefs(sql).map(t => t.TableName).sort();
+            expect(names).toContain('__mj_clause_screen');
+            expect(names).toContain('vwTaskAssignments');
+        });
+
+        it('extracts the FROM of an EXISTS subquery', () => {
+            const sql = `SELECT 1 FROM __mj_clause_screen WHERE (EXISTS (SELECT 1 FROM __mj.[User] WHERE Type='Owner'))`;
+            const tables = extractTableRefs(sql);
+            expect(tables.some(t => t.TableName === 'User' && t.SchemaName === '__mj')).toBe(true);
+        });
+
         it('should return empty for empty SQL', () => {
             expect(extractTableRefs('')).toEqual([]);
         });

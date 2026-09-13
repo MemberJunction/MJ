@@ -3581,12 +3581,18 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Load current field values for each changed record
         const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityMap.Entity);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+        if (!entityInfo) {
+            throw new Error(`Cannot push ${entityMap.Entity}: entity not found in metadata.`);
+        }
+        // The normalized RecordID is the '|'-joined value(s) of EVERY key column — the shape the record
+        // map stores — so it is parsed against all of the entity's PrimaryKeys. Pinning it to the first
+        // key column (or a made-up `ID`) handed a composite key to one column as "v1|v2" and failed the load.
+        const pkFields = entityInfo.PrimaryKeys;
         for (const [recordID, change] of latestByRecord) {
             if (change.Type === 'Delete') continue; // No fields to load for deletes
             try {
                 const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
-                const loaded = await entity.InnerLoad(new CompositeKey([{ FieldName: pkFieldName, Value: recordID }]));
+                const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(recordID, pkFields));
                 if (loaded) {
                     change.Fields = entity.GetAll();
                 }
@@ -3655,11 +3661,16 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityMap.Entity);
-        const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
+        if (!entityInfo) {
+            throw new Error(`Cannot push ${entityMap.Entity}: entity not found in metadata.`);
+        }
+        const pkFields = entityInfo.PrimaryKeys;
 
         const now = new Date().toISOString();
         return allResult.Results.map(record => {
-            const recordID = String(record[pkFieldName] ?? '');
+            // '|'-joined across EVERY key column — the shape EntityRecordID is stored in — so the
+            // existingMaps lookup (Create vs Update) matches a composite key, not just its first column.
+            const recordID = this.ComposeEntityRecordID(record, pkFields);
             return {
                 RecordID: recordID,
                 Type: existingMaps.has(recordID) ? 'Update' : 'Create',
@@ -3954,7 +3965,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const md = this.ProviderToUse;
             const entity = await md.GetEntityObject(entityMap.Entity, contextUser);
             const entityInfo = md.EntityByName(entityMap.Entity);
-            const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+            const pkFields = entityInfo?.PrimaryKeys ?? [];
             const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(mjRecordID, pkFields));
             if (!loaded) return;
             const fields = entity.Fields ?? [];
@@ -4053,7 +4064,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityMap.Entity);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
 
         for (const orphan of orphans) {
             try {
@@ -4981,7 +4992,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
 
         // Upsert-safe: if the record's mapped fields carry a PK (soft-PK dest tables key on the external
         // ID), check whether that row already exists before deciding INSERT vs UPDATE. A null mappedPK
@@ -5219,7 +5230,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             // Matched-ID row vanished — fall back to upsert by PK (insert; or update/skip if PK exists)
@@ -5423,7 +5434,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         this.enrolInWriteGroup(entity);
         const entityInfo = md.EntityByName(record.MJEntityName);
-        const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
+        const pkFields = entityInfo?.PrimaryKeys ?? [];
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
             console.log(`[IntegrationEngine] Skipping delete for ${record.MJEntityName} ${record.MatchedMJRecordID} — record not found in MJ DB (may have been deleted already)`);
@@ -5469,8 +5480,13 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         pkFields: Array<{ Name: string }>
     ): CompositeKey {
         const key = new CompositeKey();
-        if (pkFields.length <= 1) {
-            key.KeyValuePairs.push({ FieldName: pkFields[0]?.Name ?? 'ID', Value: recordID });
+        if (pkFields.length === 0) {
+            // Never invent an `ID` column: MJ keys can have any name, and a load against a made-up
+            // field fails with "Primary key ID not found in entity ..." — surface the real cause instead.
+            throw new Error(`Cannot build a primary key for record '${recordID}': the entity has no primary key fields in metadata.`);
+        }
+        if (pkFields.length === 1) {
+            key.KeyValuePairs.push({ FieldName: pkFields[0].Name, Value: recordID });
         } else {
             const parts = recordID.split('|');
             for (let i = 0; i < pkFields.length; i++) {
@@ -5478,6 +5494,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         }
         return key;
+    }
+
+    /**
+     * The exact inverse of {@link BuildEntityPrimaryKey}: the '|'-joined value(s) of a data row's
+     * primary-key column(s), in PK-field order — the shape CompanyIntegrationRecordMap.EntityRecordID
+     * and a normalized RecordChange.RecordID carry. A single-column key is just its value.
+     */
+    private ComposeEntityRecordID(row: Record<string, unknown>, pkFields: Array<{ Name: string }>): string {
+        return pkFields.map(pk => serializeKeyValue(row[pk.Name])).join('|');
     }
 
     /**
@@ -6203,7 +6228,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             const d = provider.Dialect;
             const runTable = `${d.QuoteIdentifier(runInfo.SchemaName)}.${d.QuoteIdentifier(runInfo.BaseTable)}`;
             const detailTable = `${d.QuoteIdentifier(detailInfo.SchemaName)}.${d.QuoteIdentifier(detailInfo.BaseTable)}`;
-            const runPk = d.QuoteIdentifier(runInfo.PrimaryKeys[0].Name);
+            const runPk = d.QuoteIdentifier(runInfo.FirstPrimaryKey.Name); // first-pk-ok: runInfo is MJ: Company Integration Runs (core entity, single ID key), the FK target of Run Details.CompanyIntegrationRunID
             const ciCol = d.QuoteIdentifier('CompanyIntegrationID');
             const startedCol = d.QuoteIdentifier('StartedAt');
             const detailFk = d.QuoteIdentifier('CompanyIntegrationRunID');

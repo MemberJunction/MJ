@@ -70,7 +70,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
     /** CategoryID as CompositeKey for tree dropdown binding */
     public get CategoryIDAsKey(): CompositeKey | null {
-        return this.record?.CategoryID ? CompositeKey.FromID(this.record.CategoryID) : null;
+        return this.record?.CategoryID ? CompositeKey.FromID(this.record.CategoryID) : null; // first-pk-ok: FK target — Query CategoryID references the single-column ID key of Query Categories
     }
 
     /** Handle tree dropdown category selection */
@@ -741,8 +741,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
 
         if (targetQuery) {
-            const compositeKey = CompositeKey.FromID(targetQuery.ID);
-            this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+            this.navigationService.OpenEntityRecord('MJ: Queries', CompositeKey.FromID(targetQuery.ID));
         } else {
             MJNotificationService.Instance.CreateSimpleNotification(
                 `Referenced query "${event.FullPath}" not found.`,
@@ -756,8 +755,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Navigate to a dependent query's record
      */
     onDependentQueryClick(dep: MJQueryDependencyEntity): void {
-        const compositeKey = CompositeKey.FromID(dep.QueryID);
-        this.navigationService.OpenEntityRecord('MJ: Queries', compositeKey);
+        this.navigationService.OpenEntityRecord('MJ: Queries', CompositeKey.FromID(dep.QueryID));
     }
 
     /**

@@ -40,6 +40,7 @@ import type sql from 'mssql';
 import { Assert } from '@memberjunction/testing-integration';
 import { IntegrationCheckRegistry } from '@memberjunction/testing-integration';
 import type { NamedCheck, IntegrationCheckContext } from '@memberjunction/testing-integration';
+import { hasFullCatalogVisibility } from './catalog-visibility';
 
 /**
  * MC6 ratchet ceiling — the number of core-schema columns that today carry no MS_Description.
@@ -96,12 +97,18 @@ const SAMPLE_SIZE = 8;
 // ── small shared helpers ────────────────────────────────────────────────────────────────────
 
 /**
- * Resolve the mssql pool, or null when this run is on a transport that has none (PostgreSQL).
- * Callers treat null as skip-as-pass — never as a silent success on SQL Server.
+ * Resolve the mssql pool, or null when this run is on a transport that has none (PostgreSQL)
+ * OR the login lacks catalog visibility (least-privilege app logins hide unprivileged objects
+ * and every module definition — see catalog-visibility.ts). Callers treat null as skip-as-pass
+ * — never as a silent success on SQL Server.
  */
-function poolOrSkip(ctx: IntegrationCheckContext, checkId: string): sql.ConnectionPool | null {
+async function poolOrSkip(ctx: IntegrationCheckContext, checkId: string): Promise<sql.ConnectionPool | null> {
     if (!ctx.Pool) {
         console.log(`      → ${checkId} skipped: no mssql pool on this transport (PostgreSQL / client bootstrap)`);
+        return null;
+    }
+    if (!(await hasFullCatalogVisibility(ctx.Pool))) {
+        console.log(`      → ${checkId} skipped: the login lacks VIEW DEFINITION — catalog audit needs a privileged (db_owner/sa) connection`);
         return null;
     }
     return ctx.Pool;
@@ -365,7 +372,7 @@ const MC1: NamedCheck = {
     Id: 'metadata-consistency.MC1',
     Name: 'MC1: every generated BaseView exists in sys.objects',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC1');
+        const pool = await poolOrSkip(ctx, 'MC1');
         if (!pool) {
             return;
         }
@@ -382,7 +389,7 @@ const MC2: NamedCheck = {
     Id: 'metadata-consistency.MC2',
     Name: 'MC2: every generated spCreate/spUpdate/spDelete exists in sys.objects',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC2');
+        const pool = await poolOrSkip(ctx, 'MC2');
         if (!pool) {
             return;
         }
@@ -405,7 +412,7 @@ const MC3: NamedCheck = {
     Id: 'metadata-consistency.MC3',
     Name: 'MC3: CHECK-constraint value lists match their EntityFieldValue rows',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC3');
+        const pool = await poolOrSkip(ctx, 'MC3');
         if (!pool) {
             return;
         }
@@ -445,7 +452,7 @@ const MC4: NamedCheck = {
     Id: 'metadata-consistency.MC4',
     Name: 'MC4: every FK column has its IDX_AUTO_MJ_FKEY index',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC4');
+        const pool = await poolOrSkip(ctx, 'MC4');
         if (!pool) {
             return;
         }
@@ -469,7 +476,7 @@ const MC5: NamedCheck = {
     Id: 'metadata-consistency.MC5',
     Name: 'MC5: field sequences are gapless from 1 and match base-view column order',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC5');
+        const pool = await poolOrSkip(ctx, 'MC5');
         if (!pool) {
             return;
         }
@@ -499,7 +506,7 @@ const MC6: NamedCheck = {
     Id: 'metadata-consistency.MC6',
     Name: 'MC6: every core-schema physical field carries an MS_Description',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC6');
+        const pool = await poolOrSkip(ctx, 'MC6');
         if (!pool) {
             return;
         }
@@ -546,7 +553,7 @@ const MC8: NamedCheck = {
     Id: 'metadata-consistency.MC8',
     Name: 'MC8: SchemaInfo covers every entity schema with casing-correct names',
     Fn: async (ctx: IntegrationCheckContext) => {
-        const pool = poolOrSkip(ctx, 'MC8');
+        const pool = await poolOrSkip(ctx, 'MC8');
         if (!pool) {
             return;
         }

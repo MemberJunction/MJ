@@ -5,6 +5,12 @@ import type { DatabaseProviderBase } from '@memberjunction/core';
 // ---------------------------------------------------------------------------
 // Mock external modules
 // ---------------------------------------------------------------------------
+// The canonical system-user ID lives in the server-side provider package, not core — the
+// account is a server concept and has no place in a bundle a browser loads.
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    SystemUserID: 'ecafccec-6a37-ef11-86d4-000d3a4e707e',
+}));
+
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     UserInfo: class {

@@ -1,9 +1,9 @@
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { WHITEBOARD_FONT_SIZES, WhiteboardFontFamily, WhiteboardShapeKind } from './whiteboard-state';
-
-/** A user-selectable board tool. */
-export type WhiteboardTool = 'select' | 'pan' | 'pen' | 'shape' | 'sticky' | 'text' | 'markdown' | 'html' | 'image' | 'connector' | 'eraser';
+// WhiteboardTool is imported, never re-exported: public-api.ts `export *`s this file and the
+// roster module, and two modules exporting the same name that way is a TS2308 ambiguity.
+import { WhiteboardTool, WhiteboardToolRoster, VisibleToolbarEntries } from './whiteboard-tool-roster';
 
 /** One entry in the floating toolbar. */
 interface ToolbarEntry {
@@ -55,6 +55,24 @@ interface FontFamilyEntry {
 export class RealtimeWhiteboardToolbarComponent {
   /** The currently active tool. */
   @Input() ActiveTool: WhiteboardTool = 'select';
+  /**
+   * Which tools the palette offers. `null` (default) is all eleven, today's rendering. A host
+   * that narrows this also narrows the keyboard shortcuts and the canvas context menu, because
+   * the same roster is threaded to all three (see `whiteboard-tool-roster.ts`).
+   *
+   * A setter so {@link VisibleTools} is filtered ONCE per roster change rather than on every
+   * change-detection pass — the template loops over it, so a getter re-filtered the eleven
+   * entries (and allocated a new array, defeating `@for` reuse) on every tick.
+   */
+  @Input()
+  set ToolRoster(value: WhiteboardToolRoster) {
+    this._toolRoster = value ?? null;
+    this.VisibleTools = VisibleToolbarEntries(this.Tools, this._toolRoster);
+  }
+  get ToolRoster(): WhiteboardToolRoster {
+    return this._toolRoster;
+  }
+  private _toolRoster: WhiteboardToolRoster = null;
   /** Selected pen ink color (from {@link WHITEBOARD_PEN_COLORS}). */
   @Input() PenColor: string = WHITEBOARD_PEN_COLORS[0];
   /** Selected pen stroke width. */
@@ -101,6 +119,12 @@ export class RealtimeWhiteboardToolbarComponent {
     { Tool: 'connector', Icon: 'fa-solid fa-arrow-trend-up', Title: 'Connector', Kbd: 'C' },
     { Tool: 'eraser', Icon: 'fa-solid fa-eraser', Title: 'Eraser', Kbd: 'E' }
   ];
+
+  /**
+   * `Tools` narrowed by `ToolRoster`, in `Tools` order. The template loops over this.
+   * Recomputed by the {@link ToolRoster} setter; the default (no roster) is every tool.
+   */
+  public VisibleTools: ToolbarEntry[] = [...this.Tools];
 
   public readonly PenColors = WHITEBOARD_PEN_COLORS;
   public readonly PenWidths = WHITEBOARD_PEN_WIDTHS;

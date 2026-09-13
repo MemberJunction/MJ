@@ -1,0 +1,28 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT92 - FLS Over-The-Wire (client transport)",
+    "Description": "Field-Level Security proven OVER THE WIRE — the legs the server-transport IT90 cannot reach because there enforcement and observation share a process. A GraphQL client authenticates as ONE wire identity and a passed contextUser cannot change what the server returns, so per-user enforcement over the wire is only observable through per-user AUTHENTICATION: the fls-enforcement-client lifecycle mints one user API key (mj_sk_*, x-api-key header) each for the seeded it-fls-reader, it-fls-writer and it-fls-multi users and builds secondary GraphQLDataProvider connections (separateConnection — the process-global system-key provider is untouched). MJAPI resolves each key to its real user with roles, making the reader connection a genuinely restricted principal end to end. All provisioning happens through the wire as the system-key identity: enabling EnableFieldLevelSecurity on 'MJ: Employees' runs snapshot initialization inside MJAPI's own entity layer, and the reader role's Email rule is tightened to Deny the same way; because MJAPI's metadata refresh after those saves is asynchronous, Setup polls the reader connection until the denied column disappears — live coverage of permission-change propagation to a running API (test-plan 5.6's single-server half). Six checks: FC1 list results to the restricted wire identity omit the denied column (3.1, wire); FC2 the single-record GraphQL payload omits the denied field's value entirely (3.8 — the MapFieldNamesToCodeNames output boundary); FC3 the unrestricted wire identity still receives the column with its real value (3.2, wire); FC4 an ExtraFilter naming the denied field is rejected over the wire with exactly the ambiguous 'does not exist or you do not have access' wording (3.4/3.12, wire); FC5 creating a record over the wire while a field is create-denied SUCCEEDS with the value silently suppressed to the column default (3.11, wire) — the leg that caught a real defect only manual Explorer testing had found, where the client built the mutation input by reading every writable field and threw on the denied one, so a NEW record could not be saved at all while every server-transport check stayed green; FC6 updating a field the caller may READ but not write is rejected with the explicit write wording rather than the ambiguous read wording (3.9 plus the read/write denial split), and the stored value is verified unchanged. FC5/FC6 authenticate as the seeded it-fls-multi user — entity-level create/update via the Writer role plus a field-level write denial via the Denier role, the only combination that can reach field-level write enforcement at all, since a read-only identity is refused by the entity gate first; they skip when that user is not seeded. Teardown restores the reader rule to the snapshot default, disables the flag, deletes the fixture employee and the minted keys with their usage logs. Skips-as-pass loudly when MJAPI is unreachable, the seed is absent, or the entity is already FLS-enabled by an administrator.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "A restricted wire identity never receives a denied column (lists or single-record payloads), predicates naming it are rejected with the ambiguous wording, an unrestricted identity is unaffected, and permission changes propagate to the running API."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "client",
+      "checks": [
+        {
+          "type": "fls-enforcement-client"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "007A8D7F-80B6-4997-9880-1651B9F61DB9"
+  },
+  "sync": {
+    "lastModified": "2026-09-09T11:23:36.410Z",
+    "checksum": "bd4ec42f424ca1ba839d28eb9687747e7cf8f0f78b0ce22007c55697da90f426"
+  }
+}

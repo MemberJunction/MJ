@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Consent &amp; Privacy Center</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa; --mj-bg-surface: white; --mj-bg-surface-card: #f5f7fa; --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155; --mj-text-secondary: #64748b; --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF; --mj-border-default: #e2e8f0; --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a; --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c; --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626; --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7; --mj-status-info-bg: #f0f9ff;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px; }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+  .nav-item .badge { margin-left: auto; background: var(--mj-status-error); color: white; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 7px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+  .btn-sm { padding: 5px 11px; font-size: 12px; }
+
+  .content { padding: 22px 28px 40px; }
+  .disclosure { background: var(--mj-status-info-bg); border: 1px solid #bae6fd; color: #075985; padding: 10px 16px; border-radius: 8px; font-size: 12px; display: flex; gap: 8px; align-items: flex-start; margin-bottom: 18px; }
+  .disclosure i { margin-top: 1px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 15px 18px; }
+  .kpi .label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 7px; }
+  .kpi .value { font-size: 25px; font-weight: 800; }
+  .kpi .value.warn { color: var(--mj-status-warning); }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .sub { font-size: 11.5px; color: var(--mj-text-muted); margin-top: 3px; }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); font-size: 13px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th { text-align: left; padding: 9px 18px; background: var(--mj-bg-surface-card); color: var(--mj-text-muted); font-weight: 700; text-transform: uppercase; font-size: 10.5px; letter-spacing: .03em; border-bottom: 1px solid var(--mj-border-default); }
+  td { padding: 10px 18px; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .status-chip { font-size: 10.5px; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+  .status-received { background: var(--mj-status-info-bg); color: var(--mj-status-info); }
+  .status-progress { background: var(--mj-status-warning-bg); color: var(--mj-status-warning); }
+  .status-fulfilled { background: var(--mj-status-success-bg); color: var(--mj-status-success); }
+  .due-soon { color: var(--mj-status-error); font-weight: 700; }
+  .type-chip { font-size: 10.5px; padding: 2px 8px; border-radius: 5px; background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); font-weight: 600; }
+
+  .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--mj-text-muted); margin: 26px 0 10px; }
+
+  .portal-preview { border: 2px solid var(--mj-border-default); border-radius: 14px; overflow: hidden; max-width: 480px; box-shadow: 0 8px 24px rgba(0,0,0,.06); background: white; }
+  .portal-header { background: linear-gradient(135deg, var(--mj-brand-primary), #3b63c4); color: white; padding: 20px 22px; }
+  .portal-header .org { font-size: 12px; opacity: .85; margin-bottom: 4px; }
+  .portal-header h3 { font-size: 17px; font-weight: 700; }
+  .portal-body { padding: 18px 22px; }
+  .consent-row { display: flex; align-items: flex-start; justify-content: space-between; padding: 13px 0; border-bottom: 1px solid var(--mj-border-subtle); gap: 12px; }
+  .consent-row:last-child { border-bottom: none; }
+  .consent-name { font-weight: 700; font-size: 13.5px; margin-bottom: 3px; }
+  .consent-desc { font-size: 12px; color: var(--mj-text-secondary); }
+  .switch { width: 40px; height: 22px; border-radius: 999px; position: relative; flex-shrink: 0; margin-top: 2px; }
+  .switch.on { background: var(--mj-status-success); }
+  .switch.off { background: #cbd5e1; }
+  .switch::after { content:''; position:absolute; width:18px; height:18px; background:white; border-radius:50%; top:2px; box-shadow: 0 1px 2px rgba(0,0,0,.3); }
+  .switch.on::after { right: 2px; }
+  .switch.off::after { left: 2px; }
+  .portal-actions { display: flex; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--mj-border-subtle); }
+  .link-btn { font-size: 12.5px; color: var(--mj-brand-primary); font-weight: 600; text-decoration: underline; cursor: pointer; }
+  .jur-note { font-size: 11px; color: var(--mj-text-muted); margin-top: 14px; display: flex; gap: 6px; align-items: flex-start; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 480px; gap: 24px; align-items: start; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cubes"></i> MemberJunction</div>
+    <div class="nav-section">Workspace</div>
+    <div class="nav-item"><i class="fa-solid fa-house"></i> Home</div>
+    <div class="nav-item"><i class="fa-solid fa-address-book"></i> Contacts</div>
+    <div class="nav-section">Governance</div>
+    <div class="nav-item"><i class="fa-solid fa-clipboard-check"></i> Approval Center</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> Resource Budgets</div>
+    <div class="nav-item active"><i class="fa-solid fa-shield-halved"></i> Consent &amp; Privacy <span class="badge">3</span></div>
+    <div class="nav-section">Admin</div>
+    <div class="nav-item"><i class="fa-solid fa-users-gear"></i> Roles &amp; Permissions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-shield-halved"></i> Consent &amp; Privacy Center</h1>
+        <div class="sub">Data subject requests, consent records &amp; jurisdiction policy — admin view</div>
+      </div>
+      <button class="btn btn-primary"><i class="fa-solid fa-plus"></i> Log a Request</button>
+    </div>
+
+    <div class="content">
+      <div class="disclosure"><i class="fa-solid fa-circle-info"></i> Jurisdiction policy defaults shipped with MemberJunction are a configurable starting point, not legal advice. Consult counsel before relying on them for compliance.</div>
+
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Open DSAR Requests</div><div class="value warn">3</div><div class="sub">1 due within 5 days</div></div>
+        <div class="kpi"><div class="label">Fulfilled (90d)</div><div class="value">28</div><div class="sub">avg. 4.2 days to fulfill</div></div>
+        <div class="kpi"><div class="label">Active Consents</div><div class="value">18,204</div><div class="sub">across 6 purposes</div></div>
+        <div class="kpi"><div class="label">Opt-In-Required States</div><div class="value">6</div><div class="sub">CO · DE · MD · MN · NJ · OR</div></div>
+      </div>
+
+      <div class="two-col">
+        <div>
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-folder-open"></i> Data Subject Requests</h2></div>
+            <table>
+              <thead><tr><th>Requester</th><th>Type</th><th>Status</th><th>Due</th><th>Jurisdiction</th></tr></thead>
+              <tbody>
+                <tr>
+                  <td><strong>Priya Anand</strong><br><span style="color:var(--mj-text-muted);font-size:11.5px;">Member #48213</span></td>
+                  <td><span class="type-chip">Access</span></td>
+                  <td><span class="status-chip status-progress">In Progress</span></td>
+                  <td class="due-soon">Aug 27 (5 days)</td>
+                  <td>Colorado</td>
+                </tr>
+                <tr>
+                  <td><strong>Jordan Vance</strong><br><span style="color:var(--mj-text-muted);font-size:11.5px;">Former Member #29104</span></td>
+                  <td><span class="type-chip">Deletion</span></td>
+                  <td><span class="status-chip status-received">Received</span></td>
+                  <td>Sep 2 (11 days)</td>
+                  <td>Oregon</td>
+                </tr>
+                <tr>
+                  <td><strong>Helen Brooks</strong><br><span style="color:var(--mj-text-muted);font-size:11.5px;">Donor #7710</span></td>
+                  <td><span class="type-chip">Correction</span></td>
+                  <td><span class="status-chip status-received">Received</span></td>
+                  <td>Sep 6 (15 days)</td>
+                  <td>Virginia</td>
+                </tr>
+                <tr>
+                  <td><strong>Marcus Yee</strong><br><span style="color:var(--mj-text-muted);font-size:11.5px;">Member #10023</span></td>
+                  <td><span class="type-chip">Access</span></td>
+                  <td><span class="status-chip status-fulfilled">Fulfilled</span></td>
+                  <td>Completed Aug 18</td>
+                  <td>Texas</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-user-shield"></i> Consent Record — Priya Anand (#48213)</h2><span style="font-size:11.5px;color:var(--mj-text-muted)">Embedded form tab, any entity</span></div>
+            <table>
+              <thead><tr><th>Purpose</th><th>Status</th><th>Captured</th><th>Basis</th></tr></thead>
+              <tbody>
+                <tr><td>Email Marketing</td><td><span class="status-chip status-fulfilled">Granted</span></td><td>Mar 3, 2025 · Web form</td><td>Consent (opt-in required, CO)</td></tr>
+                <tr><td>Photo / Video Use</td><td><span class="status-chip status-progress">Withdrawn</span></td><td>Withdrawn Jul 14, 2026</td><td>Consent</td></tr>
+                <tr><td>Data Sharing — Chapter Affiliates</td><td><span class="status-chip status-received">Never Granted</span></td><td>—</td><td>Consent (opt-in required, CO)</td></tr>
+                <tr><td>Renewal Reminders</td><td><span class="status-chip status-fulfilled">Granted</span></td><td>Default · Legitimate Interest</td><td>Legitimate Interest</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title" style="margin-top:0;">End-User Self-Service — Member Portal</div>
+          <div class="portal-preview">
+            <div class="portal-header">
+              <div class="org">Riverbend Association · Privacy Settings</div>
+              <h3>Manage My Data &amp; Consent</h3>
+            </div>
+            <div class="portal-body">
+              <div class="consent-row">
+                <div><div class="consent-name">Email Marketing</div><div class="consent-desc">Renewal reminders, event invites, newsletters</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="consent-row">
+                <div><div class="consent-name">Photo / Video Use</div><div class="consent-desc">Featuring you in event photos or promotional video</div></div>
+                <div class="switch off"></div>
+              </div>
+              <div class="consent-row">
+                <div><div class="consent-name">Data Sharing — Chapter Affiliates</div><div class="consent-desc">Share your contact info with your local chapter</div></div>
+                <div class="switch off"></div>
+              </div>
+              <div class="consent-row">
+                <div><div class="consent-name">Directory Listing</div><div class="consent-desc">Show your profile in the member directory</div></div>
+                <div class="switch on"></div>
+              </div>
+              <div class="portal-actions">
+                <span class="link-btn"><i class="fa-solid fa-download"></i> Download my data</span>
+                <span class="link-btn" style="color:var(--mj-status-error)"><i class="fa-solid fa-trash"></i> Request deletion</span>
+              </div>
+              <div class="jur-note"><i class="fa-solid fa-location-dot"></i> Because you're in Colorado, we ask before using your data for new purposes — you can change your mind anytime here.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

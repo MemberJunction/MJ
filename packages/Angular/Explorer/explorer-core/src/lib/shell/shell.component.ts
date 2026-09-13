@@ -39,6 +39,7 @@ import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AppSwitcherStyle } from './components/header/app-switcher.component';
+import { ApplyShellChromePolicy, BaseShellChromePolicy, ShellChromeFlags } from './shell-chrome-policy';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -47,21 +48,6 @@ import { AppSwitcherStyle } from './components/header/app-switcher.component';
  * - Golden Layout-based tab container
  * - Unified workspace state management
  */
-/**
- * Instance-config-backed shell chrome flags, resolved once from InstanceConfigEngine
- * and cached for the component's lifetime. Angular change detection evaluates the
- * getters that expose these constantly, so a per-read engine lookup would run
- * thousands of times; resolving the whole set once keeps every read a field access.
- */
-interface ShellChromeFlags {
-  searchBar: boolean;
-  searchPreview: boolean;
-  notifications: boolean;
-  appSwitcher: boolean;
-  appSwitcherStyle: AppSwitcherStyle;
-  appNav: boolean;
-  recordOpenStyle: RecordOpenStyle;
-}
 
 @Component({
   standalone: false,
@@ -165,12 +151,22 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   // memoized `chromeFlags` accessor below (see ShellChromeFlags) so Angular's
   // change detection reads a cached field instead of hitting the engine per pass.
   private _chromeFlags: ShellChromeFlags | null = null;
+  /**
+   * The host's chrome policy (see {@link BaseShellChromePolicy}) — the identity unless a host
+   * registered a subclass. Consulted on every resolve; its `Changed` drops the cache.
+   */
+  private readonly chromePolicy: BaseShellChromePolicy =
+      MJGlobal.Instance.ClassFactory.CreateInstance<BaseShellChromePolicy>(BaseShellChromePolicy) ?? new BaseShellChromePolicy();
 
   /**
    * Resolve the instance-config chrome flags once and cache them. Computed live
    * from the fail-open defaults until InstanceConfigEngine has loaded, then frozen
    * on the first post-load read — so the pre-load defaults are never cached over
    * the real values, and every steady-state read is a plain field access.
+   *
+   * Instance Config is the ceiling; the host's chrome policy may narrow it per user
+   * (see {@link BaseShellChromePolicy}). The cache is dropped when the policy fires
+   * `Changed`, so an organization or plan switch repaints the chrome.
    */
   private get chromeFlags(): ShellChromeFlags {
       if (this._chromeFlags) {
@@ -178,7 +174,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       }
       const engine = InstanceConfigEngine.Instance;
       const rawStyle = engine.Get('Shell.AppSwitcher.Style');
-      const flags: ShellChromeFlags = {
+      const baseline: ShellChromeFlags = {
           searchBar: engine.GetBoolean('Shell.SearchBar.Enabled', true),
           searchPreview: engine.GetBoolean('Shell.SearchBar.EnablePreview', true),
           notifications: engine.GetBoolean('Shell.Notifications.Enabled', true),
@@ -193,10 +189,17 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
           // depend on when a template happens to be evaluated.
           recordOpenStyle: this.resolvedRecordOpenStyle,
       };
+      const flags = ApplyShellChromePolicy(baseline, this.chromePolicy);
       if (engine.Loaded) {
           this._chromeFlags = flags;
       }
       return flags;
+  }
+
+  /** The policy's answer may have changed: forget the cached flags and repaint. */
+  private onChromePolicyChanged(): void {
+      this._chromeFlags = null;
+      this.cdr.markForCheck();
   }
 
   /** The record-open style resolved at startup ('records' until resolved) */
@@ -228,6 +231,19 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // destroy an open record.
       this.workspaceManager.TempTabConsumptionFilter = this.resolvedRecordOpenStyle === 'records'
         ? (tab) => !IsRecordsTabConfiguration(tab.configuration)
+        : null;
+      // The records region's OWN temp-tab pool (TabRequest.TempScope 'records').
+      // Region membership again, not record identity, so a record docked to the
+      // workspace is in neither pool: "Move to Workspace" takes a record out of
+      // preview replacement, which is the point of docking it.
+      // ...minus any tab the user is actively editing. Replacement destroys the
+      // pane, so an editing tab leaves the pool and the next plain open gets
+      // its own tab — the edit survives without a modal interrupting a browse.
+      // (VS Code reaches the same outcome by promoting a modified preview; this
+      // is the same guarantee read off state we already have, instead of a new
+      // dirty-tracking pipeline.)
+      this.workspaceManager.RecordsRegionTabFilter = this.resolvedRecordOpenStyle === 'records'
+        ? (tab) => IsRecordsRegionTab(tab.configuration) && !this.tabContainerRef?.IsRecordTabEditing(tab.id)
         : null;
   }
 
@@ -336,6 +352,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
   /** Header affordance click → open the palette. */
   OpenOmnibar(initialQuery = ''): void {
+      if (!this.ShowSearchBar) {
+          return;
+      }
       this.omnibarPalette?.Open(initialQuery);
   }
 
@@ -511,6 +530,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       this.workspaceManager.TabBarVisible.subscribe(visible => {
         this.tabBarVisible = visible;
       })
+    );
+
+    // The host's chrome policy says its answer may have changed (org or plan switch)
+    this.subscriptions.push(
+      this.chromePolicy.Changed.subscribe(() => this.onChromePolicyChanged())
     );
 
     // Subscribe to the global Activity tracker (Run Pipeline, Sync, Cluster, …)
@@ -829,6 +853,16 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
 
     if (shouldSetActiveApp) {
       await this.appManager.SetActiveApp(request.ApplicationId);
+    }
+
+    // Scope URL-driven record opens to the records pool. Assigned HERE rather
+    // than at the resolver that built the request: those live in MJExplorer,
+    // which this package must not modify, and every one of them funnels
+    // through this method anyway. Without it a deep link to a record consumes
+    // the NAV temp tab and converts it into a records tab — the asymmetry
+    // records opens through NavigationService no longer have.
+    if (this.RecordTabsStyle && IsRecordsRegionTab(request.Configuration)) {
+      request.TempScope = 'records';
     }
 
     this.workspaceManager.OpenTab(request, appColor);
@@ -2627,11 +2661,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) return null;
 
-      const pkField = entityInfo.FirstPrimaryKey;
-      if (!pkField) return null;
-
-      const compositeKey = new CompositeKey();
-      compositeKey.KeyValuePairs = [{ FieldName: pkField.Name, Value: recordId }];
+      // recordId is the tab's compact key segment (bare value, or "F1|v1||F2|v2" for a composite key)
+      const compositeKey = CompositeKey.FromURLSegment(entityInfo, recordId);
+      if (compositeKey.KeyValuePairs.length === 0) return null;
 
       const results = await md.GetEntityRecordNames([{ EntityName: entityName, CompositeKey: compositeKey }]);
       if (results.length > 0 && results[0].Success && results[0].RecordName) {
@@ -2891,6 +2923,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
    * Toggle search popup visibility
    */
   toggleSearch(): void {
+    if (!this.ShowSearchBar) {
+      return;
+    }
     if (this.UseOmnibar) {
       this.OpenOmnibar();
       return;
@@ -2976,6 +3011,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       (.desktop-only) but its ViewChild still exists — focusing an invisible input
       would silently eat the interaction. */
   OnHeaderSearchClick(): void {
+      // No search surface at all when the chrome hides search — the header affordance is
+      // gone, but the Ctrl/Cmd+K chord and the mobile icon route here too.
+      if (!this.ShowSearchBar) {
+          return;
+      }
       const isMobile = window.matchMedia('(max-width: 768px)').matches;
       if (this.UseOmnibar) {
           this.OpenOmnibar();
@@ -3004,7 +3044,14 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       // truthful origin (default capture) — "back" returns the user there.
       // Contrast the chat overlay, a persistent surface whose true origin is
       // the conversation (it passes an explicit recordSource).
-      const pkey = new CompositeKey([{ FieldName: 'ID', Value: result.RecordID }]);
+      //
+      // `RecordID` is a compact CompositeKey segment — the bare value for a single-column primary
+      // key, "F1|v1||F2|v2" for a composite one — and the key column can have ANY name (the search
+      // lanes read it off entity metadata). Resolve it against that metadata; hardcoding
+      // `{ FieldName: 'ID' }` made Load() fail with "Primary key ID not found" for every entity
+      // whose key isn't called ID, and could never open a composite-key record at all.
+      const entityInfo = this.ProviderToUse.EntityByName(result.EntityName);
+      const pkey = CompositeKey.FromURLSegment(entityInfo, result.RecordID);
       this.navigationService.OpenEntityRecord(result.EntityName, pkey);
   }
 

@@ -1,0 +1,37 @@
+[
+  {
+    "_comments": [
+      "Sets JSONType metadata on MJ: Entities.SubtypeSelector so CodeGen emits a typed",
+      "SubtypeSelectorObject accessor returning MJEntityEntity_IEntitySubtypeSelectorConfig.",
+      "The EntityField row must exist (created by the migration) before this @lookup resolves on push.",
+      "Source: metadata/entities/JSONType-interfaces/IEntitySubtypeSelectorConfig.ts"
+    ],
+    "fields": {
+      "Name": "MJ: Entities"
+    },
+    "relatedEntities": {
+      "MJ: Entity Fields": [
+        {
+          "fields": {
+            "JSONType": "IEntitySubtypeSelectorConfig",
+            "JSONTypeIsArray": false,
+            "JSONTypeDefinition": "@file:JSONType-interfaces/IEntitySubtypeSelectorConfig.ts"
+          },
+          "_comments": [
+            "Entity.SubtypeSelector — prospective IsA subtype selector configuration"
+          ],
+          "primaryKey": {
+            "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Entities&Name=SubtypeSelector"
+          },
+          "sync": {
+            "lastModified": "2026-09-08T16:36:03.315Z",
+            "checksum": "d0903826d4f9ec65319595fe02238718cfa4e9f53b62b8ae9f5fc5248636c488"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Entities"
+    }
+  }
+]

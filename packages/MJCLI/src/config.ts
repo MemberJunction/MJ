@@ -64,8 +64,15 @@ const dynamicPackageEntrySchema = z.object({
   // entries are pure side-effect imports (their @RegisterClass decorators fire on
   // load), so StartupExport is optional and unset for the client array.
   StartupExport: z.string().optional(),
-  AppName: z.string(),
+  // Written by `mj app install`; hand-authored entries (see @memberjunction/dynamic-packages
+  // README) need not carry it, and the loader treats it as optional — so must this schema, or
+  // every getValidatedConfig() command aborts with a misleading "credentials missing" error.
+  AppName: z.string().optional(),
   Enabled: z.boolean().default(true),
+  // Hand-authored per-process scoping, read by @memberjunction/dynamic-packages: process IDs
+  // (or prefixes — `cli:sync` covers every `mj sync` command) the entry loads in / never loads in.
+  Processes: z.array(z.string()).optional(),
+  ExcludeProcesses: z.array(z.string()).optional(),
 });
 
 // Schema for Open App configuration section
@@ -106,9 +113,15 @@ const openAppsConfigSchema = z.object({
 // `server` is consumed by @memberjunction/server-bootstrap at MJAPI boot (B1).
 // `client` is consumed by `mj codegen manifest --open-app-client-bootstrap`, which
 // appends a side-effect import per entry to MJExplorer's class-registrations manifest.
-const dynamicPackagesSchema = z.object({
+export const dynamicPackagesSchema = z.object({
   server: z.array(dynamicPackageEntrySchema).optional(),
   client: z.array(dynamicPackageEntrySchema).optional(),
+  // Per-process on/off switch keyed by process ID or prefix (`{ 'cli:codegen': 'none' }`);
+  // the most specific key wins. MJ_DYNAMIC_PACKAGES / --no-app-packages override it.
+  // Values are validated by the loader's own parser (which also accepts the env-var synonyms
+  // `off`/`skip`/`0`/`on`/`1`/…, and warns on anything else), not narrowed here — a stricter
+  // schema than the loader turns a harmless typo into a hard failure of unrelated commands.
+  policy: z.record(z.string(), z.string()).optional(),
 }).optional();
 
 // Schema for database-dependent config (required fields)
@@ -187,6 +200,16 @@ const mjConfigSchemaOptional = z.object({
 
 // Don't validate at module load - let commands decide when they need validated config
 export const config = result?.config as MJConfig | undefined;
+
+/**
+ * The discovered mj.config.cjs BEFORE any Zod parse, plus its path. The dynamic-package loader
+ * needs the raw object (a parsed config keeps only the keys its schema names) and the file path
+ * (the resolution anchor for packages the host, not the CLI, declares).
+ */
+export const getRawConfig = (): { config: Record<string, unknown> | undefined; configFilePath?: string } => ({
+  config: result?.config as Record<string, unknown> | undefined,
+  configFilePath: result?.filepath || undefined,
+});
 
 /**
  * Get validated config for commands that require database connection.
