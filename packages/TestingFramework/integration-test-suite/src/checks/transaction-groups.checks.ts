@@ -46,9 +46,9 @@
  * fixtures (key + scope rules + usage logs) self-clean in the check's own try/finally,
  * mirroring the `api-keys` bundle's AK3.
  */
-import { Metadata, RunView, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
+import { BaseEntityResult, Metadata, RunView, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import type { RunViewParams, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLTransactionGroup } from '@memberjunction/graphql-dataprovider';
 import {
     MJActionCategoryEntity,
@@ -429,10 +429,32 @@ export const TransactionGroupsChecks: NamedCheck[] = [
             );
 
             // And the reason has to travel, or the caller is told it failed without being told why.
-            const reasons = (tgResult!.ErrorMessages ?? []).join(' ');
+            //
+            // Asserted against the REASON-BEARING fields only — Message, Error and Errors[].Message —
+            // never the serialized blob. `ErrorMessages` carries a whole `BaseEntityResult`, and one
+            // of those ALWAYS includes `OriginalValues: [{FieldName, Value}, …]`, one entry per
+            // field of the entity. The literal key `"FieldName"` lowercases to `"fieldname"`, which
+            // contains `"name"` — so a substring test over the raw JSON is satisfied by any non-null
+            // result whether or not a reason was reported, and the failure it names can never fire.
+            // This check shipped that way and the gauntlet caught it; keep the extraction narrow.
+            const reasons = (tgResult!.ErrorMessages ?? [])
+                .map(m => SafeJSONParse<Partial<BaseEntityResult>>(m ?? ''))
+                .flatMap(r => r ? [
+                    r.Message,
+                    r.Error ? BaseEntityResult.ErrorText(r.Error) : null,
+                    ...(r.Errors ?? []).map(e => e?.Message)
+                ] : [])
+                .filter((t): t is string => typeof t === 'string' && t.trim().length > 0);
+
+            // Wording-independent half: the server said SOMETHING about why.
             Assert(
-                reasons.toLowerCase().includes('name'),
-                `TG6: the refusal reason did not reach ErrorMessages, so no UI can name the offending row: ${reasons.slice(0, 400)}`
+                reasons.length > 0,
+                `TG6: the server reported no reason at all for the refused row, so no UI can explain the failure: ${JSON.stringify(tgResult!.ErrorMessages ?? []).slice(0, 400)}`
+            );
+            // And it points at the offending column, which is what lets a UI mark the bad field.
+            Assert(
+                reasons.some(r => r.toLowerCase().includes('name')),
+                `TG6: the refusal reason did not name the offending column, so no UI can point at the bad field: ${JSON.stringify(reasons).slice(0, 400)}`
             );
 
             console.log('      → refused row reported Success:false; survivor not committed; reason carried in ErrorMessages');
