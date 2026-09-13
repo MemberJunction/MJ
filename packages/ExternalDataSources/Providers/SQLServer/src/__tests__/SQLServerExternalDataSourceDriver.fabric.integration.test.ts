@@ -31,7 +31,7 @@ const CONN = {
 class FabricTestDriver extends SQLServerExternalDataSourceDriver {
   protected override async resolveCredential<TCred extends Record<string, string> = Record<string, string>>(): Promise<ResolvedCredential<TCred> | null> {
     const values = { tenantId: CONN.tenantId, clientId: CONN.clientId, clientSecret: CONN.clientSecret } as unknown as TCred;
-    return { credential: null, values, source: 'request', expiresAt: null };
+    return { credential: null, values, source: 'request', expiresAt: null, expirationStatus: 'valid' };
   }
   public async closeAll(ds: MJExternalDataSourceEntity): Promise<void> {
     const pool = await this.getConnection(ds);
