@@ -14,6 +14,7 @@ import { RealtimeDelegationCardVM } from '../lib/components/realtime/realtime-se
 
 function workingCard(overrides: Partial<RealtimeDelegationCardVM> = {}): RealtimeDelegationCardVM {
   return {
+    Kind: 'agent',
     CallID: 'call-1',
     AgentName: 'Sage',
     LatestMessage: 'Looking things up',

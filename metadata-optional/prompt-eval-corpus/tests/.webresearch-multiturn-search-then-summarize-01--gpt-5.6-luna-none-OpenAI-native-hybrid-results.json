@@ -1,0 +1,175 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-multiturn-search-then-summarize-01 [gpt-5.6-luna@none · OpenAI · native-hybrid-results]",
+    "Description": "A search came back with two promising URLs as a tool result. Summarizing them (or fetching them) is the agent's Step 3; a refined follow-up search is the prompt's own instruction (\"iterate and refine queries based on results\") and the spec's example of an acceptable next step; writing findings from snippets alone is also accepted. Stopping here — completing or chatting with nothing written — is the failure. Neutral tool form.",
+    "InputDefinition": {
+      "payload": {
+        "topic": "grid-scale battery storage 2025",
+        "findings": [],
+        "sources": []
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research grid-scale battery storage developments in 2025."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_0",
+              "name": "perplexity_search",
+              "arguments": {
+                "Query": "grid-scale battery storage developments 2025"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_0",
+              "toolName": "perplexity_search",
+              "isError": false,
+              "content": "1. https://example.org/iea-2025 — IEA: utility-scale storage additions reached ~70 GW in 2025, up 40% year on year.\n2. https://example.org/nrel-costs — NREL: LFP pack costs fell to ~$95/kWh in 2025."
+            }
+          ]
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-multiturn-search-then-summarize-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Summarize Content"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Web Page Content"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Google Custom Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Perplexity Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "payloadChange",
+            "payload": {
+              "newElements.findings": {
+                "matcher": "nonEmpty"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Summarize Content"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Web Page Content"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Google Custom Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Perplexity Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "payloadChange",
+                "payload": {
+                  "newElements.findings": {
+                    "matcher": "nonEmpty"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "35FA6F07-013C-4C99-A802-3CCB2B033CCC"
+  }
+}

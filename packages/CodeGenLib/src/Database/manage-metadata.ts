@@ -17,7 +17,7 @@ import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinne
 import { SQLUtilityBase } from "./sql";
 import { applyIncludeSchemaScope } from "./schema-scope";
 import { buildHealSchemaRoutineParams, getAuthoredExcludeSchemas, snapshotAuthoredExcludeSchemas } from "./heal-schema-params";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, isPlausibleEntityName } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
    applySearchableFieldsCap,
@@ -39,7 +39,6 @@ import { canonicalJSONStringify, deepEqualJSON } from "../Misc/util";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 import { computeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
-import { DecisionMetadataWriter } from "./decision-metadata-writer";
 import {
    TRACKED_FIELD_COLUMNS,
    FieldChangeReason,
@@ -3423,7 +3422,6 @@ export class ManageMetadataBase {
       }
 
       logStatus(`         Applied categories for VE ${entity.Name} (${fieldCategories.length} fields)`);
-      await DecisionMetadataWriter.Instance.flushEntity(entity);
       return true;
    }
 
@@ -5872,6 +5870,10 @@ export class ManageMetadataBase {
          if (newEntities && newEntities.length > 0 ) {
             const md = new Metadata() // global-provider-ok: codegen runs offline against a single provider
             const transaction = await pool.beginTransaction();
+            // The in-run list of new entity names is process-static. Names pushed by a batch that is then
+            // rolled back must not survive into the next run of the same process (in-process CodeGen runs
+            // many times per process), or every one of them reads as "taken" and gets a schema suffix.
+            const newEntityNamesBefore = ManageMetadataBase.newEntityList.length;
             try {
                // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
@@ -5881,6 +5883,7 @@ export class ManageMetadataBase {
                await transaction.commit();
             } catch (e) {
                await transaction.rollback();
+               ManageMetadataBase.newEntityList.length = newEntityNamesBefore;
                throw e;
             }
 
@@ -6003,11 +6006,13 @@ export class ManageMetadataBase {
 
    protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any, currentUser: UserInfo): Promise<string> {
       const result = await ag.generateEntityName(newEntity.TableName, currentUser);
-      if (result?.entityName) {
+      // Checked here as well as inside generateEntityName: a subclass or a stub can return anything, and
+      // a non-name that reaches the INSERT fails it (see createNewEntity's catch for why that used to be silent).
+      if (result && isPlausibleEntityName(result.entityName)) {
          return this.markupEntityName(newEntity.SchemaName, result.entityName);
       }
       else {
-         console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name');
+         console.warn(`   >>> Advanced Generation Error: LLM returned an unusable entity name for ${newEntity.SchemaName}.${newEntity.TableName}, falling back to simple generated entity name`);
          return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
    }
@@ -6232,6 +6237,15 @@ export class ManageMetadataBase {
          if (errStack) {
             LogError(`   Stack trace: ${errStack}`);
          }
+         // Rethrow so createNewEntities stops, rolls back, and the run fails. Swallowing here let CodeGen
+         // commit a PARTIAL set of new entities and report success: the table whose INSERT failed was simply
+         // absent afterwards, with a log line as the only witness. It has bitten twice — a UQ_Entity_Name
+         // collision (see resolveUniqueEntityName) and an AI-generated name of `-1` that dropped eleven of a
+         // connector's twenty-seven tables while the schema update reported "complete". The transaction in
+         // createNewEntities exists to give "all of it or none of it"; it can only do that if a failure
+         // reaches it. A table that does not QUALIFY (no primary key) is still a skip, not a failure — that
+         // path returns above and never gets here.
+         throw e instanceof Error ? e : new Error(errMsg);
       }
    }
 
@@ -7271,9 +7285,6 @@ export class ManageMetadataBase {
                logStatus(`         Applied form layout for ${entity.Name}`);
             }
          }
-
-         // Flush decision metadata for this entity
-         await DecisionMetadataWriter.Instance.flushEntity(entity);
       }
       catch (ex) {
          logError('Error Processing Entity Advanced Generation', ex)
@@ -7553,9 +7564,6 @@ export class ManageMetadataBase {
                WHERE ID = '${winner.ID}'
                AND AutoUpdateIsNameField = ${this.boolLit(true)}
             `);
-         if (entity?.Name) {
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(winner.Name), 'IsNameField', true);
-         }
       }
 
       // Clear every other flagged field that allows auto-update — single winner, always.
@@ -7569,9 +7577,6 @@ export class ManageMetadataBase {
                WHERE ID = '${f.ID}'
                AND AutoUpdateIsNameField = ${this.boolLit(true)}
             `);
-         if (entity?.Name) {
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(f.Name), 'IsNameField', false);
-         }
       }
    }
 
@@ -7739,9 +7744,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateDefaultInView = ${this.boolLit(true)}
             `);
-            if (entity?.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'DefaultInView', true);
-            }
          }
       }
    }
@@ -7794,9 +7796,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateIncludeInUserSearchAPI = ${this.boolLit(true)}
             `);
-            if (entity?.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'IncludeInUserSearchAPI', true);
-            }
          }
       }
    }
@@ -7855,9 +7854,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateUserSearchPredicate = ${this.boolLit(true)}
             `);
-            if (entity?.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'UserSearchPredicateAPI', sp.predicate);
-            }
          }
       }
    }
@@ -7910,9 +7906,6 @@ export class ManageMetadataBase {
             WHERE ID = '${entity.ID}'
             AND AutoUpdateAllowUserSearchAPI = ${this.boolLit(true)}
          `);
-         if (entity.Name) {
-            DecisionMetadataWriter.Instance.recordEntityDecision(entity.Name, 'AllowUserSearchAPI', newValue);
-         }
       }
    }
 
@@ -7957,9 +7950,6 @@ export class ManageMetadataBase {
                WHERE ID = '${entity.ID}'
                AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
             `);
-            if (entity.Name) {
-               DecisionMetadataWriter.Instance.recordEntityDecision(entity.Name, 'FullTextSearchEnabled', newValue);
-            }
          }
       }
 
@@ -7984,9 +7974,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
             `);
-            if (entity.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'FullTextSearchEnabled', true);
-            }
          }
       }
    }
@@ -8080,7 +8067,6 @@ export class ManageMetadataBase {
             WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = ${this.boolLit(true)}
          `, `Set SupportsGeoCoding = ${shouldSupportGeo} for ${entity.Name}`);
          logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from persisted geo fields)`);
-         DecisionMetadataWriter.Instance.recordEntityDecision(entity.Name, 'SupportsGeoCoding', shouldSupportGeo);
          // Queue for late-phase view regeneration — the view was already generated
          // before this flag was set, so it needs to be regenerated with the geo JOIN
          ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name, 'Geocoding');
@@ -8199,25 +8185,20 @@ export class ManageMetadataBase {
 
          if (update.Category !== undefined) {
             setClauses.push(`Category = '${update.Category.replace(/'/g, "''")}'`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'Category', update.Category);
          }
          if (update.GeneratedFormSection !== undefined) {
             setClauses.push(`GeneratedFormSection = 'Category'`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'GeneratedFormSection', 'Category');
          }
          if (update.DisplayName !== undefined) {
             setClauses.push(`DisplayName = '${update.DisplayName.replace(/'/g, "''")}'`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'DisplayName', update.DisplayName);
          }
          if (update.ExtendedType !== undefined) {
             const extVal = update.ExtendedType === null ? 'NULL' : `'${update.ExtendedType.replace(/'/g, "''")}'`;
             setClauses.push(`ExtendedType = ${extVal}`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'ExtendedType', update.ExtendedType);
          }
          if (update.CodeType !== undefined) {
             const codeVal = update.CodeType === null ? 'NULL' : `'${update.CodeType.replace(/'/g, "''")}'`;
             setClauses.push(`CodeType = ${codeVal}`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'CodeType', update.CodeType);
          }
 
          if (setClauses.length > 0) {
@@ -8265,9 +8246,6 @@ WHERE
             try {
                await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
                logStatus(`  Set entity icon: ${entityIcon}`);
-               if (entityName) {
-                  DecisionMetadataWriter.Instance.recordEntityDecision(entityName, 'Icon', entityIcon);
-               }
             }
             catch (ex) {
                logError('Error Applying Entity Icon', ex);
@@ -8283,13 +8261,9 @@ WHERE
       pool: CodeGenConnection,
       entityId: string,
       categoryInfo: Record<string, FieldCategoryInfo>,
-      entityName?: string
+      _entityName?: string
    ): Promise<void> {
       if (!categoryInfo || Object.keys(categoryInfo).length === 0) return;
-
-      if (entityName) {
-         DecisionMetadataWriter.Instance.recordEntitySetting(entityName, 'FieldCategoryInfo', categoryInfo);
-      }
 
       const canonicalInfo = canonicalJSONStringify(categoryInfo, 2);
       const infoJSON = canonicalInfo.replace(/'/g, "''");
@@ -8342,9 +8316,6 @@ WHERE
          if (info && typeof info === 'object' && 'icon' in info) {
             iconsOnly[category] = info.icon;
          }
-      }
-      if (entityName) {
-         DecisionMetadataWriter.Instance.recordEntitySetting(entityName, 'FieldCategoryIcons', iconsOnly);
       }
       const canonicalIcons = canonicalJSONStringify(iconsOnly, 2);
       const iconsJSON = canonicalIcons.replace(/'/g, "''");
@@ -8411,9 +8382,6 @@ WHERE
 
          logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
          logStatus(`    Reasoning: ${importance.reasoning}`);
-         if (entityName) {
-            DecisionMetadataWriter.Instance.recordApplicationEntityDecision(entityName, '', 'DefaultForNewUser', importance.defaultForNewUser);
-         }
       }
       catch (ex) {
          logError('Error Applying Entity Importance', ex)

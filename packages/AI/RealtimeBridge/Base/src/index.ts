@@ -3,6 +3,7 @@ export * from './media-tracks';
 export * from './channel-plane';
 export * from './base-realtime-bridge';
 export * from './base-telephony-bridge';
+export * from './base-detached-media-bridge';
 export * from './turn-taking-policy';
 export * from './ai-bridge-engine-base';
 export * from './bridge-native-sdk-registry';

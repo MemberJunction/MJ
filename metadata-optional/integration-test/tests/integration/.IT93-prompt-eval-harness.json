@@ -1,0 +1,24 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Integration Test",
+    "Name": "IT93 - Prompt Eval Harness",
+    "Description": "Verifies the prompt-eval measuring instrument itself, deterministically and without a single model token: every corpus case names an agent and capabilities that exist in the catalog (PE1); the generated MJ: Tests records have not drifted from the golden files (PE2); every expectation is decidable — a synthesized correct answer passes it (PE3); a scripted correct reply scores correct through the REAL AIPromptRunner with TestLLM registered over the driver classes (PE4); five distinct malformed shapes are actually caught, including the undispatchable step types MJ's own exemplars taught before the exemplar audit (PE5); and a wrong-but-well-formed reply separates decision accuracy from malformed rate so a comparison can attribute a delta to one or the other (PE6). PE5 is the load-bearing negative: a harness that cannot fail on demand makes every rate it reports a fiction. 6 checks, read-only, server transport.",
+    "InputDefinition": {},
+    "ExpectedOutcomes": {
+      "summary": "Verifies the prompt-eval measuring instrument itself, deterministically and without a single model token: every corpus case names an agent and capabilities that exist in the catalog (PE1); the generated MJ: Tests records have not drifted from the golden files (PE2); every expectation is decidable — a synthesized correct answer passes it (PE3); a scripted correct reply scores correct through the REAL AIPromptRunner with TestLLM registered over the driver classes (PE4); five distinct malformed shapes are actually caught, including the undispatchable step types MJ's own exemplars taught before the exemplar audit (PE5); and a wrong-but-well-formed reply separates decision accuracy from malformed rate so a comparison can attribute a delta to one or the other (PE6). PE5 is the load-bearing negative: a harness that cannot fail on demand makes every rate it reports a fiction. 6 checks, read-only, server transport."
+    },
+    "Configuration": {
+      "tier": "deterministic",
+      "transport": "server",
+      "checks": [
+        {
+          "type": "prompt-eval-harness"
+        }
+      ]
+    },
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C2445DAC-C01F-4AA1-946F-CE61A8A30648"
+  }
+}

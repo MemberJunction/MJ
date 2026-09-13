@@ -10,7 +10,7 @@
  */
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { resolve, dirname } from 'node:path';
+import { resolve, dirname, basename, join } from 'node:path';
 import type { ManifestPackageEntry } from '../manifest/manifest-schema.js';
 import { ResolveServerPackagePath, ResolveClientPackagePath } from './workspace-paths.js';
 
@@ -94,6 +94,10 @@ export interface PackageOperationResult {
   Removed: string[];
   /** Error message if the operation failed */
   ErrorMessage?: string;
+  /** Where `install` actually ran (RunPackageInstall only). */
+  InstallRoot?: string;
+  /** Set when the install ran at an `mj dev workspace` parent instead of the repo itself (RunPackageInstall only). */
+  DevWorkspaceParent?: string;
 }
 
 /**
@@ -173,6 +177,45 @@ export function detectPackageManager(repoRoot: string): PackageManagerType {
   return 'npm';
 }
 
+/** The sentinel `mj dev workspace` writes at the parent directory that joins sibling repos into one pnpm workspace. */
+export const DEV_WORKSPACE_SENTINEL = '.mj-dev-workspace.json';
+
+/** Where a package install must run, and with what. */
+export interface InstallRootResolution {
+  /** Directory to run `install` in. */
+  Root: string;
+  PackageManager: PackageManagerType;
+  /** Set when Root is an `mj dev workspace` parent the repo is a member of. */
+  DevWorkspaceParent?: string;
+}
+
+/**
+ * Decides where `install` runs. Normally the repo root, with its own package manager.
+ *
+ * When the repo is a MEMBER of an `mj dev workspace` — its parent directory carries the
+ * generator's sentinel naming this directory, next to the parent's `pnpm-workspace.yaml` —
+ * the install belongs to the parent: pnpm treats a member that has its own
+ * `pnpm-workspace.yaml` as a root, so an in-place install silently creates a second,
+ * standalone store beside the parent's links (split singletons, and the app's packages
+ * resolved from the registry instead of the sibling checkout the workspace links). Field
+ * `mj app install` inside the MJ member does exactly that.
+ */
+export function ResolveInstallRoot(repoRoot: string, packageManager?: PackageManagerType): InstallRootResolution {
+  const parent = dirname(repoRoot);
+  const sentinelPath = join(parent, DEV_WORKSPACE_SENTINEL);
+  if (parent !== repoRoot && existsSync(sentinelPath) && existsSync(join(parent, 'pnpm-workspace.yaml'))) {
+    try {
+      const sentinel = JSON.parse(readFileSync(sentinelPath, 'utf-8')) as { generatedBy?: unknown; members?: unknown };
+      if (sentinel.generatedBy === 'mj dev workspace' && Array.isArray(sentinel.members) && sentinel.members.includes(basename(repoRoot))) {
+        return { Root: parent, PackageManager: 'pnpm', DevWorkspaceParent: parent };
+      }
+    } catch {
+      // an unreadable sentinel is not a workspace claim — install in the repo itself
+    }
+  }
+  return { Root: repoRoot, PackageManager: packageManager ?? detectPackageManager(repoRoot) };
+}
+
 /**
  * Checks if the pnpm-workspace.yaml has a catalog section.
  * Returns true if there's a `catalog:` or `catalogs:` key in the file.
@@ -213,7 +256,9 @@ function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
 }
 
 /**
- * Runs package install from the monorepo root using the appropriate package manager.
+ * Runs package install from the monorepo root using the appropriate package manager —
+ * or, when the repo is a member of an `mj dev workspace`, from that workspace's parent
+ * with pnpm (see {@link ResolveInstallRoot}); the result says where it ran.
  *
  * Registry configuration is resolved in this order:
  * 1. Explicit `registryUrl` parameter (passed from manifest)
@@ -226,7 +271,8 @@ function ValidateRegistryUrl(url: string): { Valid: boolean; Reason?: string } {
  * @param packageManager - Package manager to use (auto-detected if not provided)
  */
 export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryUrl?: string, packageManager?: PackageManagerType): PackageOperationResult {
-  const pm = packageManager ?? detectPackageManager(repoRoot);
+  const target = ResolveInstallRoot(repoRoot, packageManager);
+  const pm = target.PackageManager;
 
   // Only pass --registry for non-default registries. The standard npm registry
   // (https://registry.npmjs.org) is already the default, and passing it explicitly
@@ -268,15 +314,15 @@ export function RunPackageInstall(repoRoot: string, verbose?: boolean, registryU
     // scoped registries, auth tokens, and other settings. We don't need to
     // parse these files — just ensure `cwd` is set correctly so they're found.
     execFileSync(bin, argv, {
-      cwd: repoRoot,
+      cwd: target.Root,
       encoding: 'utf-8',
       timeout: 300000,
       stdio: verbose ? 'inherit' : 'pipe',
     });
-    return { Success: true, Added: [], Removed: [] };
+    return { Success: true, Added: [], Removed: [], InstallRoot: target.Root, DevWorkspaceParent: target.DevWorkspaceParent };
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : String(error);
-    return { Success: false, Added: [], Removed: [], ErrorMessage: `${pm} install failed: ${message}` };
+    return { Success: false, Added: [], Removed: [], ErrorMessage: `${pm} install failed: ${message}`, InstallRoot: target.Root, DevWorkspaceParent: target.DevWorkspaceParent };
   }
 }
 

@@ -1,0 +1,27 @@
+{
+  "id": "sage-calculate-first-step-01",
+  "agent": "Sage",
+  "tags": [
+    "first-step-action"
+  ],
+  "description": "Arithmetic Sage must not do by inference. Calculate Expression exists precisely so the model does not guess at numbers.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "What is 1847 * 293 divided by 7? Compute it exactly."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Calculate Expression",
+        "params": {}
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}
