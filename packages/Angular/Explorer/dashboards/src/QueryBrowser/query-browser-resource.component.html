@@ -94,10 +94,23 @@
     </div>
   </div>
 
-  <!-- Resize Handle -->
+  <!-- Resize Handle. A separator WITHOUT tabindex is a static (decorative) separator per
+       ARIA, so the action-phrased label would announce a control that can't be operated:
+       tabindex + the keydown handler + aria-value* are what make it a real widget. Before
+       this it was a bare <div> whose only handler was (mousedown) — an addEventListener,
+       not an onclick attribute — so a 6px unlabeled target appeared in no accessibility
+       tree and in no automation's element list. -->
   <div class="resize-handle"
+    role="separator"
+    aria-orientation="vertical"
+    aria-label="Resize query list panel"
+    tabindex="0"
+    [attr.aria-valuenow]="PanelWidth"
+    [attr.aria-valuemin]="MinPanelWidth"
+    [attr.aria-valuemax]="MaxPanelWidth"
     [class.active]="IsResizing"
-    (mousedown)="onResizeStart($event)">
+    (mousedown)="onResizeStart($event)"
+    (keydown)="onResizeKeydown($event)">
     <div class="resize-handle-grip"></div>
   </div>
 
