@@ -65,7 +65,8 @@ export class MJAIAgentFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIAgentSkills', sectionName: 'AI Agent Skills', isExpanded: false },
             { sectionKey: 'mJConversationWidgetInstances', sectionName: 'Conversation Widget Instances', isExpanded: false },
             { sectionKey: 'mJAISkillSubAgents', sectionName: 'AI Skill Sub Agents', isExpanded: false },
-            { sectionKey: 'mJAIAgentCredentials', sectionName: 'AI Agent Credentials', isExpanded: false }
+            { sectionKey: 'mJAIAgentCredentials', sectionName: 'AI Agent Credentials', isExpanded: false },
+            { sectionKey: 'mJAIAgentPersonas', sectionName: 'AI Agent Personas', isExpanded: false }
         ]);
     }
 }

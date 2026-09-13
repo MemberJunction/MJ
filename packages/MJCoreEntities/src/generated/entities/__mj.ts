@@ -1636,6 +1636,71 @@ export const MJAIAgentPermissionSchema = z.object({
 export type MJAIAgentPermissionEntityType = z.infer<typeof MJAIAgentPermissionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Personas
+ */
+export const MJAIAgentPersonaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    PersonaID: z.string().describe(`
+        * * Field Name: PersonaID
+        * * Display Name: Persona
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default Persona
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this persona is the default presentation for the agent when none is explicitly requested.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Display Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering sequence for displaying available personas in user interfaces.`),
+    IsAllowed: z.boolean().describe(`
+        * * Field Name: IsAllowed
+        * * Display Name: Is Allowed
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the agent is allowed to use this persona. Set to 0 to explicitly disable or veto a persona.`),
+    StyleOverride: z.any().nullable().describe(`
+        * * Field Name: StyleOverride
+        * * Display Name: Style Override
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride
+        * * Description: Optional JSON payload overriding or refining persona presentation specifically for this agent (e.g. Tone or SpeakingStyle adjustments).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    Persona: z.string().describe(`
+        * * Field Name: Persona
+        * * Display Name: Persona Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIAgentPersonaEntityType = z.infer<typeof MJAIAgentPersonaSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Prompts
  */
 export const MJAIAgentPromptSchema = z.object({
@@ -5300,6 +5365,59 @@ export const MJAIModelModalitySchema = z.object({
 export type MJAIModelModalityEntityType = z.infer<typeof MJAIModelModalitySchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Model Personas
+ */
+export const MJAIModelPersonaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
+    PersonaID: z.string().describe(`
+        * * Field Name: PersonaID
+        * * Display Name: Persona ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Deterministic ordering sequence for persona priority at the model level.`),
+    IsSupported: z.boolean().describe(`
+        * * Field Name: IsSupported
+        * * Display Name: Is Supported
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this persona is supported by the specific model. Set to 0 to explicitly disable an inherited vendor persona for this model.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Persona: z.string().describe(`
+        * * Field Name: Persona
+        * * Display Name: Persona
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIModelPersonaEntityType = z.infer<typeof MJAIModelPersonaSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Model Price Types
  */
 export const MJAIModelPriceTypeSchema = z.object({
@@ -5705,6 +5823,186 @@ export const MJAIModelSchema = z.object({
 });
 
 export type MJAIModelEntityType = z.infer<typeof MJAIModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Persona Vendors
+ */
+export const MJAIPersonaVendorSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PersonaID: z.string().describe(`
+        * * Field Name: PersonaID
+        * * Display Name: Persona
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)`),
+    VendorID: z.string().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    APIName: z.string().describe(`
+        * * Field Name: APIName
+        * * Display Name: API Asset Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Vendor-specific asset name or identifier passed over the wire (e.g., alloy, sage, an ElevenLabs voice_id, or a HeyGen avatar_id).`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Inactive'), z.literal('Preview')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Inactive
+    *   * Preview
+        * * Description: Current operational status of this vendor persona binding.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Selection priority when multiple vendor bindings qualify for a given persona and modality. Higher numbers indicate higher priority.`),
+    VendorSettings: z.any().nullable().describe(`
+        * * Field Name: VendorSettings
+        * * Display Name: Vendor Settings
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPersonaVendorEntity_IAIPersonaVendorSettings
+        * * Description: Provider-specific configuration JSON (e.g., ElevenLabs stability, similarityBoost, style, useSpeakerBoost).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Persona: z.string().describe(`
+        * * Field Name: Persona
+        * * Display Name: Persona Name
+        * * SQL Data Type: nvarchar(100)`),
+    Vendor: z.string().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor Name
+        * * SQL Data Type: nvarchar(50)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJAIPersonaVendorEntityType = z.infer<typeof MJAIPersonaVendorSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Personas
+ */
+export const MJAIPersonaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Persona Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the persona, its characteristics, and intended personality.`),
+    PerceivedGender: z.string().nullable().describe(`
+        * * Field Name: PerceivedGender
+        * * Display Name: Perceived Gender
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The perceived gender presentation of this persona (e.g., Male, Female, Neutral, Non-Binary).`),
+    Locale: z.string().nullable().describe(`
+        * * Field Name: Locale
+        * * Display Name: Locale
+        * * SQL Data Type: nvarchar(20)
+        * * Description: BCP 47 language and locale tag primarily associated with this persona (e.g., en-US, es-ES).`),
+    PerceivedAgeRangeMin: z.number().nullable().describe(`
+        * * Field Name: PerceivedAgeRangeMin
+        * * Display Name: Perceived Age Range Min
+        * * SQL Data Type: int
+        * * Description: Approximate minimum perceived age for this persona, enabling numerical filtering.`),
+    PerceivedAgeRangeMax: z.number().nullable().describe(`
+        * * Field Name: PerceivedAgeRangeMax
+        * * Display Name: Perceived Age Range Max
+        * * SQL Data Type: int
+        * * Description: Approximate maximum perceived age for this persona, enabling numerical filtering.`),
+    Tone: z.string().nullable().describe(`
+        * * Field Name: Tone
+        * * Display Name: Tone
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Core tonal quality for this persona (e.g., Warm, Authoritative, Enthusiastic, Calm). Injected into prompt context for conversational delivery.`),
+    SpeakingStyle: z.string().nullable().describe(`
+        * * Field Name: SpeakingStyle
+        * * Display Name: Speaking Style
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Stylistic manner of speaking (e.g., Casual and conversational, Direct and concise, Academic).`),
+    StyleDescriptors: z.any().nullable().describe(`
+        * * Field Name: StyleDescriptors
+        * * Display Name: Style Descriptors
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPersonaEntity_IAIPersonaStyleDescriptors
+        * * Description: Additional descriptive keywords or JSON metadata capturing nuanced personality and presentation traits.`),
+    PreviewAudioURL: z.string().nullable().describe(`
+        * * Field Name: PreviewAudioURL
+        * * Display Name: Preview Audio URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to a sample audio file demonstrating this persona's voice.`),
+    PreviewImageURL: z.string().nullable().describe(`
+        * * Field Name: PreviewImageURL
+        * * Display Name: Preview Image URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to a preview avatar image for this persona.`),
+    PreviewVideoURL: z.string().nullable().describe(`
+        * * Field Name: PreviewVideoURL
+        * * Display Name: Preview Video URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to a preview video demonstrating this persona's visual animation or avatar.`),
+    Source: z.union([z.literal('BuiltIn'), z.literal('Cloned'), z.literal('Custom')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: BuiltIn
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BuiltIn
+    *   * Cloned
+    *   * Custom
+        * * Description: Origin of this persona: BuiltIn (provided by system/catalog), Custom (user-defined), or Cloned (derived/voice-cloned).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this persona is currently active and available for selection.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIPersonaEntityType = z.infer<typeof MJAIPersonaSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Categories
@@ -38786,6 +39084,212 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
 
 
 /**
+ * Agent-specific presentation style overrides for an assigned AI Persona.
+ *
+ * Stored as JSON in `MJ: AI Agent Personas.StyleOverride`. CodeGen emits a typed
+ * `StyleOverrideObject` accessor on `MJAIAgentPersonaEntity` returning `MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null`.
+ *
+ * Allows an agent to fine-tune a catalog persona (e.g. "Aria, but more formal and authoritative")
+ * without minting an entirely separate persona record.
+ */
+export interface MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride {
+    /** Optional override for the persona's core Tone. */
+    Tone?: string;
+
+    /** Optional override for the persona's SpeakingStyle. */
+    SpeakingStyle?: string;
+
+    /** Open extension point for additional descriptor overrides. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: AI Agent Personas - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentPersona
+ * * Base View: vwAIAgentPersonas
+ * * @description Configures which personas an AI agent is permitted to wear, their preference order, and which persona serves as the agent's default identity.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Personas')
+export class MJAIAgentPersonaEntity extends BaseEntity<MJAIAgentPersonaEntityType> {
+    /**
+    * Loads the MJ: AI Agent Personas record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Personas record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentPersonaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: PersonaID
+    * * Display Name: Persona
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    */
+    get PersonaID(): string {
+        return this.Get('PersonaID');
+    }
+    set PersonaID(value: string) {
+        this.Set('PersonaID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default Persona
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this persona is the default presentation for the agent when none is explicitly requested.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Display Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering sequence for displaying available personas in user interfaces.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsAllowed
+    * * Display Name: Is Allowed
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the agent is allowed to use this persona. Set to 0 to explicitly disable or veto a persona.
+    */
+    get IsAllowed(): boolean {
+        return this.Get('IsAllowed');
+    }
+    set IsAllowed(value: boolean) {
+        this.Set('IsAllowed', value);
+    }
+
+    /**
+    * * Field Name: StyleOverride
+    * * Display Name: Style Override
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride
+    * * Description: Optional JSON payload overriding or refining persona presentation specifically for this agent (e.g. Tone or SpeakingStyle adjustments).
+    */
+    get StyleOverride(): string | null {
+        return this.Get('StyleOverride');
+    }
+    set StyleOverride(value: string | null) {
+        this.Set('StyleOverride', value);
+    }
+
+    private _StyleOverrideObject_cached: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null | undefined = undefined;
+    private _StyleOverrideObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for StyleOverride — returns parsed JSON as MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get StyleOverrideObject(): MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null {
+        const raw = this.StyleOverride;
+        if (raw !== this._StyleOverrideObject_lastRaw) {
+            this._StyleOverrideObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleOverrideObject_lastRaw = raw;
+        }
+        return this._StyleOverrideObject_cached!;
+    }
+    set StyleOverrideObject(value: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleOverride = raw;
+        this._StyleOverrideObject_cached = value;
+        this._StyleOverrideObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Persona
+    * * Display Name: Persona Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Persona(): string {
+        return this.Get('Persona');
+    }
+}
+
+
+/**
  * MJ: AI Agent Prompts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentPrompt
@@ -46583,6 +47087,8 @@ export interface MJAIBridgeProviderEntity_IBridgeProviderFeatures {
     CallTransfer?: boolean;
     /** The bridge can request platform recording (subject to per-jurisdiction consent handling). */
     Recording?: boolean;
+    /** Detached media plane: platform terminates live audio directly; bridge attaches a sideband (e.g. OpenAISipBridge). */
+    DetachedMediaPlane?: boolean;
 }
 
 /**
@@ -48812,6 +49318,143 @@ export class MJAIModelModalityEntity extends BaseEntity<MJAIModelModalityEntityT
 
 
 /**
+ * MJ: AI Model Personas - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelPersona
+ * * Base View: vwAIModelPersonas
+ * * @description Specifies per-model persona availability overrides where a model's supported personas differ from its vendor's default catalog.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Personas')
+export class MJAIModelPersonaEntity extends BaseEntity<MJAIModelPersonaEntityType> {
+    /**
+    * Loads the MJ: AI Model Personas record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Personas record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIModelPersonaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: PersonaID
+    * * Display Name: Persona ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    */
+    get PersonaID(): string {
+        return this.Get('PersonaID');
+    }
+    set PersonaID(value: string) {
+        this.Set('PersonaID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Deterministic ordering sequence for persona priority at the model level.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsSupported
+    * * Display Name: Is Supported
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this persona is supported by the specific model. Set to 0 to explicitly disable an inherited vendor persona for this model.
+    */
+    get IsSupported(): boolean {
+        return this.Get('IsSupported');
+    }
+    set IsSupported(value: boolean) {
+        this.Set('IsSupported', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Persona
+    * * Display Name: Persona
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Persona(): string {
+        return this.Get('Persona');
+    }
+}
+
+
+/**
  * MJ: AI Model Price Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIModelPriceType
@@ -48963,6 +49606,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * DriverClass: This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
     * * Name: This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
+    * * UnitsPerBillingUnit: Units per billing unit must be greater than zero to ensure valid billing calculations.
     * @public
     * @method
     * @override
@@ -48971,6 +49615,7 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
         const result = super.Validate();
         this.ValidateDriverClassNotBlank(result);
         this.ValidateNameHasNonWhitespaceCharacters(result);
+        this.ValidateUnitsPerBillingUnitGreaterThanZero(result);
         result.Success = result.Success && (result.Errors.length === 0);
 
         return result;
@@ -48997,6 +49642,23 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
     public ValidateNameHasNonWhitespaceCharacters(result: ValidationResult) {
     	if (this.Name != null && this.Name.trim().length === 0) {
     		result.Errors.push(new ValidationErrorInfo("Name", "Name cannot be empty or consist only of spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * Units per billing unit must be greater than zero to ensure valid billing calculations.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUnitsPerBillingUnitGreaterThanZero(result: ValidationResult) {
+    	if (this.UnitsPerBillingUnit != null && this.UnitsPerBillingUnit <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UnitsPerBillingUnit",
+    			"Units per billing unit must be greater than zero.",
+    			this.UnitsPerBillingUnit,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -49170,6 +49832,26 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
             Threshold?: number | null;
             /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
             SilenceDurationMs?: number | null;
+        } | null;
+
+        /**
+         * Reasoning plane settings — dual delegation configuration.
+         * Absent defaults to 'local'.
+         */
+        Reasoning?: {
+            /**
+             * Which plane handles reasoning:
+             * - 'local' — application/agent loop (default).
+             * - 'remote' — delegated to remote model or hosted agent.
+             */
+            Plane?: 'local' | 'remote' | null;
+            /** Remote reasoning target configuration. */
+            Remote?: {
+                Kind?: 'model' | 'hostedAgent' | null;
+                Ref?: string | null;
+                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+                MaxOutputTokens?: number | null;
+            } | null;
         } | null;
     } | null;
 
@@ -49437,6 +50119,26 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
             Threshold?: number | null;
             /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
             SilenceDurationMs?: number | null;
+        } | null;
+
+        /**
+         * Reasoning plane settings — dual delegation configuration.
+         * Absent defaults to 'local'.
+         */
+        Reasoning?: {
+            /**
+             * Which plane handles reasoning:
+             * - 'local' — application/agent loop (default).
+             * - 'remote' — delegated to remote model or hosted agent.
+             */
+            Plane?: 'local' | 'remote' | null;
+            /** Remote reasoning target configuration. */
+            Remote?: {
+                Kind?: 'model' | 'hostedAgent' | null;
+                Ref?: string | null;
+                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+                MaxOutputTokens?: number | null;
+            } | null;
         } | null;
     } | null;
 
@@ -49897,6 +50599,26 @@ export interface MJAIModelEntity_IAIModelConfiguration {
             /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
             SilenceDurationMs?: number | null;
         } | null;
+
+        /**
+         * Reasoning plane settings — dual delegation configuration.
+         * Absent defaults to 'local'.
+         */
+        Reasoning?: {
+            /**
+             * Which plane handles reasoning:
+             * - 'local' — application/agent loop (default).
+             * - 'remote' — delegated to remote model or hosted agent.
+             */
+            Plane?: 'local' | 'remote' | null;
+            /** Remote reasoning target configuration. */
+            Remote?: {
+                Kind?: 'model' | 'hostedAgent' | null;
+                Ref?: string | null;
+                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+                MaxOutputTokens?: number | null;
+            } | null;
+        } | null;
     } | null;
 
     /** Vision knobs. Reserved. */
@@ -50310,6 +51032,534 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
     }
     set SupportsEffortLevel(value: boolean | null) {
         this.Set('SupportsEffortLevel', value);
+    }
+}
+
+
+/**
+ * Provider-specific configuration JSON for a persona-to-vendor binding.
+ *
+ * Stored as JSON in `MJ: AI Persona Vendors.VendorSettings`. CodeGen emits a typed
+ * `VendorSettingsObject` accessor on `MJAIPersonaVendorEntity` returning `MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null`.
+ *
+ * Contains vendor-native voice/avatar tuning parameters (e.g., ElevenLabs voice settings)
+ * moved out of generic base classes into their concrete vendor binding.
+ */
+
+export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
+    /** Vendor-native tuning, keyed by the vendor on AIPersonaVendor.VendorID.
+     *  Typed members are those common enough to be worth compile-time checking. */
+    stability?: number;
+    similarityBoost?: number;
+    style?: number;
+    useSpeakerBoost?: boolean;
+    speed?: number;
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: AI Persona Vendors - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPersonaVendor
+ * * Base View: vwAIPersonaVendors
+ * * @description Concrete vendor and modality binding for a persona, mapping the abstract persona to a provider-specific wire asset identifier (voice ID or avatar ID).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Persona Vendors')
+export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityType> {
+    /**
+    * Loads the MJ: AI Persona Vendors record from the database
+    * @param ID: string - primary key value to load the MJ: AI Persona Vendors record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIPersonaVendorEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PersonaID
+    * * Display Name: Persona
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    */
+    get PersonaID(): string {
+        return this.Get('PersonaID');
+    }
+    set PersonaID(value: string) {
+        this.Set('PersonaID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    */
+    get VendorID(): string {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: APIName
+    * * Display Name: API Asset Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Vendor-specific asset name or identifier passed over the wire (e.g., alloy, sage, an ElevenLabs voice_id, or a HeyGen avatar_id).
+    */
+    get APIName(): string {
+        return this.Get('APIName');
+    }
+    set APIName(value: string) {
+        this.Set('APIName', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Inactive
+    *   * Preview
+    * * Description: Current operational status of this vendor persona binding.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Inactive' | 'Preview' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Inactive' | 'Preview') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Selection priority when multiple vendor bindings qualify for a given persona and modality. Higher numbers indicate higher priority.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: VendorSettings
+    * * Display Name: Vendor Settings
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPersonaVendorEntity_IAIPersonaVendorSettings
+    * * Description: Provider-specific configuration JSON (e.g., ElevenLabs stability, similarityBoost, style, useSpeakerBoost).
+    */
+    get VendorSettings(): string | null {
+        return this.Get('VendorSettings');
+    }
+    set VendorSettings(value: string | null) {
+        this.Set('VendorSettings', value);
+    }
+
+    private _VendorSettingsObject_cached: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null | undefined = undefined;
+    private _VendorSettingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for VendorSettings — returns parsed JSON as MJAIPersonaVendorEntity_IAIPersonaVendorSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get VendorSettingsObject(): MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null {
+        const raw = this.VendorSettings;
+        if (raw !== this._VendorSettingsObject_lastRaw) {
+            this._VendorSettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._VendorSettingsObject_lastRaw = raw;
+        }
+        return this._VendorSettingsObject_cached!;
+    }
+    set VendorSettingsObject(value: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.VendorSettings = raw;
+        this._VendorSettingsObject_cached = value;
+        this._VendorSettingsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Persona
+    * * Display Name: Persona Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Persona(): string {
+        return this.Get('Persona');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+}
+
+
+/**
+ * Nuanced style and presentation descriptors for an AI Persona.
+ *
+ * Stored as JSON in `MJ: AI Personas.StyleDescriptors`. CodeGen emits a typed
+ * `StyleDescriptorsObject` accessor on `MJAIPersonaEntity` returning `MJAIPersonaEntity_IAIPersonaStyleDescriptors | null`.
+ *
+ * Reserved extension point for fine-grained style descriptors (e.g. cadence, emphasis, prosody quirks)
+ * beyond the primary Tone and SpeakingStyle scalar columns.
+ */
+export interface MJAIPersonaEntity_IAIPersonaStyleDescriptors {
+    /** Prose for GPT-Live's `Interruption policy:` prompt block (gpt-live-1.md §1). */
+    interruptionPolicy?: string;
+    /** Prose for GPT-Live's `Backchannel policy:` prompt block. */
+    backchannelPolicy?: string;
+    /** Open extension point for additional fine-grained style descriptors. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: AI Personas - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPersona
+ * * Base View: vwAIPersonas
+ * * @description Abstract, provider-agnostic presentational identity (voice and/or visual appearance) that AI agents can assume when interacting with users.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Personas')
+export class MJAIPersonaEntity extends BaseEntity<MJAIPersonaEntityType> {
+    /**
+    * Loads the MJ: AI Personas record from the database
+    * @param ID: string - primary key value to load the MJ: AI Personas record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIPersonaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Persona Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the persona, its characteristics, and intended personality.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PerceivedGender
+    * * Display Name: Perceived Gender
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The perceived gender presentation of this persona (e.g., Male, Female, Neutral, Non-Binary).
+    */
+    get PerceivedGender(): string | null {
+        return this.Get('PerceivedGender');
+    }
+    set PerceivedGender(value: string | null) {
+        this.Set('PerceivedGender', value);
+    }
+
+    /**
+    * * Field Name: Locale
+    * * Display Name: Locale
+    * * SQL Data Type: nvarchar(20)
+    * * Description: BCP 47 language and locale tag primarily associated with this persona (e.g., en-US, es-ES).
+    */
+    get Locale(): string | null {
+        return this.Get('Locale');
+    }
+    set Locale(value: string | null) {
+        this.Set('Locale', value);
+    }
+
+    /**
+    * * Field Name: PerceivedAgeRangeMin
+    * * Display Name: Perceived Age Range Min
+    * * SQL Data Type: int
+    * * Description: Approximate minimum perceived age for this persona, enabling numerical filtering.
+    */
+    get PerceivedAgeRangeMin(): number | null {
+        return this.Get('PerceivedAgeRangeMin');
+    }
+    set PerceivedAgeRangeMin(value: number | null) {
+        this.Set('PerceivedAgeRangeMin', value);
+    }
+
+    /**
+    * * Field Name: PerceivedAgeRangeMax
+    * * Display Name: Perceived Age Range Max
+    * * SQL Data Type: int
+    * * Description: Approximate maximum perceived age for this persona, enabling numerical filtering.
+    */
+    get PerceivedAgeRangeMax(): number | null {
+        return this.Get('PerceivedAgeRangeMax');
+    }
+    set PerceivedAgeRangeMax(value: number | null) {
+        this.Set('PerceivedAgeRangeMax', value);
+    }
+
+    /**
+    * * Field Name: Tone
+    * * Display Name: Tone
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Core tonal quality for this persona (e.g., Warm, Authoritative, Enthusiastic, Calm). Injected into prompt context for conversational delivery.
+    */
+    get Tone(): string | null {
+        return this.Get('Tone');
+    }
+    set Tone(value: string | null) {
+        this.Set('Tone', value);
+    }
+
+    /**
+    * * Field Name: SpeakingStyle
+    * * Display Name: Speaking Style
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Stylistic manner of speaking (e.g., Casual and conversational, Direct and concise, Academic).
+    */
+    get SpeakingStyle(): string | null {
+        return this.Get('SpeakingStyle');
+    }
+    set SpeakingStyle(value: string | null) {
+        this.Set('SpeakingStyle', value);
+    }
+
+    /**
+    * * Field Name: StyleDescriptors
+    * * Display Name: Style Descriptors
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPersonaEntity_IAIPersonaStyleDescriptors
+    * * Description: Additional descriptive keywords or JSON metadata capturing nuanced personality and presentation traits.
+    */
+    get StyleDescriptors(): string | null {
+        return this.Get('StyleDescriptors');
+    }
+    set StyleDescriptors(value: string | null) {
+        this.Set('StyleDescriptors', value);
+    }
+
+    private _StyleDescriptorsObject_cached: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null | undefined = undefined;
+    private _StyleDescriptorsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for StyleDescriptors — returns parsed JSON as MJAIPersonaEntity_IAIPersonaStyleDescriptors.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get StyleDescriptorsObject(): MJAIPersonaEntity_IAIPersonaStyleDescriptors | null {
+        const raw = this.StyleDescriptors;
+        if (raw !== this._StyleDescriptorsObject_lastRaw) {
+            this._StyleDescriptorsObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleDescriptorsObject_lastRaw = raw;
+        }
+        return this._StyleDescriptorsObject_cached!;
+    }
+    set StyleDescriptorsObject(value: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleDescriptors = raw;
+        this._StyleDescriptorsObject_cached = value;
+        this._StyleDescriptorsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: PreviewAudioURL
+    * * Display Name: Preview Audio URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to a sample audio file demonstrating this persona's voice.
+    */
+    get PreviewAudioURL(): string | null {
+        return this.Get('PreviewAudioURL');
+    }
+    set PreviewAudioURL(value: string | null) {
+        this.Set('PreviewAudioURL', value);
+    }
+
+    /**
+    * * Field Name: PreviewImageURL
+    * * Display Name: Preview Image URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to a preview avatar image for this persona.
+    */
+    get PreviewImageURL(): string | null {
+        return this.Get('PreviewImageURL');
+    }
+    set PreviewImageURL(value: string | null) {
+        this.Set('PreviewImageURL', value);
+    }
+
+    /**
+    * * Field Name: PreviewVideoURL
+    * * Display Name: Preview Video URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to a preview video demonstrating this persona's visual animation or avatar.
+    */
+    get PreviewVideoURL(): string | null {
+        return this.Get('PreviewVideoURL');
+    }
+    set PreviewVideoURL(value: string | null) {
+        this.Set('PreviewVideoURL', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: BuiltIn
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BuiltIn
+    *   * Cloned
+    *   * Custom
+    * * Description: Origin of this persona: BuiltIn (provided by system/catalog), Custom (user-defined), or Cloned (derived/voice-cloned).
+    */
+    get Source(): 'BuiltIn' | 'Cloned' | 'Custom' {
+        return this.Get('Source');
+    }
+    set Source(value: 'BuiltIn' | 'Cloned' | 'Custom') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this persona is currently active and available for selection.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
     }
 }
 
@@ -51175,6 +52425,8 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     /**
     * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
     * * EffortLevel: This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * * InputUnitsUsed: Input units used must be greater than or equal to zero to ensure usage is not recorded as a negative value.
+    * * OutputUnitsUsed: The number of output units used cannot be negative, ensuring accurate tracking of resource usage.
     * * Table-Level: This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
     * * Table-Level: This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
     * @public
@@ -51184,6 +52436,8 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     public override Validate(): ValidationResult {
         const result = super.Validate();
         this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateInputUnitsUsedGreaterThanOrEqualToZero(result);
+        this.ValidateOutputUnitsUsedGreaterThanOrEqualToZero(result);
         this.ValidateCompletedAtNotBeforeRunAt(result);
         this.ValidateTokensUsedEqualsPromptPlusCompletion(result);
         result.Success = result.Success && (result.Errors.length === 0);
@@ -51200,6 +52454,40 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
     	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
     		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100 if provided.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * Input units used must be greater than or equal to zero to ensure usage is not recorded as a negative value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.InputUnitsUsed != null && this.InputUnitsUsed < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InputUnitsUsed",
+    			"Input units used must be greater than or equal to zero.",
+    			this.InputUnitsUsed,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The number of output units used cannot be negative, ensuring accurate tracking of resource usage.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.OutputUnitsUsed != null && this.OutputUnitsUsed < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"OutputUnitsUsed",
+    			"Output units used must be greater than or equal to 0.",
+    			this.OutputUnitsUsed,
+    			ValidationErrorType.Failure
+    		));
     	}
     }
 
@@ -90132,6 +91420,49 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Form Chrome Rules entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that if the target kind is 'Relationship', a related entity is specified and the contribution key is left empty. Conversely, if the target kind is 'Contribution', a contribution key must be provided and the related entity must be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTargetKindDependencies(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that if the target kind is 'Relationship', a related entity is specified and the contribution key is left empty. Conversely, if the target kind is 'Contribution', a contribution key must be provided and the related entity must be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetKindDependencies(result: ValidationResult) {
+    	if (this.TargetKind === "Relationship") {
+    		if (this.RelatedEntityID == null || this.ContributionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"TargetKind",
+    				"When Target Kind is 'Relationship', Related Entity ID must be provided and Contribution Key must be empty.",
+    				this.TargetKind,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.TargetKind === "Contribution") {
+    		if (this.ContributionKey == null || this.RelatedEntityID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"TargetKind",
+    				"When Target Kind is 'Contribution', Contribution Key must be provided and Related Entity ID must be empty.",
+    				this.TargetKind,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**

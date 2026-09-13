@@ -17831,7 +17831,18 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=Eleven Labs",
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
             "DriverClass": "ElevenLabsRealtime",
-            "APIName": "MJ Realtime Co-Agent",
+            "APIName": null,
+            "ModelConfiguration": {
+              "Realtime": {
+                "Reasoning": {
+                  "Plane": "remote",
+                  "Remote": {
+                    "Kind": "hostedAgent",
+                    "Ref": "MJ Realtime Co-Agent"
+                  }
+                }
+              }
+            },
             "Priority": 0,
             "Status": "Active",
             "SupportedResponseFormats": "Any",
@@ -17842,8 +17853,8 @@
             "ID": "12ED40AE-7660-44FF-9158-CC162A8EC4CB"
           },
           "sync": {
-            "lastModified": "2026-06-16T01:17:10.583Z",
-            "checksum": "79458e967f6bad62f7a7c7b4fe025064fa48d9cb79365e6d9241d9e81d1a3d5a"
+            "lastModified": "2026-09-11T18:26:10.438Z",
+            "checksum": "1f9235e732d0d1e928a538395a66b452d83f41f307d46fdff85843a18fd0471a"
           }
         }
       ]
@@ -17964,7 +17975,18 @@
             "VendorID": "@lookup:MJ: AI Vendors.Name=Inworld",
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider",
             "DriverClass": "InworldRealtime",
-            "APIName": "anthropic/claude-sonnet-4-6",
+            "APIName": "inworld-realtime",
+            "ModelConfiguration": {
+              "Realtime": {
+                "Reasoning": {
+                  "Plane": "remote",
+                  "Remote": {
+                    "Kind": "model",
+                    "Ref": "anthropic/claude-sonnet-4-6"
+                  }
+                }
+              }
+            },
             "MaxInputTokens": 128000,
             "Priority": 0,
             "Status": "Active",
@@ -17976,8 +17998,8 @@
             "ID": "AA0D147C-1D4B-4581-BD9A-8F55BAB8DC70"
           },
           "sync": {
-            "lastModified": "2026-06-16T01:17:10.640Z",
-            "checksum": "46e070718c4c1d6caecfe2a1796c4c88ebff9395cf4a980199fd145e23104de1"
+            "lastModified": "2026-09-11T18:26:10.465Z",
+            "checksum": "858b461fd0ed15e31279ef67141634add0423297d8f78e019bcbd02960c987d6"
           }
         }
       ]
@@ -23138,6 +23160,127 @@
     "sync": {
       "lastModified": "2026-09-10T17:40:33.754Z",
       "checksum": "c342b464e136f911bc0400a79e00240daa7d5160d48ee515e89cbfe8ad0aa083"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT-Live 1",
+      "PowerRank": 14,
+      "Description": "OpenAI's GPT-Live 1 speech-to-speech realtime model. Features native full-duplex conversational audio with dual delegation (local and remote reasoning planes) over raw WebSocket and SIP, supporting PCM16, G.711 μ-law, and A-law formats with per-minute billing ($0.05/min).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Realtime",
+      "IsActive": true,
+      "SpeedRank": 10,
+      "CostRank": 5,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "F3431AC6-C079-4866-9F46-A2F38E5A57EB"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:10.511Z",
+            "checksum": "4c36fe1d06911fb5186661acf8a5c6e0774e82d8b49fe2bd22b181ce78f636b9"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILiveRealtime",
+            "APIName": "gpt-live-1",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "29B5A4BC-C201-4341-B60E-C3E929E4E513"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:10.530Z",
+            "checksum": "79018d295810b843d44e85aa24d229a5bc213930a7edb5dfb4fd5458e1bf523d"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-09-11T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Minutes",
+            "InputPricePerUnit": 0.05,
+            "OutputPricePerUnit": 0,
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Minute",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-Live 1 per-minute audio list pricing: $0.05 per minute of audio session duration."
+          },
+          "primaryKey": {
+            "ID": "847D106C-19EB-4034-92BC-15B158C3CB12"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:10.561Z",
+            "checksum": "e4e7f9ee4f3e748571e0a86665c29f0d089abb3e24b6dc8d0e5dcad6fd05e6cb"
+          }
+        }
+      ],
+      "MJ: AI Model Modalities": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Input",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "FF0725A1-20F5-4138-B22B-2CF2CF5A873A"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:10.586Z",
+            "checksum": "e62690b66a41bf9d5d5bd30218d3c45f05062f347770a683d15135dca97f803a"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Output",
+            "IsSupported": true
+          },
+          "primaryKey": {
+            "ID": "3D66FDBF-0DAA-40C4-B549-136A6AB75EA2"
+          },
+          "sync": {
+            "lastModified": "2026-09-11T18:26:10.599Z",
+            "checksum": "16dd2415bd0f49e0bd34d574f77c77aa96912cbdf9218f57d322995db6f5574a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "51F8EF42-316F-41CB-81E9-A63996AD90F7"
+    },
+    "sync": {
+      "lastModified": "2026-09-11T18:26:10.296Z",
+      "checksum": "2f15dc0b913fa23cfa395c278048ceeee97896b3541e3d6c27b0b1da7652ada5"
     }
   }
 ]

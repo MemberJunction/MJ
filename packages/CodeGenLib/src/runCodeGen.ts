@@ -25,7 +25,7 @@ import { AngularClientGeneratorBase } from './Angular/angular-codegen';
 import { CreateNewUserBase } from './Misc/createNewUser';
 import { MJGlobal } from '@memberjunction/global';
 import { ActionSubClassGeneratorBase } from './Misc/action_subclasses_codegen';
-import { RemoteOperationGeneratorBase } from './Misc/remote_operations_codegen';
+import { RemoteOperationGeneratorBase, resolveRemoteOperationSchema } from './Misc/remote_operations_codegen';
 import { MJRemoteOperationEntity } from '@memberjunction/core-entities';
 import { SQLLogging } from './Misc/sql_logging';
 import { CodeGenConnection, CodeGenDatabaseProvider, DataSourceResult as ProviderDataSourceResult, resolveCodeGenDatabaseProvider } from './Database/codeGenDatabaseProvider';
@@ -523,8 +523,20 @@ export class RunCodeGenBase {
       }
 
       startSpinner('Running system integrity checks...');
-      await SystemIntegrityBase.RunIntegrityChecks(conn, true);
-      succeedSpinner('System integrity checks completed');
+      const integrityResults = await SystemIntegrityBase.RunIntegrityChecks(conn, true);
+      const integrityFailures = integrityResults.filter((r) => !r.Success);
+      if (integrityFailures.length > 0) {
+        failSpinner(`System integrity checks FAILED: ${integrityFailures.length} check(s) failed`);
+        pipelineSuccess = false;
+        for (const failure of integrityFailures) {
+          const msg = `Integrity check '${failure.Name}' failed: ${failure.Message}`;
+          logError(msg);
+          reporter.note(msg);
+          this.commandFailures.push({ context: 'INTEGRITY_CHECK', message: msg });
+        }
+      } else {
+        succeedSpinner('System integrity checks completed');
+      }
 
       const afterCommands = commands('AFTER');
       if (afterCommands && afterCommands.length > 0) {
@@ -840,10 +852,7 @@ export class RunCodeGenBase {
       // Remote Operations — emit the typed BaseRemotableOperation subclass for each MJ: Remote Operations row.
       // Two output targets, parallel to the entity-subclass split: `CoreRemoteOperations` (MJ core ops, shipped
       // in @memberjunction/core-entities) and `RemoteOperations` (downstream/user ops, their GeneratedEntities).
-      // NOTE: ops have no SchemaName, so there is no automatic core/non-core PARTITION (the entity split keys on
-      // SchemaName === mjCoreSchema). Each configured target therefore receives the full op set; in practice a
-      // repo configures exactly one (this repo: CoreRemoteOperations only). A per-op core/non-core marker — the
-      // SchemaName-equivalent — is the open decision needed to let a single DB route ops to both targets.
+      // Remote operations are scoped to includeSchemas / excludeSchemas and partitioned between core and non-core.
       const coreRemoteOpsDir = outputDir('CoreRemoteOperations', false);
       const nonCoreRemoteOpsDir = outputDir('RemoteOperations', false);
       if (coreRemoteOpsDir || nonCoreRemoteOpsDir) {
@@ -851,16 +860,74 @@ export class RunCodeGenBase {
           { EntityName: 'MJ: Remote Operations', ResultType: 'entity_object' },
           currentUser,
         );
-        const remoteOps = remoteOpsResult.Results ?? [];
+        const allRemoteOps = remoteOpsResult.Results ?? [];
+
+        const allCandidateSchemas = Array.from(new Set([
+          ...md.Entities.map((e) => e.SchemaName),
+          ...(configInfo.includeSchemas ?? []),
+          ...(configInfo.excludeSchemas ?? []),
+        ])).filter(Boolean);
+
+        const opsWithSchema = allRemoteOps.map((op) => ({
+          op,
+          schema: resolveRemoteOperationSchema(op, md.Entities, allCandidateSchemas, mjCoreSchema),
+        }));
+
+        // Filter operations by excludedSchemaNames (compiled includeSchemas/excludeSchemas scope)
+        // and by includeSchemas (if explicitly configured).
+        const inScopeOpsWithSchema = opsWithSchema.filter(({ schema }) => {
+          const key = schemaKey(schema);
+          if (excludedSchemaNames.includes(key)) {
+            return false;
+          }
+          if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
+            const includeKeys = configInfo.includeSchemas.map((s) => schemaKey(s));
+            if (!includeKeys.includes(key)) {
+              return false;
+            }
+          }
+          return true;
+        });
+
+        const excludedOpsCount = allRemoteOps.length - inScopeOpsWithSchema.length;
+        if (excludedOpsCount > 0) {
+          const excludedBySchema = opsWithSchema
+            .filter(({ schema }) => {
+              const key = schemaKey(schema);
+              if (excludedSchemaNames.includes(key)) return true;
+              if (configInfo.includeSchemas && configInfo.includeSchemas.length > 0) {
+                return !configInfo.includeSchemas.map((s) => schemaKey(s)).includes(key);
+              }
+              return false;
+            })
+            .reduce((acc, { schema }) => {
+              const s = schema.trim() || '(none)';
+              acc[s] = (acc[s] || 0) + 1;
+              return acc;
+            }, {} as Record<string, number>);
+          const details = Object.entries(excludedBySchema)
+            .map(([s, count]) => `${s}: ${count}`)
+            .join(', ');
+          logStatus(`Excluded ${excludedOpsCount} remote operation(s) from code generation by schema: ${details}`);
+        }
+
+        const coreRemoteOps = inScopeOpsWithSchema
+          .filter(({ schema }) => schemaKey(schema) === schemaKey(mjCoreSchema))
+          .map(({ op }) => op);
+
+        const nonCoreRemoteOps = inScopeOpsWithSchema
+          .filter(({ schema }) => schemaKey(schema) !== schemaKey(mjCoreSchema))
+          .map(({ op }) => op);
+
         const remoteOpsGenerator = MJGlobal.Instance.ClassFactory.CreateInstance<RemoteOperationGeneratorBase>(RemoteOperationGeneratorBase)!;
         for (const target of [
-          { dir: coreRemoteOpsDir, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
-          { dir: nonCoreRemoteOpsDir, label: 'Remote Operation', phase: 'generateRemoteOperations' },
+          { dir: coreRemoteOpsDir, ops: coreRemoteOps, label: 'CORE Remote Operation', phase: 'generateRemoteOperationsCore' },
+          { dir: nonCoreRemoteOpsDir, ops: nonCoreRemoteOps, label: 'Remote Operation', phase: 'generateRemoteOperations' },
         ]) {
           if (!target.dir) continue;
           if (isVerbose) startSpinner(`Generating ${target.label} typed bases...`);
           const ok = await reporter.phase(target.phase, () =>
-            remoteOpsGenerator.generateRemoteOperations(remoteOps, target.dir!),
+            remoteOpsGenerator.generateRemoteOperations(target.ops, target.dir!),
           );
           if (!ok) {
             failSpinner(`Error generating ${target.label} code`);

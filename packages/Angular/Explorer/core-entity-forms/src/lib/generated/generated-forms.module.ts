@@ -34,6 +34,7 @@ import { MJAIAgentModelFormComponent } from "./Entities/MJAIAgentModel/mjaiagent
 import { MJAIAgentNoteFormComponent } from "./Entities/MJAIAgentNote/mjaiagentnote.form.component";
 import { MJAIAgentNoteTypeFormComponent } from "./Entities/MJAIAgentNoteType/mjaiagentnotetype.form.component";
 import { MJAIAgentPermissionFormComponent } from "./Entities/MJAIAgentPermission/mjaiagentpermission.form.component";
+import { MJAIAgentPersonaFormComponent } from "./Entities/MJAIAgentPersona/mjaiagentpersona.form.component";
 import { MJAIAgentPromptFormComponent } from "./Entities/MJAIAgentPrompt/mjaiagentprompt.form.component";
 import { MJAIAgentRelationshipFormComponent } from "./Entities/MJAIAgentRelationship/mjaiagentrelationship.form.component";
 import { MJAIAgentRequestFormComponent } from "./Entities/MJAIAgentRequest/mjaiagentrequest.form.component";
@@ -64,10 +65,13 @@ import { MJAIModelArchitectureFormComponent } from "./Entities/MJAIModelArchitec
 import { MJAIModelCostFormComponent } from "./Entities/MJAIModelCost/mjaimodelcost.form.component";
 import { MJAIModelFormComponent } from "./Entities/MJAIModel/mjaimodel.form.component";
 import { MJAIModelModalityFormComponent } from "./Entities/MJAIModelModality/mjaimodelmodality.form.component";
+import { MJAIModelPersonaFormComponent } from "./Entities/MJAIModelPersona/mjaimodelpersona.form.component";
 import { MJAIModelPriceTypeFormComponent } from "./Entities/MJAIModelPriceType/mjaimodelpricetype.form.component";
 import { MJAIModelPriceUnitTypeFormComponent } from "./Entities/MJAIModelPriceUnitType/mjaimodelpriceunittype.form.component";
 import { MJAIModelTypeFormComponent } from "./Entities/MJAIModelType/mjaimodeltype.form.component";
 import { MJAIModelVendorFormComponent } from "./Entities/MJAIModelVendor/mjaimodelvendor.form.component";
+import { MJAIPersonaFormComponent } from "./Entities/MJAIPersona/mjaipersona.form.component";
+import { MJAIPersonaVendorFormComponent } from "./Entities/MJAIPersonaVendor/mjaipersonavendor.form.component";
 import { MJAIPromptCategoryFormComponent } from "./Entities/MJAIPromptCategory/mjaipromptcategory.form.component";
 import { MJAIPromptFormComponent } from "./Entities/MJAIPrompt/mjaiprompt.form.component";
 import { MJAIPromptModelFormComponent } from "./Entities/MJAIPromptModel/mjaipromptmodel.form.component";
@@ -840,6 +844,7 @@ declarations: [
     MJAIAgentModalityFormComponent,
     MJAIModelArchitectureFormComponent,
     MJAIModelPriceTypeFormComponent,
+    MJAIPersonaVendorFormComponent,
     MJAISkillPermissionFormComponent,
     MJAPIScopeFormComponent,
     MJDashboardCategoryLinkFormComponent,
@@ -864,6 +869,7 @@ export class GeneratedForms_SubModule_15 { }
 @NgModule({
 declarations: [
     MJAIAgentSearchScopeFormComponent,
+    MJAIModelPersonaFormComponent,
     MJArtifactUseFormComponent,
     MJCommunicationRunFormComponent,
     MJContentTypeFormComponent,
@@ -983,6 +989,7 @@ export class GeneratedForms_SubModule_19 { }
 
 @NgModule({
 declarations: [
+    MJAIAgentPersonaFormComponent,
     MJAIModalityFormComponent,
     MJAISkillSearchScopeFormComponent,
     MJCompanyIntegrationRunDetailFormComponent,
@@ -1011,6 +1018,7 @@ export class GeneratedForms_SubModule_20 { }
 declarations: [
     MJAIAgentClientToolFormComponent,
     MJAIAgentStepPathFormComponent,
+    MJAIPersonaFormComponent,
     MJActionExecutionLogFormComponent,
     MJCompanyIntegrationSyncWatermarkFormComponent,
     MJComponentLibraryLinkFormComponent,

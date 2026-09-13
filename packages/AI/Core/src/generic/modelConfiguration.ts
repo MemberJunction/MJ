@@ -59,6 +59,37 @@ export interface RealtimeTurnDetectionSettings {
     SilenceDurationMs?: number;
 }
 
+/**
+ * Which plane handles reasoning during a realtime session:
+ * - `'local'` — the application/agent loop handles reasoning, Actions, and tool results (MJ default).
+ * - `'remote'` — the model delegates reasoning to a remote model or hosted agent backend.
+ */
+export type RealtimeReasoningPlane = 'local' | 'remote';
+
+/**
+ * Configuration for remote reasoning delegation.
+ */
+export interface RealtimeRemoteReasoning {
+    /** What the remote reference denotes. `model` = Live/Inworld; `hostedAgent` = ElevenLabs. */
+    Kind?: 'model' | 'hostedAgent';
+    /** 'gpt-5.6-terra' | 'anthropic/claude-sonnet-4-6' | 'MJ Realtime Co-Agent'. */
+    Ref?: string;
+    /** Reasoning effort level for supported models. */
+    Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+    /** Maximum output tokens for the remote reasoning pass. */
+    MaxOutputTokens?: number;
+}
+
+/**
+ * Realtime reasoning settings controlling dual delegation.
+ */
+export interface RealtimeReasoningSettings {
+    /** Absent = 'local'. Session-creation-time only — NOT runtime-switchable. */
+    Plane?: RealtimeReasoningPlane;
+    /** Remote reasoning target when Plane is 'remote'. */
+    Remote?: RealtimeRemoteReasoning;
+}
+
 /** The `Realtime` section of {@link AIModelConfiguration} — knobs the realtime drivers consume. */
 export interface RealtimeModelConfigurationSection {
     /**
@@ -67,6 +98,12 @@ export interface RealtimeModelConfigurationSection {
      * and the runtime override — the catalog supplies the default, agents/apps/callers refine it.
      */
     TurnDetection?: RealtimeTurnDetectionSettings;
+
+    /**
+     * Reasoning plane settings — dual delegation configuration.
+     * Absent defaults to 'local'.
+     */
+    Reasoning?: RealtimeReasoningSettings;
 }
 
 /**
