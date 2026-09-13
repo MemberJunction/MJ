@@ -2226,9 +2226,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
         // Mark user message as complete
         await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
       } else {
-        // A post-ACK disconnect means the first run may still be executing on this
-        // detail — do not start a second run on the same conversationDetailId.
-        if (agentFailureDisposition(subResult).status === 'In-Progress') {
+        // Only a genuine failure earns a retry. A post-ACK disconnect means the first run
+        // may still be executing on this detail, and an Awaiting-Input run is parked on the
+        // user — re-invoking on the same conversationDetailId in either case starts a second
+        // run against a live one, and for the awaiting run it throws away the question the
+        // agent is waiting to have answered.
+        if (agentFailureDisposition(subResult).status !== 'Error') {
           await this.applyAgentFailureToDetail(agentResponseMessage, userMessage, agentName, subResult);
           return;
         }
@@ -2836,6 +2839,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * invokeSubAgent; once that returns, the watch observes the detail until the
    * server writes a terminal status (MaxTimePerRun).
    *
+   * A run in AwaitingFeedback/Paused is not a failure at all — it is alive and parked
+   * on this user. It only reaches here because the envelope says `success: false`, and
+   * because such a run usually carries no ErrorMessage it used to render as
+   * "❌ failed — Unknown error": a verdict the server never returned. That branch
+   * surfaces the agent's question and completes the bubble instead.
+   *
    * Always completes the user message — the user turn finished regardless of
    * what the agent is doing.
    */
@@ -2847,6 +2856,20 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     failedVerb = 'failed',
   ): Promise<void> {
     const disposition = agentFailureDisposition(result);
+    if (disposition.status === 'Awaiting-Input') {
+      // Complete, not Error: the turn is over from the UI's point of view (the timer must
+      // stop) while the run itself stays alive server-side. `result` is passed through so
+      // any ResponseForm the agent attached to its question still renders. AgentStateService
+      // keeps the run in its active set until the user's reply resumes it.
+      await this.updateConversationDetail(
+        agentResponseMessage,
+        disposition.message || `**${agentName}** needs more information to continue — please reply with details.`,
+        'Complete',
+        result ?? undefined,
+      );
+      await this.updateConversationDetail(userMessage, userMessage.Message, 'Complete');
+      return;
+    }
     if (disposition.status === 'In-Progress') {
       await this.updateConversationDetail(
         agentResponseMessage,

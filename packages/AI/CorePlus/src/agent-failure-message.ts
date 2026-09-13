@@ -4,7 +4,21 @@
  */
 export type AgentFailureSource = {
     errorMessage?: string | null;
-    agentRun?: { ErrorMessage?: string | null } | null;
+    agentRun?: {
+        ErrorMessage?: string | null;
+        /**
+         * The persisted AIAgentRun status. Widened to `string` on purpose: this module
+         * is the arbiter for results arriving off the wire, where the value is whatever
+         * the server wrote, and a literal union here would reject a run carrying a status
+         * this build does not know about instead of letting the checks below decide.
+         */
+        Status?: string | null;
+        /**
+         * The agent's own last message. When the run is awaiting a human this is the
+         * question it is waiting on — not an error.
+         */
+        Message?: string | null;
+    } | null;
     /**
      * True when the fire-and-forget mutation returned an ACK before the
      * transport died. False when the request never left the browser (or the
@@ -58,18 +72,55 @@ export function isDisconnectWhileAgentMayStillBeRunning(
     );
 }
 
+/**
+ * AIAgentRun statuses that mean the run is ALIVE and parked on a human, not failed.
+ *
+ * A run in either state has `success: false` on the envelope — the turn did not
+ * complete — so every failure path sees it. It is not a failure: the server is
+ * waiting for the user to answer, and the run resumes when they do.
+ */
+export const AGENT_RUN_AWAITING_HUMAN_STATUSES: readonly string[] = ['AwaitingFeedback', 'Paused'];
+
+/**
+ * True when the run exists and its persisted status says it is waiting on the user.
+ *
+ * Checked against the run's own Status rather than the error text: the status is
+ * what the server actually reported, and an awaiting run usually carries no error
+ * message at all — which is exactly how it ended up rendered as
+ * "failed — Unknown error".
+ */
+export function isAgentRunAwaitingHuman(result: AgentFailureSource): boolean {
+    const status = result?.agentRun?.Status;
+    return typeof status === 'string' && AGENT_RUN_AWAITING_HUMAN_STATUSES.includes(status);
+}
+
 export type AgentFailureDisposition =
+    /** Transport died after the ACK; the server may still finish this run. */
     | { status: 'In-Progress'; message: string }
+    /**
+     * The run is alive and waiting on the user. `message` is the agent's own question
+     * (`agentRun.Message`), or `''` when the run recorded none — callers supply their
+     * own prompt copy in that case, since the agent's display name lives in the UI layer.
+     */
+    | { status: 'Awaiting-Input'; message: string }
+    /** A real failure. `message` is never empty. */
     | { status: 'Error'; message: string };
 
 /**
- * Decide whether a failed `ExecuteAgentResult` should keep the conversation
- * detail In-Progress (server may still complete) or paint Error.
+ * Decide what a non-successful `ExecuteAgentResult` means for the conversation detail:
+ * the run is waiting on the user (Awaiting-Input), the server may still complete it
+ * (In-Progress), or it genuinely failed (Error).
+ *
+ * The awaiting check runs FIRST and is decided by the run's status, which outranks any
+ * guess made from error text.
  */
 export function agentFailureDisposition(
     result: AgentFailureSource,
     fallback?: string
 ): AgentFailureDisposition {
+    if (isAgentRunAwaitingHuman(result)) {
+        return { status: 'Awaiting-Input', message: result?.agentRun?.Message?.trim() ?? '' };
+    }
     const message = agentFailureMessage(result, fallback);
     if (isDisconnectWhileAgentMayStillBeRunning(message, result)) {
         return { status: 'In-Progress', message };
