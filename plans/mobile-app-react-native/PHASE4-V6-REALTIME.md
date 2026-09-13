@@ -242,6 +242,48 @@ DOM tests) and verify Explorer voice still works before mobile consumes it. If y
 not touch Explorer's critical path, the fallback is a mobile-side adapter that duplicates the
 orchestration — I would build it, but I want it on record as the worse outcome.
 
+### 🚩 PROPOSED CORE REFACTOR #2 — free `ConversationAttachmentService` from the storage SDKs
+
+**Proposal only. Not started. Needs approval.** Found while implementing G2.
+
+`ConversationAttachmentService` (`packages/AI/Engine/src/services/ConversationAttachmentService.ts`)
+is **859 lines with zero Angular and zero DOM references**. It owns everything a client needs for
+attachments: limit validation, the inline-vs-MJStorage decision via the agent's threshold, modality
+resolution, thumbnail generation, content URLs for AI consumption, and delete-with-cleanup.
+
+It is unusable from React Native for exactly one reason:
+
+```ts
+import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';   // line 30
+```
+
+`@memberjunction/storage` depends on `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`,
+`@azure/identity`, `@azure/storage-blob`, `dropbox` and more. Statically importing it drags every
+cloud SDK into the bundle — unacceptable in a mobile app, and several of them will not run under
+Hermes at all. The service also uses `Buffer` in the storage path, which Hermes does not provide.
+
+**The shape is identical to the realtime extraction**: a genuinely portable service made
+host-specific by one dependency that only *some* callers need.
+
+**Proposed fix** — the same seam pattern:
+
+1. Keep the decision logic (validate, classify, choose inline vs storage, build the row, the inline
+   branch) free of storage imports. None of it touches a blob.
+2. Put blob operations behind an `IAttachmentBlobStore` seam: `Upload`, `Download`, `GetDownloadUrl`,
+   `Delete`.
+3. The server binds it to `FileStorageEngine`; a browser or RN client binds it to the existing
+   `GraphQLFileStorageClient`; a client that only supports inline attachments binds nothing, and the
+   storage branch reports a clear "not available on this host" instead of failing to import.
+
+**Consequence if not done:** every non-server host re-implements the attachment rules, and they
+drift — which is already visible, since `@memberjunction/ng-conversations` carries its own 494-line
+`conversation-attachment.service.ts` alongside this one.
+
+**Mobile does not block on this.** G2 ships the inline path, which is what a `UI`-role user can
+actually do (they have `CanCreate` on `MJ: Conversation Detail Attachments` but not on `MJ: Files`),
+reusing `ConversationUtility` for the decisions. Large-attachment support on mobile is what this
+refactor would unlock.
+
 ### Further coupling to watch for (propose, don't do)
 
 As I proceed I will log any other primitive that is portable-in-principle but Angular-bound, and
