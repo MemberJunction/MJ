@@ -469,9 +469,16 @@ export abstract class CodeGenDatabaseProvider {
     /**
      * Strips trailing whitespace and statement terminators from a caller-supplied SQL body so
      * it can be embedded in a larger statement (a view definition, a dynamic `EXECUTE` string).
+     *
+     * A backwards scan rather than `/[\s;]+$/`: the body comes from configuration, and that
+     * pattern backtracks quadratically on a long whitespace run that isn't at the end.
      */
     protected trimStatementTerminator(sql: string): string {
-        return sql.replace(/[\s;]+$/, '');
+        let end = sql.length;
+        while (end > 0 && (sql[end - 1] === ';' || /\s/.test(sql[end - 1]))) {
+            end--;
+        }
+        return sql.slice(0, end);
     }
 
     /**

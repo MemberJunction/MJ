@@ -72,6 +72,19 @@ describe('generateCreateOrReplaceViewSQL', () => {
       expect(sql).toBe('CREATE OR ALTER VIEW [acgi].[vwBridge]\nAS\nSELECT 1 AS [One]');
     });
 
+    it('strips a mixed run of trailing terminators and whitespace, keeping everything before it', () => {
+      const sql = provider.generateCreateOrReplaceViewSQL('acgi', 'vwBridge', 'SELECT 1 AS [One] ;\n\t; \r\n');
+      expect(sql.endsWith('SELECT 1 AS [One]')).toBe(true);
+    });
+
+    it('trims a body with a long whitespace run in linear time (no regex backtracking)', () => {
+      const body = `SELECT 1 AS [One]${' '.repeat(200_000)}FROM [acgi].[T]`;
+      const started = Date.now();
+      const sql = provider.generateCreateOrReplaceViewSQL('acgi', 'vwBridge', body);
+      expect(Date.now() - started).toBeLessThan(500);
+      expect(sql.endsWith(body)).toBe(true);
+    });
+
     it('escapes a closing bracket in the schema and view names', () => {
       const sql = provider.generateCreateOrReplaceViewSQL('ac]gi', 'vw]Bridge', 'SELECT 1 AS [One]');
       expect(sql).toContain('CREATE OR ALTER VIEW [ac]]gi].[vw]]Bridge]');
