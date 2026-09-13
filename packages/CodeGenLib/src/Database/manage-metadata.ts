@@ -36,6 +36,7 @@ import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import * as fs from 'fs';
 import path from 'path';
 import { canonicalJSONStringify, deepEqualJSON } from "../Misc/util";
+import { trimTrailingStatementTerminators } from "../Misc/sql_text";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 import { computeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
@@ -965,16 +966,17 @@ export class ManageMetadataBase {
     * All SQL is executed AND logged via LogSQLAndExecute for complete CI/CD traceability.
     * Must run AFTER entities are created.
     */
-   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number }> {
+   protected async processOrganicKeyConfig(pool: CodeGenConnection): Promise<{ success: boolean; createdCount: number; updatedCount: number; failedCount: number }> {
       const config = ManageMetadataBase.getSoftPKFKConfig();
-      if (!config) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (!config) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
       const allOrganicKeys = this.extractOrganicKeysFromConfig(config as Record<string, unknown>);
-      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0 };
+      if (allOrganicKeys.length === 0) return { success: true, createdCount: 0, updatedCount: 0, failedCount: 0 };
 
       const schema = mj_core_schema();
       let createdCount = 0;
       let updatedCount = 0;
+      let failedCount = 0;
 
       for (const tableConfig of allOrganicKeys) {
          // Resolve the owning entity
@@ -1003,11 +1005,13 @@ export class ManageMetadataBase {
                      const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
 
                      const viewSQL = this.dbProvider.generateCreateOrReplaceViewSQL(viewSchema, re.TransitiveView.Name, re.TransitiveView.SQL);
-                     // A view must be the only statement in its SQL Server batch, so the migration file
-                     // needs the provider's separator after it ('' on PostgreSQL, where a GO breaks replay).
+                     // T-SQL requires CREATE [OR ALTER] VIEW to be the ONLY statement in its batch — first as
+                     // well as last — and the metadata DML logged just before it (entity-config UPDATEs, the
+                     // previous key's INSERTs) has no trailing GO. requiresOwnBatch puts the provider's
+                     // separator on both sides in the migration file ('' on PostgreSQL: nothing is added).
                      await this.LogSQLAndExecute(pool, viewSQL,
                         `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`,
-                        false, true, this.dbProvider.BatchSeparator);
+                        false, true, this.dbProvider.BatchSeparator, true);
 
                      // Auto-populate TransitiveObject from the view definition
                      re.TransitiveObject = viewFullName;
@@ -1123,13 +1127,17 @@ export class ManageMetadataBase {
                   logStatus(`    > Organic key "${okConfig.Name}": ${existingRel.recordset.length > 0 ? 'updated' : 'created'} → ${relEntityName} (${isDirect ? 'direct' : 'transitive'})`);
                }
             } catch (err) {
+               // Keep going so one bad key doesn't block the others — but count it: a key that failed
+               // here (bridge-view DDL the database rejected, a refused view drop, …) is missing from
+               // the database, and the run must not report success for it.
+               failedCount++;
                const errMessage = err instanceof Error ? err.message : String(err);
                logError(`    > Organic key config: Failed to process "${okConfig.Name}" on ${ownerEntityName}: ${errMessage}`);
             }
          }
       }
 
-      return { success: true, createdCount, updatedCount };
+      return { success: failedCount === 0, createdCount, updatedCount, failedCount };
    }
 
    /**
@@ -2562,6 +2570,10 @@ export class ManageMetadataBase {
       const organicKeyResult = await this.processOrganicKeyConfig(pool);
       if (organicKeyResult.createdCount > 0 || organicKeyResult.updatedCount > 0) {
          logStatus(`    > Organic keys: ${organicKeyResult.createdCount} created, ${organicKeyResult.updatedCount} updated from config`);
+      }
+      if (!organicKeyResult.success) {
+         logError(`   Error processing organic keys: ${organicKeyResult.failedCount} key(s) failed and were not applied — see the errors above`);
+         bSuccess = false;
       }
 
       // Config-driven base-view materialization — emit the physical table + wrapper view and
@@ -8406,8 +8418,8 @@ WHERE
     * @param isRecurringScript - if set to true tells the logger that the provided SQL represents a recurring script meaning it is something that is executed, generally, for all CodeGen runs. In these cases, the Config settings can result in omitting these recurring scripts from being logged because the configuration environment may have those recurring scripts already set to run after all run-specific migrations get run.
     * @returns - The result of the query execution.
     */
-   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
-      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+   private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO', requiresOwnBatch: boolean = false): Promise<any> {
+      return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator, requiresOwnBatch);
    }
 
    /**
@@ -8436,7 +8448,7 @@ WHERE
    ): Promise<any> {
       const terminated: string[] = [];
       for (const s of statements) {
-         const trimmed = (s ?? '').replace(/[\s;]+$/g, '');
+         const trimmed = trimTrailingStatementTerminators(s ?? '');
          if (trimmed.length === 0) continue;
          terminated.push(`${trimmed};`);
       }

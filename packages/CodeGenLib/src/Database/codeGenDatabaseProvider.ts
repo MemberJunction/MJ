@@ -1,6 +1,7 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo, IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { trimTrailingStatementTerminators } from '../Misc/sql_text';
 
 // ─── CONNECTION ABSTRACTION ──────────────────────────────────────────────────
 
@@ -469,16 +470,10 @@ export abstract class CodeGenDatabaseProvider {
     /**
      * Strips trailing whitespace and statement terminators from a caller-supplied SQL body so
      * it can be embedded in a larger statement (a view definition, a dynamic `EXECUTE` string).
-     *
-     * A backwards scan rather than `/[\s;]+$/`: the body comes from configuration, and that
-     * pattern backtracks quadratically on a long whitespace run that isn't at the end.
+     * Linear time — the body comes from configuration (see Misc/sql_text).
      */
     protected trimStatementTerminator(sql: string): string {
-        let end = sql.length;
-        while (end > 0 && (sql[end - 1] === ';' || /\s/.test(sql[end - 1]))) {
-            end--;
-        }
-        return sql.slice(0, end);
+        return trimTrailingStatementTerminators(sql);
     }
 
     /**

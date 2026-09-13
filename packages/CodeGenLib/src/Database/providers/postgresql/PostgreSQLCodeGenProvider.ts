@@ -470,22 +470,30 @@ SELECT * FROM ${pgDialect.QuoteSchema(schema, tableName)};`;
      * The drop is deliberately **not** `CASCADE`. Unlike a base view, nothing CodeGen generates
      * depends on a config-declared view, so any dependent is user-owned and CodeGen could not
      * restore it — PG refuses the drop (`2BP01`) and the run fails loudly rather than silently
-     * destroying it. Grants on the view are lost on that path; the happy path keeps them.
+     * destroying it. Grants on the view are lost on that path (a NOTICE names the view so an
+     * operator can re-apply them); the happy path keeps them.
      *
      * The body travels inside dollar quotes, which `quoteSQLForExecution` skips — it must be
      * valid PostgreSQL as written, with mixed-case identifiers already double-quoted.
      */
     override generateCreateOrReplaceViewSQL(schema: string, viewName: string, selectSQL: string): string {
+        // The body sits inside BOTH dollar-quoted strings. PostgreSQL ends a dollar-quoted string at
+        // the first reoccurrence of its own tag (no nesting depth), so either tag inside the body
+        // would cut the statement short and run the rest as top-level SQL.
+        const outerTag = '$mj_create_view$';
         const bodyTag = '$mj_view_sql$';
-        if (selectSQL.includes(bodyTag)) {
-            throw new Error(`View body for ${schema}.${viewName} contains the reserved dollar-quote tag ${bodyTag}`);
+        for (const tag of [outerTag, bodyTag]) {
+            if (selectSQL.includes(tag)) {
+                throw new Error(`View body for ${schema}.${viewName} contains the reserved dollar-quote tag ${tag}`);
+            }
         }
         const quotedView = pgDialect.QuoteSchema(schema, viewName);
+        const viewLiteral = `'${`${schema}.${viewName}`.replace(/'/g, "''")}'`;
         const createSQL = `CREATE OR REPLACE VIEW ${quotedView}
 AS
 ${this.trimStatementTerminator(selectSQL)}`;
 
-        return `DO $mj_create_view$
+        return `DO ${outerTag}
 DECLARE
   vsql CONSTANT TEXT := ${bodyTag}${createSQL}${bodyTag};
 BEGIN
@@ -495,7 +503,8 @@ EXCEPTION WHEN invalid_table_definition THEN
   -- No CASCADE: dependents are user-owned, so refuse rather than destroy them.
   DROP VIEW ${quotedView};
   EXECUTE vsql;
-END $mj_create_view$`;
+  RAISE NOTICE 'MJ CodeGen: recreated view % because its column list changed; grants on it were dropped and must be re-applied', ${viewLiteral};
+END ${outerTag}`;
     }
 
     /**

@@ -17,14 +17,14 @@ import { ColumnDefinition, DatabaseDocumentation, ForeignKeyReference, TableDefi
 
 /** OrderLine → Order → Contact: the spoke reaches the hub's organic key in two hops. */
 const path: BridgePath = {
-  spokeSchema: 'acgi',
+  spokeSchema: 'sales',
   spokeTable: 'OrderLine',
-  hubSchema: 'acgi',
+  hubSchema: 'sales',
   hubTable: 'Contact',
   hubKeyField: 'emailAddress',
   hops: [
-    { fromSchema: 'acgi', fromTable: 'OrderLine', fromColumn: 'orderId', toSchema: 'acgi', toTable: 'Order', toColumn: 'id', kind: 'hard' },
-    { fromSchema: 'acgi', fromTable: 'Order', fromColumn: 'contactId', toSchema: 'acgi', toTable: 'Contact', toColumn: 'id', kind: 'hard' },
+    { fromSchema: 'sales', fromTable: 'OrderLine', fromColumn: 'orderId', toSchema: 'sales', toTable: 'Order', toColumn: 'id', kind: 'hard' },
+    { fromSchema: 'sales', fromTable: 'Order', fromColumn: 'contactId', toSchema: 'sales', toTable: 'Contact', toColumn: 'id', kind: 'hard' },
   ],
   pathLength: 2,
   pathConfidence: 1,
@@ -38,9 +38,9 @@ describe('generateBridgeView — identifier quoting per provider', () => {
         'SELECT',
         '    hub.[emailAddress] AS [emailAddress],',
         '    spoke.[id] AS [OrderLine_id]',
-        'FROM [acgi].[OrderLine] spoke',
-        'INNER JOIN [acgi].[Order] t1 ON spoke.[orderId] = t1.[id]',
-        'INNER JOIN [acgi].[Contact] hub ON t1.[contactId] = hub.[id]',
+        'FROM [sales].[OrderLine] spoke',
+        'INNER JOIN [sales].[Order] t1 ON spoke.[orderId] = t1.[id]',
+        'INNER JOIN [sales].[Contact] hub ON t1.[contactId] = hub.[id]',
       ].join('\n'),
     );
   });
@@ -52,17 +52,23 @@ describe('generateBridgeView — identifier quoting per provider', () => {
         'SELECT',
         '    hub."emailAddress" AS "emailAddress",',
         '    spoke."id" AS "OrderLine_id"',
-        'FROM "acgi"."OrderLine" spoke',
-        'INNER JOIN "acgi"."Order" t1 ON spoke."orderId" = t1."id"',
-        'INNER JOIN "acgi"."Contact" hub ON t1."contactId" = hub."id"',
+        'FROM "sales"."OrderLine" spoke',
+        'INNER JOIN "sales"."Order" t1 ON spoke."orderId" = t1."id"',
+        'INNER JOIN "sales"."Contact" hub ON t1."contactId" = hub."id"',
       ].join('\n'),
     );
     expect(sql).not.toMatch(/[[\]]/);
   });
 
+  it('treats an explicitly undefined provider as the SQL Server default', () => {
+    // Callers thread an optional provider through as `{ provider }`; spreading that explicit
+    // undefined over the defaults must not leave the quoter without a platform.
+    expect(generateBridgeView(path, 'id', { provider: undefined }).sql).toContain('FROM [sales].[OrderLine] spoke');
+  });
+
   it('uses backticks on MySQL', () => {
     const { sql } = generateBridgeView(path, 'id', { provider: 'mysql' });
-    expect(sql).toContain('FROM `acgi`.`OrderLine` spoke');
+    expect(sql).toContain('FROM `sales`.`OrderLine` spoke');
     expect(sql).toContain('hub.`emailAddress` AS `emailAddress`');
   });
 
@@ -107,15 +113,19 @@ function createState(): DatabaseDocumentation {
       totalTables: 3,
       totalColumns: 7,
     },
-    database: { name: 'acgi_db', server: 'localhost', analyzedAt: '2026-01-01' },
+    database: { name: 'sales_db', server: 'localhost', analyzedAt: '2026-01-01' },
     phases: { descriptionGeneration: [] },
     schemas: [
       {
-        name: 'acgi',
+        name: 'sales',
         tables: [
           table('Contact', [column('id', true), column('emailAddress', false)], []),
-          table('Order', [column('id', true), column('contactId', false)], [{ schema: 'acgi', table: 'Contact', column: 'contactId', referencedColumn: 'id' }]),
-          table('OrderLine', [column('id', true), column('orderId', false)], [{ schema: 'acgi', table: 'Order', column: 'orderId', referencedColumn: 'id' }]),
+          table(
+            'Order',
+            [column('id', true), column('contactId', false)],
+            [{ schema: 'sales', table: 'Contact', column: 'contactId', referencedColumn: 'id' }],
+          ),
+          table('OrderLine', [column('id', true), column('orderId', false)], [{ schema: 'sales', table: 'Order', column: 'orderId', referencedColumn: 'id' }]),
         ],
         descriptionIterations: [],
       },
@@ -127,7 +137,7 @@ const emailCluster: OrganicKeyCluster = {
   id: 'cluster-email',
   concept: 'email_address',
   normalization: 'LowerCaseTrim',
-  members: [{ schema: 'acgi', table: 'Contact', column: 'emailAddress', participatesInFK: false }],
+  members: [{ schema: 'sales', table: 'Contact', column: 'emailAddress', participatesInFK: false }],
   confidence: 0.95,
   reasoning: 'test fixture',
   maxIntraDistance: 0,
@@ -146,11 +156,11 @@ describe('detectTransitiveBridges — bridge SQL dialect', () => {
 
   it('writes the bridge body in PostgreSQL syntax when the analyzed database is PostgreSQL', () => {
     const sql = spokeSQL('postgresql');
-    expect(sql).toContain('FROM "acgi"."OrderLine" spoke');
+    expect(sql).toContain('FROM "sales"."OrderLine" spoke');
     expect(sql).not.toMatch(/[[\]]/);
   });
 
   it('still defaults to SQL Server syntax when no provider is given', () => {
-    expect(spokeSQL()).toContain('FROM [acgi].[OrderLine] spoke');
+    expect(spokeSQL()).toContain('FROM [sales].[OrderLine] spoke');
   });
 });

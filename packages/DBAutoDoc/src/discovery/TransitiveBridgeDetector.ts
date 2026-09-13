@@ -75,7 +75,9 @@ export function detectTransitiveBridges(
     state: DatabaseDocumentation,
     opts: TransitiveBridgeDetectorOptions = {},
 ): TransitiveBridgeFinding[] {
-    const o = { ...DEFAULTS, ...opts };
+    // `?? DEFAULTS.provider`: runStructuralPhase passes `{ provider }` with an optional provider,
+    // and a spread of an explicit `undefined` would overwrite the default.
+    const o = { ...DEFAULTS, ...opts, provider: opts.provider ?? DEFAULTS.provider };
 
     // ─── 1. Build the hub set from existing organic-key clusters ────────────
     // Each hub is a (schema, table) carrying one or more organic-key match field(s).

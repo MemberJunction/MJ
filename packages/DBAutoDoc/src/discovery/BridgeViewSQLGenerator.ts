@@ -91,7 +91,9 @@ export function generateBridgeView(
     spokePKColumn: string,
     opts: BridgeViewSQLGeneratorOptions = {},
 ): GeneratedBridgeView {
-    const o = { ...DEFAULTS, ...opts };
+    // `?? DEFAULTS.provider`: callers thread an optional provider through as `{ provider }`, and a
+    // spread of an explicit `undefined` would overwrite the default.
+    const o = { ...DEFAULTS, ...opts, provider: opts.provider ?? DEFAULTS.provider };
     const qident = identifierQuoter(o.provider);
     const viewName = buildViewName(o.viewNamePattern, path);
     const schemaName = o.viewSchema || path.spokeSchema;
@@ -160,7 +162,12 @@ function buildViewName(pattern: string, path: BridgePath): string {
     return cleaned;
 }
 
-/** Returns the platform's identifier quoter, doubling the closing delimiter inside a name. */
+/**
+ * Returns the platform's identifier quoter, doubling the closing delimiter inside a name.
+ * Exhaustive on purpose (no `default`): a provider added to `DatabaseConfig['provider']` fails to
+ * compile here instead of silently getting SQL Server brackets, and the caller's default is the only
+ * place a missing provider becomes `'sqlserver'`.
+ */
 function identifierQuoter(provider: BridgeViewProvider): (name: string) => string {
     switch (provider) {
         case 'postgresql':
@@ -169,7 +176,6 @@ function identifierQuoter(provider: BridgeViewProvider): (name: string) => strin
         case 'mysql':
             return (name) => `\`${name.replace(/`/g, '``')}\``;
         case 'sqlserver':
-        default:
             return (name) => `[${name.replace(/]/g, ']]')}]`;
     }
 }
