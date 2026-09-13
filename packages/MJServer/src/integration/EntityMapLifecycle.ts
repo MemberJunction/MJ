@@ -322,3 +322,151 @@ export function decideFieldMapReconcile(
     }
     return plan;
 }
+
+// ── Re-keying: when a connector upgrade changes what identifies a row ────────────────────────
+//
+// A connector release can change an object's primary key — PheedLoop 1.4.6 makes Attendees
+// `code + eventCode` because the object is fetched once per event and an attendee at two events
+// comes back twice with the same `code`.
+//
+// That is not an ordinary schema change. `BaseRESTIntegrationConnector.ToExternalRecord` builds
+// `ExternalID` by joining every IsPrimaryKey field with '|' in Sequence order, so changing the key
+// changes the identity of every row the source will ever send again. Nothing can match a row
+// already stored: the RecordMap is keyed `EntityID|ExternalID`, and the fallback
+// (`MatchEngine.FindByKeyFields`) queries the destination table by key fields that are NULL on
+// rows written before the change. The next sync therefore inserts the whole source ALONGSIDE the
+// rows already there, leaving two copies of everything and nothing to say which is current.
+//
+// So a re-key means the object's stored data has to go, and the source reloaded under the new
+// identity. This is the same reasoning as U10's watermark reset one step further: not just
+// "re-fetch everything", but "re-fetch everything into a table that is not holding rows the
+// re-fetch can never reconcile with".
+
+const ENTITY_RECORD_MAPS = 'MJ: Company Integration Record Maps';
+
+/** A catalog or entity field, as much of one as the key decision needs. */
+export interface KeyCandidateField {
+    Name: string;
+    IsPrimaryKey: boolean | null;
+    Sequence: number | null;
+}
+
+/**
+ * The key that decides identity, in the order identity uses.
+ *
+ * Deliberately NOT `SourceObjectInfo.PrimaryKeyFields`. That is built in
+ * `buildSourceSchemaFromPersistedRows` as `fields.filter(f => f.IsPrimaryKey).map(f => f.Name)`
+ * over `GetIntegrationObjectFields`, which returns rows in load order with NO Sequence sort — so
+ * its order is not the order `ToExternalRecord` joins in, and comparing against it would miss a
+ * reorder and could invent one.
+ */
+export function IdentityKeyFields(fields: ReadonlyArray<KeyCandidateField>): string[] {
+    return fields
+        .filter(f => f.IsPrimaryKey === true)
+        .slice()
+        .sort((a, b) => (a.Sequence ?? 0) - (b.Sequence ?? 0))
+        .map(f => f.Name);
+}
+
+/**
+ * Has the identity changed between the key the tables were BUILT with and the key the catalog
+ * now declares?
+ *
+ * Ordered, not set-based: `code|eventCode` and `eventCode|code` are different identity strings,
+ * so a key that keeps its columns and reorders them strands rows exactly like one that gains a
+ * column.
+ *
+ * Returns false when the built key is EMPTY. That is "we could not read it", not "it had no key" —
+ * an object genuinely without a key never had stable identities to strand, and treating unknown as
+ * empty would re-key every table on a workspace whose entity metadata failed to load.
+ */
+export function DecideRekeyed(builtKey: readonly string[], catalogKey: readonly string[]): boolean {
+    if (builtKey.length === 0) return false;
+    const norm = (s: string) => (s ?? '').trim().toLowerCase();
+    if (builtKey.length !== catalogKey.length) return true;
+    return builtKey.some((n, i) => norm(n) !== norm(catalogKey[i]));
+}
+
+/**
+ * Clear everything that ties a re-keyed object's stored rows to the source, so the next sync
+ * rebuilds it: the record maps, then the rows themselves.
+ *
+ * Set-based, not row-by-row. `BaseEntity.Save()`/`Delete()` is roughly nine serialized round trips
+ * per row, which is fine for a handful and unusable for a table with real data in it — and a
+ * re-key can land on the biggest table a connector has. Same mechanism the engine's own run-history
+ * retention uses (`IntegrationEngine.pruneRunHistory`): the provider's Dialect quotes both the
+ * identifiers and the literals, so one statement is correct on SQL Server and Postgres alike.
+ *
+ * Order matters. Record maps first: if the row delete succeeds and the map delete then fails, the
+ * maps point at rows that no longer exist and the next sync tries to UPDATE them, which fails per
+ * record rather than re-inserting. Maps-first degrades the other way — worst case the rows survive
+ * with no maps, which the next run resolves by re-inserting, i.e. exactly the state we were
+ * heading for anyway.
+ *
+ * Returns the object names actually cleared. A failure is logged and the object is left out rather
+ * than aborting the whole evolution — a table that could not be cleared must not silently look
+ * like one that was.
+ */
+export async function ClearRekeyedObjectData(
+    targets: ReadonlyArray<{
+        ExternalObjectName: string;
+        EntityMapID: string;
+        EntityID: string;
+        SchemaName: string;
+        BaseTable: string;
+    }>,
+    companyIntegrationID: string,
+    contextUser: UserInfo,
+    md: IMetadataProvider,
+): Promise<string[]> {
+    const cleared: string[] = [];
+    if (targets.length === 0) return cleared;
+
+    // DatabaseProviderBase carries Dialect + ExecuteSQL; typed structurally so this module keeps
+    // its existing import surface.
+    const provider = md as unknown as {
+        Dialect?: { QuoteIdentifier(s: string): string; QuoteStringLiteral(s: string): string };
+        ExecuteSQL?: (
+            sql: string, p?: unknown, o?: unknown, u?: UserInfo
+        ) => Promise<unknown>;
+    };
+    const d = provider.Dialect;
+    if (!d || typeof provider.ExecuteSQL !== 'function') {
+        LogError('[EntityMapLifecycle] Cannot clear re-keyed objects: provider exposes no Dialect/ExecuteSQL');
+        return cleared;
+    }
+
+    // Resolved from metadata, never spelled out. A hardcoded `__mj.CompanyIntegrationRecordMap`
+    // would be a second place the schema is declared, and the one place nothing would update.
+    const rmEntity = (md as unknown as { Entities?: ReadonlyArray<{ Name: string; SchemaName: string; BaseTable: string }> })
+        .Entities?.find(e => e.Name === ENTITY_RECORD_MAPS);
+    if (!rmEntity?.SchemaName || !rmEntity.BaseTable) {
+        LogError(`[EntityMapLifecycle] Cannot clear re-keyed objects: '${ENTITY_RECORD_MAPS}' is not registered`);
+        return cleared;
+    }
+    const recordMaps = `${d.QuoteIdentifier(rmEntity.SchemaName)}.${d.QuoteIdentifier(rmEntity.BaseTable)}`;
+
+    const ci = d.QuoteStringLiteral(String(companyIntegrationID));
+    for (const t of targets) {
+        if (!t.SchemaName || !t.BaseTable || !t.EntityID) {
+            LogError(`[EntityMapLifecycle] Skipping re-key clear for ${t.ExternalObjectName}: no resolved table`);
+            continue;
+        }
+        try {
+            await provider.ExecuteSQL(
+                `DELETE FROM ${recordMaps} WHERE ${d.QuoteIdentifier('CompanyIntegrationID')}=${ci} ` +
+                `AND ${d.QuoteIdentifier('EntityID')}=${d.QuoteStringLiteral(String(t.EntityID))}`,
+                undefined, undefined, contextUser
+            );
+            const table = `${d.QuoteIdentifier(t.SchemaName)}.${d.QuoteIdentifier(t.BaseTable)}`;
+            await provider.ExecuteSQL(`DELETE FROM ${table}`, undefined, undefined, contextUser);
+            cleared.push(t.ExternalObjectName);
+        } catch (err) {
+            LogError(
+                `[EntityMapLifecycle] Failed to clear re-keyed object ${t.ExternalObjectName}: ` +
+                `${err instanceof Error ? err.message : String(err)}`
+            );
+        }
+    }
+    return cleared;
+}
