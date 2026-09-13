@@ -67,6 +67,8 @@ import { RegisterRSUProgressBridge } from './integration/RSUProgressBridge.js';
 import { ClientToolRequestManager, AgentRunWatchdog } from '@memberjunction/ai-agents';
 import { SessionJanitor } from './agentSessions/index.js';
 import { StartTaskGraphDispatcher } from './services/StartTaskGraphDispatcher.js';
+import { GetAttachmentService } from '@memberjunction/aiengine';
+import { MJStorageBlobStore } from './services/MJStorageBlobStore.js';
 import { CACHE_INVALIDATION_TOPIC } from './generic/CacheInvalidationResolver.js';
 import { ConnectorFactory, IntegrationEngine, IntegrationSyncOptions } from '@memberjunction/integration-engine';
 import { CronExpressionHelper } from '@memberjunction/scheduling-engine';
@@ -307,7 +309,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
   }
 
-  const setupComplete$ = new ReplaySubject(1);
+  // Bind MJStorage as the conversation-attachment blob store. The attachment service itself no
+// longer imports `@memberjunction/storage` — that dependency made it unusable from any browser or
+// React Native client, which is why the same attachment rules had been reimplemented three times.
+// Binding at module load (rather than inside a startup phase) means no server code path can reach
+// the service before its storage is available; the store is stateless and configures
+// FileStorageEngine lazily on first use, so there is no ordering hazard.
+GetAttachmentService().BlobStore = new MJStorageBlobStore();
+
+const setupComplete$ = new ReplaySubject(1);
   const dbType = getDbType();
   const dataSources: DataSourceInfo[] = [];
 

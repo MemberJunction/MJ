@@ -27,7 +27,6 @@ import {
 } from '@memberjunction/core-entities';
 import { LogError, LogStatus } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
-import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 import {
     ConversationUtility,
     AttachmentType,
@@ -37,6 +36,10 @@ import {
     DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES
 } from '@memberjunction/ai-core-plus';
 import { createBase64DataUrl, parseBase64DataUrl } from '@memberjunction/ai';
+import {
+    AttachmentBlobStoreUnavailableError,
+    type IAttachmentBlobStore,
+} from './IAttachmentBlobStore';
 
 /**
  * Input for adding a new attachment
@@ -100,6 +103,25 @@ export class ConversationAttachmentService {
      * `instance.Provider = providerToUse` before invoking service methods
      * in multi-provider contexts. Falls back to the global default provider when unset.
      */
+    private _blobStore: IAttachmentBlobStore | null = null;
+
+    /**
+     * The blob store backing storage-scale attachments, or `null` when this host supports only
+     * inline ones.
+     *
+     * Bind an implementation once at startup — the server binds MJStorage, a browser or React
+     * Native client can bind a GraphQL-backed one. Leaving it unbound is a supported configuration:
+     * inline attachments (the common case for an end user, who typically cannot write to MJStorage
+     * at all) work without it, and storage-backed operations report that clearly instead of the
+     * package failing to load.
+     */
+    public get BlobStore(): IAttachmentBlobStore | null {
+        return this._blobStore;
+    }
+    public set BlobStore(value: IAttachmentBlobStore | null) {
+        this._blobStore = value;
+    }
+
     public get Provider(): IMetadataProvider {
         return this._defaultProvider ?? Metadata.Provider;
     }
@@ -417,7 +439,9 @@ export class ConversationAttachmentService {
                 }
                 contentUrl = downloadUrl;
             } else {
-                contentUrl = createBase64DataUrl(fileContent.toString('base64'), attachment.MimeType);
+                // `DownloadFileContent` returns base64 directly now — no Buffer conversion, which
+                // is what kept this service usable outside Node.
+                contentUrl = createBase64DataUrl(fileContent, attachment.MimeType);
             }
         } else {
             return null;
@@ -430,80 +454,39 @@ export class ConversationAttachmentService {
     }
 
     /**
-     * Download file content from MJStorage as a Buffer.
+     * Downloads a stored file's content as base64.
      *
-     * @param fileId - The File entity ID
+     * Returns base64 rather than a `Buffer` so this service stays runtime-neutral — `Buffer` is a
+     * Node global, and its presence in a shared signature is what made this class server-only.
+     * Callers that genuinely need bytes convert at their own boundary.
+     *
+     * @param fileId - The `MJ: Files` record id
      * @param contextUser - The current user context
      * @param provider - Optional per-request metadata provider for server isolation
-     * @returns Buffer of file content, or null if unavailable
+     * @returns Base64 content, or null when unavailable or no blob store is bound
      */
-    async DownloadFileContent(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<Buffer | null> {
-        try {
-            const md = this.resolveProvider(provider);
-            const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
-            if (!await file.Load(fileId)) {
-                return null;
-            }
-
-            const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-            if (!await storageProvider.Load(file.ProviderID)) {
-                return null;
-            }
-
-            // Find the FileStorageAccount that links to this provider using cached metadata
-            const matchingAccounts = FileStorageEngine.Instance.GetAccountsByProviderID(file.ProviderID);
-
-            let driver: FileStorageBase;
-            if (matchingAccounts.length > 0) {
-                // Initialize driver with account credentials via FileStorageEngine
-                driver = await FileStorageEngine.Instance.GetDriver(matchingAccounts[0].ID, contextUser);
-            } else {
-                // Fallback: create driver without account credentials (env vars only)
-                driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-                    FileStorageBase,
-                    storageProvider.ServerDriverKey
-                );
-            }
-
-            const objectKey = file.ProviderKey || file.Name;
-            return await driver.GetObject({ fullPath: objectKey });
-        } catch (err) {
-            console.error(`[ConversationAttachmentService] Failed to download file ${fileId}:`, err);
+    async DownloadFileContent(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
+        if (!this._blobStore) {
+            LogError(`[ConversationAttachmentService] ${AttachmentBlobStoreUnavailableError}`);
             return null;
         }
+        return this._blobStore.Download(fileId, contextUser, provider);
     }
 
     /**
-     * Get a pre-authenticated download URL for an MJStorage file.
+     * Gets a pre-authenticated download URL for a stored file.
      *
-     * @param fileId - The File entity ID
+     * @param fileId - The `MJ: Files` record id
      * @param contextUser - The current user context
      * @param provider - Optional per-request metadata provider for server isolation
-     * @returns The download URL or null if unavailable
+     * @returns The URL, or null when unavailable or no blob store is bound
      */
     async GetDownloadUrl(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
-        const md = this.resolveProvider(provider);
-
-        // Load file entity
-        const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
-        if (!await file.Load(fileId)) {
+        if (!this._blobStore) {
+            LogError(`[ConversationAttachmentService] ${AttachmentBlobStoreUnavailableError}`);
             return null;
         }
-
-        // Load storage provider
-        const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-        if (!await storageProvider.Load(file.ProviderID)) {
-            return null;
-        }
-
-        // Get driver and create download URL
-        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-            FileStorageBase,
-            storageProvider.ServerDriverKey
-        );
-
-        const objectKey = file.ProviderKey || file.Name;
-        return driver.CreatePreAuthDownloadUrl(objectKey);
+        return this._blobStore.GetDownloadUrl(fileId, contextUser, provider);
     }
 
     /**
@@ -647,14 +630,10 @@ export class ConversationAttachmentService {
     }
 
     /**
-     * Upload data to MJStorage.
+     * Stores attachment bytes through the bound blob store.
      *
-     * Resolves the storage account using:
-     * 1. Agent's `DefaultStorageAccountID` (account-based, with credentials)
-     * 2. Fallback: Agent's `AttachmentStorageProviderID` (legacy provider-based)
-     *
-     * When an account is resolved, uses `FileStorageEngine.Instance.UploadFile()`
-     * for proper OAuth credential handling.
+     * Account-versus-provider resolution and the `MJ: Files` record belong to the implementation:
+     * the two must not diverge, and only the store knows how its credentials work.
      */
     private async uploadToStorage(
         base64Data: string,
@@ -664,101 +643,36 @@ export class ConversationAttachmentService {
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Promise<{ success: boolean; fileId?: string; error?: string }> {
-        const md = this.resolveProvider(provider);
-
-        // Prefer account-based resolution (new path via FileStorageEngine)
-        const storageAccountId = agent?.DefaultStorageAccountID ?? null;
-        if (storageAccountId) {
-            await FileStorageEngine.Instance.Config(false, contextUser);
-            try {
-                const result = await FileStorageEngine.Instance.UploadFile({
-                    content: Buffer.from(base64Data, 'base64'),
-                    fileName,
-                    mimeType,
-                    contextUser,
-                    storageAccountId,
-                    provider: md,
-                    pathPrefix: `conversation-attachments/${Date.now()}`
-                });
-                return { success: true, fileId: result.FileID };
-            } catch (err) {
-                return { success: false, error: (err as Error).message };
-            }
+        if (!this._blobStore) {
+            return { success: false, error: AttachmentBlobStoreUnavailableError };
         }
-
-        // Legacy fallback: provider-based resolution (no account credentials)
-        const legacyProviderId = agent?.AttachmentStorageProviderID ?? null;
-        if (!legacyProviderId) {
-            return { success: false, error: 'No storage provider configured for attachments' };
-        }
-        const storageProviderEntity = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-        if (!await storageProviderEntity.Load(legacyProviderId)) {
-            return { success: false, error: 'Failed to load storage provider' };
-        }
-        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-            FileStorageBase,
-            storageProviderEntity.ServerDriverKey
+        const result = await this._blobStore.Upload(
+            {
+                FileName: fileName,
+                MimeType: mimeType,
+                Base64Data: base64Data,
+                StorageAccountID: agent?.DefaultStorageAccountID ?? null,
+                StorageProviderID: agent?.AttachmentStorageProviderID ?? null,
+                PathPrefix: `conversation-attachments/${Date.now()}`,
+            },
+            contextUser,
+            provider
         );
-
-        // Determine storage path
-        const objectName = `conversation-attachments/${Date.now()}_${fileName}`;
-
-        // Convert base64 to buffer and upload
-        const buffer = Buffer.from(base64Data, 'base64');
-        const uploaded = await driver.PutObject(objectName, buffer, mimeType);
-        if (!uploaded) {
-            return { success: false, error: 'Failed to upload file to storage' };
-        }
-
-        // Create File entity record
-        const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
-        file.Name = fileName;
-        file.ProviderID = legacyProviderId;
-        file.ContentType = mimeType;
-        file.ProviderKey = objectName;
-        file.Status = 'Uploaded';
-
-        if (!await file.Save()) {
-            await driver.DeleteObject(objectName);
-            return { success: false, error: 'Failed to create file record' };
-        }
-
-        return { success: true, fileId: file.ID };
+        return { success: result.Success, fileId: result.FileID, error: result.Error };
     }
 
     /**
-     * Delete a file from MJStorage
+     * Deletes a stored file's bytes and its `MJ: Files` record through the bound blob store.
+     *
+     * Returns `false` when no store is bound, so the caller leaves the attachment row alone rather
+     * than orphaning it against content it cannot remove.
      */
     private async deleteStorageFile(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
-        const md = this.resolveProvider(provider);
-
-        // Load file entity
-        const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
-        if (!await file.Load(fileId)) {
+        if (!this._blobStore) {
+            LogError(`[ConversationAttachmentService] ${AttachmentBlobStoreUnavailableError}`);
             return false;
         }
-
-        // Load storage provider
-        const storageProvider = await md.GetEntityObject<MJFileStorageProviderEntity>('MJ: File Storage Providers', contextUser);
-        if (!await storageProvider.Load(file.ProviderID)) {
-            return false;
-        }
-
-        // Get driver and delete
-        const driver = MJGlobal.Instance.ClassFactory.CreateInstance<FileStorageBase>(
-            FileStorageBase,
-            storageProvider.ServerDriverKey
-        );
-
-        const objectKey = file.ProviderKey || file.Name;
-        const deleted = await driver.DeleteObject(objectKey);
-
-        if (deleted) {
-            // Delete file record
-            await file.Delete();
-        }
-
-        return deleted;
+        return this._blobStore.Delete(fileId, contextUser, provider);
     }
 
     /**

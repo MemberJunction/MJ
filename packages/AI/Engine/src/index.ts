@@ -1,5 +1,6 @@
 export * from './AIEngine';
 export * from './services/ConversationAttachmentService';
+export * from './services/IAttachmentBlobStore';
 export * from './types/AgentMatchResult';
 export * from './types/ActionMatchResult';
 export * from './types/NoteMatchResult';

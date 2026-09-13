@@ -10,9 +10,11 @@ import {
 } from '@memberjunction/core-entities';
 import {
   ConversationUtility,
+  DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES,
   AttachmentContent,
   AttachmentType
 } from '@memberjunction/ai-core-plus';
+import { GetAttachmentService } from '@memberjunction/aiengine';
 import { MessageAttachment } from '../components/message/message-item.component';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -206,10 +208,36 @@ export class ConversationAttachmentService {
           continue; // Skip creating a ConversationDetailAttachment for artifacts
         }
 
-        // Store inline data for uploaded files
+        // Storage placement is NOT this service's decision. `ConversationUtility.ShouldStoreInline`
+        // owns it — honouring an agent's `InlineStorageThresholdBytes` before the system default —
+        // and it is the same call the server and the mobile app make. This service previously set
+        // `InlineData` unconditionally, so a large image went into a database column instead of
+        // MJStorage, contradicting the entity's own contract that the two are mutually exclusive
+        // and sized.
         if (pending.dataUrl) {
           const base64Data = this.extractBase64FromDataUrl(pending.dataUrl);
-          attachment.InlineData = base64Data;
+          const storeInline = ConversationUtility.ShouldStoreInline(
+            pending.sizeBytes,
+            null,
+            DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES,
+          );
+
+          if (storeInline) {
+            attachment.InlineData = base64Data;
+          } else {
+            const stored = await GetAttachmentService().BlobStore?.Upload(
+              { FileName: pending.fileName, MimeType: pending.mimeType, Base64Data: base64Data },
+              contextUser ?? md.CurrentUser,
+              md,
+            );
+            if (!stored?.Success || !stored.FileID) {
+              rejectionMessages.push(
+                `Attachment "${pending.fileName}" is too large to store inline and could not be uploaded: ${stored?.Error ?? 'storage is not available.'}`,
+              );
+              continue;
+            }
+            attachment.FileID = stored.FileID;
+          }
         }
 
         const saved = await attachment.Save();

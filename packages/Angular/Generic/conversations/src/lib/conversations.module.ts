@@ -101,6 +101,8 @@ import { MJChatHeaderDefaultComponent } from './components/slots/mj-chat-header-
 import { MJChatMessageExtraDefaultComponent } from './components/slots/mj-chat-message-extra-default.component';
 import { MJChatDemonstrationSurfaceDefaultComponent } from './components/slots/mj-chat-demonstration-surface-default.component';
 import { MJChatMessageBubbleDefaultComponent } from './components/slots/mj-chat-message-bubble-default.component';
+import { GetAttachmentService } from '@memberjunction/aiengine';
+import { GraphQLAttachmentBlobStore } from './services/graphql-attachment-blob-store';
 
 // Tree-shaking prevention for interactive-channel CLIENT PLUGINS: they are resolved
 // dynamically through the MJ ClassFactory (keyed by the `MJ: AI Agent Channels` registry's
@@ -247,4 +249,16 @@ const COMPONENTS = [
     RealtimeEvidencePlaybackComponent
   ]
 })
-export class ConversationsModule { }
+export class ConversationsModule {
+  constructor() {
+    // Bind the browser's blob store once the widget is in play. The shared attachment service is
+    // storage-agnostic by design — the server binds MJStorage directly, a browser must go through
+    // MJAPI — and without a binding the service supports inline attachments only.
+    //
+    // Binding in the module constructor rather than at module load keeps it out of the import
+    // graph's side effects, and Angular instantiates the module once.
+    if (!GetAttachmentService().BlobStore) {
+      GetAttachmentService().BlobStore = new GraphQLAttachmentBlobStore();
+    }
+  }
+}

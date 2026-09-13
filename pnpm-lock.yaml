@@ -898,9 +898,6 @@ importers:
       '@memberjunction/global':
         specifier: 6.1.0-edge.6
         version: link:../../MJGlobal
-      '@memberjunction/storage':
-        specifier: 6.1.0-edge.6
-        version: link:../../MJStorage
       dotenv:
         specifier: ^17.2.4
         version: 17.2.4
@@ -6466,6 +6463,9 @@ importers:
       '@memberjunction/ai-realtime-client':
         specifier: 6.1.0-edge.6
         version: link:../../../AI/RealtimeClient
+      '@memberjunction/aiengine':
+        specifier: 6.1.0-edge.6
+        version: link:../../../AI/Engine
       '@memberjunction/conversations-runtime':
         specifier: 6.1.0-edge.6
         version: link:../../../ConversationsRuntime

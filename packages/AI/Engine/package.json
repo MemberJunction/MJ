@@ -25,7 +25,6 @@
     "@memberjunction/ai-core-plus": "6.1.0-edge.6",
     "@memberjunction/ai-engine-base": "6.1.0-edge.6",
     "@memberjunction/ai-vectors-memory": "6.1.0-edge.6",
-    "@memberjunction/storage": "6.1.0-edge.6",
     "dotenv": "^17.2.4",
     "rxjs": "^7.8.2"
   },
