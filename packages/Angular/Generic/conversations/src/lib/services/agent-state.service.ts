@@ -125,8 +125,13 @@ export class AgentStateService implements OnDestroy {
 
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
-      // Valid statuses: Running, Completed, Paused, Failed, Cancelled
-      let filter = `Status IN ('Running', 'Paused')`;
+      // Valid statuses: Running, Paused, AwaitingFeedback, Completed, Failed, Cancelled.
+      //
+      // AwaitingFeedback and Paused are ALIVE — the run is parked waiting on a human, not
+      // finished. Leaving AwaitingFeedback out dropped such a run from the active set on the
+      // very next poll, so the surface stopped tracking a run that is still waiting for the
+      // user's reply and downstream code then treated the absence as a failure.
+      let filter = `Status IN ('Running', 'Paused', 'AwaitingFeedback')`;
 
       if (conversationId) {
         filter += ` AND ConversationID='${conversationId}'`;

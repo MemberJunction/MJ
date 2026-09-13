@@ -1563,7 +1563,14 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   }
 
   /**
-   * Load entity IDs associated with a specific application
+   * Load entity IDs associated with a specific application.
+   *
+   * `IgnoreMaxRows` is required, not an optimization. This set is the membership
+   * filter for the whole surface: an entity missing from it is not merely unlisted,
+   * it is unreachable — the tree hides it and the search box cannot find it. Under
+   * the default row cap an application with more than the cap's worth of entities
+   * silently returns a truncated set, and the UI shows the truncation as fact with
+   * nothing to indicate rows were dropped. Read every row or report nothing.
    */
   private async loadApplicationEntityIds(applicationId: string): Promise<void> {
     this.applicationEntityIds.clear();
@@ -1572,7 +1579,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const result = await rv.RunView<MJApplicationEntityEntity>({
       EntityName: 'MJ: Application Entities',
       ExtraFilter: `ApplicationID = '${applicationId}'`,
-      ResultType: 'entity_object'
+      ResultType: 'entity_object',
+      IgnoreMaxRows: true
     });
 
     if (result.Success && result.Results) {
