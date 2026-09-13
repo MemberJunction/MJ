@@ -79,19 +79,34 @@ export function withoutSensitiveFields<T extends { Name: string }>(fields: Reado
  * refusal can say which ones, rather than only that something was wrong.
  */
 export function sensitiveFieldsInTemplate(templateText: string | null | undefined): string[] {
-    if (!templateText) {
-        return [];
-    }
     const found = new Set<string>();
-    // Nunjucks/Handlebars-style placeholders. The field name is the first identifier
-    // inside the braces; filters and whitespace after it are ignored.
-    const placeholder = /\{\{\s*([A-Za-z0-9_.\-]+)/g;
-    let match: RegExpExecArray | null;
-    while ((match = placeholder.exec(templateText)) !== null) {
-        const token = match[1];
+    for (const token of templatePlaceholderNames(templateText)) {
         if (isSensitiveFieldName(token)) {
             found.add(token);
         }
     }
     return [...found].sort();
+}
+
+/**
+ * Field names referenced by a template's `{{Placeholder}}` tokens, in order of appearance
+ * and including repeats.
+ *
+ * Exported so the field-count cap in `vector-document-rules.ts` parses placeholders the same
+ * way this refusal does. Two parsers that drift apart would mean a template that satisfies
+ * one guard and evades the other.
+ */
+export function templatePlaceholderNames(templateText: string | null | undefined): string[] {
+    if (!templateText) {
+        return [];
+    }
+    // Nunjucks/Handlebars-style placeholders. The field name is the first identifier
+    // inside the braces; filters and whitespace after it are ignored.
+    const placeholder = /\{\{\s*([A-Za-z0-9_.\-]+)/g;
+    const names: string[] = [];
+    let match: RegExpExecArray | null;
+    while ((match = placeholder.exec(templateText)) !== null) {
+        names.push(match[1]);
+    }
+    return names;
 }
