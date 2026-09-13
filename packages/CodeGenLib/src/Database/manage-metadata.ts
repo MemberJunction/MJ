@@ -17,7 +17,7 @@ import { logError, logMessage, logStatus, logWarning, startSpinner, updateSpinne
 import { SQLUtilityBase } from "./sql";
 import { applyIncludeSchemaScope } from "./schema-scope";
 import { buildHealSchemaRoutineParams, getAuthoredExcludeSchemas, snapshotAuthoredExcludeSchemas } from "./heal-schema-params";
-import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
+import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult, isPlausibleEntityName } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
 import {
    applySearchableFieldsCap,
@@ -5870,6 +5870,10 @@ export class ManageMetadataBase {
          if (newEntities && newEntities.length > 0 ) {
             const md = new Metadata() // global-provider-ok: codegen runs offline against a single provider
             const transaction = await pool.beginTransaction();
+            // The in-run list of new entity names is process-static. Names pushed by a batch that is then
+            // rolled back must not survive into the next run of the same process (in-process CodeGen runs
+            // many times per process), or every one of them reads as "taken" and gets a schema suffix.
+            const newEntityNamesBefore = ManageMetadataBase.newEntityList.length;
             try {
                // wrap in a transaction so we get all of it or none of it
                for ( let i = 0; i < newEntities.length; ++i) {
@@ -5879,6 +5883,7 @@ export class ManageMetadataBase {
                await transaction.commit();
             } catch (e) {
                await transaction.rollback();
+               ManageMetadataBase.newEntityList.length = newEntityNamesBefore;
                throw e;
             }
 
@@ -6001,11 +6006,13 @@ export class ManageMetadataBase {
 
    protected async newEntityNameWithAdvancedGeneration(ag: AdvancedGeneration, newEntity: any, currentUser: UserInfo): Promise<string> {
       const result = await ag.generateEntityName(newEntity.TableName, currentUser);
-      if (result?.entityName) {
+      // Checked here as well as inside generateEntityName: a subclass or a stub can return anything, and
+      // a non-name that reaches the INSERT fails it (see createNewEntity's catch for why that used to be silent).
+      if (result && isPlausibleEntityName(result.entityName)) {
          return this.markupEntityName(newEntity.SchemaName, result.entityName);
       }
       else {
-         console.warn('   >>> Advanced Generation Error: LLM returned invalid result, falling back to simple generated entity name');
+         console.warn(`   >>> Advanced Generation Error: LLM returned an unusable entity name for ${newEntity.SchemaName}.${newEntity.TableName}, falling back to simple generated entity name`);
          return this.simpleNewEntityName(newEntity.SchemaName, newEntity.TableName);
       }
    }
@@ -6230,6 +6237,15 @@ export class ManageMetadataBase {
          if (errStack) {
             LogError(`   Stack trace: ${errStack}`);
          }
+         // Rethrow so createNewEntities stops, rolls back, and the run fails. Swallowing here let CodeGen
+         // commit a PARTIAL set of new entities and report success: the table whose INSERT failed was simply
+         // absent afterwards, with a log line as the only witness. It has bitten twice — a UQ_Entity_Name
+         // collision (see resolveUniqueEntityName) and an AI-generated name of `-1` that dropped eleven of a
+         // connector's twenty-seven tables while the schema update reported "complete". The transaction in
+         // createNewEntities exists to give "all of it or none of it"; it can only do that if a failure
+         // reaches it. A table that does not QUALIFY (no primary key) is still a skip, not a failure — that
+         // path returns above and never gets here.
+         throw e instanceof Error ? e : new Error(errMsg);
       }
    }
 
