@@ -172,7 +172,19 @@ export class TransactionResolver extends ResolverBase {
                         break;
                     case "Delete":
                         await entity.InnerLoad(pkey);
-                        objectValues.push(entity.GetDataObject());
+                        // AWAITED: GetDataObject() is async, and pushing the un-awaited Promise put
+                        // one into `objectValues` — which is `any[]`, so neither tsc nor a
+                        // floating-promise lint could see it. PrepareReturnValue's Delete branch
+                        // then stringified that Promise, and JSON.stringify(Promise) is "{}", so
+                        // EVERY Delete in a transaction group reported an empty payload, successful
+                        // ones included. Worse than losing the payload: GraphQLDataProvider's Delete
+                        // transaction callback validates the commit with
+                        // `pk.Value !== results[pk.FieldName]`, so "{}" made every key mismatch and
+                        // reported 'Transaction failed to commit' for a delete that DID commit.
+                        // Awaiting costs nothing here — DataObjectParams defaults
+                        // includeRelatedEntityData to false, which guards the method's only awaited
+                        // work, so with no params this is GetAll() plus a filter loop.
+                        objectValues.push(await entity.GetDataObject());
                         entity.TransactionGroup = tg;
                         if (!await entity.Delete()) {
                             refusals.push(describeRefusedItem(index, item, entity));

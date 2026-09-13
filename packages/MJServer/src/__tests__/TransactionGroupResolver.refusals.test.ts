@@ -91,6 +91,12 @@ interface FakeEntityOptions {
     /** True for the not-dirty case: accepted, but nothing to write, so nothing enrols either. */
     clean?: boolean;
     refusalMessage?: string;
+    /**
+     * What `InnerLoad()` puts on the record, mirroring a real load of an existing row. A `Delete`
+     * reports the row it removed, so without this the fake has nothing to report and a test of
+     * `ResultsJSON` could not tell an empty payload from a correct one.
+     */
+    loadedValues?: Record<string, unknown>;
 }
 
 /**
@@ -109,8 +115,21 @@ class FakeEntity {
     public SetMany(values: Record<string, unknown>): void {
         this.values = { ...this.values, ...values };
     }
-    public async InnerLoad(): Promise<boolean> { return true; }
-    public GetDataObject(): Record<string, unknown> { return { ...this.values }; }
+    public async InnerLoad(): Promise<boolean> {
+        if (this.options.loadedValues) {
+            this.values = { ...this.options.loadedValues };
+        }
+        return true;
+    }
+    /**
+     * `async`, because the REAL one is: `BaseEntity.GetDataObject` returns `Promise<any>`
+     * (`baseEntity.ts:3657`). This fake used to be synchronous, and that divergence is precisely
+     * why this suite could not see that `ExecuteTransactionGroup` was calling it without `await` —
+     * against a sync fake the resolver stored a plain object and `JSON.stringify` produced real
+     * data that production never produced. A fake that is more correct than production hides the
+     * bug it exists to catch.
+     */
+    public async GetDataObject(): Promise<Record<string, unknown>> { return { ...this.values }; }
     public async GetDataObjectJSON(): Promise<string> { return JSON.stringify(this.values); }
 
     public async Save(): Promise<boolean> { return this.write(); }
@@ -231,6 +250,28 @@ describe('ExecuteTransactionGroup — rows refused server-side (issue #4309)', (
 
         expect(result.Success).toBe(true);
         expect(group.SubmitCalled).toBe(true);
+    });
+
+    it("returns the deleted row's data in ResultsJSON, not an empty object", async () => {
+        // `GetDataObject()` is async, and ExecuteTransactionGroup pushed it WITHOUT awaiting, so
+        // PrepareReturnValue's Delete branch stringified a Promise. `JSON.stringify(Promise)` is
+        // "{}" — no throw, no type error (the array is `any[]`), just a well-formed empty payload
+        // on every Delete a transaction group performs, successful ones included.
+        //
+        // It is not only a lost payload: GraphQLDataProvider's own Delete transaction callback
+        // validates the commit with `pk.Value !== results[pk.FieldName]`, so an empty object makes
+        // every key mismatch and reports 'Transaction failed to commit' for a delete that DID
+        // commit.
+        const deletedRow = { ID: 'a0000000-0000-0000-0000-000000000001', UserID: 'u1', RoleID: 'r1' };
+        const entities = [new FakeEntity('MJ: User Roles', { accepts: true, loadedValues: deletedRow })];
+        const { context } = buildContext(entities);
+
+        const result = await new TransactionResolver().ExecuteTransactionGroup(
+            buildGroupInput(1, TransactionOperationType.Delete), context
+        );
+
+        expect(result.Success).toBe(true);
+        expect(JSON.parse(result.ResultsJSON[0])).toEqual(deletedRow);
     });
 
     it('still reports success when accepted rows were CLEAN — an empty group is not itself a refusal', async () => {
