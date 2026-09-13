@@ -89,13 +89,43 @@ export interface FKGraphWalkerOptions {
      * Default true.
      */
     pruneCycles?: boolean;
+    /**
+     * Hard ceiling on the number of BFS states held at once for a single
+     * (spoke → hub) search. See {@link bfsPaths} for why an unbounded frontier
+     * is not a theoretical concern.
+     */
+    maxFrontier?: number;
+    /** Hard ceiling on the paths retained per (spoke → hub) search. */
+    maxPathsPerPair?: number;
+    /** Hard ceiling on the paths retained across the whole walk. */
+    maxTotalPaths?: number;
 }
 
 const DEFAULTS: Required<FKGraphWalkerOptions> = {
     maxHops: 3,
     minSoftFKConfidence: 0.6,
     pruneCycles: true,
+    // THE NUMBERS ARE CEILINGS, NOT TUNING. They exist so that a graph nobody
+    // anticipated cannot take the process down; a schema that hits one is a
+    // schema whose bridge set was never going to be usable anyway, and the
+    // truncation is reported rather than swallowed.
+    maxFrontier: 50_000,
+    maxPathsPerPair: 50,
+    maxTotalPaths: 25_000,
 };
+
+/** What a bounded walk found, and whether a bound stopped it finding more. */
+export interface BridgePathWalkResult {
+    paths: BridgePath[];
+    /** True when any cap (frontier, per-pair, or total) truncated the search. */
+    truncated: boolean;
+    /** Which caps fired, for logging. Empty when the walk ran to completion. */
+    truncationReasons: Array<'frontier' | 'pathsPerPair' | 'totalPaths'>;
+    /** (spoke, hub) pairs actually searched, after skipping pairs with no graph edge. */
+    pairsSearched: number;
+    /** (spoke, hub) pairs skipped because the spoke has no FK edge at all. */
+    pairsSkipped: number;
+}
 
 /**
  * Build the join graph and find all bridge paths from each spoke candidate to
@@ -114,22 +144,75 @@ export function findBridgePaths(
     spokes: Array<{ schema: string; table: string }>,
     opts: FKGraphWalkerOptions = {},
 ): BridgePath[] {
-    const o = { ...DEFAULTS, ...opts };
+    return walkBridgePaths(edges, hubs, spokes, opts).paths;
+}
+
+/**
+ * The bounded walk. {@link findBridgePaths} is the historical shape (paths only);
+ * this one also reports whether a bound truncated the search, which is the
+ * difference between "this schema has no bridges" and "we stopped looking".
+ */
+export function walkBridgePaths(
+    edges: FKEdge[],
+    hubs: Array<{ schema: string; table: string; keyField: string }>,
+    spokes: Array<{ schema: string; table: string }>,
+    opts: FKGraphWalkerOptions = {},
+): BridgePathWalkResult {
+    // `{ ...DEFAULTS, ...opts }` would let an explicitly-undefined option UNSET a ceiling, which
+    // is the one way a caller could accidentally un-bound the walk. Only defined keys override.
+    const o: Required<FKGraphWalkerOptions> = { ...DEFAULTS };
+    for (const key of Object.keys(DEFAULTS) as Array<keyof FKGraphWalkerOptions>) {
+        const supplied = opts[key];
+        if (supplied !== undefined) {
+            (o[key] as typeof supplied) = supplied;
+        }
+    }
 
     // Build the adjacency map keyed by "schema.table".
     const adjacency = buildAdjacency(edges, o.minSoftFKConfidence);
 
+    const reasons = new Set<'frontier' | 'pathsPerPair' | 'totalPaths'>();
     const out: BridgePath[] = [];
+    let pairsSearched = 0;
+    let pairsSkipped = 0;
+
+    // GATE ON THE GRAPH, NOT ON THE INPUTS. An empty adjacency means no table is
+    // joined to any other, so every BFS below would dequeue its start node, find
+    // no neighbours and return nothing — `hubs × spokes` times.
+    if (adjacency.size === 0) {
+        return { paths: [], truncated: false, truncationReasons: [], pairsSearched: 0, pairsSkipped: hubs.length * spokes.length };
+    }
+
+    outer:
     for (const hub of hubs) {
         const hubKey = `${hub.schema}.${hub.table}`;
+        // A hub with no edge of its own is unreachable from every spoke.
+        if (!adjacency.has(hubKey)) {
+            pairsSkipped += spokes.length;
+            continue;
+        }
         for (const spoke of spokes) {
             const spokeKey = `${spoke.schema}.${spoke.table}`;
             if (spokeKey === hubKey) continue;
+            // A spoke with no edge of its own cannot reach anything. Skipping it here is
+            // what turns "one BFS per hub × EVERY TABLE IN THE DATABASE" back into one
+            // BFS per hub × every table that is actually joined to something.
+            if (!adjacency.has(spokeKey)) {
+                pairsSkipped++;
+                continue;
+            }
+            pairsSearched++;
             // BFS from spoke → hub.
-            const paths = bfsPaths(adjacency, spokeKey, hubKey, o.maxHops, o.pruneCycles);
-            for (const p of paths) {
+            const search = bfsPaths(adjacency, spokeKey, hubKey, o.maxHops, o.pruneCycles, o.maxFrontier, o.maxPathsPerPair);
+            if (search.frontierTruncated) reasons.add('frontier');
+            if (search.pathsTruncated) reasons.add('pathsPerPair');
+            for (const p of search.paths) {
                 if (p.length === 0) continue; // self
                 if (p.length === 1) continue; // direct FK already handled by existing relationship system
+                if (out.length >= o.maxTotalPaths) {
+                    reasons.add('totalPaths');
+                    break outer;
+                }
                 out.push(materializeBridgePath(p, hub, spoke));
             }
         }
@@ -139,7 +222,13 @@ export function findBridgePaths(
         if (a.pathLength !== b.pathLength) return a.pathLength - b.pathLength;
         return b.pathConfidence - a.pathConfidence;
     });
-    return out;
+    return {
+        paths: out,
+        truncated: reasons.size > 0,
+        truncationReasons: [...reasons],
+        pairsSearched,
+        pairsSkipped,
+    };
 }
 
 // ─── Adjacency construction ─────────────────────────────────────────────────
@@ -194,21 +283,62 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V): void {
 
 // ─── BFS ────────────────────────────────────────────────────────────────────
 
-/** Path of adjacency edges from `start` to `goal`. Returns empty if none found. */
+/** One bounded BFS: the paths found, and whether a bound stopped the search early. */
+interface BFSResult {
+    paths: AdjacencyEdge[][];
+    /** The frontier hit `maxFrontier`, so some states were never expanded. */
+    frontierTruncated: boolean;
+    /** `maxPaths` paths were found, so the search stopped looking for more. */
+    pathsTruncated: boolean;
+}
+
+/**
+ * Path of adjacency edges from `start` to `goal`, bounded in both frontier size and
+ * result count. Returns empty paths if none found.
+ *
+ * WHY THE BOUNDS AND THE CURSOR ARE NOT MICRO-OPTIMISATION. Three properties compounded
+ * into an out-of-memory kill on a large schema before the phase could emit anything:
+ *
+ *  1. Every enqueued state carried a FRESH `Set<string>` and a FRESH path array, allocated
+ *     per neighbour per dequeued node. On a dense graph with `maxHops` 3 that is
+ *     O(branching³) live Sets, each holding up to `maxHops + 1` strings.
+ *  2. The queue was drained with `Array.shift()`, which is O(n) on a large array, so
+ *     draining it was quadratic on top of the allocation.
+ *  3. Nothing bounded either the queue or the result array.
+ *
+ * The cursor fixes (2) outright. The caps fix (1) and (3) by refusing to grow past a
+ * ceiling and SAYING SO, rather than by silently returning a partial answer. The visited
+ * Set is still copied per state — a path-specific visited set is what `pruneCycles` means,
+ * and a shared one would wrongly prune valid alternate paths — but it can no longer be
+ * copied an unbounded number of times.
+ */
 function bfsPaths(
     adjacency: Map<string, AdjacencyEdge[]>,
     start: string,
     goal: string,
     maxHops: number,
     pruneCycles: boolean,
-): AdjacencyEdge[][] {
-    if (start === goal) return [[]];
-    const queue: { node: string; pathEdges: AdjacencyEdge[]; visited: Set<string> }[] = [
+    maxFrontier: number,
+    maxPaths: number,
+): BFSResult {
+    if (start === goal) return { paths: [[]], frontierTruncated: false, pathsTruncated: false };
+    const queue: ({ node: string; pathEdges: AdjacencyEdge[]; visited: Set<string> } | undefined)[] = [
         { node: start, pathEdges: [], visited: new Set([start]) },
     ];
+    // Index cursor instead of Array.shift(): shift() is O(n) on a large array, which made
+    // draining the queue quadratic in the number of enqueued states.
+    let head = 0;
     const found: AdjacencyEdge[][] = [];
-    while (queue.length > 0) {
-        const { node, pathEdges, visited } = queue.shift()!;
+    let frontierTruncated = false;
+    let pathsTruncated = false;
+    while (head < queue.length) {
+        const { node, pathEdges, visited } = queue[head]!;
+        // Release the slot as we pass it. An index cursor alone keeps every state ever enqueued
+        // reachable from the array — including its visited Set — which would trade Array.shift()'s
+        // O(n) drain for a retained-memory leak over a long walk. Nulling gives O(1) dequeue AND
+        // lets the frontier bound below actually bound live memory.
+        queue[head] = undefined as unknown as (typeof queue)[number];
+        head++;
         if (pathEdges.length >= maxHops) continue;
         const neighbors = adjacency.get(node) ?? [];
         for (const edge of neighbors) {
@@ -216,15 +346,27 @@ function bfsPaths(
             if (pruneCycles && visited.has(nextNode)) continue;
             const newPath = [...pathEdges, edge];
             if (nextNode === goal) {
+                if (found.length >= maxPaths) {
+                    pathsTruncated = true;
+                    break;
+                }
                 found.push(newPath);
                 continue; // don't extend past the goal
+            }
+            // The live frontier is what is enqueued but not yet expanded. Bounding THAT
+            // rather than total enqueues keeps a long, narrow walk working while still
+            // refusing to hold an unbounded number of visited-set copies at once.
+            if (queue.length - head >= maxFrontier) {
+                frontierTruncated = true;
+                break;
             }
             const nextVisited = new Set(visited);
             nextVisited.add(nextNode);
             queue.push({ node: nextNode, pathEdges: newPath, visited: nextVisited });
         }
+        if (pathsTruncated) break;
     }
-    return found;
+    return { paths: found, frontierTruncated, pathsTruncated };
 }
 
 // ─── Bridge path materialization ────────────────────────────────────────────

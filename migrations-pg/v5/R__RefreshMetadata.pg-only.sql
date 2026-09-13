@@ -53,10 +53,7 @@ UPDATE ${flyway:defaultSchema}."EntityField" ef
 -- The PostgreSQL function already ships (emitted by metadataSupportObjects.ts) with the same
 -- external-entity and scoping guards — it simply was never called from here.
 --
--- The other five routines in the SQL Server file stay deliberately absent:
---   * spRecompileAllViews has no PostgreSQL equivalent — PG freezes a view's column list at
---     creation and there is no sp_refreshview. That gap is real, is tracked separately, and
---     cannot be closed from this file.
+-- The other four routines in the SQL Server file stay deliberately absent:
 --   * spUpdateExistingEntitiesFromSchema / spUpdateExistingEntityFieldsFromSchema /
 --     spSetDefaultColumnWidthWhereNeeded / spUpdateSchemaInfoFromDatabase would rewrite Sequence
 --     from PG physical column order — the cosmetic difference this file's header already states
@@ -66,4 +63,29 @@ UPDATE ${flyway:defaultSchema}."EntityField" ef
 DO $$
 BEGIN
   PERFORM ${flyway:defaultSchema}."spDeleteUnneededEntityFields"('sys,staging');
+END $$;
+
+-- ----------------------------------------------------------------------------
+-- Stale base views — the third thing that drifts on the migrate-only path, and the one this
+-- file previously said it could not touch.
+--
+-- SQL Server's R__RefreshMetadata opens with spRecompileAllViews, which heals every view whose
+-- cached column list went stale when a migration altered a base table. PostgreSQL has no
+-- in-place refresh: a view's targetlist is frozen at creation, CREATE OR REPLACE VIEW may only
+-- append columns, and pg_get_viewdef hands back the already-expanded definition — so the only
+-- repair is DROP + CREATE from the ORIGINAL source, which lives in CodeGen rather than in the
+-- database. That half genuinely cannot be closed from here and is not attempted.
+--
+-- What CAN be closed is the silence. A stale view says nothing until something reads it and
+-- fails with `column "X" does not exist`, which takes BaseEngine loads and `mj sync push` down
+-- with it, far from the migration that caused it. The PostgreSQL spRecompileAllViews (emitted by
+-- metadataSupportObjects.ts, same as the prune above) compares every entity base view against
+-- its base table and RAISEs a WARNING naming each drifted view and the columns it is missing, so
+-- the condition lands in the migrate log at the point it is introduced. The repair it names is
+-- `mj codegen`.
+--
+-- Idempotent and non-fatal: a database with no drifted view warns nothing.
+DO $$
+BEGIN
+  PERFORM ${flyway:defaultSchema}."spRecompileAllViews"('sys,information_schema,staging');
 END $$;

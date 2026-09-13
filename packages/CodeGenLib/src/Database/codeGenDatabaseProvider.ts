@@ -207,6 +207,78 @@ export interface FullTextSearchResult {
 /**
  * Options for generating a base view.
  */
+/**
+ * BASE-VIEW COLUMN EXCLUSION — the run-scoped switch and the name matcher.
+ *
+ * Both providers emit `SELECT <alias>.*` for a base view, so there is no column list to filter:
+ * excluding a column means ENUMERATING columns, for the affected entity only. Everything that
+ * decides which columns those are lives here, shared by both dialects, so the two cannot disagree
+ * about what an exclusion means.
+ *
+ * WHY THE SWITCH IS RUN-SCOPED STATE RATHER THAN A PARAMETER. Whether an exclusion may be applied
+ * at all depends on a DATABASE fact — whether this install's `spDeleteUnneededEntityFields` accepts
+ * a protected-field list, without which the excluded column's `EntityField` row is deleted on the
+ * next run. Base-view generation is synchronous and has no connection, so the fact is probed once
+ * per run (during metadata management, which precedes SQL generation) and recorded here.
+ *
+ * Default DISABLED, so a caller that never probes — a unit test, a `--skipdb` run — emits exactly
+ * what it emitted before, and no code path can turn an exclusion on by accident.
+ */
+let _baseViewExclusionsPermitted = false;
+
+/**
+ * Records whether base-view column exclusions may be applied in this run.
+ * Called by metadata management after probing the prune routine. See {@link excludedBaseViewFieldNames}.
+ */
+export function setBaseViewExclusionsPermitted(permitted: boolean): void {
+    _baseViewExclusionsPermitted = permitted;
+}
+
+/** Whether base-view column exclusions may be applied in this run. */
+export function baseViewExclusionsPermitted(): boolean {
+    return _baseViewExclusionsPermitted;
+}
+
+/** Test-only: restore the default (disabled) between cases. */
+export function resetBaseViewExclusionsPermitted(): void {
+    _baseViewExclusionsPermitted = false;
+}
+
+/**
+ * Normalises the configured exclusion entries into the set of field names excluded for one entity.
+ *
+ * An entry is either a bare `FieldName` (every entity) or `EntityName.FieldName` (that entity only).
+ * Entity names contain spaces and colons in MJ (`MJ: Entities`), field names do not contain dots, so
+ * splitting on the LAST dot is unambiguous.
+ *
+ * Returns an empty set when exclusions are not permitted in this run, so every caller gets the
+ * unchanged `alias.*` behaviour without having to remember to check.
+ */
+export function excludedBaseViewFieldNames(entityName: string, configuredEntries: readonly string[]): ReadonlySet<string> {
+    const out = new Set<string>();
+    if (!_baseViewExclusionsPermitted) {
+        return out;
+    }
+    const entity = entityName.trim().toLowerCase();
+    for (const raw of configuredEntries) {
+        const entry = raw.trim();
+        if (entry.length === 0) {
+            continue;
+        }
+        const lastDot = entry.lastIndexOf('.');
+        if (lastDot <= 0 || lastDot === entry.length - 1) {
+            out.add(entry.toLowerCase());
+            continue;
+        }
+        const qualifiedEntity = entry.slice(0, lastDot).trim().toLowerCase();
+        const field = entry.slice(lastDot + 1).trim().toLowerCase();
+        if (qualifiedEntity === entity && field.length > 0) {
+            out.add(field);
+        }
+    }
+    return out;
+}
+
 export interface BaseViewGenerationContext {
     /** Entity to generate the view for */
     entity: EntityInfo;
@@ -494,6 +566,54 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateTimestampTrigger(entity: EntityInfo): string;
 
+    /**
+     * The base-table part of a base view's SELECT list: `<alias>.*`, or an explicit column list when
+     * this entity has at least one excluded column.
+     *
+     * `<alias>.*` UNLESS SOMETHING IS ACTUALLY EXCLUDED, deliberately. Enumerating columns
+     * unconditionally would rewrite every base view in every tenant on the next CodeGen run for no
+     * behavioural gain, churn a large generated diff, and hand the golden-master suite a rebaseline
+     * that hides any real change inside it. Emitting the star whenever the exclusion set is empty
+     * keeps the output byte-identical for every entity nobody has named — which, with the default
+     * empty config, is all of them.
+     *
+     * The enumerated list is BASE-TABLE columns only, in `Sequence` order. Virtual fields are the
+     * view's own joined columns and are appended by the caller from
+     * {@link BaseViewGenerationContext}; including them here would project them twice.
+     */
+    protected baseTableSelectList(entity: EntityInfo, alias: string, excludedFieldNames: ReadonlySet<string>): string {
+        if (excludedFieldNames.size === 0) {
+            return `${alias}.*`;
+        }
+        const columns = entity.Fields
+            .filter((f) => !f.IsVirtual && !excludedFieldNames.has(f.Name.trim().toLowerCase()))
+            .sort((a, b) => a.Sequence - b.Sequence);
+        // An exclusion that would leave nothing to select is a misconfiguration, not an instruction:
+        // a zero-column view will not create. Fall back to the star and let the run continue.
+        if (columns.length === 0) {
+            return `${alias}.*`;
+        }
+        return columns.map((f) => `${alias}.${this.Dialect.QuoteIdentifier(f.Name)}`).join(',\n    ');
+    }
+
+    /**
+     * The STANDING COST of the full-text objects this dialect emits for {@link entity}, as a single
+     * human-readable line, or `null` when the dialect adds no ongoing cost.
+     *
+     * WHY A METHOD AND NOT A COMMENT. Turning on full-text search for an entity is a metadata flag,
+     * and the flag says nothing about what it buys. What it actually buys differs per dialect and is
+     * charged on every write to the table forever, not at generation time — so the operator who
+     * flipped the flag is not the person who sees the cost. CodeGen is the last point at which the
+     * two are in the same place, which makes it the right place to say it out loud.
+     *
+     * Returning a string rather than logging directly keeps the decision dialect-local and the
+     * emission orchestrator-local, so the call site cannot accidentally describe the wrong dialect's
+     * objects.
+     */
+    fullTextSearchCostDisclosure(_entity: EntityInfo, _searchFields: EntityFieldInfo[]): string | null {
+        return null;
+    }
+
     // ─── INDEXES ─────────────────────────────────────────────────────────
 
     /**
@@ -512,9 +632,12 @@ export abstract class CodeGenDatabaseProvider {
      * {@link isIndexableForeignKey}.
      */
     generateForeignKeyIndexes(entity: EntityInfo): string[] {
-        return entity.Fields
-            .filter((f) => this.isIndexableForeignKey(f))
+        const verified = this.verifiedJoinColumnNames(entity);
+        const indexes = entity.Fields
+            .filter((f) => this.isIndexableForeignKey(f, verified))
             .map((f) => this.formatIndexStatement(entity, f, this.foreignKeyIndexName(entity, f)));
+        const declined = this.unindexableOrganicKeyDisclosure(entity);
+        return declined ? [...indexes, declined] : indexes;
     }
 
     /**
@@ -537,8 +660,93 @@ export abstract class CodeGenDatabaseProvider {
      * (no FK field in the reference database is also a primary key or virtual), so this is a
      * guard against a future case rather than a change in today's generated output.
      */
-    protected isIndexableForeignKey(f: EntityFieldInfo): boolean {
-        return !!f.RelatedEntityID && !f.IsPrimaryKey && !f.IsVirtual;
+    protected isIndexableForeignKey(f: EntityFieldInfo, verifiedJoinColumns?: ReadonlySet<string>): boolean {
+        const isJoinColumn = !!f.RelatedEntityID
+            || (verifiedJoinColumns?.has(f.Name.trim().toLowerCase()) ?? false);
+        return isJoinColumn && !f.IsPrimaryKey && !f.IsVirtual;
+    }
+
+    /**
+     * The columns on THIS entity that MJ itself joins or filters on, over and above its declared
+     * foreign keys, lower-cased for comparison.
+     *
+     * WHY FK METADATA ALONE IS NOT ENOUGH. `RelatedEntityID` is the only thing
+     * {@link isIndexableForeignKey} used to look at, so indexing and FK metadata were the same
+     * decision. On an imported schema they are not: the real joins are on external ids, the inferred
+     * FKs pointing at them get deleted as wrong (that is what the delete is for), and the entity is
+     * then left with a join MJ performs on every parent record and no index for it. Removing bad FK
+     * metadata and getting the indexes you need were mutually exclusive, and the more correct the
+     * metadata became the worse the query plans got.
+     *
+     * TWO SOURCES, both of which are MJ's own verified join declarations rather than inferences:
+     *
+     *  - `EntityRelationship.EntityKeyField` on the relationships this entity parents. That column is
+     *    exactly what `BuildRelationshipViewParams` puts on the left of the predicate for every
+     *    related-records view, once per parent record. It is only ever set for a NON-PK join, so
+     *    every value here is a column that no primary-key index covers.
+     *
+     *  - The match fields of this entity's ACTIVE, `ExactMatch`-normalized organic keys. An organic
+     *    key is a human-verified join over columns that carry no constraint at all.
+     *
+     * ONLY `ExactMatch`, DELIBERATELY. Every other normalization strategy wraps the column in a
+     * function — `LOWER(LTRIM(RTRIM(col)))` for the default `LowerCaseTrim` — and a plain B-tree
+     * index on `col` cannot serve `LOWER(TRIM(col)) = ?` on either dialect. Emitting one would ship
+     * an index that is never used, costs a write on every insert, and reads in a catalog listing
+     * exactly like an index that works. See {@link unindexableOrganicKeyDisclosure} for what is said
+     * instead.
+     */
+    protected verifiedJoinColumnNames(entity: EntityInfo): ReadonlySet<string> {
+        const out = new Set<string>();
+        for (const r of entity.RelatedEntities ?? []) {
+            const keyField = r.EntityKeyField?.trim();
+            if (keyField) {
+                out.add(keyField.toLowerCase());
+            }
+        }
+        for (const ok of entity.OrganicKeys ?? []) {
+            if (ok.Status !== 'Active' || ok.NormalizationStrategy !== 'ExactMatch') {
+                continue;
+            }
+            for (const name of ok.MatchFieldNamesArray) {
+                const trimmed = name.trim();
+                if (trimmed) {
+                    out.add(trimmed.toLowerCase());
+                }
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The generated-SQL note for organic keys this dialect will not index, or `null` when there are
+     * none.
+     *
+     * A normalizing organic key is the one case where the honest answer is "no index, and here is
+     * why". Saying it in the emitted SQL follows {@link generateSoftPrimaryKeyIndex}: the failure
+     * mode both methods exist to end is an index that is silently absent, and swapping one silence
+     * for another leaves the next person with the same puzzle. The fix is an expression index, which
+     * has to match the normalization expression exactly and is therefore a deliberate act, not
+     * something to guess at from metadata.
+     */
+    protected unindexableOrganicKeyDisclosure(entity: EntityInfo): string | null {
+        const normalizing = (entity.OrganicKeys ?? []).filter(
+            (ok) => ok.Status === 'Active' && ok.NormalizationStrategy !== 'ExactMatch' && ok.MatchFieldNamesArray.length > 0
+        );
+        if (normalizing.length === 0) {
+            return null;
+        }
+        const lines = normalizing.map(
+            (ok) => `--   ${ok.Name}: ${ok.MatchFieldNamesArray.join(', ')} (normalization: ${ok.NormalizationStrategy})`
+        );
+        return [
+            `-- ORGANIC KEY INDEXES NOT EMITTED for ${entity.SchemaName}.${entity.BaseTable}`,
+            ...lines,
+            `-- MJ matches these keys through the key's normalization expression, so the predicate is`,
+            `-- LOWER(LTRIM(RTRIM(col))) = ? (or the key's custom expression) rather than col = ?. A plain`,
+            `-- index on the column cannot serve that, so emitting one would cost a write per insert and`,
+            `-- never be used. Add a matching EXPRESSION index by hand, or set the key's`,
+            `-- NormalizationStrategy to ExactMatch and CodeGen will index the columns directly.`,
+        ].join('\n');
     }
 
     /**
