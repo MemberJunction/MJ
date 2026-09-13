@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ContentChildren, TemplateRef, ElementRef, AfterViewChecked, inject } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogError, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON, ArtifactJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureDataSnapshotCommand, AppContextSnapshot, ConversationUtility, OpenResourceCommand } from "@memberjunction/ai-core-plus";
 import { ActionableCommandRequest, UICommandHandlerService } from '../../services/ui-command-handler.service';
@@ -33,7 +33,7 @@ import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunctio
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { ConversationStreamingService } from '../../services/conversation-streaming.service';
+import { ConversationStreamingService, StreamingConnectionStatus } from '../../services/conversation-streaming.service';
 import { ConversationBridgeService } from '../../services/conversation-bridge.service';
 import { AgentClientService } from '@memberjunction/ng-agent-client';
 import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
@@ -914,6 +914,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   // Used to detect when polling transitions from active → no active agents (completion via poll).
   private hadActiveAgents: boolean = false;
 
+  /**
+   * Whether the streaming socket is currently up, as last reported by
+   * `ConversationStreaming.getConnectionStatus$()`.
+   */
+  private streamConnected: boolean = false;
+
+  /**
+   * Whether the socket has EVER been up in this component's lifetime.
+   *
+   * Distinguishes a reconnect from the first connect. The first `'connected'` needs no
+   * catch-up — the conversation-load path reconciles as part of loading — while every
+   * subsequent one means events were published into a dead socket and dropped.
+   */
+  private streamHasConnected: boolean = false;
+
   // Resize state
   private isResizing: boolean = false;
   private startX: number = 0;
@@ -1408,6 +1423,24 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         const message = this.messages.find(m => UUIDsEqual(m.ID, event.conversationDetailId));
         if (message && conversationId) {
           await this.handleMessageCompletion(message, event.agentRunId, conversationId);
+        }
+      });
+
+    // Reconcile on socket RECONNECT.
+    //
+    // `getConnectionStatus$()` existed and had zero subscribers anywhere in the repo. That is
+    // what made this whole area unfixable-looking: a reconciler
+    // ({@link detectAndReconcileAgentRuns}) and a server-side heartbeat (the agent-run
+    // watchdog) both already existed, and neither was REACHABLE after a socket drop — the
+    // reconciler had exactly one caller, inside the conversation-*load* path, and the polling
+    // fallback below needs a falling edge it can only see if it watched the run go active in
+    // the first place. A run that finished while the socket was down therefore displayed
+    // "running" until the user navigated away and back.
+    this.streamingService.getConnectionStatus$()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(status => {
+        if (this.onStreamConnectionStatus(status)) {
+          void this.reconcileAfterStreamReconnect();
         }
       });
 
@@ -4716,6 +4749,95 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     if (this.turnStartRetryHandle) {
       clearTimeout(this.turnStartRetryHandle);
       this.turnStartRetryHandle = null;
+    }
+  }
+
+  /**
+   * Fold one streaming connection-status emission into the connect/reconnect state.
+   *
+   * @returns `true` when this emission is a RE-connect, i.e. the socket has just come back up
+   * after having been up and then down. The first `'connected'` returns `false`: nothing was
+   * missed, and the conversation-load path already reconciled.
+   *
+   * Split out from the subscription so the transition rule is testable without a TestBed —
+   * it is the part that decides whether anything happens at all.
+   */
+  private onStreamConnectionStatus(status: StreamingConnectionStatus): boolean {
+    const nowConnected = status === 'connected';
+    const wasConnected = this.streamConnected;
+    this.streamConnected = nowConnected;
+
+    if (!nowConnected) {
+      return false;
+    }
+    // Already up and still up (the BehaviorSubject re-emitting, a duplicate 'connected'):
+    // nothing changed, nothing was missed.
+    if (wasConnected) {
+      return false;
+    }
+    const isReconnect = this.streamHasConnected;
+    this.streamHasConnected = true;
+    return isReconnect;
+  }
+
+  /**
+   * Catch up on everything the streaming socket could not deliver while it was down.
+   *
+   * Re-reads the newest window before reconciling. That order is load-bearing:
+   * {@link detectAndReconcileAgentRuns} compares message statuses against
+   * `agentRunsByDetailId`, which is a SNAPSHOT taken when the window was loaded — reconciling
+   * without refreshing it would compare the stale rows against themselves and conclude that
+   * nothing had changed, every time.
+   *
+   * Cheap when there is nothing to do: returns immediately unless some AI message is still
+   * showing In-Progress, or is showing Error (which the reconciler can correct when the server
+   * actually completed the run). A quiet conversation costs one array scan per reconnect.
+   */
+  private async reconcileAfterStreamReconnect(): Promise<void> {
+    const conversationId = this.conversationId;
+    if (!conversationId) {
+      return;
+    }
+    const hasUnsettled = this.messages.some(
+      m => m.Role === 'AI' && (m.Status === 'In-Progress' || m.Status === 'Error')
+    );
+    if (!hasUnsettled) {
+      return;
+    }
+
+    const loadToken = this.conversationLoadToken;
+    LogStatusEx({
+      message: `🔌 Streaming reconnected — reconciling agent runs for conversation ${conversationId}`,
+      verboseOnly: true,
+    });
+
+    try {
+      // Newest page only, deliberately: the same choice the poll-completion path makes.
+      // A full-history refresh would replace the loaded window with every row.
+      await this.windowStore.RefreshLatest(this.currentUser);
+      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+
+      const refreshed = this.windowStore.GetSnapshot();
+      this.messages = refreshed.Details;
+      // loadPeripheralData short-circuits when it has already run for this conversation;
+      // clearing the marker is what lets it rebuild agentRunsByDetailId from the fresh window.
+      this.lastLoadedConversationId = null;
+      await this.loadPeripheralData(conversationId, refreshed, loadToken);
+      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+
+      await this.detectAndReconcileAgentRuns(conversationId, loadToken);
+      if (!this.isActiveConversationLoad(conversationId, loadToken)) {
+        return;
+      }
+      this.cdr.detectChanges();
+    } catch (error) {
+      // A failed catch-up must not break the live conversation; the polling fallback and the
+      // next conversation load remain.
+      LogError(`Failed to reconcile agent runs after streaming reconnect: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 

@@ -1,11 +1,28 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { buildCompositeKey, buildPkString } from '../utils/record.util';
 
 interface RelatedEntityData {
   relationship: EntityRelationshipInfo;
+  /**
+   * The related entity's technical NAME. Used to address data — metadata lookups, the
+   * `navigateToRelated` / `openRelatedRecord` payloads — and therefore NOT unique across this
+   * list: two foreign keys pointing at the same entity produce two rows with the same value.
+   */
   relatedEntityName: string;
+  /**
+   * What the user reads. Disambiguated by the foreign-key field when more than one
+   * relationship targets the same entity — see {@link buildRelatedEntityDisplayNames}.
+   */
+  displayName: string;
+  /**
+   * Stable, unique identity for this ROW (the relationship's own ID). The template tracks on
+   * this; tracking on {@link relatedEntityName} gave Angular a duplicate key for two FKs to
+   * one entity (NG0955) and let it reuse the wrong DOM node between them.
+   */
+  key: string;
   count: number;
   isExpanded: boolean;
   records: Record<string, unknown>[];
@@ -129,6 +146,65 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
   }
 
   /**
+   * Label for each related-records grid, in the same order as `relationships`.
+   *
+   * Two foreign keys from one entity to another are two genuinely different record sets — an
+   * Invoice's `BillToContactID` rows are not its `ShipToContactID` rows — but both were
+   * labelled with the bare related-entity name, so the panel showed two identically titled
+   * grids with different counts and nothing to tell them apart. (Collapsing them into one
+   * grid, which the bare label implies, would be data loss.)
+   *
+   * The disambiguation rule is CodeGen's, reused rather than reinvented: an explicit
+   * `DisplayName` on the relationship wins; otherwise use the entity's display name, and when
+   * more than one relationship targets that same entity, append the foreign-key field's own
+   * display name — `Contacts (Bill To Contact)` / `Contacts (Ship To Contact)`. See
+   * `generateRelatedEntityTabName` in `packages/CodeGenLib/src/Angular/angular-codegen.ts`.
+   */
+  private buildRelatedEntityDisplayNames(relationships: EntityRelationshipInfo[]): string[] {
+    // How many relationships in THIS list point at each related entity. Only a collision
+    // needs the suffix; a single relationship reads better without it.
+    // Keyed case-insensitively: UUIDs reach the client in whatever case the provider wrote,
+    // and two spellings of one id would each look like a single, unambiguous relationship.
+    const perTarget = new Map<string, number>();
+    for (const rel of relationships) {
+      const id = (rel.RelatedEntityID ?? '').toLowerCase();
+      perTarget.set(id, (perTarget.get(id) ?? 0) + 1);
+    }
+
+    return relationships.map(rel => {
+      if (rel.DisplayName && rel.DisplayName.trim().length > 0) {
+        return rel.DisplayName;
+      }
+
+      const relatedEntity = this.metadata.Entities.find(e => UUIDsEqual(e.ID, rel.RelatedEntityID));
+      let label = relatedEntity?.DisplayNameOrName ?? rel.RelatedEntity;
+
+      if ((perTarget.get((rel.RelatedEntityID ?? '').toLowerCase()) ?? 0) > 1) {
+        // Strip the SQL brackets CodeGen also strips — `[ContactID]` is how some
+        // schemas spell the join field.
+        const joinField = rel.RelatedEntityJoinField?.trim().replace(/[[\]]/g, '');
+        if (joinField) {
+          const field = relatedEntity?.Fields.find(f => f.Name.trim().toLowerCase() === joinField.toLowerCase());
+          label += ` (${field?.DisplayNameOrName ?? joinField})`;
+        }
+      }
+
+      return label;
+    });
+  }
+
+  /**
+   * Unique row identity for a related-records grid.
+   *
+   * The relationship's own ID, which is unique by construction. Falls back to
+   * entity + join field for a relationship whose ID is somehow absent, because the one thing
+   * this must never do is return the same key for two rows — that is the NG0955 it fixes.
+   */
+  private relationshipRowKey(rel: EntityRelationshipInfo): string {
+    return rel.ID ?? `${rel.RelatedEntityID}|${rel.RelatedEntityJoinField ?? ''}`;
+  }
+
+  /**
    * Load counts for related entities using batch RunViews call
    */
   private async loadRelationshipCounts(): Promise<void> {
@@ -167,11 +243,14 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
       const results = await rv.RunViews(viewParams);
 
       // Map results back to relationship data
+      const displayNames = this.buildRelatedEntityDisplayNames(relationships);
       this.relatedEntities = relationships.map((rel, index) => {
         const result = results[index];
         return {
           relationship: rel,
           relatedEntityName: rel.RelatedEntity,
+          displayName: displayNames[index],
+          key: this.relationshipRowKey(rel),
           count: result.Success ? result.TotalRowCount : 0,
           isExpanded: false,
           records: [],
@@ -181,9 +260,12 @@ export class EntityRecordDetailPanelComponent extends BaseAngularComponent imple
     } catch (error) {
       console.warn('Failed to load relationship counts:', error);
       // Initialize with zero counts on error
-      this.relatedEntities = relationships.map(rel => ({
+      const displayNames = this.buildRelatedEntityDisplayNames(relationships);
+      this.relatedEntities = relationships.map((rel, index) => ({
         relationship: rel,
         relatedEntityName: rel.RelatedEntity,
+        displayName: displayNames[index],
+        key: this.relationshipRowKey(rel),
         count: 0,
         isExpanded: false,
         records: [],

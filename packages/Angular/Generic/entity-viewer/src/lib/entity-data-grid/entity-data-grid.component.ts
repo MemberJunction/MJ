@@ -19,7 +19,7 @@ import { LogError, RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo
 import { UUIDsEqual } from '@memberjunction/global';
 import { EntityActionEngineBase } from '@memberjunction/actions-base';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
-import { buildPkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
+import { buildPkString, buildUsablePkString, canonicalizeColumnFields, computeFieldsList } from '../utils/record.util';
 import {
   MJUserViewEntityExtended,
   ViewInfo,
@@ -1484,9 +1484,27 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     }
   }
 
-  /** Get row ID function for AG Grid */
-  public getRowId = (params: GetRowIdParams<Record<string, unknown>>) =>
-    params.data['__pk'] as string;
+  /**
+   * Get row ID function for AG Grid.
+   *
+   * `__pk` is minted by {@link getRowKey}, which guarantees a non-empty, collision-free value.
+   * The guard here covers the one case that does not come from there: the infinite row model
+   * hands `getRowId` a node whose `data` is not yet loaded, and reading `['__pk']` off that
+   * throws inside ag-Grid's own call stack.
+   */
+  public getRowId = (params: GetRowIdParams<Record<string, unknown>>): string => this.resolveRowId(params);
+
+  /**
+   * The body of {@link getRowId}, on the prototype so it is reachable without constructing the
+   * component (the public member has to stay an arrow field: the template passes it to ag-Grid
+   * as a bare reference, `[getRowId]="getRowId"`, which would lose `this`).
+   */
+  private resolveRowId(params: GetRowIdParams<Record<string, unknown>>): string {
+    const pk = params.data?.['__pk'];
+    return typeof pk === 'string' && pk.length > 0
+      ? pk
+      : `mjrow_pending_${this._syntheticRowKeySeq++}`;
+  }
 
   /** Suppress sort changed events during programmatic updates */
   private suppressSortEvents: boolean = false;
@@ -3729,14 +3747,62 @@ export class EntityDataGridComponent extends BaseAngularComponent implements OnI
     this.cdr.detectChanges();
   }
 
+  /**
+   * Per-row synthetic identity for rows that carry no usable key, so {@link getRowKey} can
+   * never hand ag-Grid the same id twice.
+   *
+   * Keyed on the row object reference, so the same source row keeps the same id across
+   * re-processing (a sort, a filter, a re-render). A WeakMap, so it never retains rows past
+   * their lifetime. Mirrors `query-data-grid.component.ts`, which already solved this.
+   */
+  private _syntheticRowKeys = new WeakMap<object, string>();
+  private _syntheticRowKeySeq = 0;
+
+  /**
+   * Stable identity for one row — the value behind `__pk`, and therefore behind
+   * {@link getRowId}.
+   *
+   * ag-Grid treats `getRowId` as authoritative and SILENTLY MERGES rows that share an id
+   * (raising error #2, *"Duplicate node id … from getRowId"*). Both previous branches could
+   * return the same value for every row in the grid:
+   *
+   * - `buildPkString` formats without validating, so a row whose primary-key column was not
+   *   selected produced the constant `"ID|undefined"`;
+   * - the configured-key-field branch returned `''` whenever that field was absent or null.
+   *
+   * Either way N rows collapsed to one, which reads as a data-loading bug rather than an
+   * identity bug. A key is used only when it is actually a key; otherwise the row gets a
+   * synthetic id, which cannot collide.
+   *
+   * The trade-off matches query-data-grid's: a synthetic id is per-object rather than
+   * value-derived, so a keyless row loses its selection across a REFETCH. Not dropping rows
+   * matters far more than preserving a selection on rows that cannot be addressed anyway.
+   */
   private getRowKey(entity: Record<string, unknown>): string {
     // Build key from EntityInfo PK fields when available
     if (this._entityInfo) {
-      return buildPkString(entity, this._entityInfo);
+      const pk = buildUsablePkString(entity, this._entityInfo);
+      if (pk !== null) {
+        return pk;
+      }
+    } else {
+      // Fallback to configured key field via direct property access
+      const keyValue = entity[this._keyField];
+      if (keyValue != null && String(keyValue).length > 0) {
+        return String(keyValue);
+      }
     }
-    // Fallback to configured key field via direct property access
-    const keyValue = entity[this._keyField];
-    return keyValue != null ? String(keyValue) : '';
+    return this.syntheticRowKey(entity);
+  }
+
+  /** Mint (or reuse) this row object's synthetic id. See {@link _syntheticRowKeys}. */
+  private syntheticRowKey(entity: Record<string, unknown>): string {
+    let key = this._syntheticRowKeys.get(entity);
+    if (!key) {
+      key = `mjrow_${this._syntheticRowKeySeq++}`;
+      this._syntheticRowKeys.set(entity, key);
+    }
+    return key;
   }
 
   private computeRowClasses(index: number, _entity: Record<string, unknown>): string[] {
