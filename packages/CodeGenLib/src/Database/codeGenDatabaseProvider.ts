@@ -699,6 +699,26 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult;
 
+    /**
+     * Whether {@link generateFullTextSearch} embeds the table's PHYSICAL primary-key index name
+     * in the DDL it emits — and therefore whether CodeGen must look that name up before calling it.
+     *
+     * SQL Server: `true` — `CREATE FULLTEXT INDEX … KEY INDEX <name>` names a unique index on the
+     *   table, so the DDL literally cannot be composed without it.
+     * PostgreSQL: `false` (the default) — full-text search there is a GIN index over a `tsvector`
+     *   column, and the search function joins the base view on MJ's DECLARED primary keys. No
+     *   physical index name appears anywhere in the generated SQL.
+     *
+     * The default is `false` so that a provider which does not consume the value does not inherit a
+     * precondition it cannot satisfy. The lookup (`getEntityPrimaryKeyIndexName`) THROWS when the
+     * table has no `PRIMARY KEY` constraint, which is legitimate on PostgreSQL — MJ's primary key
+     * may be a soft key declared only in metadata. Requiring the name unconditionally made full-text
+     * search unreachable on every such table, on a platform that never wanted the name.
+     */
+    get FullTextIndexNeedsPrimaryKeyIndexName(): boolean {
+        return false;
+    }
+
     // ─── RECURSIVE FUNCTIONS (HIERARCHY & ROOT ID) ──────────────────────
 
     /**
