@@ -20,6 +20,7 @@ import { findEntityDirectories } from '../lib/provider-utils';
 import { DeletionAuditor, DeletionAudit } from '../lib/deletion-auditor';
 import { DeletionReportGenerator } from '../lib/deletion-report-generator';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import type { GenericDatabaseProvider, SqlLoggingSession } from '@memberjunction/generic-database-provider';
 
 // Configuration for parallel processing.
@@ -672,7 +673,15 @@ export class PushService {
     let skipped = 0;
     let deferred = 0;
     let errors = 0;
-    
+
+    // A push against an entity whose subclass is not loaded in this process "succeeds" with a
+    // generic BaseEntity and silently skips the entity's custom logic. Say so (#4199).
+    const subclassWarning = describeMissingEntitySubclass(String(entityConfig.entity ?? ''), { dryRun: options.dryRun });
+    if (subclassWarning) {
+      this.warnings.push(subclassWarning);
+      callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
+    }
+
     // Find all JSON files in the directory
     const pattern = entityConfig.filePattern || '*.json';
     const files = await fastGlob(pattern, {

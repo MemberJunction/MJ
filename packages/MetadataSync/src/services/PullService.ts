@@ -5,6 +5,7 @@ import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { loadEntityConfig, EntityConfig } from '../config';
 import { configManager } from '../lib/config-manager';
 import { FileWriteBatch } from '../lib/file-write-batch';
+import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordProcessor } from '../lib/RecordProcessor';
 import { SyncStateManager } from '../lib/sync-state-manager';
@@ -131,6 +132,13 @@ export class PullService {
       }
     }
     
+    // Records load through the ClassFactory; without the entity's own subclass they arrive as a
+    // generic BaseEntity. Say so once, before pulling.
+    const subclassWarning = describeMissingEntitySubclass(options.entity, { operation: 'pull', dryRun: options.dryRun });
+    if (subclassWarning) {
+      callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
+    }
+
     // Pull records
     callbacks?.onProgress?.(`Pulling ${options.entity} records`);
     const rv = new RunView();

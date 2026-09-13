@@ -120,6 +120,7 @@ export class SyncPushPlugin extends BaseCLIPlugin {
       PushService, ValidationService, FormattingService,
       loadMJConfig, loadSyncConfig, initializeProvider,
       getSyncEngine, getSystemUser, configManager, SyncStateManager,
+      loadSyncDynamicPackages,
     } = engine;
 
     const errors: MJCLIResultError[] = [];
@@ -137,6 +138,9 @@ export class SyncPushPlugin extends BaseCLIPlugin {
     const syncConfigDir = flags.dir ? path.resolve(baseDir, flags.dir) : baseDir;
     await loadSyncConfig(syncConfigDir);
 
+    // Register the host's Open App / generated entity subclasses before any entity object is
+    // created, so records push through their real classes (custom Save(), validation, hooks).
+    await loadSyncDynamicPackages('sync:push', { verbose: this.Host.Verbose });
     await initializeProvider(mjConfig);
     await getSyncEngine(getSystemUser());
     this.Host.SucceedStep('Configuration and metadata loaded');
@@ -416,6 +420,7 @@ export class SyncPullPlugin extends BaseCLIPlugin {
       PullService, ValidationService, FormattingService,
       loadMJConfig, initializeProvider, getSyncEngine, getSystemUser,
       configManager, loadEntityConfig, FileBackupManager, SyncStateManager,
+      loadSyncDynamicPackages,
     } = engine;
 
     const errors: MJCLIResultError[] = [];
@@ -430,6 +435,9 @@ export class SyncPullPlugin extends BaseCLIPlugin {
         return { success: false, command: 'sync:pull', durationSeconds: (Date.now() - startTime) / 1000, errors: [{ message: 'No mj.config.cjs found in current directory or parent directories' }] };
       }
 
+      // Register the host's Open App / generated entity subclasses before any entity object is
+      // created, so pulled records come through their real classes.
+      await loadSyncDynamicPackages('sync:pull', { verbose: this.Host.Verbose });
       await initializeProvider(mjConfig);
       const syncEngine = await getSyncEngine(getSystemUser());
       this.Host.SucceedStep('Configuration and metadata loaded');
