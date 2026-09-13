@@ -231,6 +231,13 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         CompanyIntegrations?: Array<Partial<MJCompanyIntegrationEntity>>;
         EntityMaps?: Array<Partial<MJCompanyIntegrationEntityMapEntity>>;
         FieldMaps?: Array<Partial<MJCompanyIntegrationFieldMapEntity>>;
+        /**
+         * Per-connection catalog rows, as LOADED rows rather than projections — they go through
+         * `projectCatalogObjects`/`projectCatalogFields` exactly as the real load does, so a seed
+         * that omits a required column fails the same way production would.
+         */
+        CompanyIntegrationObjects?: BaseEntity[];
+        CompanyIntegrationObjectFields?: BaseEntity[];
     }): void {
         if (seed.Integrations) this._integrations = seed.Integrations as MJIntegrationEntity[];
         if (seed.IntegrationObjects) this._integrationObjects = seed.IntegrationObjects as MJIntegrationObjectEntity[];
@@ -238,6 +245,8 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         if (seed.CompanyIntegrations) this._companyIntegrations = seed.CompanyIntegrations as MJCompanyIntegrationEntity[];
         if (seed.EntityMaps) this._entityMaps = seed.EntityMaps as MJCompanyIntegrationEntityMapEntity[];
         if (seed.FieldMaps) this._fieldMaps = seed.FieldMaps as MJCompanyIntegrationFieldMapEntity[];
+        if (seed.CompanyIntegrationObjects) this._companyIntegrationObjects = seed.CompanyIntegrationObjects;
+        if (seed.CompanyIntegrationObjectFields) this._companyIntegrationObjectFields = seed.CompanyIntegrationObjectFields;
     }
 
     // ── Public Accessors ──────────────────────────────────────────────
@@ -379,9 +388,31 @@ export class IntegrationEngineBase extends BaseEngine<IntegrationEngineBase> {
         );
     }
 
-    /** Get a specific IntegrationObject by its ID. */
+    /**
+     * Get a specific IntegrationObject by its ID, from EITHER catalog.
+     *
+     * Id-polymorphic for exactly the reason `GetIntegrationObjectFields` is: object ids are UUIDs
+     * from two disjoint tables and cannot collide, so the id itself says which catalog the caller
+     * meant, and a caller holding an id needs no scope to resolve it. The field side was made
+     * polymorphic and this one was not, which left a hole precisely where the two sides meet — a
+     * parent object resolved through a per-connection FK edge.
+     *
+     * The hole, measured on the sandbox 2026-09-12: a connector's nested fetch resolves a child's
+     * parent to a per-connection object id (`RelatedCompanyIntegrationObjectID`, surfaced on the
+     * per-connection field as `RelatedIntegrationObjectID`), then asks for that object by id here.
+     * The shared-only lookup returned undefined and `LoadParentIDs` threw
+     * "Parent IntegrationObject not found: <id>" for EVERY child object — twenty of PheedLoop's
+     * twenty-seven — so each of them fetched nothing while the run still reported success: 330 rows
+     * where the same connector had synced about sixteen hundred. A parent that cannot be resolved
+     * is the one case where an over-broad shared answer is not available as a fallback, because the
+     * id is not in the shared table at all.
+     *
+     * Shared first, so a shared id costs exactly the scan it always did.
+     */
     public GetIntegrationObjectByID(objectID: string): MJIntegrationObjectEntity | undefined {
-        return this._integrationObjects.find(o => UUIDsEqual(o.ID, objectID));
+        const shared = this._integrationObjects.find(o => UUIDsEqual(o.ID, objectID));
+        if (shared) return shared;
+        return this.GetCompanyIntegrationObjectByID(objectID);
     }
 
     /**
