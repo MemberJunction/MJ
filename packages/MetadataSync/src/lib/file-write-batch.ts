@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { RecordData } from './sync-engine';
 import { JsonWriteHelper } from './json-write-helper';
+import { isCompletePrimaryKeyLookup } from './record-primary-key';
 
 /**
  * Represents a pending change to a file
@@ -48,6 +49,15 @@ export class FileWriteBatch {
    * @param primaryKeyLookup - Primary key lookup string to identify the record
    */
   queueArrayUpdate(filePath: string, updatedRecord: RecordData, primaryKeyLookup: string): void {
+    // Array updates match entries by this key. An incomplete one ("ID:undefined") matches every
+    // other incomplete one, so each queued record would overwrite the last and a batch of N new
+    // records would write exactly one (#3415). Refuse rather than lose data.
+    if (!isCompletePrimaryKeyLookup(primaryKeyLookup)) {
+      throw new Error(
+        `Refusing to queue an update to ${path.basename(filePath)} with an incomplete primary key ('${primaryKeyLookup}'): ` +
+          `it would overwrite other records in the file.`
+      );
+    }
     const absolutePath = path.resolve(filePath);
     this.addChange(absolutePath, {
       filePath: absolutePath,
