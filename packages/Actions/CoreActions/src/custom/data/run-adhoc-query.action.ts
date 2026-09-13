@@ -268,9 +268,21 @@ export class RunAdhocQueryAction extends BaseAction {
         } catch {
             // Ultimate safety net: if WrapWithMaxRows throws, fall back to a
             // DISTINCT-aware regex (still better than the original).
+            //
+            // The safety net is reached precisely when the AST path could not
+            // understand the SQL, so it must ALSO respect the tenant's dialect.
+            // Emitting `TOP` unconditionally here handed a PostgreSQL tenant SQL
+            // that cannot parse at all — the cap turned a query that merely
+            // confused the parser into one the database rejected outright.
             const hasTop = /SELECT\s+TOP\s+\d+/i.test(query);
             const hasOffsetFetch = /OFFSET\s+\d+\s+ROWS\s+FETCH/i.test(query);
-            if (hasTop || hasOffsetFetch) return query;
+            const hasLimit = /\bLIMIT\s+\d+/i.test(query);
+            if (hasTop || hasOffsetFetch || hasLimit) return query;
+            if (this.resolvePlatform() === 'postgresql') {
+                // Trailing `;`/whitespace is stripped first so the clause does not
+                // land after the statement terminator.
+                return `${query.replace(/\s*;?\s*$/, '')} LIMIT ${maxRows}`;
+            }
             return query.replace(/^(\s*SELECT\s+(?:DISTINCT\s+|ALL\s+)?)/i, `$1TOP ${maxRows} `);
         }
     }
