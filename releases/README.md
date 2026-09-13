@@ -64,8 +64,9 @@ document. Name things; let the sections describe them.
   a section. Bullets invite one-per-change, which is how this section grows into a second
   copy of the release.
 - **User-facing features that create business value come first.** Name them and move on.
-  Fixes and improvements follow in one short clause, summarised as a group rather than
-  enumerated.
+  Fixes and improvements follow in **one clause naming at most three areas** — "plus CodeGen
+  and realtime driver fixes", not a tour of everything that changed. A generation of this
+  section listed five, which is an inventory wearing a clause's clothing.
 - **Name, do not explain.** "Field-Level Security" is a complete entry. The defect, the
   mechanism, the packages and the consequence all belong in the section bullets — the
   "lead with the consequence" rule below applies THERE, not here. It is the single easiest
@@ -84,17 +85,23 @@ document. Name things; let the sections describe them.
   breaking change is the highest-value thing a scanning reader can hit, so it gets a flag
   rather than a slot in the feature list — but one clause only. The detail stays in the
   section.
-- **No marketing language.** No "we are excited to", no "a significant step forward". This
-  is a technical record for people who run the software.
+- **No marketing language, and no intensifiers.** No "we are excited to", no "a significant
+  step forward". Also drop *critical*, *major*, *powerful*, *seamless*, *comprehensive*: if a
+  fix matters, what it fixes shows that, and the word is doing nothing a reader can check.
+  This is a technical record for people who run the software.
 
-A worked TL;DR, for a release whose sections run to 40 bullets:
+A worked TL;DR — `v5.51.2`, a patch whose one section runs to seven dense bullets:
 
-> Field-Level Security, end-to-end support for OpenAI's Live realtime stack, and a
-> first-class AI Persona catalog. Fixes for Explorer search returning no results on
-> ordinary terms, plus CodeGen and realtime driver improvements.
->
-> **Upgrade Notes apply:** the generated GraphQL schema drops non-nullability on ~2,150
-> fields, so externally generated types need regenerating.
+> Cache-integrity fixes for the certified 5.x line, most of them in cache-maintenance paths
+> that only misbehave once more than one server is running. No new features, no schema
+> changes and no migrations.
+
+It carries no upgrade flag, because that release has no `## Upgrade Notes` section — the
+flag appears only when the section does.
+
+The example is deliberately taken from a **shipped** release. An example drawn from the
+release currently being written is one the model copies instead of composing, and it will
+look like compliance.
 
 ## House style for section bullets
 
