@@ -14,7 +14,14 @@
 #   RUN_CROSS_SERVER=1 \
 #   MJAPI_A_URL=http://localhost:14000/ MJAPI_B_URL=http://localhost:14001/ \
 #   MJ_API_KEY=<system-api-key> \
-#   npx tsx packages/MJServer/integration-test-scripts/cross-server-invalidation-tests.ts
+#   npx tsx packages/TestingFramework/integration-test-suite/rigs/cross-server-invalidation-tests.ts
+#
+# NOTE: bringing this stack up also needs `docker/regression/.docker-generated/` to exist —
+# Dockerfile.api COPYs the codegen overlay from it, and Docker has no conditional COPY, so a
+# fresh clone fails there. Produce it first with `docker/regression/gen-forms.sh` (see
+# LIMITATIONS.md). The CI lane in .github/workflows/integration.yml ("Cross-server
+# invalidation rig (nightly)") sidesteps all of this: it provisions SQL Server + a Redis
+# service and boots two host MJAPI processes directly, using no images from this directory.
 #
 # REDIS_KEY_PREFIX defaults to "mj" on both processes, so they share one keyspace.
 
