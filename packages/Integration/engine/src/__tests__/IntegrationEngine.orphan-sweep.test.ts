@@ -77,7 +77,19 @@ function harness(opts: {
     };
     Object.defineProperty(engine, 'ProviderToUse', { get: () => md });
     const internals = engine as unknown as OrphanSweepInternals;
-    internals.LoadAllRecordMaps = vi.fn().mockResolvedValue({ Rows: opts.mapRows, Complete: true });
+    // The loader now STREAMS: the sweep passes a per-page consumer and keeps only the orphans, so a
+    // stub that just resolves rows would hand the sweep nothing to sweep. Feed the page through the
+    // callback exactly as the real loader does, and hand back the streaming shape (empty Rows +
+    // RowsRead) so this suite cannot pass against a sweep that went back to reading Rows.
+    internals.LoadAllRecordMaps = vi.fn().mockImplementation(async (
+        _ci: string,
+        _entityID: string,
+        _user: unknown,
+        onPage?: (rows: ReadonlyArray<{ ID: string; EntityRecordID: string; ExternalSystemRecordID: string }>) => void,
+    ) => {
+        onPage?.(opts.mapRows);
+        return { Rows: [], RowsRead: opts.mapRows.length, Complete: true };
+    });
     const warnings: Array<{ code: string; data?: unknown }> = [];
     const logger = { warning: (_o: string, code: string, _m: string, data?: unknown) => warnings.push({ code, data }) };
     const result = { RecordsDeleted: 0 };
