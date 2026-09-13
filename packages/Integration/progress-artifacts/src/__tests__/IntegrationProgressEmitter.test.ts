@@ -26,11 +26,11 @@ describe('IntegrationProgressEmitter', () => {
         await fs.rm(rootDir, { recursive: true, force: true });
     });
 
-    function makeManifest(runID: string): IntegrationRunManifest {
+    function makeManifest(runID: string, startedAt: Date = new Date()): IntegrationRunManifest {
         return {
             runID,
             runKind: 'SyncRun',
-            startedAt: new Date().toISOString(),
+            startedAt: startedAt.toISOString(),
         };
     }
 
@@ -292,13 +292,14 @@ describe('IntegrationProgressEmitter', () => {
         }
 
         it('prunes oldest run dirs beyond maxRunDirs, always keeping the newest', async () => {
-            // Create old-1 and force its mtime to the epoch so it is deterministically the oldest.
-            const e1 = new IntegrationProgressEmitter(makeManifest('old-1'), { rootDir, maxRunDirs: 2 });
-            await e1.flush();
-            await fs.utimes(join(rootDir, 'old-1'), new Date(0), new Date(0));
-
-            const e2 = new IntegrationProgressEmitter(makeManifest('old-2'), { rootDir, maxRunDirs: 2 });
-            await e2.flush();
+            // Retention orders by the manifest's run START time, so the ages are declared there.
+            // (An mtime-ordered prune deleted a STRANDED run first, because a stranded run's mtime
+            // freezes the moment it strands — see RunRetentionKeepsTheStrandedRun.test.ts.)
+            const hourAgo = (n: number) => new Date(Date.now() - n * 3600_000);
+            const e1 = new IntegrationProgressEmitter(makeManifest('old-1', hourAgo(3)), { rootDir, maxRunDirs: 2 });
+            await e1.complete();
+            const e2 = new IntegrationProgressEmitter(makeManifest('old-2', hourAgo(2)), { rootDir, maxRunDirs: 2 });
+            await e2.complete();
             // Third run: 3 dirs > cap of 2 → bootstrap prunes the single oldest (old-1).
             const e3 = new IntegrationProgressEmitter(makeManifest('new-3'), { rootDir, maxRunDirs: 2 });
             await e3.flush();
