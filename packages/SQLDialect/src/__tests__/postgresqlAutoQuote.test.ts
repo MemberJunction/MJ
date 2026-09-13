@@ -119,6 +119,116 @@ describe('AutoQuotePostgreSQLIdentifiers', () => {
             expect(AutoQuotePostgreSQLIdentifiers('RELEASE SAVEPOINT sp1')).toBe('RELEASE SAVEPOINT sp1');
             expect(AutoQuotePostgreSQLIdentifiers('SET CONSTRAINTS ALL DEFERRED')).toBe('SET CONSTRAINTS ALL DEFERRED');
         });
+
+        // Found in production: a generated query used bare CURRENT_DATE and PostgreSQL rejected the
+        // rewritten SQL with `column "CURRENT_DATE" does not exist`. These are niladic functions
+        // spelled without parentheses, so the word-before-`(` rule never classifies them.
+        it('leaves the niladic datetime/identity functions bare', () => {
+            for (const fn of [
+                'CURRENT_DATE', 'CURRENT_TIME', 'CURRENT_TIMESTAMP',
+                'LOCALTIME', 'LOCALTIMESTAMP',
+                'CURRENT_USER', 'SESSION_USER', 'CURRENT_CATALOG', 'CURRENT_ROLE', 'CURRENT_SCHEMA',
+            ]) {
+                expect(
+                    AutoQuotePostgreSQLIdentifiers(`SELECT ${fn}`),
+                    `${fn} must not be quoted — PostgreSQL cannot resolve it as an identifier`
+                ).toBe(`SELECT ${fn}`);
+            }
+        });
+
+        it('leaves CURRENT_DATE bare inside a predicate and an interval expression', () => {
+            const sql = 'SELECT a FROM t WHERE "expiresOn" >= CURRENT_DATE '
+                + "AND \"expiresOn\" <= CURRENT_DATE + (30 || ' days')::INTERVAL";
+            expect(AutoQuotePostgreSQLIdentifiers(sql)).toBe(sql);
+        });
+
+        it('still quotes the mixed-case column spelling of those functions', () => {
+            // The case-sensitive rule is what makes adding these safe: only the ALL-CAPS
+            // spelling is exempt, so a real column keeps its quoting.
+            expect(AutoQuotePostgreSQLIdentifiers('SELECT Current_Date FROM t')).toContain('"Current_Date"');
+            expect(AutoQuotePostgreSQLIdentifiers('SELECT LocalTime FROM t')).toContain('"LocalTime"');
+        });
+
+        // The same defect class as CURRENT_DATE, found by running realistic PostgreSQL through the
+        // tokenizer rather than by waiting for the next production failure. Every construct below
+        // hinges on a word that is NOT followed by `(`, which is the only thing rule 3 can rescue.
+        it('leaves ordered-set aggregate and window-frame vocabulary bare', () => {
+            const cases = [
+                'SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY amt) FROM t',
+                'SELECT MODE() WITHIN GROUP (ORDER BY descr) FROM t',
+                'SELECT SUM(x) OVER (ORDER BY b GROUPS BETWEEN 1 PRECEDING AND 1 FOLLOWING EXCLUDE TIES) FROM t',
+                'SELECT a FROM t GROUP BY GROUPING SETS ((a),(b))',
+                'SELECT a FROM t GROUP BY ROLLUP (a), CUBE (b)',
+                'SELECT * FROM UNNEST(ARRAY[1,2]) WITH ORDINALITY',
+            ];
+            for (const sql of cases) {
+                expect(AutoQuotePostgreSQLIdentifiers(sql), sql).toBe(sql);
+            }
+        });
+
+        it('leaves reserved predicate and TRIM/OVERLAY vocabulary bare', () => {
+            const cases = [
+                "SELECT TRIM(LEADING ' ' FROM name) FROM t",
+                "SELECT TRIM(TRAILING ' ' FROM name) FROM t",
+                "SELECT OVERLAY(name PLACING 'x' FROM 2 FOR 3) FROM t",
+                "SELECT * FROM t WHERE a SIMILAR TO 'x%'",
+                "SELECT * FROM t WHERE a LIKE 'x!%' ESCAPE '!'",
+                'SELECT * FROM t WHERE a BETWEEN SYMMETRIC 1 AND 5',
+                'SELECT * FROM t WHERE a IS UNKNOWN',
+                'SELECT * FROM t WHERE a ISNULL OR b NOTNULL',
+                'SELECT * FROM a NATURAL JOIN b',
+                'SELECT * FROM t FOR UPDATE NOWAIT',
+            ];
+            for (const sql of cases) {
+                expect(AutoQuotePostgreSQLIdentifiers(sql), sql).toBe(sql);
+            }
+        });
+
+        it('leaves two-word and short-form type names bare in cast position', () => {
+            const cases = [
+                'SELECT CAST(a AS CHARACTER VARYING) FROM t',
+                'SELECT CAST(a AS DOUBLE PRECISION) FROM t',
+                'SELECT a::INT8, b::FLOAT8, c::BOOL FROM t',
+                'SELECT a::TIMETZ, b::BPCHAR FROM t',
+                'SELECT a::TSVECTOR, b::TSQUERY FROM t',
+            ];
+            for (const sql of cases) {
+                expect(AutoQuotePostgreSQLIdentifiers(sql), sql).toBe(sql);
+            }
+        });
+
+        it('does not mangle the first word of a utility statement', () => {
+            const cases = [
+                'REFRESH MATERIALIZED VIEW CONCURRENTLY foo',
+                'EXPLAIN ANALYZE VERBOSE SELECT a FROM t',
+                'VACUUM ANALYZE t',
+                'REINDEX TABLE t',
+            ];
+            for (const sql of cases) {
+                expect(AutoQuotePostgreSQLIdentifiers(sql), sql).toBe(sql);
+            }
+        });
+
+        it('still quotes the mixed-case column spelling of the newly added words', () => {
+            // Same contract as the niladic functions: adding a keyword never costs a column.
+            for (const col of ['Within', 'Character', 'Escape', 'Natural', 'Stored', 'Exclude', 'Binary']) {
+                expect(AutoQuotePostgreSQLIdentifiers(`SELECT ${col} FROM t`)).toContain(`"${col}"`);
+            }
+        });
+
+        it('leaves the deliberately-excluded ambiguous words quoted', () => {
+            // These are NON-reserved in PostgreSQL, so they are legal bare column names and a
+            // customer schema may well have one. They stay quotable on purpose — see the comment
+            // block at the end of PostgreSQLQuotingKeywords. `USER` is excluded for the same reason
+            // and is the sharpest case: unquoted it silently resolves to the session user rather
+            // than failing loudly.
+            for (const word of ['USER', 'LEVEL', 'MODE', 'OPTION', 'SHARE', 'START', 'CACHE', 'POLICY']) {
+                expect(
+                    AutoQuotePostgreSQLIdentifiers(`SELECT ${word} FROM t`),
+                    `${word} must stay quoted — it is a legal bare column name in PostgreSQL`
+                ).toContain(`"${word}"`);
+            }
+        });
     });
 
     describe('TYPE and DATA — DDL keyword vs column name', () => {
