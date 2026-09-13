@@ -362,6 +362,14 @@ export class SQLServerDataProvider
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
+  /**
+   * The promise of the most recently ENQUEUED transactional query. The queue below is a strictly
+   * serial `concatMap`, so once this settles every query enqueued before it has finished — which
+   * makes it a deterministic "queue is drained" signal for commit/rollback (see drainSQLQueue).
+   * Rejections are swallowed on this tracker only; the enqueuer still receives them.
+   */
+  private _lastQueuedSQL: Promise<unknown> = Promise.resolve();
+
   private _sqlQueue$ = new Subject<{
     id: string;
     query: string;
@@ -1772,7 +1780,7 @@ export class SQLServerDataProvider
     
     // For transactional queries, use the instance queue to ensure serialization
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
-    return new Promise((resolve, reject) => {
+    const queued = new Promise<sql.IResult<any>>((resolve, reject) => {
       this._sqlQueue$.next({
         id: uuidv4(),
         query,
@@ -1783,6 +1791,9 @@ export class SQLServerDataProvider
         reject
       });
     });
+    // Track it so commit/rollback can wait for the queue to drain without polling (#4447).
+    this._lastQueuedSQL = queued.catch(() => undefined);
+    return queued;
   }
 
   /**
@@ -2408,10 +2419,35 @@ IF ${varName} IS NOT NULL
     const start = Date.now();
     while (tx._activeRequest) {
       if (Date.now() - start > timeoutMs) {
-        LogError(`waitForActiveRequest: timed out after ${timeoutMs}ms waiting for active request on transaction`);
-        break;
+        // Do NOT fall through to commit/rollback: with a request still in flight mssql rejects both
+        // ("Can't commit transaction. There is a request in progress."), and the original error then
+        // named a symptom rather than the cause. A request can only still be here if it bypassed the
+        // serial queue that drainSQLQueue() already waited on, so say that (#4447).
+        throw new Error(
+          `A request is still in flight on the transaction after ${timeoutMs}ms; it did not go through ` +
+          `the instance SQL queue. Await every query issued on the transaction before committing or rolling back.`
+        );
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  /**
+   * Waits until every transactional query enqueued so far has finished. Loops because a query can be
+   * enqueued while we wait; it returns only once a full wait completed with nothing new arriving.
+   *
+   * Replaces polling a private mssql field on a 2-second budget. That poll gave up silently and the
+   * caller then committed over the in-flight request — which is exactly what made ~21% of integration
+   * runs fail inside `mj sync push` (#4447). Every transactional query is serialized through the
+   * instance queue while commit/rollback bypass it, so this is the drain the poll was approximating.
+   */
+  private async drainSQLQueue(): Promise<void> {
+    for (;;) {
+      const last = this._lastQueuedSQL;
+      await last;
+      if (this._lastQueuedSQL === last) {
+        return;
+      }
     }
   }
 
@@ -2419,13 +2455,17 @@ IF ${varName} IS NOT NULL
     if (!this._transaction) {
       throw new Error('No active transaction to commit');
     }
-    try {
-      await this.waitForActiveRequest();
-      await this._transaction.commit();
-    } finally {
-      this._transaction = null;
-      this._transactionState$.next(false);
-    }
+    // Drain first: every transactional query is serialized through the instance queue and commit
+    // bypasses it, so without this a commit can race a queued query still executing on the handle.
+    await this.drainSQLQueue();
+    await this.waitForActiveRequest();
+    await this._transaction.commit();
+    // Clear the handle only on SUCCESS. On failure it must survive so the base class's
+    // AbandonPhysicalTransaction can roll the doomed handle back. Nulling it first — as the old
+    // `finally` did — made that abandon a no-op, leaked the server-side transaction, and turned the
+    // caller's own rollback into 'No active transaction to rollback' (#4447).
+    this._transaction = null;
+    this._transactionState$.next(false);
   }
 
   protected override async AfterPhysicalCommit(): Promise<void> {
@@ -2458,6 +2498,7 @@ IF ${varName} IS NOT NULL
       throw new Error('No active transaction to rollback');
     }
     try {
+      await this.drainSQLQueue();
       await this.waitForActiveRequest();
       await this._transaction.rollback();
     } finally {
