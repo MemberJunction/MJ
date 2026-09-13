@@ -58,7 +58,7 @@ import type { RunArtifactAuthorizationResult } from "../integration/RunArtifactA
 import type { IntegrationRunSnapshot, IntegrationRunKind } from "@memberjunction/integration-progress-artifacts";
 import { ResolverBase } from "../generic/ResolverBase.js";
 import { IntegrationCustomColumnPromoter } from "../integration/CustomColumnPromoter.js";
-import { ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DisableUnselectedEntityMaps, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
+import { ClearRekeyedObjectData, ComputeCascadeRemovalSet, ComputeRemovedDependencyWarnings, decideFieldMapReconcile, DecideRekeyed, DisableUnselectedEntityMaps, IdentityKeyFields, ReenableFieldMapsForEntityMap, ResetPullWatermarks, SetEntityMapEnabled } from "../integration/EntityMapLifecycle.js";
 import { ComputeInactiveRowWarnings } from "../integration/InactiveRowWarnings.js";
 import { BuildCreateConnectionMessage, BuildDetachedRefreshMessage, BuildReactivateMessage, BuildUpdateConnectionMessage } from "../integration/SchemaRefreshLaunch.js";
 // Type-only: the registered runtime class for 'MJ: Company Integrations'. Lets the create path name the
@@ -247,6 +247,12 @@ class SchemaEvolutionOutput {
     @Field(() => [String], { nullable: true }) ChangedObjects?: string[];
     /** U10 — objects whose Pull watermark was reset so the next sync backfills the schema change. */
     @Field(() => [String], { nullable: true }) WatermarksReset?: string[];
+    /**
+     * Objects whose stored rows were CLEARED because the connector changed what identifies a row.
+     * Reported separately from WatermarksReset: a reset means "fetch it all again", this means
+     * "what was here could not be reconciled with the source and has been rebuilt from it".
+     */
+    @Field(() => [String], { nullable: true }) RekeyedObjects?: string[];
 }
 
 // ─── Connector Capabilities Output Type ─────────────────────────────────────
@@ -6380,6 +6386,58 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
+            // ── Phase 6b — RE-KEYED objects: the identity of every stored row just changed ──
+            //
+            // A connector upgrade can change an object's primary key (PheedLoop 1.4.6 makes
+            // Attendees `code + eventCode`, because it is fetched once per event and an attendee at
+            // two events returns twice with the same `code`). `ToExternalRecord` joins every
+            // IsPrimaryKey field with '|' in Sequence order, so changing the key — its members OR
+            // their order — re-identifies every record the source will send from now on. Nothing can
+            // match a stored row again: the RecordMap is keyed `EntityID|ExternalID`, and
+            // `MatchEngine.FindByKeyFields` queries the destination table by key fields that are
+            // NULL on rows written before the change. Left alone, the next sync inserts the entire
+            // source ALONGSIDE what is there.
+            //
+            // Compared against the key the TABLES were built with (the entity's registered fields),
+            // not against the previous catalog — the built key is what the stored rows were actually
+            // written under, and it is the only side that cannot drift from them.
+            const rekeyTargets: Array<{
+                ExternalObjectName: string; EntityMapID: string; EntityID: string;
+                SchemaName: string; BaseTable: string;
+            }> = [];
+            for (const em of continuingMaps) {
+                const io = iosByLowerName.get((em.ExternalObjectName ?? '').toLowerCase());
+                if (!io || !em.EntityID) continue;
+                const entity = md.Entities.find(e => UUIDsEqual(e.ID, em.EntityID));
+                if (!entity) continue;
+                const builtKey = IdentityKeyFields(entity.Fields.map(ef => ({
+                    Name: ef.Name, IsPrimaryKey: ef.IsPrimaryKey, Sequence: ef.Sequence,
+                })));
+                const catalogKey = IdentityKeyFields(
+                    IntegrationEngineBase.Instance.GetIntegrationObjectFields(io.ID)
+                        .filter(iof => iof.Status === 'Active')
+                        .map(iof => ({
+                            Name: iof.Name, IsPrimaryKey: iof.IsPrimaryKey, Sequence: iof.Sequence,
+                        }))
+                );
+                if (!DecideRekeyed(builtKey, catalogKey)) continue;
+                rekeyTargets.push({
+                    ExternalObjectName: em.ExternalObjectName as string,
+                    EntityMapID: em.ID,
+                    EntityID: em.EntityID,
+                    SchemaName: entity.SchemaName,
+                    BaseTable: entity.BaseTable,
+                });
+                // A re-key is a change even when no column moved — a pure reorder alters no DDL,
+                // and without this the object would not reach the watermark reset below.
+                if (em.ExternalObjectName && !changedObjects.includes(em.ExternalObjectName)) {
+                    changedObjects.push(em.ExternalObjectName);
+                }
+            }
+            const rekeyedObjects = await ClearRekeyedObjectData(
+                rekeyTargets, companyIntegrationID, user, md
+            );
+
             // ── Phase 7 — U10: reset the Pull watermark of every CHANGED object so the next sync
             // full-fetches + backfills the schema change (content-hash bounds the rewrite cost).
             const changedLower = new Set(changedObjects.map(n => n.toLowerCase()));
@@ -6500,6 +6558,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 CascadeRemovedObjects: cascadeRemoved.length > 0 ? cascadeRemoved : undefined,
                 ChangedObjects: changedObjects.length > 0 ? changedObjects : undefined,
                 WatermarksReset: watermarksReset.length > 0 ? watermarksReset : undefined,
+                RekeyedObjects: rekeyedObjects.length > 0 ? rekeyedObjects : undefined,
                 Warnings: (dagRemovalWarnings.length + schemaOutput.Warnings.length) > 0
                     ? [...dagRemovalWarnings, ...schemaOutput.Warnings]
                     : undefined,
