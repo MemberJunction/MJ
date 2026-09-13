@@ -39,15 +39,15 @@ function formatBytes(bytes: number): string {
     return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-export function describeAttachment(att: CapturedAttachment): string {
+export function DescribeAttachment(att: CapturedAttachment): string {
     const size = att.size != null ? `, ${formatBytes(att.size)}` : '';
     const label = att.kind === 'image' ? 'image' : 'file';
     return `[Attached ${label}: ${att.name} (${att.mimeType}${size})]`;
 }
 
-export function composeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
+export function ComposeMessageWithAttachment(text: string, att: CapturedAttachment | null): string {
     const trimmed = text.trim();
     if (!att) return trimmed;
-    const note = describeAttachment(att);
+    const note = DescribeAttachment(att);
     return trimmed.length > 0 ? `${trimmed}\n\n${note}` : note;
 }

@@ -1,22 +1,22 @@
 /**
  * Integration: conversations service against the live backend.
  *
- * loadConversations() should surface the seeded "Markdown demo" conversations
- * created during QA. loadConversation(id) for one of them returns its message
+ * LoadConversations() should surface the seeded "Markdown demo" conversations
+ * created during QA. LoadConversation(id) for one of them returns its message
  * thread (user + AI roles) and any artifacts.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { initLiveProvider, hasToken } from './setup-live';
-import { loadConversations, loadConversation } from '@/data/services/conversations';
+import { LoadConversations, LoadConversation } from '@/data/services/conversations';
 
 describe.skipIf(!hasToken())('integration: conversations', () => {
     beforeAll(async () => {
         await initLiveProvider();
     });
 
-    it('loadConversations returns the seeded "Markdown demo" conversations', async () => {
-        const conversations = await loadConversations();
+    it('LoadConversations returns the seeded "Markdown demo" conversations', async () => {
+        const conversations = await LoadConversations();
         expect(conversations.length).toBeGreaterThan(0);
 
         const markdownDemos = conversations.filter((c) =>
@@ -32,14 +32,14 @@ describe.skipIf(!hasToken())('integration: conversations', () => {
         }
     });
 
-    it('loadConversation returns a message thread with user + AI roles', async () => {
-        const conversations = await loadConversations();
+    it('LoadConversation returns a message thread with user + AI roles', async () => {
+        const conversations = await LoadConversations();
         const demo =
             conversations.find((c) => (c.entity.Name ?? '').toLowerCase().includes('markdown demo')) ??
             conversations[0];
         expect(demo).toBeTruthy();
 
-        const load = await loadConversation(demo.entity.ID);
+        const load = await LoadConversation(demo.entity.ID);
         expect(load).not.toBeNull();
         expect(load!.conversation.ID).toBe(demo.entity.ID);
         expect(load!.messages.length).toBeGreaterThan(0);

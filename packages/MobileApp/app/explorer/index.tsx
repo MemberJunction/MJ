@@ -12,7 +12,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Purpose: landing hub for the Explorer area — three navigation tiles
  * (Entities, Queries, Dashboards), each showing a live count.
  * Data: `useExplorerCounts()` -> explorer service. Entity and query counts come
- * from in-memory MJ `Metadata` (`entityCount()` / `queryCount()`); the dashboard
+ * from in-memory MJ `Metadata` (`EntityCount()` / `QueryCount()`); the dashboard
  * count is the length of a `RunView` over `MJ: Dashboards`. No records are
  * fetched here — only totals for the tile badges.
  * Interactions: tap a tile -> `router.push` to `/explorer/entities`,

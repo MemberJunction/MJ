@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
 import { Icons } from '@/components/Icon';
-import { groupConversations } from '@/data/adapt';
+import { GroupConversations } from '@/data/adapt';
 import type { ConversationSummary } from '@/data/types';
 import { useConversations } from '@/hooks/useConversations';
 import { useMJ } from '@/providers/mj-provider';
@@ -18,7 +18,7 @@ import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
  * Purpose: list the user's MJ conversations, grouped by recency, with entry
  *   points to start a new one and to jump into a thread.
  * Data: `useConversations()` hook (MJ `Conversations` via RunView) supplying
- *   `{ conversations, loading, error, refresh }`; `groupConversations()`
+ *   `{ conversations, loading, error, refresh }`; `GroupConversations()`
  *   (`@/data/adapt`) buckets them into pinned / today / yesterday / earlier;
  *   `useMJ()` for connection `status` (gates the pull-to-refresh spinner). Real
  *   data only — no mock fallback.
@@ -32,7 +32,7 @@ export default function ConversationsScreen() {
 
     const grouped = useMemo(() => {
         if (!conversations) return null;
-        return groupConversations(conversations);
+        return GroupConversations(conversations);
     }, [conversations]);
 
     const totalCount = conversations?.length ?? 0;

@@ -18,10 +18,10 @@ import { AttachmentChip } from '@/components/AttachmentChip';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { Icons } from '@/components/Icon';
 import { MarkdownView } from '@/components/markdown/MarkdownView';
-import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
-import { sendMessage, getConversationDetailStatus, type SendProgress } from '@/data/services/agents';
-import { attachCapturedFile, composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
-import { getDefaultAgentId } from '@/data/preferences';
+import { AdaptConversation, AdaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
+import { SendMessage, GetConversationDetailStatus, type SendProgress } from '@/data/services/agents';
+import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { GetDefaultAgentId } from '@/data/preferences';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -37,9 +37,9 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *     MJ `Conversations` + `Conversation Details` via RunView).
  *   - `useConversations()` -> the full list, used to build the recents strip and
  *     to refresh the list after a send.
- *   - `adaptConversation` / `adaptConversationToSummary` (`@/data/adapt`) shape
+ *   - `AdaptConversation` / `AdaptConversationToSummary` (`@/data/adapt`) shape
  *     raw entities into the view model.
- *   - `sendMessage` / `getConversationDetailStatus` (`@/data/services/agents`)
+ *   - `SendMessage` / `GetConversationDetailStatus` (`@/data/services/agents`)
  *     post the user turn, run the agent, and poll the AI `Conversation Detail`
  *     status until it finalizes (the push WebSocket may not deliver completion
  *     on this client, so it polls up to 24× every 2.5s, refreshing as it goes).
@@ -61,7 +61,7 @@ export default function ChatThreadScreen() {
     const [sendError, setSendError] = useState<string | null>(null);
     const scrollRef = useRef<ScrollView>(null);
 
-    const view = useMemo(() => (data ? adaptConversation(data) : null), [data]);
+    const view = useMemo(() => (data ? AdaptConversation(data) : null), [data]);
 
     const handleSend = useCallback(async (text: string, attachment: CapturedAttachment | null = null) => {
         if (!id || !text.trim()) return;
@@ -70,21 +70,21 @@ export default function ChatThreadScreen() {
         setPendingUserText(text.trim());
         setProgress({ currentStep: 'starting', message: 'Sending…' });
         try {
-            const result = await sendMessage({
+            const result = await SendMessage({
                 conversationId: id,
                 text: text.trim(),
                 // The Profile screen's default-agent picker was write-only: it stored a choice
                 // that nothing ever read, so every message went to the runtime's own default
                 // regardless. Passing it as the explicit agent is what makes that setting mean
                 // something. Unset leaves resolution to the runtime's chain.
-                agentId: getDefaultAgentId(),
+                agentId: GetDefaultAgentId(),
                 onProgress: (p) => setProgress(p),
             });
             // The user message now exists server-side, so the attachment finally has something to
             // hang off. Uploading here rather than before the send keeps a failed upload from
             // costing the user their message — the text goes either way.
             if (attachment && result.userMessageId) {
-                const stored = await attachCapturedFile(attachment, result.userMessageId);
+                const stored = await AttachCapturedFile(attachment, result.userMessageId);
                 if (!stored.ok) setSendError(`The message sent, but the attachment did not: ${stored.message}`);
             }
             // The user message + in-progress AI bubble now exist server-side; show them.
@@ -100,7 +100,7 @@ export default function ChatThreadScreen() {
             // under Expo SDK 54 (verified: "Completion event received"). The 2.5s x 24 polling
             // loop this replaces existed because that WebSocket used to be unreliable here.
             if (result.aiMessageId) {
-                const status = await getConversationDetailStatus(result.aiMessageId).catch(() => null);
+                const status = await GetConversationDetailStatus(result.aiMessageId).catch(() => null);
                 if (status === 'Error') setSendError('The agent could not complete this request.');
                 await refresh();
                 void refreshList();
@@ -138,7 +138,7 @@ export default function ChatThreadScreen() {
     // Recents strip = top 5 most recent conversations excluding the active one
     const recentChips = useMemo(() => {
         if (!allConversations) return [];
-        const summaries = allConversations.map(adaptConversationToSummary);
+        const summaries = allConversations.map(AdaptConversationToSummary);
         return summaries
             .filter((s) => s.id !== id)
             .slice(0, 5);
@@ -273,7 +273,7 @@ function ChatHeader({ title, participants, messageCount, live }: {
 }
 
 /** A recents-strip chip = a conversation summary adapted for the horizontal rail. */
-type RecentChip = ReturnType<typeof adaptConversationToSummary>;
+type RecentChip = ReturnType<typeof AdaptConversationToSummary>;
 
 /**
  * Horizontal strip of recent-conversation chips above the thread. Tapping a
@@ -397,7 +397,7 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
  * attachment (clears the draft and calls `onSend`), otherwise a mic button that
  * opens `/voice-mode`. `disabled` blocks input/send while an agent run is in flight.
  *
- * On send, the attachment travels two ways: {@link composeMessageWithAttachment} adds a
+ * On send, the attachment travels two ways: {@link ComposeMessageWithAttachment} adds a
  * human-readable note to the message text, and the attachment itself is handed to the
  * parent so it can be uploaded and attached to the created message as a first-class
  * `MJ: Conversation Detail Attachments` row once that message exists.
@@ -410,7 +410,7 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
 
     const submit = () => {
         if (!canSend) return;
-        const body = composeMessageWithAttachment(text, attachment);
+        const body = ComposeMessageWithAttachment(text, attachment);
         const pending = attachment;
         setText('');
         setAttachment(null);

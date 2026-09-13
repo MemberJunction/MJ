@@ -3,18 +3,18 @@ import * as SecureStore from 'expo-secure-store';
 import { GraphQLProviderConfigData, setupGraphQLClient } from '@memberjunction/graphql-dataprovider';
 import { Env } from '@/config/env';
 import {
-    clearAuth0Tokens,
-    getValidAuth0IdToken,
-    isAuth0Expired,
-    loadAuth0Tokens,
-    persistAuth0Tokens,
+    ClearAuth0Tokens,
+    GetValidAuth0IdToken,
+    IsAuth0Expired,
+    LoadAuth0Tokens,
+    PersistAuth0Tokens,
     type Auth0Tokens,
 } from '@/auth/auth0';
 import {
-    clearStoredTokens as clearMsalTokens,
-    getValidIdToken as getValidMsalIdToken,
-    isExpired as isMsalExpired,
-    loadStoredTokens as loadMsalTokens,
+    ClearStoredTokens as clearMsalTokens,
+    GetValidIdToken as getValidMsalIdToken,
+    IsExpired as isMsalExpired,
+    LoadStoredTokens as loadMsalTokens,
     type MJAuthTokens,
 } from '@/auth/msal';
 
@@ -121,7 +121,7 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 Env.graphqlWsUrl,
                 async () => {
                     if (method === 'auth0') {
-                        try { return await getValidAuth0IdToken(); }
+                        try { return await GetValidAuth0IdToken(); }
                         catch { return ''; }
                     }
                     if (method === 'msal') {
@@ -185,9 +185,9 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 //    nothing yet, persist it once. From then on the normal Auth0 path
                 //    in step 1 (load + auto-refresh via refreshAsync) takes over —
                 //    same code that handles a real in-app OAuth login.
-                if (Env.devAuthToken && Env.devAuth0RefreshToken && !(await loadAuth0Tokens())) {
+                if (Env.devAuthToken && Env.devAuth0RefreshToken && !(await LoadAuth0Tokens())) {
                     console.log('[MJProvider] seeding Auth0 secure-store from env (dev)');
-                    await persistAuth0Tokens({
+                    await PersistAuth0Tokens({
                         idToken: Env.devAuthToken,
                         accessToken: Env.devAuth0AccessToken,
                         refreshToken: Env.devAuth0RefreshToken,
@@ -196,8 +196,8 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 }
 
                 // 1. Try Auth0 stored tokens
-                const auth0Tokens = await loadAuth0Tokens();
-                if (auth0Tokens && !isAuth0Expired(auth0Tokens)) {
+                const auth0Tokens = await LoadAuth0Tokens();
+                if (auth0Tokens && !IsAuth0Expired(auth0Tokens)) {
                     console.log('[MJProvider] using stored Auth0 token');
                     if (!cancelled) await bootWith(auth0Tokens.idToken, 'auth0');
                     return;
@@ -205,14 +205,14 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
                 if (auth0Tokens) {
                     console.log('[MJProvider] Auth0 token expired, attempting refresh');
                     try {
-                        const refreshed = await getValidAuth0IdToken();
+                        const refreshed = await GetValidAuth0IdToken();
                         if (refreshed && !cancelled) {
                             await bootWith(refreshed, 'auth0');
                             return;
                         }
                     } catch (e) {
                         console.warn('[MJProvider] Auth0 refresh failed, clearing:', e);
-                        await clearAuth0Tokens();
+                        await ClearAuth0Tokens();
                     }
                 }
 
@@ -280,7 +280,7 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
      * screen takes over. Does not itself tear down the GraphQL client.
      */
     const signOut = useCallback(async () => {
-        await clearAuth0Tokens();
+        await ClearAuth0Tokens();
         await clearMsalTokens();
         await SecureStore.deleteItemAsync(DEV_TOKEN_KEY).catch(() => undefined);
         setAuthMethod(null);

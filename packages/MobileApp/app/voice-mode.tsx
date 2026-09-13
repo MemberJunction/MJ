@@ -4,7 +4,7 @@ import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, View 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { Type } from '@/theme/tokens';
-import { resolveTargetAgent } from '@/data/services/agents';
+import { ResolveTargetAgent } from '@/data/services/agents';
 import {
     RealtimeVoiceService,
     type VoiceSessionState,
@@ -60,7 +60,7 @@ export default function VoiceModeScreen() {
         });
 
         void (async () => {
-            const agent = await resolveTargetAgent('');
+            const agent = await ResolveTargetAgent('');
             if (!agent) {
                 setReason('backend');
                 setState('unavailable');

@@ -15,7 +15,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import type { ComponentProps as RuntimeComponentProps, ComponentSpec } from '@memberjunction/react-runtime';
 import { Icons } from '@/components/Icon';
 import { Colors, Radius, Spacing, Type } from '@/theme/tokens';
-import { getInteractiveRuntime } from './runtime-loader';
+import { GetInteractiveRuntime } from './runtime-loader';
 import { ShimReact } from './react-native-shim';
 
 /** A compiled interactive component: a React component over the runtime prop bag. */
@@ -33,7 +33,7 @@ type LoadState =
 /**
  * Render an interactive component artifact.
  *
- * @param props.spec The parsed, mobile-safe component spec (see `assessSpec`).
+ * @param props.spec The parsed, mobile-safe component spec (see `AssessSpec`).
  */
 export function InteractiveComponentRenderer({ spec }: { spec: ComponentSpec }): React.ReactElement {
     const state = useCompiledComponent(spec);
@@ -85,7 +85,7 @@ function useCompiledComponent(spec: ComponentSpec): LoadState {
  */
 async function compileSpec(spec: ComponentSpec): Promise<LoadState> {
     try {
-        const runtime = await getInteractiveRuntime();
+        const runtime = await GetInteractiveRuntime();
         const result = await runtime.manager.loadComponent(spec);
         const compiled = result.component?.component;
         if (!result.success || typeof compiled !== 'function') {
@@ -130,7 +130,7 @@ function buildCallbacks(): Parameters<InteractiveRuntimeBuildProps>[3] {
 }
 
 /** Alias to derive the exact `buildComponentProps` callbacks parameter type. */
-type InteractiveRuntimeBuildProps = Awaited<ReturnType<typeof getInteractiveRuntime>>['buildComponentProps'];
+type InteractiveRuntimeBuildProps = Awaited<ReturnType<typeof GetInteractiveRuntime>>['buildComponentProps'];
 
 /**
  * Fallback card shown when a component can't or shouldn't render on-device.

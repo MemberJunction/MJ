@@ -36,11 +36,11 @@ import {
 import type { ClientRealtimeSessionConfig, JSONObject } from '@memberjunction/ai';
 import {
     LoadRNVoiceDrivers,
-    acquireVoiceInputStream,
-    configureVoiceAudioSession,
-    isRealtimePcmAudioSupported,
-    requestMicrophonePermission,
-    resetVoiceAudioSession,
+    AcquireVoiceInputStream,
+    ConfigureVoiceAudioSession,
+    IsRealtimePcmAudioSupported,
+    RequestMicrophonePermission,
+    ResetVoiceAudioSession,
 } from './rn-audio-adapter';
 
 // Keep the RN driver's @RegisterClass side effect alive under the bundler (see the adapter).
@@ -172,16 +172,16 @@ export class RealtimeVoiceService {
 
         // Gate 1 — audio plane. An expo-audio-only build cannot stream PCM (see the adapter),
         // so there is no point minting a server session that could carry no audio.
-        if (!isRealtimePcmAudioSupported()) {
+        if (!IsRealtimePcmAudioSupported()) {
             this.setUnavailable('audio');
             return;
         }
         // Gate 2 — microphone permission (real expo-audio flow).
-        if (!(await requestMicrophonePermission())) {
+        if (!(await RequestMicrophonePermission())) {
             this.setUnavailable('permission');
             return;
         }
-        await configureVoiceAudioSession();
+        await ConfigureVoiceAudioSession();
         this.setState('connecting');
 
         // Gate 3 — server session mint.
@@ -204,7 +204,7 @@ export class RealtimeVoiceService {
         this.wireClientHandlers(client);
 
         try {
-            await client.Connect(this.buildClientConfig(session), acquireVoiceInputStream());
+            await client.Connect(this.buildClientConfig(session), AcquireVoiceInputStream());
         } catch (error) {
             this.emitError(this.describeError(error), true);
             this.setState('error');
@@ -227,7 +227,7 @@ export class RealtimeVoiceService {
             }
         }
         await this.closeServerSession();
-        await resetVoiceAudioSession();
+        await ResetVoiceAudioSession();
         if (this.state !== 'error' && this.state !== 'unavailable') {
             this.setState('closed');
         }

@@ -17,7 +17,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Purpose: render each panel of a desktop-authored MJ dashboard in a stacked,
  * mobile-friendly way, degrading gracefully for parts that only make sense on
  * desktop.
- * Data: `useDashboard(id)` -> explorer service `loadDashboard()`, which uses
+ * Data: `useDashboard(id)` -> explorer service `LoadDashboard()`, which uses
  * `Metadata.GetEntityObject('MJ: Dashboards')` + `Load`, parses the dashboard's
  * Golden Layout `UIConfigDetails` JSON into typed parts, and resolves part type
  * names via a `RunView`. Each `query` part runs its saved query through

@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
     savedDetails: [] as Array<Record<string, unknown>>,
 }));
 
-// sendMessage now delegates orchestration to ConversationsRuntime. Mocking that boundary keeps
+// SendMessage now delegates orchestration to ConversationsRuntime. Mocking that boundary keeps
 // this suite about the part mobile still owns — framing a turn as two Conversation Detail rows —
 // and stops the real runtime (and the whole MJ entity layer behind it) loading under Node.
 vi.mock('@memberjunction/conversations-runtime', () => ({
@@ -65,7 +65,7 @@ vi.mock('@memberjunction/core', () => {
     return { Metadata, RunView };
 });
 
-import { loadAgents, resolveTargetAgent, sendMessage } from '@/data/services/agents';
+import { LoadAgents, ResolveTargetAgent, SendMessage } from '@/data/services/agents';
 
 function agentRows(...rows: Array<{ ID: string; Name: string; Description?: string | null }>): void {
     state.runView = () => ({ Success: true, Results: rows });
@@ -75,13 +75,13 @@ beforeEach(() => {
     state.runView = () => ({ Success: true, Results: [] });
 });
 
-describe('loadAgents', () => {
+describe('LoadAgents', () => {
     it('maps result rows into AgentOption shape', async () => {
         agentRows(
             { ID: '1', Name: 'Skip', Description: 'default' },
             { ID: '2', Name: 'Research Agent', Description: null },
         );
-        const agents = await loadAgents();
+        const agents = await LoadAgents();
         expect(agents).toEqual([
             { id: '1', name: 'Skip', description: 'default' },
             { id: '2', name: 'Research Agent', description: null },
@@ -90,48 +90,48 @@ describe('loadAgents', () => {
 
     it('substitutes a placeholder name for unnamed agents', async () => {
         agentRows({ ID: '1', Name: null as unknown as string });
-        const agents = await loadAgents();
+        const agents = await LoadAgents();
         expect(agents[0].name).toBe('(unnamed agent)');
     });
 
     it('throws when the RunView fails', async () => {
         state.runView = () => ({ Success: false, ErrorMessage: 'db down' });
-        await expect(loadAgents()).rejects.toThrow(/db down/);
+        await expect(LoadAgents()).rejects.toThrow(/db down/);
     });
 });
 
-describe('resolveTargetAgent', () => {
+describe('ResolveTargetAgent', () => {
     it('returns null when no agents exist', async () => {
         agentRows();
-        expect(await resolveTargetAgent('hello')).toBeNull();
+        expect(await ResolveTargetAgent('hello')).toBeNull();
     });
 
     it('resolves an @mention against the agent roster (ignoring spaces/case)', async () => {
         agentRows({ ID: '1', Name: 'Skip' }, { ID: '2', Name: 'Research Agent' });
-        const agent = await resolveTargetAgent('@research please look into this');
+        const agent = await ResolveTargetAgent('@research please look into this');
         expect(agent?.id).toBe('2');
     });
 
     it('falls back to Skip when an @mention does not match any agent', async () => {
         agentRows({ ID: '1', Name: 'Skip' }, { ID: '2', Name: 'Research Agent' });
-        const agent = await resolveTargetAgent('@nobody are you there');
+        const agent = await ResolveTargetAgent('@nobody are you there');
         expect(agent?.name).toBe('Skip');
     });
 
     it('prefers a Skip-like agent when there is no mention', async () => {
         agentRows({ ID: '1', Name: 'Analyst' }, { ID: '2', Name: 'Skip Assistant' });
-        const agent = await resolveTargetAgent('just a question');
+        const agent = await ResolveTargetAgent('just a question');
         expect(agent?.id).toBe('2');
     });
 
     it('falls back to the first agent when there is no Skip and no mention', async () => {
         agentRows({ ID: '9', Name: 'Analyst' }, { ID: '8', Name: 'Forecaster' });
-        const agent = await resolveTargetAgent('plain message');
+        const agent = await ResolveTargetAgent('plain message');
         expect(agent?.id).toBe('9');
     });
 });
 
-describe('sendMessage', () => {
+describe('SendMessage', () => {
     beforeEach(() => {
         state.savedDetails = [];
         state.lastProcessMessage = null;
@@ -140,7 +140,7 @@ describe('sendMessage', () => {
     });
 
     it('frames a turn as a user row plus an in-progress AI row', async () => {
-        const result = await sendMessage({ conversationId: 'conv-1', text: 'hello' });
+        const result = await SendMessage({ conversationId: 'conv-1', text: 'hello' });
         expect(result.success).toBe(true);
 
         const [user, ai] = state.savedDetails;
@@ -151,7 +151,7 @@ describe('sendMessage', () => {
     it('hands the AI row — not the user row — to the runtime', async () => {
         // The server writes the answer INTO the detail it is given. Passing the user row lands
         // the reply on it as Role='User' and renders it as plain text in a user bubble.
-        await sendMessage({ conversationId: 'conv-1', text: 'hi' });
+        await SendMessage({ conversationId: 'conv-1', text: 'hi' });
         const input = state.lastProcessMessage as { conversationDetailId: string; message: { ID: string } };
         const [user, ai] = state.savedDetails;
         expect(input.conversationDetailId).toBe(ai.ID);
@@ -159,17 +159,17 @@ describe('sendMessage', () => {
     });
 
     it('passes an explicit agent through, and leaves resolution to the runtime otherwise', async () => {
-        await sendMessage({ conversationId: 'c', text: 'x', agentId: 'agent-7' });
+        await SendMessage({ conversationId: 'c', text: 'x', agentId: 'agent-7' });
         expect((state.lastProcessMessage as { explicitAgentId: string }).explicitAgentId).toBe('agent-7');
         expect(state.savedDetails[1]).toMatchObject({ AgentID: 'agent-7' });
 
         state.savedDetails = [];
-        await sendMessage({ conversationId: 'c', text: 'x' });
+        await SendMessage({ conversationId: 'c', text: 'x' });
         expect((state.lastProcessMessage as { explicitAgentId: string | null }).explicitAgentId).toBeNull();
     });
 
     it('reports both detail ids so a caller can attach files and track the reply', async () => {
-        const result = await sendMessage({ conversationId: 'c', text: 'x' });
+        const result = await SendMessage({ conversationId: 'c', text: 'x' });
         const [user, ai] = state.savedDetails;
         expect(result.userMessageId).toBe(user.ID);
         expect(result.aiMessageId).toBe(ai.ID);
@@ -177,14 +177,14 @@ describe('sendMessage', () => {
 
     it('fails cleanly when the user message cannot be saved', async () => {
         state.saveResult = false;
-        const result = await sendMessage({ conversationId: 'c', text: 'x' });
+        const result = await SendMessage({ conversationId: 'c', text: 'x' });
         expect(result.success).toBe(false);
         expect(state.lastProcessMessage).toBeNull();
     });
 
     it('surfaces a runtime throw as an error rather than propagating it', async () => {
         state.processMessageResult = null;
-        const result = await sendMessage({ conversationId: 'c', text: 'x' });
+        const result = await SendMessage({ conversationId: 'c', text: 'x' });
         expect(result.success).toBe(false);
         expect(result.errorMessage).toContain('No agent');
     });

@@ -63,11 +63,11 @@ vi.mock('@memberjunction/core', () => {
 });
 
 import {
-    getExpoPushToken,
-    registerDeviceToken,
-    registerForPushNotifications,
-    requestNotificationPermission,
-    unregisterDeviceToken,
+    GetExpoPushToken,
+    RegisterDeviceToken,
+    RegisterForPushNotifications,
+    RequestNotificationPermission,
+    UnregisterDeviceToken,
 } from '@/data/services/notifications';
 
 beforeEach(() => {
@@ -82,77 +82,77 @@ beforeEach(() => {
     state.lastSavedValue = null;
 });
 
-describe('requestNotificationPermission', () => {
+describe('RequestNotificationPermission', () => {
     it('is true when already granted (no re-prompt)', async () => {
-        expect(await requestNotificationPermission()).toBe(true);
+        expect(await RequestNotificationPermission()).toBe(true);
     });
 
     it('prompts and honors the request result when undecided', async () => {
         state.perm = { granted: false, ios: { status: 0 } };
         state.requestPerm = { granted: true };
-        expect(await requestNotificationPermission()).toBe(true);
+        expect(await RequestNotificationPermission()).toBe(true);
     });
 
     it('treats iOS provisional authorization as granted', async () => {
         state.perm = { granted: false, ios: { status: 3 } };
-        expect(await requestNotificationPermission()).toBe(true);
+        expect(await RequestNotificationPermission()).toBe(true);
     });
 
     it('is false when denied both times', async () => {
         state.perm = { granted: false, ios: { status: 1 } };
         state.requestPerm = { granted: false, ios: { status: 1 } };
-        expect(await requestNotificationPermission()).toBe(false);
+        expect(await RequestNotificationPermission()).toBe(false);
     });
 });
 
-describe('getExpoPushToken', () => {
+describe('GetExpoPushToken', () => {
     it('returns the token data when available', async () => {
-        expect(await getExpoPushToken()).toBe('ExponentPushToken[abc]');
+        expect(await GetExpoPushToken()).toBe('ExponentPushToken[abc]');
     });
 
     it('returns null (no throw) when the token cannot be minted', async () => {
         state.tokenThrows = true;
-        expect(await getExpoPushToken()).toBeNull();
+        expect(await GetExpoPushToken()).toBeNull();
     });
 });
 
-describe('registerDeviceToken', () => {
+describe('RegisterDeviceToken', () => {
     it('persists the token as JSON for the current user', async () => {
-        expect(await registerDeviceToken('tok-1')).toBe(true);
+        expect(await RegisterDeviceToken('tok-1')).toBe(true);
         expect(state.lastSavedValue).not.toBeNull();
         expect(JSON.parse(state.lastSavedValue as string).token).toBe('tok-1');
     });
 
     it('no-ops (false) when there is no current user', async () => {
         state.currentUser = null;
-        expect(await registerDeviceToken('tok-1')).toBe(false);
+        expect(await RegisterDeviceToken('tok-1')).toBe(false);
     });
 });
 
-describe('registerForPushNotifications', () => {
+describe('RegisterForPushNotifications', () => {
     it('reports not-granted when permission is denied', async () => {
         state.perm = { granted: false, ios: { status: 1 } };
         state.requestPerm = { granted: false, ios: { status: 1 } };
-        const result = await registerForPushNotifications();
+        const result = await RegisterForPushNotifications();
         expect(result).toMatchObject({ granted: false, token: null, persisted: false });
     });
 
     it('degrades gracefully when granted but no token (simulator)', async () => {
         state.tokenThrows = true;
-        const result = await registerForPushNotifications();
+        const result = await RegisterForPushNotifications();
         expect(result).toMatchObject({ granted: true, token: null, persisted: false });
         expect(result.reason).toMatch(/simulator|APNs/i);
     });
 
     it('persists the token on the happy path', async () => {
-        const result = await registerForPushNotifications();
+        const result = await RegisterForPushNotifications();
         expect(result).toMatchObject({ granted: true, token: 'ExponentPushToken[abc]', persisted: true });
     });
 });
 
-describe('unregisterDeviceToken', () => {
+describe('UnregisterDeviceToken', () => {
     it('is a no-op (true) when there is no stored token', async () => {
-        expect(await unregisterDeviceToken()).toBe(true);
+        expect(await UnregisterDeviceToken()).toBe(true);
     });
 
     it('deletes the stored token row when present', async () => {
@@ -165,6 +165,6 @@ describe('unregisterDeviceToken', () => {
                 LatestResult: { CompleteMessage: '' },
             },
         ];
-        expect(await unregisterDeviceToken()).toBe(true);
+        expect(await UnregisterDeviceToken()).toBe(true);
     });
 });

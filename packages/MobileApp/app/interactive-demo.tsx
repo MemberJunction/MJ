@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { InteractiveComponentRenderer } from '@/interactive/InteractiveComponentRenderer';
-import { parseInteractiveSpec } from '@/data/services/interactive-components';
+import { ParseInteractiveSpec } from '@/data/services/interactive-components';
 import { Colors, Spacing, Type } from '@/theme/tokens';
 
 /**
@@ -40,7 +40,7 @@ const DEMO_CODE = `function DemoCounter({ utilities, styles }) {
   );
 }`;
 
-const DEMO_SPEC = parseInteractiveSpec(
+const DEMO_SPEC = ParseInteractiveSpec(
     JSON.stringify({ name: 'DemoCounter', code: DEMO_CODE }),
     'Interactive Component',
 );

@@ -121,7 +121,7 @@ export const Shadow = {
  * Stable color resolver for an agent. Falls back to a neutral slate
  * when no specific mapping is registered.
  */
-export function colorForAgent(agentName: string | undefined | null): string {
+export function ColorForAgent(agentName: string | undefined | null): string {
   if (!agentName) return Colors.agentFallback;
   const key = agentName.trim().toLowerCase();
   if (key.includes('skip')) return Colors.agentSkip;

@@ -9,15 +9,15 @@ import { useMJ } from '@/providers/mj-provider';
 import { useAgents } from '@/hooks/useAgents';
 import { Env } from '@/config/env';
 import {
-    prefsStorage,
+    PrefsStorage,
     PrefKeys,
     APPEARANCE_LABEL,
-    cycleAppearance,
-    setDefaultAgent,
+    CycleAppearance,
+    SetDefaultAgent,
     type AppearanceMode,
 } from '@/data/preferences';
-import { isBiometricAvailable } from '@/auth/biometric';
-import { registerForPushNotifications, unregisterDeviceToken } from '@/data/services/notifications';
+import { IsBiometricAvailable } from '@/auth/biometric';
+import { RegisterForPushNotifications, UnregisterDeviceToken } from '@/data/services/notifications';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
@@ -31,9 +31,9 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *     email, title, initials), gated on `useMJ().status === 'ready'`;
  *     workspace host derived from `Env.graphqlUrl`.
  *   - Preferences: MMKV-backed via `react-native-mmkv` hooks
- *     (`useMMKVString`/`useMMKVBoolean` over `prefsStorage`/`PrefKeys`) —
+ *     (`useMMKVString`/`useMMKVBoolean` over `PrefsStorage`/`PrefKeys`) —
  *     appearance, default agent, voice/push/Face-ID toggles. Writes go through
- *     the `@/data/preferences` helpers (`cycleAppearance`, `setDefaultAgent`).
+ *     the `@/data/preferences` helpers (`CycleAppearance`, `SetDefaultAgent`).
  *   - `useAgents()` populates the default-agent picker.
  *   - `useMJ()` provides `signOut` and `authMethod`.
  *   Note: the Push (P2.3) and Face ID (P2.4) toggles are now wired to their
@@ -50,11 +50,11 @@ export default function ProfileScreen() {
     const [agentPickerOpen, setAgentPickerOpen] = useState(false);
 
     // Reactive preferences — writing the same key elsewhere re-renders this screen.
-    const [appearanceRaw] = useMMKVString(PrefKeys.appearance, prefsStorage);
-    const [defaultAgentName] = useMMKVString(PrefKeys.defaultAgentName, prefsStorage);
-    const [voiceOn, setVoiceOn] = useMMKVBoolean(PrefKeys.voiceResponses, prefsStorage);
-    const [pushOn, setPushOn] = useMMKVBoolean(PrefKeys.pushNotifications, prefsStorage);
-    const [faceIdOn, setFaceIdOn] = useMMKVBoolean(PrefKeys.faceIdLock, prefsStorage);
+    const [appearanceRaw] = useMMKVString(PrefKeys.appearance, PrefsStorage);
+    const [defaultAgentName] = useMMKVString(PrefKeys.defaultAgentName, PrefsStorage);
+    const [voiceOn, setVoiceOn] = useMMKVBoolean(PrefKeys.voiceResponses, PrefsStorage);
+    const [pushOn, setPushOn] = useMMKVBoolean(PrefKeys.pushNotifications, PrefsStorage);
+    const [faceIdOn, setFaceIdOn] = useMMKVBoolean(PrefKeys.faceIdLock, PrefsStorage);
 
     const appearance = (appearanceRaw as AppearanceMode | undefined) ?? 'system';
 
@@ -63,7 +63,7 @@ export default function ProfileScreen() {
     const [biometricAvailable, setBiometricAvailable] = useState(false);
     useEffect(() => {
         let active = true;
-        void isBiometricAvailable().then((ok) => {
+        void IsBiometricAvailable().then((ok) => {
             if (active) setBiometricAvailable(ok);
         });
         return () => {
@@ -82,10 +82,10 @@ export default function ProfileScreen() {
     const handlePushToggle = async () => {
         if (pushOn) {
             setPushOn(false);
-            await unregisterDeviceToken();
+            await UnregisterDeviceToken();
             return;
         }
-        const result = await registerForPushNotifications();
+        const result = await RegisterForPushNotifications();
         setPushOn(result.granted);
     };
 
@@ -144,7 +144,7 @@ export default function ProfileScreen() {
                         icon={<Icons.Sliders size={16} color={Colors.ink2} strokeWidth={2} />}
                         label="Appearance"
                         value={APPEARANCE_LABEL[appearance]}
-                        onPress={() => cycleAppearance()}
+                        onPress={() => CycleAppearance()}
                     />
                     <ToggleRow
                         icon={<Icons.Mic size={16} color={Colors.ink2} strokeWidth={2} />}
@@ -190,7 +190,7 @@ export default function ProfileScreen() {
                 selectedName={defaultAgentName}
                 onClose={() => setAgentPickerOpen(false)}
                 onSelect={(id, name) => {
-                    setDefaultAgent(id, name);
+                    SetDefaultAgent(id, name);
                     setAgentPickerOpen(false);
                 }}
             />

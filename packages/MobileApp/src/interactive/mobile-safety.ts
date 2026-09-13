@@ -11,7 +11,7 @@
 
 import type { ComponentSpec } from '@memberjunction/react-runtime';
 
-/** Verdict from {@link assessSpec}: whether the spec can render on-device. */
+/** Verdict from {@link AssessSpec}: whether the spec can render on-device. */
 export interface SpecAssessment {
     /** True when the spec is safe to compile + render in the RN runtime. */
     renderable: boolean;
@@ -35,7 +35,7 @@ function hasRenderableCode(spec: ComponentSpec): boolean {
  * @param spec The parsed interactive component spec.
  * @returns A {@link SpecAssessment} describing the decision and, if negative, why.
  */
-export function assessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
+export function AssessSpec(spec: ComponentSpec | null | undefined): SpecAssessment {
     if (!spec || !hasRenderableCode(spec)) {
         return { renderable: false, reason: 'This artifact does not contain a renderable component.' };
     }

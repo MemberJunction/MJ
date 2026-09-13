@@ -50,7 +50,7 @@ export type ConversationListItem = {
  * detail rows across all of them (covers ~2 messages per conversation on
  * average for the list view).
  */
-export async function loadConversations(contextUser?: UserInfo): Promise<ConversationListItem[]> {
+export async function LoadConversations(contextUser?: UserInfo): Promise<ConversationListItem[]> {
     const rv = new RunView();
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
@@ -174,7 +174,7 @@ export type ConversationDetailLoad = {
  * @returns A {@link ConversationDetailLoad}, or `null` if the conversation can't be loaded.
  * @throws If the conversation-details view fails.
  */
-export async function loadConversation(
+export async function LoadConversation(
     conversationId: string,
     contextUser?: UserInfo,
 ): Promise<ConversationDetailLoad | null> {

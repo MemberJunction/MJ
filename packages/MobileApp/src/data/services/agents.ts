@@ -25,7 +25,7 @@ export type AgentOption = {
  * Load active, top-level agents the user can talk to. Top-level = no ParentID
  * (sub-agents are orchestrated internally and shouldn't be addressed directly).
  */
-export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
+export async function LoadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
     const rv = new RunView();
     const result = await rv.RunView<MJAIAgentEntity>(
         {
@@ -53,11 +53,11 @@ export async function loadAgents(contextUser?: UserInfo): Promise<AgentOption[]>
  *   2. Else prefer an agent named like "Skip".
  *   3. Else the first active agent.
  */
-export async function resolveTargetAgent(
+export async function ResolveTargetAgent(
     messageText: string,
     contextUser?: UserInfo,
 ): Promise<AgentOption | null> {
-    const agents = await loadAgents(contextUser);
+    const agents = await LoadAgents(contextUser);
     if (agents.length === 0) return null;
 
     const mentionMatch = messageText.match(/@([\w-]+)/);
@@ -77,7 +77,7 @@ export type SendProgress = {
     message: string;
 };
 
-/** Outcome of {@link sendMessage}: the saved user message id, the placeholder AI reply id, and whether completion must be polled. */
+/** Outcome of {@link SendMessage}: the saved user message id, the placeholder AI reply id, and whether completion must be polled. */
 export type SendResult = {
     success: boolean;
     errorMessage?: string;
@@ -109,7 +109,7 @@ export type SendResult = {
  * @param args.onProgress Live progress callback, driven by the agent run.
  * @param args.contextUser Optional context user; defaults to the signed-in user.
  */
-export async function sendMessage(args: {
+export async function SendMessage(args: {
     conversationId: string;
     text: string;
     agentId?: string;
@@ -218,7 +218,7 @@ async function createTurnDetail(
  * Lightweight status check for a conversation detail — used to poll for an
  * agent reply finalizing when the push WebSocket isn't delivering completion.
  */
-export async function getConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
+export async function GetConversationDetailStatus(detailId: string, contextUser?: UserInfo): Promise<string | null> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Status: string }>(
         {
@@ -238,7 +238,7 @@ export async function getConversationDetailStatus(detailId: string, contextUser?
  * Create a new conversation and return its entity. Used by the
  * "new conversation" flow before sending the first message.
  */
-export async function createConversation(
+export async function CreateConversation(
     name: string,
     contextUser?: UserInfo,
 ): Promise<{ id: string } | null> {

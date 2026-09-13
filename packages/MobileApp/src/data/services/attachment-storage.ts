@@ -48,7 +48,7 @@ export type AttachResult =
     | { ok: false; reason: 'too-large' | 'invalid' | 'save-failed'; message: string };
 
 /** Byte length of a base64 payload, without allocating the decoded buffer. */
-export function base64SizeBytes(base64: string): number {
+export function Base64SizeBytes(base64: string): number {
     const clean = base64.replace(/=+$/, '');
     return Math.floor((clean.length * 3) / 4);
 }
@@ -96,7 +96,7 @@ async function resolveModalityId(name: string, contextUser: UserInfo): Promise<s
  * @param agentInlineThresholdBytes Optional agent override of the inline-storage threshold.
  * @param contextUser Optional context user; defaults to the signed-in user.
  */
-export async function attachCapturedFileToMessage(
+export async function AttachCapturedFileToMessage(
     conversationDetailId: string,
     att: CapturedAttachment,
     base64: string,
@@ -107,7 +107,7 @@ export async function attachCapturedFileToMessage(
         const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
         const user = contextUser ?? md.CurrentUser;
 
-        const sizeBytes = att.size ?? base64SizeBytes(base64);
+        const sizeBytes = att.size ?? Base64SizeBytes(base64);
 
         // MJ owns this decision, not mobile — same thresholds as every other surface.
         const storeInline = ConversationUtility.ShouldStoreInline(
@@ -166,7 +166,7 @@ export async function attachCapturedFileToMessage(
  * {@link CompositeKey} rather than assuming a column named `ID`, so this holds for entities mapped
  * from external schemas and for composite keys.
  */
-export async function linkFileToRecord(
+export async function LinkFileToRecord(
     fileId: string,
     entityName: string,
     recordKey: CompositeKey,

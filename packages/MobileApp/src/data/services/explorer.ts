@@ -23,7 +23,7 @@ export type EntityListItem = {
  * Entities the user can browse. We surface entities that are not system/
  * internal and that the current user can read. Sorted by display name.
  */
-export function loadEntities(): EntityListItem[] {
+export function LoadEntities(): EntityListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Entities
         .filter((e) => e.AllowUserSearchAPI !== false && !e.Name.startsWith('__'))
@@ -37,7 +37,7 @@ export function loadEntities(): EntityListItem[] {
 }
 
 /** Total number of entities known to the metadata (all, unfiltered). */
-export function entityCount(): number {
+export function EntityCount(): number {
     return new Metadata().Entities.length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
 }
 
@@ -50,7 +50,7 @@ function primaryDisplayField(entity: EntityInfo): EntityFieldInfo | undefined {
         entity.Fields.find((f) => f.Name === entity.NameField?.Name) ??
         entity.Fields.find((f) => f.Name.toLowerCase() === 'name') ??
         entity.Fields.find((f) => f.Type === 'nvarchar' && !f.IsPrimaryKey) ??
-        entity.FirstPrimaryKey // first-pk-ok: card-title display fallback only; record identity is built from the full key (see loadEntityRecords)
+        entity.FirstPrimaryKey // first-pk-ok: card-title display fallback only; record identity is built from the full key (see LoadEntityRecords)
     );
 }
 
@@ -77,7 +77,7 @@ export type EntityRecordRow = {
     raw: Record<string, unknown>;
 };
 
-/** Result of {@link loadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
+/** Result of {@link LoadEntityRecords}: the entity metadata, the card rows, and how many were returned. */
 export type EntityRecordsLoad = {
     entity: EntityInfo;
     rows: EntityRecordRow[];
@@ -88,7 +88,7 @@ export type EntityRecordsLoad = {
  * Load records for an entity (read-only, card view). Uses `simple` ResultType
  * with a narrowed field set for performance (CLAUDE.md RunView guidance).
  */
-export async function loadEntityRecords(
+export async function LoadEntityRecords(
     entityName: string,
     contextUser?: UserInfo,
     maxRows = 100,
@@ -128,7 +128,7 @@ export async function loadEntityRecords(
 
     const rows: EntityRecordRow[] = (result.Results ?? []).map((r) => {
         // Compact record id — the bare value for a single-column key, `F1|v1||F2|v2` for a composite
-        // key — which loadRecordDetail reads back with CompositeKey.FromURLSegment.
+        // key — which LoadRecordDetail reads back with CompositeKey.FromURLSegment.
         const idVal = entity.PrimaryKeys.length > 0 ? CompositeKey.FromEntityRecord(entity, r).ToCompactURLSegment() : '';
         const title = titleField ? String(r[titleField.Name] ?? '(no name)') : idVal;
         const subtitle = secondary
@@ -145,7 +145,7 @@ export async function loadEntityRecords(
 /** A single displayable field of a record: its key, label, and stringified value. */
 export type RecordFieldRow = { key: string; label: string; value: string };
 
-/** Result of {@link loadRecordDetail}: the entity metadata, a title, and the projected field rows. */
+/** Result of {@link LoadRecordDetail}: the entity metadata, a title, and the projected field rows. */
 export type RecordDetailLoad = {
     entity: EntityInfo;
     title: string;
@@ -156,7 +156,7 @@ export type RecordDetailLoad = {
  * Load a single record's fields (read-only). Uses GetEntityObject + Load so
  * we get the full strongly-typed entity, then projects displayable fields.
  */
-export async function loadRecordDetail(
+export async function LoadRecordDetail(
     entityName: string,
     recordId: string,
     contextUser?: UserInfo,
@@ -207,7 +207,7 @@ export type QueryListItem = {
  *
  * @returns The approved queries as {@link QueryListItem}s.
  */
-export function loadQueries(): QueryListItem[] {
+export function LoadQueries(): QueryListItem[] {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     return md.Queries
         .filter((q) => q.Status === 'Approved')
@@ -221,7 +221,7 @@ export function loadQueries(): QueryListItem[] {
 }
 
 /** Count of approved saved queries in metadata. */
-export function queryCount(): number {
+export function QueryCount(): number {
     return new Metadata().Queries.filter((q) => q.Status === 'Approved').length;  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
 }
 
@@ -286,7 +286,7 @@ export type DashboardListItem = {
  * @param contextUser Optional acting user (server-side scoping).
  * @returns The dashboards as {@link DashboardListItem}s.
  */
-export async function loadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
+export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardListItem[]> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(
         {
@@ -403,7 +403,7 @@ function parsePanels(uiConfigDetails: string): RawPanel[] {
  * @param dashboardId The dashboard to load.
  * @param contextUser Optional acting user (server-side scoping).
  */
-export async function loadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
+export async function LoadDashboard(dashboardId: string, contextUser?: UserInfo): Promise<DashboardLoad | null> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 

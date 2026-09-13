@@ -13,7 +13,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * from the query string via `useLocalSearchParams`.
  * Purpose: read-only ("view only") detail of a single record as a hero card plus
  * a FIELDS key/value list.
- * Data: `useRecordDetail(entity, id)` -> explorer service `loadRecordDetail()`,
+ * Data: `useRecordDetail(entity, id)` -> explorer service `LoadRecordDetail()`,
  * which uses `Metadata.GetEntityObject` + `Load` on the named entity to fetch the
  * single record, then projects its fields into label/value pairs.
  * Interactions: back chevron -> `router.back()`; "Ask about this <entity>"

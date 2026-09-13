@@ -11,7 +11,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Route: `/explorer/dashboards` (Expo Router, `app/explorer/dashboards.tsx`).
  * Purpose: list of dashboards shared with the user, with a standing notice that
  * most dashboards are desktop-oriented and may not render optimally on mobile.
- * Data: `useDashboards()` -> explorer service `loadDashboards()`, which issues a
+ * Data: `useDashboards()` -> explorer service `LoadDashboards()`, which issues a
  * `RunView` over the `MJ: Dashboards` entity (id, name, description).
  * Interactions: tap a row -> `router.push` to `/explorer/dashboard/[id]`.
  * Mockup: `plans/mobile-app-react-native/html/dashboard-view.html` (shared).

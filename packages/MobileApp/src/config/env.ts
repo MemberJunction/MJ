@@ -53,7 +53,7 @@ export const Env = {
    * Optional companions to `devAuthToken` for auto-refresh (dev-only). When both an
    * id_token AND a refresh_token are provided, the app seeds expo-secure-store with
    * the full bundle at boot and the standard Auth0 refresh path (auth0.ts →
-   * refreshAsync → persistAuth0Tokens) takes over — same code the production OAuth
+   * refreshAsync → PersistAuth0Tokens) takes over — same code the production OAuth
    * login uses, so the token auto-renews like the Angular Auth0 SDK does. Leave
    * empty in committed code.
    */

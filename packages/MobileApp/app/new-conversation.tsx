@@ -9,8 +9,8 @@ import { AttachmentChip } from '@/components/AttachmentChip';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { Icons } from '@/components/Icon';
 import { useAgents } from '@/hooks/useAgents';
-import { createConversation } from '@/data/services/agents';
-import { composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { CreateConversation } from '@/data/services/agents';
+import { ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
 
 /** A starter-prompt card: display `title`, the full `prompt` it inserts, plus icon/color. */
@@ -32,7 +32,7 @@ const SUGGESTIONS: Suggestion[] = [
  *   prompt, or an `@agent`-addressed prompt), create the MJ conversation, then
  *   hand off to the chat thread which actually runs the send.
  * Data: `useAgents()` (available agents for the `@mention` rail, MJ `AI Agents`);
- *   `createConversation(title)` (`@/data/services/agents`) creates the
+ *   `CreateConversation(title)` (`@/data/services/agents`) creates the
  *   `Conversations` record — the title is derived from the first ~6 words of the
  *   message.
  * Interactions: type a message and Send; tap a suggestion to prefill; tap an
@@ -55,14 +55,14 @@ export default function NewConversationScreen() {
         // The note goes into the message text; the attachment itself rides to the thread,
         // which owns the send and is therefore the only place that will have a message id
         // to attach it to.
-        const body = composeMessageWithAttachment(overrideText ?? text, attachment);
+        const body = ComposeMessageWithAttachment(overrideText ?? text, attachment);
         if (!body || busy) return;
         setBusy(true);
         setError(null);
         try {
             // Title from the first ~6 words of the prompt
             const title = body.split(/\s+/).slice(0, 6).join(' ');
-            const conv = await createConversation(title);
+            const conv = await CreateConversation(title);
             if (!conv) {
                 setError('Could not create the conversation.');
                 return;

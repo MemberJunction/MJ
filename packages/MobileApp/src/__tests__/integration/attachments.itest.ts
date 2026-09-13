@@ -7,8 +7,8 @@ import type {
 } from '@memberjunction/core-entities';
 import { initLiveProvider, hasToken, md } from './setup-live';
 import {
-    attachCapturedFileToMessage,
-    base64SizeBytes,
+    AttachCapturedFileToMessage,
+    Base64SizeBytes,
 } from '../../data/services/attachment-storage';
 import type { CapturedAttachment } from '../../data/services/attachment-meta';
 
@@ -78,7 +78,7 @@ describe.runIf(hasToken())('integration: attachments', () => {
 
     it('attaches a small image inline, as a real UI-role user can', async () => {
         const att = makeAttachment();
-        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64);
+        const result = await AttachCapturedFileToMessage(detailId, att, PNG_BASE64);
         expect(result.ok, result.ok ? '' : `attach failed: ${result.message}`).toBe(true);
         if (!result.ok) return;
         createdAttachmentIds.push(result.attachmentId);
@@ -87,7 +87,7 @@ describe.runIf(hasToken())('integration: attachments', () => {
 
     it('writes a row an agent can consume — inline bytes plus a resolved modality', async () => {
         const att = makeAttachment();
-        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64);
+        const result = await AttachCapturedFileToMessage(detailId, att, PNG_BASE64);
         expect(result.ok).toBe(true);
         if (!result.ok) return;
         createdAttachmentIds.push(result.attachmentId);
@@ -113,7 +113,7 @@ describe.runIf(hasToken())('integration: attachments', () => {
 
     it('refuses an oversized attachment with an actionable reason, not a permission error', async () => {
         const att = { ...makeAttachment(), size: 5 * 1024 * 1024 };
-        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64);
+        const result = await AttachCapturedFileToMessage(detailId, att, PNG_BASE64);
         expect(result.ok).toBe(false);
         if (result.ok) return;
         expect(result.reason).toBe('too-large');
@@ -122,21 +122,21 @@ describe.runIf(hasToken())('integration: attachments', () => {
     it('honours an agent threshold override below the system default', async () => {
         const att = makeAttachment();
         // 10 bytes — smaller than our PNG, so the override must force the storage path.
-        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64, 10);
+        const result = await AttachCapturedFileToMessage(detailId, att, PNG_BASE64, 10);
         expect(result.ok).toBe(false);
         if (result.ok) return;
         expect(result.reason).toBe('too-large');
     }, 60000);
 
     it('reports a save failure rather than throwing for a nonexistent message', async () => {
-        const result = await attachCapturedFileToMessage(
+        const result = await AttachCapturedFileToMessage(
             '00000000-0000-0000-0000-000000000000', makeAttachment(), PNG_BASE64);
         expect(result.ok).toBe(false);
     }, 60000);
 
     it('computes base64 size without decoding', () => {
-        expect(base64SizeBytes(PNG_BASE64)).toBeGreaterThan(60);
-        expect(base64SizeBytes(PNG_BASE64)).toBeLessThan(100);
+        expect(Base64SizeBytes(PNG_BASE64)).toBeGreaterThan(60);
+        expect(Base64SizeBytes(PNG_BASE64)).toBeLessThan(100);
     });
 
     function makeAttachment(): CapturedAttachment {
@@ -144,7 +144,7 @@ describe.runIf(hasToken())('integration: attachments', () => {
             uri: `data:image/png;base64,${PNG_BASE64}`,
             name: `pixel-${Date.now()}.png`,
             mimeType: 'image/png',
-            size: base64SizeBytes(PNG_BASE64),
+            size: Base64SizeBytes(PNG_BASE64),
             kind: 'image',
         };
     }

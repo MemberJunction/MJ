@@ -11,7 +11,7 @@
  * today, so we store the token under the user's server-side settings
  * (`MJ: User Settings`, key {@link PUSH_TOKEN_SETTING_KEY}). This is per-user,
  * not per-device — a single row holds one token. See the TODO on
- * {@link registerDeviceToken}: a dedicated `Device Tokens` entity (one row per
+ * {@link RegisterDeviceToken}: a dedicated `Device Tokens` entity (one row per
  * device, so a user with multiple devices can be targeted individually) is the
  * proper follow-up.
  */
@@ -23,7 +23,7 @@ import type { MJUserSettingEntity } from '@memberjunction/core-entities';
 /** `MJ: User Settings` key under which this user's push token bundle is stored. */
 export const PUSH_TOKEN_SETTING_KEY = 'mobile.pushDeviceToken';
 
-/** Outcome of {@link registerForPushNotifications}. */
+/** Outcome of {@link RegisterForPushNotifications}. */
 export type PushRegistrationResult = {
     /** Whether the OS granted notification permission (or provisional on iOS). */
     granted: boolean;
@@ -47,7 +47,7 @@ type StoredPushToken = {
  * banner + list entry but stay quiet (no sound/badge). Safe to call more than
  * once — the last handler wins.
  */
-export function configureNotificationHandler(): void {
+export function ConfigureNotificationHandler(): void {
     Notifications.setNotificationHandler({
         handleNotification: async () => ({
             shouldShowBanner: true,
@@ -64,7 +64,7 @@ export function configureNotificationHandler(): void {
  *
  * @returns `true` if notifications are permitted; `false` on denial or error.
  */
-export async function requestNotificationPermission(): Promise<boolean> {
+export async function RequestNotificationPermission(): Promise<boolean> {
     try {
         const current = await Notifications.getPermissionsAsync();
         if (isGranted(current)) return true;
@@ -90,7 +90,7 @@ function isGranted(status: Notifications.NotificationPermissionsStatus): boolean
  *
  * @returns The Expo push token string, or `null` when unavailable.
  */
-export async function getExpoPushToken(): Promise<string | null> {
+export async function GetExpoPushToken(): Promise<string | null> {
     try {
         // projectId defaults from Constants.expoConfig.extra.eas.projectId.
         const result = await Notifications.getExpoPushTokenAsync();
@@ -114,7 +114,7 @@ export async function getExpoPushToken(): Promise<string | null> {
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns `true` when the token was saved.
  */
-export async function registerDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
+export async function RegisterDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
     if (!currentUser?.ID) {
@@ -139,7 +139,7 @@ export async function registerDeviceToken(token: string, contextUser?: UserInfo)
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns `true` when the stored token was deleted (or there was nothing to delete).
  */
-export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boolean> {
+export async function UnregisterDeviceToken(contextUser?: UserInfo): Promise<boolean> {
     try {
         await Notifications.unregisterForNotificationsAsync();
     } catch (e) {
@@ -166,20 +166,20 @@ export async function unregisterDeviceToken(contextUser?: UserInfo): Promise<boo
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns A {@link PushRegistrationResult} describing what succeeded.
  */
-export async function registerForPushNotifications(contextUser?: UserInfo): Promise<PushRegistrationResult> {
-    configureNotificationHandler();
+export async function RegisterForPushNotifications(contextUser?: UserInfo): Promise<PushRegistrationResult> {
+    ConfigureNotificationHandler();
 
-    const granted = await requestNotificationPermission();
+    const granted = await RequestNotificationPermission();
     if (!granted) {
         return { granted: false, token: null, persisted: false, reason: 'Notification permission not granted.' };
     }
 
-    const token = await getExpoPushToken();
+    const token = await GetExpoPushToken();
     if (!token) {
         return { granted: true, token: null, persisted: false, reason: 'No Expo push token (simulator or APNs unavailable).' };
     }
 
-    const persisted = await registerDeviceToken(token, contextUser);
+    const persisted = await RegisterDeviceToken(token, contextUser);
     return { granted: true, token, persisted, reason: persisted ? undefined : 'Token acquired but backend persistence failed.' };
 }
 

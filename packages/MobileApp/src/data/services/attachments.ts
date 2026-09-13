@@ -28,7 +28,7 @@
  * Links`, which is what makes an attachment discoverable from the record rather
  * than only from the file catalog.
  *
- * {@link composeMessageWithAttachment} is still used alongside this — not as a
+ * {@link ComposeMessageWithAttachment} is still used alongside this — not as a
  * fallback for missing upload, but because a chat message should *say* that it
  * carries an attachment. The note is the human-readable half; the File record and
  * its link are the machine-readable half.
@@ -37,21 +37,21 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
 import type { CompositeKey, UserInfo } from '@memberjunction/core';
-import { attachCapturedFileToMessage, type AttachResult } from './attachment-storage';
-import { describeAttachment, type AttachmentKind, type CapturedAttachment } from './attachment-meta';
+import { AttachCapturedFileToMessage, type AttachResult } from './attachment-storage';
+import { DescribeAttachment, type AttachmentKind, type CapturedAttachment } from './attachment-meta';
 
 // Re-exported so existing call sites keep one import for the whole attachment surface.
 // Intra-package re-export — the no-re-export rule governs crossing package boundaries.
 export {
     type AttachmentKind,
     type CapturedAttachment,
-    describeAttachment,
-    composeMessageWithAttachment,
+    DescribeAttachment,
+    ComposeMessageWithAttachment,
 } from './attachment-meta';
 export {
-    attachCapturedFileToMessage,
-    linkFileToRecord,
-    base64SizeBytes,
+    AttachCapturedFileToMessage,
+    LinkFileToRecord,
+    Base64SizeBytes,
     type AttachResult,
 } from './attachment-storage';
 
@@ -119,7 +119,7 @@ function imageResultToAttachment(result: ImagePicker.ImagePickerResult): Capture
  * @returns The chosen image as a {@link CapturedAttachment}, or `null` when the
  *   user cancels, denies library access, or a native error occurs.
  */
-export async function pickImageFromLibrary(): Promise<CapturedAttachment | null> {
+export async function PickImageFromLibrary(): Promise<CapturedAttachment | null> {
     const allowed = await ensurePermission(
         () => ImagePicker.getMediaLibraryPermissionsAsync(),
         () => ImagePicker.requestMediaLibraryPermissionsAsync(),
@@ -145,7 +145,7 @@ export async function pickImageFromLibrary(): Promise<CapturedAttachment | null>
  *
  * @returns The captured photo as a {@link CapturedAttachment}, or `null`.
  */
-export async function capturePhoto(): Promise<CapturedAttachment | null> {
+export async function CapturePhoto(): Promise<CapturedAttachment | null> {
     const allowed = await ensurePermission(
         () => ImagePicker.getCameraPermissionsAsync(),
         () => ImagePicker.requestCameraPermissionsAsync(),
@@ -167,7 +167,7 @@ export async function capturePhoto(): Promise<CapturedAttachment | null> {
  * @returns The chosen document as a {@link CapturedAttachment}, or `null` on
  *   cancel / native error.
  */
-export async function pickDocument(): Promise<CapturedAttachment | null> {
+export async function PickDocument(): Promise<CapturedAttachment | null> {
     try {
         // copyToCacheDirectory guarantees a readable local URI for base64 inlining.
         const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
@@ -193,7 +193,7 @@ export async function pickDocument(): Promise<CapturedAttachment | null> {
  * @param att The attachment whose bytes to read.
  * @returns The base64-encoded contents, or `null` if the file can't be read.
  */
-export async function readAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
+export async function ReadAttachmentBase64(att: CapturedAttachment): Promise<string | null> {
     try {
         return await new File(att.uri).base64();
     } catch {
@@ -212,14 +212,14 @@ export async function readAttachmentBase64(att: CapturedAttachment): Promise<str
  * @param conversationDetailId The message to attach it to.
  * @param contextUser Optional context user; defaults to the signed-in user.
  */
-export async function attachCapturedFile(
+export async function AttachCapturedFile(
     att: CapturedAttachment,
     conversationDetailId: string,
     contextUser?: UserInfo,
 ): Promise<AttachResult> {
-    const base64 = await readAttachmentBase64(att);
+    const base64 = await ReadAttachmentBase64(att);
     if (!base64) {
         return { ok: false, reason: 'invalid', message: 'The file could not be read from this device.' };
     }
-    return attachCapturedFileToMessage(conversationDetailId, att, base64, null, contextUser);
+    return AttachCapturedFileToMessage(conversationDetailId, att, base64, null, contextUser);
 }

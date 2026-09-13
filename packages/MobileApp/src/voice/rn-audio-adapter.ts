@@ -27,14 +27,14 @@
  * `react-native-audio-api`'s Web Audio implementation, or `@siteed/expo-audio-stream`) that can
  * (a) deliver mic PCM16 blocks via a callback and (b) schedule raw PCM16 chunks on an output
  * clock. This adapter is written against exactly that seam: when such a module is present it calls
- * {@link enableRealtimePcmAudio} at startup, {@link isRealtimePcmAudioSupported} flips `true`, and
+ * {@link EnableRealtimePcmAudio} at startup, {@link IsRealtimePcmAudioSupported} flips `true`, and
  * the session runs; when it is absent (an `expo-audio`-only build) the capability reports `false`
  * and {@link RealtimeVoiceService} degrades gracefully to a clear "voice unavailable" state instead
  * of opening a session that could carry no audio.
  *
  * The `expo-audio` primitives we CAN use unconditionally are the microphone **permission** flow and
- * the **audio-session** configuration ({@link requestMicrophonePermission},
- * {@link configureVoiceAudioSession}) — those are wired here for real.
+ * the **audio-session** configuration ({@link RequestMicrophonePermission},
+ * {@link ConfigureVoiceAudioSession}) — those are wired here for real.
  */
 
 import { RegisterClass } from '@memberjunction/global';
@@ -54,7 +54,7 @@ import {
 // ── Native-PCM capability seam ─────────────────────────────────────────────────
 
 /**
- * Module-level flag toggled by {@link enableRealtimePcmAudio}. A native PCM-streaming module
+ * Module-level flag toggled by {@link EnableRealtimePcmAudio}. A native PCM-streaming module
  * calls the enabler at app startup; until then the flag stays `false` and the voice service
  * degrades gracefully (see the file header). Kept as a module variable (not a `globalThis`
  * probe) so it stays strongly typed with no casts.
@@ -64,20 +64,20 @@ let pcmAudioSupported = false;
 /**
  * Declares that a native module capable of low-latency PCM16 mic capture + gapless PCM16
  * playback is installed and wired into {@link RnPcmMicCapture} / {@link RnPcmPlayback}. Call
- * this once at startup from that module's init. Absent this call, {@link isRealtimePcmAudioSupported}
+ * this once at startup from that module's init. Absent this call, {@link IsRealtimePcmAudioSupported}
  * reports `false` and realtime voice degrades to an "unavailable" state rather than opening a
  * session that cannot carry audio.
  */
-export function enableRealtimePcmAudio(): void {
+export function EnableRealtimePcmAudio(): void {
     pcmAudioSupported = true;
 }
 
 /**
  * Whether this build can carry a real-time PCM16 voice session. `false` on an `expo-audio`-only
  * build (the file-based recorder/player cannot stream raw PCM — see the file header); `true` once
- * a native audio module has called {@link enableRealtimePcmAudio}.
+ * a native audio module has called {@link EnableRealtimePcmAudio}.
  */
-export function isRealtimePcmAudioSupported(): boolean {
+export function IsRealtimePcmAudioSupported(): boolean {
     return pcmAudioSupported;
 }
 
@@ -89,7 +89,7 @@ export function isRealtimePcmAudioSupported(): boolean {
  * never re-prompted. Never throws — any module error resolves to `false` (treated as "denied") so
  * the caller can surface a clear permission message instead of crashing.
  */
-export async function requestMicrophonePermission(): Promise<boolean> {
+export async function RequestMicrophonePermission(): Promise<boolean> {
     try {
         const current = await getRecordingPermissionsAsync();
         if (current.granted) {
@@ -110,7 +110,7 @@ export async function requestMicrophonePermission(): Promise<boolean> {
  * recording enabled and audio audible even with the ringer on silent. Best-effort — a failure is
  * swallowed (the session can still proceed; iOS simply keeps its prior category).
  */
-export async function configureVoiceAudioSession(): Promise<void> {
+export async function ConfigureVoiceAudioSession(): Promise<void> {
     try {
         await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
     } catch {
@@ -121,7 +121,7 @@ export async function configureVoiceAudioSession(): Promise<void> {
 /**
  * Reverts the audio session out of record mode at session end. Best-effort and never throws.
  */
-export async function resetVoiceAudioSession(): Promise<void> {
+export async function ResetVoiceAudioSession(): Promise<void> {
     try {
         await setAudioModeAsync({ allowsRecording: false });
     } catch {
@@ -134,7 +134,7 @@ export async function resetVoiceAudioSession(): Promise<void> {
 /**
  * RN microphone-capture seam. On an `expo-audio`-only build this cannot emit PCM16 frames (see the
  * file header), so `onPcmChunk` is retained for the native-module path but never invoked here —
- * {@link isRealtimePcmAudioSupported} gates the session so this inert state is never reached in
+ * {@link IsRealtimePcmAudioSupported} gates the session so this inert state is never reached in
  * production. When a native PCM module is wired in, its per-block callback is forwarded to
  * `onPcmChunk` and {@link Stop} releases the native capture graph.
  */
@@ -171,7 +171,7 @@ export class RnPcmMicCapture implements IPcmMicCapture {
 /**
  * RN playout seam. On an `expo-audio`-only build there is no primitive to schedule raw PCM16
  * chunks gaplessly (see the file header), so enqueued chunks are counted for an honest
- * {@link IsPlaying} but not rendered to the speaker — {@link isRealtimePcmAudioSupported} gates the
+ * {@link IsPlaying} but not rendered to the speaker — {@link IsRealtimePcmAudioSupported} gates the
  * session so this inert state is never reached in production. A native module replaces the counting
  * with a real output-clock scheduler.
  */
@@ -222,7 +222,7 @@ export class RnPcmPlayback implements IRealtimePcmPlayback {
  *
  * @returns A `MediaStream`-typed shim exposing empty track lists.
  */
-export function acquireVoiceInputStream(): MediaStream {
+export function AcquireVoiceInputStream(): MediaStream {
     const shim: Pick<MediaStream, 'getTracks' | 'getAudioTracks' | 'getVideoTracks'> = {
         getTracks: () => [],
         getAudioTracks: () => [],

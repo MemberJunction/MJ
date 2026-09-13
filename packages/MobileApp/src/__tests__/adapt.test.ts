@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import {
-    adaptConversationToSummary,
-    groupConversations,
-    adaptAgentRef,
-    adaptMessage,
-    adaptConversation,
+    AdaptConversationToSummary,
+    GroupConversations,
+    AdaptAgentRef,
+    AdaptMessage,
+    AdaptConversation,
 } from '@/data/adapt';
 import type { ConversationListItem, ConversationMessage, ConversationDetailLoad } from '@/data/services/conversations';
-import { Colors, colorForAgent } from '@/theme/tokens';
+import { Colors, ColorForAgent } from '@/theme/tokens';
 
 // ---------------------------------------------------------------------------
 // Lightweight builders — adapt.ts only reads a handful of fields off the MJ
@@ -48,26 +48,26 @@ function message(detail: DetailShape, agentName: string | null = null): Conversa
 }
 
 describe('adapt', () => {
-    describe('adaptAgentRef', () => {
+    describe('AdaptAgentRef', () => {
         it('resolves color + initial from the agent name', () => {
-            const ref = adaptAgentRef('a1', 'Research Bot');
+            const ref = AdaptAgentRef('a1', 'Research Bot');
             expect(ref.id).toBe('a1');
             expect(ref.name).toBe('Research Bot');
-            expect(ref.color).toBe(colorForAgent('Research Bot'));
+            expect(ref.color).toBe(ColorForAgent('Research Bot'));
             expect(ref.initial).toBe('R');
         });
 
         it('falls back to safe defaults for null id/name', () => {
-            const ref = adaptAgentRef(null, null);
+            const ref = AdaptAgentRef(null, null);
             expect(ref.id).toBe('unknown');
             expect(ref.name).toBe('Agent');
             expect(ref.initial).toBe('A');
         });
     });
 
-    describe('adaptConversationToSummary', () => {
+    describe('AdaptConversationToSummary', () => {
         it('maps core fields and falls back for empty title/snippet', () => {
-            const summary = adaptConversationToSummary(
+            const summary = AdaptConversationToSummary(
                 listItem({ entity: { ID: 'c9', Name: null, IsPinned: true }, latestSnippet: null, messageCount: 7, live: true }),
             );
             expect(summary.id).toBe('c9');
@@ -79,14 +79,14 @@ describe('adapt', () => {
         });
 
         it('synthesizes a single fallback agent when none participated', () => {
-            const summary = adaptConversationToSummary(listItem({ agentIds: [], agentNames: [] }));
+            const summary = AdaptConversationToSummary(listItem({ agentIds: [], agentNames: [] }));
             expect(summary.agents).toHaveLength(1);
             expect(summary.agents[0].name).toBe('Skip');
             expect(summary.agents[0].color).toBe(Colors.agentFallback);
         });
 
         it('builds one participant per agent id with resolved colors/initials', () => {
-            const summary = adaptConversationToSummary(
+            const summary = AdaptConversationToSummary(
                 listItem({ agentIds: ['a1', 'a2'], agentNames: ['Research', 'Analyst'] }),
             );
             expect(summary.agents).toHaveLength(2);
@@ -95,7 +95,7 @@ describe('adapt', () => {
         });
     });
 
-    describe('groupConversations', () => {
+    describe('GroupConversations', () => {
         it('buckets by pinned / today / yesterday / earlier', () => {
             const now = new Date();
             const yesterday = new Date(now);
@@ -103,7 +103,7 @@ describe('adapt', () => {
             const lastWeek = new Date(now);
             lastWeek.setDate(now.getDate() - 8);
 
-            const grouped = groupConversations([
+            const grouped = GroupConversations([
                 listItem({ entity: { ID: 'p', Name: 'Pinned', IsPinned: true }, latestAt: lastWeek }),
                 listItem({ entity: { ID: 't', Name: 'Today' }, latestAt: now }),
                 listItem({ entity: { ID: 'y', Name: 'Yest' }, latestAt: yesterday }),
@@ -117,9 +117,9 @@ describe('adapt', () => {
         });
     });
 
-    describe('adaptMessage', () => {
+    describe('AdaptMessage', () => {
         it('adapts a user message', () => {
-            const m = adaptMessage(message({ ID: 'm1', Role: 'User', Message: 'hi there' }));
+            const m = AdaptMessage(message({ ID: 'm1', Role: 'User', Message: 'hi there' }));
             expect(m.kind).toBe('user');
             if (m.kind === 'user') {
                 expect(m.id).toBe('m1');
@@ -128,7 +128,7 @@ describe('adapt', () => {
         });
 
         it('adapts an agent message and parses suggested responses (strings only, max 4)', () => {
-            const m = adaptMessage(
+            const m = AdaptMessage(
                 message(
                     {
                         ID: 'm2',
@@ -152,12 +152,12 @@ describe('adapt', () => {
         });
 
         it('tolerates malformed suggested-responses JSON', () => {
-            const m = adaptMessage(message({ ID: 'm3', Role: 'AI', Message: 'x', SuggestedResponses: '{not json' }));
+            const m = AdaptMessage(message({ ID: 'm3', Role: 'AI', Message: 'x', SuggestedResponses: '{not json' }));
             if (m.kind === 'agent') expect(m.suggestedResponses).toEqual([]);
         });
 
         it('defaults status to Complete and falls back to Error text for empty message', () => {
-            const m = adaptMessage(message({ ID: 'm4', Role: 'Error', Message: null, Error: 'boom', Status: null }));
+            const m = AdaptMessage(message({ ID: 'm4', Role: 'Error', Message: null, Error: 'boom', Status: null }));
             if (m.kind === 'agent') {
                 expect(m.status).toBe('Complete');
                 expect(m.body).toBe('boom');
@@ -165,7 +165,7 @@ describe('adapt', () => {
         });
     });
 
-    describe('adaptConversation', () => {
+    describe('AdaptConversation', () => {
         it('dedupes participants, counts messages, and flags live', () => {
             const load: ConversationDetailLoad = {
                 conversation: { ID: 'c1', Name: 'My Chat' } as unknown as ConversationDetailLoad['conversation'],
@@ -176,7 +176,7 @@ describe('adapt', () => {
                 ],
                 artifacts: [],
             };
-            const adapted = adaptConversation(load);
+            const adapted = AdaptConversation(load);
             expect(adapted.id).toBe('c1');
             expect(adapted.title).toBe('My Chat');
             expect(adapted.messageCount).toBe(3);

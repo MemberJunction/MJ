@@ -21,10 +21,10 @@ vi.mock('expo-audio', () => ({
 import {
     RnPcmMicCapture,
     RnPcmPlayback,
-    acquireVoiceInputStream,
-    isRealtimePcmAudioSupported,
-    enableRealtimePcmAudio,
-    requestMicrophonePermission,
+    AcquireVoiceInputStream,
+    IsRealtimePcmAudioSupported,
+    EnableRealtimePcmAudio,
+    RequestMicrophonePermission,
 } from '@/voice/rn-audio-adapter';
 import { RealtimeVoiceService, type VoiceServiceEvent } from '@/voice/realtime-voice-service';
 
@@ -59,29 +59,29 @@ describe('rn-audio-adapter', () => {
         });
     });
 
-    describe('acquireVoiceInputStream', () => {
+    describe('AcquireVoiceInputStream', () => {
         it('returns a stream with empty track lists', () => {
-            const stream = acquireVoiceInputStream();
+            const stream = AcquireVoiceInputStream();
             expect(stream.getAudioTracks()).toEqual([]);
             expect(stream.getTracks()).toEqual([]);
         });
     });
 
-    describe('requestMicrophonePermission', () => {
+    describe('RequestMicrophonePermission', () => {
         it('returns true when already granted (without prompting again)', async () => {
             getRecordingPermissionsAsync.mockResolvedValueOnce({ granted: true, canAskAgain: true, status: 'granted' });
-            expect(await requestMicrophonePermission()).toBe(true);
+            expect(await RequestMicrophonePermission()).toBe(true);
             expect(requestRecordingPermissionsAsync).not.toHaveBeenCalled();
         });
 
         it('prompts and returns the grant when not yet granted', async () => {
-            expect(await requestMicrophonePermission()).toBe(true);
+            expect(await RequestMicrophonePermission()).toBe(true);
             expect(requestRecordingPermissionsAsync).toHaveBeenCalledOnce();
         });
 
         it('returns false (never throws) when the module errors', async () => {
             getRecordingPermissionsAsync.mockRejectedValueOnce(new Error('no module'));
-            expect(await requestMicrophonePermission()).toBe(false);
+            expect(await RequestMicrophonePermission()).toBe(false);
         });
     });
 });
@@ -89,7 +89,7 @@ describe('rn-audio-adapter', () => {
 describe('RealtimeVoiceService graceful degradation', () => {
     it('degrades to unavailable("audio") when no native PCM audio is present — no throw, no network', async () => {
         // Default build has no native PCM module.
-        expect(isRealtimePcmAudioSupported()).toBe(false);
+        expect(IsRealtimePcmAudioSupported()).toBe(false);
 
         const service = new RealtimeVoiceService();
         const events: VoiceServiceEvent[] = [];
@@ -116,9 +116,9 @@ describe('RealtimeVoiceService graceful degradation', () => {
     });
 });
 
-describe('enableRealtimePcmAudio', () => {
+describe('EnableRealtimePcmAudio', () => {
     it('flips the capability flag (native-module seam)', () => {
-        enableRealtimePcmAudio();
-        expect(isRealtimePcmAudioSupported()).toBe(true);
+        EnableRealtimePcmAudio();
+        expect(IsRealtimePcmAudioSupported()).toBe(true);
     });
 });
