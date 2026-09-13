@@ -1,0 +1,29 @@
+{
+  "id": "webresearch-parallel-fanout-01",
+  "agent": "Web Research Agent",
+  "tags": [
+    "parallel-actions"
+  ],
+  "description": "Two independent searches warranted in one turn. the provider matrix showed parallel-call support varies by generation even within one vendor; this is the corpus-level version.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Search both Google and Perplexity for 2025 solid-state battery commercialization news."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Google Custom Search"
+      },
+      {
+        "name": "Perplexity Search"
+      }
+    ],
+    "allowAdditionalActions": false
+  }
+}

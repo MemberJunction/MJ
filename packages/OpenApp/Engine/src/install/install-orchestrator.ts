@@ -7,7 +7,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mkdirSync, readFileSync, rmSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import type { AppInstallCallbacks, InstallOptions, UpgradeOptions, RemoveOptions, AppOperationResult, ErrorPhase, PassthroughInstallOptions, AppHookPayload, AppStatus, InstallAction } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
@@ -23,6 +22,7 @@ import { RunFkGraphTeardown, buildRootDoomedPredicate } from './entity-teardown.
 import { extractApplicationIds } from './migration-application-ids.js';
 import { RunAppMigrations, type SkywayDatabaseConfig } from './migration-runner.js';
 import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDependencies, type PackageManagerType, type VersionStrategy, type WorkspaceTarget } from './package-manager.js';
+import { BuildHookResolutionBases, ResolveHookModule } from './hook-module-resolver.js';
 import { AddServerDynamicPackages, AddClientDynamicPackages, RemoveServerDynamicPackages, PruneDynamicPackagesNotInManifest, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping, AddExcludeSchema, RemoveExcludeSchema } from './config-manager.js';
 import { AngularConfigManager } from './angular-config-manager.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
@@ -462,7 +462,7 @@ export async function InstallApp(options: InstallOptions, context: OrchestratorC
           ContextUser: context.ContextUser,
           Callbacks: context.Callbacks,
           Manifest: manifest,
-        }, context.RepoRoot);
+        }, context, manifest);
       }
       await SetAppStep(context.ContextUser, createdAppId!, 'HooksRun');
     }
@@ -953,7 +953,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
           ContextUser: context.ContextUser,
           Callbacks: context.Callbacks,
           Manifest: manifest,
-        }, context.RepoRoot);
+        }, context, manifest);
       }
       await SetAppStep(context.ContextUser, existingApp.ID, 'HooksRun', undefined, manifest.version);
     }
@@ -1115,7 +1115,7 @@ export async function RemoveApp(options: RemoveOptions, context: OrchestratorCon
         ContextUser: context.ContextUser,
         Callbacks: context.Callbacks,
         Manifest: manifest,
-      }, context.RepoRoot);
+      }, context, manifest);
     }
 
     // Step 3: Database cleanup FIRST — metadata + schema (the hard-to-undo, failure-prone
@@ -1871,6 +1871,13 @@ async function HandlePackageInstallation(
 
   context.Callbacks?.OnProgress?.('Packages', 'Running package install...');
   const installResult = RunPackageInstall(context.RepoRoot, verbose, manifest.packages.registry, context.PackageManager);
+  if (installResult.DevWorkspaceParent) {
+    context.Callbacks?.OnProgress?.(
+      'Packages',
+      `Ran the install at the mj dev workspace parent ${installResult.DevWorkspaceParent} — this repo is a member there, ` +
+        `and an in-place install would have created a second, standalone store beside the workspace links.`
+    );
+  }
   if (!installResult.Success) {
     return { Success: false, PackageJsonUpdated: true, ErrorMessage: installResult.ErrorMessage };
   }
@@ -2048,31 +2055,39 @@ async function ExecuteHook(command: string, cwd: string): Promise<void> {
 }
 
 /**
- * Executes an in-process lifecycle hook MODULE. The specifier is resolved from the
- * consumer monorepo (`repoRoot`) so it loads one of the app's already-installed npm
- * packages (npm install runs earlier in the flow), then its default export is awaited
- * with the live {@link AppHookPayload} — DB provider, context user, interactive prompt
- * callbacks, and the manifest. Unlike {@link ExecuteHook} this runs IN-PROCESS: no child
- * process, no execSync timeout, and no need for the hook to self-bootstrap a DB
- * connection. This is what powers DB-aware, interactive setup/teardown (e.g. a guided
- * config wizard). A repo-relative path will NOT work here — only the manifest + migration
- * .sql files are downloaded to the consumer, never the app's source — so the specifier
- * must resolve to an installed package (e.g. '@scope/app-server/setup').
+ * Executes an in-process lifecycle hook MODULE. The specifier is resolved from where the
+ * app's npm packages were installed (package install runs earlier in the flow) — each
+ * installed app package first, then the server / client workspaces, then the repo root; see
+ * {@link BuildHookResolutionBases} for why the repo root alone stopped working under pnpm —
+ * then its default export is awaited with the live {@link AppHookPayload}: DB provider,
+ * context user, interactive prompt callbacks, and the manifest. Unlike {@link ExecuteHook}
+ * this runs IN-PROCESS: no child process, no execSync timeout, and no need for the hook to
+ * self-bootstrap a DB connection. This is what powers DB-aware, interactive setup/teardown
+ * (e.g. a guided config wizard). A repo-relative path will NOT work here — only the manifest
+ * + migration .sql files are downloaded to the consumer, never the app's source — so the
+ * specifier must resolve to an installed package or one of its dependencies (e.g.
+ * '@scope/app-server/setup', or '@scope/app-core/setup' beneath '@scope/app-server').
  */
-async function ExecuteHookModule(specifier: string, payload: AppHookPayload, repoRoot: string): Promise<void> {
+async function ExecuteHookModule(
+  specifier: string,
+  payload: AppHookPayload,
+  layout: Pick<OrchestratorContext, 'RepoRoot' | 'ServerPackagePath' | 'ClientPackagePath'>,
+  manifest: MJAppManifest
+): Promise<void> {
   try {
-    const requireFromRepo = createRequire(pathToFileURL(join(repoRoot, 'package.json')).href);
-    let resolved: string;
-    try {
-      resolved = requireFromRepo.resolve(specifier);
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      throw new Error(
-        `Hook module '${specifier}' could not be resolved from '${repoRoot}'. ` +
-        `Ensure it is exported by one of the app's installed packages. (${msg})`,
-      );
+    const shared = (manifest.packages?.shared ?? []).map((p) => p.name);
+    const bases = BuildHookResolutionBases({
+      RepoRoot: layout.RepoRoot,
+      ServerPackagePath: layout.ServerPackagePath,
+      ClientPackagePath: layout.ClientPackagePath,
+      ServerPackageNames: [...(manifest.packages?.server ?? []).map((p) => p.name), ...shared],
+      ClientPackageNames: [...(manifest.packages?.client ?? []).map((p) => p.name), ...shared],
+    });
+    const resolution = ResolveHookModule(specifier, bases);
+    if ('Error' in resolution) {
+      throw new Error(resolution.Error);
     }
-    const mod = await import(pathToFileURL(resolved).href);
+    const mod = await import(pathToFileURL(resolution.Resolved).href);
     const fn = (mod.default ?? mod) as unknown;
     if (typeof fn !== 'function') {
       throw new Error(`Hook module '${specifier}' must export a default async function`);

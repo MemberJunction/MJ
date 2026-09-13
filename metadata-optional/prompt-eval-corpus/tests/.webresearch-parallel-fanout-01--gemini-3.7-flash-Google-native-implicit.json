@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-parallel-fanout-01 [gemini-3.7-flash · Google · native-implicit]",
+    "Description": "Two independent searches warranted in one turn. the provider matrix showed parallel-call support varies by generation even within one vendor; this is the corpus-level version.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Search both Google and Perplexity for 2025 solid-state battery commercialization news."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-parallel-fanout-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Google Custom Search"
+          },
+          {
+            "name": "Perplexity Search"
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Google Custom Search"
+              },
+              {
+                "name": "Perplexity Search"
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "F61601F9-5EA5-41C8-AE5F-A51E2160A51F"
+  }
+}

@@ -1,4 +1,4 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { LMStudioClient, LLMPredictionFragment } from '@lmstudio/sdk';
 
@@ -165,7 +165,7 @@ export class LMStudioLLM extends BaseLLM {
 
             // Convert MJ messages to LM Studio format
             const messages = params.messages.map(m => ({
-                role: m.role,
+                role: toClassicChatMessageRole(m.role),
                 content: Array.isArray(m.content) ? 
                     m.content.map(block => block.content).join('\n') : 
                     m.content
@@ -318,7 +318,7 @@ export class LMStudioLLM extends BaseLLM {
 
         // Convert MJ messages to LM Studio format
         const messages = params.messages.map(m => ({
-            role: m.role,
+            role: toClassicChatMessageRole(m.role),
             content: Array.isArray(m.content) ? 
                 m.content.map(block => block.content).join('\n') : 
                 m.content
