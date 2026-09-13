@@ -9,6 +9,7 @@ import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordProcessor } from '../lib/RecordProcessor';
 import { SyncStateManager } from '../lib/sync-state-manager';
+import { extractPrimaryKeyValues } from '../lib/record-primary-key';
 
 /** Validates that a string is a well-formed ISO 8601 timestamp. */
 function isValidISOTimestamp(value: string): boolean {
@@ -281,11 +282,7 @@ export class PullService {
       // Process records in parallel for multi-file mode
       const recordPromises = records.map(async (record, index) => {
         try {
-          // Build primary key
-          const primaryKey: Record<string, any> = {};
-          for (const pk of entityInfo.PrimaryKeys) {
-            primaryKey[pk.Name] = (record as any)[pk.Name];
-          }
+          const primaryKey = extractPrimaryKeyValues(record, entityInfo);
 
           // Process record for multi-file
           const recordData = await this.recordProcessor.processRecord(
@@ -590,12 +587,8 @@ export class PullService {
     const existingRecordsToUpdate: Array<{ record: BaseEntity; primaryKey: Record<string, any>; filePath: string }> = [];
     
     for (const record of records) {
-      // Build primary key
-      const primaryKey: Record<string, any> = {};
-      for (const pk of entityInfo.PrimaryKeys) {
-        primaryKey[pk.Name] = (record as any)[pk.Name];
-      }
-      
+      const primaryKey = extractPrimaryKeyValues(record, entityInfo);
+
       // Create lookup key
       const lookupKey = this.createPrimaryKeyLookup(primaryKey);
       const existingFileInfo = existingRecordsMap.get(lookupKey);
