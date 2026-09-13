@@ -16527,6 +16527,94 @@
   },
   {
     "fields": {
+      "Name": "DeepSeek V4.1 Flash",
+      "PowerRank": 32,
+      "Description": "DeepSeek's cost-efficient flagship refresh, released September 10, 2026 as the successor to V4 Flash. Mixture-of-Experts with 552B total parameters and NATIVE VISION - the first Flash-tier DeepSeek model to take images without a separate vision-experimental variant. 1,048,576-token context window with up to 384,000 output tokens. The official API model id is `deepseek-flash`; the retired `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` ids temporarily route here at the Flash rate, so existing callers keep working, but new integrations should use `deepseek-flash`. PEAK/OFF-PEAK BILLING: DeepSeek bills two tiers and the cost record below carries the OFF-PEAK rate ($0.15 input / $0.60 output per 1M, $0.003 cached input). Peak rates are exactly double, and DeepSeek's peak window runs Monday-Friday 01:00-04:00 and 06:00-10:00 UTC. Recording off-peak rather than an average is deliberate: the 2026-08-16 `DeepSeek V4 Pro` record was written at a blended figure matching neither tier and has been an open reconciliation item ever since.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 2,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=DeepSeek V4 Flash",
+      "ModelConfiguration": {
+        "LLM": {
+          "SupportsNativeToolCalling": true,
+          "DefaultToNativeToolCalling": false,
+          "NativeControlFlow": "implicit",
+          "NativeToolResults": true
+        }
+      }
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "DeepSeekLLM",
+            "APIName": "deepseek-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "Priority": 50,
+            "Status": "Active",
+            "DriverClass": "OpenRouterLLM",
+            "APIName": "deepseek/deepseek-v4.1-flash",
+            "MaxInputTokens": 1048576,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "StartedAt": "2026-09-10T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.6,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "DeepSeek direct, OFF-PEAK tier, effective 2026-09-10. $0.15 uncached input / $0.60 output / $0.003 cached input per 1M. PEAK is exactly double ($0.30/$1.20, $0.006 cached) during Monday-Friday 01:00-04:00 and 06:00-10:00 UTC. Off-peak is recorded rather than a blend, so the figure always matches a rate DeepSeek actually charges. No OpenRouter cost row is recorded: the OpenRouter route exists (deepseek/deepseek-v4.1-flash) but its rate was not confirmed at research time, and a guessed price is worse than an absent one. Sources: https://openrouter.ai/deepseek/deepseek-v4.1-flash ; https://techbriefly.com/2026/09/11/deepseek-v4-1-flash-api-pricing/",
+            "CacheReadPricePerUnit": 0.003,
+            "CacheWritePricePerUnit": null
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
       "Name": "GPT Image 2",
       "PowerRank": 19,
       "Description": "OpenAI's state-of-the-art image generation and editing model (April 2026). Generates at 1K, 2K, and 4K resolution, accepts up to 16 reference images, and renders multilingual text (including Chinese, Japanese, Korean) inside images with near-perfect accuracy. Pricing is token-based: $5/M text input, $8/M image input, $30/M image output tokens. Claimed #1 on Image Arena leaderboard at launch by a +242 point margin.",
@@ -23884,16 +23972,17 @@
             "ModelID": "@parent:ID",
             "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
             "StartedAt": "2026-08-26T00:00:00.000Z",
-            "Status": "Active",
+            "Status": "Expired",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 0.05,
             "OutputPricePerUnit": 0.1667,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash",
+            "Comments": "GLM-5.3-Flash on OpenRouter listed at $0.05/$0.1667 per 1M input/output as of 2026-08-26. Values reflect a limited-time 50% Z.AI promo (through 2026-09-09 16:00 UTC); a follow-up cost row should be added once the promo expires so the historical rate is preserved and post-promo pricing is captured accurately. Source: https://openrouter.ai/z-ai/glm-5.3-flash EXPIRED 2026-09-09T16:00Z: Z.AI's 50% launch promo ended at 24:00 Singapore time (UTC+8) on 2026-09-09, the date and time pre-announced in the 2026-09-07 research report. Superseded by the list-rate row below. Note the promo figure recorded here ($0.05/$0.1667) is the rate captured at 2026-08-26; Z.AI's own later materials describe the promo as $0.075/$0.25, so the two disagree — the discrepancy is left as recorded rather than rewritten after the fact, and it does not affect the forward rate.",
             "CacheReadPricePerUnit": null,
-            "CacheWritePricePerUnit": null
+            "CacheWritePricePerUnit": null,
+            "EndedAt": "2026-09-09T16:00:00.000Z"
           },
           "primaryKey": {
             "ID": "C4F43C5F-1AAD-4EEB-A90D-8840A3C3756E"
@@ -23901,6 +23990,23 @@
           "sync": {
             "lastModified": "2026-09-01T16:57:31.956Z",
             "checksum": "6fd8377fc59ce41552e460145539b26d2fade9ac3d4b89d38b1d3d18a5973966"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenRouter",
+            "StartedAt": "2026-09-09T16:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.15,
+            "OutputPricePerUnit": 0.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5.3-Flash list rate on OpenRouter after the Z.AI launch promo expired 2026-09-09 16:00 UTC. Z.AI's own OpenRouter endpoint moved to list pricing ($0.15 input / $0.50 output per 1M) on 2026-09-11, at parity with Z.AI direct. Third-party hosts on OpenRouter (DeepInfra, Relace) undercut this on their own routes; this row records the first-party Z.AI route, which is what APIName z-ai/glm-5.3-flash resolves to. Sources: https://openrouter.ai/z-ai/glm-5.3-flash ; https://cellcog.ai/blog/glm-5-3-flash/",
+            "CacheReadPricePerUnit": null,
+            "CacheWritePricePerUnit": null
           }
         }
       ]
@@ -24357,6 +24463,22 @@
             "lastModified": "2026-09-10T17:40:34.511Z",
             "checksum": "948f501f18701b29e1228ea2ce497f660aeaf81c6ba631daf35813e872cf81ab"
           }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "BedrockLLM",
+            "APIName": "openai.gpt-6-astra",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
         }
       ],
       "MJ: AI Model Costs": [
@@ -24406,6 +24528,23 @@
           "sync": {
             "lastModified": "2026-09-10T17:40:34.547Z",
             "checksum": "b317adfbc59ae2d8cc85879d58c172873cdd439c2e8eacbc0aaf868340d842e3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Amazon Bedrock",
+            "StartedAt": "2026-09-08T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 10,
+            "OutputPricePerUnit": 50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-6 Astra became generally available on Amazon Bedrock 2026-09-08, closing the item left open in the 2026-09-07 report. APIName openai.gpt-6-astra is the Bedrock Mantle endpoint in Oregon; cross-Region inference profiles us.openai.gpt-6-astra and global.openai.gpt-6-astra also exist. This row records GLOBAL cross-Region Standard pricing at the SHORT-context tier (<=272,000 input tokens): $10 input / $50 output per 1M, with $1 cache read and $12.50 cache write. Above 272K the whole request is rebilled at $20/$75; in-Region and US-geographic cross-Region inference are priced 10% higher ($11/$55 short, $22/$82.50 long). The short-context global rate is recorded here for parity with the OpenAI-direct and Azure rows, which use the same convention. Priority and Flex service tiers are not supported for Astra. Source: https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-6-astra.html",
+            "CacheReadPricePerUnit": 1,
+            "CacheWritePricePerUnit": 12.5
           }
         }
       ]
