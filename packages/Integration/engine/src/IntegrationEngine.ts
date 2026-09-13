@@ -46,6 +46,7 @@ import { FieldMappingEngine } from './FieldMappingEngine.js';
 import { MatchEngine } from './MatchEngine.js';
 import { WatermarkService } from './WatermarkService.js';
 import { SyncLogger } from './SyncLogger.js';
+import { ReadResourcePressure, EvaluatePressure } from './ResourcePressure.js';
 import { CONTENT_HASH_COLUMN, computeContentHash } from './ContentHash.js';
 import { RecordMapBatch } from './RecordMapBatch.js';
 import { buildContentHashPrefetchFilter, quoteTextLiteral } from './prefetchFilter.js';
@@ -616,6 +617,20 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         return true;
     }
 
+    /**
+     * Whether a sync for this connection is executing IN THIS PROCESS right now.
+     *
+     * Exists so a caller can tell an operator the truth about a cancel. The durable cancel needs
+     * a run-row column that only newer tenants have; where it is absent, the in-process registry
+     * is the only signal there is, and "we signalled the sync" versus "a sync is running
+     * somewhere we cannot reach" are different things to tell someone who just hit pause.
+     *
+     * Reads the same map RunSync reserves, so it cannot drift from what is actually running.
+     */
+    public static IsSyncRunningInThisProcess(companyIntegrationID: string): boolean {
+        return IntegrationEngine.activeSyncs.has(companyIntegrationID.toLowerCase());
+    }
+
     /** Releases the maintenance lock (idempotent — safe in a finally). */
     public static ReleaseMaintenanceLock(companyIntegrationID: string): void {
         IntegrationEngine.maintenanceLocks.delete(companyIntegrationID.toLowerCase());
@@ -766,11 +781,11 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // Server-side providers are DatabaseProviderBase (which implements IRunViewProvider);
         // same narrowing the engine uses for the ownership sprocs.
         const rv = new RunView(provider as DatabaseProviderBase | undefined);
-        const result = await rv.RunView<{ ProgressJSON: string | null; LeaseExpiresAt: string | Date | null; StartedAt: string | Date }>({
+        const result = await rv.RunView<{ ID: string; ProgressJSON: string | null; LeaseExpiresAt: string | Date | null; StartedAt: string | Date }>({
             EntityName: 'MJ: Company Integration Runs',
             ExtraFilter: `CompanyIntegrationID='${companyIntegrationID.replace(/'/g, "''")}' AND Status IN ('In Progress','Queued')`,
             OrderBy: 'StartedAt DESC',
-            Fields: ['ProgressJSON', 'LeaseExpiresAt', 'StartedAt'],
+            Fields: ['ID', 'ProgressJSON', 'LeaseExpiresAt', 'StartedAt'],
             MaxRows: 1,
             ResultType: 'simple',
             BypassCache: true, // live liveness/progress read — must see the current row
@@ -783,10 +798,15 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         if (row.LeaseExpiresAt != null && new Date(row.LeaseExpiresAt).getTime() < Date.now()) {
             return undefined; // owner's lease lapsed — not live progress
         }
-        if (!row.ProgressJSON) return IntegrationEngine.liveProgress.get(companyIntegrationID.toLowerCase());
+        if (!row.ProgressJSON) {
+            const local = IntegrationEngine.liveProgress.get(companyIntegrationID.toLowerCase());
+            // The row is readable even when the column is not, so the id is known here even on a
+            // tenant whose snapshot came from this process rather than the database.
+            return local ? { ...local, RunID: local.RunID ?? row.ID } : undefined;
+        }
         try {
             const snapshot = JSON.parse(row.ProgressJSON) as SyncProgressSnapshot & { StartedAt: string | Date };
-            return { ...snapshot, StartedAt: new Date(snapshot.StartedAt) };
+            return { ...snapshot, StartedAt: new Date(snapshot.StartedAt), RunID: snapshot.RunID ?? row.ID };
         } catch {
             return undefined; // corrupt snapshot — treat as no progress rather than throwing at a poller
         }
@@ -1852,6 +1872,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         const totalMaps = config.entityMaps.length;
         let globalIndex = 0;
+        /** Pressure codes already reported on this run, so each is said once and not per map. */
+        const pressureWarned = new Set<string>();
 
         // Per-map processing. Extracted so it can run sequentially OR concurrently within a
         // dependency layer. Aggregate mutations run when each promise resolves — atomic under
@@ -1874,6 +1896,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     config, entityMap, run, contextUser, i, totalMaps, onProgress, abortSignal, logger
                 );
                 this.MergeResult(aggregate, mapResult);
+                await this.warnOnResourcePressure(logger, pressureWarned);
                 aggregate.EntityMapResults!.push(this.buildEntityMapResult(entityMap, mapResult, Date.now() - mapStartTime));
                 logger?.emit('sync.entity-map.complete', {
                     externalObjectName: entityMap.ExternalObjectName,
@@ -6073,6 +6096,30 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     /**
      * Merges an entity-map-level result into the aggregate result.
      */
+    /**
+     * Warn on the run's own stream when the host is running out of memory or disk.
+     *
+     * plan.md line 158 wants the user told, and the only moment that is useful is BEFORE the
+     * failure. Emitted at an entity-map boundary because that is a natural checkpoint - the
+     * measurement is cheap but not free, and per-record would be absurd.
+     *
+     * ONCE per code per run. Repeating it every map would bury the run's real events, and the
+     * condition does not become more true by being restated.
+     */
+    private async warnOnResourcePressure(logger: SyncLogger | undefined, warned: Set<string>): Promise<void> {
+        if (!logger) return;
+        try {
+            const findings = EvaluatePressure(await ReadResourcePressure());
+            for (const f of findings) {
+                if (warned.has(f.Code)) continue;
+                warned.add(f.Code);
+                logger.warning('sync', f.Code, f.Message, { fraction: f.Fraction });
+            }
+        } catch {
+            // Measuring headroom must never be the thing that ends a sync.
+        }
+    }
+
     private MergeResult(aggregate: SyncResult, mapResult: SyncResult): void {
         aggregate.RecordsProcessed += mapResult.RecordsProcessed;
         aggregate.RecordsCreated += mapResult.RecordsCreated;
