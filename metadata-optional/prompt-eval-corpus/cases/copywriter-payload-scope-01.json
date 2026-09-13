@@ -1,0 +1,17 @@
+{
+  "id": "copywriter-payload-scope-01",
+  "agent": "Copywriter Agent",
+  "tags": ["payload-change", "payload-scoping", "n2"],
+  "description": "The Copywriter may write content.* and copywriter.*; brand.*, seo.* and editor.* belong to other agents (PayloadUpstreamPaths). Drafting the copy is the decision; writing outside its lane is the failure this case exists to catch. Completing with the draft in the message is also acceptable.",
+  "input": {
+    "payload": { "content": { "brief": "Announce the real-time refresh of the Analytics Dashboard." }, "brand": { "voice": "confident, plain" }, "seo": { "primaryKeyword": "real-time analytics" } },
+    "conversationMessages": [{ "role": "user", "content": "Write the announcement copy." }]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      { "kind": "payloadChange", "forbiddenPayloadPaths": ["newElements.brand", "updateElements.brand", "replaceElements.brand", "newElements.seo", "updateElements.seo", "replaceElements.seo", "newElements.editor", "updateElements.editor"] },
+      { "kind": "taskComplete" }
+    ]
+  }
+}

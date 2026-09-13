@@ -1,0 +1,69 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-clarify-ambiguous-01 [gpt-5.6-luna@none · OpenAI · envelope]",
+    "Description": "The request is too broad to search well. Clarifying is right; searching anyway is the over-eager failure this case exists to catch.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research AI."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-clarify-ambiguous-01",
+      "expect": {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        },
+        "forbiddenActions": [
+          "Google Custom Search",
+          "Perplexity Search",
+          "Web Page Content"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            },
+            "forbiddenActions": [
+              "Google Custom Search",
+              "Perplexity Search",
+              "Web Page Content"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "C9BFA400-99AF-42D9-A39A-AF2F269BAF30"
+  }
+}
