@@ -128,3 +128,30 @@ describe('RealtimeSessionRuntime', () => {
         });
     });
 });
+
+describe('host provider capability filter', () => {
+    /** A host that can only carry WebRTC providers, like the React Native app. */
+    class WebRtcOnlyRuntime extends RealtimeSessionRuntime {
+        public Asked: string[] = [];
+        protected override hostCanUseProvider(provider: string): boolean {
+            this.Asked.push(provider);
+            return provider === 'openai' || provider === 'openai-live';
+        }
+    }
+
+    it('accepts everything by default, so existing hosts are unaffected', () => {
+        const runtime = new RealtimeSessionRuntime(new FakeMediaHost());
+        // The default is deliberately permissive — a browser can run every shipped driver.
+        const canUse = (runtime as unknown as { hostCanUseProvider(p: string): boolean }).hostCanUseProvider;
+        expect(canUse.call(runtime, 'gemini')).toBe(true);
+        expect(canUse.call(runtime, 'elevenlabs')).toBe(true);
+    });
+
+    it('lets a host narrow what it will connect to', () => {
+        const runtime = new WebRtcOnlyRuntime(new FakeMediaHost());
+        const canUse = (runtime as unknown as { hostCanUseProvider(p: string): boolean }).hostCanUseProvider;
+        expect(canUse.call(runtime, 'openai-live')).toBe(true);
+        expect(canUse.call(runtime, 'gemini')).toBe(false);
+        expect(runtime.Asked).toEqual(['openai-live', 'gemini']);
+    });
+});

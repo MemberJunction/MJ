@@ -571,5 +571,31 @@
       "lastModified": "2026-09-09T11:57:15.898Z",
       "checksum": "eb38b6ae199b43108efb59e1a1ee1d93ef03c43f5977891ec243c65b6f189243"
     }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Sessions",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "662A433E-F36B-1410-8595-00C8AD7ACEA2"
+    }
+  },
+  {
+    "fields": {
+      "EntityID": "@lookup:MJ: Entities.Name=MJ: AI Agent Session Channels",
+      "RoleID": "@lookup:MJ: Roles.Name=UI",
+      "CanRead": true,
+      "CanCreate": true,
+      "CanUpdate": true,
+      "CanDelete": false
+    },
+    "primaryKey": {
+      "ID": "7E2A433E-F36B-1410-8595-00C8AD7ACEA2"
+    }
   }
 ]

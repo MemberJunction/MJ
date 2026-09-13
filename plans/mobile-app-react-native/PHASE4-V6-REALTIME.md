@@ -244,45 +244,95 @@ orchestration — I would build it, but I want it on record as the worse outcome
 
 ### 🚩 PROPOSED CORE REFACTOR #2 — free `ConversationAttachmentService` from the storage SDKs
 
-**Proposal only. Not started. Needs approval.** Found while implementing G2.
+**Proposal. Needs approval before implementation — it changes a server-critical path.**
+
+#### The finding
 
 `ConversationAttachmentService` (`packages/AI/Engine/src/services/ConversationAttachmentService.ts`)
-is **859 lines with zero Angular and zero DOM references**. It owns everything a client needs for
-attachments: limit validation, the inline-vs-MJStorage decision via the agent's threshold, modality
-resolution, thumbnail generation, content URLs for AI consumption, and delete-with-cleanup.
+is **859 lines with zero Angular and zero DOM references**. It owns everything a client needs:
+limit validation, the inline-vs-MJStorage decision via the agent's threshold, modality resolution,
+thumbnail generation, content URLs for AI consumption, delete-with-cleanup.
 
-It is unusable from React Native for exactly one reason:
+It is unusable from React Native for exactly one reason — line 30:
 
 ```ts
-import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';   // line 30
+import { FileStorageBase, FileStorageEngine } from '@memberjunction/storage';
 ```
 
-`@memberjunction/storage` depends on `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`,
-`@azure/identity`, `@azure/storage-blob`, `dropbox` and more. Statically importing it drags every
-cloud SDK into the bundle — unacceptable in a mobile app, and several of them will not run under
-Hermes at all. The service also uses `Buffer` in the storage path, which Hermes does not provide.
+That package depends on `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `@azure/identity`,
+`@azure/storage-blob`, `dropbox` and more. Importing it drags every cloud SDK into the bundle, and
+several will not run under Hermes at all. The storage paths also use `Buffer`, which Hermes does
+not provide.
 
-**The shape is identical to the realtime extraction**: a genuinely portable service made
-host-specific by one dependency that only *some* callers need.
+**And it is the package's only server-only dependency.** Everything else `@memberjunction/aiengine`
+imports — `core`, `global`, `core-entities`, `actions-base`, `ai`, `ai-core-plus`,
+`ai-engine-base`, `ai-vectors-memory` — is client-safe. Removing this one import makes the whole
+package client-consumable.
 
-**Proposed fix** — the same seam pattern:
+#### Where the coupling actually is
 
-1. Keep the decision logic (validate, classify, choose inline vs storage, build the row, the inline
-   branch) free of storage imports. None of it touches a blob.
-2. Put blob operations behind an `IAttachmentBlobStore` seam: `Upload`, `Download`, `GetDownloadUrl`,
-   `Delete`.
-3. The server binds it to `FileStorageEngine`; a browser or RN client binds it to the existing
-   `GraphQLFileStorageClient`; a client that only supports inline attachments binds nothing, and the
-   storage branch reports a clear "not available on this host" instead of failing to import.
+Confined to four members. Everything else, including `AddAttachment`'s **inline** branch and all
+the decision logic, is storage-free:
 
-**Consequence if not done:** every non-server host re-implements the attachment rules, and they
-drift — which is already visible, since `@memberjunction/ng-conversations` carries its own 494-line
-`conversation-attachment.service.ts` alongside this one.
+| Member | Uses |
+|---|---|
+| `DownloadFileContent` | `FileStorageEngine.GetDriver`, returns `Buffer` |
+| `GetDownloadUrl` | `FileStorageBase` via ClassFactory |
+| the storage branch of `AddAttachment` | `Buffer.from(base64, 'base64')` |
+| `deleteStorageFile` | driver delete |
 
-**Mobile does not block on this.** G2 ships the inline path, which is what a `UI`-role user can
-actually do (they have `CanCreate` on `MJ: Conversation Detail Attachments` but not on `MJ: Files`),
-reusing `ConversationUtility` for the decisions. Large-attachment support on mobile is what this
-refactor would unlock.
+#### The proposed seam
+
+```ts
+/**
+ * Blob operations an attachment needs, behind a seam so the service does not
+ * depend on any particular storage implementation — or on there being one.
+ */
+export interface IAttachmentBlobStore {
+    Upload(input: { FileName: string; MimeType: string; Base64Data: string },
+           contextUser: UserInfo, provider?: IMetadataProvider): Promise<{ FileID: string } | null>;
+    /** Base64, NOT Buffer — see below. */
+    Download(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null>;
+    GetDownloadUrl(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null>;
+    Delete(fileId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<boolean>;
+}
+```
+
+Three deliberate choices:
+
+1. **base64 at the seam, never `Buffer`.** `Buffer` is Node-only; a base64 string crosses every
+   runtime. This is the same lesson the realtime extraction learned with its recorder seam, where
+   `Blob` had leaked into orchestration for the same reason.
+2. **The store is optional.** A host that binds nothing gets the inline path and a clear
+   "storage is not available on this host" from the storage branch — which is not a degraded mode
+   but the *normal* one for a mobile client, where a stock `UI`-role user cannot write to MJStorage
+   anyway.
+3. **Bindings live outside the shared service.** `MJStorageBlobStore` (wrapping `FileStorageEngine`)
+   ships in a server package; `GraphQLBlobStore` (wrapping the existing `GraphQLFileStorageClient`)
+   ships client-side. Neither is imported by the service.
+
+#### Migration
+
+1. Add the interface + an optional `BlobStore` property on the service. Default: unset.
+2. Move the four members' bodies to call `this.BlobStore`, returning a structured
+   "not available" when unset. No signature changes.
+3. Add `MJStorageBlobStore` in a server package and bind it where the server constructs the
+   service — one line, at the existing startup binding point.
+4. Delete the `@memberjunction/storage` import.
+
+Steps 1–2 are behaviour-preserving for the server the moment step 3 lands. The risk is entirely in
+step 3: a server path that reaches the service without a binding would lose downloads. That is why
+this wants a maintainer's eye on the binding sites rather than a mobile branch doing it unilaterally.
+
+#### The cost of not doing it
+
+Already visible: `@memberjunction/ng-conversations` carries its own 494-line
+`conversation-attachment.service.ts` alongside this one, and mobile now carries a third (smaller)
+implementation of the same decisions. Three copies of one policy is how thresholds drift.
+
+**Mobile does not block on this.** G2 ships the inline path — which is what a `UI`-role user can
+actually do — reusing `ConversationUtility` for the decisions so at least the *rules* are shared.
+Large-attachment support on mobile is what this refactor unlocks.
 
 ### Further coupling to watch for (propose, don't do)
 
@@ -391,7 +441,8 @@ show it.
 
 ## 10. 🚩 PROPOSED METADATA CHANGE — the `UI` role cannot start a realtime session
 
-**Proposal only. Applied to the local dev database for testing; NOT committed as a product change.**
+**Approved and applied** (2026-09-13) — the permission seed now grants it. Retained here because
+the reasoning is worth keeping.
 
 Found empirically while minting a realtime session as a normal user.
 
@@ -415,11 +466,17 @@ a deliberate gate — especially since the session path *already* authorizes pro
 on the target agent (per the Real-Time Co-Agents guide), making the entity-permission check a
 second, stricter gate that nothing else in the voice design anticipates.
 
-**Proposed fix:** grant the `UI` role `Create` (and `Update`, for `LastActiveAt` heartbeats and
-close-reason stamping) on `MJ: AI Agent Sessions` and `MJ: AI Agent Session Channels`, seeded as
-metadata alongside the existing conversation permissions.
+**The decisive evidence that this is an oversight rather than a policy:** the seed already grants
+`Create` + `Update` on both entities to the **`Widget Guest`** role. So an *anonymous widget guest*
+could start a voice session while a *signed-in end user* could not. The permission was clearly
+granted for the widget case and never extended to the standard role.
 
-**Why it is not in this PR:** entity permissions are product-wide security metadata. Changing what
-every deployment's standard end-user role may create is a decision for the maintainers, not a side
-effect of a mobile feature branch. The local database has the grant applied so realtime work can
-proceed; the change is disclosed rather than smuggled.
+**The fix, now applied:** `metadata/entity-permissions/.entity-permissions.json` grants the `UI`
+role `Read` + `Create` + `Update` on `MJ: AI Agent Sessions` and `MJ: AI Agent Session Channels` —
+mirroring the `Widget Guest` entries that were already there. `Update` is included because the
+session lifecycle stamps `LastActiveAt` heartbeats and a `CloseReason`; `Delete` is deliberately
+withheld, since sessions are closed rather than removed and the janitor reconciles orphans.
+
+Security posture is unchanged in substance: `SessionManager.CreateSession` already authorizes
+`CanRun` on the target agent before it writes anything, so the entity permission was a second gate
+that only ever produced a confusing denial for users the first gate had already admitted.

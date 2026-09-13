@@ -769,7 +769,45 @@ export class RealtimeSessionRuntime {
       return;
     }
 
+    if (!this.hostCanUseProvider(session.Provider)) {
+      await this.abortUnusableSession(session);
+      return;
+    }
+
     await this.runMintedSession(session, conversationId ?? null, consent);
+  }
+
+  /**
+   * Declares which provider keys this host can actually carry audio for.
+   *
+   * The server resolves a realtime model by rank across every configured vendor, so it can
+   * legitimately return a provider whose client driver this host cannot run. A browser can run all
+   * of them; React Native can run the WebRTC ones but not those needing a Web Audio PCM plane.
+   * Connecting anyway gets as far as constructing the driver's playback engine and then throws —
+   * a crash, where the honest answer is "this workspace's voice provider is not one this app can
+   * use".
+   *
+   * The default accepts everything, so existing hosts are unaffected. Override to narrow it.
+   *
+   * @param provider The `Provider` key the server stamped on the minted session.
+   */
+  protected hostCanUseProvider(_provider: string): boolean {
+    return true;
+  }
+
+  /**
+   * Closes a session that was minted but will never be connected, and reports why.
+   *
+   * Minting creates a durable `MJ: AI Agent Sessions` row server-side, so declining to connect
+   * still has to close it — otherwise every rejected attempt leaks an `Active` session for the
+   * janitor to reconcile fifteen minutes later.
+   */
+  private async abortUnusableSession(session: StartRealtimeClientSessionResult): Promise<void> {
+    this._connectionState$.next('error');
+    this._active$.next(false);
+    if (session.AgentSessionId) {
+      await this.closeServerSession(session.AgentSessionId);
+    }
   }
 
   /**
@@ -801,6 +839,10 @@ export class RealtimeSessionRuntime {
     }
 
     const effectiveOptions = options ?? {};
+    if (!this.hostCanUseProvider(result.Provider)) {
+      await this.abortUnusableSession(result);
+      return;
+    }
     const consent = this.beginSessionStart(effectiveOptions);
     await this.runMintedSession(result, effectiveOptions.conversationId ?? null, consent);
   }
