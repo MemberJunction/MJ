@@ -1751,7 +1751,7 @@ async function HandleTeardown(manifest: MJAppManifest, context: OrchestratorCont
 
   try {
     context.Callbacks?.OnProgress?.('Metadata', 'Downloading teardown scripts...');
-    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath);
+    const download = await DownloadMigrations(manifest.repository, manifest.version, dir, tempDir, context.GitHubOptions, subpath, manifest.name);
     if (!download.Success) {
       return { Success: false, ErrorMessage: `Failed to download teardown scripts: ${download.ErrorMessage}` };
     }
@@ -1810,16 +1810,21 @@ async function DownloadAppMigrations(
 
   if (isPG) {
     const pgDir = `${baseDir.replace(/\/+$/, '')}-pg`;
-    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath);
+    const pgResult = await DownloadMigrations(manifest.repository, manifest.version, pgDir, tempDir, context.GitHubOptions, subpath, manifest.name);
     // Use the PG-specific set only if it exists AND has files; otherwise fall
     // back to the declared directory (a 404 yields Success:false, an empty dir
     // yields Success:true with no files — both mean "no PG variant here").
+    //
+    // `manifest.name` matters MORE here than anywhere else: this probe reads a 404 as "no PG
+    // variant", so a ref that does not exist is indistinguishable from a repo that ships no `-pg`
+    // set. Without the app name, a package-tagged monorepo app's PG migrations are skipped
+    // silently on this line before the declared directory fails loudly on the next one.
     if (pgResult.Success && (pgResult.Files?.length ?? 0) > 0) {
       return pgResult;
     }
   }
 
-  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath);
+  return DownloadMigrations(manifest.repository, manifest.version, baseDir, tempDir, context.GitHubOptions, subpath, manifest.name);
 }
 
 /**

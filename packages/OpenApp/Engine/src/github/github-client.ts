@@ -406,13 +406,23 @@ async function listSqlFilesRecursive(
     return out;
 }
 
+/**
+ * Downloads an app's `.sql` migrations from the repo at the ref its version is tagged under.
+ *
+ * `appName` is the manifest's own `name`, for the same reason the manifest fetch needs it: a
+ * package-tagged monorepo publishes `@memberjunction/connector-pheedloop@1.4.6`, never the folder
+ * form `Events-PheedLoop@1.4.6`, and unlike the manifest fetch this call ALWAYS has a version
+ * (`manifest.version` is required by the manifest schema) — so it never falls back to HEAD and the
+ * composed folder ref 404s on every install, upgrade and teardown of such an app.
+ */
 export async function DownloadMigrations(
     repoUrl: string,
     version: string | undefined,
     migrationsPath: string,
     localDir: string,
     options: GitHubClientOptions,
-    subpath?: string
+    subpath?: string,
+    appName?: string
 ): Promise<MigrationDownloadResult> {
     const parsed = ParseGitHubUrl(repoUrl);
     if (!parsed) {
@@ -420,7 +430,12 @@ export async function DownloadMigrations(
     }
 
     const effectiveSubpath = (subpath ?? parsed.Subpath)?.replace(/^\/+|\/+$/g, '');
-    const ref = ResolveRef(version, effectiveSubpath);
+    // Prefer the tag that EXISTS over one composed from the folder name; fall back to the composed
+    // form so single-app repos and repos that really do tag by folder are untouched.
+    const ref = version
+        ? (await FindVersionTagName(repoUrl, options, version, effectiveSubpath, appName))
+            ?? ResolveRef(version, effectiveSubpath)
+        : ResolveRef(version, effectiveSubpath);
     const cleanPath = ComposeRepoPath(effectiveSubpath, migrationsPath);
     const octokit = CreateOctokit(repoUrl, options);
 

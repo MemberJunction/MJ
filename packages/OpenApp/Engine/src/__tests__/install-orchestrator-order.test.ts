@@ -311,7 +311,10 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
         const r = await InstallApp({ Source: source }, ctxFor('sqlserver'));
         expect(r.Success).toBe(true);
         expect(vi.mocked(DownloadMigrations)).toHaveBeenCalledWith(
-            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations', expect.any(String), expect.anything(), 'CRM/HubSpot',
+            // 7th arg is the manifest's own name: a package-tagged monorepo tags
+            // `@memberjunction/connector-hubspot@1.0.0`, never the folder form `CRM-HubSpot@1.0.0`,
+            // and this call always has a version so it never falls back to HEAD.
+            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations', expect.any(String), expect.anything(), 'CRM/HubSpot', 'connector-hubspot',
         );
     });
 
@@ -319,7 +322,9 @@ describe('HandleMigrations — platform-aware dialect directory', () => {
         const r = await InstallApp({ Source: source }, ctxFor('postgresql'));
         expect(r.Success).toBe(true);
         expect(vi.mocked(DownloadMigrations)).toHaveBeenCalledWith(
-            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations-pg', expect.any(String), expect.anything(), 'CRM/HubSpot',
+            // The PG probe reads a 404 as "no PG variant here", so without the app name a
+            // package-tagged monorepo app's PG migrations would be skipped SILENTLY on this line.
+            'https://github.com/MemberJunction/Integrations', '1.0.0', 'migrations-pg', expect.any(String), expect.anything(), 'CRM/HubSpot', 'connector-hubspot',
         );
     });
 
