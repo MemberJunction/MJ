@@ -232,6 +232,19 @@ export interface FetchBatchResult {
     NextAfterKeyValue?: string;
     /** Next cursor to pass back via FetchContext.CurrentCursor on the next call (cursor-based pagination) */
     NextCursor?: string;
+    /**
+     * MJ-RUN-35 — the total the SOURCE says it holds for this object, when it says so.
+     *
+     * Many APIs state it on every page (Django REST returns `{count, next, previous, results}`), and
+     * it is the cheapest self-check available: comparing it against what a clean fetch actually
+     * produced turns a silently incomplete scan into a failed one. Before this it went nowhere — the
+     * REST base parsed `count` into its internal pagination state and had no field to carry it out
+     * on, so every connector that read it discarded it and the engine had nothing to check against.
+     *
+     * Absent means "the source did not say", which is NOT the same as zero and must never be
+     * compared as if it were.
+     */
+    SourceTotalRecords?: number;
 }
 
 /** Configurable timeout values for connector operations */

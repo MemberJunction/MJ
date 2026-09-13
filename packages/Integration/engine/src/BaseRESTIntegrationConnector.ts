@@ -72,6 +72,8 @@ interface PaginatedFetchResult {
     NextPage?: number;
     NextOffset?: number;
     NextCursor?: string;
+    /** MJ-RUN-35 — the total the source stated for this object, carried out to FetchBatchResult. */
+    SourceTotalRecords?: number;
 }
 
 /** One template variable resolved to its parent IntegrationObject + FK field. */
@@ -1339,6 +1341,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         ctx: FetchContext
     ): Promise<PaginatedFetchResult> {
         const allRecords: Record<string, unknown>[] = [];
+        // MJ-RUN-35: the source's own stated total for this object, if any page states it.
+        let sourceTotalRecords: number | undefined;
         const batchLimit = ctx.BatchSize ?? Number.MAX_SAFE_INTEGER;
         let page = ctx.CurrentPage ?? 1;
         let offset = ctx.CurrentOffset ?? 0;
@@ -1393,6 +1397,12 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             page = paginationState.NextPage ?? page + 1;
             offset = paginationState.NextOffset ?? offset + records.length;
             cursor = paginationState.NextCursor;
+            // MJ-RUN-35: keep the source's own stated total so the engine can check its work.
+            // Last writer wins deliberately — the freshest page is the most current answer, and a
+            // page that omits it must not erase a total an earlier page gave.
+            if (typeof paginationState.TotalRecords === 'number' && paginationState.TotalRecords >= 0) {
+                sourceTotalRecords = paginationState.TotalRecords;
+            }
         }
 
         return {
@@ -1401,6 +1411,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             NextPage: page,
             NextOffset: offset,
             NextCursor: cursor,
+            SourceTotalRecords: sourceTotalRecords,
         };
     }
 
