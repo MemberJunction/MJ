@@ -137,7 +137,7 @@ export default function ProfileScreen() {
                         icon={<Icons.Sparkle size={16} color={Colors.ink2} strokeWidth={2} />}
                         label="Default agent"
                         sub="Who answers when you don't @mention"
-                        value={defaultAgentName || 'Skip'}
+                        value={defaultAgentName || 'Sage'}
                         onPress={() => setAgentPickerOpen(true)}
                     />
                     <SettingRow
@@ -149,7 +149,7 @@ export default function ProfileScreen() {
                     <ToggleRow
                         icon={<Icons.Mic size={16} color={Colors.ink2} strokeWidth={2} />}
                         label="Voice responses"
-                        sub="Speak Skip's replies aloud"
+                        sub="Speak agent replies aloud"
                         value={!!voiceOn}
                         onToggle={() => setVoiceOn(!voiceOn)}
                     />

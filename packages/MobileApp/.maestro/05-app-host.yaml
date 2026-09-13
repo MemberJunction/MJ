@@ -1,0 +1,33 @@
+# App-host flow: proves the mobile app hosts applications declared in MJ metadata, and that a
+# nav item with no mobile surface degrades honestly instead of rendering something broken.
+#
+# What this covers that a unit test cannot: the ClassFactory resolution actually running in the
+# Hermes bundle, and the registered sample resource actually mounting inside the shell.
+appId: org.memberjunction.mobile
+---
+- launchApp:
+    clearState: false
+- openLink: "org.memberjunction.mobile:///apps"
+- assertVisible: "Apps"
+# Applications come from MJ: Applications metadata — no mobile code declares them. The list is
+# fetched from MJAPI, so wait for it rather than racing the request.
+# Matched on the accessible name, not the inner text: the launcher tile sets an
+# accessibilityLabel ("Open <app>") which correctly becomes the element's accessible name and
+# shadows its children. Asserting on it is also closer to what a screen-reader user hears.
+- extendedWaitUntil:
+    visible: "Open Data Explorer"
+    timeout: 20000
+
+# Open the sample application and confirm its registered surface mounted.
+- openLink: "org.memberjunction.mobile:///apps/D4DF5208-17B7-4254-A740-D2653BB0D2CA"
+- extendedWaitUntil:
+    visible: "Capture a field note…"
+    timeout: 20000
+- assertVisible: "Field Notes"
+
+# The second nav item has no registered mobile driver, so the shell must say so plainly
+# rather than render an empty or broken screen.
+- tapOn: "Reports"
+- extendedWaitUntil:
+    visible: "Reports opens on desktop"
+    timeout: 10000

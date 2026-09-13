@@ -97,7 +97,7 @@ export default function ConversationsScreen() {
                         </View>
                         <Text style={styles.emptyTitle}>No conversations yet</Text>
                         <Text style={styles.emptyBody}>
-                            Tap "New conversation" to ask Skip or any other agent your first question.
+                            Tap "New conversation" to ask your first question.
                         </Text>
                     </View>
                 ) : null}
@@ -198,10 +198,20 @@ function ConversationRow({ conv }: { conv: ConversationSummary }) {
     );
 }
 
-/** Bottom-of-list navigation card: links to Data Explorer and Profile. */
+/** Bottom-of-list navigation card: links to Apps, Data Explorer and Profile. */
 function FooterNav() {
     return (
         <View style={styles.footer}>
+            <Pressable style={styles.footerRow} onPress={() => router.push('/apps')}>
+                <View style={[styles.footerIcon, { backgroundColor: Colors.positiveSoft }]}>
+                    <Icons.Sliders size={18} color={Colors.positive} />
+                </View>
+                <View style={styles.footerBody}>
+                    <Text style={styles.footerLabel}>Apps</Text>
+                    <Text style={styles.footerSub}>Applications hosted in this app</Text>
+                </View>
+                <Icons.ChevronRight size={16} color={Colors.ink3} />
+            </Pressable>
             <Pressable style={styles.footerRow} onPress={() => router.push('/explorer')}>
                 <View style={[styles.footerIcon, { backgroundColor: Colors.brandSoft }]}>
                     <Icons.Database size={18} color={Colors.brand} />

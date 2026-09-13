@@ -109,7 +109,7 @@ export default function NewConversationScreen() {
 
                     <View style={styles.composerCard}>
                         <TextInput
-                            placeholder="Ask anything — Skip will route to the right agent…"
+                            placeholder="Ask anything — your agent will route it…"
                             placeholderTextColor={Colors.ink3}
                             style={styles.composerInput}
                             multiline

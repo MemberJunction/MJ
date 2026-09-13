@@ -21,6 +21,7 @@ import { MarkdownView } from '@/components/markdown/MarkdownView';
 import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
 import { sendMessage, getConversationDetailStatus, type SendProgress } from '@/data/services/agents';
 import { attachCapturedFile, composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { getDefaultAgentId } from '@/data/preferences';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -72,6 +73,11 @@ export default function ChatThreadScreen() {
             const result = await sendMessage({
                 conversationId: id,
                 text: text.trim(),
+                // The Profile screen's default-agent picker was write-only: it stored a choice
+                // that nothing ever read, so every message went to the runtime's own default
+                // regardless. Passing it as the explicit agent is what makes that setting mean
+                // something. Unset leaves resolution to the runtime's chain.
+                agentId: getDefaultAgentId(),
                 onProgress: (p) => setProgress(p),
             });
             // The user message now exists server-side, so the attachment finally has something to
