@@ -7,6 +7,7 @@ import {
     FullTextSearchResult,
     MaterializedColumnSpec,
     DataSourceResult,
+    excludedBaseViewFieldNames,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import { ordinalCompare, RegisterClass } from '@memberjunction/global';
@@ -123,6 +124,13 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         const whereClause = entity.DeleteType === 'Soft'
             ? `WHERE\n    ${alias}.[${EntityInfo.DeletedAtFieldName}] IS NULL\n`
             : '';
+        // `alias.*` unless this entity has a configured base-view column exclusion, in which case the
+        // base-table columns are enumerated instead. See baseTableSelectList / excludedBaseViewFieldNames.
+        const baseTableSelect = this.baseTableSelectList(
+            entity,
+            alias,
+            excludedBaseViewFieldNames(entity.Name, configInfo?.baseViewExcludedFields ?? [])
+        );
 
         return `
 ------------------------------------------------------------
@@ -138,7 +146,7 @@ GO
 CREATE VIEW [${entity.SchemaName}].[${viewName}]
 AS
 SELECT
-    ${alias}.*${context.parentFieldsSelect}${context.relatedFieldsSelect.length > 0 ? ',' : ''}${context.relatedFieldsSelect}${context.rootFieldsSelect}
+    ${baseTableSelect}${context.parentFieldsSelect}${context.relatedFieldsSelect.length > 0 ? ',' : ''}${context.relatedFieldsSelect}${context.rootFieldsSelect}
 FROM
     [${entity.SchemaName}].[${entity.BaseTable}] AS ${alias}${context.parentJoins ? '\n' + context.parentJoins : ''}${context.relatedFieldsJoins ? '\n' + context.relatedFieldsJoins : ''}${context.rootJoins}
 ${whereClause}GO`;
@@ -630,6 +638,25 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${col
      *
      * @returns The generated SQL and the resolved function name for permission grants.
      */
+    /**
+     * SQL Server charges full-text search through the fulltext population service rather than a
+     * trigger: `CREATE FULLTEXT INDEX` puts the table under continuous change tracking, so every
+     * INSERT/UPDATE/DELETE that touches an indexed column queues crawl work, and the index itself
+     * occupies catalog storage. The generated script also DROPs and RECREATEs the index, which means
+     * a full re-crawl of the table each time this entity's SQL is applied.
+     */
+    fullTextSearchCostDisclosure(entity: EntityInfo, searchFields: EntityFieldInfo[]): string | null {
+        if (!entity.FullTextIndexGenerated) {
+            return null;
+        }
+        const fields = searchFields.map((f: EntityFieldInfo) => f.Name).join(', ');
+        return `Full-text search on ${entity.SchemaName}.${entity.BaseTable} adds a PERMANENT cost: the `
+            + `fulltext index over (${fields}) puts the table under change tracking, so every write to an `
+            + `indexed column queues population work, and this script DROPs and RECREATEs the index — a full `
+            + `re-crawl of the table on every apply. Clearing the entity's full-text flags later does not drop `
+            + `the index or the catalog.`;
+    }
+
     generateFullTextSearch(entity: EntityInfo, searchFields: EntityFieldInfo[], primaryKeyIndexName: string): FullTextSearchResult {
         let sql = '';
         const catalogName = entity.FullTextCatalog && entity.FullTextCatalog.length > 0

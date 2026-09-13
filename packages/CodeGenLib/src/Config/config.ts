@@ -534,6 +534,39 @@ const configInfoSchema = z.object({
    */
   includeSchemas: z.string().array().optional(),
   /**
+   * Field names to KEEP OUT of generated base views. Empty by default, and an empty list changes
+   * nothing: the base view is emitted as `SELECT alias.*` exactly as before, byte for byte.
+   *
+   * WHAT THIS IS FOR. A base view is what every read goes through — `RunView`, `BaseEntity.Load`,
+   * every grid and form. `SELECT alias.*` means a column no component ever reads is still fetched,
+   * deserialised and held in memory on every one of those reads. Measured on one integration mirror:
+   * a single JSON bookkeeping column was 52–70% of the table's stored bytes (96 MB of one table's
+   * 137 MB), and nothing in the UI read it.
+   *
+   * Entries are matched case-insensitively and may be either a bare field name (applies to every
+   * entity that has a column of that name) or `EntityName.FieldName` (that entity only). An entity
+   * with no matching column is emitted unchanged — the explicit column list appears ONLY for
+   * entities that actually have something excluded, so the blast radius is exactly the entities you
+   * name and nothing else.
+   *
+   * TWO THINGS TO KNOW BEFORE SETTING IT.
+   *
+   * 1. An excluded column is GONE from every MJ read of that entity. `entity.Get('Field')` returns
+   *    undefined. Writes are unaffected (they go through the CRUD routines against the base table),
+   *    but any code path that reads the column through metadata must be repointed first.
+   * 2. CodeGen's own field prune (`spDeleteUnneededEntityFields`) asks "is this column in the base
+   *    VIEW?", so an excluded column's `EntityField` row would be deleted on the next run. CodeGen
+   *    passes the exclusions to the prune as a protected list to prevent that — and REFUSES to apply
+   *    an exclusion at all on a database whose prune routine does not accept that list, rather than
+   *    trading a memory win for silent metadata loss. Watch the run log: an exclusion that was
+   *    refused says so.
+   *
+   * The view also stops auto-absorbing NEW physical columns for the entities that carry an
+   * exclusion, because an explicit column list is enumerated at generation time. CodeGen re-enumerates
+   * on every run, so a new column appears after the next run rather than immediately.
+   */
+  baseViewExcludedFields: z.string().array().default([]),
+  /**
    * When true, CodeGen cascade-delete SQL walks FKs pointing at the entity in
    * EVERY schema in metadata. Default false: only same-schema children.
    * Turning this on (and CascadeDeletes on an entity) will bake consumer
