@@ -2792,8 +2792,25 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         let previousBatchFingerprint: string | undefined;
         let fetchCompletedCleanly = true; // flipped to false if fetch aborted or errored mid-way
         let hadFetchGap = false;          // ≥1 page was skipped after a persistent fetch error (offset/page paging)
+        // A HOLE behind the max watermark seen, from a cause other than a skipped page.
+        //
+        // The early-stop branch below persists the max watermark on the reasoning that whole
+        // batches completed, so nothing unwritten lies past it. That reasoning fails when records
+        // were never HANDED to us at all: a shortfall against the source's own total, or pages that
+        // overlapped and therefore skipped. Those missing records can carry timestamps BELOW the max
+        // we saw, so advancing past them skips them permanently — the same reason that branch already
+        // refuses to run when `hadFetchGap`, which its own comment calls 'a HOLE behind this
+        // watermark'. Clearing `fetchCompletedCleanly` alone is NOT enough: it only moves us out of
+        // the clean branch and into this one.
+        let windowHasHole = false;
         let watermarkFloorSaved: string | null = null; // §8a durability floor last persisted mid-run (null = none)
         let fetchGapCount = 0;            // CONSECUTIVE skipped pages (reset on any clean fetch)
+        // MJ-RUN-35: the total the SOURCE stated for this object, when it states one.
+        let sourceTotalRecords: number | undefined;
+        // MJ-RUN-36: identities a LATER batch repeated from an EARLIER one. Only meaningful for
+        // position-based paging, where it is evidence the page boundaries moved under us.
+        let crossBatchRepeatCount = 0;
+        const crossBatchRepeatSamples: string[] = [];
         const MAX_FETCH_GAPS = 25;        // give up + hold the watermark if this many pages fail in a row (API down)
         let consecutiveEmptyBatches = 0;  // P3-D: detect a connector that pages empty-but-HasMore forever
         let oversizeBatchWarned = false;  // pagination rule: warn ONCE per object that the connector ignored BatchSize
@@ -2895,6 +2912,12 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
                     batch = await this.governedFetch(config, ctx, entityMap.ExternalObjectName, fetchTimeoutMs, batchCount, logger);
                 }
                 this.reportRateOutcome(config);   // clean fetch → ramp the adaptive rate back up
+                // MJ-RUN-35: remember what the source said it holds. Last statement wins — the
+                // freshest page is the most current answer — and a page that says nothing must
+                // never erase a total an earlier page gave.
+                if (typeof batch.SourceTotalRecords === 'number' && batch.SourceTotalRecords >= 0) {
+                    sourceTotalRecords = batch.SourceTotalRecords;
+                }
                 fetchGapCount = 0;                // clean fetch → reset the consecutive fetch-gap counter
                 // §10: connector type-driven post-processing hook (default no-op) — enforce/normalize
                 // record values to their resolved formats before mapping + write.
@@ -3093,6 +3116,47 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
 
             if (!orphanTrackingOverflowed) {
+                // MJ-RUN-36: an identity seen in an EARLIER batch means the pages overlapped.
+                //
+                // `CollapseDuplicateIdentities` below is within-batch only ("already present in the
+                // same batch"), so it cannot see this, and before this check nothing could: a page
+                // that re-served a row another page already gave was written twice, quietly, as an
+                // insert and then an update.
+                //
+                // That matters far beyond the wasted write. Position-based pagination has no
+                // guaranteed order unless the source promises one, so a boundary that moves BACKWARD
+                // to re-serve a row has also moved FORWARD past another — the repeat is the visible
+                // half of an omission. The row count then understates the source while the run
+                // reports success, which is the failure mode with no signal attached to it.
+                //
+                // The set is already accumulated here for orphan detection, so this costs one lookup
+                // per record and no extra memory.
+                // TWO PASSES, and the order is the whole correctness of this check.
+                //
+                // Checking and adding in one loop misattributes a batch's OWN duplicate to page
+                // overlap: by the time the second copy is examined, the first has already been added,
+                // so an in-batch repeat looks exactly like a row an earlier page served. Verified —
+                // page 1 [ext-1, ext-2] then page 2 [ext-3, ext-3] reported BOTH a within-batch
+                // collapse and a page overlap, and only one of them was true.
+                //
+                // So pass one asks only about identities from EARLIER batches, while the set still
+                // holds exactly those. Pass two then adds this batch. No copy of the set is taken —
+                // it can hold hundreds of thousands of ids.
+                //
+                // `positionPaged` is also the batch-1 guard: currentOffset/currentPage are only set
+                // from the PREVIOUS batch's NextOffset/NextPage, so both are null on the first batch
+                // by construction and nothing can be a repeat yet.
+                const positionPaged = currentOffset != null || currentPage != null;
+                if (positionPaged) {
+                    for (const rec of batch.Records) {
+                        if (fetchedExternalIDs.has(rec.ExternalID)) {
+                            crossBatchRepeatCount++;
+                            if (crossBatchRepeatSamples.length < 5) {
+                                crossBatchRepeatSamples.push(String(rec.ExternalID));
+                            }
+                        }
+                    }
+                }
                 for (const rec of batch.Records) {
                     fetchedExternalIDs.add(rec.ExternalID);
                 }
@@ -3282,6 +3346,64 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             hasMore = batch.HasMore === true; // Explicit boolean check — prevents truthy undefined from looping
         }
 
+        // MJ-RUN-35 — check our work against the number the source gave us.
+        //
+        // The cheapest self-check available, and it was never wired: the source states its own total
+        // on every page (Django REST returns `count`), connectors parsed it, and it had nowhere to
+        // go. Comparing it to what a CLEAN fetch produced turns a silently short scan into a failed
+        // one, on every connector that states a total, without knowing anything about the vendor.
+        //
+        // Only on a clean fetch: one that already skipped pages or aborted is KNOWN to be short and
+        // has said so. Only when a total was actually stated — absent means "it did not say", never
+        // zero. And deliberately not an equality check: a total that moves while we page is normal,
+        // and fetching MORE than claimed is not a fault. Fetching FEWER is.
+        if (
+            fetchCompletedCleanly &&
+            typeof sourceTotalRecords === 'number' &&
+            recordsInMap < sourceTotalRecords
+        ) {
+            const missing = sourceTotalRecords - recordsInMap;
+            fetchCompletedCleanly = false;
+            windowHasHole = true;
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'FETCH_SHORT_OF_SOURCE_TOTAL',
+                `'${entityMap.ExternalObjectName}': the source reports ${sourceTotalRecords} record(s) and the scan ` +
+                `finished with ${recordsInMap}, so ${missing} were never returned to us. No request failed, which ` +
+                `means the shortfall is in how the source paged rather than in any one response — most often a page ` +
+                `boundary that moved mid-scan. This result set is INCOMPLETE; the watermark is held so the window is ` +
+                `re-fetched next run.`,
+                { sourceTotal: sourceTotalRecords, fetched: recordsInMap, missing, batches: batchCount },
+            );
+        }
+
+        // MJ-RUN-36 — pages that overlapped also skipped, so this result set is INCOMPLETE.
+        //
+        // Reported and marked incomplete rather than logged as a curiosity: the repeat is the only
+        // visible symptom of an invisible omission, and the run would otherwise finish Success with a
+        // row count that understates the source.
+        //
+        // `fetchCompletedCleanly = false` is what withholds every consequence of "we saw the complete
+        // set" — the watermark is held, orphan detection is skipped (rows absent from an incomplete
+        // fetch are not proof they are gone at the source), and the partition rollup is not
+        // overwritten.
+        if (crossBatchRepeatCount > 0) {
+            fetchCompletedCleanly = false;
+            windowHasHole = true;
+            logger?.warning(
+                entityMap.ExternalObjectName ?? entityMap.ID,
+                'FETCH_PAGES_OVERLAPPED',
+                `'${entityMap.ExternalObjectName}': ${crossBatchRepeatCount} record(s) were served again by a later ` +
+                `page after an earlier page had already returned them, so the page boundaries moved during the scan. ` +
+                `A boundary that moves back to repeat a row has also moved forward past another, which means records ` +
+                `were MISSED — this result set is INCOMPLETE and its row count understates the source. The watermark ` +
+                `is held so the window is re-fetched next run. This object needs a guaranteed sort order from the ` +
+                `source, or a page size large enough that the scan fits one page. ` +
+                `Sample: ${crossBatchRepeatSamples.join(', ')}`,
+                { repeated: crossBatchRepeatCount, sample: crossBatchRepeatSamples, batches: batchCount },
+            );
+        }
+
         // Partition (Merkle) reconcile: the full set is now accumulated — diff it against last sync's
         // rollups and deep-apply ONLY the changed/added partitions; the new rollup snapshot is persisted
         // inside. Runs only on a CLEAN fetch (a partial set would mis-skip partitions and lose updates).
@@ -3345,7 +3467,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // last ordering key so the next run resumes the seek from here instead of restarting.
             await this.runWriteForMap(entityMapID, () => this.watermarkService.SaveKeysetPosition(entityMapID, currentAfterKey, contextUser));
             result.WatermarkAfter = currentAfterKey;
-        } else if (!hadFetchGap && currentWatermark && currentWatermark !== initialWatermark) {
+        } else if (!hadFetchGap && !windowHasHole && currentWatermark && currentWatermark !== initialWatermark) {
             // A WATERMARK-based connector stopped early (cancel / safety limit / duplicate batch /
             // schema-not-generated / unskippable fetch error) but whole batches DID complete. Persist the
             // max watermark seen so the next run resumes from there instead of re-fetching everything
@@ -3360,7 +3482,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             // Deliberately NOT wall-clock "now", even for a full sync: coverage is partial, so advancing
             // past the point actually reached would skip the (reached, now] window permanently. And
             // deliberately NOT when hadFetchGap — a skipped page leaves a HOLE behind this watermark,
-            // which is why that path holds it for a full re-fetch next run.
+            // which is why that path holds it for a full re-fetch next run. `windowHasHole` is the
+            // same refusal for the two holes that are not skipped pages: a scan that finished short
+            // of the total the source stated, and one whose pages overlapped (and therefore skipped).
+            // In both, records we never received can sit BELOW this value.
             const partialWatermark = currentWatermark;
             await this.runWriteForMap(entityMapID, () => this.watermarkService.Update(entityMapID, partialWatermark, contextUser, 'Pull'));
             result.WatermarkAfter = partialWatermark;
