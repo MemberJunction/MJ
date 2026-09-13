@@ -5701,6 +5701,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private _savepointStack: string[] = [];
     /** Physical handle is gone but outer frames still must settle. Queued nested begins must not become outermost. */
     private _doomed = false;
+    /**
+     * Set when an outermost commit failed and the physical handle was already abandoned (rolled
+     * back) on the way out. A caller's own rollback in its catch block then finds no transaction —
+     * which is the CORRECT state, not a second failure — so that rollback is a no-op instead of
+     * throwing 'No active transaction to rollback' on top of the real error (#4447).
+     */
+    private _abandonedByFailedCommit = false;
 
     protected override get CurrentTransactionDepth(): number {
         return this._transactionDepth;
@@ -5857,6 +5864,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         this._transactionDepth++;
         try {
             if (this._transactionDepth === 1) {
+                this._abandonedByFailedCommit = false;
                 await this.BeginPhysicalTransaction();
                 return;
             }
@@ -5955,6 +5963,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             } catch (e) {
                 await this.AbandonPhysicalTransaction();
                 this.clearTransactionState();
+                this._abandonedByFailedCommit = true;
                 LogError(e);
                 throw e;
             }
@@ -5986,6 +5995,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     private async rollbackTransactionCore(): Promise<void> {
         if (this._doomed) {
             this.popDoomedFrame();
+            return;
+        }
+        if (this._abandonedByFailedCommit) {
+            // The failed commit already rolled the doomed handle back; there is nothing left to undo.
+            this._abandonedByFailedCommit = false;
             return;
         }
         if (!this.HasPhysicalTransaction) {
