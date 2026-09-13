@@ -463,13 +463,12 @@ describe('AutoQuotePostgreSQLIdentifiers', () => {
             expect(AutoQuotePostgreSQLIdentifiers('SELECT 1 WHERE 1 = 1')).toBe('SELECT 1 WHERE 1 = 1');
         });
 
-        it('still quotes ORDINALITY, so the dialect workaround that avoids it remains required', () => {
-            // ORDINALITY is ALL-CAPS, not in the keyword set, and not followed by `(` — so it quotes.
-            // PostgreSQLDialect.ForeignKeyGraphSQL deliberately avoids WITH ORDINALITY for this reason
-            // (asserted in crossDialect.test.ts). If ORDINALITY is ever added to the keyword set, that
-            // workaround can be revisited — but not before.
+        it('leaves ORDINALITY bare, so the dialect workaround that avoids it is no longer required', () => {
+            // ORDINALITY is now in the keyword set. PostgreSQLDialect.ForeignKeyGraphSQL still
+            // deliberately avoids WITH ORDINALITY (asserted in crossDialect.test.ts) because this
+            // tokenizer used to quote it to `WITH "ORDINALITY"`. That workaround can now be retired.
             expect(AutoQuotePostgreSQLIdentifiers('SELECT * FROM unnest(a) WITH ORDINALITY')).toBe(
-                'SELECT * FROM unnest(a) WITH "ORDINALITY"'
+                'SELECT * FROM unnest(a) WITH ORDINALITY'
             );
         });
     });
