@@ -54,6 +54,7 @@ import {
     FetchManifestFromGitHub,
     IsPrereleaseVersion,
     ClearGitHubTagCache,
+    FindVersionTagName,
 } from '../github/github-client.js';
 import type { GitHubClientOptions } from '../github/github-client.js';
 
@@ -675,5 +676,72 @@ describe('scoped (multi-app) version resolution', () => {
         mocks.getRef.mockResolvedValueOnce({ data: {} });
         await ValidateGitHubTag('https://github.com/Acme/App', '2.0.0', {});
         expect(mocks.getRef).toHaveBeenCalledWith({ owner: 'Acme', repo: 'App', ref: 'tags/v2.0.0' });
+    });
+});
+
+
+// ── The package-tagged monorepo ──────────────────────────────────────────────────────────────
+//
+// A connector lives at `Events/PheedLoop` but releases through changesets, so its tag is the
+// PACKAGE name: `@memberjunction/connector-pheedloop@1.4.6`. Deriving the tag from the folder
+// produced `Events-PheedLoop@…`, which matches nothing — so every such app resolved to no version
+// and `mj app upgrade` reported 'Could not determine target version'. Installs hid it, because a
+// version-less install resolves to HEAD and never reads a tag.
+const PHEEDLOOP_TAGS = {
+    data: [
+        { name: '@memberjunction/connector-pheedloop@1.4.6' },
+        { name: '@memberjunction/connector-pheedloop@1.4.5' },
+        { name: '@memberjunction/connector-nimble-ams@1.3.2' },
+        { name: 'not-semver' },
+    ],
+};
+
+describe('scoped tags named after the package, not the folder', () => {
+    it('finds the version when the app name is supplied', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(v).toBe('1.4.6');
+    });
+
+    it('is the regression: without the app name the folder form matches nothing', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'Events/PheedLoop'
+        );
+        expect(v).toBeNull();
+    });
+
+    it('does not bleed across connectors sharing the repo', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'AMS/NimbleAMS', 'connector-nimble-ams'
+        );
+        expect(v).toBe('1.3.2');
+    });
+
+    it('resolves the REAL tag name for a version, not one built from the folder', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const tag = await FindVersionTagName(
+            'https://github.com/MemberJunction/Integrations', {}, '1.4.6', 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(tag).toBe('@memberjunction/connector-pheedloop@1.4.6');
+    });
+
+    it('returns null for a version that is not tagged', async () => {
+        mocks.listTags.mockResolvedValueOnce(PHEEDLOOP_TAGS);
+        const tag = await FindVersionTagName(
+            'https://github.com/MemberJunction/Integrations', {}, '9.9.9', 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(tag).toBeNull();
+    });
+
+    it('still honours a repo that genuinely tags by folder', async () => {
+        mocks.listTags.mockResolvedValueOnce({ data: [{ name: 'Events-PheedLoop@2.0.0' }] });
+        const v = await GetLatestVersion(
+            'https://github.com/MemberJunction/Integrations', {}, 'Events/PheedLoop', 'connector-pheedloop'
+        );
+        expect(v).toBe('2.0.0');
     });
 });
