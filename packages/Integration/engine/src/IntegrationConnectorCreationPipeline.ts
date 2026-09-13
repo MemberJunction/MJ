@@ -15,6 +15,8 @@ import {
 } from '@memberjunction/integration-pk-classifier';
 import { BaseIntegrationConnector, type ExternalObjectSchema, type ExternalFieldSchema } from './BaseIntegrationConnector.js';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
+import { BuildCatalogWriter, ResolveCatalogSource } from './CatalogSource.js';
+import { WithCatalogScope } from './CatalogScope.js';
 import { IntegrationSchemaSync, type PersistSchemaResult } from './IntegrationSchemaSync.js';
 import type { IntrospectSchemaOptions, SourceObjectInfo } from './types.js';
 import { MergeDeclaredWithSample } from './DeclaredSampleMerge.js';
@@ -193,7 +195,19 @@ export class IntegrationConnectorCreationPipeline {
      * a `RunID` and coalescing served a different run, we publish a terminal ALIAS run under the
      * requested ID pointing at the run that actually did the work. See {@link honourRequestedRunID}.
      */
+    /**
+     * Every read a discovery makes — the connector's GetCachedObject/GetCachedFields during
+     * sampling, the dependency graph, the excluded-field resolution — happens with THIS connection
+     * in catalog scope. Scope-aware getters answer from the connection's own rows once it has any
+     * and fall back to the shared declared rows until then, so a first discovery still sees the
+     * connector's declared floor and a re-discovery sees what this connection found last time,
+     * not what some other connection of the same connector found.
+     */
     public async Run(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
+        return WithCatalogScope(opts.CompanyIntegration?.ID ?? '', () => this.runWithDedup(opts));
+    }
+
+    private async runWithDedup(opts: ConnectorCreationPipelineOptions): Promise<ConnectorCreationPipelineResult> {
         const ciID = opts.CompanyIntegration?.ID;
         if (!ciID) return this.runInternal(opts); // no key to de-dup on — run directly
 
@@ -762,6 +776,11 @@ export class IntegrationConnectorCreationPipeline {
         const startMs = Date.now();
         const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
             IntegrationID: opts.CompanyIntegration.IntegrationID,
+            // The connection this discovery belongs to, and which catalog it writes into. Resolved
+            // in ONE place (CatalogSource.ts) so the read side and the write side of the same run
+            // can never disagree about which catalog they are on.
+            CompanyIntegrationID: opts.CompanyIntegration.ID,
+            CatalogSource: ResolveCatalogSource(opts.CompanyIntegration),
             SourceSchema: sourceSchema,
             ContextUser: opts.ContextUser,
             Provider: opts.Provider,
@@ -824,14 +843,18 @@ export class IntegrationConnectorCreationPipeline {
         const engine = IntegrationEngineBase.Instance;
         // Refresh from DB so we see what Persist just wrote
         await engine.Config(true, opts.ContextUser, md);
-        const objects = engine.GetIntegrationObjectsByIntegrationID(opts.CompanyIntegration.IntegrationID);
+        // Read through the writer rather than the cache. On the per-connection catalog the cached
+        // rows are read-only projections with no Save(), so the classifier's one write — promoting
+        // its nominee to primary key — would have had nothing to write to.
+        const writer = BuildCatalogWriter(md, opts.CompanyIntegration, opts.ContextUser);
+        const objects = (await writer.ObjectsInScope()).filter(o => o.Status === 'Active');
 
         const classifier = new SoftPKClassifier();
         const verdicts: ConnectorCreationPipelineResult['PKVerdicts'] = [];
         const unresolved: string[] = [];
 
         for (const obj of objects) {
-            const fields = engine.GetIntegrationObjectFields(obj.ID);
+            const fields = await writer.FieldsForObject(obj.ID);
             const hasPK = fields.some(f => f.IsPrimaryKey);
             if (hasPK) {
                 emitter.entityGenerated(obj.Name, obj.Name);
