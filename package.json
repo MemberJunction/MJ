@@ -105,6 +105,8 @@
     "check:esm:test": "vitest run --config .github/scripts/vitest.config.mts",
     "check:claude-md": "node .github/scripts/check-claude-md.mjs",
     "check:codegen-tail": "node .github/scripts/check-codegen-tail.mjs",
+    "check:release-notes": "node .github/scripts/check-release-notes-shape.mjs",
+    "check:release-notes:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-release-notes-shape",
     "check:codegen-tail:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-codegen-tail",
     "check:browser-manifest": "node .github/scripts/check-browser-manifest-leakage.mjs",
     "check:browser-manifest:test": "vitest run --config .github/scripts/vitest.config.mts __tests__/check-browser-manifest-leakage",

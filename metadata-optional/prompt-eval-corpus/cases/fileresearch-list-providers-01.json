@@ -1,0 +1,41 @@
+{
+  "id": "fileresearch-list-providers-01",
+  "agent": "File Research Agent",
+  "tags": [
+    "first-step-action",
+    "mid-loop-action"
+  ],
+  "description": "Before searching files the agent must know which storage providers exist. Ordering discipline: enumerate, then search.",
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Find the Q3 board deck in our document storage."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "List Storage Providers"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Search Storage Files"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    ]
+  }
+}

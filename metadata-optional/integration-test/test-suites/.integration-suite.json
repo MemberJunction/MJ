@@ -1157,6 +1157,17 @@
           "primaryKey": {
             "ID": "5345610B-4E73-497C-8994-099492F48C3B"
           }
+        },
+        {
+          "fields": {
+            "SuiteID": "@parent:ID",
+            "TestID": "@lookup:MJ: Tests.Name=IT93 - Prompt Eval Harness",
+            "Sequence": 48,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "D09895B7-D4CC-4505-A425-FD97DC0949F8"
+          }
         }
       ]
     },

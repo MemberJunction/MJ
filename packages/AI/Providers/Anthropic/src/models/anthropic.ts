@@ -1,9 +1,11 @@
 import { Anthropic, APIUserAbortError } from "@anthropic-ai/sdk";
-import { MessageCreateParams, MessageParam } from "@anthropic-ai/sdk/resources/messages";
+import { ContentBlock, MessageCreateParams, MessageParam, Tool, ToolChoice } from "@anthropic-ai/sdk/resources/messages";
 import { BaseLLM, ChatMessage, ChatMessageRole, ChatMessageContent, ChatMessageContentBlock, ChatParams, ChatResult, ClassifyParams, ClassifyResult,
     GetSystemPromptFromChatParams, GetUserMessageFromChatParams, SummarizeParams,
-    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities } from "@memberjunction/ai";
+    SummarizeResult, ModelUsage, ErrorAnalyzer, parseBase64DataUrl, FileCapabilities,
+    ChatToolCall, CHAT_FINISH_REASON_TOOL_CALLS } from "@memberjunction/ai";
 import { RegisterClass, ToJSONSafe } from "@memberjunction/global";
+import { BuildAnthropicThinking, UsesAdaptiveThinking } from "./thinking-config";
 
 /**
  * Sentinel a prompt can embed to tell the Anthropic adapter WHERE the stable, cacheable prefix ends
@@ -86,6 +88,13 @@ export class AnthropicLLM extends BaseLLM {
      * Anthropic natively supports assistant prefill
      */
     public override get SupportsPrefill(): boolean {
+        return true;
+    }
+
+    /**
+     * Anthropic natively supports tool calling (`tool_use` / `tool_result` content blocks).
+     */
+    public override get SupportsTools(): boolean {
         return true;
     }
 
@@ -173,6 +182,16 @@ export class AnthropicLLM extends BaseLLM {
                     if (docBlock) {
                         formattedBlocks.push(docBlock);
                     }
+                } else if (block.type === 'tool_result') {
+                    // Anthropic carries tool results as `tool_result` blocks inside a USER turn,
+                    // paired to the originating call by `tool_use_id`. Never cache-marked: results
+                    // are the volatile tail of the conversation by definition.
+                    formattedBlocks.push({
+                        type: 'tool_result',
+                        tool_use_id: block.toolCallId,
+                        content: block.content,
+                        ...(block.isError ? { is_error: true } : {})
+                    });
                 }
                 // Note: video_url, audio_url not yet supported by Anthropic
             }
@@ -329,11 +348,18 @@ export class AnthropicLLM extends BaseLLM {
      */
     protected formatMessagesWithCaching(messages: ChatMessage[], enableCaching: boolean = true): any[] {
         const result: any[] = [];
-        let lastRole = "assistant";
+        // Compare ANTHROPIC roles, not MJ roles: `tool` and `user` both become `user` here, and it
+        // is the wire role that has to alternate. For conversations without tool turns the two are
+        // identical (user->user, assistant->assistant), so this is unchanged behavior.
+        let lastRole: 'assistant' | 'user' = 'assistant';
 
-        for (let i = 0; i < messages.length; i++) {
+        const coalesced = this.coalesceToolMessages(messages);
+
+        for (let i = 0; i < coalesced.length; i++) {
+            const role = this.ConvertMJToAnthropicRole(coalesced[i].role);
+
             // If we have two messages with the same role back-to-back, insert an assistant message
-            if (messages[i].role === lastRole) {
+            if (role === lastRole) {
                 result.push({
                     role: "assistant",
                     content: [{ type: "text", text: "OK" }]
@@ -341,24 +367,75 @@ export class AnthropicLLM extends BaseLLM {
             }
 
             // Apply caching only to the last message
-            const isLastMessage = i === (messages.length - 1);
+            const isLastMessage = i === (coalesced.length - 1);
 
             // Format the content - now returns an array of content blocks
             const contentBlocks = this.formatContentWithCaching(
-                messages[i].content,
+                coalesced[i].content,
                 enableCaching && isLastMessage
             );
 
+            // An assistant turn that called tools must replay those calls as `tool_use` blocks, or
+            // Anthropic rejects the `tool_result` blocks that answer them as orphaned.
+            for (const call of coalesced[i].toolCalls ?? []) {
+                contentBlocks.push({
+                    type: 'tool_use',
+                    id: call.id,
+                    name: call.name,
+                    input: call.arguments ?? {}
+                });
+            }
+
             const formattedMsg: any = {
-                role: this.ConvertMJToAnthropicRole(messages[i].role),
-                content: contentBlocks
+                role,
+                // Anthropic rejects empty text blocks. A tool-call turn commonly has no prose at
+                // all, so drop empty text once something else is carrying the turn.
+                content: contentBlocks.length > 1
+                    ? contentBlocks.filter(b => b.type !== 'text' || (b.text ?? '').length > 0)
+                    : contentBlocks
             };
 
             result.push(formattedMsg);
-            lastRole = messages[i].role;
+            lastRole = role;
         }
 
         return result;
+    }
+
+    /**
+     * Merges runs of consecutive `tool` messages into one.
+     *
+     * Anthropic requires EVERY `tool_result` answering a given assistant turn to travel in the
+     * single user turn immediately after it. Left as separate messages they would be split across
+     * turns — and the alternation filler above would push an assistant "OK" between them, orphaning
+     * every result after the first.
+     *
+     * @param messages The caller's messages
+     * @returns The same messages with consecutive tool turns merged; the input is not mutated
+     */
+    private coalesceToolMessages(messages: ChatMessage[]): ChatMessage[] {
+        if (!messages.some(m => m.role === ChatMessageRole.tool)) {
+            return messages;
+        }
+
+        const out: ChatMessage[] = [];
+        for (const message of messages) {
+            const previous = out[out.length - 1];
+            if (message.role === ChatMessageRole.tool && previous?.role === ChatMessageRole.tool) {
+                out[out.length - 1] = {
+                    ...previous,
+                    content: [...this.asContentBlocks(previous.content), ...this.asContentBlocks(message.content)]
+                };
+            } else {
+                out.push(message);
+            }
+        }
+        return out;
+    }
+
+    /** Normalizes message content to a block array so two tool turns can be concatenated. */
+    private asContentBlocks(content: ChatMessageContent): ChatMessageContentBlock[] {
+        return typeof content === 'string' ? [{ type: 'text', content }] : content;
     }
 
 
@@ -426,6 +503,82 @@ export class AnthropicLLM extends BaseLLM {
     }
 
     /**
+     * Maps the neutral {@link ChatParams.tools} onto Anthropic's `tools` array.
+     * JSON Schema passes through untouched — Anthropic's `input_schema` IS JSON Schema.
+     *
+     * @param params The chat params for this request
+     * @returns The Anthropic tool declarations, or undefined when no tools were declared
+     */
+    private buildAnthropicTools(params: ChatParams): Tool[] | undefined {
+        if (!params.tools || params.tools.length === 0) {
+            return undefined;
+        }
+        return params.tools.map(tool => ({
+            name: tool.name,
+            description: tool.description,
+            input_schema: tool.inputSchema as Tool.InputSchema
+        }));
+    }
+
+    /**
+     * Maps the neutral {@link ChatParams.toolChoice} onto Anthropic's `tool_choice`.
+     *
+     * Anthropic spells "the model must call something" as `any` (not `required`), and expresses
+     * "one call at a time" as `disable_parallel_tool_use` on the choice object rather than as a
+     * top-level request field.
+     *
+     * @param params The chat params for this request
+     * @returns The Anthropic tool_choice object, or undefined to accept the provider default
+     */
+    private buildAnthropicToolChoice(params: ChatParams): ToolChoice | undefined {
+        const choice = params.toolChoice;
+        // `parallelToolCalls === false` still needs a choice object to hang the flag on; Anthropic's
+        // own default is `auto`, so that is the one we synthesize.
+        if (choice === undefined && params.parallelToolCalls !== false) {
+            return undefined;
+        }
+
+        let mapped: ToolChoice;
+        if (choice === undefined || choice === 'auto') {
+            mapped = { type: 'auto' };
+        } else if (choice === 'none') {
+            mapped = { type: 'none' };
+        } else if (choice === 'required') {
+            mapped = { type: 'any' };
+        } else {
+            mapped = { type: 'tool', name: choice.name };
+        }
+
+        // `none` takes no parallelism flag — there will be no calls to serialize.
+        if (params.parallelToolCalls === false && mapped.type !== 'none') {
+            mapped.disable_parallel_tool_use = true;
+        }
+        return mapped;
+    }
+
+    /**
+     * Pulls the `tool_use` blocks out of an Anthropic response and normalizes them.
+     *
+     * @param content The response's content blocks
+     * @returns The normalized calls, or undefined when the model called nothing
+     */
+    private extractToolCalls(content: ContentBlock[]): ChatToolCall[] | undefined {
+        const calls: ChatToolCall[] = [];
+        for (const block of content ?? []) {
+            if (block?.type === 'tool_use') {
+                calls.push({
+                    id: block.id,
+                    name: block.name,
+                    // Anthropic already delivers parsed input; guard anyway so a malformed block
+                    // yields an empty argument set rather than a non-object.
+                    arguments: (block.input && typeof block.input === 'object') ? block.input as Record<string, unknown> : {}
+                });
+            }
+        }
+        return calls.length > 0 ? calls : undefined;
+    }
+
+    /**
      * Was this error produced by the caller aborting the request?
      *
      * The Anthropic SDK raises {@link APIUserAbortError} when the `signal` we hand it fires (and it
@@ -482,11 +635,14 @@ export class AnthropicLLM extends BaseLLM {
             const nonSystemMsgs = params.messages.filter(m => m.role !== "system");
             
             // Determine max_tokens and thinking budget
-            // When thinking is enabled, max_tokens must be greater than budget_tokens
+            // When BUDGET-form thinking is enabled, max_tokens must be greater than budget_tokens.
+            // Adaptive-thinking models (Claude 4.6+, all of Claude 5) have no budget: they take
+            // `thinking.type = 'adaptive'` + `output_config.effort` and reject the budget form with
+            // HTTP 400 (observed on claude-sonnet-5) — see `UsesAdaptiveThinking`.
             let maxTokens = params.maxOutputTokens || 32000;
             let thinkingBudget: number | undefined = undefined;
 
-            if (params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
+            if (!UsesAdaptiveThinking(params.model) && params.effortLevel && (params.reasoningBudgetTokens >= 1 || params.reasoningBudgetTokens === undefined || params.reasoningBudgetTokens === null)) {
                 thinkingBudget = params.reasoningBudgetTokens || 31000;
                 // Ensure max_tokens is greater than budget_tokens
                 if (maxTokens <= thinkingBudget) {
@@ -548,12 +704,24 @@ export class AnthropicLLM extends BaseLLM {
                 );
             }
 
-            // Add thinking parameter if effort level is set
-            if (thinkingBudget !== undefined) {
-                createParams.thinking = {
-                    type: "enabled" as const,
-                    budget_tokens: thinkingBudget
-                };
+            // Add thinking, in whichever form the model accepts, if an effort level is set
+            const thinking = BuildAnthropicThinking({ model: params.model, effortLevel: params.effortLevel, budgetTokens: thinkingBudget });
+            if (thinking.thinking) {
+                createParams.thinking = thinking.thinking;
+            }
+            if (thinking.output_config) {
+                createParams.output_config = thinking.output_config;
+            }
+
+            // Native tool calling (§5.1). Declarations and choice are ephemeral per-call params —
+            // the prompt runner decides whether they are present; the driver just maps them.
+            const anthropicTools = this.buildAnthropicTools(params);
+            if (anthropicTools) {
+                createParams.tools = anthropicTools;
+                const toolChoice = this.buildAnthropicToolChoice(params);
+                if (toolChoice) {
+                    createParams.tool_choice = toolChoice;
+                }
             }
 
             switch (params.responseFormat) {
@@ -615,6 +783,10 @@ export class AnthropicLLM extends BaseLLM {
             usage.cacheReadTokens = cacheReadTokens;
             usage.cacheWriteTokens = cacheWriteTokens;
 
+            // Normalize any native tool calls the model made. A turn can carry BOTH text and tool
+            // calls, so this never displaces `content`.
+            const toolCalls = this.extractToolCalls(result.content);
+
             const chatResult: ChatResult = {
                 data: {
                     choices: [
@@ -622,9 +794,13 @@ export class AnthropicLLM extends BaseLLM {
                             message: {
                                 role: "assistant",
                                 content: content,
-                                thinking: thinkingContent
+                                thinking: thinkingContent,
+                                toolCalls: toolCalls
                             },
-                            finish_reason: "completed",
+                            // Only the tool-call case gets a normalized reason; everything else keeps
+                            // this driver's long-standing "completed" so existing consumers are
+                            // untouched.
+                            finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : "completed",
                             index: 0
                         }
                     ],
@@ -776,13 +952,19 @@ export class AnthropicLLM extends BaseLLM {
             params.enableCaching
         );
         
-        // Add thinking parameter if effort level is set
-        // Note: Requires minimum 1024 tokens and must be less than max_tokens
-        if (params.effortLevel && params.reasoningBudgetTokens >= 1024) {
-            createParams.thinking = {
-                type: "enabled" as const,
-                budget_tokens: params.reasoningBudgetTokens
-            };
+        // Add thinking, in whichever form the model accepts, if an effort level is set. The budget
+        // form needs a caller-supplied budget of at least 1024 tokens (and below max_tokens); the
+        // adaptive form (Claude 4.6+, all of Claude 5) has no budget at all.
+        const streamingThinking = BuildAnthropicThinking({
+            model: params.model,
+            effortLevel: params.effortLevel,
+            budgetTokens: params.reasoningBudgetTokens >= 1024 ? params.reasoningBudgetTokens : undefined
+        });
+        if (streamingThinking.thinking) {
+            createParams.thinking = streamingThinking.thinking;
+        }
+        if (streamingThinking.output_config) {
+            createParams.output_config = streamingThinking.output_config;
         }
 
         switch (params.responseFormat) {

@@ -61,7 +61,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 15
           },
@@ -78,7 +78,8 @@
             "PromptID": "@parent:ID",
             "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
-            "Priority": 20
+            "Priority": 20,
+            "Status": "Inactive"
           },
           "primaryKey": {
             "ID": "B8C7575B-0C10-4508-B189-C2492CC79180"
@@ -91,7 +92,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 14
           },

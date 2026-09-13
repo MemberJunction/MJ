@@ -13,7 +13,7 @@ import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { ManageMetadataBase } from './Database/manage-metadata';
 import { applyIncludeSchemaScope } from './Database/schema-scope';
 import { partitionEntitiesByOutputDirectory } from './Config/schema-output';
-import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo } from './Config/config';
+import { outputDir, commands, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig, CommandInfo, applyInProcessAdvancedGenerationPolicy, IN_PROCESS_ADVANCED_GENERATION_ENV } from './Config/config';
 import { resolveDirtySchemasForEmit, schemaKey, SchemaEmitOptions } from './Misc/schema-emit';
 import { EmitStats } from './Misc/emit-stats';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
@@ -128,7 +128,18 @@ export class RunCodeGenBase {
       // are seen as PK-less → entities are skipped ("No primary key found") → 0 rows sync until an MJAPI
       // restart. In-process path only; the CLI Run() keeps load-once. Deterministic — no mtime/TOCTOU.
       ManageMetadataBase.invalidateSoftPKFKConfigCache();
-      return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
+      // In-process runs are the runtime schema-update path, where the CLI's full AI profile turns a
+      // minutes-class step into an hours-class one and a bad AI answer can drop a table. Off unless the
+      // operator opts in; see applyInProcessAdvancedGenerationPolicy for the reasoning.
+      const advancedGeneration = applyInProcessAdvancedGenerationPolicy(configInfo);
+      if (advancedGeneration.disabled) {
+        logStatus(`In-process CodeGen: advanced (AI) generation is off for this run; set ${IN_PROCESS_ADVANCED_GENERATION_ENV}=1 to keep it on`);
+      }
+      try {
+        return await this.executeCodeGenPipeline(dataSource, skipDatabaseGeneration, skipFileGeneration);
+      } finally {
+        advancedGeneration.restore();
+      }
     } catch (e) {
       logError('In-process CodeGen failed: ' + e);
       return false;
