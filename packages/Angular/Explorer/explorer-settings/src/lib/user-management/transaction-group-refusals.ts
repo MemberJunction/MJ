@@ -27,7 +27,7 @@ export interface EnrolledRow {
  * the latest result. Keeping the knowledge in one place, pinned by a test, is the containment:
  * if the provider's wording changes, one test fails and one constant moves.
  */
-const PROVIDER_PLACEHOLDER_MESSAGES: ReadonlySet<string> = new Set([
+export const PROVIDER_PLACEHOLDER_MESSAGES: ReadonlySet<string> = new Set([
     'Transaction failed',
     'Transaction failed to commit',
 ]);

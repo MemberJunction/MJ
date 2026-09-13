@@ -11,7 +11,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { BaseEntity } from '@memberjunction/core';
-import { serverRefusalReasons, EnrolledRow } from './transaction-group-refusals';
+import { serverRefusalReasons, EnrolledRow, PROVIDER_PLACEHOLDER_MESSAGES } from './transaction-group-refusals';
 
 /** An entity carrying only the one thing the helper reads. */
 function row(label: string, completeMessage?: string): EnrolledRow {
@@ -65,6 +65,23 @@ describe('serverRefusalReasons', () => {
 });
 
 /**
+ * Does `bundle` emit `message` as a COMPLETE string literal?
+ *
+ * A substring test cannot answer that, and the difference is the whole point of this pin.
+ * `'Transaction failed to commit'` contains `'Transaction failed'`, so a `toContain` check on the
+ * shorter string is satisfied by the longer one alone — it would stay green through exactly the
+ * drift it exists to catch, and only the longer placeholder would really be pinned. The filter
+ * this guards matches placeholders EXACTLY (see the `merely CONTAINS` case above), so the pin has
+ * to prove the complete literal is still there.
+ */
+function emitsLiteral(bundle: string, message: string): boolean {
+    const escaped = message.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Quote-agnostic on purpose: `dist/index.cjs` is minified and currently double-quotes these,
+    // so pinning the single-quoted form the provider SOURCE uses would fail against every build.
+    return new RegExp(`["'\`]${escaped}["'\`]`).test(bundle);
+}
+
+/**
  * The filter above hardcodes two strings that live in `@memberjunction/graphql-dataprovider`, a
  * declared dependency of this package. That coupling is deliberate and documented on the constant —
  * but a comment cannot notice when the provider changes its wording, and the failure mode if it
@@ -79,9 +96,20 @@ describe('the provider placeholders this filter depends on', () => {
         const require = createRequire(import.meta.url);
         const bundle = readFileSync(require.resolve('@memberjunction/graphql-dataprovider'), 'utf8');
 
-        expect(bundle, "GraphQLDataProvider no longer emits 'Transaction failed' — update PROVIDER_PLACEHOLDER_MESSAGES")
-            .toContain('Transaction failed');
-        expect(bundle, "GraphQLDataProvider no longer emits 'Transaction failed to commit' — update PROVIDER_PLACEHOLDER_MESSAGES")
-            .toContain('Transaction failed to commit');
+        // Driven off the real set, so a third placeholder added to the filter is pinned by
+        // arriving — not by someone remembering to re-type it here.
+        expect(PROVIDER_PLACEHOLDER_MESSAGES.size).toBeGreaterThan(0);
+        for (const message of PROVIDER_PLACEHOLDER_MESSAGES) {
+            expect(
+                emitsLiteral(bundle, message),
+                `GraphQLDataProvider no longer emits '${message}' as a complete string literal — update PROVIDER_PLACEHOLDER_MESSAGES`,
+            ).toBe(true);
+        }
+    });
+
+    it('can actually fail: a bundle carrying only the longer placeholder does not satisfy the shorter one', () => {
+        // The bundle is minified, so the literal arrives double-quoted; this is a real excerpt of
+        // the shape `dist/index.cjs` ships.
+        expect(emitsLiteral('s.Message="Transaction failed to commit"', 'Transaction failed')).toBe(false);
     });
 });
