@@ -19,10 +19,16 @@ const state = vi.hoisted(() => ({
     docResult: { canceled: false, assets: [{ uri: 'file:///docs/report.pdf', name: 'report.pdf', mimeType: 'application/pdf', size: 4096 }] } as PickerResult,
     base64: 'Zm9vYmFy',
     base64Throws: false,
-    storageProviders: [{ ID: 'prov-1' }] as { ID: string }[],
-    runViewSuccess: true,
+    uploadResult: { Success: true, FileID: 'file-1' } as { Success: boolean; FileID?: string; ErrorMessage?: string },
+    uploadThrows: false,
+    lastUploadInput: null as { FileName: string; Base64Data: string; MimeType?: string; Description?: string } | null,
     saveResult: true,
-    lastSavedFile: null as { Name: string; ProviderID: string; ContentType: string | null; Status: string } | null,
+    lastSavedLink: null as { FileID: string; EntityID: string; RecordID: string } | null,
+    entityKnown: true,
+    modalityRows: [{ ID: 'modality-1' }] as { ID: string }[],
+    modalityLookupSuccess: true,
+    lastModalityFilter: '' as string,
+    lastSavedConvAttachment: null as Record<string, unknown> | null,
 }));
 
 vi.mock('expo-image-picker', () => ({
@@ -49,16 +55,15 @@ vi.mock('expo-file-system', () => ({
 }));
 
 vi.mock('@memberjunction/core', () => {
-    class FakeFile {
-        ID = 'file-1';
-        Name = '';
-        ProviderID = '';
-        ContentType: string | null = null;
-        Status = '';
+    class FakeLink {
+        ID = 'link-1';
+        FileID = '';
+        EntityID = '';
+        RecordID = '';
         LatestResult = { CompleteMessage: 'err' };
         NewRecord(): void {}
         async Save(): Promise<boolean> {
-            state.lastSavedFile = { Name: this.Name, ProviderID: this.ProviderID, ContentType: this.ContentType, Status: this.Status };
+            state.lastSavedLink = { FileID: this.FileID, EntityID: this.EntityID, RecordID: this.RecordID };
             return state.saveResult;
         }
     }
@@ -66,23 +71,76 @@ vi.mock('@memberjunction/core', () => {
         get CurrentUser(): { ID: string } {
             return { ID: 'user-1' };
         }
-        async GetEntityObject(): Promise<FakeFile> {
-            return new FakeFile();
+        EntityByName(name: string): { ID: string; Name: string } | undefined {
+            return state.entityKnown ? { ID: 'entity-1', Name: name } : undefined;
+        }
+        async GetEntityObject(entityName: string): Promise<FakeLink | FakeConvAttachment> {
+            return entityName === 'MJ: Conversation Detail Attachments' ? new FakeConvAttachment() : new FakeLink();
+        }
+    }
+    class FakeConvAttachment {
+        ID = 'ca-1';
+        ConversationDetailID = '';
+        FileID = '';
+        ModalityID = '';
+        MimeType = '';
+        FileName = '';
+        FileSizeBytes = 0;
+        DisplayOrder = 0;
+        LatestResult = { CompleteMessage: 'err' };
+        NewRecord(): void {}
+        async Save(): Promise<boolean> {
+            state.lastSavedConvAttachment = {
+                ConversationDetailID: this.ConversationDetailID,
+                FileID: this.FileID,
+                ModalityID: this.ModalityID,
+                MimeType: this.MimeType,
+                FileName: this.FileName,
+                FileSizeBytes: this.FileSizeBytes,
+                DisplayOrder: this.DisplayOrder,
+            };
+            return state.saveResult;
         }
     }
     class RunView {
-        async RunView(): Promise<{ Success: boolean; Results: unknown[] }> {
-            return { Success: state.runViewSuccess, Results: state.storageProviders };
+        async RunView(params: { ExtraFilter?: string }): Promise<{ Success: boolean; Results: unknown[] }> {
+            state.lastModalityFilter = params?.ExtraFilter ?? '';
+            return { Success: state.modalityLookupSuccess, Results: state.modalityRows };
         }
     }
-    return { Metadata, RunView };
+    class CompositeKey {
+        constructor(private readonly value: string) {}
+        static FromID(id: string): CompositeKey {
+            return new CompositeKey(id);
+        }
+        ToCompactURLSegment(): string {
+            return this.value;
+        }
+    }
+    return { Metadata, CompositeKey, RunView };
 });
 
+vi.mock('@memberjunction/graphql-dataprovider', () => {
+    class GraphQLFileStorageClient {
+        async UploadFile(input: { FileName: string; Base64Data: string; MimeType?: string; Description?: string }) {
+            if (state.uploadThrows) throw new Error('network');
+            state.lastUploadInput = input;
+            return state.uploadResult;
+        }
+    }
+    return { GraphQLFileStorageClient, GraphQLDataProvider: { Instance: {} } };
+});
+
+import { CompositeKey } from '@memberjunction/core';
 import {
     capturePhoto,
     composeMessageWithAttachment,
     describeAttachment,
-    persistAttachment,
+    uploadAttachment,
+    linkAttachmentToRecord,
+    uploadAndLinkAttachment,
+    attachFileToConversationDetail,
+    uploadAndAttachToMessage,
     pickDocument,
     pickImageFromLibrary,
     readAttachmentBase64,
@@ -98,10 +156,16 @@ beforeEach(() => {
     state.docResult = { canceled: false, assets: [{ uri: 'file:///docs/report.pdf', name: 'report.pdf', mimeType: 'application/pdf', size: 4096 }] };
     state.base64 = 'Zm9vYmFy';
     state.base64Throws = false;
-    state.storageProviders = [{ ID: 'prov-1' }];
-    state.runViewSuccess = true;
+    state.uploadResult = { Success: true, FileID: 'file-1' };
+    state.uploadThrows = false;
+    state.lastUploadInput = null;
     state.saveResult = true;
-    state.lastSavedFile = null;
+    state.lastSavedLink = null;
+    state.entityKnown = true;
+    state.modalityRows = [{ ID: 'modality-1' }];
+    state.modalityLookupSuccess = true;
+    state.lastModalityFilter = '';
+    state.lastSavedConvAttachment = null;
 });
 
 describe('pickImageFromLibrary', () => {
@@ -219,27 +283,151 @@ describe('describeAttachment / composeMessageWithAttachment', () => {
     });
 });
 
-describe('persistAttachment', () => {
+describe('uploadAttachment', () => {
     const att: CapturedAttachment = { uri: 'u', name: 'report.pdf', mimeType: 'application/pdf', kind: 'document' };
 
-    it('creates an MJ: Files catalog record and returns its id', async () => {
-        const result = await persistAttachment(att);
+    it('uploads the bytes and returns the new MJ: Files id', async () => {
+        const result = await uploadAttachment(att);
         expect(result).toEqual({ id: 'file-1' });
-        expect(state.lastSavedFile).toMatchObject({
-            Name: 'report.pdf',
-            ProviderID: 'prov-1',
-            ContentType: 'application/pdf',
-            Status: 'Pending',
+        expect(state.lastUploadInput).toMatchObject({
+            FileName: 'report.pdf',
+            Base64Data: 'Zm9vYmFy',
+            MimeType: 'application/pdf',
         });
     });
 
-    it('returns null when no storage provider is configured', async () => {
-        state.storageProviders = [];
-        expect(await persistAttachment(att)).toBeNull();
+    it('sends a human-readable description alongside the bytes', async () => {
+        await uploadAttachment(att);
+        expect(state.lastUploadInput?.Description).toContain('report.pdf');
     });
 
-    it('returns null when the save fails', async () => {
+    it('returns null when the file bytes cannot be read', async () => {
+        state.base64Throws = true;
+        expect(await uploadAttachment(att)).toBeNull();
+    });
+
+    it('returns null when the server rejects the upload', async () => {
+        state.uploadResult = { Success: false, ErrorMessage: 'quota exceeded' };
+        expect(await uploadAttachment(att)).toBeNull();
+    });
+
+    it('returns null rather than throwing when the transport fails', async () => {
+        state.uploadThrows = true;
+        await expect(uploadAttachment(att)).resolves.toBeNull();
+    });
+
+    it('returns null when the server reports success but no file id', async () => {
+        state.uploadResult = { Success: true };
+        expect(await uploadAttachment(att)).toBeNull();
+    });
+});
+
+describe('linkAttachmentToRecord', () => {
+    it('writes a link row keyed by the record, not by a hardcoded ID column', async () => {
+        const ok = await linkAttachmentToRecord('file-1', 'MJ: Conversation Details', CompositeKey.FromID('detail-9'));
+        expect(ok).toBe(true);
+        expect(state.lastSavedLink).toEqual({
+            FileID: 'file-1',
+            EntityID: 'entity-1',
+            RecordID: 'detail-9',
+        });
+    });
+
+    it('returns false for an entity that is not in metadata', async () => {
+        state.entityKnown = false;
+        expect(await linkAttachmentToRecord('file-1', 'Nope', CompositeKey.FromID('x'))).toBe(false);
+    });
+
+    it('returns false when the link row fails to save', async () => {
         state.saveResult = false;
-        expect(await persistAttachment(att)).toBeNull();
+        expect(await linkAttachmentToRecord('file-1', 'MJ: Conversation Details', CompositeKey.FromID('d'))).toBe(false);
+    });
+});
+
+describe('uploadAndLinkAttachment', () => {
+    const att: CapturedAttachment = { uri: 'u', name: 'report.pdf', mimeType: 'application/pdf', kind: 'document' };
+
+    it('uploads then links, reporting both outcomes', async () => {
+        const result = await uploadAndLinkAttachment(att, 'MJ: Conversation Details', CompositeKey.FromID('d1'));
+        expect(result).toEqual({ id: 'file-1', linked: true });
+    });
+
+    it('keeps the uploaded file even when linking fails — stored beats discarded', async () => {
+        state.saveResult = false;
+        const result = await uploadAndLinkAttachment(att, 'MJ: Conversation Details', CompositeKey.FromID('d1'));
+        expect(result).toEqual({ id: 'file-1', linked: false });
+    });
+
+    it('returns null when the upload itself failed', async () => {
+        state.uploadResult = { Success: false };
+        expect(await uploadAndLinkAttachment(att, 'MJ: Conversation Details', CompositeKey.FromID('d1'))).toBeNull();
+    });
+});
+
+describe('attachFileToConversationDetail', () => {
+    const image: CapturedAttachment = { uri: 'u', name: 'IMG.jpg', mimeType: 'image/jpeg', size: 2048, kind: 'image' };
+
+    it('writes a first-class conversation attachment row', async () => {
+        const ok = await attachFileToConversationDetail('file-1', 'detail-1', image);
+        expect(ok).toBe(true);
+        expect(state.lastSavedConvAttachment).toEqual({
+            ConversationDetailID: 'detail-1',
+            FileID: 'file-1',
+            ModalityID: 'modality-1',
+            MimeType: 'image/jpeg',
+            FileName: 'IMG.jpg',
+            FileSizeBytes: 2048,
+            DisplayOrder: 0,
+        });
+    });
+
+    it('routes an image to the Image modality so a vision model can consume it', async () => {
+        await attachFileToConversationDetail('f', 'd', image);
+        expect(state.lastModalityFilter).toContain("Name='Image'");
+    });
+
+    it('routes audio and video to their own modalities', async () => {
+        await attachFileToConversationDetail('f', 'd', { ...image, mimeType: 'audio/m4a' });
+        expect(state.lastModalityFilter).toContain("Name='Audio'");
+        await attachFileToConversationDetail('f', 'd', { ...image, mimeType: 'video/mp4' });
+        expect(state.lastModalityFilter).toContain("Name='Video'");
+    });
+
+    it('falls back to the File modality for anything unclassifiable', async () => {
+        await attachFileToConversationDetail('f', 'd', { ...image, mimeType: 'application/pdf' });
+        expect(state.lastModalityFilter).toContain("Name='File'");
+    });
+
+    it('reports an unreported size as 0 rather than blocking the attachment', async () => {
+        await attachFileToConversationDetail('f', 'd', { uri: 'u', name: 'x.bin', mimeType: 'application/octet-stream', kind: 'document' });
+        expect(state.lastSavedConvAttachment).toMatchObject({ FileSizeBytes: 0 });
+    });
+
+    it('returns false when the deployment has no matching modality row', async () => {
+        state.modalityRows = [];
+        expect(await attachFileToConversationDetail('f', 'd', image)).toBe(false);
+    });
+
+    it('returns false when the row fails to save', async () => {
+        state.saveResult = false;
+        expect(await attachFileToConversationDetail('f', 'd', image)).toBe(false);
+    });
+});
+
+describe('uploadAndAttachToMessage', () => {
+    const image: CapturedAttachment = { uri: 'u', name: 'IMG.jpg', mimeType: 'image/jpeg', size: 2048, kind: 'image' };
+
+    it('uploads then attaches, reporting both outcomes', async () => {
+        expect(await uploadAndAttachToMessage(image, 'detail-1')).toEqual({ id: 'file-1', attached: true });
+    });
+
+    it('keeps the uploaded file when attaching fails', async () => {
+        state.saveResult = false;
+        expect(await uploadAndAttachToMessage(image, 'detail-1')).toEqual({ id: 'file-1', attached: false });
+    });
+
+    it('returns null when the upload failed', async () => {
+        state.uploadResult = { Success: false };
+        expect(await uploadAndAttachToMessage(image, 'detail-1')).toBeNull();
     });
 });

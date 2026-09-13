@@ -52,8 +52,9 @@ export default function NewConversationScreen() {
     const canSend = (text.trim().length > 0 || attachment != null) && !busy;
 
     const start = async (overrideText?: string) => {
-        // Fold any pending attachment into the first message via the documented
-        // inline-note fallback (no mobile byte-upload pipeline yet; see attachments.ts).
+        // The note goes into the message text; the attachment itself rides to the thread,
+        // which owns the send and is therefore the only place that will have a message id
+        // to attach it to.
         const body = composeMessageWithAttachment(overrideText ?? text, attachment);
         if (!body || busy) return;
         setBusy(true);
@@ -69,7 +70,16 @@ export default function NewConversationScreen() {
             // Navigate into the thread and let it run the send — the thread shows the
             // "agent working" indicator and polls for the reply. Passing the message via
             // ?autosend gives the first message the same progress UX as in-thread sends.
-            router.replace({ pathname: '/chat/[id]', params: { id: conv.id, autosend: body } });
+            router.replace({
+                pathname: '/chat/[id]',
+                params: {
+                    id: conv.id,
+                    autosend: body,
+                    // Serialized because route params are strings. Only the small descriptor
+                    // travels — the bytes stay on disk at `uri` until the thread uploads them.
+                    ...(attachment ? { autosendAttachment: JSON.stringify(attachment) } : {}),
+                },
+            });
         } catch (e) {
             setError(e instanceof Error ? e.message : String(e));
         } finally {

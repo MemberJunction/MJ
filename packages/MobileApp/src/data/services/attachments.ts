@@ -15,30 +15,30 @@
  *     UI code doesn't care whether an item came from the camera, the library, or
  *     the Files app.
  *
- * ## Backend persistence status
- * MJ *does* have a first-class attachment entity — {@link MJFileEntity}
- * (`MJ: Files`) — and {@link persistAttachment} creates its catalog record via
- * the standard object model. However, uploading the raw *bytes* is a separate,
- * bespoke server capability: MJ's `FileResolver.CreateFile` mutation mints a
- * pre-signed `UploadUrl` that the client then PUTs the bytes to. That flow is a
- * custom GraphQL endpoint, NOT part of the plain `Metadata.GetEntityObject` /
- * `Save` object model, so it is intentionally out of scope here (we do not
- * invent an upload endpoint). Consequently {@link persistAttachment} records the
- * file metadata with `Status = 'Pending'` and leaves byte upload as documented
- * future work. Until that pipeline is wired, the chat composers use the
- * {@link composeMessageWithAttachment} fallback to describe the attachment inline
- * in the message text, so the capture UX is real end-to-end.
+ * ## Backend persistence
+ * Bytes are uploaded through `GraphQLFileStorageClient.UploadFile`, which posts the
+ * base64 payload to MJ Storage's server-side subsystem. That one call uploads the
+ * bytes *and* creates the `MJ: Files` catalog record, so the client never needs to
+ * mint a pre-signed URL, PUT to it, and then reconcile the record's status — three
+ * steps that previously had no mobile implementation and left every attachment
+ * stranded at `Status = 'Pending'`.
  *
- * // TODO(P3.x): once a mobile file-upload path exists (CreateFile pre-signed
- * // URL -> PUT bytes -> mark Uploaded, then link via `MJ: File Entity Record
- * // Links`), have the composers persist + reference the File instead of the
- * // inline text note.
+ * {@link linkAttachmentToRecord} then relates the stored file to whatever record it
+ * belongs to (a `Conversation Detail`, an entity row) via `MJ: File Entity Record
+ * Links`, which is what makes an attachment discoverable from the record rather
+ * than only from the file catalog.
+ *
+ * {@link composeMessageWithAttachment} is still used alongside this — not as a
+ * fallback for missing upload, but because a chat message should *say* that it
+ * carries an attachment. The note is the human-readable half; the File record and
+ * its link are the machine-readable half.
  */
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJFileEntity } from '@memberjunction/core-entities';
+import { CompositeKey, Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
+import type { MJConversationDetailAttachmentEntity, MJFileEntityRecordLinkEntity } from '@memberjunction/core-entities';
 
 /** Whether a captured attachment is an image (thumbnail-able) or an opaque document. */
 export type AttachmentKind = 'image' | 'document';
@@ -241,63 +241,251 @@ export function composeMessageWithAttachment(text: string, att: CapturedAttachme
     return trimmed.length > 0 ? `${trimmed}\n\n${note}` : note;
 }
 
+
 /**
- * Resolve the highest-priority active file-storage provider's ID, needed as the
- * required `ProviderID` FK on a `MJ: Files` record.
+ * Uploads a captured attachment's bytes and creates its `MJ: Files` catalog record.
  *
- * @returns The provider ID, or `null` when none is configured / the query fails.
+ * Delegates to MJ Storage's `UploadFile`, which performs both halves server-side — so
+ * there is no window where a catalog row exists without its bytes. The storage account
+ * is chosen by the server when {@link accountId} is omitted, which is the normal case;
+ * mobile has no business picking a storage backend.
+ *
+ * Best-effort by contract, like every other function in this module: a read failure,
+ * a transport error, or a server-side rejection all resolve to `null`. An attachment
+ * that cannot be uploaded must never take the message with it — the composer still
+ * sends the text, and the user still sees their note.
+ *
+ * @param att The captured attachment to upload.
+ * @param contextUser Optional context user; defaults to the signed-in user.
+ * @param accountId Optional specific `MJ: File Storage Accounts` id.
+ * @returns The new `MJ: Files` record id, or `null` if anything went wrong.
  */
-async function resolveActiveStorageProviderId(contextUser?: UserInfo): Promise<string | null> {
+export async function uploadAttachment(
+    att: CapturedAttachment,
+    contextUser?: UserInfo,
+    accountId?: string,
+): Promise<{ id: string } | null> {
+    const base64 = await readAttachmentBase64(att);
+    if (!base64) return null;
+    return uploadAttachmentBytes(att, base64, accountId);
+}
+
+/**
+ * Uploads attachment bytes that the caller has already read.
+ *
+ * Split out from {@link uploadAttachment} so the upload step does not depend on the device
+ * filesystem: reading bytes is `expo-file-system`'s job and only works on a device, while the
+ * upload itself is plain GraphQL and works anywhere. That separation is what lets the pipeline
+ * be tested against a live server from Node, instead of only on a simulator.
+ *
+ * @param att Metadata describing the attachment (name, MIME type, size).
+ * @param base64 The already-read file contents.
+ * @param accountId Optional specific `MJ: File Storage Accounts` id; the server chooses when omitted.
+ * @returns The new `MJ: Files` record id, or `null` on any failure. Never throws.
+ */
+export async function uploadAttachmentBytes(
+    att: CapturedAttachment,
+    base64: string,
+    accountId?: string,
+): Promise<{ id: string } | null> {
+    try {
+        const client = new GraphQLFileStorageClient(GraphQLDataProvider.Instance);
+        const result = await client.UploadFile({
+            FileName: att.name,
+            Base64Data: base64,
+            MimeType: att.mimeType,
+            AccountID: accountId,
+            Description: describeAttachment(att),
+        });
+
+        if (!result?.Success || !result.FileID) {
+            console.warn('[attachments] upload failed:', result?.ErrorMessage ?? 'no FileID returned');
+            return null;
+        }
+        return { id: result.FileID };
+    } catch (error) {
+        console.warn('[attachments] upload threw:', error);
+        return null;
+    }
+}
+
+/**
+ * Relates an uploaded file to the record it belongs to, via `MJ: File Entity Record Links`.
+ *
+ * This is what makes an attachment reachable *from the record* — a conversation message,
+ * an account, a work order — rather than only from the file catalog. Without it an upload
+ * is orphaned: stored, but findable by nobody who wasn't already looking for it.
+ *
+ * The record key is built through {@link CompositeKey} rather than assuming a column named
+ * `ID`, so this works for entities mapped from external schemas and for composite keys.
+ *
+ * @param fileId The `MJ: Files` id returned by {@link uploadAttachment}.
+ * @param entityName The entity the record belongs to, e.g. `'MJ: Conversation Details'`.
+ * @param recordKey The target record's primary key.
+ * @param contextUser Optional context user; defaults to the signed-in user.
+ * @returns `true` when the link row saved, `false` otherwise. Never throws.
+ */
+export async function linkAttachmentToRecord(
+    fileId: string,
+    entityName: string,
+    recordKey: CompositeKey,
+    contextUser?: UserInfo,
+): Promise<boolean> {
+    try {
+        const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+        const currentUser = contextUser ?? md.CurrentUser;
+
+        const entity = md.EntityByName(entityName);
+        if (!entity) {
+            console.warn(`[attachments] unknown entity for link: ${entityName}`);
+            return false;
+        }
+
+        const link = await md.GetEntityObject<MJFileEntityRecordLinkEntity>('MJ: File Entity Record Links', currentUser);
+        link.NewRecord();
+        link.FileID = fileId;
+        link.EntityID = entity.ID;
+        link.RecordID = recordKey.ToCompactURLSegment();
+
+        const saved = await link.Save();
+        if (!saved) {
+            console.warn('[attachments] link save failed:', link.LatestResult?.CompleteMessage ?? 'unknown error');
+        }
+        return saved;
+    } catch (error) {
+        console.warn('[attachments] link threw:', error);
+        return false;
+    }
+}
+
+/**
+ * Uploads an attachment and links it to a record in one step — the call the chat
+ * composers actually want.
+ *
+ * Returns the file id even when linking fails: the bytes are safely stored either way,
+ * and losing the link is a lesser failure than discarding the upload. The caller decides
+ * whether a partial success is worth surfacing.
+ *
+ * @returns `{ id, linked }`, or `null` if the upload itself failed.
+ */
+export async function uploadAndLinkAttachment(
+    att: CapturedAttachment,
+    entityName: string,
+    recordKey: CompositeKey,
+    contextUser?: UserInfo,
+): Promise<{ id: string; linked: boolean } | null> {
+    const uploaded = await uploadAttachment(att, contextUser);
+    if (!uploaded) return null;
+    const linked = await linkAttachmentToRecord(uploaded.id, entityName, recordKey, contextUser);
+    return { id: uploaded.id, linked };
+}
+
+/**
+ * Maps a MIME type onto an `MJ: AI Modalities` name.
+ *
+ * The modality is what lets an agent treat an attachment as something it can *reason about*
+ * rather than an opaque blob — a photo routed as `Image` reaches a vision model, where the same
+ * bytes filed as `File` would not. Anything we cannot classify falls back to `File`, which is
+ * honest: the bytes are attached and downloadable, they are just not claimed to be interpretable.
+ */
+function modalityNameForMimeType(mimeType: string): 'Image' | 'Audio' | 'Video' | 'File' {
+    const m = mimeType.toLowerCase();
+    if (m.startsWith('image/')) return 'Image';
+    if (m.startsWith('audio/')) return 'Audio';
+    if (m.startsWith('video/')) return 'Video';
+    return 'File';
+}
+
+/** Resolves an `MJ: AI Modalities` row id by name, or `null` when the deployment lacks it. */
+async function resolveModalityId(name: string, contextUser?: UserInfo): Promise<string | null> {
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string }>(
         {
-            EntityName: 'MJ: File Storage Providers',
-            ExtraFilter: 'IsActive=1',
-            OrderBy: 'Priority ASC',
+            EntityName: 'MJ: AI Modalities',
+            ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
             Fields: ['ID'],
             MaxRows: 1,
             ResultType: 'simple',
         },
         contextUser,
     );
-    if (!result.Success || !result.Results || result.Results.length === 0) return null;
+    if (!result.Success || !result.Results?.length) return null;
     return result.Results[0].ID;
 }
 
 /**
- * Persist an attachment's *metadata* as an MJ {@link MJFileEntity} (`MJ: Files`)
- * catalog record via the standard object model.
+ * Attaches an uploaded file to a chat message as a first-class conversation attachment.
  *
- * IMPORTANT: this creates the catalog row only — it does NOT upload the file
- * bytes. Byte upload is a separate, bespoke server capability (the `CreateFile`
- * pre-signed-URL flow) that lives outside the plain object model; see this
- * module's header. The record is therefore saved with `Status = 'Pending'`.
- * Returns `null` (never throws) when no storage provider is configured or the
- * save fails, so the caller can fall back cleanly to the inline note.
+ * This writes `MJ: Conversation Detail Attachments` — MJ's purpose-built multimodal attachment
+ * model — rather than the generic `MJ: File Entity Record Links`. The distinction matters: the
+ * conversation model carries `ModalityID`, dimensions and size, which is what allows an agent to
+ * *consume* the attachment (a photo reaching a vision model) instead of merely having a pointer
+ * to a file it cannot open. Use {@link linkAttachmentToRecord} for non-conversation records, where
+ * the generic link is the right shape.
  *
- * @param att The captured attachment to catalog.
- * @param contextUser Optional acting user (falls back to the current user).
- * @returns `{ id }` of the created File record, or `null` on failure.
+ * @param fileId The `MJ: Files` id from {@link uploadAttachment}.
+ * @param conversationDetailId The message this attachment belongs to.
+ * @param att The captured attachment, for its metadata.
+ * @param displayOrder Position among a message's attachments; defaults to 0.
+ * @param contextUser Optional context user; defaults to the signed-in user.
+ * @returns `true` when the attachment row saved. Never throws.
  */
-export async function persistAttachment(
+export async function attachFileToConversationDetail(
+    fileId: string,
+    conversationDetailId: string,
     att: CapturedAttachment,
+    displayOrder = 0,
     contextUser?: UserInfo,
-): Promise<{ id: string } | null> {
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
+): Promise<boolean> {
+    try {
+        const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+        const currentUser = contextUser ?? md.CurrentUser;
 
-    const providerId = await resolveActiveStorageProviderId(currentUser);
-    if (!providerId) return null;
+        const modalityId = await resolveModalityId(modalityNameForMimeType(att.mimeType), currentUser);
+        if (!modalityId) {
+            console.warn('[attachments] no AI Modality row resolved; cannot attach to conversation');
+            return false;
+        }
 
-    const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', currentUser);
-    file.NewRecord();
-    file.Name = att.name;
-    file.ProviderID = providerId;
-    file.ContentType = att.mimeType;
-    // 'Pending' == catalog row created, bytes not yet uploaded (see header TODO).
-    file.Status = 'Pending';
+        const row = await md.GetEntityObject<MJConversationDetailAttachmentEntity>(
+            'MJ: Conversation Detail Attachments',
+            currentUser,
+        );
+        row.NewRecord();
+        row.ConversationDetailID = conversationDetailId;
+        row.FileID = fileId;
+        row.ModalityID = modalityId;
+        row.MimeType = att.mimeType;
+        row.FileName = att.name;
+        // Size is required but some pickers omit it; 0 is truthful ("unreported") and keeps the
+        // row valid rather than blocking an otherwise good attachment on a missing nicety.
+        row.FileSizeBytes = att.size ?? 0;
+        row.DisplayOrder = displayOrder;
 
-    const saved = await file.Save();
-    if (!saved) return null;
-    return { id: file.ID };
+        const saved = await row.Save();
+        if (!saved) {
+            console.warn('[attachments] conversation attachment save failed:', row.LatestResult?.CompleteMessage ?? 'unknown error');
+        }
+        return saved;
+    } catch (error) {
+        console.warn('[attachments] conversation attachment threw:', error);
+        return false;
+    }
+}
+
+/**
+ * Uploads an attachment and attaches it to a chat message — the call the composers want.
+ *
+ * Returns the file id even when the attach step fails, for the same reason
+ * {@link uploadAndLinkAttachment} does: stored-but-unattached beats discarded.
+ */
+export async function uploadAndAttachToMessage(
+    att: CapturedAttachment,
+    conversationDetailId: string,
+    contextUser?: UserInfo,
+): Promise<{ id: string; attached: boolean } | null> {
+    const uploaded = await uploadAttachment(att, contextUser);
+    if (!uploaded) return null;
+    const attached = await attachFileToConversationDetail(uploaded.id, conversationDetailId, att, 0, contextUser);
+    return { id: uploaded.id, attached };
 }

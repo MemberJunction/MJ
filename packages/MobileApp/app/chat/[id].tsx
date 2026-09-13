@@ -20,7 +20,7 @@ import { Icons } from '@/components/Icon';
 import { MarkdownView } from '@/components/markdown/MarkdownView';
 import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
 import { sendMessage, getConversationDetailStatus, type SendProgress } from '@/data/services/agents';
-import { composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
+import { composeMessageWithAttachment, uploadAndAttachToMessage, type CapturedAttachment } from '@/data/services/attachments';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -50,7 +50,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  * Mockup: `plans/mobile-app-react-native/html/chat-thread.html`.
  */
 export default function ChatThreadScreen() {
-    const { id, autosend } = useLocalSearchParams<{ id: string; autosend?: string }>();
+    const { id, autosend, autosendAttachment } = useLocalSearchParams<{ id: string; autosend?: string; autosendAttachment?: string }>();
     const { data, loading, error, refresh } = useConversation(id);
     const { conversations: allConversations, refresh: refreshList } = useConversations();
 
@@ -62,7 +62,7 @@ export default function ChatThreadScreen() {
 
     const view = useMemo(() => (data ? adaptConversation(data) : null), [data]);
 
-    const handleSend = useCallback(async (text: string) => {
+    const handleSend = useCallback(async (text: string, attachment: CapturedAttachment | null = null) => {
         if (!id || !text.trim()) return;
         setSending(true);
         setSendError(null);
@@ -74,6 +74,14 @@ export default function ChatThreadScreen() {
                 text: text.trim(),
                 onProgress: (p) => setProgress(p),
             });
+            // The user message now exists server-side, so the attachment finally has something to
+            // hang off. Uploading here rather than before the send keeps a failed upload from
+            // costing the user their message — the text goes either way.
+            if (attachment && result.userMessageId) {
+                const stored = await uploadAndAttachToMessage(attachment, result.userMessageId);
+                if (!stored) setSendError('The message sent, but the attachment could not be uploaded.');
+                else if (!stored.attached) setSendError('The file uploaded, but could not be attached to this message.');
+            }
             // The user message + in-progress AI bubble now exist server-side; show them.
             setPendingUserText(null);
             await refresh();
@@ -112,9 +120,19 @@ export default function ChatThreadScreen() {
     useEffect(() => {
         if (autosend && !autoSentRef.current && view && !sending) {
             autoSentRef.current = true;
-            void handleSend(autosend);
+            // A first message started from the new-conversation screen may carry an attachment.
+            // Parsing is tolerant: a malformed descriptor costs the attachment, never the message.
+            let firstAttachment: CapturedAttachment | null = null;
+            if (autosendAttachment) {
+                try {
+                    firstAttachment = JSON.parse(autosendAttachment) as CapturedAttachment;
+                } catch {
+                    firstAttachment = null;
+                }
+            }
+            void handleSend(autosend, firstAttachment);
         }
-    }, [autosend, view, sending, handleSend]);
+    }, [autosend, autosendAttachment, view, sending, handleSend]);
 
     // Recents strip = top 5 most recent conversations excluding the active one
     const recentChips = useMemo(() => {
@@ -378,11 +396,12 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
  * attachment (clears the draft and calls `onSend`), otherwise a mic button that
  * opens `/voice-mode`. `disabled` blocks input/send while an agent run is in flight.
  *
- * On send, the attachment is folded into the message via
- * {@link composeMessageWithAttachment} — the documented inline-note fallback,
- * since there is no mobile byte-upload pipeline yet (see `attachments.ts`).
+ * On send, the attachment travels two ways: {@link composeMessageWithAttachment} adds a
+ * human-readable note to the message text, and the attachment itself is handed to the
+ * parent so it can be uploaded and attached to the created message as a first-class
+ * `MJ: Conversation Detail Attachments` row once that message exists.
  */
-function Composer({ onSend, disabled, conversationId }: { onSend: (text: string) => void; disabled: boolean; conversationId: string }) {
+function Composer({ onSend, disabled, conversationId }: { onSend: (text: string, attachment: CapturedAttachment | null) => void; disabled: boolean; conversationId: string }) {
     const [text, setText] = useState('');
     const [attachment, setAttachment] = useState<CapturedAttachment | null>(null);
     const [pickerVisible, setPickerVisible] = useState(false);
@@ -391,9 +410,10 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string)
     const submit = () => {
         if (!canSend) return;
         const body = composeMessageWithAttachment(text, attachment);
+        const pending = attachment;
         setText('');
         setAttachment(null);
-        onSend(body);
+        onSend(body, pending);
     };
 
     return (
