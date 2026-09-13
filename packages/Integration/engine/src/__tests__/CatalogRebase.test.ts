@@ -80,3 +80,65 @@ describe('RebaseFromDeclared', () => {
     expect(row.APIPath).toBe('/v1/old');
   });
 });
+
+/**
+ * MJ-CAT-21 — the same rule, for FIELDS, on a row that already exists.
+ *
+ * Objects were rebased on every refresh; fields were rebased only when the row was CREATED. So a
+ * connector release that changed a declared field's type, width or key flags reached connections
+ * that had never seen the field, and silently skipped every connection that already had it.
+ *
+ * The live case: PheedLoop 1.4.6 added `eventCode` to the Attendees primary key. Connections that
+ * had already discovered `eventCode` from the source kept a one-column key while the declaration
+ * said two — with no error, because from the persist's point of view nothing had changed.
+ */
+describe('AdoptDeclaration — an existing field row matched to a declaration', () => {
+  const declaredField = () =>
+    ({ ID: 'df-1', Name: 'eventCode', Type: 'nvarchar', Length: 100, IsPrimaryKey: true,
+       IsUniqueKey: false, IsCustom: false, MetadataSource: 'Metadata' }) as never;
+
+  it('carries the declared key flag onto a row discovery had created', () => {
+    const row = { ID: 'cf-9', Name: 'eventCode', Type: 'nvarchar', Length: 64, IsPrimaryKey: false,
+                  IsCustom: true, MetadataSource: 'Discovered', Provenance: 'Sampled',
+                  IntegrationObjectFieldID: null } as never as Record<string, unknown>;
+    const moved = perConn().AdoptDeclaration(row as never, declaredField(), 'field');
+    expect(row.IsPrimaryKey).toBe(true);
+    expect(moved).toContain('IsPrimaryKey');
+  });
+
+  it('stops calling the row Discovered — without this the PK decider demotes it again', () => {
+    // decidePKPromotion reads MetadataSource === 'Discovered' to rule that a declared key cannot
+    // include this field. A rebase that left it alone would set IsPrimaryKey and lose it again
+    // three statements later, which is the whole reason this is not just RebaseFromDeclared.
+    const row = { ID: 'cf-9', Name: 'eventCode', IsPrimaryKey: false, IsCustom: true,
+                  MetadataSource: 'Discovered', Provenance: 'Sampled',
+                  IntegrationObjectFieldID: null } as never as Record<string, unknown>;
+    perConn().AdoptDeclaration(row as never, declaredField(), 'field');
+    expect(row.MetadataSource).not.toBe('Discovered');
+    expect(row.Provenance).toBe('Declared');
+    expect(row.IsCustom).toBe(false);
+    expect(row.IntegrationObjectFieldID).toBe('df-1');
+  });
+
+  it('does not deselect the field or forget when it was first seen', () => {
+    // StampNewField clears IsSelected and resets FirstSeenAt. Reusing it here would deselect a
+    // table the customer had chosen.
+    const first = new Date('2026-01-01T00:00:00Z');
+    const row = { ID: 'cf-9', Name: 'eventCode', IsPrimaryKey: false, MetadataSource: 'Discovered',
+                  IsSelected: true, FirstSeenAt: first } as never as Record<string, unknown>;
+    perConn().AdoptDeclaration(row as never, declaredField(), 'field');
+    expect(row.IsSelected).toBe(true);
+    expect(row.FirstSeenAt).toBe(first);
+  });
+
+  it('is a no-op with no declaration — a connection-only field has nothing to adopt', () => {
+    const row = { ID: 'cf-9', Name: 'custom_thing', IsPrimaryKey: false,
+                  MetadataSource: 'Discovered' } as never as Record<string, unknown>;
+    expect(perConn().AdoptDeclaration(row as never, null, 'field')).toEqual([]);
+    expect(row.MetadataSource).toBe('Discovered');
+  });
+
+  it('is a no-op on the shared catalog, where the row IS the declaration', () => {
+    expect(shared().AdoptDeclaration()).toEqual([]);
+  });
+});

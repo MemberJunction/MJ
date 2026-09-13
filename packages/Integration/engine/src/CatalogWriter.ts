@@ -172,6 +172,27 @@ export interface CatalogWriter {
                        declared: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity | null,
                        kind: 'object' | 'field'): string[];
 
+    /**
+     * MJ-CAT-21 — an EXISTING per-connection row has just been matched to a declaration. Rebase it, and record
+     * that it is now a declared row rather than one this connection merely found.
+     *
+     * The second half is the load-bearing one. A field this connection discovered BEFORE the
+     * connector declared it keeps `MetadataSource = 'Discovered'`, and `decidePKPromotion` reads
+     * exactly that to rule that a declared primary key cannot include it — so a rebase on its own
+     * sets `IsPrimaryKey` and has it demoted again a few statements later, which is precisely how
+     * PheedLoop 1.4.6's new `eventCode` key reached a connection's catalog as an ordinary column.
+     * A row that now has a declaration is no longer merely discovered.
+     *
+     * Not `StampNewField`: that one also clears `IsSelected` and resets `FirstSeenAt`, which would
+     * deselect a table the customer chose and forget when the field first appeared.
+     *
+     * Shared writers no-op — there the row IS the declaration, and writing provenance onto it
+     * would be writing it onto itself.
+     */
+    AdoptDeclaration(row: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity,
+                     declared: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity | null,
+                     kind: 'object' | 'field'): string[];
+
     RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }>;
     RetireField(row: MJIntegrationObjectFieldEntity): Promise<{ ok: boolean; deleted: boolean }>;
 }
@@ -322,6 +343,9 @@ export class SharedCatalogWriter implements CatalogWriter {
     /** The shared row IS the declaration; there is nothing to rebase it from. */
     public RebaseFromDeclared(): string[] { return []; }
 
+    /** Likewise: the shared row cannot adopt a declaration, because it is one. */
+    public AdoptDeclaration(): string[] { return []; }
+
     /** Shared rows are the declared floor for every other connection — disable, never delete. */
     public async RetireObject(row: MJIntegrationObjectEntity): Promise<{ ok: boolean; deleted: boolean }> {
         row.Status = 'Disabled';
@@ -435,6 +459,33 @@ export class PerConnectionCatalogWriter implements CatalogWriter {
             if ((target[c] ?? null) === next) continue;
             target[c] = next;
             moved.push(c);
+        }
+        return moved;
+    }
+
+    public AdoptDeclaration(
+        row: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity,
+        declared: MJIntegrationObjectEntity | MJIntegrationObjectFieldEntity | null,
+        kind: 'object' | 'field'
+    ): string[] {
+        if (!declared) return [];
+        const moved = this.RebaseFromDeclared(row, declared, kind);
+        const target = row as unknown as Record<string, unknown>;
+        const source = declared as unknown as Record<string, unknown>;
+        // Deliberately OUTSIDE the rebase. These three sit in NOT_DECLARED_OWNED because discovery
+        // owns them for a row discovery created — but a row that now has a declaration is not that
+        // row any more, and the seeding path in UpsertField/UpsertObject already stamps exactly
+        // these from the declaration when it creates one.
+        const link = kind === 'field' ? 'IntegrationObjectFieldID' : 'IntegrationObjectID';
+        for (const [col, next] of [
+            [link, declared.ID],
+            ['MetadataSource', source['MetadataSource'] ?? null],
+            ['IsCustom', source['IsCustom'] ?? null],
+            ['Provenance', 'Declared'],
+        ] as Array<[string, unknown]>) {
+            if ((target[col] ?? null) === (next ?? null)) continue;
+            target[col] = next;
+            moved.push(col);
         }
         return moved;
     }

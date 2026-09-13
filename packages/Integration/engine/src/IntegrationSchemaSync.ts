@@ -956,6 +956,7 @@ export class IntegrationSchemaSync {
     // MJ-CAT-17 — see UpsertObject. A declared field with no per-connection row yet is seeded from the
     // declaration (type, width, key flags, sequence) and then overlaid like an existing row.
     let seeded = false;
+    let fieldDirtyFromAdoption = false;
     if (!existing && declaredField) {
       const row = await writer.NewFieldRow();
       writer.StampNewField(row, declaredField.ID, 'Declared');
@@ -971,6 +972,32 @@ export class IntegrationSchemaSync {
     const winners: FieldMergeLog['AttributeWinners'] = {};
 
     if (existing) {
+      // MJ-CAT-21 — re-assert the DECLARATION on a row that already exists.
+      //
+      // UpsertObject does this for objects (see its existing-row branch) under a comment that
+      // states the reason: a refresh uses the declaration as the source of truth for a
+      // per-connection row rather than overlaying discovery onto that row's own previous output.
+      // Fields never got the same treatment, so a connector release that changed a declared FIELD
+      // — its type, its width, its key flags — reached only connections that had never seen that
+      // field, and silently skipped every connection that already had it.
+      //
+      // Observed: PheedLoop 1.4.6 added `eventCode` to the Attendees primary key. A connection that
+      // had discovered `eventCode` from the source before 1.4.6 declared it already had the row, so
+      // the new key never landed — its catalog kept a single-column key while the declaration said
+      // two, and nothing reported a problem, because from the persist's point of view nothing
+      // changed.
+      //
+      // `AdoptDeclaration`, not `RebaseFromDeclared`: the rebase alone is not enough. The row still
+      // reads `MetadataSource = 'Discovered'`, and decidePKPromotion below uses exactly that to
+      // rule that a declared key cannot include this field — so the rebase would set IsPrimaryKey
+      // and have it demoted again before the row was ever saved. Adoption records that the row is
+      // declared now, which is what makes the decision downstream come out right.
+      if (!seeded && declaredField) {
+        const adopted = writer.AdoptDeclaration(existing, declaredField, 'field');
+        if (adopted.length > 0) {
+          fieldDirtyFromAdoption = true;
+        }
+      }
       // Declared row exists. Overlay rule — external-wins-when-present, per attribute:
       //  - Describe wins for DDL-affecting attributes (Type, AllowsNull, IsRequired, IsPrimaryKey,
       //    IsUniqueKey, IsReadOnly) whenever the source states an opinion; `undefined` = no opinion
@@ -984,7 +1011,7 @@ export class IntegrationSchemaSync {
       // Returned attribute winners surface EXACTLY which source decided each
       // attribute so the caller (progress emitter, UI) can show structural
       // transparency on the merge.
-      let dirty = false;
+      let dirty = fieldDirtyFromAdoption;
       // §7 REACTIVATE-on-rediscover: a field the source dropped (and we Disabled) that REAPPEARS flips
       // back to Active. existingFields includes Disabled rows, so it is reactivated, not duplicated.
       if (existing.Status !== 'Active') {
