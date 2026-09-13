@@ -33,7 +33,8 @@ import {
     IntegrationSchemaSync,
     decideSchemaLimitViolations,
     IntegrationConnectorCreationPipeline,
-    IntegrationActionGenerator
+    IntegrationActionGenerator,
+    ObjectsWithWatermarkFieldChange
 } from "@memberjunction/integration-engine";
 import type {
     IntegrationActionVerb,
@@ -3516,8 +3517,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 return { Success: false, Message: 'No valid schema inputs to process', Items: itemResults };
             }
 
+            // Retrying variant, matching `IntegrationApplySchema` (which retries via
+            // SchemaBuilder.RunSchemaPipeline). This is the same install path over the same
+            // SchemaBuilder-generated DDL, and its expensive middle steps — ExecuteMigration,
+            // RunCodeGen, CompileTypeScript, RestartMJAPI — fail transiently. The wrapper replays
+            // only those four, and only while NOTHING in the batch has been applied, so a partially
+            // succeeded batch is still reported as-is rather than double-applied.
             const rsm = RuntimeSchemaManager.Instance;
-            const batchResult = await rsm.RunPipelineBatch(pipelineInputs);
+            const batchResult = await rsm.RunPipelineBatchWithRetry(pipelineInputs);
 
             return {
                 Success: batchResult.SuccessCount > 0,
@@ -6227,6 +6234,36 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 }
             }
 
+            // ── Phase 5b — MJ-RUN-37: a WATERMARK-FIELD swap is a change the DDL diff cannot see ──
+            //
+            // A connector upgrade can move an object's incremental cursor to a different source
+            // column (`modified_at` → `last_updated`). Phase 1's persist already DETECTS that — the
+            // overlay rewrites `IntegrationObject.IncrementalWatermarkField` and records it in the
+            // merge log's `ChangedAttributes`. Nothing consumed it, and no other source of
+            // `changedObjects` can: a cursor swap adds no column (so `diff.AddedColumns` and
+            // `ModifiedColumns` are both empty) and touches no field map (so Phase 6 stays quiet).
+            //
+            // The object was therefore treated as unchanged, its Pull watermark survived, and the
+            // next incremental sync applied the OLD column's stored value as a lower bound on the
+            // NEW one. Where the new column sorts later, every row below that value is filtered out
+            // AT THE SOURCE — permanently, and with no artifact: the source reports a total
+            // consistent with the filter it was given, so fetched equals expected and the run
+            // closes clean. Absence, not duplication, is what this produces.
+            //
+            // Scoped to CONTINUING maps deliberately. A new object has no watermark to invalidate
+            // and a removed one has no sync left to protect; widening this to every persisted object
+            // would inflate `ChangedObjects` (and `hasChanges`) with names Phase 7 cannot act on.
+            const watermarkFieldChanged = ObjectsWithWatermarkFieldChange(
+                refresh.PersistResult?.ObjectMergeLog ?? [],
+                continuingMaps.map(m => m.ExternalObjectName ?? ''),
+            );
+            for (const name of watermarkFieldChanged) {
+                if (!changedObjects.some(n => n.toLowerCase() === name.toLowerCase())) changedObjects.push(name);
+            }
+            if (watermarkFieldChanged.length > 0) {
+                LogStatus(`[SchemaEvolution] IncrementalWatermarkField changed on ${watermarkFieldChanged.length} object(s) — resetting their Pull watermarks: ${watermarkFieldChanged.join(', ')}`);
+            }
+
             // ── Phase 6 — reconcile CONTINUING maps' field maps to the resolution ──
             // Added source fields get field maps (Active on enabled maps, Disabled on disabled
             // maps); field maps whose source field vanished from the resolution are disabled.
@@ -6301,8 +6338,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     rsuInput.ContextUser = user;
                 }
 
+                // Retrying variant, for the same reason every other install path uses it: a refresh
+                // is unattended and long, and a transient ExecuteMigration / RunCodeGen /
+                // CompileTypeScript / RestartMJAPI failure would otherwise abandon it with the
+                // metadata already re-resolved and the DDL not applied — the half-state an operator
+                // then has to diagnose. Replay happens only while nothing was applied.
                 const rsm = RuntimeSchemaManager.Instance;
-                const batchResult = await rsm.RunPipelineBatch([rsuInput]);
+                const batchResult = await rsm.RunPipelineBatchWithRetry([rsuInput]);
                 const pipelineResult = batchResult.Results[0];
                 pipelineSteps = pipelineResult?.Steps.map((s: RSUPipelineStep) => ({
                     Name: s.Name, Status: s.Status, DurationMs: s.DurationMs, Message: s.Message, StepIndex: s.StepIndex, StepTotal: s.StepTotal,

@@ -156,6 +156,8 @@ export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult
 export type { FetchWarning } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
 export { decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
+// MJ-RUN-37 — the persist layer's watermark-invalidation signal, consumed by the schema evolution.
+export { ObjectsWithWatermarkFieldChange, WATERMARK_INVALIDATING_ATTRIBUTES } from './IntegrationSchemaSync.js';
 export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
 
 // ── Auth helpers (shared OAuth2/token primitives for connectors) ──

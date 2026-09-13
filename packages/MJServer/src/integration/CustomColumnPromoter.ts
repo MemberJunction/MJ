@@ -295,7 +295,12 @@ export class IntegrationCustomColumnPromoter {
         // step with the database.
         let batchResults: RSUPipelineResult[] = [];
         if (batchInputs.length > 0) {
-            const batch = await RuntimeSchemaManager.Instance.RunPipelineBatch(batchInputs);
+            // Retrying variant. This runs UNATTENDED, mid-sync, with no operator watching: a
+            // transient ExecuteMigration / RunCodeGen / CompileTypeScript / RestartMJAPI failure
+            // drops the whole promotion, and the columns simply stay in overflow until something
+            // triggers a promotion again. The wrapper replays only those four steps and only while
+            // nothing in the batch was applied, so a partially-applied batch is still returned as-is.
+            const batch = await RuntimeSchemaManager.Instance.RunPipelineBatchWithRetry(batchInputs);
             batchResults = batch.Results ?? [];
             // M3: make the freshly-created EntityFields + regenerated sprocs visible in-process
             // ONCE for the whole batch. CRITICAL: the spread below builds sproc calls from this
