@@ -360,3 +360,29 @@ added. Net mobile-specific code should *fall*.
 The architecture chosen in this phase must not foreclose this. Concretely: the registry-driven,
 metadata-resolved patterns (ClassFactory driver classes, Application nav metadata, channel plugins)
 are the mechanism — mobile should consume the same metadata rather than hardcoding its screens.
+
+---
+
+## 9. Expanded scope (requested 2026-09-13) — what "done" now includes
+
+Everything below is in addition to §6, and none of it counts as complete until **empirically
+verified** — run, exercised, and observed, not merely compiled.
+
+| # | Deliverable | Verification bar |
+|---|---|---|
+| **D1** | **World-class docs** for the mobile package | Rewritten README + `docs/` set that matches verified reality. No aspirational claims; every capability stated is one I have run. |
+| **D2** | **A guide for building apps hosted in the mobile app** | A developer with an MJ/MJE app can follow it start to finish without reading mobile source. Lives in `guides/`, indexed in `guides/README.md` (CI enforces the index). |
+| **D3** | **A working sample app** extending the mobile app through the extension mechanism | Not a snippet — a real app that registers, appears in the shell, and runs on device. Its existence is the proof D2 is honest. |
+| **D4** | **Screenshots at each milestone** | Captured from the running simulator/emulator, shared as work lands. |
+| **D5** | **Tests to MJ repo standard** | Unit tests per package convention; integration tests self-seeding and self-cleaning; both tiers green with real counts reported. |
+| **D6** | **Conventions pass** | PascalCase for public class members and exported package symbols; camelCase for private/protected and non-exported; TSDoc on public APIs; no `any`; functional decomposition; every other rule in `.claude/rules/`. |
+| **D7** | **Adversarial review** | A non-pedantic adversarial reviewer agent, iterated with until every finding is resolved or explicitly and defensibly declined. |
+
+### On D3 and the packaging question
+
+D3 forces the answer to the open question in §7 of
+[`MOBILE-AS-APP-HOST.md`](MOBILE-AS-APP-HOST.md): a web host can load an app's code at runtime, a
+native host generally cannot. The sample app is where that stops being a design note and becomes a
+mechanism — whatever it has to do to register itself is, by definition, the porting story every
+other app inherits. If that mechanism is awkward, the architecture is wrong and the sample will
+show it.
