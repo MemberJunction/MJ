@@ -40,9 +40,13 @@ function reExportedNames(): string[] {
 }
 
 describe('rigs/lib/harness.ts', () => {
+    // 60s, not the 30s default: this import pulls the whole @memberjunction/testing-integration
+    // graph through Vite's transform with a cold cache. It takes ~6s on a warm dev machine and
+    // overran 30s on a CI runner the first time this lane actually executed. The budget is for
+    // transform time, not for anything the test itself waits on.
     it('imports without throwing', async () => {
         await expect(import('../../rigs/lib/harness')).resolves.toBeDefined();
-    });
+    }, 60_000);
 
     it('forwards a non-trivial set of names', () => {
         // Guards against the regex silently matching nothing and making the next test vacuous.
