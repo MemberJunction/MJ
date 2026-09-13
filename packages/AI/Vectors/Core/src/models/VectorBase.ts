@@ -139,19 +139,79 @@ export class VectorBase {
         }).join("\n OR ");
     }
 
+    /**
+     * Resolve the embedding model to generate vectors with.
+     *
+     * **Pass an `id` wherever one exists.** The width of an embedding is a property of the model,
+     * and the width an index accepts is fixed when the index is created, so which model this
+     * returns decides whether the vectors fit. The no-`id` branch cannot know that and is a
+     * last resort only.
+     *
+     * The no-`id` branch used to be a bare `find()` over `AIEngine.Instance.Models`, which
+     * `BaseAIEngine.Config` loads with no `OrderBy` and no `IsActive` filter. So it returned
+     * whichever Embeddings row the view happened to hand back first — a different model on a
+     * different database, or after an unrelated insert, and quite possibly a deactivated one.
+     * An arbitrary answer is worse than a wrong one: the same code produces different widths in
+     * different environments and nothing in the failure names the model that was chosen.
+     *
+     * It is now deterministic — active models first, then highest `PowerRank`, then name — and it
+     * says out loud which model it picked and that nobody asked for it.
+     */
     protected GetAIModel(id?: string): MJAIModelEntityExtended {
-        let model: MJAIModelEntityExtended;
-        if(id){
-            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings" && UUIDsEqual(m.ID, id));
-        }
-        else{
-            model = AIEngine.Instance.Models.find(m => m.AIModelType === "Embeddings");
+        const embeddings = AIEngine.Instance.Models.filter(m => this.IsEmbeddingsModel(m));
+
+        if (id) {
+            const model = embeddings.find(m => UUIDsEqual(m.ID, id));
+            if (!model) {
+                throw new Error(
+                    `No Embeddings AI Model found with ID "${id}". ` +
+                    `The record referencing it points at a model that is missing, or at a model that is not of type Embeddings.`
+                );
+            }
+            return model;
         }
 
-        if(!model){
-            throw new Error("No AI Model Entity found");
+        if (embeddings.length === 0) {
+            throw new Error(
+                'No AI Model of type "Embeddings" is registered. Add one under AI Models before vectorizing.'
+            );
         }
-        return model;
+
+        // Prefer active models, but do not refuse outright when every embeddings model is
+        // deactivated: that would turn a soft misconfiguration into a hard stop on a path that
+        // has always tolerated it. Rank within whichever set we end up using.
+        const active = embeddings.filter(m => m.IsActive !== false);
+        const pool = active.length > 0 ? active : embeddings;
+        const chosen = [...pool].sort(VectorBase.CompareEmbeddingModelPreference)[0];
+
+        LogError(
+            `GetAIModel was called with no model ID, so the embedding model was chosen by ranking rather than by configuration: ` +
+            `"${chosen.Name}" (${chosen.ID}) out of ${pool.length} candidate(s)${active.length === 0 ? ', none of which are active' : ''}. ` +
+            `The vector width this produces is not guaranteed to match any index — set the model explicitly on the Entity Document or Vector Index.`
+        );
+        return chosen;
+    }
+
+    /**
+     * Case- and whitespace-insensitive type test. The strict `=== "Embeddings"` this replaces
+     * matched the literal spelling only, so a type row stored as `embeddings` silently made
+     * every embedding model invisible.
+     */
+    private IsEmbeddingsModel(model: MJAIModelEntityExtended): boolean {
+        return (model.AIModelType ?? '').trim().toLowerCase() === 'embeddings';
+    }
+
+    /**
+     * Total order over embedding models for the no-`id` fallback: higher `PowerRank` first
+     * (a null rank sorts last), then name ascending so the result never depends on row order.
+     */
+    private static CompareEmbeddingModelPreference(a: MJAIModelEntityExtended, b: MJAIModelEntityExtended): number {
+        const rankA = a.PowerRank ?? Number.NEGATIVE_INFINITY;
+        const rankB = b.PowerRank ?? Number.NEGATIVE_INFINITY;
+        if (rankA !== rankB) {
+            return rankB - rankA;
+        }
+        return (a.Name ?? '').localeCompare(b.Name ?? '');
     }
 
     protected GetVectorDatabase(id?: string): MJVectorDatabaseEntity {

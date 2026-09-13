@@ -6,7 +6,7 @@ const { mockRunView, mockRunViews, mockEntities, mockModels, mockVectorDBs } = v
   const mockEntities = [
     { ID: 'entity-1', Name: 'MJTestEntity', FirstPrimaryKey: { Name: 'ID', NeedsQuotes: true } },
   ];
-  const mockModels = [
+  const mockModels: Array<{ ID: string; AIModelType: string; DriverClass: string; Name?: string; PowerRank?: number | null; IsActive?: boolean }> = [
     { ID: 'model-1', AIModelType: 'Embeddings', DriverClass: 'TestDriver' },
     { ID: 'model-2', AIModelType: 'LLM', DriverClass: 'TestLLM' },
   ];
@@ -60,6 +60,22 @@ vi.mock('@memberjunction/ai-core-plus', () => ({
 }));
 
 import { VectorBase } from '../models/VectorBase';
+
+/**
+ * Swap the engine's model list for the duration of `fn`, then restore it. The list is a shared
+ * hoisted array, so restoring matters: a leaked mutation silently changes later cases.
+ */
+function withModels<T>(rows: Array<{ ID: string; AIModelType: string; DriverClass: string; Name?: string; PowerRank?: number | null; IsActive?: boolean }>, fn: () => T): T {
+  const original = [...mockModels];
+  mockModels.length = 0;
+  rows.forEach(r => mockModels.push(r));
+  try {
+    return fn();
+  } finally {
+    mockModels.length = 0;
+    original.forEach(m => mockModels.push(m));
+  }
+}
 
 describe('VectorBase', () => {
   let vectorBase: VectorBase;
@@ -131,16 +147,86 @@ describe('VectorBase', () => {
     });
 
     it('should throw when no embeddings model found', () => {
-      const origModels = [...mockModels];
-      mockModels.length = 0;
-      mockModels.push({ ID: 'model-x', AIModelType: 'LLM', DriverClass: 'X' });
+      // Message deliberately changed from the old "No AI Model Entity found": that told you
+      // neither which kind of model was missing nor what to do about it.
+      withModels([{ ID: 'model-x', AIModelType: 'LLM', DriverClass: 'X' }], () => {
+        expect(() =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel()
+        ).toThrow(/No AI Model of type "Embeddings" is registered/);
+      });
+    });
 
-      expect(() =>
-        (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel()
-      ).toThrow('No AI Model Entity found');
+    // ---------------------------------------------------------------------------------------
+    // The no-id branch used to be `Models.find(m => m.AIModelType === "Embeddings")` over an
+    // array `BaseAIEngine.Config` loads with no OrderBy and no IsActive filter. So the answer
+    // was whatever the view happened to return first: a different model on a different
+    // database, or after an unrelated insert, and possibly a deactivated one. Since the vector
+    // width is a property of the model, an arbitrary answer means an index can end up holding
+    // vectors of a width it never agreed to — and nothing in the failure names the culprit.
+    // ---------------------------------------------------------------------------------------
 
-      mockModels.length = 0;
-      origModels.forEach(m => mockModels.push(m));
+    it('picks the same model regardless of the order the engine loaded them in', () => {
+      const forward = [
+        { ID: 'emb-a', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Alpha', PowerRank: 5, IsActive: true },
+        { ID: 'emb-b', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Beta', PowerRank: 9, IsActive: true },
+        { ID: 'emb-c', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Gamma', PowerRank: 9, IsActive: true },
+      ];
+
+      const pickFor = (rows: typeof forward) =>
+        withModels(rows, () =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID
+        );
+
+      expect(pickFor(forward)).toBe('emb-b');              // highest rank, then name
+      expect(pickFor([...forward].reverse())).toBe('emb-b');
+      expect(pickFor([forward[2], forward[0], forward[1]])).toBe('emb-b');
+    });
+
+    it('prefers an active embeddings model over an inactive one that sorts first', () => {
+      const id = withModels([
+        { ID: 'emb-off', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Aardvark', PowerRank: 100, IsActive: false },
+        { ID: 'emb-on', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Zebra', PowerRank: 1, IsActive: true },
+      ], () => (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID);
+      expect(id).toBe('emb-on');
+    });
+
+    it('still answers when every embeddings model is inactive', () => {
+      // A soft misconfiguration must not become a hard stop on a path that has always tolerated it.
+      const id = withModels([
+        { ID: 'emb-off', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Only', PowerRank: 1, IsActive: false },
+      ], () => (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID);
+      expect(id).toBe('emb-off');
+    });
+
+    it('refuses a named model that is not an embeddings model, rather than substituting one', () => {
+      // A viable substitute is deliberately present: silently swapping in some other embeddings
+      // model is exactly how an index ends up holding vectors of a width nobody chose. The id
+      // has to appear in the message, or the row that points at it cannot be found.
+      withModels([
+        { ID: 'emb-real', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Real', PowerRank: 9, IsActive: true },
+        { ID: 'model-2', AIModelType: 'LLM', DriverClass: 'TestLLM' },
+      ], () => {
+        expect(() =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel('model-2')
+        ).toThrow(/model-2/);
+      });
+    });
+
+    it('refuses an id that matches nothing at all, even when other embeddings models exist', () => {
+      withModels([
+        { ID: 'emb-real', AIModelType: 'Embeddings', DriverClass: 'D', Name: 'Real', PowerRank: 9, IsActive: true },
+      ], () => {
+        expect(() =>
+          (vectorBase as unknown as { GetAIModel: (id?: string) => unknown }).GetAIModel('DEAD0000-0000-0000-0000-000000000000')
+        ).toThrow(/DEAD0000-0000-0000-0000-000000000000/);
+      });
+    });
+
+    it('recognizes the type however it is cased or padded', () => {
+      const id = withModels([
+        { ID: 'emb-lc', AIModelType: ' embeddings ', DriverClass: 'D', Name: 'Lower', PowerRank: 1, IsActive: true },
+      ], () => (vectorBase as unknown as { GetAIModel: (id?: string) => { ID: string } }).GetAIModel().ID);
+      expect(id).toBe('emb-lc');
     });
   });
 

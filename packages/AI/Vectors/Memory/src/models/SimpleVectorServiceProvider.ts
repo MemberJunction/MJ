@@ -235,6 +235,14 @@ export class SimpleVectorServiceProvider extends VectorDBBase {
         return false;
     }
 
+    /** SVS owns no index object: the "index" named on an `MJ: Vector Indexes` row is a logical
+     *  pairing of (this provider, an embedding model), and the vectors live in
+     *  `MJ: Entity Record Documents.VectorJSON`. So `CreateIndex` answering `success: false` is
+     *  the correct answer, not a provisioning fault — callers must not escalate it. */
+    public override get ManagesIndexes(): boolean {
+        return false;
+    }
+
     /** SVS keys its vector pool by EntityDocumentID — it reads `MJ: Entity Record Documents`
      *  rows `WHERE EntityDocumentID = <id>`. So callers must pass the EntityDocumentID (a GUID)
      *  as `QueryIndex` `params.id`, NOT a logical index name. */
