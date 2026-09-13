@@ -1,9 +1,8 @@
 /**
- * The canonical `ModelConfiguration` shape + the pure cascade resolver.
+ * The canonical AI configuration shapes + the pure cascade resolvers.
  *
- * `ModelConfiguration` is a JSONType `nvarchar(max)` column that exists at THREE levels of the
- * model catalog, forming an inherit-with-override cascade (the structured generalization of the
- * scalar `SupportsPrefill` / `PrefillFallbackText` cascade those same three entities already carry):
+ * The AI stack carries `nvarchar(max)` JSONType configuration bags at five levels, in two cascades.
+ * The MODEL CATALOG cascade describes the model:
  *
  * ```
  * MJ: AI Model Types . ModelConfiguration     (type-wide default — e.g. every Realtime model)
@@ -11,16 +10,28 @@
  *     < MJ: AI Model Vendors . ModelConfiguration   (per model-on-this-provider — the winner)
  * ```
  *
- * **Lockstep contract**: this interface is the package-side mirror of
- * `metadata/entities/JSONType-interfaces/IAIModelConfiguration.ts`, which is pushed into
- * `EntityField.JSONTypeDefinition` and drives the CodeGen-generated `ModelConfigurationObject`
- * accessors on the three entities. Keep the two in step when adding a section or property —
- * the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
+ * The PROMPT cascade describes what a given prompt asks for, and layers on top of the catalog:
+ *
+ * ```
+ * MJ: AI Prompts . PromptConfiguration        (per-prompt)
+ *   < MJ: AI Prompt Models . PromptConfiguration  (per prompt-on-this-model — the winner)
+ * ```
+ *
+ * Both compose the SAME per-modality section types ({@link LLMConfigurationSettings},
+ * {@link RealtimeConfigurationSettings}, …) — one definition of what "the LLM configuration" means,
+ * reused at every layer. Only the outer per-table type differs.
+ *
+ * **Lockstep contract**: these interfaces mirror
+ * `metadata/entities/JSONType-interfaces/IAIConfiguration.ts`, which is pushed into
+ * `EntityField.JSONTypeDefinition` and drives the CodeGen-generated `ModelConfigurationObject` /
+ * `PromptConfigurationObject` accessors on the five entities. Keep the two in step when adding a section
+ * or property — the same pact `IAgentSettings` follows with `@memberjunction/ai-core-plus`.
  *
  * **Boundary rule** (also documented on the metadata interface): anything the engine filters,
  * sorts, or joins on stays a COLUMN (`PowerRank`, `IsActive`, `Priority`, `Status` — SQL cannot
- * cheaply predicate into this bag); anything a driver consumes at session/call time belongs HERE.
- * New capability knobs go in this bag — do not add a new capability column per knob.
+ * cheaply predicate into this bag); anything a driver or runner consumes at call time belongs HERE.
+ * New capability knobs go in the bag — do not add a capability column per knob. A knob graduates to
+ * a real column when it needs a foreign key or becomes a first-class platform concept.
  */
 
 import { IsPlainObject } from '@memberjunction/global';
@@ -90,14 +101,14 @@ export interface RealtimeReasoningSettings {
     Remote?: RealtimeRemoteReasoning;
 }
 
-/** The `Realtime` section of {@link AIModelConfiguration} — knobs the realtime drivers consume. */
-export interface RealtimeModelConfigurationSection {
+/** The `Realtime` section — knobs the realtime drivers consume. */
+export interface RealtimeConfigurationSettings {
     /**
      * Catalog-level turn-detection default for this model. Folded into the session Config bag as
      * the `turnDetection` key BELOW the agent/app config cascade (`realtime.session.turnDetection`)
      * and the runtime override — the catalog supplies the default, agents/apps/callers refine it.
      */
-    TurnDetection?: RealtimeTurnDetectionSettings;
+    TurnDetection?: RealtimeTurnDetectionSettings | null;
 
     /**
      * Reasoning plane settings — dual delegation configuration.
@@ -107,32 +118,114 @@ export interface RealtimeModelConfigurationSection {
 }
 
 /**
- * The `LLM` section of {@link AIModelConfiguration}. Reserved — no consumers yet. Candidate
- * contents: per-model effort-level defaults, response-format quirks, tool-calling behavior flags.
- * Existing capability COLUMNS (`SupportsEffortLevel`, `SupportsStreaming`, …) are NOT migrating
- * here — new knobs only (see the boundary rule in the module docstring).
+ * The `LLM` section — knobs the LLM drivers and the prompt runner consume at call time.
+ *
+ * Every flag here is TRI-STATE (`boolean | null | absent`), and the three differ. The cascade
+ * REPLACES on any explicit value (including `null`) and only skips a layer that OMITS the property.
+ * So absent means "inherit", while an explicit value at a higher layer overrides a lower one even
+ * when that value is `false`.
+ *
+ * Properties are marked with the layers that HONOR them. Setting one at a layer that does not honor
+ * it is inert rather than an error — deliberate tolerance, so a knob can move between layers
+ * without a schema change.
+ *
+ * Deliberately NO index signature: this interface must stay structurally identical to the JSONType
+ * source, because CodeGen emits per-entity copies of that source and runtime code assigns those
+ * generated types straight into this one. An index signature here (and not there) makes the two
+ * incompatible. Unknown keys in stored JSON still round-trip fine at runtime — the parse is
+ * tolerant; what is lost is only a compile-time affordance nothing needs.
  */
-export interface LLMModelConfigurationSection {
-    /** Open extension point until the first typed knob lands. */
+export interface LLMConfigurationSettings {
+    /**
+     * **Catalog layers only.** Whether this model — or this vendor's serving of it — supports native
+     * tool/function calling. CAPABILITY flag, and a hard gate: no policy or preference at any layer
+     * can force tools onto a (model, vendor) whose resolved value is not true.
+     *
+     * Set `false` only for a model or serving path verified NOT to support tools; leave absent when
+     * support is unknown, because absent is the honest value and it inherits.
+     */
+    SupportsNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** Whether prompts run against this model default to native tool calling
+     * when they express no preference of their own. POLICY flag — subordinate to
+     * {@link LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    DefaultToNativeToolCalling?: boolean | null;
+
+    /**
+     * **Prompt layers only.** Whether THIS prompt asks for native tool calling. PREFERENCE — it
+     * outranks the catalog's `DefaultToNativeToolCalling` and is still subordinate to the capability
+     * gate. Absent means "no preference; fall through to the model's default".
+     */
+    UseNativeToolCalling?: boolean | null;
+
+    /**
+     * **Catalog layers only.** How control flow is expressed when a request resolves to native tool
+     * calling. `'envelope'` (the default when absent) is the hybrid: Actions are tools, everything
+     * else — completion, chat, delegation, payload changes — is the JSON envelope. `'implicit'` is the
+     * implicit protocol: sub-agents, `payload_change_request` and `ask_user` are tools too, a tool call
+     * continues the loop, and plain text with no call ends the turn as task completion. Consulted only
+     * when the gate resolves native; subordinate to {@link LLMConfigurationSettings.SupportsNativeToolCalling}.
+     */
+    NativeControlFlow?: 'envelope' | 'implicit' | null;
+
+    /**
+     * **Catalog layers only.** Whether action results are returned to the model as native tool-result
+     * turns instead of a markdown "Action results" user message. Absent means `false`. Consulted
+     * only when the gate resolves native.
+     */
+    NativeToolResults?: boolean | null;
+}
+
+/** Vision knobs. Reserved — no consumers yet. */
+export interface VisionConfigurationSettings {
+    [key: string]: unknown;
+}
+
+/** Audio (TTS/STT) knobs. Reserved — no consumers yet. */
+export interface AudioConfigurationSettings {
     [key: string]: unknown;
 }
 
 /**
- * The per-modality model-configuration bag stored (as JSON) in the `ModelConfiguration` column of
- * `MJ: AI Model Types`, `MJ: AI Models`, and `MJ: AI Model Vendors`. Sections are optional and
- * per-modality so one catalog row can configure everything its model does.
+ * The per-modality bag common to every AI configuration column. Sections are optional and
+ * per-modality so one row can configure everything the thing it describes does.
  */
-export interface AIModelConfiguration {
-    /** Text-generation knobs. Reserved. */
-    LLM?: LLMModelConfigurationSection;
-    /** Realtime (speech-to-speech) knobs — the first live section. */
-    Realtime?: RealtimeModelConfigurationSection;
+export interface AIConfigurationSections {
+    /** Text-generation knobs. */
+    LLM?: LLMConfigurationSettings | null;
+    /** Realtime (speech-to-speech) knobs. */
+    Realtime?: RealtimeConfigurationSettings | null;
     /** Vision knobs. Reserved. */
-    Vision?: JSONObject;
+    Vision?: VisionConfigurationSettings | null;
     /** Audio (TTS/STT) knobs. Reserved. */
-    Audio?: JSONObject;
+    Audio?: AudioConfigurationSettings | null;
 }
 
+/**
+ * The `ModelConfiguration` column on `MJ: AI Model Types`, `MJ: AI Models` and
+ * `MJ: AI Model Vendors` — the model-catalog cascade.
+ */
+export type AIModelConfiguration = AIConfigurationSections;
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompts` — per-prompt call-time knobs, layered on top of
+ * the resolved model-catalog configuration by the prompt runner.
+ */
+export type AIPromptConfiguration = AIConfigurationSections;
+
+/**
+ * The `PromptConfiguration` column on `MJ: AI Prompt Models` — the most specific layer, overriding both
+ * the prompt's own bag and the model catalog for this one (prompt, model) pairing.
+ */
+export type AIPromptModelConfiguration = AIConfigurationSections;
+
+/** @deprecated Renamed to {@link RealtimeConfigurationSettings}; the sections are shared now. */
+export type RealtimeModelConfigurationSection = RealtimeConfigurationSettings;
+
+/** @deprecated Renamed to {@link LLMConfigurationSettings}; the sections are shared now. */
+export type LLMModelConfigurationSection = LLMConfigurationSettings;
 /**
  * TOLERANTLY parses one `ModelConfiguration` column value. Returns `null` — never throws — for
  * absent, blank, malformed, or non-object payloads, so a bad catalog row contributes nothing to

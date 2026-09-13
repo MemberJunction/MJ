@@ -166,7 +166,7 @@ Does this approach work for you?
     "tasks": {
       "workflowName": "...",
       "reasoning": "...",
-      "tasks": [...]
+      "tasks": []
     }
   }
 }
