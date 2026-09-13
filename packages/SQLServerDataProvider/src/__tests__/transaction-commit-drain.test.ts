@@ -32,6 +32,7 @@ interface ProviderTestSurface {
     context: { pool: sql.ConnectionPool; transaction?: sql.Transaction | null }
   ): Promise<unknown>;
   waitForActiveRequest(timeoutMs?: number): Promise<void>;
+  _activeRequestWaitMs: number;
   BeginTransaction(): Promise<void>;
   CommitTransaction(): Promise<void>;
   RollbackTransaction(): Promise<void>;
@@ -115,4 +116,22 @@ describe('SQLServerDataProvider - transaction commit/rollback vs the instance SQ
     await provider.RollbackTransaction();
     expect(mssqlState.EventKinds()).toEqual(['begin', 'rollback']);
   });
+  it('surfaces a bypassed request through the commit path itself, and keeps the handle for abandon', async () => {
+    await provider.BeginTransaction();
+    const tx = provider._transaction as TransactionWithActiveRequest;
+    tx._activeRequest = new sql.Request(provider._transaction as sql.Transaction);
+    provider._activeRequestWaitMs = 25;
+
+    // End to end through CommitTransaction, not the wait helper in isolation: the drain has nothing
+    // to wait for, the guard trips, and the message names the real cause.
+    await expect(provider.CommitTransaction()).rejects.toThrow(/did not go through the instance SQL queue/);
+
+    // The handle survived the failure, so the base class's abandon found it and rolled it back.
+    // (Real mssql would reject that rollback too while the request is in flight; the mock cannot
+    // model an in-flight request, so what this pins is the provider-side contract: the handle
+    // reaches abandon instead of being nulled first.)
+    expect(mssqlState.EventKinds()).toEqual(['begin', 'rollback']);
+    expect(provider._transaction).toBeNull();
+  });
+
 });

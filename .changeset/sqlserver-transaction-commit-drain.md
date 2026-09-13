@@ -12,4 +12,4 @@ Every transactional query on a `SQLServerDataProvider` instance is serialized th
 - **A failed commit keeps the handle** so `AbandonPhysicalTransaction` can roll the doomed transaction back; it is cleared only on success.
 - **`GenericDatabaseProvider`** treats a rollback issued after a failed outermost commit as already done rather than a second failure, since the abandon already rolled the handle back. The flag resets when the next physical transaction begins.
 
-Closes #4447.
+See #4447 for the failure analysis and #4454 for the follow-up that routes commit through the queue.

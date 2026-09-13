@@ -370,6 +370,12 @@ export class SQLServerDataProvider
    */
   private _lastQueuedSQL: Promise<unknown> = Promise.resolve();
 
+  /**
+   * How long commit/rollback wait for a request that bypassed the instance SQL queue before failing
+   * loudly. Instance-level so a test can shorten it; production leaves the default.
+   */
+  protected _activeRequestWaitMs = 2000;
+
   private _sqlQueue$ = new Subject<{
     id: string;
     query: string;
@@ -2408,7 +2414,7 @@ IF ${varName} IS NOT NULL
   /**
    * Internal mssql transaction interface to safely inspect `_activeRequest` without `any`.
    */
-  private async waitForActiveRequest(timeoutMs = 2000): Promise<void> {
+  private async waitForActiveRequest(timeoutMs = this._activeRequestWaitMs): Promise<void> {
     if (!this._transaction) {
       return;
     }
