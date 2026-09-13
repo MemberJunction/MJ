@@ -618,6 +618,15 @@ CREATE INDEX ${indexName} ON [${entity.SchemaName}].[${entity.BaseTable}] (${col
     // ─── FULL-TEXT SEARCH ────────────────────────────────────────────────
 
     /**
+     * True: the `CREATE FULLTEXT INDEX … KEY INDEX <name>` below names the table's unique
+     * primary-key index, so CodeGen must resolve that name before the DDL can be composed.
+     * See {@link CodeGenDatabaseProvider.FullTextIndexNeedsPrimaryKeyIndexName}.
+     */
+    override get FullTextIndexNeedsPrimaryKeyIndexName(): boolean {
+        return true;
+    }
+
+    /**
      * Generates SQL Server full-text search infrastructure for an entity, conditionally
      * producing up to three components based on entity metadata flags:
      *
