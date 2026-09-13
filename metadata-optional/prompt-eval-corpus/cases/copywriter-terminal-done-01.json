@@ -1,0 +1,63 @@
+{
+  "id": "copywriter-terminal-done-01",
+  "agent": "Copywriter Agent",
+  "tags": [
+    "terminal-synthesis",
+    "implicit-payload-first"
+  ],
+  "description": "The brief is fully specified and needs no research. Writing and finishing is right; reaching for a search action is over-eagerness with a full toolbelt. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "brief": {
+        "product": "Analytics Dashboard",
+        "audience": "existing customers",
+        "tone": "plain",
+        "length": "120 words",
+        "facts": [
+          "real-time refresh",
+          "no setup required",
+          "included in all plans"
+        ]
+      }
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Write the announcement from the brief in the payload. Everything you need is there."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete",
+        "forbiddenActions": [
+          "Google Custom Search",
+          "Perplexity Search",
+          "Web Page Content",
+          "Census Data Lookup"
+        ]
+      },
+      {
+        "kind": "payloadChange",
+        "forbiddenActions": [
+          "Google Custom Search",
+          "Perplexity Search",
+          "Web Page Content",
+          "Census Data Lookup"
+        ],
+        "forbiddenPayloadPaths": [
+          "newElements.brand",
+          "updateElements.brand",
+          "replaceElements.brand",
+          "newElements.seo",
+          "updateElements.seo",
+          "replaceElements.seo",
+          "newElements.editor",
+          "updateElements.editor"
+        ]
+      }
+    ]
+  }
+}

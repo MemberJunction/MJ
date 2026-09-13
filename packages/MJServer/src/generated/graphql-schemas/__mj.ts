@@ -267,6 +267,9 @@ export class MJAIAgentAction_ {
     @MaxLength(36)
     CompactPromptID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether this Action may be declared as a native tool for this agent (1, default). 0 keeps it out of the tool set on native turns; because the prose catalog is not rendered in native mode, the action is then unavailable on those turns. Use for actions an agent holds but should rarely reach for on its own.`}) 
+    DeclareAsNativeTool?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -322,6 +325,9 @@ export class CreateMJAIAgentActionInput {
     @Field({ nullable: true })
     CompactPromptID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    DeclareAsNativeTool?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -364,6 +370,9 @@ export class UpdateMJAIAgentActionInput {
 
     @Field({ nullable: true })
     CompactPromptID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DeclareAsNativeTool?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -5757,6 +5766,19 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`}) 
     Skills?: string;
         
+    @Field({nullable: true, description: `Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`}) 
+    @MaxLength(25)
+    ToolCallingMode?: string;
+        
+    @Field(() => Int, {nullable: true, description: `How many native tool calls the model made on this step. 0 on a native-mode step where the model chose to answer with the envelope instead; NULL when the step took the envelope path or never reached a model call.`}) 
+    NativeToolCallCount?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `On a native-mode step where the model made tool calls: 1 when the same turn also carried a parseable JSON Loop envelope (the model answered on both channels; the loop dispatched the tool call and discarded the envelope), 0 when the tool calls came alone. NULL when the step made no tool calls or took the envelope path.`}) 
+    NativeDualChannel?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature.`}) 
+    NativeToolResultsSent?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     AgentRun?: string;
@@ -5854,6 +5876,18 @@ export class CreateMJAIAgentRunStepInput {
     @Field({ nullable: true })
     Skills: string | null;
 
+    @Field({ nullable: true })
+    ToolCallingMode: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NativeToolCallCount: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeDualChannel: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeToolResultsSent: boolean | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -5926,6 +5960,18 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field({ nullable: true })
     Skills?: string | null;
+
+    @Field({ nullable: true })
+    ToolCallingMode?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NativeToolCallCount?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeDualChannel?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeToolResultsSent?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9300,6 +9346,9 @@ if this limit is exceeded.`})
     @MaxLength(36)
     ConversationSummaryPromptID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: `When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.`}) 
+    DeclareActionsAsNativeTools?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -9608,6 +9657,9 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     ConversationSummaryPromptID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    DeclareActionsAsNativeTools?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9851,6 +9903,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     ConversationSummaryPromptID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DeclareActionsAsNativeTools?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14831,6 +14886,9 @@ export class MJAIPromptModel_ {
     @Field(() => Int, {nullable: true, description: `Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Most-specific layer of the prompt configuration bag (JSON, IAIPromptModelConfiguration shape) — configuration for THIS prompt on THIS model. Deep-merges per key over the AIPrompt layer, which in turn sits above the model-catalog ModelConfiguration cascade. NULL = inherit the merged configuration unchanged.`}) 
+    PromptConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Prompt?: string;
@@ -14896,6 +14954,9 @@ export class CreateMJAIPromptModelInput {
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
 
+    @Field({ nullable: true })
+    PromptConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -14944,6 +15005,9 @@ export class UpdateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    PromptConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15617,6 +15681,10 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     UsageTypeID?: string;
         
+    @Field({nullable: true, description: `Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`}) 
+    @MaxLength(25)
+    ToolCallingMode?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Prompt?: string;
@@ -15958,6 +16026,9 @@ export class CreateMJAIPromptRunInput {
     @Field({ nullable: true })
     UsageTypeID: string | null;
 
+    @Field({ nullable: true })
+    ToolCallingMode: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16234,6 +16305,9 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     UsageTypeID?: string | null;
+
+    @Field({ nullable: true })
+    ToolCallingMode?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -16672,6 +16746,9 @@ export class MJAIPrompt_ {
     @Field(() => Boolean, {nullable: true, description: `Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`}) 
     RequireSpecificModels?: boolean;
         
+    @Field({nullable: true, description: `Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing.`}) 
+    PromptConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Template?: string;
@@ -16858,6 +16935,9 @@ export class CreateMJAIPromptInput {
     @Field(() => Boolean, { nullable: true })
     RequireSpecificModels?: boolean;
 
+    @Field({ nullable: true })
+    PromptConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -17023,6 +17103,9 @@ export class UpdateMJAIPromptInput {
 
     @Field(() => Boolean, { nullable: true })
     RequireSpecificModels?: boolean;
+
+    @Field({ nullable: true })
+    PromptConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

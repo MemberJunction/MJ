@@ -526,6 +526,7 @@
       "ExecutionOrder": 0,
       "ModelSelectionMode": "Agent",
       "ExposeAsAction": true,
+      "DeclareActionsAsNativeTools": false,
       "IconClass": "fa-solid fa-magnifying-glass-chart",
       "PayloadSelfWritePaths": [
         "metadata.*",

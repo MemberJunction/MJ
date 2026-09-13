@@ -26,6 +26,7 @@ export * from './checks/metadata-consistency.checks';
 export * from './checks/open-app-teardown.checks';
 export * from './checks/permission-engine.checks';
 export * from './checks/predictive-studio.checks';
+export * from './checks/prompt-eval-harness.checks';
 export * from './checks/prompt-runner.checks';
 export * from './checks/record-process-facade.checks';
 export * from './checks/entity-actions.checks';

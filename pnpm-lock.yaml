@@ -1454,6 +1454,9 @@ importers:
         specifier: 6.1.0-edge.6
         version: link:../../../MJGlobal
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.6
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1750,6 +1753,9 @@ importers:
         specifier: 6.1.0-edge.6
         version: link:../../../MJGlobal
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.6
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -1993,6 +1999,9 @@ importers:
         specifier: 6.18.0
         version: 6.18.0(ws@8.19.0)(zod@4.3.6)
     devDependencies:
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.6
+        version: link:../../../UnitTesting
       ts-node-dev:
         specifier: ^2.0.0
         version: 2.0.0(@types/node@24.10.11)(typescript@5.9.3)
@@ -11600,6 +11609,9 @@ importers:
       '@angular/core':
         specifier: 21.2.22
         version: 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
+      '@angular/elements':
+        specifier: 21.2.22
+        version: 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
       '@angular/forms':
         specifier: 21.2.22
         version: 21.2.22(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(@angular/platform-browser@21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(rxjs@7.8.2)
@@ -14880,9 +14892,15 @@ importers:
       '@memberjunction/templates-base-types':
         specifier: 6.1.0-edge.6
         version: link:../../Templates/base-types
+      '@memberjunction/testing-engine':
+        specifier: 6.1.0-edge.6
+        version: link:../Engine
       '@memberjunction/testing-integration':
         specifier: 6.1.0-edge.6
         version: link:../testing-integration
+      '@memberjunction/unit-testing':
+        specifier: 6.1.0-edge.6
+        version: link:../../UnitTesting
       dotenv:
         specifier: 17.2.4
         version: 17.2.4

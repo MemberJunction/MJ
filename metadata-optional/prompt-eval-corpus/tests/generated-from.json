@@ -1,0 +1,8 @@
+{
+  "matrix": "metadata-optional/prompt-eval-corpus/matrix/tool-calling-comparison.json",
+  "suiteName": "Native Tool Calling — Envelope vs Native",
+  "reps": 3,
+  "cells": 12,
+  "cases": 68,
+  "generatedAt": "2026-09-13T03:03:36.287Z"
+}

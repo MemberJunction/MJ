@@ -1,0 +1,20 @@
+{
+  "id": "codesmith-payload-errors-cleared-01",
+  "agent": "Codesmith Agent",
+  "tags": ["payload-change", "n2"],
+  "description": "A prior attempt recorded an error; the retry succeeded. The contract tracks errors and results — the write must store the results and may clear or keep the error log, but must not invent a new error.",
+  "input": {
+    "payload": { "task": "parse dates", "inputData": { "dates": ["2024-01-01"] }, "iterations": 2, "errors": ["TypeError: x is undefined"] },
+    "conversationMessages": [
+      { "role": "user", "content": "Parse the dates." },
+      { "role": "user", "content": "[Action Result] Execute Code succeeded. output = [\"2024-01-01T00:00:00.000Z\"]" }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      { "kind": "payloadChange", "payload": { "newElements.results": { "matcher": "nonEmpty" } }, "forbiddenPayloadPaths": ["newElements.errors"] },
+      { "kind": "payloadChange", "payload": { "updateElements.results": { "matcher": "nonEmpty" } }, "forbiddenPayloadPaths": ["newElements.errors"] }
+    ]
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "querystrategist-ambiguous-anyof-01",
+  "agent": "Query Strategist",
+  "description": "Genuinely ambiguous: exploring the schema first and asking which entity is meant are both defensible. anyOf keeps the corpus honest instead of encoding one reviewer's taste.",
+  "tags": [
+    "disambiguation",
+    "anyOf"
+  ],
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Show me the recent stuff."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Get Entity Details"
+          }
+        ],
+        "allowAdditionalActions": true
+      },
+      {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Search Query Catalog"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    ]
+  }
+}
