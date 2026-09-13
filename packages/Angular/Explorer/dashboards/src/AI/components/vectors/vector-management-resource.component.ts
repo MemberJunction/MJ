@@ -38,6 +38,7 @@ import {
     VectorSyncRowCandidate,
 } from './vector-management-agent-context';
 import { validateStringParam } from '../../../shared/agent-tool-validation';
+import { withoutSensitiveFields, sensitiveFieldsInTemplate } from './sensitive-fields';
 
 /** Flattened row for the entity sync table */
 interface EntitySyncRow {
@@ -1432,6 +1433,20 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             throw new Error('No template content to save');
         }
 
+        // LAYER 2: the template is hand-editable after the model returns, so a user can type
+        // a field the picker never offered. Refuse before anything is written — once values
+        // reach the vector index they are retrievable by similarity search, outside the
+        // entity permissions that guard the source column, and not fully reversible.
+        const sensitive = sensitiveFieldsInTemplate(templateText);
+        if (sensitive.length > 0) {
+            throw new Error(
+                `This template references ${sensitive.length === 1 ? 'a field' : 'fields'} that must not be ` +
+                `vectorized: ${sensitive.join(', ')}. Embedding copies the values into the vector index, ` +
+                `where they are retrievable by similarity search rather than by an authorized query. ` +
+                `Remove ${sensitive.length === 1 ? 'it' : 'them'} from the template and save again.`
+            );
+        }
+
         // Create Template record
         const template = await md.GetEntityObject<MJTemplateEntity>('MJ: Templates');
         template.NewRecord();
@@ -1593,7 +1608,9 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Build the data payload for the suggestion prompt */
     private buildPromptData(entity: EntityInfo, useCase: string): Record<string, unknown> {
-        const fields = entity.Fields.map(f => ({
+        // LAYER 1 of the sensitive-field refusal: the model never sees these columns, so it
+        // cannot suggest them. See sensitive-fields.ts for why this cannot live in the prompt.
+        const fields = withoutSensitiveFields(entity.Fields).map(f => ({
             Name: f.Name,
             Type: f.Type,
             IsPrimaryKey: f.IsPrimaryKey,
