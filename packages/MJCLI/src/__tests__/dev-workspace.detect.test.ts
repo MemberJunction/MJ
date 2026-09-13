@@ -34,6 +34,55 @@ describe('DetectCandidates', () => {
     expect(candidates[0].Reasons).toContain('mj-app-json');
   });
 
+  it('reads a member mj-app.json into MjAppJson, client entries included', () => {
+    parent = CreateFixtureParent({
+      'bizapps-caliber': {
+        RootPackageJson: { name: 'caliber' },
+        MjAppJson: {
+          name: 'mj-bizapps-caliber',
+          packages: { client: [{ name: '@mj-biz-apps/caliber-ng', role: 'bootstrap', startupExport: 'LoadCaliber' }] },
+        },
+      },
+    });
+    const [member] = DetectCandidates(parent);
+    expect(member.MjAppJson?.packages?.client).toEqual([
+      { name: '@mj-biz-apps/caliber-ng', role: 'bootstrap', startupExport: 'LoadCaliber' },
+    ]);
+  });
+
+  // Detection walks EVERY sibling directory, before the Reasons filter and long before --exclude.
+  // A broken mj-app.json in a repo the user excludes must not take the whole command down with it —
+  // the failure belongs to whoever actually reads the declaration (rkihm-BC review, R1).
+  it('does not abort detection when a sibling ships an unparseable mj-app.json', () => {
+    parent = CreateFixtureParent({
+      'bizapps-good': { RootPackageJson: { name: 'good' }, MjAppJson: true },
+      'bizapps-rotten': { RootPackageJson: { name: 'rotten' }, Files: { 'mj-app.json': '{ this is not json' } },
+    });
+    const names = DetectCandidates(parent).map((c) => c.Name);
+    expect(names).toEqual(['bizapps-good', 'bizapps-rotten']);
+  });
+
+  it('records the parse failure on the candidate instead of throwing', () => {
+    parent = CreateFixtureParent({
+      'bizapps-rotten': { RootPackageJson: { name: 'rotten' }, Files: { 'mj-app.json': '{ this is not json' } },
+    });
+    const [repo] = DetectCandidates(parent);
+    expect(repo.MjAppJson).toBeNull();
+    expect(repo.MjAppJsonError).toMatch(/mj-app\.json/);
+  });
+
+  it('still throws on an unparseable root package.json — that repo is not loadable at all', () => {
+    parent = CreateFixtureParent({ 'bizapps-x': { Files: { 'package.json': '{ nope' } } });
+    expect(() => DetectCandidates(parent)).toThrow(/Unparseable JSON/);
+  });
+
+  it('leaves MjAppJson null for a member that ships none', () => {
+    parent = CreateFixtureParent({
+      'plain-repo': { RootPackageJson: { name: 'plain' }, Packages: { Lib: { name: '@mj-biz-apps/lib' } } },
+    });
+    expect(DetectCandidates(parent)[0].MjAppJson).toBeNull();
+  });
+
   it('detects a repo whose library packages mention the @mj-biz-apps scope (name or deps)', () => {
     parent = CreateFixtureParent({
       producer: {
