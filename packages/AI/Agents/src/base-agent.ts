@@ -104,7 +104,8 @@ import {
     AgentSkillInvocation,
     ExtractPromptResultText,
     GetTaskGraphSubmitter,
-    SkillAvailabilityPurpose
+    SkillAvailabilityPurpose,
+    ArtifactDirective
 } from '@memberjunction/ai-core-plus';
 import { MJActionEntityExtended, ActionResult, ActionParam, AIDirective } from '@memberjunction/actions-base';
 import { AgentRunner } from './AgentRunner';
@@ -9816,6 +9817,8 @@ The context is now within limits. Please retry your request with the recovered c
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
+                    // artifactDirective is deliberately NOT carried across the parent/child
+                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
                 };
 
                 // Validate through parent's ChatHandlingOption (if configured)
@@ -9865,6 +9868,7 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
             
+            this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
@@ -9872,7 +9876,14 @@ The context is now within limits. Please retry your request with the recovered c
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
-                newPayload: mergedPayload
+                newPayload: mergedPayload,
+                // An artifact directive describes the payload of the agent that ISSUED it. What the
+                // parent returns here is `mergedPayload` — its own payload with the child's changes
+                // folded in — so letting the spread above carry the child's directive through would
+                // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
+                // way for the parent to opt out. Dropped explicitly, which also matches the Chat
+                // mapping in this method and `executeChatStep`: neither ever carried it.
+                artifactDirective: undefined
             };            
         } catch (error) {
             // Preserve payload on error
@@ -10722,6 +10733,8 @@ The context is now within limits. Please retry your request with the recovered c
                     responseForm: subAgentResult.responseForm,
                     actionableCommands: subAgentResult.actionableCommands,
                     automaticCommands: subAgentResult.automaticCommands
+                    // artifactDirective is deliberately NOT carried across the parent/child
+                    // boundary — see warnIfDiscardingSubAgentArtifactDirective.
                 };
 
                 // Validate through parent's ChatHandlingOption (if configured)
@@ -10764,6 +10777,7 @@ The context is now within limits. Please retry your request with the recovered c
                 this._agentRun.FinalPayloadObject = mergedPayload;
             }
 
+            this.warnIfDiscardingSubAgentArtifactDirective(subAgentResult, subAgentRequest.name);
             return {
                 ...subAgentResult,
                 step: subAgentResult.success ? 'Success' : 'Failed',
@@ -10771,7 +10785,14 @@ The context is now within limits. Please retry your request with the recovered c
                 errorMessage: subAgentResult.success ? undefined : (subAgentResult.agentRun?.ErrorMessage || 'Related sub-agent failed with no error message'),
                 terminate: shouldTerminate,
                 previousPayload: previousDecision?.newPayload,
-                newPayload: mergedPayload
+                newPayload: mergedPayload,
+                // An artifact directive describes the payload of the agent that ISSUED it. What the
+                // parent returns here is `mergedPayload` — its own payload with the child's changes
+                // folded in — so letting the spread above carry the child's directive through would
+                // persist the PARENT's payload onto an artifact the CHILD named, silently and with no
+                // way for the parent to opt out. Dropped explicitly, which also matches the Chat
+                // mapping in this method and `executeChatStep`: neither ever carried it.
+                artifactDirective: undefined
             };
         } catch (error) {
             // Preserve payload on error
@@ -10789,6 +10810,33 @@ The context is now within limits. Please retry your request with the recovered c
                 previousPayload: payload,
                 newPayload: payload
             };
+        }
+    }
+
+    /**
+     * Logs a sub-agent's artifact directive as it is dropped from the parent's step.
+     *
+     * The framework's rule is that a directive travels with the payload of the agent that issued
+     * it, and never across the parent/child boundary: the parent's terminal step carries a MERGED
+     * payload, so applying the child's directive to it would write the wrong content to a
+     * child-chosen artifact. A sub-agent's directive is therefore inert — `RunAgent` does not run
+     * the artifact writer for sub-agents either — and "inert" is much easier to diagnose from a log
+     * line than from an artifact that never appeared.
+     *
+     * @param subAgentResult - The child's result, possibly carrying a directive.
+     * @param subAgentName - Child agent name, for the log line.
+     * @private
+     */
+    private warnIfDiscardingSubAgentArtifactDirective(
+        subAgentResult: { artifactDirective?: ArtifactDirective },
+        subAgentName: string
+    ): void {
+        const directive = subAgentResult?.artifactDirective;
+        if (directive) {
+            LogStatus(
+                `Sub-agent "${subAgentName}" requested artifact behavior '${directive.behavior}'; not applied — ` +
+                `an artifact directive governs its own agent's payload, and the parent step returns a merged payload`
+            );
         }
     }
 
@@ -11549,7 +11597,11 @@ The context is now within limits. Please retry your request with the recovered c
                 scratchpad: previousDecision.scratchpad,
                 responseForm: previousDecision.responseForm,
                 actionableCommands: previousDecision.actionableCommands,
-                automaticCommands: previousDecision.automaticCommands
+                automaticCommands: previousDecision.automaticCommands,
+                // Same agent, same payload — this rebuilds THIS agent's own terminal step, so its
+                // own artifact directive has to come along. Omitting it silently discarded the
+                // instruction whenever an agent declared client tools and taskComplete together.
+                artifactDirective: previousDecision.artifactDirective
             };
         }
 
@@ -12005,6 +12057,13 @@ The context is now within limits. Please retry your request with the recovered c
      * Because `params` is the same object reference used for the rest of this run, every subsequent
      * turn's `gatherPromptTemplateData()` call picks up the change automatically — no extra plumbing.
      *
+     * Which actions: the skill's `ExposeToModel` rows only ({@link AIEngine.GetSkillExposedActionIDs}).
+     * A bundled action with the flag off is left OUT of the run: the effective action set is both the
+     * prompt's tool surface and the execution allow-list, so the model neither sees it nor can call it
+     * by name, and no agent path (PreProcessActionStep, a loop's action lookup) can reach it either.
+     * It stays bundled for SKILL.md export and tooling; application code invokes it through the
+     * Actions API. Skill attribution therefore never applies to it — the agent never runs it.
+     *
      * Override to change propagation scope (e.g. a subclass that wants skill-granted capabilities
      * to cascade to sub-agents could push `scope: 'all-subagents'` instead).
      *
@@ -12013,7 +12072,10 @@ The context is now within limits. Please retry your request with the recovered c
     protected enableSkillCapabilities(skill: MJAISkillEntity, params: ExecuteAgentParams): void {
         const activatingAgentIds = [params.agent.ID];
 
-        const actionIds = AIEngine.Instance.GetSkillActionIDs(skill.ID);
+        // Only the actions the skill exposes (AISkillAction.ExposeToModel) join the run. A bundled
+        // action with the flag off is not described to the model and not executable by the agent;
+        // the application invokes it (a menu button in the skill's reply) through the Actions API.
+        const actionIds = AIEngine.Instance.GetSkillExposedActionIDs(skill.ID);
         if (actionIds.length > 0) {
             if (!params.actionChanges) {
                 params.actionChanges = [];
@@ -12450,7 +12512,11 @@ The context is now within limits. Please retry your request with the recovered c
             newPayload: previousDecision.newPayload || previousDecision.previousPayload, // chat steps don't modify the payload
             responseForm: previousDecision.responseForm,
             actionableCommands: previousDecision.actionableCommands,
-            automaticCommands: previousDecision.automaticCommands
+            automaticCommands: previousDecision.automaticCommands,
+            // This agent's own step, rebuilt — carry its directive. A Chat step can still be a run's
+            // final step with a payload attached, so a 'suppress' declared alongside a question to
+            // the user has to reach the writer rather than being dropped on reconstruction.
+            artifactDirective: previousDecision.artifactDirective
         };
     }
 
@@ -13822,6 +13888,7 @@ The context is now within limits. Please retry your request with the recovered c
             responseForm: finalStep.responseForm,
             actionableCommands: resolvedActionableCommands,
             automaticCommands: finalStep.automaticCommands,
+            artifactDirective: finalStep.artifactDirective,
             memoryContext: this._injectedMemory.notes.length > 0 || this._injectedMemory.examples.length > 0
                 ? this._injectedMemory
                 : undefined,

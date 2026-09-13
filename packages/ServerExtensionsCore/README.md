@@ -1,26 +1,34 @@
 # @memberjunction/server-extensions-core
 
-Plugin architecture for MJServer that enables auto-discovery and lifecycle management of extension modules. Extensions register Express routes, handle their own authentication, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+Plugin architecture for MJServer that enables auto-discovery and lifecycle management of server extension modules. Extensions register Express routes, background workers, or WebSocket services, handle their own or MJ-managed authentication, publish and consume typed services, and participate in health checks and graceful shutdown — all without modifying MJServer source code.
+
+For complete architectural patterns and guidelines, see the **[Server Extensions Guide](../../guides/SERVER_EXTENSIONS_GUIDE.md)**.
 
 ## Overview
 
-This package provides two main exports:
+This package provides the core contracts and loader for server extensions:
 
-- **`BaseServerExtension`** — Abstract base class that all extensions implement. Defines the `Initialize`, `Shutdown`, and `HealthCheck` lifecycle methods.
-- **`ServerExtensionLoader`** — Discovers registered extension classes via MJ's `ClassFactory`, matches them to config entries, and manages their lifecycle.
+- **`BaseServerExtension`** — Abstract base class that all extensions implement. Defines `DefaultPhase`, `Initialize`, `OnAllExtensionsMounted`, `Shutdown`, and `HealthCheck` lifecycle methods.
+- **`ServerExtensionLoader`** — Discovers registered extension classes via MJ's `ClassFactory`, matches them to config entries, enforces phased mounting (`pre-auth` vs. `post-auth`), maintains the shared `ServerExtensionServiceRegistry`, and manages extension lifecycle.
+- **`ServerExtensionServiceRegistry`** — Typed registry facilitating decoupled cross-extension service discovery and telemetry sharing.
+- **`ServerExtensionInitContext`** — Unified context passed to extension `Initialize` and `OnAllExtensionsMounted` methods.
 
 Extensions are discovered automatically using MemberJunction's standard `@RegisterClass` + `ClassFactory` pattern.
 
+### Open App & Dynamic Package Discovery
 **Open App packages** listed in the host `mj.config.cjs` `dynamicPackages.server[]` declare the extensions they need:
-
 1. Named export `MJ_SERVER_EXTENSIONS` on the server package (preferred; read after the package is imported).
 2. Fallback: `package.json` → `memberjunction.serverExtensions`.
 
-`@memberjunction/server-bootstrap` collects those declarations and `serve()` merges them with the host `serverExtensions[]`. Host `DriverClass` wins (`Enabled`, `RootPath`, per-key `Settings`). A host entry with `Enabled: false` disables a discovered extension. Host-only extensions (Slack, Teams) stay in the host config.
+`@memberjunction/server-bootstrap` collects those declarations and `serve()` merges them with the host `serverExtensions[]`. Host `DriverClass` wins (`Enabled`, `RootPath`, per-key `Settings`, `Phase`). A host entry with `Enabled: false` disables a discovered extension.
 
-**Pre-auth.** Extension routes mount *before* MJServer's auth middleware. Boot logs every collected and merged extension as `PRE-AUTH` with its `DriverClass` and `RootPath` so an operator who installed an Open App for its entities can see the HTTP surface. To suppress one, add the same `DriverClass` to host `serverExtensions[]` with `Enabled: false`. Invalid `RootPath` values (`/`, `/graphql`, `/auth`, `/oauth`, `/health`, `/magic-link`, wildcards) are dropped fail-closed rather than mounted. Matching is **case-insensitive** (Express routing is) and `serve()` also passes the process's real mounts (`graphqlRootPath`, `/healthcheck`, `/esignature`, `/media`, widget, telephony, …) so a custom GraphQL root or a core path not in the static baseline cannot be claimed. Overlapping enabled roots (including case variants) are logged.
+### Lifecycle Phases (G1)
+Extensions declare their execution phase or inherit their class default:
+- **`'pre-auth'`** (Default): Mounted **before** MJServer authentication middleware. Used for external webhooks that carry provider signatures (Slack HMAC, Teams Bot Framework JWT, Twilio signatures, WebRTC SDP brokers).
+- **`'post-auth'`**: Mounted **after** MJServer authentication middleware (`createUnifiedAuthMiddleware`). Guaranteed to have authenticated `req.user` context.
 
-Open Apps therefore do **not** require the operator to copy extension blocks into the host `mj.config.cjs`. The host file is the override layer plus host-only extensions.
+### Reserved Root Path Safety (G2)
+Core system paths cannot be claimed by server extensions: `/`, `/graphql`, `/auth`, `/oauth`, `/health`, `/magic-link`, `/schema`, `/media`, `/mcp`. Configured roots matching these reserved paths fail closed and are dropped with an error.
 
 ## Installation
 
@@ -33,28 +41,44 @@ npm install @memberjunction/server-extensions-core
 ### 1. Create an Extension
 
 ```typescript
-import { Application } from 'express';
+import { Router } from 'express';
 import { RegisterClass } from '@memberjunction/global';
 import {
     BaseServerExtension,
-    ServerExtensionConfig,
+    ServerExtensionInitContext,
+    ServerExtensionPhase,
     ExtensionInitResult,
     ExtensionHealthResult
 } from '@memberjunction/server-extensions-core';
 
 @RegisterClass(BaseServerExtension, 'MyCustomExtension')
 export class MyCustomExtension extends BaseServerExtension {
-    async Initialize(app: Application, config: ServerExtensionConfig): Promise<ExtensionInitResult> {
-        // Register your Express routes
-        app.get(config.RootPath + '/hello', (_req, res) => {
+    /** Declare lifecycle phase */
+    public override get DefaultPhase(): ServerExtensionPhase {
+        return 'pre-auth';
+    }
+
+    async Initialize(context: ServerExtensionInitContext): Promise<ExtensionInitResult> {
+        const { app, config, services } = context;
+
+        const router = Router();
+        router.get('/hello', (_req, res) => {
             res.json({ message: 'Hello from my extension!' });
         });
+
+        app.use(config.RootPath, router);
 
         return {
             Success: true,
             Message: 'Custom extension loaded',
-            RegisteredRoutes: [`GET ${config.RootPath}/hello`]
+            RegisteredRoutes: [`GET ${config.RootPath}/hello`],
+            Service: { ping: () => 'pong' } // Auto-registered into ServerExtensionServiceRegistry
         };
+    }
+
+    async OnAllExtensionsMounted(context: ServerExtensionInitContext): Promise<void> {
+        // Cross-extension service wiring
+        const telephony = context.services.GetService('TwilioTelephonyService');
     }
 
     async Shutdown(): Promise<void> {
@@ -67,38 +91,17 @@ export class MyCustomExtension extends BaseServerExtension {
 }
 ```
 
-### 2. Declare the extension (Open App **or** host)
-
-An Open App server package publishes the default config (so installing the app is enough):
-
-```typescript
-// packages/Server/src/index.ts
-export const MJ_SERVER_EXTENSIONS = [
-    { Enabled: true, DriverClass: 'MyCustomExtension', RootPath: '/api/my-extension', Settings: {} },
-];
-```
-
-```json
-// packages/Server/package.json
-{
-  "memberjunction": {
-    "serverExtensions": [
-      { "Enabled": true, "DriverClass": "MyCustomExtension", "RootPath": "/api/my-extension", "Settings": {} }
-    ]
-  }
-}
-```
-
-A **host** `mj.config.cjs` is only needed to override that default, to disable it, or to load a host-only extension (not shipped by an Open App):
+### 2. Configure in `mj.config.cjs`
 
 ```javascript
 module.exports = {
-    // ... other MJServer config ...
     serverExtensions: [
         {
+            Name: 'MyExtension',
             Enabled: true,
             DriverClass: 'MyCustomExtension',
             RootPath: '/api/my-extension',
+            Phase: 'pre-auth',
             Settings: {
                 apiKey: process.env.MY_EXTENSION_API_KEY,
             }
@@ -107,101 +110,65 @@ module.exports = {
 };
 ```
 
-### 3. Import Your Extension Package
-
-Ensure your extension package is imported in your application so the `@RegisterClass` decorator fires at module load time. Add it as a dependency in your MJAPI project.
-
 ## API Reference
 
 ### `BaseServerExtension`
 
-Abstract base class for all server extensions.
-
-| Method | Description |
-|--------|-------------|
-| `Initialize(app, config)` | Called once at MJServer startup. Register routes, open connections. |
-| `Shutdown()` | Called during graceful shutdown (SIGTERM/SIGINT). Clean up resources. |
+| Member | Description |
+|---|---|
+| `DefaultPhase` | Getter returning default lifecycle phase (`'pre-auth'` or `'post-auth'`). Default is `'pre-auth'`. |
+| `Initialize(context)` | Called once at MJServer startup. Receives `ServerExtensionInitContext`. |
+| `OnAllExtensionsMounted?(context)` | Optional hook called after all extensions across both phases have mounted. Ideal for service wiring. |
+| `Shutdown()` | Called during graceful shutdown (SIGTERM/SIGINT). |
 | `HealthCheck()` | Called periodically. Return health status quickly (< 100ms). |
-| `OnConfigurationChange?(config)` | Optional. Called when config changes at runtime. |
+| `OnConfigurationChange?(config)` | Optional. Called when configuration changes at runtime. |
 
 ### `ServerExtensionLoader`
 
-Manages the extension lifecycle.
-
-| Method | Description |
-|--------|-------------|
-| `LoadExtensions(app, configs)` | Discover and initialize all enabled extensions from config. |
-| `HealthCheckAll()` | Run health checks on all loaded extensions. |
+| Member | Description |
+|---|---|
+| `Services` | Access the unified `ServerExtensionServiceRegistry`. |
+| `LoadExtensions(app, configs, options?)` | Discover and initialize extensions filtered by phase (`pre-auth` or `post-auth`). |
+| `NotifyAllExtensionsMounted(options?)` | Invoke `OnAllExtensionsMounted` on all loaded extensions. |
+| `HealthCheckAll()` | Run health checks across all loaded extensions. |
 | `ShutdownAll()` | Shut down all extensions in reverse order (LIFO). |
 | `Extensions` | Read-only array of loaded extension instances. |
-| `ExtensionCount` | Number of currently loaded extensions. |
 
 ### Type Interfaces
 
-#### `ServerExtensionConfig`
-
 ```typescript
-interface ServerExtensionConfig {
-    Enabled: boolean;        // Skip loading if false
-    DriverClass: string;     // Must match @RegisterClass key
-    RootPath: string;        // URL prefix for extension routes
-    Settings: Record<string, unknown>;  // Extension-specific config
+export type ServerExtensionPhase = 'pre-auth' | 'post-auth';
+
+export interface ServerExtensionConfig {
+    Name?: string;
+    DriverClass: string;
+    RootPath: string;
+    Enabled: boolean;
+    Phase?: ServerExtensionPhase;
+    Settings?: Record<string, unknown>;
+    PackagePath?: string;
 }
-```
 
-#### `ExtensionInitResult`
+export interface ServerExtensionInitContext {
+    app: Application;
+    httpServer?: Server;
+    config: ServerExtensionConfig;
+    publicUrl?: string;
+    services: ServerExtensionServiceRegistry;
+    phase: ServerExtensionPhase;
+}
 
-```typescript
-interface ExtensionInitResult {
+export interface ExtensionInitResult {
     Success: boolean;
     Message: string;
     RegisteredRoutes?: string[];
+    Service?: object;
+    Skipped?: boolean;
 }
-```
-
-#### `ExtensionHealthResult`
-
-```typescript
-interface ExtensionHealthResult {
-    Healthy: boolean;
-    Name: string;
-    Details?: Record<string, unknown>;
-}
-```
-
-## Lifecycle
-
-1. MJServer merges Open App–discovered `serverExtensions[]` with the host `mj.config.cjs` list (host `DriverClass` wins)
-2. For each enabled entry, `ServerExtensionLoader` uses `ClassFactory.CreateInstance(BaseServerExtension, driverClass)` to find the registered class
-3. Creates an instance and calls `Initialize(app, config)`
-4. Extension registers its Express routes under `config.RootPath`
-5. MJServer exposes `GET /health/extensions` for aggregate health checks
-6. On SIGTERM/SIGINT, `ShutdownAll()` calls each extension's `Shutdown()` in reverse order
-
-## Error Handling
-
-- Extensions that fail to initialize are logged and skipped — they don't prevent other extensions from loading
-- Health check exceptions are caught and reported as unhealthy
-- Shutdown exceptions are logged but don't prevent other extensions from shutting down
-
-## Authentication
-
-Extensions handle their own authentication by default. Common patterns:
-
-- **Platform-specific auth** (Slack HMAC signatures, Teams Bot Framework JWT)
-- **MJServer auth middleware** — import from `@memberjunction/server` if you want to reuse MJServer's built-in auth
-- **Custom auth** — API keys, OAuth, etc.
-
-This is opt-in — extensions are not forced to use MJServer's auth middleware.
-
-## Testing
-
-```bash
-npm run test        # Run all tests
-npm run test:watch  # Watch mode
 ```
 
 ## Related Packages
 
 - [`@memberjunction/messaging-adapters`](../MessagingAdapters/) — Slack and Teams adapters built on this framework
-- [`@memberjunction/server`](../MJServer/) — MJServer that loads and manages extensions
+- [`@memberjunction/server`](../MJServer/) — Core server hosting the extension lifecycle
+- [`guides/SERVER_EXTENSIONS_GUIDE.md`](../../guides/SERVER_EXTENSIONS_GUIDE.md) — Comprehensive developer guide

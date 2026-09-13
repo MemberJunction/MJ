@@ -308,7 +308,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '5be7bba0-3d9c-46d2-aa89-12b159defbe6',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            1,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'ID',
             'ID',
             NULL,
@@ -371,7 +371,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '56693a11-25d6-48f4-90d7-ecb1a850d4d7',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            2,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'ConversationID',
             'Conversation ID',
             'The conversation the skill is active in.',
@@ -434,7 +434,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '88f0e3c9-f8bd-4a69-b51c-9bdd61e695d0',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            3,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'SkillID',
             'Skill ID',
             'The skill (AISkill.ActivationScope = Conversation) held active.',
@@ -497,7 +497,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '1fc1d01a-1f6f-4492-a2b2-be5e4384a5f3',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            4,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'Status',
             'Status',
             'Active: re-requested on every root run in the conversation. Ended: history — the mode was left; a later activation re-uses the row and sets it Active again.',
@@ -560,7 +560,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '70fc39bb-0302-47c4-bab2-b931466e1e6a',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            5,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'ActivatedByRunID',
             'Activated By Run ID',
             'The agent run in which the skill was (most recently) activated — provenance for the Active row.',
@@ -623,7 +623,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'f84c2254-12d2-438c-8434-aa37db8357b1',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            6,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'EndedAt',
             'Ended At',
             'When the mode was left. NULL while Active.',
@@ -686,7 +686,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             'bdc50332-0960-4d12-96a7-7088bbccabca',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            7,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             '__mj_CreatedAt',
             'Created At',
             NULL,
@@ -749,7 +749,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '17d857de-a44c-4351-b551-077362545765',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            8,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             '__mj_UpdatedAt',
             'Updated At',
             NULL,
@@ -821,7 +821,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '7184d031-59ee-42c1-8b55-d70abe05eb11',
             '1D52DE84-DD3F-4E46-8D2B-574B70080BB4', -- Entity: MJ: AI Skills
-            14,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = '1D52DE84-DD3F-4E46-8D2B-574B70080BB4'),
             'ActivationScope',
             'Activation Scope',
             'How long an activation lasts. Run (default): the skill is active for the run that activated it and no longer — a one-shot capability. Conversation: once activated in a run that belongs to a conversation, the skill stays active for that conversation (an MJ: Conversation Skills row, Status Active) and is re-requested at the start of every later root run there until ended — a persona, or a mode whose menu is pressed on the next turn. Subject to every availability gate on each run; ActivationMode still decides who may trigger the FIRST activation.',
@@ -2666,7 +2666,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '63782154-4994-44a9-826b-59ddd9b0e1c8',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            9,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'Conversation',
             'Conversation',
             NULL,
@@ -2729,7 +2729,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '8f4ef253-724b-49ea-a771-32d40cfce6a8',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            10,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'Skill',
             'Skill',
             NULL,
@@ -2792,7 +2792,7 @@ UPDATE [${flyway:defaultSchema}].[EntityField]
          (
             '5b64deaa-b6d6-40f7-820d-3cee8ea92514',
             'D2021771-50D7-4E0F-A2A8-27AC37E01B34', -- Entity: MJ: Conversation Skills
-            11,
+            (SELECT COALESCE(MAX([Sequence]), 0) + 1 FROM [${flyway:defaultSchema}].[EntityField] WHERE [EntityID] = 'D2021771-50D7-4E0F-A2A8-27AC37E01B34'),
             'ActivatedByRun',
             'Activated By Run',
             NULL,

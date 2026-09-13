@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-kanban",
-  "version": "6.1.0-edge.5",
+  "version": "6.1.0-edge.6",
   "description": "MemberJunction: Generic Kanban board component with drag-and-drop column management",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -19,7 +19,7 @@
   "devDependencies": {
     "@angular/compiler": "21.2.22",
     "@angular/compiler-cli": "21.2.22",
-    "@memberjunction/ng-test-utils": "6.1.0-edge.5",
+    "@memberjunction/ng-test-utils": "6.1.0-edge.6",
     "vitest": "^4.0.18"
   },
   "peerDependencies": {
@@ -27,7 +27,7 @@
     "@angular/core": "^21.2.22"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.6",
     "tslib": "^2.8.1"
   },
   "sideEffects": false,

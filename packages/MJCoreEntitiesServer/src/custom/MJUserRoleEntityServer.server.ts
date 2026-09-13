@@ -1,9 +1,37 @@
-import { BaseEntity, BaseEntityResult, EntityDeleteOptions, EntitySaveOptions, UserInfo, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import {
+    BaseEntity,
+    BaseEntityResult,
+    EntityDeleteOptions,
+    EntityInfo,
+    EntitySaveOptions,
+    IMetadataProvider,
+    IsRestrictingFieldRule,
+    Metadata,
+    UserInfo,
+    ValidationErrorInfo,
+    ValidationErrorType,
+    ValidationResult,
+} from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { MJUserRoleEntity } from '@memberjunction/core-entities';
+import { FindSystemUserFieldAccessViolations, UserCache } from '@memberjunction/generic-database-provider';
 
 /**
- * Server-side `MJ: User Roles` entity enforcing MJ's role-elevation invariant (issue #4282).
+ * Server-side `MJ: User Roles` entity. It carries TWO independent guards that happen to protect the
+ * same table from opposite directions. They share no state and no helpers, and every write path
+ * must satisfy both:
+ *
+ *   A. **Role elevation** (issue #4282) — bounds what the CALLER may do, by their own roles.
+ *   B. **System-user field access** — bounds what may be done TO the system user's role set.
+ *
+ * Guard A and guard B are orthogonal: A asks "is this caller entitled to make this change", B asks
+ * "does this change leave the system user field-restricted". A change must clear both, so the
+ * checks compose as a conjunction and are evaluated A-then-B (A is an in-memory role-list test; B
+ * walks cached metadata and only ever runs when the system user is the target).
+ *
+ * ---------------------------------------------------------------------------------------------
+ * GUARD A — ROLE ELEVATION (issue #4282)
+ * ---------------------------------------------------------------------------------------------
  *
  * WHY THIS EXISTS AT ALL. Issue #4260 (`MJUserEntityServer`) closed the `User.Type` route to
  * elevated capability. Role assignment is the platform's OTHER authority mechanism and was
@@ -76,14 +104,50 @@ import { MJUserRoleEntity } from '@memberjunction/core-entities';
  * deployment whose system user is NOT an Owner will see those sync paths fail closed — loudly,
  * at the save — exactly as #4260 documented for `MJ: Users`.
  *
- * Pure: reads only this record's own field state and the caller's cached roles. No `RunView`, no
- * provider, no engine, no I/O — so it costs nothing per save/delete and is unit-testable without a
- * database.
+ * Guard A is pure: it reads only this record's own field state and the caller's cached roles. No
+ * `RunView`, no provider, no engine, no I/O — so it costs nothing per save/delete and is
+ * unit-testable without a database. (Guard B is NOT pure in that sense; see below.)
+ *
+ * ---------------------------------------------------------------------------------------------
+ * GUARD B — SYSTEM-USER FIELD ACCESS
+ * ---------------------------------------------------------------------------------------------
+ *
+ * This is the other half of the system-user guard for field-level security.
+ * `MJEntityFieldPermissionEntityServer` guards the RULES; this guards the account's ROLE SET, from
+ * both directions. Without both halves an administrator reaches the forbidden state simply by
+ * doing the steps in a different order.
+ *
+ * - **Assignment** ({@link SystemUserRejectionReason}) — refuses giving the system user a role that
+ *   already denies a field. Only DENYING rules count here, because adding a role can only add rules
+ *   to the aggregate: its `Allow` rows grant, its `No Access` rows are inert, and only a `Deny`
+ *   can take something away. A guard that counted every rule would refuse to reassemble the
+ *   account's own role set the moment field security was enabled anywhere.
+ * - **Removal** ({@link Delete}) — refuses taking a role away when that would leave the account
+ *   short of its entity-level access. Removal is the opposite shape: it drops rules OUT of the
+ *   aggregate, so what matters is not what the departing role said but whether an `Allow` survives
+ *   without it.
+ *
+ * Why the system user must stay unrestricted: the server runs background work as that account.
+ * It pre-warms the shared engine caches at startup, and in task mode — which job and agent
+ * runners use — engines instead load on first touch, so whichever caller gets there first
+ * configures the engine for the entire process. Engine caches are process-wide and shared
+ * across users. A restricted system user could therefore leave partially loaded records in a
+ * cache that everyone reads afterward, with nothing at the point of failure pointing back at
+ * the role assignment that caused it.
+ *
+ * Unlike guard A, guard B reads cached metadata (`Metadata.Entities`, the provider, `UserCache`).
+ * It still performs no database I/O, but it is not state-free, and it needs those caches populated
+ * to have an opinion — a cold `UserCache` skips the check rather than blocking an administrator.
+ *
+ * This restricts CONFIGURATION only. There is no user who is exempt from a Deny at runtime —
+ * not even the system user, whose access comes from the same rows as everyone else's.
  */
 @RegisterClass(BaseEntity, 'MJ: User Roles')
 export class MJUserRoleEntityServer extends MJUserRoleEntity {
     public override Validate(): ValidationResult {
         const result = super.Validate();
+
+        // Guard A — the caller may only assign/move a role they hold themselves.
         if (!this.callerIsOwner()) {
             this.validateRoleHeld(
                 result,
@@ -95,6 +159,19 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
                 this.validatePriorRoleHeld(result);
             }
         }
+
+        // Guard B — the system user may not be given a role that denies it a field. Applies to every
+        // caller, Owner included: an Owner is entitled to make the assignment but the resulting state
+        // is one the server cannot run in, so this is not an authority question.
+        const rejection = MJUserRoleEntityServer.SystemUserRejectionReason(
+            this.UserID,
+            this.RoleID,
+            this.ProviderToUse as unknown as IMetadataProvider
+        );
+        if (rejection) {
+            result.Errors.push(new ValidationErrorInfo('RoleID', rejection, this.RoleID, ValidationErrorType.Failure));
+        }
+
         result.Success = result.Success && result.Errors.length === 0;
         return result;
     }
@@ -118,14 +195,26 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
     }
 
     /**
-     * Invariant 3 — a non-Owner may only revoke a role they hold themselves.
+     * Enforces both guards on the delete path.
      *
-     * Reports the refusal the way `MJUserEntityServer.Delete` does — a `BaseEntityResult` on the
+     * Guard A, invariant 3 — a non-Owner may only revoke a role they hold themselves.
+     *
+     * Guard B — refuses REMOVING a role from the system user when that would cost the account its
+     * field access. The mirror of the assignment guard, and needed for the same reason the
+     * field-permission subclass guards its own delete path: the system user's access is ordinary
+     * `Allow` rows, and taking a role away drops that role's rows out of the aggregate. If the
+     * remaining roles have `No Access` on a field, the last removal denies it — with no `Deny`
+     * written anywhere and no field-permission row touched. It permits the removal when it also
+     * costs the account its entity-level read, since it is then denied one level up and field rules
+     * decide nothing — which is why the projection re-evaluates the entity ceiling too, rather than
+     * only the field rules.
+     *
+     * Reports refusals the way `MJUserEntityServer.Delete` does — a `BaseEntityResult` on the
      * result history, so `LatestResult.CompleteMessage` carries the reason, `Delete()` returning
      * `false` on a logical rejection rather than throwing (the CLAUDE.md Save/Delete error-handling
      * contract). Note that `SyncRolesUsersResolver.SyncUserRoles` treats a `false` from this method
      * as a hard error and throws, rolling its transaction back; that mutation runs as the system
-     * Owner, so it is exempt and never sees this refusal on a default install.
+     * Owner, so it is exempt from guard A and never sees that refusal on a default install.
      */
     public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (!this.callerIsOwner() && !this.callerHoldsRole(this.RoleID)) {
@@ -135,6 +224,12 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
                 'strip authority you were never granted. Ask an Owner to make this change.'
             );
         }
+
+        const rejection = this.systemUserRoleRemovalReason();
+        if (rejection) {
+            return this.refuse('delete', rejection);
+        }
+
         return super.Delete(options);
     }
 
@@ -222,6 +317,8 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
      *
      * Reads `ActiveUser` rather than `ContextCurrentUser` directly so a per-request provider's
      * `CurrentUser` is honored on multi-provider servers.
+     *
+     * Applies to guard A only. Guard B has no Owner exemption — see `Validate()`.
      */
     private callerIsOwner(): boolean {
         const caller: UserInfo | null = this.ActiveUser;
@@ -230,4 +327,101 @@ export class MJUserRoleEntityServer extends MJUserRoleEntity {
         }
         return caller.Type?.trim().toLowerCase() === 'owner';
     }
+
+    /**
+     * Why this role may not be taken off this user, or null when it may.
+     * Only ever rejects for the system user; every other user is unaffected.
+     */
+    private systemUserRoleRemovalReason(): string | null {
+        const systemUser = UserCache.Instance?.GetSystemUser?.();
+        if (!systemUser || !this.UserID || !this.RoleID || !UUIDsEqual(systemUser.ID, this.UserID)) {
+            return null; // not the system user — nothing to guard
+        }
+
+        const provider = this.ProviderToUse as unknown as IMetadataProvider;
+        const lost = FindSystemUserFieldAccessViolations(provider, systemUser, { WithoutRoleID: this.RoleID });
+        if (lost.length === 0) {
+            return null;
+        }
+        const shown = lost.slice(0, 3).map(v => `${v.EntityName}.${v.FieldName}`).join(', ');
+        const more = lost.length > 3 ? `, and ${lost.length - 3} more` : '';
+        return (
+            `Removing this role from the MJ system user would leave it unable to use ${lost.length} field(s) ` +
+            `(${shown}${more}). The server runs background work as that account and shares one engine cache across ` +
+            `all users, so restricting it would let partially loaded records reach everyone. Field security has no ` +
+            `exempt user — grant those fields to another role the system user holds first.`
+        );
+    }
+
+    /**
+     * Why this role may not be given to this user, or null when it may.
+     * Only ever rejects for the system user; every other user is unaffected.
+     */
+    public static SystemUserRejectionReason(userID: string | null, roleID: string | null, provider?: IMetadataProvider): string | null {
+        if (!userID || !roleID) {
+            return null;
+        }
+        // UserCache is populated on the server; a cold cache skips the check rather than
+        // blocking an administrator on missing state.
+        const systemUser = UserCache.Instance?.GetSystemUser?.();
+        if (!systemUser || !UUIDsEqual(systemUser.ID, userID)) {
+            return null; // not the system user — nothing to guard
+        }
+
+        const restricted = MJUserRoleEntityServer.EntitiesWithRestrictingFieldRulesForRole(roleID, provider);
+        if (restricted.length === 0) {
+            return null;
+        }
+        const shown = restricted.slice(0, 3).join(', ');
+        const more = restricted.length > 3 ? `, and ${restricted.length - 3} more` : '';
+        return (
+            `This role denies access to at least one field (on ${shown}${more}), so it cannot be assigned to the MJ system user. ` +
+            `The server runs background work as that account and shares one engine cache across all users — ` +
+            `restricting it would let partially loaded records reach everyone. ` +
+            `Assign this role to a regular user, or remove its field permissions first.`
+        );
+    }
+
+    /**
+     * Names of entities where this role carries at least one RESTRICTING field rule — a `Deny`
+     * on any verb. Walks cached metadata only — no database access. Runs only when the system
+     * user is the save target, which is rare.
+     *
+     * Grants and neutrals are ignored, and must be: the system user holds the standard roles
+     * (UI, Developer, Integration), snapshot initialization writes those roles `Allow` rows on
+     * every entity they can read, and field security has no runtime exemption to fall back on.
+     * A guard that counted any rule at all would refuse to reassemble the system user's own role
+     * set the moment field security was enabled anywhere.
+     *
+     * Deliberately does NOT gate on {@link EntityInfo.EnableFieldLevelSecurity}, even though
+     * rules on a disabled entity are inactive and gating would be the cheaper walk. Gating
+     * would leave the two halves of this guard unable to compose, and the gap is reachable in
+     * three ordinary steps: disable field security on an entity, assign the role (now carrying
+     * no active rules) to the system user, re-enable. Each step is permitted and the end state
+     * is the one both guards exist to prevent. Disabling preserves rules so re-enabling does
+     * not lose them, so a rule on a disabled entity is dormant rather than gone.
+     */
+    private static EntitiesWithRestrictingFieldRulesForRole(roleID: string, provider?: IMetadataProvider): string[] {
+        const md = provider ?? new Metadata();
+        const names: string[] = [];
+        for (const entity of md.Entities as EntityInfo[]) {
+            const hit = entity.Fields.some(
+                f =>
+                    f.HasFieldPermissions &&
+                    f.FieldPermissions.some(fp => UUIDsEqual(fp.RoleID, roleID) && IsRestrictingFieldRule(fp))
+            );
+            if (hit) {
+                names.push(entity.Name);
+            }
+        }
+        return names;
+    }
+}
+
+/**
+ * Loader stub — prevents the class from being tree-shaken out of the bundle. Mirrors the
+ * pattern used by the other server-side entity subclasses in this package.
+ */
+export function LoadMJUserRoleEntityServer(): void {
+    // no-op
 }

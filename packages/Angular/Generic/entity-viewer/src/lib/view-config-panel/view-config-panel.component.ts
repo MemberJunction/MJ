@@ -395,6 +395,22 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
   }
 
   /**
+   * Field names field-level security denies the current user READ on, lowercased. Empty when
+   * there is no entity or resolved user, when the entity has field security off, or when nothing
+   * is denied — so callers can treat it as "nothing to filter".
+   *
+   * Uses the BULK primitive rather than the per-field form: `GetDeniedReadFields` aggregates the
+   * user's roles once, where the per-field call would repeat that for every field.
+   */
+  private deniedReadFields(): Set<string> {
+    const user = this.ProviderToUse?.CurrentUser;
+    if (!this.Entity || !user) {
+      return new Set<string>();
+    }
+    return this.Entity.GetDeniedReadFields(user);
+  }
+
+  /**
    * Initialize form state from entity and view
    * Priority for column state: currentGridState > viewEntity.Columns > entity defaults
    */
@@ -404,8 +420,17 @@ export class ViewConfigPanelComponent extends BaseAngularComponent implements On
       return;
     }
 
-    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info)
+    // Initialize columns from entity fields (including __mj_ fields for audit/timestamp info).
+    //
+    // Field security: a field the user cannot READ is not offered as a column at all. The grid
+    // already refuses to render its values, so listing it here would only advertise the NAME of a
+    // column they can never populate — and invite them to "fix" a column that will always be
+    // blank. This is a rendering surface, so filtering is correct here; the saved view's stored
+    // column preferences are deliberately left alone (see EntityDataGrid.filterToExistingFields —
+    // a denial is reversible, and dropping the preference would not restore it on re-grant).
+    const denied = this.deniedReadFields();
     this.Columns = this.Entity.Fields
+      .filter(field => !denied.has(field.Name.trim().toLowerCase()))
       .map((field, index) => ({
         fieldId: field.ID,
         fieldName: field.Name,

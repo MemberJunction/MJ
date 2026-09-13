@@ -1,5 +1,7 @@
 # @memberjunction/network-utils
 
+## 6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

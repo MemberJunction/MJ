@@ -1,8 +1,9 @@
-import { Component } from '@angular/core';
+import { Component, ViewChild } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecordUrlId } from '@memberjunction/core';
+import { SingleRecordComponent } from '../single-record/single-record.component';
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
   standalone: false,
@@ -11,6 +12,13 @@ import { Metadata, CompositeKey, EntityInfo, IMetadataProvider, IsNewEntityRecor
     template: `<mj-single-record [PrimaryKey]="this.PrimaryKey" [entityName]="Data.Configuration.Entity" [newRecordValues]="Data.Configuration.NewRecordValues" (loadComplete)="NotifyLoadComplete()" (recordSaved)="ResourceRecordSaved($event)" (recordDismissed)="NotifyCloseRequested()"></mj-single-record>`
 })
 export class EntityRecordResource extends BaseResourceComponent {
+    @ViewChild(SingleRecordComponent) private singleRecord?: SingleRecordComponent;
+
+    /** A record being edited must never be consumed as the region's temp tab. */
+    public override IsEditing(): boolean {
+        return this.singleRecord?.IsEditing() === true;
+    }
+
     public get PrimaryKey(): CompositeKey {
         return EntityRecordResource.GetPrimaryKey(this.Data, this.ProviderToUse);
     }

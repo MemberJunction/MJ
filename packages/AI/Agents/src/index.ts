@@ -20,6 +20,7 @@ export * from './scoped-prompt-config-resolver';
 export * from './agent-run-watchdog';
 export * from './agent-types';
 export * from './AgentRunner';
+export * from './artifact-target-plan';
 export * from './PayloadManager';
 export * from './ScratchpadManager';
 export * from './ArtifactToolManager';

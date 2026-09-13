@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-tasks",
-  "version": "6.1.0-edge.5",
+  "version": "6.1.0-edge.6",
   "description": "MemberJunction: Angular components for task visualization and management with Gantt chart support",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,12 +12,12 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/ai-core-plus": "6.1.0-edge.5",
-    "@memberjunction/ai-engine-base": "6.1.0-edge.5",
-    "@memberjunction/core": "6.1.0-edge.5",
-    "@memberjunction/core-entities": "6.1.0-edge.5",
-    "@memberjunction/global": "6.1.0-edge.5",
-    "@memberjunction/ng-shared-generic": "6.1.0-edge.5",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.6",
+    "@memberjunction/ai-engine-base": "6.1.0-edge.6",
+    "@memberjunction/core": "6.1.0-edge.6",
+    "@memberjunction/core-entities": "6.1.0-edge.6",
+    "@memberjunction/global": "6.1.0-edge.6",
+    "@memberjunction/ng-shared-generic": "6.1.0-edge.6",
     "dhtmlx-gantt": "^9.1.1",
     "rxjs": "^7.8.2"
   },
@@ -34,7 +34,7 @@
     "url": "https://github.com/MemberJunction/MJ"
   },
   "devDependencies": {
-    "@memberjunction/ng-test-utils": "6.1.0-edge.5",
+    "@memberjunction/ng-test-utils": "6.1.0-edge.6",
     "vitest": "^4.0.18",
     "@angular/compiler-cli": "21.2.22"
   },

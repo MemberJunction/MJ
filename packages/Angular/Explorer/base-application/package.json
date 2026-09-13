@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-base-application",
-  "version": "6.1.0-edge.5",
+  "version": "6.1.0-edge.6",
   "description": "MemberJunction Explorer: BaseApplication class system for app-centric navigation",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -30,9 +30,9 @@
     "@angular/core": "^21.2.22"
   },
   "dependencies": {
-    "@memberjunction/global": "6.1.0-edge.5",
-    "@memberjunction/core": "6.1.0-edge.5",
-    "@memberjunction/core-entities": "6.1.0-edge.5",
+    "@memberjunction/global": "6.1.0-edge.6",
+    "@memberjunction/core": "6.1.0-edge.6",
+    "@memberjunction/core-entities": "6.1.0-edge.6",
     "golden-layout": "^2.6.0",
     "rxjs": "~7.8.2",
     "tslib": "^2.8.1"

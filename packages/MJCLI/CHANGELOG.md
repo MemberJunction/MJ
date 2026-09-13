@@ -1,5 +1,112 @@
 # Change Log - @memberjunction/cli
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- d1d74c2: Open App CodeGen writes `CodeGen_Run_*.sql` (EntityField INSERTs) to the app's `migrations/codegen` when cwd has `mj-app.json`. Running from the MJ repo with `includeSchemas` set to an app schema fails instead of dumping metadata SQL into `MJ/migrations/v*`. If SQLOutput is enabled but no log file is open, metadata SQL is not applied. `--sql-output-dir` overrides the folder.
+- 41b0d28: Load Open App server packages in every MJ process, not only MJAPI (#4199).
+
+  `mj sync push` (and `mj app …`, `mj test`, the MCP/A2A servers, the integration-test bootstrap)
+  never imported an installed app's server package, so `Metadata.GetEntityObject` handed back a
+  generic `BaseEntity` for the app's entities and every custom `Save()`, validation rule and
+  lifecycle hook was silently skipped — while MJ core's own server subclasses, loaded through the
+  lite manifest, did run. New `@memberjunction/dynamic-packages` extracts the loader (and the
+  host-anchored import) out of `server-bootstrap` into a package with no MJ runtime dependencies,
+  and each host is now one `LoadDynamicPackages({ processId })` call. ServerBootstrap consumes it
+  with two deliberate behaviour changes: it no longer attempts to import the Angular forms package
+  into Node, and when an `mj-app.json` sits beside its `mj.config.cjs` (an Open App repo running its
+  own dev host) it now loads that app's server packages and resolver paths too.
+
+  `dynamicPackages.server[]` stays the single list `mj app install` writes; when both it and an
+  `mj-app.json` name a package, the config entry decides `Enabled` and scoping while the manifest's
+  on-disk location remains the resolution fallback. Entries gain optional
+  `Processes` / `ExcludeProcesses` (process IDs or prefixes: `cli`, `cli:sync`, `cli:sync:push`,
+  `mjapi`, `mcp`, …) and the section gains an optional `policy` map, so a package can be scoped to
+  just `mj sync` or switched off for `mj migrate`. `MJ_DYNAMIC_PACKAGES=none` and the global CLI
+  flag `--no-app-packages` (declared in `--help`) disable loading for one run — for app packages AND the
+  host's own generated packages; MJ core's classes still load from the manifest. The `mj` prerun hook
+  publishes its process id through `MJ_DYNAMIC_PACKAGES_PROCESS` so the nested `ai-cli` /
+  `testing-cli` bootstraps apply the same scoping and policy. A package already loaded in the process
+  is handed back from cache without re-running its startup export. New guide:
+  `guides/DYNAMIC_PACKAGE_LOADING_GUIDE.md`. `mj sync push` now warns, once per entity,
+  when it is about to write with a `BaseEntity` because no subclass is registered.
+
+- fd0a019: Follow-ups to the dynamic-package loader (#4199) from testing it end to end:
+  - The `mj` CLI's config schema no longer requires `AppName` on hand-authored `dynamicPackages.server[]` entries and accepts every `policy` value the loader accepts, so the README's own examples no longer make `mj migrate` / `mj clean` / `mj app check-updates` abort with a misleading "Database credentials are missing" error.
+  - A workspace member found on disk via `mj-app.json` but not yet built is reported as not-found (with the missing entry file named) instead of as a load failure that warned on every command.
+  - The standalone `mj-ai` / `mj-testing` provider bootstraps log through a new `StderrDynamicPackagesLogger`, so `--format=json` / `--output=json` stdout is no longer prefixed with loader progress lines.
+  - README: scoping examples use `cli:codegen` instead of `cli:migrate` (migrate is a light command that never loads app packages), and mode `none` is documented as skipping the host's generated packages too.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [319a7ed]
+- Updated dependencies [2f305df]
+- Updated dependencies [197fdf8]
+- Updated dependencies [62e0707]
+- Updated dependencies [6673f51]
+- Updated dependencies [d1d74c2]
+- Updated dependencies [0312b22]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [489aecd]
+- Updated dependencies [41b0d28]
+- Updated dependencies [fd0a019]
+- Updated dependencies [43f9133]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [ddf8621]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [eb962a1]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [d6e854b]
+- Updated dependencies [956f0e0]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [328a98d]
+- Updated dependencies [a4bb2f7]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [80fcb61]
+- Updated dependencies [cdd25c0]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [cda0187]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [ac96bb6]
+  - @memberjunction/aiengine@6.1.0-edge.6
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/codegen-lib@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/metadata-sync@6.1.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.6
+  - @memberjunction/generic-database-provider@6.1.0-edge.6
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.6
+  - @memberjunction/dynamic-packages@6.1.0-edge.6
+  - @memberjunction/ai-cli@6.1.0-edge.6
+  - @memberjunction/testing-cli@6.1.0-edge.6
+  - @memberjunction/installer@6.1.0-edge.6
+  - @memberjunction/open-app-engine@6.1.0-edge.6
+  - @memberjunction/db-auto-doc@6.1.0-edge.6
+  - @memberjunction/query-gen@6.1.0-edge.6
+  - @memberjunction/cli-core@6.1.0-edge.6
+  - @memberjunction/sql-converter@6.1.0-edge.6
+  - @memberjunction/config@6.1.0-edge.6
+  - @memberjunction/sqlglot-ts@6.1.0-edge.6
+  - @memberjunction/standards@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

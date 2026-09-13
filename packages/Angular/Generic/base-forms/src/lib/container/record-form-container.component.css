@@ -561,10 +561,6 @@ mj-collapsible-panel.mj-form-role-more {
   padding-left: 8px;
 }
 
-.mj-forms-chrome-rail-count.is-zero {
-  opacity: 0.55;
-}
-
 .mj-forms-chrome-rail-label {
   flex: 1;
   min-width: 0;
@@ -573,6 +569,8 @@ mj-collapsible-panel.mj-form-role-more {
   white-space: nowrap;
 }
 
+/* Related-grid row count. Not rendered at 0 — an empty grid is not a signal, and a
+   grey "0" beside the red invalid count reads as one more thing to attend to. */
 .mj-forms-chrome-rail-count {
   min-width: 1.25rem;
   padding: 0 6px;
@@ -581,6 +579,88 @@ mj-collapsible-panel.mj-form-role-more {
   color: var(--mj-text-muted);
   font-size: var(--mj-text-xs);
   text-align: center;
+}
+
+/* Screen-reader-only text (the indicators' live region). */
+.mj-forms-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================
+   RAIL SECTION INDICATORS
+   A rail item says WHICH section holds unsaved edits or an invalid field, read
+   live from the panels it fronts (FormSectionIndicatorCoordinator). Same idioms
+   as the fields themselves: the 6px amber dot an edited field shows after its
+   label, and the error colour a failing field paints its underline in.
+   ============================================ */
+.mj-forms-chrome-rail-dirty {
+  flex: 0 0 auto;
+  width: var(--mj-space-1-5);
+  height: var(--mj-space-1-5);
+  border-radius: var(--mj-radius-full);
+  background: var(--mj-status-warning);
+}
+
+.mj-forms-chrome-rail-error,
+.mj-forms-chrome-rail-warning {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mj-space-1);
+  min-width: var(--mj-space-5);
+  padding: var(--mj-space-px) var(--mj-space-1-5);
+  border-radius: var(--mj-radius-full);
+  font-size: var(--mj-text-xs);
+  font-weight: var(--mj-font-semibold);
+  line-height: 1.2;
+  text-align: center;
+}
+
+.mj-forms-chrome-rail-error {
+  background: var(--mj-status-error);
+  color: var(--mj-text-inverse);
+}
+
+.mj-forms-chrome-rail-warning {
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border: 1px solid var(--mj-status-warning-border);
+}
+
+.mj-forms-chrome-rail-error i,
+.mj-forms-chrome-rail-warning i {
+  font-size: var(--mj-space-2-5);
+}
+
+/* The section's icon takes the error colour too, so the item reads as failing
+   even before the badge is noticed — but never the active item's brand tint. */
+.mj-forms-chrome-rail-item.has-errors:not(.is-active) > i {
+  color: var(--mj-status-error);
+}
+
+/* Collapsed spine: a column of icon → badge / dot → rotated label. */
+.mj-forms-chrome-rail-error.is-spine,
+.mj-forms-chrome-rail-warning.is-spine {
+  order: 1;
+  padding: 0 var(--mj-space-1);
+  min-width: var(--mj-space-5);
+}
+
+.mj-forms-chrome-rail-dirty.is-spine {
+  order: 1;
+}
+
+.mj-forms-chrome-rail-spine > .mj-forms-chrome-rail-spine-label {
+  order: 2;
 }
 
 @media (max-width: 720px) {

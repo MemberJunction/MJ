@@ -28,7 +28,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { ReadMemberLockfile } from './lockfile.js';
-import type { CandidateReason, CandidateRepo, MemberPackageInfo, MemberPackageJson, WorkspaceGlobsSource } from './types.js';
+import type { CandidateReason, CandidateRepo, MemberPackageInfo, MemberPackageJson, MjAppJson, WorkspaceGlobsSource } from './types.js';
 
 /** Root package name that identifies the MJ monorepo checkout. */
 export const MJ_MONOREPO_PACKAGE_NAME = 'memberjunction-workspace';
@@ -49,12 +49,34 @@ export interface DetectOptions {
   MaxSiblingDirs?: number;
 }
 
+/**
+ * Reads a repo's `mj-app.json`, carrying a parse failure rather than throwing it.
+ *
+ * {@link DetectCandidates} calls {@link LoadRepo} for every subdirectory of the parent — before the
+ * candidate filter, and long before `selectMembers` applies `--exclude`. Throwing here would let a
+ * single Open App repo mid-edit abort `mj dev workspace` and `dev workspace doctor` for a workspace
+ * that does not even include it, with no flag able to route around it. So the failure travels on the
+ * candidate and is raised by the consumer that actually reads the declaration, for the members it
+ * actually reads.
+ *
+ * The root `package.json` deliberately keeps throwing in {@link LoadRepo}: unparseable there means
+ * the directory is not a loadable repo at all, which is a different claim and has no member-scoped
+ * consumer to defer to.
+ */
+function readMjApp(repoPath: string): { MjAppJson: MjAppJson | null; MjAppJsonError: string | null } {
+  try {
+    return { MjAppJson: readJsonFile<MjAppJson>(path.join(repoPath, 'mj-app.json')), MjAppJsonError: null };
+  } catch (error) {
+    return { MjAppJson: null, MjAppJsonError: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 /** Reads and parses a JSON file, returning null when absent; throws on unparseable JSON. */
-function readJsonFile(filePath: string): MemberPackageJson | null {
+function readJsonFile<T>(filePath: string): T | null {
   if (!existsSync(filePath)) return null;
   const raw = readFileSync(filePath, 'utf8');
   try {
-    return JSON.parse(raw) as MemberPackageJson;
+    return JSON.parse(raw) as T;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(`Unparseable JSON at ${filePath}: ${message}`);
@@ -310,7 +332,7 @@ function detectReasons(repoPath: string, rootPkg: MemberPackageJson, packages: M
  */
 export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | null {
   const repoPath = path.join(parentDir, dirName);
-  const rootPkg = readJsonFile(path.join(repoPath, 'package.json'));
+  const rootPkg = readJsonFile<MemberPackageJson>(path.join(repoPath, 'package.json'));
   if (rootPkg === null) return null;
   const workspaceGlobs = loadWorkspaceGlobs(repoPath);
   const enumerated = loadRepoPackages(repoPath, workspaceGlobs.Globs);
@@ -324,6 +346,7 @@ export function LoadRepo(parentDir: string, dirName: string): CandidateRepo | nu
     UnsupportedGlobs: enumerated.UnsupportedGlobs,
     Lockfile: ReadMemberLockfile(repoPath),
     TurboJson: existsSync(turboPath) ? readFileSync(turboPath, 'utf8') : null,
+    ...readMjApp(repoPath),
     WorkspaceGlobs: workspaceGlobs.Globs,
     WorkspaceGlobsSource: workspaceGlobs.Source,
   };

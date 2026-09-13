@@ -147,6 +147,24 @@ export class CustomUserMenu extends BaseUserMenu {
 }
 ```
 
+### Shell Chrome Policy
+
+Instance Config decides the platform-wide chrome (`Shell.SearchBar.Enabled`, `Shell.Notifications.Enabled`, `Shell.AppSwitcher.*`, `Shell.AppNav.Enabled`) and is the ceiling. A host that needs a narrower answer for some users — a white-label product hiding the search bar for organizations whose plan does not include browsing the knowledge base, say — registers a `BaseShellChromePolicy` subclass. The shell consults it every time it resolves its flags and re-resolves when the policy fires `Changed`.
+
+```typescript
+import { BaseShellChromePolicy, ShellChromeFlags } from '@memberjunction/ng-explorer-core';
+
+@RegisterClass(BaseShellChromePolicy)
+export class PlanChromePolicy extends BaseShellChromePolicy {
+  public override Resolve(flags: ShellChromeFlags): ShellChromeFlags {
+    return { ...flags, searchBar: flags.searchBar && this.currentOrgHasKnowledgePlus() };
+  }
+  // call this.Changed.next() when the organization or plan switches
+}
+```
+
+Booleans can only be narrowed (a `true` from the policy never re-enables what Instance Config turned off); `recordOpenStyle` is resolved at startup and is not the policy's to change; `appSwitcherStyle` may be replaced.
+
 ### Command Palette
 
 The command palette is available globally via Ctrl+K (Cmd+K on Mac). Custom commands can be registered via `CommandPaletteService`.
@@ -169,6 +187,7 @@ Key exports include:
 | `StartupValidationService` | Service | Startup validation checks |
 | `SystemValidationBannerComponent` | Component | Validation issue banner |
 | `BaseUserMenu` | Class | Extensible user menu base class |
+| `BaseShellChromePolicy` | Class | Host hook narrowing the shell chrome per user/tenant (`ShellChromeFlags`, `ApplyShellChromePolicy`) |
 | `UserMenuItem`, `UserMenuContext` | Interfaces | User menu type definitions |
 | `DashboardPreferencesDialogComponent` | Component | Dashboard preferences editor |
 | `SingleRecordComponent` | Component | Single record viewer/editor |

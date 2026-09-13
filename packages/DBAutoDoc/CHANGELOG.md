@@ -1,5 +1,39 @@
 # @memberjunction/db-auto-doc
 
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- 80fcb61: Memory/resource leak fixes surfaced by the Round 13 audit: drain previously-discarded `fetch()` response bodies at six call sites (BlackForestLabs, IntegrationDiscoveryResolver's webhook sender, WebPageContentAction's content-too-large guard, the React runtime's external component registry client, and RuntimeSchemaManager's restart poll) so undici no longer pins keep-alive connections; bound `RemoteBrowserActionResolver`'s process-lifetime screencast/audio-stream idempotency maps with a TTL sweep so a crashed or disconnected session no longer leaks a permanent entry; add missing SQL connection-pool `'error'` listeners (ComponentRegistry's server, DBAutoDoc's three drivers) and close DBAutoDoc's connection pool on its error path so a failed analysis run no longer leaves it open for the rest of the CLI process.
+- Updated dependencies [2c826f7]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [cdd25c0]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [512bb53]
+- Updated dependencies [1748491]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [ac96bb6]
+  - @memberjunction/ai@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

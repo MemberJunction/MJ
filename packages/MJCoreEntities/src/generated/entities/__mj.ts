@@ -1636,6 +1636,71 @@ export const MJAIAgentPermissionSchema = z.object({
 export type MJAIAgentPermissionEntityType = z.infer<typeof MJAIAgentPermissionSchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Agent Personas
+ */
+export const MJAIAgentPersonaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    AgentID: z.string().describe(`
+        * * Field Name: AgentID
+        * * Display Name: Agent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)`),
+    PersonaID: z.string().describe(`
+        * * Field Name: PersonaID
+        * * Display Name: Persona
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)`),
+    IsDefault: z.boolean().describe(`
+        * * Field Name: IsDefault
+        * * Display Name: Is Default Persona
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Indicates whether this persona is the default presentation for the agent when none is explicitly requested.`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Display Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Ordering sequence for displaying available personas in user interfaces.`),
+    IsAllowed: z.boolean().describe(`
+        * * Field Name: IsAllowed
+        * * Display Name: Is Allowed
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether the agent is allowed to use this persona. Set to 0 to explicitly disable or veto a persona.`),
+    StyleOverride: z.any().nullable().describe(`
+        * * Field Name: StyleOverride
+        * * Display Name: Style Override
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride
+        * * Description: Optional JSON payload overriding or refining persona presentation specifically for this agent (e.g. Tone or SpeakingStyle adjustments).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Agent: z.string().nullable().describe(`
+        * * Field Name: Agent
+        * * Display Name: Agent Name
+        * * SQL Data Type: nvarchar(255)`),
+    Persona: z.string().describe(`
+        * * Field Name: Persona
+        * * Display Name: Persona Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIAgentPersonaEntityType = z.infer<typeof MJAIAgentPersonaSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Agent Prompts
  */
 export const MJAIAgentPromptSchema = z.object({
@@ -5300,6 +5365,59 @@ export const MJAIModelModalitySchema = z.object({
 export type MJAIModelModalityEntityType = z.infer<typeof MJAIModelModalitySchema>;
 
 /**
+ * zod schema definition for the entity MJ: AI Model Personas
+ */
+export const MJAIModelPersonaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ModelID: z.string().describe(`
+        * * Field Name: ModelID
+        * * Display Name: Model ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)`),
+    PersonaID: z.string().describe(`
+        * * Field Name: PersonaID
+        * * Display Name: Persona ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)`),
+    Sequence: z.number().describe(`
+        * * Field Name: Sequence
+        * * Display Name: Sequence
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Deterministic ordering sequence for persona priority at the model level.`),
+    IsSupported: z.boolean().describe(`
+        * * Field Name: IsSupported
+        * * Display Name: Is Supported
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this persona is supported by the specific model. Set to 0 to explicitly disable an inherited vendor persona for this model.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Model: z.string().describe(`
+        * * Field Name: Model
+        * * Display Name: Model
+        * * SQL Data Type: nvarchar(50)`),
+    Persona: z.string().describe(`
+        * * Field Name: Persona
+        * * Display Name: Persona
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJAIModelPersonaEntityType = z.infer<typeof MJAIModelPersonaSchema>;
+
+/**
  * zod schema definition for the entity MJ: AI Model Price Types
  */
 export const MJAIModelPriceTypeSchema = z.object({
@@ -5705,6 +5823,186 @@ export const MJAIModelSchema = z.object({
 });
 
 export type MJAIModelEntityType = z.infer<typeof MJAIModelSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Persona Vendors
+ */
+export const MJAIPersonaVendorSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    PersonaID: z.string().describe(`
+        * * Field Name: PersonaID
+        * * Display Name: Persona
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)`),
+    VendorID: z.string().describe(`
+        * * Field Name: VendorID
+        * * Display Name: Vendor
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)`),
+    ModalityID: z.string().describe(`
+        * * Field Name: ModalityID
+        * * Display Name: Modality
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)`),
+    APIName: z.string().describe(`
+        * * Field Name: APIName
+        * * Display Name: API Asset Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Vendor-specific asset name or identifier passed over the wire (e.g., alloy, sage, an ElevenLabs voice_id, or a HeyGen avatar_id).`),
+    Status: z.union([z.literal('Active'), z.literal('Deprecated'), z.literal('Inactive'), z.literal('Preview')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Inactive
+    *   * Preview
+        * * Description: Current operational status of this vendor persona binding.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Selection priority when multiple vendor bindings qualify for a given persona and modality. Higher numbers indicate higher priority.`),
+    VendorSettings: z.any().nullable().describe(`
+        * * Field Name: VendorSettings
+        * * Display Name: Vendor Settings
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPersonaVendorEntity_IAIPersonaVendorSettings
+        * * Description: Provider-specific configuration JSON (e.g., ElevenLabs stability, similarityBoost, style, useSpeakerBoost).`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Persona: z.string().describe(`
+        * * Field Name: Persona
+        * * Display Name: Persona Name
+        * * SQL Data Type: nvarchar(100)`),
+    Vendor: z.string().describe(`
+        * * Field Name: Vendor
+        * * Display Name: Vendor Name
+        * * SQL Data Type: nvarchar(50)`),
+    Modality: z.string().describe(`
+        * * Field Name: Modality
+        * * Display Name: Modality Name
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJAIPersonaVendorEntityType = z.infer<typeof MJAIPersonaVendorSchema>;
+
+/**
+ * zod schema definition for the entity MJ: AI Personas
+ */
+export const MJAIPersonaSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    Name: z.string().describe(`
+        * * Field Name: Name
+        * * Display Name: Persona Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.`),
+    Description: z.string().nullable().describe(`
+        * * Field Name: Description
+        * * Display Name: Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description of the persona, its characteristics, and intended personality.`),
+    PerceivedGender: z.string().nullable().describe(`
+        * * Field Name: PerceivedGender
+        * * Display Name: Perceived Gender
+        * * SQL Data Type: nvarchar(50)
+        * * Description: The perceived gender presentation of this persona (e.g., Male, Female, Neutral, Non-Binary).`),
+    Locale: z.string().nullable().describe(`
+        * * Field Name: Locale
+        * * Display Name: Locale
+        * * SQL Data Type: nvarchar(20)
+        * * Description: BCP 47 language and locale tag primarily associated with this persona (e.g., en-US, es-ES).`),
+    PerceivedAgeRangeMin: z.number().nullable().describe(`
+        * * Field Name: PerceivedAgeRangeMin
+        * * Display Name: Perceived Age Range Min
+        * * SQL Data Type: int
+        * * Description: Approximate minimum perceived age for this persona, enabling numerical filtering.`),
+    PerceivedAgeRangeMax: z.number().nullable().describe(`
+        * * Field Name: PerceivedAgeRangeMax
+        * * Display Name: Perceived Age Range Max
+        * * SQL Data Type: int
+        * * Description: Approximate maximum perceived age for this persona, enabling numerical filtering.`),
+    Tone: z.string().nullable().describe(`
+        * * Field Name: Tone
+        * * Display Name: Tone
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Core tonal quality for this persona (e.g., Warm, Authoritative, Enthusiastic, Calm). Injected into prompt context for conversational delivery.`),
+    SpeakingStyle: z.string().nullable().describe(`
+        * * Field Name: SpeakingStyle
+        * * Display Name: Speaking Style
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Stylistic manner of speaking (e.g., Casual and conversational, Direct and concise, Academic).`),
+    StyleDescriptors: z.any().nullable().describe(`
+        * * Field Name: StyleDescriptors
+        * * Display Name: Style Descriptors
+        * * SQL Data Type: nvarchar(MAX)
+        * * JSON Type: MJAIPersonaEntity_IAIPersonaStyleDescriptors
+        * * Description: Additional descriptive keywords or JSON metadata capturing nuanced personality and presentation traits.`),
+    PreviewAudioURL: z.string().nullable().describe(`
+        * * Field Name: PreviewAudioURL
+        * * Display Name: Preview Audio URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to a sample audio file demonstrating this persona's voice.`),
+    PreviewImageURL: z.string().nullable().describe(`
+        * * Field Name: PreviewImageURL
+        * * Display Name: Preview Image URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to a preview avatar image for this persona.`),
+    PreviewVideoURL: z.string().nullable().describe(`
+        * * Field Name: PreviewVideoURL
+        * * Display Name: Preview Video URL
+        * * SQL Data Type: nvarchar(1000)
+        * * Description: URL to a preview video demonstrating this persona's visual animation or avatar.`),
+    Source: z.union([z.literal('BuiltIn'), z.literal('Cloned'), z.literal('Custom')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: BuiltIn
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BuiltIn
+    *   * Cloned
+    *   * Custom
+        * * Description: Origin of this persona: BuiltIn (provided by system/catalog), Custom (user-defined), or Cloned (derived/voice-cloned).`),
+    IsActive: z.boolean().describe(`
+        * * Field Name: IsActive
+        * * Display Name: Is Active
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this persona is currently active and available for selection.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+});
+
+export type MJAIPersonaEntityType = z.infer<typeof MJAIPersonaSchema>;
 
 /**
  * zod schema definition for the entity MJ: AI Prompt Categories
@@ -7234,6 +7532,12 @@ export const MJAISkillActionSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    ExposeToModel: z.boolean().describe(`
+        * * Field Name: ExposeToModel
+        * * Display Name: Expose to Model
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply.`),
     Skill: z.string().describe(`
         * * Field Name: Skill
         * * Display Name: Skill
@@ -17383,6 +17687,12 @@ export const MJEntitySchema = z.object({
         * * SQL Data Type: nvarchar(MAX)
         * * JSON Type: MJEntityEntity_IEntitySubtypeSelectorConfig
         * * Description: Optional JSON configuration specifying the declarative subtype selector for this entity (shape = IEntitySubtypeSelectorConfig). Path is a dotted foreign-key dereference path ending at a column containing the target subtype entity name (e.g. "ProductID.ProductTypeID.OrderLineExtensionEntity"). Read by BaseEntity.ResolveSubtypeEntityName() as a fallback when no runtime EntitySubtypeResolver is registered, and by offline tooling like Loom and CodeGen to determine conditional IsA child entities. NULL means no declarative subtype selector is configured.`),
+    EnableFieldLevelSecurity: z.boolean().describe(`
+        * * Field Name: EnableFieldLevelSecurity
+        * * Display Name: Enable Field Level Security
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.`),
     CodeName: z.string().nullable().describe(`
         * * Field Name: CodeName
         * * Display Name: Code Name
@@ -18203,6 +18513,80 @@ export const MJEntityDocumentSchema = z.object({
 });
 
 export type MJEntityDocumentEntityType = z.infer<typeof MJEntityDocumentSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Entity Field Permissions
+ */
+export const MJEntityFieldPermissionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    EntityFieldID: z.string().describe(`
+        * * Field Name: EntityFieldID
+        * * Display Name: Entity Field ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)`),
+    RoleID: z.string().describe(`
+        * * Field Name: RoleID
+        * * Display Name: Role ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)`),
+    ReadAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: ReadAccess
+        * * Display Name: Read Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may read the field's values. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default) and leaves the outcome to the user's other roles. Enforced at the API output boundary (result projection and GraphQL field mapping), by predicate validation which rejects an ExtraFilter/OrderBy/Aggregate referencing an unreadable field, and by the strongly-typed accessor path which throws.`),
+    UpdateAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: UpdateAccess
+        * * Display Name: Update Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may modify the field's value on an EXISTING record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow — a field a user cannot see is one they cannot change. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.`),
+    CreateAccess: z.union([z.literal('Allow'), z.literal('Deny'), z.literal('No Access')]).describe(`
+        * * Field Name: CreateAccess
+        * * Display Name: Create Access
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+        * * Description: Whether this role may supply the field's value when INSERTING a record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow. When a user may not create a field, any value they supply is dropped and the column takes its default — the insert is not rejected, matching the read path where a denied field is simply absent rather than an error. A NOT NULL column with no default that a user cannot create makes records uncreatable for that user; restricted fields should be nullable or defaulted.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    EntityField: z.string().describe(`
+        * * Field Name: EntityField
+        * * Display Name: Entity Field
+        * * SQL Data Type: nvarchar(255)`),
+    Role: z.string().describe(`
+        * * Field Name: Role
+        * * Display Name: Role
+        * * SQL Data Type: nvarchar(50)`),
+});
+
+export type MJEntityFieldPermissionEntityType = z.infer<typeof MJEntityFieldPermissionSchema>;
 
 /**
  * zod schema definition for the entity MJ: Entity Field Values
@@ -34393,6 +34777,153 @@ export class MJAIAgentActionEntity extends BaseEntity<MJAIAgentActionEntityType>
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactLength: This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
+    * * CompactMode: CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
+    * * MaxExecutionsPerRun: This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
+    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
+    * * ResultExpirationTurns: This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
+    * * Table-Level: This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
+    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
+    * * Table-Level: This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
+    * * Table-Level: This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCompactLengthGreaterThanZero(result);
+        this.ValidateCompactModeAllowedValues(result);
+        this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMinExecutionsPerRunIsNonNegative(result);
+        this.ValidateResultExpirationTurnsNonNegative(result);
+        this.ValidateCompactLengthRequiredForFirstNCharsMode(result);
+        this.ValidateCompactModeWhenResultExpirationModeIsCompact(result);
+        this.ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result);
+        this.ValidateResultExpirationModeRequiresCompactFieldsEmpty(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a value is provided for CompactLength, it must be greater than zero. If CompactLength is left empty, no rule applies.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactLengthGreaterThanZero(result: ValidationResult) {
+    	if (this.CompactLength != null && this.CompactLength <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CompactLength", "CompactLength must be greater than zero if specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * CompactMode can be left empty, but if a value is provided it must be either 'AI Summary' or 'First N Chars' to ensure only supported compact display options are used.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactModeAllowedValues(result: ValidationResult) {
+    	// CompactMode is optional; if set, it must be one of the allowed options
+    	if (this.CompactMode != null && this.CompactMode !== 'AI Summary' && this.CompactMode !== 'First N Chars') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'CompactMode',
+    			"CompactMode must be either 'AI Summary' or 'First N Chars' when provided.",
+    			this.CompactMode,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the maximum executions per run is specified, the number must be greater than zero. If it is not specified, no restriction applies.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "When provided, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a minimum executions per run value is provided, it must be zero or greater.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunIsNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum executions per run must be zero or greater.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the ResultExpirationTurns field has a value, it must be zero or greater (it cannot be negative). If ResultExpirationTurns is left empty, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultExpirationTurnsNonNegative(result: ValidationResult) {
+    	if (this.ResultExpirationTurns != null && this.ResultExpirationTurns < 0) {
+    		result.Errors.push(new ValidationErrorInfo("ResultExpirationTurns", "If provided, ResultExpirationTurns must be zero or greater.", this.ResultExpirationTurns, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the compact mode is set to 'First N Chars', a compact length must be specified. For any other compact mode, the compact length can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactLengthRequiredForFirstNCharsMode(result: ValidationResult) {
+    	if (this.CompactMode === "First N Chars" && this.CompactLength == null) {
+    		result.Errors.push(new ValidationErrorInfo("CompactLength", "When CompactMode is set to 'First N Chars', CompactLength must be specified.", this.CompactLength, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the result expiration mode is set to 'Compact', a compact mode value must also be provided. If the result expiration mode is not 'Compact', compact mode can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactModeWhenResultExpirationModeIsCompact(result: ValidationResult) {
+    	if (this.ResultExpirationMode === "Compact" && this.CompactMode == null) {
+    		result.Errors.push(new ValidationErrorInfo("CompactMode", "CompactMode must be specified when ResultExpirationMode is 'Compact'.", this.CompactMode, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if both minimum and maximum executions per run are specified, the minimum cannot be greater than the maximum. If either value is not specified, the rule is not enforced.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunIsLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null && this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be greater than maximum executions per run.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the result expiration mode is set to 'Compact', then CompactMode, CompactLength, and CompactPromptID must all be empty (null). If the expiration mode is not 'Compact', these fields may be filled in.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultExpirationModeRequiresCompactFieldsEmpty(result: ValidationResult) {
+    	if (this.ResultExpirationMode === "Compact") {
+    		if (this.CompactMode != null || this.CompactLength != null || this.CompactPromptID != null) {
+    			result.Errors.push(new ValidationErrorInfo("ResultExpirationMode", "When ResultExpirationMode is set to 'Compact', the fields CompactMode, CompactLength, and CompactPromptID must be empty.", this.ResultExpirationMode, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -35345,6 +35876,68 @@ export class MJAIAgentCoAgentEntity extends BaseEntity<MJAIAgentCoAgentEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Co Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Exactly one of Target Agent or Target Agent Type must be specified. You cannot provide both, and you cannot leave both empty.
+    * * Table-Level: An agent cannot be assigned as both the Co-Agent and the Target Agent on the same record.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateExclusiveTargetAgentOrType(result);
+        this.ValidateTargetAgentNotEqualToCoAgent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Exactly one of Target Agent or Target Agent Type must be specified. You cannot provide both, and you cannot leave both empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateExclusiveTargetAgentOrType(result: ValidationResult) {
+    	const hasAgent = this.TargetAgentID != null;
+    	const hasAgentType = this.TargetAgentTypeID != null;
+    
+    	if (hasAgent && hasAgentType) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"Cannot specify both a Target Agent and a Target Agent Type. Please choose only one.",
+    			this.TargetAgentID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (!hasAgent && !hasAgentType) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"Either a Target Agent or a Target Agent Type must be specified.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * An agent cannot be assigned as both the Co-Agent and the Target Agent on the same record.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetAgentNotEqualToCoAgent(result: ValidationResult) {
+    	// If TargetAgentID is specified, it must not be the same as CoAgentID
+    	if (this.TargetAgentID != null && this.CoAgentID === this.TargetAgentID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TargetAgentID",
+    			"The Target Agent cannot be the same as the Co-Agent.",
+    			this.TargetAgentID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -35927,6 +36520,81 @@ export class MJAIAgentDataSourceEntity extends BaseEntity<MJAIAgentDataSourceEnt
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Data Sources entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ResultType: Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
+    * * Table-Level: This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
+    * * Table-Level: This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
+    * * Table-Level: This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateResultTypeAllowedValues(result);
+        this.ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result);
+        this.ValidateEntityNameRequiredWhenSourceTypeRunView(result);
+        this.ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Result Type can be left blank or set only to the values 'entity_object' or 'simple'. Any other value is not allowed, ensuring that the system only processes recognized result formats.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultTypeAllowedValues(result: ValidationResult) {
+    	// If ResultType has a value, ensure it is one of the permitted options
+    	if (this.ResultType != null && this.ResultType !== 'entity_object' && this.ResultType !== 'simple') {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ResultType",
+    			"Result Type must be either 'entity_object' or 'simple' when specified",
+    			this.ResultType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache policy is set to 'PerAgent', a cache timeout value must be provided. For other cache policies, providing a cache timeout is optional.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheTimeoutSecondsRequiredForPerAgentPolicy(result: ValidationResult) {
+    	if (this.CachePolicy === "PerAgent" && this.CacheTimeoutSeconds == null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTimeoutSeconds", "When the cache policy is set to 'PerAgent', you must specify a cache timeout value.", this.CacheTimeoutSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that if the source type is 'RunView', the entity name must be provided. If the source type is anything else, the entity name can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityNameRequiredWhenSourceTypeRunView(result: ValidationResult) {
+    	if (this.SourceType === "RunView" && this.EntityName == null) {
+    		result.Errors.push(new ValidationErrorInfo("EntityName", "EntityName is required when SourceType is 'RunView'.", this.EntityName, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that when the Source Type is set to 'RunQuery', a Query Name must be provided. If Source Type is anything other than 'RunQuery', Query Name is optional.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateQueryNameRequiredWhenSourceTypeIsRunQuery(result: ValidationResult) {
+    	if (this.SourceType === "RunQuery" && this.QueryName == null) {
+    		result.Errors.push(new ValidationErrorInfo("QueryName", "The query name must be provided when Source Type is 'RunQuery'.", this.QueryName, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -38210,6 +38878,40 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that either a Role or a User is specified, but not both at the same time. You must provide one or the other, but never both, and neither can be left blank at the same time.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRoleIDAndUserIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that either a Role or a User is specified, but not both at the same time. You must provide one or the other, but never both, and neither can be left blank at the same time.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRoleIDAndUserIDExclusive(result: ValidationResult) {
+    	const hasRole = this.RoleID !== null;
+    	const hasUser = this.UserID !== null;
+    	if ((hasRole && hasUser) || (!hasRole && !hasUser)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RoleID/UserID",
+    			"You must specify either a Role or a User, but not both and not neither.",
+    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -38382,6 +39084,212 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
 
 
 /**
+ * Agent-specific presentation style overrides for an assigned AI Persona.
+ *
+ * Stored as JSON in `MJ: AI Agent Personas.StyleOverride`. CodeGen emits a typed
+ * `StyleOverrideObject` accessor on `MJAIAgentPersonaEntity` returning `MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null`.
+ *
+ * Allows an agent to fine-tune a catalog persona (e.g. "Aria, but more formal and authoritative")
+ * without minting an entirely separate persona record.
+ */
+export interface MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride {
+    /** Optional override for the persona's core Tone. */
+    Tone?: string;
+
+    /** Optional override for the persona's SpeakingStyle. */
+    SpeakingStyle?: string;
+
+    /** Open extension point for additional descriptor overrides. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: AI Agent Personas - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIAgentPersona
+ * * Base View: vwAIAgentPersonas
+ * * @description Configures which personas an AI agent is permitted to wear, their preference order, and which persona serves as the agent's default identity.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Agent Personas')
+export class MJAIAgentPersonaEntity extends BaseEntity<MJAIAgentPersonaEntityType> {
+    /**
+    * Loads the MJ: AI Agent Personas record from the database
+    * @param ID: string - primary key value to load the MJ: AI Agent Personas record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIAgentPersonaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: AgentID
+    * * Display Name: Agent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Agents (vwAIAgents.ID)
+    */
+    get AgentID(): string {
+        return this.Get('AgentID');
+    }
+    set AgentID(value: string) {
+        this.Set('AgentID', value);
+    }
+
+    /**
+    * * Field Name: PersonaID
+    * * Display Name: Persona
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    */
+    get PersonaID(): string {
+        return this.Get('PersonaID');
+    }
+    set PersonaID(value: string) {
+        this.Set('PersonaID', value);
+    }
+
+    /**
+    * * Field Name: IsDefault
+    * * Display Name: Is Default Persona
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Indicates whether this persona is the default presentation for the agent when none is explicitly requested.
+    */
+    get IsDefault(): boolean {
+        return this.Get('IsDefault');
+    }
+    set IsDefault(value: boolean) {
+        this.Set('IsDefault', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Display Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Ordering sequence for displaying available personas in user interfaces.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsAllowed
+    * * Display Name: Is Allowed
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether the agent is allowed to use this persona. Set to 0 to explicitly disable or veto a persona.
+    */
+    get IsAllowed(): boolean {
+        return this.Get('IsAllowed');
+    }
+    set IsAllowed(value: boolean) {
+        this.Set('IsAllowed', value);
+    }
+
+    /**
+    * * Field Name: StyleOverride
+    * * Display Name: Style Override
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride
+    * * Description: Optional JSON payload overriding or refining persona presentation specifically for this agent (e.g. Tone or SpeakingStyle adjustments).
+    */
+    get StyleOverride(): string | null {
+        return this.Get('StyleOverride');
+    }
+    set StyleOverride(value: string | null) {
+        this.Set('StyleOverride', value);
+    }
+
+    private _StyleOverrideObject_cached: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null | undefined = undefined;
+    private _StyleOverrideObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for StyleOverride — returns parsed JSON as MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get StyleOverrideObject(): MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null {
+        const raw = this.StyleOverride;
+        if (raw !== this._StyleOverrideObject_lastRaw) {
+            this._StyleOverrideObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleOverrideObject_lastRaw = raw;
+        }
+        return this._StyleOverrideObject_cached!;
+    }
+    set StyleOverrideObject(value: MJAIAgentPersonaEntity_IAIAgentPersonaStyleOverride | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleOverride = raw;
+        this._StyleOverrideObject_cached = value;
+        this._StyleOverrideObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Agent
+    * * Display Name: Agent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Agent(): string | null {
+        return this.Get('Agent');
+    }
+
+    /**
+    * * Field Name: Persona
+    * * Display Name: Persona Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Persona(): string {
+        return this.Get('Persona');
+    }
+}
+
+
+/**
  * MJ: AI Agent Prompts - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIAgentPrompt
@@ -38409,6 +39317,33 @@ export class MJAIAgentPromptEntity extends BaseEntity<MJAIAgentPromptEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateContextMessageCountForSelectedBehaviors(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the context behavior is set to 'InitialMessages' or 'RecentMessages', then a value for context message count must be provided. For any other context behavior, the context message count may be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextMessageCountForSelectedBehaviors(result: ValidationResult) {
+    	if ((this.ContextBehavior === "InitialMessages" || this.ContextBehavior === "RecentMessages") && this.ContextMessageCount == null) {
+    		result.Errors.push(new ValidationErrorInfo("ContextMessageCount", "When ContextBehavior is 'InitialMessages' or 'RecentMessages', ContextMessageCount must be provided.", this.ContextMessageCount, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -38625,6 +39560,33 @@ export class MJAIAgentRelationshipEntity extends BaseEntity<MJAIAgentRelationshi
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Relationships entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxMessages: This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxMessagesGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule makes sure that if a value is specified for MaxMessages, it must be greater than 0.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "MaxMessages must be greater than 0 when specified.", this.MaxMessages, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -38985,6 +39947,39 @@ export class MJAIAgentRequestEntity extends BaseEntity<MJAIAgentRequestEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Requests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Priority: Priority must be between 1 and 100 to ensure requests are correctly ranked and processed within the allowed range.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Priority must be between 1 and 100 to ensure requests are correctly ranked and processed within the allowed range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityRange(result: ValidationResult) {
+    	// Check if Priority is within the allowed range of 1 to 100
+    	if (this.Priority != null && (this.Priority < 1 || this.Priority > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be between 1 and 100.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -39770,6 +40765,55 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Run Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * FinalPayloadValidationResult: The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
+    * * StepNumber: This rule ensures that the step number must be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateFinalPayloadValidationResultStatus(result);
+        this.ValidateStepNumberGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The final payload validation result must be one of the approved statuses: Warn, Fail, Retry, or Pass, to ensure consistent reporting of validation outcomes.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalPayloadValidationResultStatus(result: ValidationResult) {
+    	if (this.FinalPayloadValidationResult != null) {
+    		const allowedValues = ["Warn", "Fail", "Retry", "Pass"];
+    		if (allowedValues.indexOf(this.FinalPayloadValidationResult) === -1) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalPayloadValidationResult",
+    				"The validation result must be one of the following values: " + allowedValues.join(", ") + ".",
+    				this.FinalPayloadValidationResult,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
+    * This rule ensures that the step number must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateStepNumberGreaterThanZero(result: ValidationResult) {
+    	if (this.StepNumber <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("StepNumber", "Step number must be greater than zero.", this.StepNumber, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -40289,6 +41333,76 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * ContinuationDepth: The continuation depth must be a non-negative number (0 or greater) to ensure valid execution tracking.
+    * * EffortLevel: This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
+    * * FinalStep: The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateContinuationDepthGreaterThanOrEqualToZero(result);
+        this.ValidateEffortLevelBetween1And100(result);
+        this.ValidateFinalStepAllowedValues(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The continuation depth must be a non-negative number (0 or greater) to ensure valid execution tracking.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContinuationDepthGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.ContinuationDepth != null && this.ContinuationDepth < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ContinuationDepth",
+    			"Continuation depth must be greater than or equal to 0.",
+    			this.ContinuationDepth,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the effort level, if specified, must be a number between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * The FinalStep field can be left empty, but if a value is provided it must be one of the approved step names – While, ForEach, Chat, Sub-Agent, Actions, Retry, Failed, or Success. This ensures only valid workflow steps are recorded.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateFinalStepAllowedValues(result: ValidationResult) {
+    	// If FinalStep has a value, it must be one of the permitted options
+    	if (this.FinalStep != null) {
+    		const allowed = ["While", "ForEach", "Chat", "Sub-Agent", "Actions", "Retry", "Failed", "Success"];
+    		const allowedValues = allowed.join(", ");
+    		if (!allowed.includes(this.FinalStep)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"FinalStep",
+    				"FinalStep must be one of the allowed values: " + allowedValues + ".",
+    				this.FinalStep,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -42164,6 +43278,41 @@ export class MJAIAgentSessionEntity extends BaseEntity<MJAIAgentSessionEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Sessions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Both Linked Entity ID and Linked Record ID must either be provided together or both left empty. This ensures that a link to an external record is always complete with both its entity type and record identifier.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateLinkedEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Both Linked Entity ID and Linked Record ID must either be provided together or both left empty. This ensures that a link to an external record is always complete with both its entity type and record identifier.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLinkedEntityAndRecordCoexistence(result: ValidationResult) {
+    	const hasEntity = this.LinkedEntityID != null;
+    	const hasRecord = this.LinkedRecordID != null && this.LinkedRecordID !== "";
+    
+    	if (hasEntity !== hasRecord) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LinkedEntityID",
+    			"Both Linked Entity ID and Linked Record ID must be provided together, or both must be left blank.",
+    			this.LinkedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -42618,6 +43767,33 @@ export class MJAIAgentStepPathEntity extends BaseEntity<MJAIAgentStepPathEntityT
     }
 
     /**
+    * Validate() method override for MJ: AI Agent Step Paths entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateOriginStepIDAgainstDestinationStepIDDifferent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the origin step and the destination step must be different. They cannot be the same step.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOriginStepIDAgainstDestinationStepIDDifferent(result: ValidationResult) {
+    	if (this.OriginStepID === this.DestinationStepID) {
+    		result.Errors.push(new ValidationErrorInfo("OriginStepID", "The origin step cannot be the same as the destination step.", this.OriginStepID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -42810,6 +43986,47 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Steps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RetryCount: This rule ensures that the number of retries allowed cannot be negative.
+    * * TimeoutSeconds: This rule ensures that, if provided, the timeout value must be greater than zero seconds.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRetryCountNonNegative(result);
+        this.ValidateTimeoutSecondsGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the number of retries allowed cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRetryCountNonNegative(result: ValidationResult) {
+    	if (this.RetryCount < 0) {
+    		result.Errors.push(new ValidationErrorInfo("RetryCount", "Retry count cannot be negative.", this.RetryCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that, if provided, the timeout value must be greater than zero seconds.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTimeoutSecondsGreaterThanZero(result: ValidationResult) {
+    	if (this.TimeoutSeconds != null && this.TimeoutSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("TimeoutSeconds", "TimeoutSeconds must be greater than zero if specified.", this.TimeoutSeconds, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -43194,6 +44411,97 @@ export class MJAIAgentTypeEntity extends BaseEntity<MJAIAgentTypeEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Agent Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactionTargetPercent: The compaction target percentage must be a value between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100 percent.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than 0.
+    * * Table-Level: The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
+        this.ValidateContextWindowMaxTokensGreaterThanZero(result);
+        this.ValidateCompactionTargetPercentLessThanTriggerPercent(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The compaction target percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentRange(result: ValidationResult) {
+    	if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			'CompactionTargetPercent',
+    			'Compaction Target Percent must be between 1 and 100.',
+    			this.CompactionTargetPercent,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+        if (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100) {
+            result.Errors.push(new ValidationErrorInfo(
+                "CompactionTriggerPercent",
+                "Compaction trigger percentage must be between 1 and 100.",
+                this.CompactionTriggerPercent,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * The maximum tokens for the context window must be a positive number greater than 0.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextWindowMaxTokensGreaterThanZero(result: ValidationResult) {
+    	if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ContextWindowMaxTokens",
+    			"Context Window Max Tokens must be a positive number greater than 0.",
+    			this.ContextWindowMaxTokens,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction target percentage must be less than the compaction trigger percentage to ensure that compaction successfully reduces the resource usage below the trigger threshold.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentLessThanTriggerPercent(result: ValidationResult) {
+    	if (this.CompactionTargetPercent != null && this.CompactionTriggerPercent != null) {
+    		if (this.CompactionTargetPercent >= this.CompactionTriggerPercent) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"CompactionTargetPercent",
+    				"The compaction target percentage must be strictly less than the compaction trigger percentage.",
+    				this.CompactionTargetPercent,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -43687,6 +44995,185 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
             return super.Delete(options);
         }
     }
+
+    /**
+    * Validate() method override for MJ: AI Agents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CompactionTargetPercent: The compaction target percentage must be between 1 and 100 percent.
+    * * CompactionTriggerPercent: The compaction trigger percentage must be a value between 1 and 100.
+    * * ContextWindowMaxTokens: The maximum tokens for the context window must be a positive number greater than zero.
+    * * DefaultPromptEffortLevel: This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
+    * * MaxExecutionsPerRun: This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
+    * * MaxMessages: This rule ensures that the maximum number of messages, if specified, must be greater than zero.
+    * * MinExecutionsPerRun: This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
+    * * Table-Level: This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
+    * * Table-Level: This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
+    * * Table-Level: This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCompactionTargetPercentRange(result);
+        this.ValidateCompactionTriggerPercentRange(result);
+        this.ValidateContextWindowMaxTokensGreaterThanZero(result);
+        this.ValidateDefaultPromptEffortLevelInAllowedRange(result);
+        this.ValidateMaxExecutionsPerRunGreaterThanZero(result);
+        this.ValidateMaxMessagesGreaterThanZero(result);
+        this.ValidateMinExecutionsPerRunNonNegative(result);
+        this.ValidateContextCompressionFieldsWhenEnabled(result);
+        this.ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result);
+        this.ValidateParentIDRequiresExposeAsActionFalse(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The compaction target percentage must be between 1 and 100 percent.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompactionTargetPercentRange(result: ValidationResult) {
+    	if (this.CompactionTargetPercent != null && (this.CompactionTargetPercent < 1 || this.CompactionTargetPercent > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"CompactionTargetPercent",
+    			"Compaction target percent must be between 1 and 100.",
+    			this.CompactionTargetPercent,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The compaction trigger percentage must be a value between 1 and 100.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    	public ValidateCompactionTriggerPercentRange(result: ValidationResult) {
+    		if (this.CompactionTriggerPercent != null && (this.CompactionTriggerPercent < 1 || this.CompactionTriggerPercent > 100)) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"CompactionTriggerPercent",
+    				"Compaction trigger percentage must be between 1 and 100.",
+    				this.CompactionTriggerPercent,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+
+    /**
+    * The maximum tokens for the context window must be a positive number greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextWindowMaxTokensGreaterThanZero(result: ValidationResult) {
+        if (this.ContextWindowMaxTokens != null && this.ContextWindowMaxTokens <= 0) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ContextWindowMaxTokens",
+                "The maximum tokens for the context window must be greater than zero.",
+                this.ContextWindowMaxTokens,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * This rule ensures that if a default prompt effort level is specified, it must be a number between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDefaultPromptEffortLevelInAllowedRange(result: ValidationResult) {
+    	if (this.DefaultPromptEffortLevel != null && (this.DefaultPromptEffortLevel < 1 || this.DefaultPromptEffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("DefaultPromptEffortLevel", "If specified, DefaultPromptEffortLevel must be between 1 and 100.", this.DefaultPromptEffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if 'MaxExecutionsPerRun' is provided, it must be a value greater than zero. If it is left blank, that's acceptable.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxExecutionsPerRunGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxExecutionsPerRun != null && this.MaxExecutionsPerRun <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxExecutionsPerRun", "If specified, the maximum executions per run must be greater than zero.", this.MaxExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the maximum number of messages, if specified, must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxMessagesGreaterThanZero(result: ValidationResult) {
+    	if (this.MaxMessages != null && this.MaxMessages <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxMessages", "If a maximum number of messages is specified, it must be greater than zero.", this.MaxMessages, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a minimum executions per run value is specified, it cannot be negative. If the field is not specified, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunNonNegative(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MinExecutionsPerRun < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "Minimum executions per run cannot be less than zero.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if context compression is enabled, then the message threshold, prompt ID, and message retention count must all be provided. If context compression is not enabled, then these fields can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateContextCompressionFieldsWhenEnabled(result: ValidationResult) {
+    	if (this.EnableContextCompression) {
+    		if (this.ContextCompressionMessageThreshold == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageThreshold", "Context compression message threshold must be provided when context compression is enabled.", this.ContextCompressionMessageThreshold, ValidationErrorType.Failure));
+    		}
+    		if (this.ContextCompressionPromptID == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionPromptID", "Context compression prompt ID must be provided when context compression is enabled.", this.ContextCompressionPromptID, ValidationErrorType.Failure));
+    		}
+    		if (this.ContextCompressionMessageRetentionCount == null) {
+    			result.Errors.push(new ValidationErrorInfo("ContextCompressionMessageRetentionCount", "Context compression message retention count must be provided when context compression is enabled.", this.ContextCompressionMessageRetentionCount, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * This rule ensures that if both the minimum and maximum number of executions per run are provided, the minimum cannot be greater than the maximum. If either value is not provided, no check is performed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMinExecutionsPerRunLessThanOrEqualToMaxExecutionsPerRun(result: ValidationResult) {
+    	if (this.MinExecutionsPerRun != null && this.MaxExecutionsPerRun != null) {
+    		if (this.MinExecutionsPerRun > this.MaxExecutionsPerRun) {
+    			result.Errors.push(new ValidationErrorInfo("MinExecutionsPerRun", "The minimum number of executions per run cannot be greater than the maximum.", this.MinExecutionsPerRun, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
+    * This rule ensures that if a ParentID is specified, then ExposeAsAction must be set to false. If ParentID is not specified, ExposeAsAction can be either true or false.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParentIDRequiresExposeAsActionFalse(result: ValidationResult) {
+    	if (this.ParentID != null && this.ExposeAsAction) {
+    		result.Errors.push(new ValidationErrorInfo("ExposeAsAction", "If ParentID is specified, ExposeAsAction must be false.", this.ExposeAsAction, ValidationErrorType.Failure));
+    	}
+    }
+    
 
     /**
     * * Field Name: ID
@@ -45600,6 +47087,8 @@ export interface MJAIBridgeProviderEntity_IBridgeProviderFeatures {
     CallTransfer?: boolean;
     /** The bridge can request platform recording (subject to per-jurisdiction consent handling). */
     Recording?: boolean;
+    /** Detached media plane: platform terminates live audio directly; bridge attaches a sideband (e.g. OpenAISipBridge). */
+    DetachedMediaPlane?: boolean;
 }
 
 /**
@@ -46446,6 +47935,121 @@ export class MJAICredentialBindingEntity extends BaseEntity<MJAICredentialBindin
     }
 
     /**
+    * Validate() method override for MJ: AI Credential Bindings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateBindingTypeAndRelatedIds(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the type of binding specified in the record matches exactly one related ID column: when BindingType is 'Vendor' an AIVendorID must be provided and the other two IDs must be empty; when BindingType is 'ModelVendor' an AIModelVendorID must be provided and the other IDs must be empty; when BindingType is 'PromptModel' an AIPromptModelID must be provided and the other IDs must be empty. This prevents ambiguous or missing references.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateBindingTypeAndRelatedIds(result: ValidationResult) {
+    	// Validate that the ID fields correspond to the selected BindingType
+    	if (this.BindingType === 'Vendor') {
+    		// AIVendorID must be present
+    		if (this.AIVendorID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'Vendor', AIVendorID must be provided.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIModelVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'Vendor', AIModelVendorID must be empty.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIPromptModelID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'Vendor', AIPromptModelID must be empty.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.BindingType === 'ModelVendor') {
+    		// AIModelVendorID must be present
+    		if (this.AIModelVendorID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'ModelVendor', AIModelVendorID must be provided.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'ModelVendor', AIVendorID must be empty.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIPromptModelID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'ModelVendor', AIPromptModelID must be empty.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.BindingType === 'PromptModel') {
+    		// AIPromptModelID must be present
+    		if (this.AIPromptModelID == null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIPromptModelID",
+    				"When BindingType is 'PromptModel', AIPromptModelID must be provided.",
+    				this.AIPromptModelID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		// The other IDs must be empty
+    		if (this.AIVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIVendorID",
+    				"When BindingType is 'PromptModel', AIVendorID must be empty.",
+    				this.AIVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    		if (this.AIModelVendorID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"AIModelVendorID",
+    				"When BindingType is 'PromptModel', AIModelVendorID must be empty.",
+    				this.AIModelVendorID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else {
+    		// Unexpected BindingType value
+    		result.Errors.push(new ValidationErrorInfo(
+    			"BindingType",
+    			"BindingType must be one of 'Vendor', 'ModelVendor', or 'PromptModel'.",
+    			this.BindingType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -46957,6 +48561,58 @@ export class MJAIModelArchitectureEntity extends BaseEntity<MJAIModelArchitectur
     }
 
     /**
+    * Validate() method override for MJ: AI Model Architectures entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rank: Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * * Weight: Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRankGreaterThanZero(result);
+        this.ValidateWeightRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Rank must be greater than zero, ensuring that every item has a positive ranking value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankGreaterThanZero(result: ValidationResult) {
+    	if (this.Rank <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rank",
+    			"Rank must be greater than 0.",
+    			this.Rank,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Weight must be between 0 and 1 when a value is provided; if no weight is entered, it may be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateWeightRange(result: ValidationResult) {
+    	// Ensure Weight is within the allowed range when it is provided
+    	if (this.Weight != null && (this.Weight < 0 || this.Weight > 1)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Weight",
+    			"Weight must be between 0 and 1.",
+    			this.Weight,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -47102,6 +48758,77 @@ export class MJAIModelCostEntity extends BaseEntity<MJAIModelCostEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Costs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Currency: This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
+    * * InputPricePerUnit: This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
+    * * OutputPricePerUnit: This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
+    * * Table-Level: This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCurrencyIsThreeUppercaseLetters(result);
+        this.ValidateInputPricePerUnitIsNonNegative(result);
+        this.ValidateOutputPricePerUnitNonNegative(result);
+        this.ValidateEndedAtAfterStartedAt(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the currency code is exactly 3 characters long and consists only of uppercase letters.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCurrencyIsThreeUppercaseLetters(result: ValidationResult) {
+    	if (this.Currency.length !== 3) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be exactly 3 characters long.", this.Currency, ValidationErrorType.Failure));
+    	} else if (this.Currency !== this.Currency.toUpperCase()) {
+    		result.Errors.push(new ValidationErrorInfo("Currency", "Currency code must be in uppercase letters.", this.Currency, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the input price per unit cannot be negative. The value must be zero or higher.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputPricePerUnitIsNonNegative(result: ValidationResult) {
+    	if (this.InputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("InputPricePerUnit", "The input price per unit cannot be negative.", this.InputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the output price per unit must be zero or greater. In other words, negative prices are not allowed for the output price per unit.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputPricePerUnitNonNegative(result: ValidationResult) {
+    	if (this.OutputPricePerUnit < 0) {
+    		result.Errors.push(new ValidationErrorInfo("OutputPricePerUnit", "The output price per unit cannot be negative.", this.OutputPricePerUnit, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if both a start date and an end date are provided, the end date must be later than the start date. If either date is missing, no validation is enforced.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEndedAtAfterStartedAt(result: ValidationResult) {
+    	if (this.EndedAt !== null && this.StartedAt !== null && this.EndedAt <= this.StartedAt) {
+    		result.Errors.push(new ValidationErrorInfo("EndedAt", "When both an end date and a start date are set, the end date must be later than the start date.", this.EndedAt, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -47591,6 +49318,143 @@ export class MJAIModelModalityEntity extends BaseEntity<MJAIModelModalityEntityT
 
 
 /**
+ * MJ: AI Model Personas - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIModelPersona
+ * * Base View: vwAIModelPersonas
+ * * @description Specifies per-model persona availability overrides where a model's supported personas differ from its vendor's default catalog.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Model Personas')
+export class MJAIModelPersonaEntity extends BaseEntity<MJAIModelPersonaEntityType> {
+    /**
+    * Loads the MJ: AI Model Personas record from the database
+    * @param ID: string - primary key value to load the MJ: AI Model Personas record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIModelPersonaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ModelID
+    * * Display Name: Model ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    */
+    get ModelID(): string {
+        return this.Get('ModelID');
+    }
+    set ModelID(value: string) {
+        this.Set('ModelID', value);
+    }
+
+    /**
+    * * Field Name: PersonaID
+    * * Display Name: Persona ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    */
+    get PersonaID(): string {
+        return this.Get('PersonaID');
+    }
+    set PersonaID(value: string) {
+        this.Set('PersonaID', value);
+    }
+
+    /**
+    * * Field Name: Sequence
+    * * Display Name: Sequence
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Deterministic ordering sequence for persona priority at the model level.
+    */
+    get Sequence(): number {
+        return this.Get('Sequence');
+    }
+    set Sequence(value: number) {
+        this.Set('Sequence', value);
+    }
+
+    /**
+    * * Field Name: IsSupported
+    * * Display Name: Is Supported
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this persona is supported by the specific model. Set to 0 to explicitly disable an inherited vendor persona for this model.
+    */
+    get IsSupported(): boolean {
+        return this.Get('IsSupported');
+    }
+    set IsSupported(value: boolean) {
+        this.Set('IsSupported', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Model
+    * * Display Name: Model
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Model(): string {
+        return this.Get('Model');
+    }
+
+    /**
+    * * Field Name: Persona
+    * * Display Name: Persona
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Persona(): string {
+        return this.Get('Persona');
+    }
+}
+
+
+/**
  * MJ: AI Model Price Types - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIModelPriceType
@@ -47618,6 +49482,33 @@ export class MJAIModelPriceTypeEntity extends BaseEntity<MJAIModelPriceTypeEntit
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Price Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Name: This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameNotEmptyOrWhitespace(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Name field is not empty or just spaces. The Name must contain at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameNotEmptyOrWhitespace(result: ValidationResult) {
+    	if (this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "Name must not be empty or only spaces.", this.Name, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -47709,6 +49600,66 @@ export class MJAIModelPriceUnitTypeEntity extends BaseEntity<MJAIModelPriceUnitT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Price Unit Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * DriverClass: This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
+    * * Name: This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
+    * * UnitsPerBillingUnit: Units per billing unit must be greater than zero to ensure valid billing calculations.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDriverClassNotBlank(result);
+        this.ValidateNameHasNonWhitespaceCharacters(result);
+        this.ValidateUnitsPerBillingUnitGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the DriverClass field contains at least one non-whitespace character and is not left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDriverClassNotBlank(result: ValidationResult) {
+    	if (this.DriverClass != null && this.DriverClass.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("DriverClass", "DriverClass cannot be blank or consist only of whitespace.", this.DriverClass, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the Name field is not empty or made up only of spaces. It must contain at least one non-space character.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameHasNonWhitespaceCharacters(result: ValidationResult) {
+    	if (this.Name != null && this.Name.trim().length === 0) {
+    		result.Errors.push(new ValidationErrorInfo("Name", "Name cannot be empty or consist only of spaces.", this.Name, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * Units per billing unit must be greater than zero to ensure valid billing calculations.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUnitsPerBillingUnitGreaterThanZero(result: ValidationResult) {
+    	if (this.UnitsPerBillingUnit != null && this.UnitsPerBillingUnit <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UnitsPerBillingUnit",
+    			"Units per billing unit must be greater than zero.",
+    			this.UnitsPerBillingUnit,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -47881,6 +49832,26 @@ export interface MJAIModelTypeEntity_IAIModelConfiguration {
             Threshold?: number | null;
             /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
             SilenceDurationMs?: number | null;
+        } | null;
+
+        /**
+         * Reasoning plane settings — dual delegation configuration.
+         * Absent defaults to 'local'.
+         */
+        Reasoning?: {
+            /**
+             * Which plane handles reasoning:
+             * - 'local' — application/agent loop (default).
+             * - 'remote' — delegated to remote model or hosted agent.
+             */
+            Plane?: 'local' | 'remote' | null;
+            /** Remote reasoning target configuration. */
+            Remote?: {
+                Kind?: 'model' | 'hostedAgent' | null;
+                Ref?: string | null;
+                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+                MaxOutputTokens?: number | null;
+            } | null;
         } | null;
     } | null;
 
@@ -48149,6 +50120,26 @@ export interface MJAIModelVendorEntity_IAIModelConfiguration {
             /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
             SilenceDurationMs?: number | null;
         } | null;
+
+        /**
+         * Reasoning plane settings — dual delegation configuration.
+         * Absent defaults to 'local'.
+         */
+        Reasoning?: {
+            /**
+             * Which plane handles reasoning:
+             * - 'local' — application/agent loop (default).
+             * - 'remote' — delegated to remote model or hosted agent.
+             */
+            Plane?: 'local' | 'remote' | null;
+            /** Remote reasoning target configuration. */
+            Remote?: {
+                Kind?: 'model' | 'hostedAgent' | null;
+                Ref?: string | null;
+                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+                MaxOutputTokens?: number | null;
+            } | null;
+        } | null;
     } | null;
 
     /** Vision knobs. Reserved. */
@@ -48186,6 +50177,61 @@ export class MJAIModelVendorEntity extends BaseEntity<MJAIModelVendorEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Model Vendors entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MaxInputTokens: This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
+    * * MaxOutputTokens: This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
+    * * Priority: This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMaxInputTokensIsNonNegative(result);
+        this.ValidateMaxOutputTokensNonNegative(result);
+        this.ValidatePriorityIsNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the value for MaxInputTokens, if provided, must be zero or greater (i.e., cannot be a negative number).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxInputTokensIsNonNegative(result: ValidationResult) {
+    	if (this.MaxInputTokens != null && this.MaxInputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxInputTokens", "MaxInputTokens, if specified, must be zero or a positive number.", this.MaxInputTokens, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a maximum output tokens value is provided, it must be greater than or equal to zero. If no value is provided, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMaxOutputTokensNonNegative(result: ValidationResult) {
+    	if (this.MaxOutputTokens !== null && this.MaxOutputTokens < 0) {
+    		result.Errors.push(new ValidationErrorInfo("MaxOutputTokens", "If specified, the maximum output tokens must be greater than or equal to zero.", this.MaxOutputTokens, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the Priority value must not be less than zero. In other words, Priority cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityIsNonNegative(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must not be negative.", this.Priority, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -48553,6 +50599,26 @@ export interface MJAIModelEntity_IAIModelConfiguration {
             /** Server-VAD trailing-silence duration in ms; ignored without a mapping. */
             SilenceDurationMs?: number | null;
         } | null;
+
+        /**
+         * Reasoning plane settings — dual delegation configuration.
+         * Absent defaults to 'local'.
+         */
+        Reasoning?: {
+            /**
+             * Which plane handles reasoning:
+             * - 'local' — application/agent loop (default).
+             * - 'remote' — delegated to remote model or hosted agent.
+             */
+            Plane?: 'local' | 'remote' | null;
+            /** Remote reasoning target configuration. */
+            Remote?: {
+                Kind?: 'model' | 'hostedAgent' | null;
+                Ref?: string | null;
+                Effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | null;
+                MaxOutputTokens?: number | null;
+            } | null;
+        } | null;
     } | null;
 
     /** Vision knobs. Reserved. */
@@ -48590,6 +50656,61 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CostRank: This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
+    * * PowerRank: This rule ensures that if a value is provided for PowerRank, it must not be negative.
+    * * SpeedRank: This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCostRankNonNegative(result);
+        this.ValidatePowerRankIsNonNegative(result);
+        this.ValidateSpeedRankNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a CostRank value is provided, it must be zero or a positive number. CostRank cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCostRankNonNegative(result: ValidationResult) {
+    	if (this.CostRank != null && this.CostRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("CostRank", "CostRank must be greater than or equal to zero.", this.CostRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a value is provided for PowerRank, it must not be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePowerRankIsNonNegative(result: ValidationResult) {
+    	if (this.PowerRank != null && this.PowerRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("PowerRank", "PowerRank must be zero or positive.", this.PowerRank, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the SpeedRank, if specified, must be zero or a positive number. Negative values are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSpeedRankNonNegative(result: ValidationResult) {
+    	if (this.SpeedRank != null && this.SpeedRank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("SpeedRank", "SpeedRank must be zero or a positive number.", this.SpeedRank, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -48916,6 +51037,534 @@ export class MJAIModelEntity extends BaseEntity<MJAIModelEntityType> {
 
 
 /**
+ * Provider-specific configuration JSON for a persona-to-vendor binding.
+ *
+ * Stored as JSON in `MJ: AI Persona Vendors.VendorSettings`. CodeGen emits a typed
+ * `VendorSettingsObject` accessor on `MJAIPersonaVendorEntity` returning `MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null`.
+ *
+ * Contains vendor-native voice/avatar tuning parameters (e.g., ElevenLabs voice settings)
+ * moved out of generic base classes into their concrete vendor binding.
+ */
+
+export interface MJAIPersonaVendorEntity_IAIPersonaVendorSettings {
+    /** Vendor-native tuning, keyed by the vendor on AIPersonaVendor.VendorID.
+     *  Typed members are those common enough to be worth compile-time checking. */
+    stability?: number;
+    similarityBoost?: number;
+    style?: number;
+    useSpeakerBoost?: boolean;
+    speed?: number;
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: AI Persona Vendors - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPersonaVendor
+ * * Base View: vwAIPersonaVendors
+ * * @description Concrete vendor and modality binding for a persona, mapping the abstract persona to a provider-specific wire asset identifier (voice ID or avatar ID).
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Persona Vendors')
+export class MJAIPersonaVendorEntity extends BaseEntity<MJAIPersonaVendorEntityType> {
+    /**
+    * Loads the MJ: AI Persona Vendors record from the database
+    * @param ID: string - primary key value to load the MJ: AI Persona Vendors record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIPersonaVendorEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: PersonaID
+    * * Display Name: Persona
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Personas (vwAIPersonas.ID)
+    */
+    get PersonaID(): string {
+        return this.Get('PersonaID');
+    }
+    set PersonaID(value: string) {
+        this.Set('PersonaID', value);
+    }
+
+    /**
+    * * Field Name: VendorID
+    * * Display Name: Vendor
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Vendors (vwAIVendors.ID)
+    */
+    get VendorID(): string {
+        return this.Get('VendorID');
+    }
+    set VendorID(value: string) {
+        this.Set('VendorID', value);
+    }
+
+    /**
+    * * Field Name: ModalityID
+    * * Display Name: Modality
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Modalities (vwAIModalities.ID)
+    */
+    get ModalityID(): string {
+        return this.Get('ModalityID');
+    }
+    set ModalityID(value: string) {
+        this.Set('ModalityID', value);
+    }
+
+    /**
+    * * Field Name: APIName
+    * * Display Name: API Asset Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Vendor-specific asset name or identifier passed over the wire (e.g., alloy, sage, an ElevenLabs voice_id, or a HeyGen avatar_id).
+    */
+    get APIName(): string {
+        return this.Get('APIName');
+    }
+    set APIName(value: string) {
+        this.Set('APIName', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Active
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Active
+    *   * Deprecated
+    *   * Inactive
+    *   * Preview
+    * * Description: Current operational status of this vendor persona binding.
+    */
+    get Status(): 'Active' | 'Deprecated' | 'Inactive' | 'Preview' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Active' | 'Deprecated' | 'Inactive' | 'Preview') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Selection priority when multiple vendor bindings qualify for a given persona and modality. Higher numbers indicate higher priority.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: VendorSettings
+    * * Display Name: Vendor Settings
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPersonaVendorEntity_IAIPersonaVendorSettings
+    * * Description: Provider-specific configuration JSON (e.g., ElevenLabs stability, similarityBoost, style, useSpeakerBoost).
+    */
+    get VendorSettings(): string | null {
+        return this.Get('VendorSettings');
+    }
+    set VendorSettings(value: string | null) {
+        this.Set('VendorSettings', value);
+    }
+
+    private _VendorSettingsObject_cached: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null | undefined = undefined;
+    private _VendorSettingsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for VendorSettings — returns parsed JSON as MJAIPersonaVendorEntity_IAIPersonaVendorSettings.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get VendorSettingsObject(): MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null {
+        const raw = this.VendorSettings;
+        if (raw !== this._VendorSettingsObject_lastRaw) {
+            this._VendorSettingsObject_cached = raw ? JSON.parse(raw) : null;
+            this._VendorSettingsObject_lastRaw = raw;
+        }
+        return this._VendorSettingsObject_cached!;
+    }
+    set VendorSettingsObject(value: MJAIPersonaVendorEntity_IAIPersonaVendorSettings | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.VendorSettings = raw;
+        this._VendorSettingsObject_cached = value;
+        this._VendorSettingsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Persona
+    * * Display Name: Persona Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get Persona(): string {
+        return this.Get('Persona');
+    }
+
+    /**
+    * * Field Name: Vendor
+    * * Display Name: Vendor Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Vendor(): string {
+        return this.Get('Vendor');
+    }
+
+    /**
+    * * Field Name: Modality
+    * * Display Name: Modality Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Modality(): string {
+        return this.Get('Modality');
+    }
+}
+
+
+/**
+ * Nuanced style and presentation descriptors for an AI Persona.
+ *
+ * Stored as JSON in `MJ: AI Personas.StyleDescriptors`. CodeGen emits a typed
+ * `StyleDescriptorsObject` accessor on `MJAIPersonaEntity` returning `MJAIPersonaEntity_IAIPersonaStyleDescriptors | null`.
+ *
+ * Reserved extension point for fine-grained style descriptors (e.g. cadence, emphasis, prosody quirks)
+ * beyond the primary Tone and SpeakingStyle scalar columns.
+ */
+export interface MJAIPersonaEntity_IAIPersonaStyleDescriptors {
+    /** Prose for GPT-Live's `Interruption policy:` prompt block (gpt-live-1.md §1). */
+    interruptionPolicy?: string;
+    /** Prose for GPT-Live's `Backchannel policy:` prompt block. */
+    backchannelPolicy?: string;
+    /** Open extension point for additional fine-grained style descriptors. */
+    [key: string]: unknown;
+}
+
+/**
+ * MJ: AI Personas - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: AIPersona
+ * * Base View: vwAIPersonas
+ * * @description Abstract, provider-agnostic presentational identity (voice and/or visual appearance) that AI agents can assume when interacting with users.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: AI Personas')
+export class MJAIPersonaEntity extends BaseEntity<MJAIPersonaEntityType> {
+    /**
+    * Loads the MJ: AI Personas record from the database
+    * @param ID: string - primary key value to load the MJ: AI Personas record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJAIPersonaEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: Name
+    * * Display Name: Persona Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.
+    */
+    get Name(): string {
+        return this.Get('Name');
+    }
+    set Name(value: string) {
+        this.Set('Name', value);
+    }
+
+    /**
+    * * Field Name: Description
+    * * Display Name: Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description of the persona, its characteristics, and intended personality.
+    */
+    get Description(): string | null {
+        return this.Get('Description');
+    }
+    set Description(value: string | null) {
+        this.Set('Description', value);
+    }
+
+    /**
+    * * Field Name: PerceivedGender
+    * * Display Name: Perceived Gender
+    * * SQL Data Type: nvarchar(50)
+    * * Description: The perceived gender presentation of this persona (e.g., Male, Female, Neutral, Non-Binary).
+    */
+    get PerceivedGender(): string | null {
+        return this.Get('PerceivedGender');
+    }
+    set PerceivedGender(value: string | null) {
+        this.Set('PerceivedGender', value);
+    }
+
+    /**
+    * * Field Name: Locale
+    * * Display Name: Locale
+    * * SQL Data Type: nvarchar(20)
+    * * Description: BCP 47 language and locale tag primarily associated with this persona (e.g., en-US, es-ES).
+    */
+    get Locale(): string | null {
+        return this.Get('Locale');
+    }
+    set Locale(value: string | null) {
+        this.Set('Locale', value);
+    }
+
+    /**
+    * * Field Name: PerceivedAgeRangeMin
+    * * Display Name: Perceived Age Range Min
+    * * SQL Data Type: int
+    * * Description: Approximate minimum perceived age for this persona, enabling numerical filtering.
+    */
+    get PerceivedAgeRangeMin(): number | null {
+        return this.Get('PerceivedAgeRangeMin');
+    }
+    set PerceivedAgeRangeMin(value: number | null) {
+        this.Set('PerceivedAgeRangeMin', value);
+    }
+
+    /**
+    * * Field Name: PerceivedAgeRangeMax
+    * * Display Name: Perceived Age Range Max
+    * * SQL Data Type: int
+    * * Description: Approximate maximum perceived age for this persona, enabling numerical filtering.
+    */
+    get PerceivedAgeRangeMax(): number | null {
+        return this.Get('PerceivedAgeRangeMax');
+    }
+    set PerceivedAgeRangeMax(value: number | null) {
+        this.Set('PerceivedAgeRangeMax', value);
+    }
+
+    /**
+    * * Field Name: Tone
+    * * Display Name: Tone
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Core tonal quality for this persona (e.g., Warm, Authoritative, Enthusiastic, Calm). Injected into prompt context for conversational delivery.
+    */
+    get Tone(): string | null {
+        return this.Get('Tone');
+    }
+    set Tone(value: string | null) {
+        this.Set('Tone', value);
+    }
+
+    /**
+    * * Field Name: SpeakingStyle
+    * * Display Name: Speaking Style
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Stylistic manner of speaking (e.g., Casual and conversational, Direct and concise, Academic).
+    */
+    get SpeakingStyle(): string | null {
+        return this.Get('SpeakingStyle');
+    }
+    set SpeakingStyle(value: string | null) {
+        this.Set('SpeakingStyle', value);
+    }
+
+    /**
+    * * Field Name: StyleDescriptors
+    * * Display Name: Style Descriptors
+    * * SQL Data Type: nvarchar(MAX)
+    * * JSON Type: MJAIPersonaEntity_IAIPersonaStyleDescriptors
+    * * Description: Additional descriptive keywords or JSON metadata capturing nuanced personality and presentation traits.
+    */
+    get StyleDescriptors(): string | null {
+        return this.Get('StyleDescriptors');
+    }
+    set StyleDescriptors(value: string | null) {
+        this.Set('StyleDescriptors', value);
+    }
+
+    private _StyleDescriptorsObject_cached: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null | undefined = undefined;
+    private _StyleDescriptorsObject_lastRaw: string | null = null;
+    /**
+    * Typed accessor for StyleDescriptors — returns parsed JSON as MJAIPersonaEntity_IAIPersonaStyleDescriptors.
+    * Uses lazy parsing with cache invalidation when the underlying raw value changes.
+    */
+    get StyleDescriptorsObject(): MJAIPersonaEntity_IAIPersonaStyleDescriptors | null {
+        const raw = this.StyleDescriptors;
+        if (raw !== this._StyleDescriptorsObject_lastRaw) {
+            this._StyleDescriptorsObject_cached = raw ? JSON.parse(raw) : null;
+            this._StyleDescriptorsObject_lastRaw = raw;
+        }
+        return this._StyleDescriptorsObject_cached!;
+    }
+    set StyleDescriptorsObject(value: MJAIPersonaEntity_IAIPersonaStyleDescriptors | null) {
+        const raw = value ? JSON.stringify(value) : null;
+        this.StyleDescriptors = raw;
+        this._StyleDescriptorsObject_cached = value;
+        this._StyleDescriptorsObject_lastRaw = raw;
+    }
+
+    /**
+    * * Field Name: PreviewAudioURL
+    * * Display Name: Preview Audio URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to a sample audio file demonstrating this persona's voice.
+    */
+    get PreviewAudioURL(): string | null {
+        return this.Get('PreviewAudioURL');
+    }
+    set PreviewAudioURL(value: string | null) {
+        this.Set('PreviewAudioURL', value);
+    }
+
+    /**
+    * * Field Name: PreviewImageURL
+    * * Display Name: Preview Image URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to a preview avatar image for this persona.
+    */
+    get PreviewImageURL(): string | null {
+        return this.Get('PreviewImageURL');
+    }
+    set PreviewImageURL(value: string | null) {
+        this.Set('PreviewImageURL', value);
+    }
+
+    /**
+    * * Field Name: PreviewVideoURL
+    * * Display Name: Preview Video URL
+    * * SQL Data Type: nvarchar(1000)
+    * * Description: URL to a preview video demonstrating this persona's visual animation or avatar.
+    */
+    get PreviewVideoURL(): string | null {
+        return this.Get('PreviewVideoURL');
+    }
+    set PreviewVideoURL(value: string | null) {
+        this.Set('PreviewVideoURL', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: BuiltIn
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BuiltIn
+    *   * Cloned
+    *   * Custom
+    * * Description: Origin of this persona: BuiltIn (provided by system/catalog), Custom (user-defined), or Cloned (derived/voice-cloned).
+    */
+    get Source(): 'BuiltIn' | 'Cloned' | 'Custom' {
+        return this.Get('Source');
+    }
+    set Source(value: 'BuiltIn' | 'Cloned' | 'Custom') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: IsActive
+    * * Display Name: Is Active
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this persona is currently active and available for selection.
+    */
+    get IsActive(): boolean {
+        return this.Get('IsActive');
+    }
+    set IsActive(value: boolean) {
+        this.Set('IsActive', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+}
+
+
+/**
  * MJ: AI Prompt Categories - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: AIPromptCategory
@@ -49100,6 +51749,101 @@ export class MJAIPromptModelEntity extends BaseEntity<MJAIPromptModelEntityType>
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Prompt Models entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
+    * * ExecutionGroup: This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
+    * * ParallelCount: This rule ensures that the ParallelCount value must always be at least 1.
+    * * Priority: This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
+    * * Table-Level: This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEffortLevelRange(result);
+        this.ValidateExecutionGroupNonNegative(result);
+        this.ValidateParallelCountAtLeastOne(result);
+        this.ValidatePriorityIsNonNegative(result);
+        this.ValidateParallelizationModeAndConfigParam(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Effort level must be between 1 and 100 whenever it is provided. This ensures that effort values stay within the allowed range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelRange(result: ValidationResult) {
+    	// Only validate when a value is provided
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"EffortLevel",
+    			"Effort level must be between 1 and 100.",
+    			this.EffortLevel,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ExecutionGroup value must be zero or a positive number. Negative values are not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateExecutionGroupNonNegative(result: ValidationResult) {
+    	if (this.ExecutionGroup < 0) {
+    		result.Errors.push(new ValidationErrorInfo("ExecutionGroup", "ExecutionGroup must be zero or a positive integer.", this.ExecutionGroup, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the ParallelCount value must always be at least 1.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountAtLeastOne(result: ValidationResult) {
+    	if (this.ParallelCount < 1) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "ParallelCount must be greater than or equal to 1.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that the priority value must be zero or a positive number; in other words, priority cannot be negative.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityIsNonNegative(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Priority", "Priority must be zero or a positive number.", this.Priority, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that, depending on the parallelization mode, the configuration parameter for parallelization is either required or must not be set. Specifically: If the parallelization mode is 'None' or 'StaticCount', the configuration parameter must be empty. If the parallelization mode is 'ConfigParam', the configuration parameter is required.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelizationModeAndConfigParam(result: ValidationResult) {
+    	if (this.ParallelizationMode === "ConfigParam") {
+    		if (this.ParallelConfigParam == null) {
+    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    		}
+    	} else if (this.ParallelizationMode === "None" || this.ParallelizationMode === "StaticCount") {
+    		if (this.ParallelConfigParam != null) {
+    			result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be null when ParallelizationMode is 'None' or 'StaticCount'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    		}
+    	}
     }
 
     /**
@@ -49676,6 +52420,103 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: AI Prompt Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * EffortLevel: This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * * InputUnitsUsed: Input units used must be greater than or equal to zero to ensure usage is not recorded as a negative value.
+    * * OutputUnitsUsed: The number of output units used cannot be negative, ensuring accurate tracking of resource usage.
+    * * Table-Level: This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
+    * * Table-Level: This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateInputUnitsUsedGreaterThanOrEqualToZero(result);
+        this.ValidateOutputUnitsUsedGreaterThanOrEqualToZero(result);
+        this.ValidateCompletedAtNotBeforeRunAt(result);
+        this.ValidateTokensUsedEqualsPromptPlusCompletion(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if an effort level is provided, it must be between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort level must be between 1 and 100 if provided.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * Input units used must be greater than or equal to zero to ensure usage is not recorded as a negative value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.InputUnitsUsed != null && this.InputUnitsUsed < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InputUnitsUsed",
+    			"Input units used must be greater than or equal to zero.",
+    			this.InputUnitsUsed,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The number of output units used cannot be negative, ensuring accurate tracking of resource usage.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputUnitsUsedGreaterThanOrEqualToZero(result: ValidationResult) {
+    	if (this.OutputUnitsUsed != null && this.OutputUnitsUsed < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"OutputUnitsUsed",
+    			"Output units used must be greater than or equal to 0.",
+    			this.OutputUnitsUsed,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the 'CompletedAt' date is provided, it must be the same as or later than the 'RunAt' date. If 'CompletedAt' is not specified, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCompletedAtNotBeforeRunAt(result: ValidationResult) {
+    	if (this.CompletedAt !== null && this.CompletedAt < this.RunAt) {
+    		result.Errors.push(new ValidationErrorInfo("CompletedAt", "If provided, CompletedAt must be the same as or later than RunAt.", this.CompletedAt, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if either the number of prompt tokens or completion tokens is missing, or the total tokens used is missing, the check passes automatically. However, if all three are provided, then the total tokens used must exactly equal the sum of prompt tokens and completion tokens.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTokensUsedEqualsPromptPlusCompletion(result: ValidationResult) {
+    	// Allow missing values for any of the three fields
+    	if (this.TokensUsed != null && this.TokensPrompt != null && this.TokensCompletion != null) {
+    		if (this.TokensUsed !== this.TokensPrompt + this.TokensCompletion) {
+    			result.Errors.push(new ValidationErrorInfo("TokensUsed", "The total tokens used must equal the sum of the prompt tokens and completion tokens.", this.TokensUsed, ValidationErrorType.Failure));
+    		}
+    	}
+    	// Otherwise, skip the check (it passes)
     }
 
     /**
@@ -51231,6 +54072,131 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: AI Prompts entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * CacheSimilarityThreshold: This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
+    * * CacheTTLSeconds: This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
+    * * EffortLevel: This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
+    * * Table-Level: This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
+    * * Table-Level: This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
+    * * Table-Level: This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
+    * * Table-Level: This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
+    * * Table-Level: This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateCacheSimilarityThresholdBetweenZeroAndOne(result);
+        this.ValidateCacheTTLSecondsIsPositive(result);
+        this.ValidateEffortLevelIsBetween1And100(result);
+        this.ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result);
+        this.ValidateOutputExampleRequiredWhenOutputTypeIsObject(result);
+        this.ValidateParallelConfigParamRequiredForConfigParamMode(result);
+        this.ValidateParallelCountRequiredForStaticCount(result);
+        this.ValidateResultSelectorPromptIDNotEqualID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the "CacheSimilarityThreshold" value, if provided, must be between 0 and 1 (including both 0 and 1). If it is not set, there is no restriction.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.CacheSimilarityThreshold != null && (this.CacheSimilarityThreshold < 0 || this.CacheSimilarityThreshold > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "CacheSimilarityThreshold must be between 0 and 1, inclusive.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if a cache time-to-live (CacheTTLSeconds) value is provided, it must be greater than zero. If it is not set, that's allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheTTLSecondsIsPositive(result: ValidationResult) {
+    	if (this.CacheTTLSeconds != null && this.CacheTTLSeconds <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("CacheTTLSeconds", "Cache time-to-live (CacheTTLSeconds) must be greater than 0 if specified.", this.CacheTTLSeconds, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if an Effort Level is provided, it must be a number between 1 and 100, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEffortLevelIsBetween1And100(result: ValidationResult) {
+    	if (this.EffortLevel != null && (this.EffortLevel < 1 || this.EffortLevel > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("EffortLevel", "Effort Level must be between 1 and 100.", this.EffortLevel, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the cache match type is set to 'Vector', a cache similarity threshold must be provided. For other cache match types, the cache similarity threshold can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateCacheSimilarityThresholdRequiredForVectorMatchType(result: ValidationResult) {
+    	if (this.CacheMatchType === "Vector" && this.CacheSimilarityThreshold == null) {
+    		result.Errors.push(new ValidationErrorInfo("CacheSimilarityThreshold", "A cache similarity threshold must be set when CacheMatchType is 'Vector'.", this.CacheSimilarityThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the OutputType is set to "object", then an OutputExample must be provided. For all other OutputType values, OutputExample can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateOutputExampleRequiredWhenOutputTypeIsObject(result: ValidationResult) {
+    	if (this.OutputType === "object" && this.OutputExample == null) {
+    		result.Errors.push(new ValidationErrorInfo("OutputExample", "An output example must be provided when OutputType is 'object'.", this.OutputExample, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the Parallelization Mode is set to 'ConfigParam', then a configuration parameter must be provided. For all other modes, the configuration parameter can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelConfigParamRequiredForConfigParamMode(result: ValidationResult) {
+    	if (this.ParallelizationMode === "ConfigParam" && this.ParallelConfigParam == null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelConfigParam", "ParallelConfigParam must be provided when ParallelizationMode is set to 'ConfigParam'.", this.ParallelConfigParam, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that if the parallelization mode is set to 'StaticCount', then a value for parallel count must be provided. For other parallelization modes, parallel count can be left blank.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateParallelCountRequiredForStaticCount(result: ValidationResult) {
+    	if (this.ParallelizationMode === "StaticCount" && this.ParallelCount == null) {
+    		result.Errors.push(new ValidationErrorInfo("ParallelCount", "A parallel count must be provided when parallelization mode is set to 'StaticCount'.", this.ParallelCount, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule makes sure that the 'ResultSelectorPromptID' field cannot have the same value as the record's own 'ID'. In other words, the record cannot select itself as its own result selector prompt.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateResultSelectorPromptIDNotEqualID(result: ValidationResult) {
+    	if (this.ResultSelectorPromptID != null && this.ResultSelectorPromptID === this.ID) {
+    		result.Errors.push(new ValidationErrorInfo("ResultSelectorPromptID", "ResultSelectorPromptID cannot be the same as the ID of this record.", this.ResultSelectorPromptID, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -52768,6 +55734,20 @@ export class MJAISkillActionEntity extends BaseEntity<MJAISkillActionEntityType>
     }
 
     /**
+    * * Field Name: ExposeToModel
+    * * Display Name: Expose to Model
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether activating the skill puts this action into the agent's run. 1 (default): the action is described to the model and callable during the run, today's behaviour. 0: the action stays bundled with the skill (SKILL.md export, tooling) but is left out of the run entirely: not described to the model and not executable by the agent; only application code invokes it, through the Actions API. Use 0 for actions a person triggers through the UI on a later turn, such as a menu button in the skill's reply.
+    */
+    get ExposeToModel(): boolean {
+        return this.Get('ExposeToModel');
+    }
+    set ExposeToModel(value: boolean) {
+        this.Set('ExposeToModel', value);
+    }
+
+    /**
     * * Field Name: Skill
     * * Display Name: Skill
     * * SQL Data Type: nvarchar(255)
@@ -53728,6 +56708,33 @@ export class MJAIVendorTypeEntity extends BaseEntity<MJAIVendorTypeEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: AI Vendor Types entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rank: This rule ensures that the Rank value cannot be negative. It must be zero or higher.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRankIsNonNegative(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Rank value cannot be negative. It must be zero or higher.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRankIsNonNegative(result: ValidationResult) {
+    	if (this.Rank < 0) {
+    		result.Errors.push(new ValidationErrorInfo("Rank", "Rank must be zero or greater.", this.Rank, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -63302,6 +66309,33 @@ export class MJCommunicationProviderEntity extends BaseEntity<MJCommunicationPro
     }
 
     /**
+    * Validate() method override for MJ: Communication Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that scheduled sending is only supported if sending is also supported. In other words, you cannot support scheduled sending without also supporting sending.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSupportsScheduledSendingOnlyIfSendingIsSupported(result: ValidationResult) {
+    	if (this.SupportsScheduledSending && !this.SupportsSending) {
+    		result.Errors.push(new ValidationErrorInfo("SupportsScheduledSending", "Scheduled sending cannot be supported if sending is not supported.", this.SupportsScheduledSending, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -70726,6 +73760,33 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     }
 
     /**
+    * Validate() method override for MJ: Conversation Artifact Versions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Version: This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateVersionGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the Version field must always be greater than 0. Any value for Version must be a positive integer.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVersionGreaterThanZero(result: ValidationResult) {
+    	if (this.Version <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("Version", "Version must be greater than zero.", this.Version, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -71312,6 +74373,39 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     }
 
     /**
+    * Validate() method override for MJ: Conversation Detail Attachments entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateInlineDataOrFileIDPresence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must include content either directly (InlineData) or by reference (FileID); they cannot both be empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateInlineDataOrFileIDPresence(result: ValidationResult) {
+    	// Ensure that at least one source of content is supplied
+    	if (this.InlineData == null && this.FileID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"InlineDataOrFileID",
+    			"Either InlineData or FileID must be provided; both cannot be empty.",
+    			null,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -71599,6 +74693,33 @@ export class MJConversationDetailRatingEntity extends BaseEntity<MJConversationD
     }
 
     /**
+    * Validate() method override for MJ: Conversation Detail Ratings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rating: This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRatingWithinAllowedRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the rating must be a whole number between 1 and 10, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRatingWithinAllowedRange(result: ValidationResult) {
+    	if (this.Rating < 1 || this.Rating > 10) {
+    		result.Errors.push(new ValidationErrorInfo("Rating", "Rating must be between 1 and 10.", this.Rating, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -71768,6 +74889,33 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: Conversation Details entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * UserRating: This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserRatingBetween1And10(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a user rating is provided, it must be a whole number between 1 and 10, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserRatingBetween1And10(result: ValidationResult) {
+    	if (this.UserRating != null && (this.UserRating < 1 || this.UserRating > 10)) {
+    		result.Errors.push(new ValidationErrorInfo("UserRating", "User rating must be between 1 and 10.", this.UserRating, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -72527,6 +75675,76 @@ export class MJConversationWidgetInstanceEntity extends BaseEntity<MJConversatio
     }
 
     /**
+    * Validate() method override for MJ: Conversation Widget Instances entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RateLimitPerMinute: The rate limit per minute must be a positive number greater than zero to ensure the application can process requests.
+    * * SessionTTLMinutes: The session time-to-live (TTL) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
+    * * VisitorMemoryRetentionDays: The visitor memory retention period, if specified, must be a positive number of days greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRateLimitPerMinuteGreaterThanZero(result);
+        this.ValidateSessionTTLMinutesRange(result);
+        this.ValidateVisitorMemoryRetentionDaysGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The rate limit per minute must be a positive number greater than zero to ensure the application can process requests.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRateLimitPerMinuteGreaterThanZero(result: ValidationResult) {
+    	if (this.RateLimitPerMinute !== undefined && this.RateLimitPerMinute !== null && this.RateLimitPerMinute <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RateLimitPerMinute",
+    			"The rate limit per minute must be greater than 0.",
+    			this.RateLimitPerMinute,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The session time-to-live (TTL) must be greater than 0 minutes and cannot exceed 1440 minutes (24 hours).
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSessionTTLMinutesRange(result: ValidationResult) {
+    	if (this.SessionTTLMinutes != null && (this.SessionTTLMinutes <= 0 || this.SessionTTLMinutes > 1440)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SessionTTLMinutes",
+    			"Session TTL must be greater than 0 and less than or equal to 1440 minutes (24 hours).",
+    			this.SessionTTLMinutes,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The visitor memory retention period, if specified, must be a positive number of days greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateVisitorMemoryRetentionDaysGreaterThanZero(result: ValidationResult) {
+    	if (this.VisitorMemoryRetentionDays != null && this.VisitorMemoryRetentionDays <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"VisitorMemoryRetentionDays",
+    			"Visitor memory retention days must be greater than 0.",
+    			this.VisitorMemoryRetentionDays,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -72882,6 +76100,69 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
             // For network providers, cascading deletes are handled server-side
             return super.Delete(options);
         }
+    }
+
+    /**
+    * Validate() method override for MJ: Conversations entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
+    * * Table-Level: Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateApplicationScopeAndIDConsistency(result);
+        this.ValidateLinkedEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that records scoped as 'Global' do not have an associated Application ID, while records scoped to 'Application' or 'Both' must have a valid Application ID assigned.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateApplicationScopeAndIDConsistency(result: ValidationResult) {
+    	// If the scope is Global, ApplicationID must be null
+    	if (this.ApplicationScope === 'Global' && this.ApplicationID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"Application ID must be empty when the application scope is set to Global.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    
+    	// If the scope is Application or Both, ApplicationID must be provided
+    	if ((this.ApplicationScope === 'Application' || this.ApplicationScope === 'Both') && this.ApplicationID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ApplicationID",
+    			"An Application ID is required when the application scope is set to Application or Both.",
+    			this.ApplicationID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Both the linked entity and the linked record must be provided together, or both must be left empty, to ensure that a reference to an external record is complete.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateLinkedEntityAndRecordCoexistence(result: ValidationResult) {
+    	// The constraint ensures that LinkedEntityID and LinkedRecordID are either both null or both populated
+    	if ((this.LinkedEntityID == null && this.LinkedRecordID != null) || (this.LinkedEntityID != null && this.LinkedRecordID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"LinkedEntityID",
+    			"Both Linked Entity and Linked Record must be provided together, or both must be empty.",
+    			this.LinkedEntityID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -74949,6 +78230,33 @@ export class MJDashboardUserPreferenceEntity extends BaseEntity<MJDashboardUserP
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Dashboard User Preferences entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeAndApplicationIDConsistency(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that when the scope is set to 'Global', there should not be an application assigned, and when the scope is set to 'App', an application must be assigned.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAndApplicationIDConsistency(result: ValidationResult) {
+    	if ((this.Scope === "Global" && this.ApplicationID !== null) || (this.Scope === "App" && this.ApplicationID === null)) {
+    		result.Errors.push(new ValidationErrorInfo("Scope", "When the scope is 'Global', ApplicationID must be null. When scope is 'App', ApplicationID must not be null.", this.Scope + ":" + this.ApplicationID, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -78374,6 +81682,118 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
+    * * Table-Level: If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
+    * * Table-Level: Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * * Table-Level: If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
+    * * Table-Level: If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateAllowRecordMergeForSoftDeleteAPI(result);
+        this.ValidateDeleteTypeForDirectSQLDelete(result);
+        this.ValidateDirectSQLAndTrackingConstraints(result);
+        this.ValidateGeneratedBaseViewNameAndBaseViewGenerated(result);
+        this.ValidateGeneratedBaseViewNameDifferentFromBaseView(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if deleting via the API is allowed and the delete type is set to 'Soft', then record merging must also be allowed. In other words, you cannot allow API deletes with a soft delete type without also allowing record merging.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAllowRecordMergeForSoftDeleteAPI(result: ValidationResult) {
+    	if (this.AllowDeleteAPI && this.DeleteType === "Soft" && !this.AllowRecordMerge) {
+    		result.Errors.push(new ValidationErrorInfo("AllowRecordMerge", "When API deletes are allowed and delete type is 'Soft', record merging must be allowed.", this.AllowRecordMerge, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * If direct SQL deletion is allowed, the delete type must be set to 'Hard' to ensure data integrity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDeleteTypeForDirectSQLDelete(result: ValidationResult) {
+    	if (this.AllowDirectSQLDelete && this.DeleteType !== "Hard") {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"DeleteType",
+    			"Delete Type must be 'Hard' if Allow Direct SQL Delete is enabled.",
+    			this.DeleteType,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * Direct SQL operations (Insert, Update, and Delete) must be disabled if Track Record Changes or Trust Server Cache Completely is enabled, ensuring that cache integrity and change tracking are not bypassed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDirectSQLAndTrackingConstraints(result: ValidationResult) {
+        if ((this.AllowDirectSQLInsert || this.AllowDirectSQLUpdate || this.AllowDirectSQLDelete) && (this.TrackRecordChanges || this.TrustServerCacheCompletely)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "AllowDirectSQLInsert",
+                "Direct SQL operations (Insert, Update, Delete) cannot be enabled when Track Record Changes or Trust Server Cache Completely is enabled.",
+                this.AllowDirectSQLInsert,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * If the base view is marked as generated, the generated base view name must be null. A generated base view name can only be set when the base view is not marked as generated.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGeneratedBaseViewNameAndBaseViewGenerated(result: ValidationResult) {
+        if (this.GeneratedBaseViewName != null && this.BaseViewGenerated) {
+            result.Errors.push(new ValidationErrorInfo(
+                "GeneratedBaseViewName",
+                "Generated Base View Name must be empty when Base View Generated is enabled.",
+                this.GeneratedBaseViewName,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * If a generated base view name is specified, a base view must also be defined, and the generated base view name cannot be the same as the base view name to prevent naming conflicts.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateGeneratedBaseViewNameDifferentFromBaseView(result: ValidationResult) {
+    	if (this.GeneratedBaseViewName != null && this.GeneratedBaseViewName.trim() !== "") {
+    		if (this.BaseView == null || this.BaseView.trim() === "") {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"GeneratedBaseViewName",
+    				"A Base View must be specified when a Generated Base View Name is provided.",
+    				this.GeneratedBaseViewName,
+    				ValidationErrorType.Failure
+    			));
+    		} else if (this.GeneratedBaseViewName === this.BaseView) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"GeneratedBaseViewName",
+    				"The Generated Base View Name cannot be the same as the Base View name.",
+    				this.GeneratedBaseViewName,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -79419,6 +82839,20 @@ export class MJEntityEntity extends BaseEntity<MJEntityEntityType> {
     }
 
     /**
+    * * Field Name: EnableFieldLevelSecurity
+    * * Display Name: Enable Field Level Security
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, field-level (column-level) security is enforced for this entity and every enforcement point consults EntityFieldPermission rows. When 0 (the default), field-level security is off entirely and any existing permission rows are retained but inactive. Enabling snapshots the entity's current entity-level permissions into per-field rows, so turning it on changes no behavior until an administrator tightens a field; disabling preserves the rows so re-enabling does not lose the configuration.
+    */
+    get EnableFieldLevelSecurity(): boolean {
+        return this.Get('EnableFieldLevelSecurity');
+    }
+    set EnableFieldLevelSecurity(value: boolean) {
+        this.Set('EnableFieldLevelSecurity', value);
+    }
+
+    /**
     * * Field Name: CodeName
     * * Display Name: Code Name
     * * SQL Data Type: nvarchar(MAX)
@@ -80311,6 +83745,38 @@ export class MJEntityActionEntity extends BaseEntity<MJEntityActionEntityType> {
     }
 
     /**
+    * Validate() method override for MJ: Entity Actions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeEntityAndRecordCoexistence(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Both Scope Entity and Scope Record must be provided together, or both must be left blank. You cannot specify one without the other.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeEntityAndRecordCoexistence(result: ValidationResult) {
+        if ((this.ScopeEntityID == null && this.ScopeRecordID != null) || (this.ScopeEntityID != null && this.ScopeRecordID == null)) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ScopeEntityID",
+                "Scope Entity and Scope Record must either both be specified or both be empty.",
+                this.ScopeEntityID,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
     * * Field Name: EntityID
     * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
@@ -81140,6 +84606,39 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: Entity Documents entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that both the Potential Match Threshold and the Absolute Match Threshold are numbers between 0 and 1, inclusive. Additionally, the Potential Match Threshold must not be higher than the Absolute Match Threshold.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePotentialAndAbsoluteMatchThresholdRangeAndRelationship(result: ValidationResult) {
+    	if (this.PotentialMatchThreshold < 0 || this.PotentialMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must be between 0 and 1.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.AbsoluteMatchThreshold < 0 || this.AbsoluteMatchThreshold > 1) {
+    		result.Errors.push(new ValidationErrorInfo("AbsoluteMatchThreshold", "Absolute Match Threshold must be between 0 and 1.", this.AbsoluteMatchThreshold, ValidationErrorType.Failure));
+    	}
+    	if (this.PotentialMatchThreshold > this.AbsoluteMatchThreshold) {
+    		result.Errors.push(new ValidationErrorInfo("PotentialMatchThreshold", "Potential Match Threshold must not exceed the Absolute Match Threshold.", this.PotentialMatchThreshold, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -81483,6 +84982,208 @@ export class MJEntityDocumentEntity extends BaseEntity<MJEntityDocumentEntityTyp
     */
     get ReasoningAgent(): string | null {
         return this.Get('ReasoningAgent');
+    }
+}
+
+
+/**
+ * MJ: Entity Field Permissions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: EntityFieldPermission
+ * * Base View: vwEntityFieldPermissions
+ * * @description Role-based field-level (column-level) security. One row per (entity field, role), carrying three independent trinary verbs — ReadAccess, UpdateAccess and CreateAccess — each Allow, Deny or No Access. Rows are only consulted when the parent entity has EnableFieldLevelSecurity = 1. Across the roles a user holds, a verb resolves to (any Allow) AND NOT (any Deny); No Access is neutral and grants nothing while blocking nothing. Read is required for Update and Create, enforced per row by a CHECK constraint and again after aggregation. Primary keys and MemberJunction system audit columns are never restrictable.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Entity Field Permissions')
+export class MJEntityFieldPermissionEntity extends BaseEntity<MJEntityFieldPermissionEntityType> {
+    /**
+    * Loads the MJ: Entity Field Permissions record from the database
+    * @param ID: string - primary key value to load the MJ: Entity Field Permissions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJEntityFieldPermissionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Field Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To grant Create or Update access, Read access must also be set to 'Allow'. This prevents users from having permission to modify or create data they cannot view.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateReadAccessRequiredForCreateOrUpdate(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To grant Create or Update access, Read access must also be set to 'Allow'. This prevents users from having permission to modify or create data they cannot view.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateReadAccessRequiredForCreateOrUpdate(result: ValidationResult) {
+        const hasUpdate = this.UpdateAccess === "Allow";
+        const hasCreate = this.CreateAccess === "Allow";
+        const hasRead = this.ReadAccess === "Allow";
+    
+        if ((hasUpdate || hasCreate) && !hasRead) {
+            result.Errors.push(new ValidationErrorInfo(
+                "ReadAccess",
+                "Read access must be set to 'Allow' if either Create or Update access is allowed.",
+                this.ReadAccess,
+                ValidationErrorType.Failure
+            ));
+        }
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: EntityFieldID
+    * * Display Name: Entity Field ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entity Fields (vwEntityFields.ID)
+    */
+    get EntityFieldID(): string {
+        return this.Get('EntityFieldID');
+    }
+    set EntityFieldID(value: string) {
+        this.Set('EntityFieldID', value);
+    }
+
+    /**
+    * * Field Name: RoleID
+    * * Display Name: Role ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Roles (vwRoles.ID)
+    */
+    get RoleID(): string {
+        return this.Get('RoleID');
+    }
+    set RoleID(value: string) {
+        this.Set('RoleID', value);
+    }
+
+    /**
+    * * Field Name: ReadAccess
+    * * Display Name: Read Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may read the field's values. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default) and leaves the outcome to the user's other roles. Enforced at the API output boundary (result projection and GraphQL field mapping), by predicate validation which rejects an ExtraFilter/OrderBy/Aggregate referencing an unreadable field, and by the strongly-typed accessor path which throws.
+    */
+    get ReadAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('ReadAccess');
+    }
+    set ReadAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('ReadAccess', value);
+    }
+
+    /**
+    * * Field Name: UpdateAccess
+    * * Display Name: Update Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may modify the field's value on an EXISTING record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow — a field a user cannot see is one they cannot change. Enforced server-side before SQL generation; the client-side BaseEntity check is UX-level defense-in-depth only.
+    */
+    get UpdateAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('UpdateAccess');
+    }
+    set UpdateAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('UpdateAccess', value);
+    }
+
+    /**
+    * * Field Name: CreateAccess
+    * * Display Name: Create Access
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: No Access
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Allow
+    *   * Deny
+    *   * No Access
+    * * Description: Whether this role may supply the field's value when INSERTING a record. Allow grants it; Deny blocks it and beats every Allow from the user's other roles; No Access is neutral (the default). Requires ReadAccess = Allow. When a user may not create a field, any value they supply is dropped and the column takes its default — the insert is not rejected, matching the read path where a denied field is simply absent rather than an error. A NOT NULL column with no default that a user cannot create makes records uncreatable for that user; restricted fields should be nullable or defaulted.
+    */
+    get CreateAccess(): 'Allow' | 'Deny' | 'No Access' {
+        return this.Get('CreateAccess');
+    }
+    set CreateAccess(value: 'Allow' | 'Deny' | 'No Access') {
+        this.Set('CreateAccess', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: EntityField
+    * * Display Name: Entity Field
+    * * SQL Data Type: nvarchar(255)
+    */
+    get EntityField(): string {
+        return this.Get('EntityField');
+    }
+
+    /**
+    * * Field Name: Role
+    * * Display Name: Role
+    * * SQL Data Type: nvarchar(50)
+    */
+    get Role(): string {
+        return this.Get('Role');
     }
 }
 
@@ -82868,6 +86569,58 @@ export class MJEntityFormOverrideEntity extends BaseEntity<MJEntityFormOverrideE
     }
 
     /**
+    * Validate() method override for MJ: Entity Form Overrides entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateScopeAndIdentifierConsistency(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that the correct identifier is provided based on the selected scope: 'User' requires a User ID without a Role, 'Role' requires a Role ID without a User, and 'Global' requires both to be empty. This prevents data inconsistency by ensuring records are correctly assigned to exactly one target type.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateScopeAndIdentifierConsistency(result: ValidationResult) {
+    	if (this.Scope === 'User') {
+    		if (this.UserID == null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UserID",
+    				"When the scope is set to 'User', a User must be specified and the Role must be left empty.",
+    				this.UserID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Role') {
+    		if (this.RoleID == null || this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"RoleID",
+    				"When the scope is set to 'Role', a Role must be specified and the User must be left empty.",
+    				this.RoleID,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.Scope === 'Global') {
+    		if (this.UserID != null || this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"Scope",
+    				"When the scope is set to 'Global', both the User and Role fields must be empty.",
+    				this.Scope,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -83113,6 +86866,50 @@ export class MJEntityOrganicKeyRelatedEntityEntity extends BaseEntity<MJEntityOr
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Entity Organic Key Related Entities entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRelatedEntityOrTransitiveMapping(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To ensure clear data mapping, you must define a relationship using either the Related Entity Field Names or a complete Transitive Object configuration. This constraint prevents ambiguous setups by ensuring that only one of these two methods is used and that all required fields for a transitive relationship are provided together.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRelatedEntityOrTransitiveMapping(result: ValidationResult) {
+    	const hasRelatedFields = this.RelatedEntityFieldNames != null;
+    	const hasTransitiveName = this.TransitiveObjectName != null;
+    	const hasTransitiveMatch = this.TransitiveObjectMatchFieldNames != null;
+    	const hasTransitiveOutput = this.TransitiveObjectOutputFieldName != null;
+    	const hasJoinField = this.RelatedEntityJoinFieldName != null;
+    
+    	// Option 1: Only RelatedEntityFieldNames is provided
+    	const isDirectMapping = hasRelatedFields && !hasTransitiveName && !hasTransitiveMatch && !hasTransitiveOutput && !hasJoinField;
+    	
+    	// Option 2: All transitive fields are provided and RelatedEntityFieldNames is null
+    	const isTransitiveMapping = !hasRelatedFields && hasTransitiveName && hasTransitiveMatch && hasTransitiveOutput && hasJoinField;
+    
+    	if (!isDirectMapping && !isTransitiveMapping) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RelatedEntityFieldNames",
+    			"You must provide either only the Related Entity Field Names OR a complete set of Transitive Object fields (Object Name, Match Fields, Output Field, and Join Field). Partial or overlapping configurations are not allowed.",
+    			this.RelatedEntityFieldNames,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -85891,6 +89688,33 @@ export class MJExplorerNavigationItemEntity extends BaseEntity<MJExplorerNavigat
     }
 
     /**
+    * Validate() method override for MJ: Explorer Navigation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Sequence: This rule ensures that the 'Sequence' value must always be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSequenceGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the 'Sequence' value must always be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSequenceGreaterThanZero(result: ValidationResult) {
+    	if (this.Sequence <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("Sequence", "The Sequence value must be greater than zero.", this.Sequence, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -86834,6 +90658,43 @@ export class MJFileStorageAccountPermissionEntity extends BaseEntity<MJFileStora
     }
 
     /**
+    * Validate() method override for MJ: File Storage Account Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Permissions must be correctly assigned based on the type: a 'User' type requires a User ID and no Role ID, a 'Role' type requires a Role ID and no User ID, and the 'Everyone' type requires both IDs to be empty. This ensures that permissions are always linked to the correct entity.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTypeIdentifierAssignment(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Permissions must be correctly assigned based on the type: a 'User' type requires a User ID and no Role ID, a 'Role' type requires a Role ID and no User ID, and the 'Everyone' type requires both IDs to be empty. This ensures that permissions are always linked to the correct entity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypeIdentifierAssignment(result: ValidationResult) {
+    	// Validates that the correct ID is provided or omitted based on the Type field
+    	const isUserValid = this.Type === "User" && this.UserID != null && this.RoleID == null;
+    	const isRoleValid = this.Type === "Role" && this.RoleID != null && this.UserID == null;
+    	const isEveryoneValid = this.Type === "Everyone" && this.UserID == null && this.RoleID == null;
+    
+    	if (!isUserValid && !isRoleValid && !isEveryoneValid) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Type",
+    			"The identifier assignment is invalid for the selected Type. 'User' requires a User ID and no Role ID, 'Role' requires a Role ID and no User ID, and 'Everyone' requires both to be empty.",
+    			this.Type,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -87559,6 +91420,49 @@ export class MJFormChromeRuleEntity extends BaseEntity<MJFormChromeRuleEntityTyp
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Form Chrome Rules entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Ensures that if the target kind is 'Relationship', a related entity is specified and the contribution key is left empty. Conversely, if the target kind is 'Contribution', a contribution key must be provided and the related entity must be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTargetKindDependencies(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Ensures that if the target kind is 'Relationship', a related entity is specified and the contribution key is left empty. Conversely, if the target kind is 'Contribution', a contribution key must be provided and the related entity must be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTargetKindDependencies(result: ValidationResult) {
+    	if (this.TargetKind === "Relationship") {
+    		if (this.RelatedEntityID == null || this.ContributionKey != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"TargetKind",
+    				"When Target Kind is 'Relationship', Related Entity ID must be provided and Contribution Key must be empty.",
+    				this.TargetKind,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	} else if (this.TargetKind === "Contribution") {
+    		if (this.ContributionKey == null || this.RelatedEntityID != null) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"TargetKind",
+    				"When Target Kind is 'Contribution', Contribution Key must be provided and Related Entity ID must be empty.",
+    				this.TargetKind,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -91626,6 +95530,39 @@ export class MJMCPServerConnectionPermissionEntity extends BaseEntity<MJMCPServe
     }
 
     /**
+    * Validate() method override for MJ: MCP Server Connection Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserIDOrRoleIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Either a specific user or a role must be assigned to the permission record, but you cannot assign both at the same time and you cannot leave both empty. This ensures that each permission is linked to exactly one entity, maintaining clear ownership and preventing ambiguous access settings.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserIDOrRoleIDExclusive(result: ValidationResult) {
+    	// Ensure that exactly one of UserID or RoleID is set
+    	if ((this.UserID != null && this.RoleID != null) || (this.UserID == null && this.RoleID == null)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Either a specific user or a role must be assigned, but not both and not neither.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -93214,6 +97151,38 @@ export class MJMLAlgorithmUseCaseRankingEntity extends BaseEntity<MJMLAlgorithmU
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: ML Algorithm Use Case Rankings entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * SuitabilityScore: The suitability score must be a value between 1 and 5, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateSuitabilityScoreRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The suitability score must be a value between 1 and 5, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateSuitabilityScoreRange(result: ValidationResult) {
+    	if (this.SuitabilityScore < 1 || this.SuitabilityScore > 5) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"SuitabilityScore",
+    			"Suitability score must be between 1 and 5.",
+    			this.SuitabilityScore,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -95133,6 +99102,59 @@ export class MJMagicLinkInviteEntity extends BaseEntity<MJMagicLinkInviteEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Magic Link Invites entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: An email address must be provided if the identity mode is set to 'email'.
+    * * Table-Level: The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEmailRequiredForEmailIdentityMode(result);
+        this.ValidateUseCountWithinMaxUsesLimit(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * An email address must be provided if the identity mode is set to 'email'.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEmailRequiredForEmailIdentityMode(result: ValidationResult) {
+    	if (this.IdentityMode && this.IdentityMode.toLowerCase() === 'email' && (this.Email == null || this.Email.trim() === '')) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Email",
+    			"An email address is required when the identity mode is set to 'email'.",
+    			this.Email,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
+    * The number of times a token has been used must be greater than or equal to 0 and cannot exceed the maximum allowed uses.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUseCountWithinMaxUsesLimit(result: ValidationResult) {
+    	if (this.UseCount != null && this.MaxUses != null) {
+    		if (this.UseCount < 0 || this.UseCount > this.MaxUses) {
+    			result.Errors.push(new ValidationErrorInfo(
+    				"UseCount",
+    				"The use count must be between 0 and the maximum allowed uses of " + this.MaxUses + ".",
+    				this.UseCount,
+    				ValidationErrorType.Failure
+    			));
+    		}
+    	}
     }
 
     /**
@@ -97527,6 +101549,40 @@ export class MJOpenAppEntity extends BaseEntity<MJOpenAppEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Open Apps entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Name: The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateNameAlphanumericHyphenOnly(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The name must consist only of lowercase letters, numbers, and hyphens to ensure it is compatible with system naming standards.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateNameAlphanumericHyphenOnly(result: ValidationResult) {
+    	// The regex checks that the entire string consists only of lowercase letters, digits, or hyphens
+    	const regex = /^[a-z0-9-]+$/;
+    	if (this.Name != null && !regex.test(this.Name)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Name",
+    			"The name must only contain lowercase letters, numbers, and hyphens.",
+    			this.Name,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -101863,6 +105919,33 @@ export class MJRecommendationItemEntity extends BaseEntity<MJRecommendationItemE
     }
 
     /**
+    * Validate() method override for MJ: Recommendation Items entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * MatchProbability: This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateMatchProbabilityIsBetweenZeroAndOne(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a match probability is set, it must be between 0 and 1, inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateMatchProbabilityIsBetweenZeroAndOne(result: ValidationResult) {
+    	if (this.MatchProbability != null && (this.MatchProbability < 0 || this.MatchProbability > 1)) {
+    		result.Errors.push(new ValidationErrorInfo("MatchProbability", "MatchProbability, if provided, must be between 0 and 1 (inclusive).", this.MatchProbability, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -105305,6 +109388,45 @@ export class MJResourcePermissionEntity extends BaseEntity<MJResourcePermissionE
     }
 
     /**
+    * Validate() method override for MJ: Resource Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTypeAndRoleOrUserIDExclusive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the type is set to 'Role', a role ID must be provided and a user ID must not be provided. If the type is set to 'User', a user ID must be provided and a role ID must not be provided.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTypeAndRoleOrUserIDExclusive(result: ValidationResult) {
+    	if (this.Type === "Role") {
+    		if (this.RoleID == null) {
+    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'Role', RoleID must be provided.", this.RoleID, ValidationErrorType.Failure));
+    		}
+    		if (this.UserID != null) {
+    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'Role', UserID must not be provided.", this.UserID, ValidationErrorType.Failure));
+    		}
+    	} else if (this.Type === "User") {
+    		if (this.UserID == null) {
+    			result.Errors.push(new ValidationErrorInfo("UserID", "When Type is 'User', UserID must be provided.", this.UserID, ValidationErrorType.Failure));
+    		}
+    		if (this.RoleID != null) {
+    			result.Errors.push(new ValidationErrorInfo("RoleID", "When Type is 'User', RoleID must not be provided.", this.RoleID, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -106111,6 +110233,37 @@ export class MJScheduledJobRunEntity extends BaseEntity<MJScheduledJobRunEntityT
     }
 
     /**
+    * Validate() method override for MJ: Scheduled Job Runs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Details: This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateDetailsAsJson(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the Details field is not empty, it must contain a valid JSON value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateDetailsAsJson(result: ValidationResult) {
+    	if (this.Details != null) {
+    		try {
+    			JSON.parse(this.Details);
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo("Details", "Details must be a valid JSON if provided.", this.Details, ValidationErrorType.Failure));
+    		}
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -106462,6 +110615,37 @@ export class MJScheduledJobEntity extends BaseEntity<MJScheduledJobEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Scheduled Jobs entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Configuration: This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateConfigurationIsJson(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if the Configuration field has a value, it must be valid JSON. If the Configuration field is empty or not set, this rule does not apply.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateConfigurationIsJson(result: ValidationResult) {
+    	if (this.Configuration != null) {
+    		try {
+    			JSON.parse(this.Configuration);
+    		} catch (e) {
+    			result.Errors.push(new ValidationErrorInfo("Configuration", "If specified, Configuration must be valid JSON.", this.Configuration, ValidationErrorType.Failure));
+    		}
+    	}
     }
 
     /**
@@ -106949,6 +111133,50 @@ export class MJSchemaInfoEntity extends BaseEntity<MJSchemaInfoEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Schema Info entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
+    * * Table-Level: This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateEntityIDMaxGreaterThanEntityIDMin(result);
+        this.ValidateEntityIDMinEntityIDMaxGreaterThanZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that the maximum entity ID value must be greater than the minimum entity ID value.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMaxGreaterThanEntityIDMin(result: ValidationResult) {
+    	if (this.EntityIDMax <= this.EntityIDMin) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than the minimum entity ID.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * This rule ensures that both the minimum and maximum entity IDs must be greater than zero.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateEntityIDMinEntityIDMaxGreaterThanZero(result: ValidationResult) {
+    	if (this.EntityIDMin <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMin", "The minimum entity ID must be greater than zero.", this.EntityIDMin, ValidationErrorType.Failure));
+    	}
+    	if (this.EntityIDMax <= 0) {
+    		result.Errors.push(new ValidationErrorInfo("EntityIDMax", "The maximum entity ID must be greater than zero.", this.EntityIDMax, ValidationErrorType.Failure));
+    	}
     }
 
     /**
@@ -108116,6 +112344,38 @@ export class MJSearchProviderEntity extends BaseEntity<MJSearchProviderEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: Search Providers entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Priority: The priority level must be a non-negative value (0 or greater) to ensure valid ordering and categorization of records.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePriorityAtLeastZero(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * The priority level must be a non-negative value (0 or greater) to ensure valid ordering and categorization of records.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePriorityAtLeastZero(result: ValidationResult) {
+    	if (this.Priority < 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Priority",
+    			"Priority must be 0 or greater.",
+    			this.Priority,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -108503,6 +112763,48 @@ export class MJSearchScopeExternalIndexEntity extends BaseEntity<MJSearchScopeEx
     }
 
     /**
+    * Validate() method override for MJ: Search Scope External Indexes entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: To ensure search functionality works correctly, vector-based indexes must have a Vector Index ID assigned, while all other index types must have an External Index Name specified.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateIndexTypeRequirements(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * To ensure search functionality works correctly, vector-based indexes must have a Vector Index ID assigned, while all other index types must have an External Index Name specified.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateIndexTypeRequirements(result: ValidationResult) {
+    	// If the index is a Vector type, ensure a Vector Index ID is provided
+    	if (this.IndexType === 'Vector' && this.VectorIndexID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"VectorIndexID",
+    			"A Vector Index ID is required when the Index Type is set to 'Vector'.",
+    			this.VectorIndexID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	// If the index is not a Vector type, ensure an External Index Name is provided
+    	if (this.IndexType !== 'Vector' && (this.ExternalIndexName == null || this.ExternalIndexName.length === 0)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"ExternalIndexName",
+    			"An External Index Name is required for the selected Index Type.",
+    			this.ExternalIndexName,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -108684,6 +112986,48 @@ export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermi
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Search Scope Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each record must be assigned to either a specific user or a specific role, but not both. This ensures that permissions or scopes are clearly defined for a single entity type and prevents ambiguous assignments.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserIDAndRoleIDExclusiveAssignment(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each record must be assigned to either a specific user or a specific role, but not both. This ensures that permissions or scopes are clearly defined for a single entity type and prevents ambiguous assignments.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserIDAndRoleIDExclusiveAssignment(result: ValidationResult) {
+    	// Check if both fields are null (violates the requirement that at least one must be set)
+    	if (this.UserID == null && this.RoleID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Each record must be assigned to either a User or a Role.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    	// Check if both fields are populated (violates the requirement that only one can be set)
+    	if (this.UserID != null && this.RoleID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"A record cannot be assigned to both a User and a Role simultaneously.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -112357,6 +116701,38 @@ export class MJTaskDependencyEntity extends BaseEntity<MJTaskDependencyEntityTyp
     }
 
     /**
+    * Validate() method override for MJ: Task Dependencies entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateTaskIDNotEqualDependsOnTaskID(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that a task cannot be set as dependent on itself. In other words, each task can only depend on a different task, not on itself.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateTaskIDNotEqualDependsOnTaskID(result: ValidationResult) {
+    	if (this.TaskID === this.DependsOnTaskID) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"TaskID",
+    			"A task cannot be dependent on itself.",
+    			this.TaskID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -113018,6 +117394,66 @@ export class MJTaskEntity extends BaseEntity<MJTaskEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tasks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * PercentComplete: This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * * Table-Level: A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidatePercentCompleteWithinZeroAndOneHundred(result);
+        this.ValidateAtMostOneContextField(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * This rule ensures that if a percent complete value is provided, it must be between 0 and 100 inclusive.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidatePercentCompleteWithinZeroAndOneHundred(result: ValidationResult) {
+    	if (this.PercentComplete != null && (this.PercentComplete < 0 || this.PercentComplete > 100)) {
+    		result.Errors.push(new ValidationErrorInfo("PercentComplete", "PercentComplete must be between 0 and 100 if specified.", this.PercentComplete, ValidationErrorType.Failure));
+    	}
+    }
+
+    /**
+    * A record can be associated with at most one context: either a User, an Agent, an Action, or a Prompt. Specifying more than one of these references is not allowed.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateAtMostOneContextField(result: ValidationResult) {
+    	let count = 0;
+    	if (this.UserID != null) {
+    		count++;
+    	}
+    	if (this.AgentID != null) {
+    		count++;
+    	}
+    	if (this.ActionID != null) {
+    		count++;
+    	}
+    	if (this.PromptID != null) {
+    		count++;
+    	}
+    
+    	if (count > 1) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"Only one of UserID, AgentID, ActionID, or PromptID can be specified for a single record.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -114651,6 +119087,38 @@ export class MJTestRunFeedbackEntity extends BaseEntity<MJTestRunFeedbackEntityT
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Test Run Feedbacks entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Rating: When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRatingRange(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * When a rating is provided, it must be a whole number from 1 up to 10. This ensures that every recorded rating falls within the allowed scoring range.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRatingRange(result: ValidationResult) {
+    	if (this.Rating != null && (this.Rating < 1 || this.Rating > 10)) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"Rating",
+    			"Rating must be between 1 and 10.",
+    			this.Rating,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**
@@ -116618,6 +121086,39 @@ export class MJTestEntity extends BaseEntity<MJTestEntityType> {
         const compositeKey: CompositeKey = new CompositeKey();
         compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
         return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * Validate() method override for MJ: Tests entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * RepeatCount: If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateRepeatCountPositive(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * If a repeat count is entered, it must be a positive number greater than zero; otherwise it can be left empty.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateRepeatCountPositive(result: ValidationResult) {
+    	// If a repeat count is set, it must be greater than zero
+    	if (this.RepeatCount != null && this.RepeatCount <= 0) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"RepeatCount",
+    			"Repeat count must be greater than zero if provided.",
+    			this.RepeatCount,
+    			ValidationErrorType.Failure
+    		));
+    	}
     }
 
     /**

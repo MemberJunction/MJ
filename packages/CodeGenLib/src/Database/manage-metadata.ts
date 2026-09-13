@@ -39,7 +39,6 @@ import { canonicalJSONStringify, deepEqualJSON } from "../Misc/util";
 import { SQLLogging } from "../Misc/sql_logging";
 import { AIEngine } from "@memberjunction/aiengine";
 import { computeFieldMetadataUpdate, FieldLockContext } from "./field-metadata-lock";
-import { DecisionMetadataWriter } from "./decision-metadata-writer";
 import {
    TRACKED_FIELD_COLUMNS,
    FieldChangeReason,
@@ -378,6 +377,20 @@ export class ManageMetadataBase {
     */
    protected boolLit(value: boolean): string {
       return this.dialect.BooleanLiteral(value);
+   }
+
+   /**
+    * Returns an explicitly-typed UUID literal for the platform.
+    * SQL Server: CAST('...' AS uniqueidentifier), PostgreSQL: CAST('...' AS uuid)
+    *
+    * Needed wherever a UUID literal appears in the SELECT list of an `INSERT ... SELECT`. A bare
+    * quoted literal is fine in `INSERT ... VALUES`, where both platforms coerce it to the target
+    * column's type — but in the projection of a SELECT, PostgreSQL can resolve an untyped literal
+    * to `text` and then refuse to assign it to a `uuid` column. `CAST(x AS y)` is ANSI and settles
+    * it on both, with the type name coming from the dialect rather than a platform branch here.
+    */
+   protected uuidLit(value: string): string {
+      return `CAST('${value}' AS ${this.dialect.UuidTypeNames[0]})`;
    }
 
    /**
@@ -3409,7 +3422,6 @@ export class ManageMetadataBase {
       }
 
       logStatus(`         Applied categories for VE ${entity.Name} (${fieldCategories.length} fields)`);
-      await DecisionMetadataWriter.Instance.flushEntity(entity);
       return true;
    }
 
@@ -5471,6 +5483,15 @@ export class ManageMetadataBase {
          const generationPromises = [];
          const ag = new AdvancedGeneration();
 
+         // `skipDBUpdate` means load-only: `runValidationGeneration` is called below with
+         // `generateNewCode = false`, and `generateValidatorFunctionFromCheckConstraint` only reaches an
+         // LLM when that flag is true. Reading a validator back out of an Approved `GeneratedCode` record
+         // is therefore a plain database read — gating it on the AI feature flag is what made
+         // `mj codegen --no-ai` DELETE every committed `Validate()` override rather than preserve it, and
+         // the `codegen-drift` gate (which runs `--no-ai`) then demanded that lossy output. Generation
+         // stays gated; only the read is unconditional.
+         const emitValidators = skipDBUpdate || ag.featureEnabled('ParseCheckConstraints');
+
          const columnLevelResults = result.filter((r: any) => r.EntityFieldID); // get the column level constraints
          const tableLevelResults = result.filter((r: any) => !r.EntityFieldID); // get the table level constraints
          for (const r of columnLevelResults) {
@@ -5507,8 +5528,8 @@ export class ManageMetadataBase {
                else {
                   // if we get here that means we don't have a simple condition in the check constraint that the RegEx could parse. If Advanced Generation is enabled, we will
                   // attempt to use an LLM to do things fancier now
-                  if (ag.featureEnabled('ParseCheckConstraints')) {
-                     // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+                  if (emitValidators) {
+                     // either we are loading persisted validators, or the feature is on and we may generate new ones
                      // run this in parallel
                      generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
                   }
@@ -5516,10 +5537,12 @@ export class ManageMetadataBase {
             }
          }
 
-         // now for the table level constraints run the process for advanced generation
+         // now for the table level constraints, build a Validate function for each constraint.
+         // As above: no featureEnabled() gate here. Loading previously-generated code is not an AI operation, and the
+         // ParseCheckConstraints gate that does guard the LLM call lives inside generateValidatorFunctionFromCheckConstraint.
          for (const r of tableLevelResults) {
-            if (ag.featureEnabled('ParseCheckConstraints')) {
-               // the user has the feature turned on, let's generate a description of the constraint and then build a Validate function for the constraint 
+            if (emitValidators) {
+               // either we are loading persisted validators, or the feature is on and we may generate new ones
                // run this in parallel
                generationPromises.push(this.runValidationGeneration(r, allEntityFields, !skipDBUpdate, currentUser));
             }
@@ -6185,9 +6208,7 @@ export class ManageMetadataBase {
                for (const p of permissions) {
                   const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
                   if (RoleID) {
-                     const sSQLInsertPermission = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                                   (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                                   ('${newEntityID}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
+                     const sSQLInsertPermission = this.buildEntityPermissionInsertSQL(newEntityID, RoleID, p.CanRead, p.CanCreate, p.CanUpdate, p.CanDelete);
                      await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else
@@ -6383,6 +6404,43 @@ export class ManageMetadataBase {
    }
 
    /**
+    * INSERT for one `EntityPermission` row, skipped when a row already exists for that
+    * (EntityID, RoleID, Type).
+    *
+    * The guard is not defensive tidiness — `EntityPermission` carries a UNIQUE constraint on those
+    * three columns (`UQ_EntityPermission_EntityID_RoleID_Type`), so an unguarded INSERT is a failed
+    * CodeGen run rather than a duplicate row. All three call sites are "grant the configured default
+    * permissions", which is naturally re-entrant: an entity re-detected as new, or a second CodeGen
+    * pass over the same entity, reaches them again. Before the constraint existed this silently
+    * accumulated duplicates — a live database showed one (entity, role) pair with rows created three
+    * years apart, and pairs whose verb flags disagreed.
+    *
+    * `Type` is written explicitly rather than left to the column default so the row being inserted
+    * and the row being tested for are keyed identically; a default that changed later would
+    * otherwise put them out of step. Expressed as INSERT ... SELECT ... WHERE NOT EXISTS, which is
+    * valid on both SQL Server and PostgreSQL, so no provider branch is needed.
+    */
+   protected buildEntityPermissionInsertSQL(
+      entityId: string,
+      roleId: string,
+      canRead: boolean,
+      canCreate: boolean,
+      canUpdate: boolean,
+      canDelete: boolean
+   ): string {
+      const table = this.qs(mj_core_schema(), 'EntityPermission');
+      const entityLit = this.uuidLit(entityId);
+      const roleLit = this.uuidLit(roleId);
+      return `INSERT INTO ${table}
+                (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('Type')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
+              SELECT ${entityLit}, ${roleLit}, 'Allow', ${this.boolLit(canRead)}, ${this.boolLit(canCreate)}, ${this.boolLit(canUpdate)}, ${this.boolLit(canDelete)}, ${this.utcNow()}, ${this.utcNow()}
+              WHERE NOT EXISTS (
+                SELECT 1 FROM ${table}
+                WHERE ${this.qi('EntityID')} = ${entityLit} AND ${this.qi('RoleID')} = ${roleLit} AND ${this.qi('Type')} = 'Allow'
+              )`;
+   }
+
+   /**
     * Adds default permissions for a newly created entity based on config settings.
     * Shared by both table-backed entity creation and virtual entity creation.
     */
@@ -6400,9 +6458,7 @@ export class ManageMetadataBase {
       for (const p of permissions) {
          const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
          if (RoleID) {
-            const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                                 (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                 ('${entityId}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
+            const sSQLInsert = this.buildEntityPermissionInsertSQL(entityId, RoleID, p.CanRead, p.CanCreate, p.CanUpdate, p.CanDelete);
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
          } else {
             LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
@@ -6563,9 +6619,7 @@ export class ManageMetadataBase {
             logStatus(`    > Materialized entity "${entityName}": role "${p.RoleName}" NOT granted read (it cannot read every source entity; the snapshot has no row-level scoping).`);
             continue;
          }
-         const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
-                              (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                              ('${entityId}', '${roleId}', ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.boolLit(false)}, ${this.utcNow()}, ${this.utcNow()})`;
+         const sSQLInsert = this.buildEntityPermissionInsertSQL(entityId, roleId, true, false, false, false);
          await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add read permission for materialized entity ${entityName} for role ${p.RoleName}`);
       }
    }
@@ -6600,7 +6654,10 @@ export class ManageMetadataBase {
    }
 
    /** Pure form of the role-RLS layer (see {@link entityHasRowLevelSecurity}). IO-free so it can be reused
-    *  verbatim by the runtime refresher's equivalent gate. */
+    *  verbatim by the runtime refresher's equivalent gate. Deliberately WIDER than the runtime's own reader
+    *  (`EntityInfo.GetUserRowLevelSecurityInfo` collects a filter only from an Allow row whose `CanRead` is
+    *  set, since #4358): a leftover filter beside a cleared flag still counts as "protected" here, which errs
+    *  conservative for a leak gate. */
    public static EntityHasRoleReadRLS(entity: EntityInfo): boolean {
       return entity.Permissions.some((p) => !!p.ReadRLSFilterID && p.ReadRLSFilterID.trim().length > 0);
    }
@@ -7212,9 +7269,6 @@ export class ManageMetadataBase {
                logStatus(`         Applied form layout for ${entity.Name}`);
             }
          }
-
-         // Flush decision metadata for this entity
-         await DecisionMetadataWriter.Instance.flushEntity(entity);
       }
       catch (ex) {
          logError('Error Processing Entity Advanced Generation', ex)
@@ -7494,9 +7548,6 @@ export class ManageMetadataBase {
                WHERE ID = '${winner.ID}'
                AND AutoUpdateIsNameField = ${this.boolLit(true)}
             `);
-         if (entity?.Name) {
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(winner.Name), 'IsNameField', true);
-         }
       }
 
       // Clear every other flagged field that allows auto-update — single winner, always.
@@ -7510,9 +7561,6 @@ export class ManageMetadataBase {
                WHERE ID = '${f.ID}'
                AND AutoUpdateIsNameField = ${this.boolLit(true)}
             `);
-         if (entity?.Name) {
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(f.Name), 'IsNameField', false);
-         }
       }
    }
 
@@ -7680,9 +7728,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateDefaultInView = ${this.boolLit(true)}
             `);
-            if (entity?.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'DefaultInView', true);
-            }
          }
       }
    }
@@ -7735,9 +7780,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateIncludeInUserSearchAPI = ${this.boolLit(true)}
             `);
-            if (entity?.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'IncludeInUserSearchAPI', true);
-            }
          }
       }
    }
@@ -7796,9 +7838,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateUserSearchPredicate = ${this.boolLit(true)}
             `);
-            if (entity?.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'UserSearchPredicateAPI', sp.predicate);
-            }
          }
       }
    }
@@ -7851,9 +7890,6 @@ export class ManageMetadataBase {
             WHERE ID = '${entity.ID}'
             AND AutoUpdateAllowUserSearchAPI = ${this.boolLit(true)}
          `);
-         if (entity.Name) {
-            DecisionMetadataWriter.Instance.recordEntityDecision(entity.Name, 'AllowUserSearchAPI', newValue);
-         }
       }
    }
 
@@ -7898,9 +7934,6 @@ export class ManageMetadataBase {
                WHERE ID = '${entity.ID}'
                AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
             `);
-            if (entity.Name) {
-               DecisionMetadataWriter.Instance.recordEntityDecision(entity.Name, 'FullTextSearchEnabled', newValue);
-            }
          }
       }
 
@@ -7925,9 +7958,6 @@ export class ManageMetadataBase {
                WHERE ID = '${field.ID}'
                AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
             `);
-            if (entity.Name) {
-               DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, String(field.Name), 'FullTextSearchEnabled', true);
-            }
          }
       }
    }
@@ -8021,7 +8051,6 @@ export class ManageMetadataBase {
             WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = ${this.boolLit(true)}
          `, `Set SupportsGeoCoding = ${shouldSupportGeo} for ${entity.Name}`);
          logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from persisted geo fields)`);
-         DecisionMetadataWriter.Instance.recordEntityDecision(entity.Name, 'SupportsGeoCoding', shouldSupportGeo);
          // Queue for late-phase view regeneration — the view was already generated
          // before this flag was set, so it needs to be regenerated with the geo JOIN
          ManageMetadataBase.AddEntityRequiringViewRegen(entity.Name, 'Geocoding');
@@ -8140,25 +8169,20 @@ export class ManageMetadataBase {
 
          if (update.Category !== undefined) {
             setClauses.push(`Category = '${update.Category.replace(/'/g, "''")}'`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'Category', update.Category);
          }
          if (update.GeneratedFormSection !== undefined) {
             setClauses.push(`GeneratedFormSection = 'Category'`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'GeneratedFormSection', 'Category');
          }
          if (update.DisplayName !== undefined) {
             setClauses.push(`DisplayName = '${update.DisplayName.replace(/'/g, "''")}'`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'DisplayName', update.DisplayName);
          }
          if (update.ExtendedType !== undefined) {
             const extVal = update.ExtendedType === null ? 'NULL' : `'${update.ExtendedType.replace(/'/g, "''")}'`;
             setClauses.push(`ExtendedType = ${extVal}`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'ExtendedType', update.ExtendedType);
          }
          if (update.CodeType !== undefined) {
             const codeVal = update.CodeType === null ? 'NULL' : `'${update.CodeType.replace(/'/g, "''")}'`;
             setClauses.push(`CodeType = ${codeVal}`);
-            DecisionMetadataWriter.Instance.recordFieldDecision(entity.Name, field.Name, 'CodeType', update.CodeType);
          }
 
          if (setClauses.length > 0) {
@@ -8206,9 +8230,6 @@ WHERE
             try {
                await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
                logStatus(`  Set entity icon: ${entityIcon}`);
-               if (entityName) {
-                  DecisionMetadataWriter.Instance.recordEntityDecision(entityName, 'Icon', entityIcon);
-               }
             }
             catch (ex) {
                logError('Error Applying Entity Icon', ex);
@@ -8224,13 +8245,9 @@ WHERE
       pool: CodeGenConnection,
       entityId: string,
       categoryInfo: Record<string, FieldCategoryInfo>,
-      entityName?: string
+      _entityName?: string
    ): Promise<void> {
       if (!categoryInfo || Object.keys(categoryInfo).length === 0) return;
-
-      if (entityName) {
-         DecisionMetadataWriter.Instance.recordEntitySetting(entityName, 'FieldCategoryInfo', categoryInfo);
-      }
 
       const canonicalInfo = canonicalJSONStringify(categoryInfo, 2);
       const infoJSON = canonicalInfo.replace(/'/g, "''");
@@ -8283,9 +8300,6 @@ WHERE
          if (info && typeof info === 'object' && 'icon' in info) {
             iconsOnly[category] = info.icon;
          }
-      }
-      if (entityName) {
-         DecisionMetadataWriter.Instance.recordEntitySetting(entityName, 'FieldCategoryIcons', iconsOnly);
       }
       const canonicalIcons = canonicalJSONStringify(iconsOnly, 2);
       const iconsJSON = canonicalIcons.replace(/'/g, "''");
@@ -8352,9 +8366,6 @@ WHERE
 
          logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
          logStatus(`    Reasoning: ${importance.reasoning}`);
-         if (entityName) {
-            DecisionMetadataWriter.Instance.recordApplicationEntityDecision(entityName, '', 'DefaultForNewUser', importance.defaultForNewUser);
-         }
       }
       catch (ex) {
          logError('Error Applying Entity Importance', ex)
