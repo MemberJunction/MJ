@@ -161,3 +161,69 @@ describe('ResolveEffectiveModelConfiguration — the three-level cascade', () =>
     });
 });
 
+describe('LLM section — native tool-calling flags (implementation plan §4.1)', () => {
+    it('inherits a model-level capability flag when the vendor layer omits it', () => {
+        const resolved = ResolveEffectiveModelConfiguration(
+            null,
+            { LLM: { SupportsNativeToolCalling: true } },
+            { LLM: { DefaultToNativeToolCalling: true } }
+        );
+        // The vendor layer set a DIFFERENT key, so per-key deep merge must preserve the model's.
+        expect(resolved?.LLM?.SupportsNativeToolCalling).toBe(true);
+        expect(resolved?.LLM?.DefaultToNativeToolCalling).toBe(true);
+    });
+
+    it('lets an explicit vendor false override a model true — a serving path that lacks tools', () => {
+        const resolved = ResolveEffectiveModelConfiguration(
+            null,
+            { LLM: { SupportsNativeToolCalling: true } },
+            { LLM: { SupportsNativeToolCalling: false } }
+        );
+        expect(resolved?.LLM?.SupportsNativeToolCalling).toBe(false);
+    });
+
+    it('distinguishes absent from false: an absent property inherits rather than disabling', () => {
+        const resolved = ResolveEffectiveModelConfiguration(
+            { LLM: { SupportsNativeToolCalling: true } },
+            { LLM: {} },
+            { LLM: {} }
+        );
+        expect(resolved?.LLM?.SupportsNativeToolCalling).toBe(true);
+    });
+
+    it('resolves to a falsy value when no layer expresses an opinion — today behavior, untouched', () => {
+        const resolved = ResolveEffectiveModelConfiguration(null, null, null);
+        expect(resolved?.LLM?.SupportsNativeToolCalling ?? false).toBe(false);
+        expect(resolved?.LLM?.DefaultToNativeToolCalling ?? false).toBe(false);
+    });
+
+    it('does not let a tool-calling flag disturb another modality section', () => {
+        const resolved = ResolveEffectiveModelConfiguration(
+            null,
+            { Realtime: { TurnDetection: { Mode: 'serverVad' } } },
+            { LLM: { SupportsNativeToolCalling: true } }
+        );
+        expect(resolved?.Realtime?.TurnDetection?.Mode).toBe('serverVad');
+        expect(resolved?.LLM?.SupportsNativeToolCalling).toBe(true);
+    });
+});
+
+describe('LLM control-flow knobs', () => {
+    it('carries NativeControlFlow and NativeToolResults through the cascade like the other LLM knobs', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { SupportsNativeToolCalling: true, NativeControlFlow: 'implicit' } },
+            { LLM: { NativeToolResults: true } }
+        );
+        expect(merged?.LLM?.NativeControlFlow).toBe('implicit');
+        expect(merged?.LLM?.NativeToolResults).toBe(true);
+        expect(merged?.LLM?.SupportsNativeToolCalling).toBe(true);
+    });
+
+    it('an explicit null at a higher layer REPLACES (tri-state), it does not inherit', () => {
+        const merged = ResolveEffectiveModelConfiguration(
+            { LLM: { NativeControlFlow: 'implicit' } },
+            { LLM: { NativeControlFlow: null } }
+        );
+        expect(merged?.LLM?.NativeControlFlow).toBeNull();
+    });
+});

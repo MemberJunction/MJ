@@ -119,7 +119,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
             "Priority": 4
           },
@@ -134,7 +134,7 @@
         {
           "fields": {
             "PromptID": "@parent:ID",
-            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.5 Flash",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.8 Flash",
             "VendorID": "@lookup:MJ: AI Vendors.Name=Vertex AI",
             "Priority": 3
           },

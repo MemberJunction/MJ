@@ -1,0 +1,78 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-no-relookup-02 [gemini-3.7-flash · Google · envelope]",
+    "Description": "Same state as -01, expressed as a prohibition: re-fetching entity details it already has is the wasted-iteration failure.",
+    "InputDefinition": {
+      "payload": {
+        "databaseResearch": {
+          "entitiesFound": [
+            "MJ: AI Agents"
+          ]
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "How many AI agents are active, grouped by type?"
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Get Entity Details succeeded. Entity 'MJ: AI Agents' base view [__mj].vwAIAgents."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-no-relookup-02",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Run Ad-hoc Query"
+          }
+        ],
+        "forbiddenActions": [
+          "Get Entity Details"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Run Ad-hoc Query"
+              }
+            ],
+            "forbiddenActions": [
+              "Get Entity Details"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "FDF763A7-7471-4E17-A875-71E30B7671E4"
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "copywriter-terminal-done-01 [gpt-5.6-luna@none · OpenAI · native-hybrid-results]",
+    "Description": "The brief is fully specified and needs no research. Writing and finishing is right; reaching for a search action is over-eagerness with a full toolbelt. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+    "InputDefinition": {
+      "payload": {
+        "brief": {
+          "product": "Analytics Dashboard",
+          "audience": "existing customers",
+          "tone": "plain",
+          "length": "120 words",
+          "facts": [
+            "real-time refresh",
+            "no setup required",
+            "included in all plans"
+          ]
+        }
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Write the announcement from the brief in the payload. Everything you need is there."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "copywriter-terminal-done-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete",
+            "forbiddenActions": [
+              "Google Custom Search",
+              "Perplexity Search",
+              "Web Page Content",
+              "Census Data Lookup"
+            ]
+          },
+          {
+            "kind": "payloadChange",
+            "forbiddenActions": [
+              "Google Custom Search",
+              "Perplexity Search",
+              "Web Page Content",
+              "Census Data Lookup"
+            ],
+            "forbiddenPayloadPaths": [
+              "newElements.brand",
+              "updateElements.brand",
+              "replaceElements.brand",
+              "newElements.seo",
+              "updateElements.seo",
+              "replaceElements.seo",
+              "newElements.editor",
+              "updateElements.editor"
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Copywriter Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete",
+                "forbiddenActions": [
+                  "Google Custom Search",
+                  "Perplexity Search",
+                  "Web Page Content",
+                  "Census Data Lookup"
+                ]
+              },
+              {
+                "kind": "payloadChange",
+                "forbiddenActions": [
+                  "Google Custom Search",
+                  "Perplexity Search",
+                  "Web Page Content",
+                  "Census Data Lookup"
+                ],
+                "forbiddenPayloadPaths": [
+                  "newElements.brand",
+                  "updateElements.brand",
+                  "replaceElements.brand",
+                  "newElements.seo",
+                  "updateElements.seo",
+                  "replaceElements.seo",
+                  "newElements.editor",
+                  "updateElements.editor"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "39D6B2E2-EFFB-49B5-A9F0-FB9CECF1FB9E"
+  }
+}

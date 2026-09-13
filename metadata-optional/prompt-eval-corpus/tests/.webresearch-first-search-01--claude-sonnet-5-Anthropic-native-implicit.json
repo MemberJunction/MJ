@@ -1,0 +1,65 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-first-search-01 [claude-sonnet-5 · Anthropic · native-implicit]",
+    "Description": "A specific, well-scoped question. Searching is right; clarifying here would be a stall.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Find recent authoritative sources on quantum computing commercialization milestones in 2025."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-first-search-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Google Custom Search"
+          }
+        ],
+        "allowAdditionalActions": true
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Google Custom Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "49B6D82F-3AD6-4539-A03B-D655233CD656"
+  }
+}
