@@ -27,9 +27,9 @@ the format **here**; the prompts do not need editing.
 # <6-10 word summary of the release>
 
 ## TL;DR
-- <consequence-first, one sentence>
-- <consequence-first, one sentence>
-- <consequence-first, one sentence>
+<1-3 sentences. Headline features first, then fixes and improvements as one short clause.>
+
+**Upgrade Notes apply:** <one clause — only when that section exists below.>
 
 <standing context for the release line, if it has any — e.g. "Edge builds are prereleases.">
 
@@ -55,19 +55,46 @@ behaviour; most patches need none, and inventing one is worse than omitting it.
 `## TL;DR` is required and comes first. It exists because the release PR body is pasted
 into Teams verbatim, and most readers there stop after it.
 
-- **Three to five bullets, one sentence each.** If a point needs two sentences, it belongs
-  in a section below.
-- **Lead with the consequence, not the change.** "Scheduled jobs silently stopped honouring
-  their activation windows" beats "changed a comparison in `isJobDue`."
+Its job is to let someone **decide whether to read further** — not to tell them what
+happened. The sections below already explain. A TL;DR that also explains is the document
+again at higher altitude, which is exactly no use to the reader who wanted to skip the
+document. Name things; let the sections describe them.
+
+- **One to three sentences of prose, not bullets.** Anything that does not fit belongs in
+  a section. Bullets invite one-per-change, which is how this section grows into a second
+  copy of the release.
+- **User-facing features that create business value come first.** Name them and move on.
+  Fixes and improvements follow in one short clause, summarised as a group rather than
+  enumerated.
+- **Name, do not explain.** "Field-Level Security" is a complete entry. The defect, the
+  mechanism, the packages and the consequence all belong in the section bullets — the
+  "lead with the consequence" rule below applies THERE, not here. It is the single easiest
+  way to turn this section back into an essay.
 - **It is the only summary prose in the file.** Do not also write an unlabelled intro
   paragraph — the TL;DR replaces it. The H1 is the one-line version, the TL;DR is the
   thirty-second version, the sections are the full record. Three stacked summaries is the
   failure mode this section exists to prevent.
-- **Point at `## Upgrade Notes`, never restate them.** When that section exists, say so in
-  one clause as the last bullet — "**Upgrade Notes apply** — two auth settings change
-  behaviour" — and leave the detail in the section.
+- **Do not pad the TL;DR to avoid repeating the H1.** The H1 is consumed on its own — it is
+  the page title and the whole of a release's line in the index — so it names the headline
+  features by design, and the TL;DR naming them again is correct. What the TL;DR must add is
+  what the H1 cannot carry: the features below the headline, the one-clause fixes summary,
+  and the upgrade flag. A TL;DR that is only the H1 restated has done nothing.
+- **Flag `## Upgrade Notes` on its own line after the prose**, when that section exists:
+  "**Upgrade Notes apply:** external GraphQL consumers must regenerate their types." A
+  breaking change is the highest-value thing a scanning reader can hit, so it gets a flag
+  rather than a slot in the feature list — but one clause only. The detail stays in the
+  section.
 - **No marketing language.** No "we are excited to", no "a significant step forward". This
   is a technical record for people who run the software.
+
+A worked TL;DR, for a release whose sections run to 40 bullets:
+
+> Field-Level Security, end-to-end support for OpenAI's Live realtime stack, and a
+> first-class AI Persona catalog. Fixes for Explorer search returning no results on
+> ordinary terms, plus CodeGen and realtime driver improvements.
+>
+> **Upgrade Notes apply:** the generated GraphQL schema drops non-nullability on ~2,150
+> fields, so externally generated types need regenerating.
 
 ## House style for section bullets
 

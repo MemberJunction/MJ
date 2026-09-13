@@ -367,9 +367,11 @@ jobs:
             nothing to reconcile against your own recollection of the format.
 
             The two things this format most often gets wrong:
-            - `## TL;DR` is required, comes FIRST, and is three to five one-sentence bullets
-              that lead with the consequence rather than the code change. Do not ALSO write
-              an unlabelled intro paragraph above the sections — the TL;DR replaces it.
+            - `## TL;DR` is required and comes FIRST: one to three sentences of PROSE, not
+              bullets. Headline features first, then fixes and improvements as one short
+              clause. NAME things there and let the sections explain them — "lead with the
+              consequence" is a rule for section bullets, not for the TL;DR. Do not ALSO
+              write an unlabelled intro paragraph above the sections; the TL;DR replaces it.
             - OMIT any section with no content. A patch release usually has only `## TL;DR`
               and `## Bug Fixes`; an `## Upgrade Notes` section belongs there only if a
               deployment could have depended on the old behaviour. Do not invent one.
