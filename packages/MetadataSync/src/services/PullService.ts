@@ -9,6 +9,7 @@ import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordProcessor } from '../lib/RecordProcessor';
 import { SyncStateManager } from '../lib/sync-state-manager';
 import { extractPrimaryKeyValues } from '../lib/record-primary-key';
+import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 
 /** Validates that a string is a well-formed ISO 8601 timestamp. */
 function isValidISOTimestamp(value: string): boolean {
@@ -52,6 +53,8 @@ export class PullService {
   private contextUser: UserInfo;
   private createdBackupFiles: string[] = [];
   private createdBackupDirs: Set<string> = new Set();
+  /** Backup path → the file it copies, so a rollback restores to the right place for any backupDirectory. */
+  private backupSources = new Map<string, string>();
   private fileWriteBatch: FileWriteBatch;
   private recordProcessor: RecordProcessor;
   private stateManager: SyncStateManager | undefined;
@@ -79,7 +82,8 @@ export class PullService {
     this.fileWriteBatch.clear();
     this.createdBackupFiles = [];
     this.createdBackupDirs.clear();
-    
+    this.backupSources.clear();
+
     let targetDir: string;
     let entityConfig: EntityConfig | null;
     
@@ -132,6 +136,13 @@ export class PullService {
       }
     }
     
+    // Records load through the ClassFactory; without the entity's own subclass they arrive as a
+    // generic BaseEntity. Pull stays correct (keys are read through Get()), but say so once.
+    const subclassWarning = describeMissingEntitySubclass(options.entity, { operation: 'pull', dryRun: options.dryRun });
+    if (subclassWarning) {
+      callbacks?.onWarn?.(`⚠️  ${subclassWarning}`);
+    }
+
     // Pull records
     callbacks?.onProgress?.(`Pulling ${options.entity} records`);
     const rv = new RunView();
@@ -197,17 +208,18 @@ export class PullService {
       
       // Write all batched file changes at once
       if (!options.dryRun) {
+        // Back up every existing file this pull is about to rewrite — updated and appended-to
+        // alike — before anything is written. The backups are kept (backupBeforeUpdate documents
+        // "timestamped backups", not temporary ones) and double as the rollback source on failure.
+        if (entityConfig.pull?.backupBeforeUpdate) {
+          await this.backupPendingFiles(entityConfig.pull.backupDirectory, options.verbose, callbacks);
+        }
         const filesWritten = await this.fileWriteBatch.flush();
         if (options.verbose && filesWritten > 0) {
           callbacks?.onSuccess?.(`Wrote ${filesWritten} files with consistent property ordering`);
         }
       }
-      
-      // Operation succeeded - clean up backup files
-      if (!options.dryRun) {
-        await this.cleanupBackupFiles();
-      }
-      
+
     } catch (error) {
       callbacks?.onError?.(`Pull operation failed: ${(error as any).message || error}`);
       
@@ -356,8 +368,9 @@ export class PullService {
   }
   
   /**
-   * Clean up backup files created during the pull operation
-   * Should be called after successful pull operations to remove persistent backup files
+   * Deletes the backup files this pull created, and their `.backups` directory when it ends up
+   * empty. Pull no longer calls this itself: `backupBeforeUpdate` backups are kept after a
+   * successful pull. Callers that want rollback-only semantics can still call it explicitly.
    */
   async cleanupBackupFiles(): Promise<void> {
     if (this.createdBackupFiles.length === 0 && this.createdBackupDirs.size === 0) {
@@ -520,14 +533,12 @@ export class PullService {
     
     for (const backupPath of this.createdBackupFiles) {
       try {
-        // Extract original file path from backup path
-        const backupDir = path.dirname(backupPath);
-        const backupFileName = path.basename(backupPath);
-        
-        // Remove timestamp and .backup extension to get original filename
-        const originalFileName = backupFileName.replace(/\.\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z\.backup$/, '.json');
-        const originalFilePath = path.join(path.dirname(backupDir), originalFileName);
-        
+        const originalFilePath = this.backupSources.get(backupPath);
+        if (!originalFilePath) {
+          errors.push(`No source recorded for backup ${backupPath}`);
+          continue;
+        }
+
         if (await fs.pathExists(backupPath)) {
           await fs.copy(backupPath, originalFilePath);
           restoredCount++;
@@ -608,22 +619,15 @@ export class PullService {
       }
     }
     
-    // Track which files have been backed up to avoid duplicates
-    const backedUpFiles = new Set<string>();
     const errors: string[] = [];
-    
+
     // Process existing records updates in parallel
     if (existingRecordsToUpdate.length > 0) {
       callbacks?.onProgress?.(`Updating existing records (parallel processing)`);
-      
+
       const updatePromises = existingRecordsToUpdate.map(async ({ record, primaryKey, filePath }, index) => {
         try {
-          // Create backup if configured (only once per file)
-          if (entityConfig.pull?.backupBeforeUpdate && !backedUpFiles.has(filePath)) {
-            await this.createBackup(filePath, entityConfig.pull?.backupDirectory);
-            backedUpFiles.add(filePath);
-          }
-          
+          // Backups are taken for every file the batch will rewrite, just before it flushes.
           // Load existing file data
           const existingData = await fs.readJson(filePath);
           
@@ -1050,27 +1054,48 @@ export class PullService {
     return result;
   }
   
-  private async createBackup(filePath: string, backupDirName?: string): Promise<void> {
+  /**
+   * Backs up each existing file the write batch is about to rewrite, once per file. Files the
+   * batch will create fresh have nothing to back up.
+   */
+  private async backupPendingFiles(backupDirName: string | undefined, verbose: boolean | undefined, callbacks?: PullCallbacks): Promise<void> {
+    for (const filePath of this.fileWriteBatch.getPendingFiles()) {
+      if (!(await fs.pathExists(filePath))) {
+        continue;
+      }
+      const backupPath = await this.createBackup(filePath, backupDirName);
+      if (verbose) {
+        callbacks?.onLog?.(`Backed up ${path.basename(filePath)} → ${path.relative(path.dirname(filePath), backupPath)}`);
+      }
+    }
+  }
+
+  /**
+   * Copies `filePath` to a timestamped `.backup` file under `backupDirName` (default `.backups`,
+   * relative to the file's directory). Throws if the copy fails: a pull asked to back up must not
+   * go on to rewrite a file it could not back up.
+   */
+  private async createBackup(filePath: string, backupDirName?: string): Promise<string> {
     const dir = path.dirname(filePath);
     const fileName = path.basename(filePath);
-    const backupDir = path.join(dir, backupDirName || '.backups');
-    
+    const backupDir = path.resolve(dir, backupDirName || '.backups');
+
     // Ensure backup directory exists
     await fs.ensureDir(backupDir);
-    // Track the backup directory for cleanup
     this.createdBackupDirs.add(backupDir);
-    
+
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     // Remove .json extension, add timestamp, then add .backup extension
     const backupFileName = fileName.replace(/\.json$/, `.${timestamp}.backup`);
     const backupPath = path.join(backupDir, backupFileName);
-    
+
     try {
       await fs.copy(filePath, backupPath);
-      // Track the created backup file for cleanup
-      this.createdBackupFiles.push(backupPath);
     } catch (error) {
-      // Log error but don't throw
+      throw new Error(`Failed to back up ${filePath} to ${backupPath}: ${error instanceof Error ? error.message : String(error)}`);
     }
+    this.createdBackupFiles.push(backupPath);
+    this.backupSources.set(backupPath, filePath);
+    return backupPath;
   }
 }

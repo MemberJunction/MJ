@@ -516,13 +516,6 @@ export class SyncPullPlugin extends BaseCLIPlugin {
       if (backupManager && !flags['dry-run']) {
         await backupManager.cleanup();
       }
-      if (!flags['dry-run']) {
-        try {
-          await pullService.cleanupBackupFiles();
-        } catch (cleanupError) {
-          warnings.push(`Failed to cleanup persistent backup files: ${cleanupError}`);
-        }
-      }
 
       if (isText && !flags['dry-run']) this.Host.Log('\n✅ Pull completed successfully');
 
