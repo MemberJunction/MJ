@@ -11,7 +11,7 @@
  */
 
 import { MJAIAgentTypeEntity,  } from '@memberjunction/core-entities';
-import { ChatMessage } from '@memberjunction/ai';
+import { ChatMessage, ChatToolCall } from '@memberjunction/ai';
 import {  } from '@memberjunction/core-entities';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { AgentPayloadChangeRequest } from './agent-payload-change-request';
@@ -297,6 +297,8 @@ export type AgentAction = {
     name: string;
     /** Parameters to pass to the action */
     params: Record<string, unknown>;
+    /** The native tool call (ChatToolCall.id) this action answers — set only on native turns. */
+    toolCallId?: string;
     /** Mapping of action outputs to payload fields */
     outputMapping?: string;   
 }
@@ -424,6 +426,8 @@ export type AgentSubAgentRequest<TContext = any> = {
     message: string;
     /** Whether to terminate the parent agent after sub-agent completes */
     terminateAfter: boolean;
+    /** The native tool call (ChatToolCall.id) this dispatch answers — set only on native turns. */
+    toolCallId?: string;
     /** Optional template parameters for sub-agent invocation */
     templateParameters?: Record<string, string>;
     /**
@@ -623,6 +627,21 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
     subAgents?: AgentSubAgentRequest<TContext>[];
     /** Array of actions to execute when step is 'actions' */
     actions?: AgentAction[];
+    /**
+     * The model's own turn when this step was derived from native tool calls. The loop replays
+     * it into history (once per turn) before answering the calls with tool-result turns, because
+     * every provider requires the assistant's call turn to precede the results.
+     */
+    nativeTurn?: {
+        /** The model's text on the turn, if any (narration; never an envelope on this path). */
+        text: string;
+        /** Every call the model made, ids included, in order. */
+        toolCalls: ChatToolCall[];
+        /** Whether results go back as native tool-result turns — the runner's recorded decision. */
+        sendResultsNatively: boolean;
+    };
+    /** On the payload-only Retry, the call id of the `payload_change_request` being answered. */
+    payloadToolCallId?: string;
     /** Message to send to user when step is 'chat' */
     message?: string;
     /**

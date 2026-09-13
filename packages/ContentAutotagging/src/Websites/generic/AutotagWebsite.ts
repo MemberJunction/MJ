@@ -424,7 +424,10 @@ export class AutotagWebsite extends AutotagBase {
             await contentItem.Load(existing.ID);
             contentItem.Checksum = newHash;
             contentItem.Text = text;
-            await contentItem.Save();
+            if (!await contentItem.Save()) {
+                console.error(`[autotag-website] Failed to update content item for ${url}: ${contentItem.LatestResult?.Message ?? 'unknown error'}`);
+                return null;
+            }
             return contentItem;
         }
 
@@ -440,7 +443,10 @@ export class AutotagWebsite extends AutotagBase {
         contentItem.Checksum = newHash;
         contentItem.URL = url;
         contentItem.Text = text;
-        await contentItem.Save();
+        if (!await contentItem.Save()) {
+            console.error(`[autotag-website] Failed to save content item for ${url}: ${contentItem.LatestResult?.Message ?? 'unknown error'}`);
+            return null;
+        }
         return contentItem;
     }
 

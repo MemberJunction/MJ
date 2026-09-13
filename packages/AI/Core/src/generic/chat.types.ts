@@ -4,11 +4,18 @@ import { BaseParams, BaseResult, ModelUsage } from "./baseModel"
 
 /**
  * The possible roles for a chat message.
+ *
+ * `tool` carries the RESULT of a native tool call back to the model and is only ever produced
+ * alongside a preceding `assistant` turn whose {@link ChatMessage.toolCalls} it answers. Its
+ * content is one or more `tool_result` {@link ChatMessageContentBlock}s. Drivers that do not
+ * implement tools (`BaseLLM.SupportsTools === false`) map it to `user` like any other non-assistant
+ * role, so an unsupported driver degrades to prose rather than erroring.
  */
 export const ChatMessageRole = {
     system: 'system',
     user: 'user',
-    assistant: 'assistant'
+    assistant: 'assistant',
+    tool: 'tool'
 } as const;
 
 export type ChatMessageRole = typeof ChatMessageRole[keyof typeof ChatMessageRole];
@@ -21,15 +28,32 @@ export type ChatMessageRole = typeof ChatMessageRole[keyof typeof ChatMessageRol
 export type ChatMessageContentBlock = {
     /**
      * The type of content block.
-     * Can be 'text', 'image_url', 'video_url', 'audio_url', or 'file_url'.
+     * Can be 'text', 'image_url', 'video_url', 'audio_url', 'file_url', or 'tool_result'.
      */
-    type: 'text' | 'image_url' | 'video_url' | 'audio_url' | 'file_url';
+    type: 'text' | 'image_url' | 'video_url' | 'audio_url' | 'file_url' | 'tool_result';
     /**
      * The content of the block.
      * This can be a string. In the case of 'image_url', 'video_url', 'audio_url', or 'file_url', it should be a URL to the resource, OR it can be a base64 encoded string.
      * representing the content of the item. For base64 images, use the data URL format: data:image/png;base64,<data>
+     * For 'tool_result', this is the result payload the model should see — stringify non-text results.
      */
     content: string;
+    /**
+     * For 'tool_result' blocks: the {@link ChatToolCall.id} this block answers. Required on
+     * 'tool_result'; providers use it to pair a result with the call that requested it.
+     */
+    toolCallId?: string;
+    /**
+     * For 'tool_result' blocks: the name of the tool that was called. Optional — carried for
+     * providers (and logs) that key results by name rather than id.
+     */
+    toolName?: string;
+    /**
+     * For 'tool_result' blocks: whether the result represents a FAILED tool execution. Providers
+     * that model this natively (Anthropic's `is_error`) get it mapped through; others receive the
+     * error text as an ordinary result.
+     */
+    isError?: boolean;
     /**
      * Optional MIME type for media content (e.g., 'image/png', 'image/jpeg', 'audio/mp3').
      * When content is a data URL, this can be extracted from the URL. When content is raw base64, this field is required.
@@ -58,6 +82,98 @@ export type ChatMessageContentBlock = {
  */
 export type ChatMessageContent = string | ChatMessageContentBlock[];
 
+// =============================================================================
+// Native Tool Calling — provider-neutral surface
+// =============================================================================
+
+/**
+ * A single tool made available to the model for this request.
+ *
+ * Provider-neutral by design: every major vendor declares tool parameters as JSON Schema with
+ * per-property `description` strings, so that is the interchange format here — `input_schema`
+ * (Anthropic), `parameters` (OpenAI), `parameters` / `parametersJsonSchema` (Gemini).
+ */
+export interface ChatTool {
+    /**
+     * The tool's name, as the model will call it. Providers constrain this to `[a-zA-Z0-9_-]`,
+     * 64 characters or fewer; callers building tools from names that can contain other characters
+     * (MJ Action names, say) must sanitize deterministically and keep a reverse map.
+     */
+    name: string;
+    /**
+     * What the tool does and — more importantly for call accuracy — WHEN the model should call it.
+     * Prescriptive phrasing ("Call this when…") measurably outperforms a bare description.
+     */
+    description?: string;
+    /**
+     * JSON Schema for the tool's input. Stick to the cross-provider common subset — `type`,
+     * `description`, `enum`, `items`, `properties`, `required` — because Gemini's classic
+     * function-declaration schema is an OpenAPI subset that rejects keywords like
+     * `additionalProperties`. Drivers adapt anything beyond that subset.
+     */
+    inputSchema: Record<string, unknown>;
+}
+
+/**
+ * Controls how the model may use the tools declared for this request.
+ *
+ * - `'auto'` — the model decides whether to call a tool. The default whenever tools are present.
+ * - `'none'` — tools stay declared (and cached) but the model must not call one this turn. The
+ *   way to force a prose/JSON answer without changing the cached tool block.
+ * - `'required'` — the model must call some tool.
+ * - `{ name }` — the model must call the named tool.
+ *
+ * Forcing a call typically SUPPRESSES text output, and Anthropic additionally disables extended
+ * thinking under a forced tool choice — never assume text accompanies a forced call.
+ */
+export type ChatToolChoice = 'auto' | 'none' | 'required' | { name: string };
+
+/**
+ * One tool call the model asked for, normalized across providers.
+ */
+export interface ChatToolCall {
+    /**
+     * The provider's call id, echoed back on the matching `tool_result` block so the provider can
+     * pair result to call. Drivers synthesize a stable id for providers that do not supply one
+     * (Gemini names calls rather than identifying them).
+     */
+    id: string;
+    /** The tool name the model called — matches a {@link ChatTool.name} that was declared. */
+    name: string;
+    /**
+     * The call arguments, already PARSED. Providers that transmit arguments as a JSON string
+     * (OpenAI) parse them in the driver, so consumers never see a string here.
+     */
+    arguments: Record<string, unknown>;
+    /**
+     * Opaque provider data that must travel with the call when it is replayed into history.
+     * Gemini 3 attaches a `thoughtSignature` to each function-call part and rejects a replayed call
+     * that lacks it (HTTP 400); the driver stores it here on the way in and
+     * sends it back on the way out. Other providers leave this undefined. Never read by the loop.
+     */
+    providerMetadata?: Record<string, unknown>;
+}
+
+/**
+ * The normalized `finish_reason` a driver reports when the model ended its turn by calling one or
+ * more tools. Consumers branch on this rather than on any provider-specific stop reason.
+ *
+ * This is currently the ONLY normalized value: every other `finish_reason` is whatever the driver's
+ * SDK returned (`'stop'`, `"completed"`, `"STOP"`, …). Normalizing the rest is tracked in
+ * MemberJunction/MJ#4335, which must preserve unrecognized values rather than map onto a closed
+ * union — a shipped action overloads the field as a channel selector.
+ */
+export const CHAT_FINISH_REASON_TOOL_CALLS = 'tool_calls';
+
+/**
+ * The normalized `finish_reason` a driver reports when the model tried to call a tool but the call
+ * could not be read — Gemini's `MALFORMED_FUNCTION_CALL`, typically an oversized or syntactically
+ * broken argument object. The turn then carries whatever text preceded the broken call and NO
+ * `toolCalls`, so without this marker a consumer reads leftover narration as the model's answer.
+ * The agent loop turns it into a corrective retry.
+ */
+export const CHAT_FINISH_REASON_MALFORMED_TOOL_CALL = 'malformed_tool_call';
+
 /**
  * Defines the shape of an individual chat message.
  *
@@ -79,6 +195,15 @@ export type ChatMessage<M = any> = {
      * the core ChatMessage type.
      */
     metadata?: M;
+    /**
+     * For `assistant` turns that called tools: the calls the model made, so a prior tool-calling
+     * turn round-trips back to the provider on the next request. Every provider requires the
+     * assistant's own call turn to be present in history before the matching results.
+     *
+     * Set this from {@link ChatCompletionMessage.toolCalls} when appending the model's reply to
+     * the conversation; the `tool` turn that answers it follows immediately.
+     */
+    toolCalls?: ChatToolCall[];
 }
 
 /**
@@ -100,6 +225,18 @@ export type ChatCompletionMessage = {
      * Not all providers/models support this field.
      */
     thinking?: string | null;
+
+    /**
+     * Tool calls the model made on this turn, normalized across providers. Absent or empty when
+     * the model did not call a tool.
+     *
+     * A turn can carry BOTH `content` and `toolCalls` — the tool-capable providers structurally
+     * allow it (Anthropic `text` + `tool_use` blocks, OpenAI nullable `content` alongside
+     * `tool_calls`, Gemini `text` + `functionCall` parts) — so this is never an either/or with
+     * `content`. Equally, nothing downstream may assume `content` is non-empty on a tool-call
+     * turn: a forced {@link ChatToolChoice} usually suppresses text entirely.
+     */
+    toolCalls?: ChatToolCall[];
 }
 
 /**
@@ -270,6 +407,32 @@ export class ChatParams extends BaseParams  {
      * Typically ranges from 2-20, depending on the provider.
      */
     topLogProbs?: number;
+
+    // Native tool calling — ephemeral, per-call. Never persisted; the prompt runner fills these
+    // from resolved metadata + caller-supplied tools, and drivers consume them verbatim.
+
+    /**
+     * Tool declarations for this request. When present and the driver reports
+     * `SupportsTools === true`, these are passed to the provider's native tool-calling API.
+     *
+     * A driver with `SupportsTools === false` IGNORES this and notes the fact in
+     * `modelSpecificResponseDetails` — the prompt runner's capability gate should mean that never
+     * happens, but Layer 2 stays safe on its own.
+     */
+    tools?: ChatTool[];
+
+    /**
+     * How the model may use {@link ChatParams.tools}. Ignored when no tools are declared.
+     * Defaults to the provider's own default (`'auto'`) when omitted.
+     */
+    toolChoice?: ChatToolChoice;
+
+    /**
+     * Whether the model may emit several tool calls in a single turn. Omit to accept the
+     * provider's default (parallel calls allowed). Maps to OpenAI `parallel_tool_calls` and
+     * Anthropic `tool_choice.disable_parallel_tool_use`.
+     */
+    parallelToolCalls?: boolean;
 }
 /**
  * Returns the first user message from the chat params
@@ -481,6 +644,105 @@ export function getTextFromContent(content: ChatMessageContent): string {
         .filter(block => block.type === 'text')
         .map(block => block.content)
         .join('\n');
+}
+
+/**
+ * Validates that every tool result in a conversation answers a tool call the model actually made.
+ *
+ * The contract providers enforce: a `tool_result` is only meaningful next to the assistant turn
+ * whose `tool_use` / `tool_calls` it answers. The easy way to break it is to append the model's
+ * reply to the conversation WITHOUT copying {@link ChatCompletionMessage.toolCalls} onto the
+ * assistant {@link ChatMessage}, then append the results — the calls vanish and the results are
+ * orphaned. Anthropic rejects that outright, and the provider's own error names an opaque id rather
+ * than the mistake, so this catches it at the MJ boundary with a message that says what to fix.
+ *
+ * Only runs where it can find a problem: conversations with no tool turns are untouched.
+ *
+ * @param messages The conversation to check
+ * @throws Error naming the unmatched tool-call ids and how to fix the history
+ */
+export function validateToolConversation(messages: ChatMessage[]): void {
+    const declaredCallIds = new Set<string>();
+    const orphaned: string[] = [];
+
+    for (const message of messages) {
+        // Assistant turns declare ids; results may only reference ids declared BEFORE them, so the
+        // two are collected in a single forward pass.
+        if (message.role === ChatMessageRole.assistant) {
+            for (const call of message.toolCalls ?? []) {
+                declaredCallIds.add(call.id);
+            }
+            continue;
+        }
+
+        for (const block of getToolResultBlocks(message.content)) {
+            if (!block.toolCallId || !declaredCallIds.has(block.toolCallId)) {
+                orphaned.push(block.toolCallId ?? '(missing toolCallId)');
+            }
+        }
+    }
+
+    if (orphaned.length > 0) {
+        throw new Error(
+            `Tool result(s) with no matching tool call in the conversation: ${orphaned.join(', ')}. ` +
+            `Every tool_result must answer a call declared by an EARLIER assistant message — set ` +
+            `ChatMessage.toolCalls from the model's ChatCompletionMessage.toolCalls when you append ` +
+            `its reply, before appending the results.`
+        );
+    }
+}
+
+/**
+ * Collapses an MJ role onto the three roles every chat API understands.
+ *
+ * `tool` becomes `user`, which is how a tool result reads to a provider with no tool support — the
+ * user handing the model some text. Drivers that DO implement tools must not use this for `tool`
+ * turns; they map those onto their SDK's own tool-result shape.
+ *
+ * @param role The MJ message role
+ * @returns The equivalent classic role
+ */
+export function toClassicChatMessageRole(role: ChatMessageRole): 'system' | 'user' | 'assistant' {
+    return role === ChatMessageRole.tool ? ChatMessageRole.user : role;
+}
+
+/**
+ * Extracts the `tool_result` blocks from a message's content, ignoring everything else.
+ * Returns an empty array for plain-string content.
+ *
+ * @param content The message content to inspect
+ * @returns The tool-result blocks, in order
+ */
+export function getToolResultBlocks(content: ChatMessageContent): ChatMessageContentBlock[] {
+    if (typeof content === 'string') {
+        return [];
+    }
+    return content.filter(block => block.type === 'tool_result');
+}
+
+/**
+ * Builds the `tool` turn that answers one or more tool calls.
+ *
+ * Providers require the results for a given assistant turn's calls to arrive TOGETHER, in the
+ * single turn that immediately follows it — so pass every result for that turn in one call rather
+ * than appending a message per result.
+ *
+ * @param results One entry per tool call being answered
+ * @returns A `tool`-role message whose content is the corresponding `tool_result` blocks
+ */
+export function createToolResultMessage(
+    results: Array<{ toolCallId: string; toolName?: string; content: string; isError?: boolean }>
+): ChatMessage {
+    return {
+        role: ChatMessageRole.tool,
+        content: results.map(r => ({
+            type: 'tool_result' as const,
+            content: r.content,
+            toolCallId: r.toolCallId,
+            toolName: r.toolName,
+            isError: r.isError
+        }))
+    };
 }
 
 /**

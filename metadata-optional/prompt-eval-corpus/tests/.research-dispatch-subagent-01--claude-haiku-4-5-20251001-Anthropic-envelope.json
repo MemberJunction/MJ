@@ -1,0 +1,70 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "research-dispatch-subagent-01 [claude-haiku-4-5-20251001 · Anthropic · envelope]",
+    "Description": "First step for the research orchestrator with nothing gathered yet: search internal scope. Dispatching the Report Writer before there are findings would be premature synthesis.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research what we know internally about churn among enterprise accounts."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "research-dispatch-subagent-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Scoped Search"
+          }
+        ],
+        "allowAdditionalActions": false,
+        "forbiddenActions": [
+          "Research Report Writer"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Research Agent",
+      "modelId": "4FD92457-0BA8-486F-978A-E5947154F4F4",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Scoped Search"
+              }
+            ],
+            "allowAdditionalActions": false,
+            "forbiddenActions": [
+              "Research Report Writer"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "03617271-C467-4297-A6C5-672B09C6672C"
+  }
+}

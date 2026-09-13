@@ -1235,9 +1235,10 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (1 classes)
+// @memberjunction/testing-engine (2 classes)
 import {
     AgentEvalDriver,
+    PromptEvalDriver,
 } from '@memberjunction/testing-engine';
 
 /**
@@ -2218,6 +2219,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
+    PromptEvalDriver,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2233,7 +2235,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 953;
+export const CLASS_REGISTRATIONS_COUNT = 954;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
