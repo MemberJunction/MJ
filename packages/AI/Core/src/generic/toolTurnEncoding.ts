@@ -41,7 +41,17 @@ export function EncodeToolTurnsAsText(messages: readonly ChatMessage[]): ChatMes
         }
         if (m.role === 'tool') {
             const blocks = (Array.isArray(m.content) ? m.content : []) as ChatMessageContentBlock[];
-            for (const b of blocks.filter((x) => x.type === 'tool_result')) {
+            const results = blocks.filter((x) => x.type === 'tool_result');
+            if (results.length === 0) {
+                // A tool turn does not always hold tool_result blocks: `compactToolResultContent`
+                // rewrites one whose content was not an array into a plain string. Dropping it here
+                // would erase the action's outcome from the very history the model is being asked to
+                // continue from, so keep whatever prose it carries.
+                const prose = proseOf(m.content);
+                if (prose.trim()) out.push({ role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} ${prose}` });
+                continue;
+            }
+            for (const b of results) {
                 out.push({ role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} ${b.toolName ?? 'tool'} ${b.isError ? 'failed' : 'succeeded'}. ${b.content}` });
             }
             continue;

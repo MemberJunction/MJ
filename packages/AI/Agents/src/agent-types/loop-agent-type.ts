@@ -352,16 +352,20 @@ export class LoopAgentType extends BaseAgentType {
             return this.createRetryStep('Call payload_change_request at most once per turn; combine your changes into one call.');
         }
         const payloadChangeRequest = payloads[0]?.call.arguments as AgentPayloadChangeRequest | undefined;
+        // The payload call's id has to travel with every step that carries the change, not just the
+        // payload-only one: whichever branch applies it also has to answer that call, or the model
+        // is left with a tool_use nothing responded to.
+        const payloadToolCallId = payloads[0]?.call.id;
         if (subAgents.length > 0 && actions.length > 0) {
             return this.createRetryStep('Delegate or act — not both in one turn. Call the sub-agent tool(s) on their own, or the action tool(s) on their own.');
         }
         if (subAgents.length > 0) {
-            return this.subAgentStep(subAgents, payloadChangeRequest);
+            return this.subAgentStep(subAgents, payloadChangeRequest, payloadToolCallId);
         }
         if (actions.length > 0) {
-            return this.actionsStep(actions, payloadChangeRequest);
+            return this.actionsStep(actions, payloadChangeRequest, payloadToolCallId);
         }
-        return this.payloadOnlyStep(payloadChangeRequest, payloads[0]?.call.id);
+        return this.payloadOnlyStep(payloadChangeRequest, payloadToolCallId);
     }
 
     /** `ask_user` ends the run as Chat / AwaitingFeedback; it must travel alone and carry a message. */
@@ -388,7 +392,8 @@ export class LoopAgentType extends BaseAgentType {
     /** One sub-agent tool → `subAgent`; several → the parallel `subAgents[]` form. */
     private subAgentStep(
         subAgents: ResolvedNativeCall<Extract<NativeToolBinding, { kind: 'subAgent' }>>[],
-        payloadChangeRequest: AgentPayloadChangeRequest | undefined
+        payloadChangeRequest: AgentPayloadChangeRequest | undefined,
+        payloadToolCallId?: string
     ): BaseAgentNextStep {
         const requests = subAgents.map(({ call, binding }) => ({
             name: binding.agent.Name,
@@ -399,14 +404,16 @@ export class LoopAgentType extends BaseAgentType {
         return this.createNextStep('Sub-Agent', {
             terminate: false,
             ...(requests.length === 1 ? { subAgent: requests[0] } : { subAgents: requests }),
-            payloadChangeRequest
+            payloadChangeRequest,
+            payloadToolCallId
         });
     }
 
     /** Action calls → the Actions step, with any same-turn payload change attached. */
     private actionsStep(
         actions: ResolvedNativeCall<Extract<NativeToolBinding, { kind: 'action' }>>[],
-        payloadChangeRequest: AgentPayloadChangeRequest | undefined
+        payloadChangeRequest: AgentPayloadChangeRequest | undefined,
+        payloadToolCallId?: string
     ): BaseAgentNextStep {
         return {
             terminate: false,
@@ -418,7 +425,8 @@ export class LoopAgentType extends BaseAgentType {
                 params: call.arguments ?? {},
                 toolCallId: call.id
             })),
-            payloadChangeRequest
+            payloadChangeRequest,
+            payloadToolCallId
         };
     }
 

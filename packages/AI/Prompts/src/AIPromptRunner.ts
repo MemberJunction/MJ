@@ -807,9 +807,17 @@ export class AIPromptRunner {
         // Caveat: failover re-resolves the gate per attempt, so a failover onto a model without
         // the capability keeps the already-rendered native wording. The request still degrades
         // correctly (no tools are sent); the prompt is merely quieter than it should be.
+        //
+        // This must resolve from the SAME inputs the request-time call uses (see
+        // `applyNativeToolCalling`), or the template can render for the opposite path: the vendor
+        // actually selected — not merely the caller's override, which is usually absent — and the
+        // selected candidate's AIPromptModel bag. Resolving without those skips the two layers the
+        // capability is normally declared on and silently inverts the decision.
         if (params.tools?.length) {
           const nativeDecision = this.resolveNativeToolCallingDecision(
-            prompt, params, selection.model, params.override?.vendorId ?? null);
+            prompt, params, selection.model,
+            selection.selectionInfo?.vendorSelected?.ID ?? params.override?.vendorId ?? null,
+            selection.promptModelConfiguration);
           params.data = {
             ...(params.data ?? {}),
             _NATIVE_TOOL_CALLING: nativeDecision.useNativeTools,
@@ -1245,6 +1253,12 @@ export class AIPromptRunner {
     consolidatedPromptRun.ExecutionTimeMS = parallelResult.totalExecutionTimeMS;
     consolidatedPromptRun.Result = selectedResult.rawResult || '';
     consolidatedPromptRun.TokensUsed = parallelResult.totalTokensUsed;
+
+    // Layer 4 instrumentation, same as the single-model path. This path reaches the same
+    // `executeModel` and therefore declares tools, so leaving the column NULL here would tell the
+    // agent loop a NativeImplicit turn was not implicit — every control-flow call would then be
+    // rejected as an undeclared tool and the loop would retry on tools it declared itself.
+    consolidatedPromptRun.ToolCallingMode = GetToolCallingMode(selectedResult.modelResult) ?? null;
     
     // Extract token and cost info from selected result
     const selectedResultUsage = selectedResult.modelResult?.data?.usage;
@@ -3535,7 +3549,12 @@ export class AIPromptRunner {
         catalogConfiguration: AIEngine.Instance.GetEffectiveModelConfiguration(
           model.ID,
           vendorId
-            ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId))?.ID
+            // Must be the INFERENCE PROVIDER row, not the Model Developer row: most models carry
+            // two AIModelVendor rows for the same VendorID, and ModelVendors has no guaranteed
+            // order. Picking the developer row merges an empty config layer and silently drops any
+            // per-serving-path LLM.* knob (notably the SupportsNativeToolCalling kill switch).
+            ? model.ModelVendors?.find(mv => UUIDsEqual(mv.VendorID, vendorId)
+                && mv.Status === 'Active' && this.isInferenceProvider(mv))?.ID
             : undefined
         ),
         promptConfiguration: prompt.PromptConfigurationObject,
@@ -3822,6 +3841,17 @@ export class AIPromptRunner {
 
       // Build message array with rendered prompt and conversation messages
       chatParams.messages = this.buildMessageArray(renderedPrompt, conversationMessages, templateMessageRole);
+
+      // Declarations and tool turns must travel TOGETHER. The gate above is re-resolved per
+      // failover attempt, so an attempt can legitimately come back envelope on a history that
+      // earlier turns filled with assistant `toolCalls` and `tool` turns — a candidate whose vendor
+      // row lacks the capability, or a catalog change mid-run. Sending those with no `tools` array
+      // is rejected outright by Anthropic and OpenAI (Gemini also polices their order), which would
+      // make failover — the mechanism meant to rescue a failing run — fail for a second, unrelated
+      // reason. Degrade the turns to text, exactly as the tools-stripped retry does.
+      if (!chatParams.tools?.length) {
+        chatParams.messages = EncodeToolTurnsAsText(chatParams.messages);
+      }
 
       // Resolve native file inputs: check each file against the driver's capabilities
       // and inject qualifying files as content blocks in the last user message.

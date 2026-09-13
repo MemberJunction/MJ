@@ -24,6 +24,11 @@ vi.mock('@memberjunction/aiengine', async (importOriginal) => {
         ...actual,
         AIEngine: {
             Instance: {
+                // Keyed on TypeID, as AIEngineBase does. Referenced lazily from inside the method
+                // body, so the constants below are initialized by the time a test calls it.
+                IsInferenceProvider(mv: { TypeID?: string }) {
+                    return mv?.TypeID === INFERENCE_TYPE_ID;
+                },
                 GetEffectiveModelConfiguration(modelID: string, vendorRowID?: string) {
                     engineState.lastCall = { modelID, vendorRowID };
                     return engineState.configuration;
@@ -38,6 +43,9 @@ import { GetToolCallingMode, GetToolCallingDecision } from '../nativeToolCalling
 
 const VENDOR_ID = 'A1111111-1111-1111-1111-111111111111';
 const VENDOR_ROW_ID = 'B2222222-2222-2222-2222-222222222222';
+const DEVELOPER_ROW_ID = 'D4444444-4444-4444-4444-444444444444';
+const INFERENCE_TYPE_ID = 'E5555555-5555-5555-5555-555555555555';
+const DEVELOPER_TYPE_ID = 'F6666666-6666-6666-6666-666666666666';
 
 type RunnerInternals = {
     applyNativeToolCalling(
@@ -56,7 +64,13 @@ const priv = (r: AIPromptRunner): RunnerInternals => r as unknown as RunnerInter
 const model = () => ({
     ID: 'C3333333-3333-3333-3333-333333333333',
     Name: 'Test Model',
-    ModelVendors: [{ ID: VENDOR_ROW_ID, VendorID: VENDOR_ID }]
+    // Mirrors the real catalog: 148 of 193 shipped models carry TWO rows for the same VendorID,
+    // with the Model Developer row listed FIRST. ModelVendors has no guaranteed order, so the gate
+    // has to select the Inference Provider row rather than trusting position.
+    ModelVendors: [
+        { ID: DEVELOPER_ROW_ID, VendorID: VENDOR_ID, Status: 'Active', TypeID: DEVELOPER_TYPE_ID },
+        { ID: VENDOR_ROW_ID, VendorID: VENDOR_ID, Status: 'Active', TypeID: INFERENCE_TYPE_ID }
+    ]
 });
 
 const prompt = (useNative?: boolean) => ({
@@ -173,6 +187,25 @@ describe('applyNativeToolCalling — filling the outgoing request', () => {
         );
 
         expect(engineState.lastCall?.vendorRowID).toBe(VENDOR_ROW_ID);
+        // Never the Model Developer row that precedes it — that row carries no ModelConfiguration,
+        // so resolving it would silently drop every per-serving-path LLM.* knob, including the
+        // SupportsNativeToolCalling kill switch the rollout depends on.
+        expect(engineState.lastCall?.vendorRowID).not.toBe(DEVELOPER_ROW_ID);
+    });
+
+    it('ignores an inactive inference-provider row', () => {
+        engineState.configuration = { LLM: { SupportsNativeToolCalling: true } };
+        const deactivated = {
+            ...model(),
+            ModelVendors: [{ ID: VENDOR_ROW_ID, VendorID: VENDOR_ID, Status: 'Inactive', TypeID: INFERENCE_TYPE_ID }]
+        };
+
+        priv(runner).applyNativeToolCalling(
+            new ChatParams(), prompt(true), { tools: [WEATHER_TOOL] }, deactivated, VENDOR_ID
+        );
+
+        // No usable vendor row: the vendor layer is omitted rather than merged from a dead row.
+        expect(engineState.lastCall?.vendorRowID).toBeUndefined();
     });
 
     it('omits the vendor layer entirely when no vendor was selected', () => {

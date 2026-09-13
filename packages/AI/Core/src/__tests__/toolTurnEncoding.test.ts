@@ -65,4 +65,22 @@ describe('EncodeToolTurnsAsText', () => {
         const textual: ChatMessage[] = [{ role: 'system', content: 's' }, { role: 'user', content: 'u' }, { role: 'assistant', content: 'a' }];
         expect(EncodeToolTurnsAsText(textual)).toEqual(textual);
     });
+
+    it('keeps a tool turn whose content is a plain string rather than dropping it', () => {
+        // `compactToolResultContent` rewrites a non-array tool turn to a string, so this shape is
+        // reachable through expiry and context recovery. Dropping it would erase the action's
+        // outcome from the very history the retry asks the model to continue from.
+        const out = EncodeToolTurnsAsText([
+            { role: 'assistant', content: '', toolCalls: [{ id: 'c', name: 'run_query', arguments: {} }] },
+            { role: 'tool', content: '[result expired — stubbed to recover context]' }
+        ]);
+        expect(out).toEqual([
+            { role: 'user', content: `${ACTION_RESULT_TEXT_PREFIX} [result expired — stubbed to recover context]` }
+        ]);
+    });
+
+    it('drops a tool turn that carries neither results nor prose', () => {
+        const out = EncodeToolTurnsAsText([{ role: 'tool', content: '   ' }]);
+        expect(out).toEqual([]);
+    });
 });

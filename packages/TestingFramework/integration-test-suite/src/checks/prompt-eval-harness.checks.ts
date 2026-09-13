@@ -24,7 +24,7 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { dirname, join, relative } from 'path';
 import { fileURLToPath } from 'url';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import type { MJTestEntity, MJTestRunEntity } from '@memberjunction/core-entities';
 import { PromptEvalDriver, AgentDecisionOracle, ResponseWellFormedOracle } from '@memberjunction/testing-engine';
 import type { IOracle } from '@memberjunction/testing-engine';
@@ -396,8 +396,7 @@ const checks: NamedCheck[] = [
             registerTestLLM(llm, ['OpenAILLM', 'AnthropicLLM', 'GeminiLLM', 'CerebrasLLM', 'GroqLLM']);
 
             await AIEngine.Instance.Config(false, ctx.User);
-            const md = new Metadata();
-            const testRun = await md.GetEntityObject<MJTestRunEntity>('MJ: Test Runs', ctx.User);
+            const testRun = await ctx.Provider.GetEntityObject<MJTestRunEntity>('MJ: Test Runs', ctx.User);
             testRun.NewRecord();
 
             // The two oracles the generated record's Configuration asks for, registered the way

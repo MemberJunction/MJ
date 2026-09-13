@@ -45,7 +45,12 @@ export function UsesAdaptiveThinking(model: string): boolean {
 export function MapEffortLevelToAnthropicEffort(effortLevel: string): AnthropicEffort | undefined {
     const numValue = Number.parseInt(effortLevel, 10);
     if (Number.isNaN(numValue)) {
-        const level = effortLevel.trim().toLowerCase();
+        const raw = effortLevel.trim().toLowerCase();
+        // `effortLevel` is a single prompt/agent-level setting with no per-vendor scoping, and
+        // model selection or failover can land the same value on any provider. OpenAI spells the
+        // top band `xhigh` where Anthropic spells it `max`; treat them as the synonyms they are
+        // rather than failing a run for using the other vendor's word for "most effort".
+        const level = raw === 'xhigh' ? 'max' : raw;
         if (level === 'none') return undefined;
         if ((ANTHROPIC_EFFORTS as readonly string[]).includes(level)) {
             return level as AnthropicEffort;

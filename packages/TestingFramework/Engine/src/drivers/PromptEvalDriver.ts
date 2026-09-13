@@ -5,7 +5,7 @@
 
 import type { ControlToolRole } from '../eval/decision';
 import { encodeHistoryForArm } from '../eval/history';
-import { RegisterClass } from '@memberjunction/global';
+import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { RunView } from '@memberjunction/core';
 import type { UserInfo } from '@memberjunction/core';
 import type { MJTestEntity, MJAIAgentPromptEntity } from '@memberjunction/core-entities';
@@ -265,7 +265,7 @@ export class PromptEvalDriver extends BaseTestDriver {
         if (!agentId) {
             throw new Error('Configuration requires promptId, agentId or agentName');
         }
-        const agent = AIEngine.Instance.Agents.find((a) => a.ID === agentId);
+        const agent = AIEngine.Instance.Agents.find((a) => UUIDsEqual(a.ID, agentId));
         if (!agent) {
             throw new Error(`Agent '${config.agentName ?? agentId}' not found in AIEngine metadata`);
         }
@@ -376,7 +376,7 @@ export class PromptEvalDriver extends BaseTestDriver {
     private async resolvePrompt(config: PromptEvalConfig, contextUser: UserInfo): Promise<MJAIPromptEntityExtended> {
         const agentId = config.agentId ?? await this.resolveAgentIdByName(config.agentName, contextUser);
         const promptId = config.promptId ?? await this.findAgentPromptId(agentId, contextUser);
-        const prompt = AIEngine.Instance.Prompts.find((p) => p.ID === promptId);
+        const prompt = AIEngine.Instance.Prompts.find((p) => UUIDsEqual(p.ID, promptId));
         if (!prompt) {
             throw new Error(`Prompt '${promptId}' not found in AIEngine metadata`);
         }

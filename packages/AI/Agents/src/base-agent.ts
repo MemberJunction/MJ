@@ -3693,6 +3693,27 @@ export class BaseAgent {
     }
 
     /**
+     * The tool_result answering a `payload_change_request` the model made on the SAME turn as its
+     * actions or its delegation.
+     *
+     * The framework applies that change before the rest of the turn runs, so its call has to be
+     * answered alongside them — and inside the same tool turn, since Anthropic requires every
+     * tool_result for an assistant turn to sit in the one message that follows it. Returns an empty
+     * array when the step carried no payload call, so callers can always spread it.
+     */
+    private payloadToolResult(previousDecision: BaseAgentNextStep | undefined): NativeToolResult[] {
+        if (!previousDecision?.payloadToolCallId) {
+            return [];
+        }
+        return [{
+            toolCallId: previousDecision.payloadToolCallId,
+            toolName: 'payload_change_request',
+            content: 'Payload change applied.',
+            isError: false
+        }];
+    }
+
+    /**
      * action results as ONE tool turn — a tool_result block per call, paired by id — when the
      * turn's results go back natively; otherwise the markdown user message as before. An action that
      * cannot be paired with a call id keeps the markdown message for itself.
@@ -3709,7 +3730,7 @@ export class BaseAgent {
             return;
         }
         const unpaired = [...(previousDecision.actions ?? [])];
-        const results: NativeToolResult[] = [];
+        const results: NativeToolResult[] = [...this.payloadToolResult(previousDecision)];
         const orphans: ActionResultSummary[] = [];
         for (const summary of summaries) {
             const at = unpaired.findIndex((a) => a.name === summary.actionName && !!a.toolCallId);
@@ -3731,6 +3752,71 @@ export class BaseAgent {
         if (orphans.length > 0) {
             params.conversationMessages.push({ role: 'user', content: `Action results:\n${this.formatActionResultsAsMarkdown(orphans)}`, metadata } as AgentChatMessage);
         }
+    }
+
+    /**
+     * Answers any tool call the turn's own result path left dangling, immediately before the
+     * history goes back to the model.
+     *
+     * `appendNativeAssistantTurn` replays the model's call turn for EVERY step that carries one,
+     * but only Actions, Sub-Agents and the payload-only Retry append results for it. An
+     * unknown-tool Retry, a protocol-violation Retry, an `ask_user` Chat, or a parallel dispatch
+     * that could not pair one of its ids therefore leaves calls unanswered — which Anthropic
+     * ("Each `tool_use` block must have a corresponding `tool_result` block in the next message"),
+     * OpenAI ("an assistant message with `tool_calls` must be followed by tool messages
+     * responding to each `tool_call_id`") and Gemini all reject outright. `validateToolConversation`
+     * in BaseLLM cannot catch it: it validates results→calls, never calls→results.
+     *
+     * Reconciling here rather than in each branch means a new step type cannot reintroduce the bug.
+     * The synthetic result states only that the call did not run; the reason travels in whatever
+     * message the branch itself appended (the retry instructions, the chat question).
+     */
+    protected reconcileUnansweredToolCalls(params: ExecuteAgentParams): void {
+        const messages = params.conversationMessages;
+        if (!messages?.length) {
+            return;
+        }
+        // Only the most recent assistant call turn can still be open — anything earlier was
+        // answered by its own branch or closed by a previous pass through here.
+        let at = -1;
+        for (let i = messages.length - 1; i >= 0; i--) {
+            const candidate = messages[i] as AgentChatMessage;
+            if (candidate.role === 'assistant' && candidate.toolCalls?.length) {
+                at = i;
+                break;
+            }
+        }
+        if (at < 0) {
+            return;
+        }
+        const answered = new Set<string>();
+        for (let i = at + 1; i < messages.length; i++) {
+            const content = messages[i].content;
+            if (!Array.isArray(content)) {
+                continue;
+            }
+            for (const block of content) {
+                if (block.type === 'tool_result' && block.toolCallId) {
+                    answered.add(block.toolCallId);
+                }
+            }
+        }
+        // A call with no id cannot be paired by any provider, so it cannot be answered here
+        // either — `extractOpenAICompatibleToolCalls` substitutes '' when a host omits the id.
+        const unanswered = ((messages[at] as AgentChatMessage).toolCalls ?? [])
+            .filter((call) => !!call.id && !answered.has(call.id));
+        if (unanswered.length === 0) {
+            return;
+        }
+        params.conversationMessages.push(buildToolResultTurn(
+            unanswered.map((call) => ({
+                toolCallId: call.id,
+                toolName: call.name,
+                content: 'Not executed — the agent did not run this call on this turn. See the message that follows.',
+                isError: true
+            })),
+            { turnAdded: this._promptTurnCount, messageType: 'action-result' }
+        ) as AgentChatMessage);
     }
 
     /**
@@ -3879,6 +3965,8 @@ export class BaseAgent {
         
         promptParams.data = promptTemplateData;
         promptParams.contextUser = params.contextUser;
+        // Last gate before the history goes back to the model: no tool call may be left dangling.
+        this.reconcileUnansweredToolCalls(params);
         promptParams.conversationMessages = params.conversationMessages;
         promptParams.verbose = params.verbose; // Pass through verbose flag
 
@@ -7358,6 +7446,58 @@ The context is now within limits. Please retry your request with the recovered c
     }
 
     /**
+     * Makes a SLICED conversation window safe to send on its own.
+     *
+     * A tool turn is only valid immediately after the assistant turn that declared its call ids, so
+     * cutting the parent's history at an arbitrary index can strand either half of a pair. Keeping
+     * the result half throws in `validateToolConversation` before the request is even built; keeping
+     * the call half is accepted there but rejected by every provider. Both halves are repaired here
+     * so the caller's window is internally consistent whatever index it happened to cut on:
+     * an unpairable tool turn is dropped, and an assistant turn whose calls nothing in the window
+     * answers keeps its prose but loses the calls.
+     *
+     * Only the slicing modes need this — 'All' is self-consistent by construction.
+     */
+    protected makeToolTurnsSelfConsistent(window: ChatMessage[]): ChatMessage[] {
+        const declared = new Set<string>();
+        const resolved = new Set<string>();
+        for (const message of window) {
+            const typed = message as AgentChatMessage;
+            if (typed.role === 'assistant') {
+                for (const call of typed.toolCalls ?? []) {
+                    if (call.id) declared.add(call.id);
+                }
+            }
+            if (typed.role === 'tool' && Array.isArray(typed.content)) {
+                for (const block of typed.content) {
+                    if (block.type === 'tool_result' && block.toolCallId) resolved.add(block.toolCallId);
+                }
+            }
+        }
+        const kept: ChatMessage[] = [];
+        for (const message of window) {
+            const typed = message as AgentChatMessage;
+            if (typed.role === 'tool') {
+                const blocks = Array.isArray(typed.content) ? typed.content : [];
+                // Its assistant turn was cut away — nothing in this window declares these calls.
+                const pairable = blocks.some((b) => b.type === 'tool_result' && b.toolCallId && declared.has(b.toolCallId));
+                if (!pairable) continue;
+            }
+            if (typed.role === 'assistant' && typed.toolCalls?.length) {
+                const answered = typed.toolCalls.every((call) => call.id && resolved.has(call.id));
+                if (!answered) {
+                    // Demote to prose rather than send a call this window never answers.
+                    const { toolCalls: _dropped, ...rest } = typed;
+                    kept.push({ ...rest, content: typed.content || '[tool call omitted for context management]' } as ChatMessage);
+                    continue;
+                }
+            }
+            kept.push(message);
+        }
+        return kept;
+    }
+
+    /**
      * Prepares conversation messages for sub-agent execution based on database-configured message mode.
      *
      * Message passing is controlled by MessageMode and MaxMessages fields stored in either:
@@ -7417,7 +7557,7 @@ The context is now within limits. Please retry your request with the recovered c
             case 'Latest':
                 // Pass most recent N messages
                 if (maxMessages && maxMessages > 0) {
-                    messages = params.conversationMessages.slice(-maxMessages);
+                    messages = this.makeToolTurnsSelfConsistent(params.conversationMessages.slice(-maxMessages));
                 } else {
                     messages = [...params.conversationMessages];
                 }
@@ -7430,14 +7570,14 @@ The context is now within limits. Please retry your request with the recovered c
                     const remaining = params.conversationMessages.slice(-(maxMessages - 2));
                     const omittedCount = params.conversationMessages.length - maxMessages;
 
-                    messages = [
+                    messages = this.makeToolTurnsSelfConsistent([
                         ...firstTwo,
                         {
                             role: 'system',
                             content: `[${omittedCount} messages omitted for context management]`
                         },
                         ...remaining
-                    ];
+                    ]);
                 } else {
                     messages = [...params.conversationMessages];
                 }
@@ -10166,7 +10306,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision?.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result.
-                params.conversationMessages.push(buildToolResultTurn([{
+                params.conversationMessages.push(buildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(subAgentRequest.name)}`,
                     content: resultMessage,
@@ -10814,17 +10954,27 @@ The context is now within limits. Please retry your request with the recovered c
         // Aggregated summary appended to the parent transcript — or, with native tool results, one `tool` turn whose
         // tool_result blocks answer each delegate_to_* call by id (every provider requires every call
         // of an assistant turn to be answered before the next turn).
-        if (nativeResults && allExecutions.every((e) => !!e.request.toolCallId)) {
-            params.conversationMessages.push(buildToolResultTurn(allExecutions.map((e) => ({
-                toolCallId: e.request.toolCallId as string,
-                toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(e.request.name)}`,
-                content: this.buildParallelSubAgentSummary([e]),
-                isError: !e.result.success
-            })), undefined) as AgentChatMessage);
-        } else {
+        // Pair per execution rather than all-or-nothing: one dispatch that lost its id must not
+        // discard the pairing for the calls that have one, or those calls go unanswered and the
+        // reconciler has to report completed sub-agents as "not executed". Anything unpairable
+        // keeps the markdown user message for itself, as the Actions path already does.
+        const pairable = nativeResults ? allExecutions.filter((e) => !!e.request.toolCallId) : [];
+        const unpairable = allExecutions.filter((e) => !pairable.includes(e));
+        if (pairable.length > 0) {
+            params.conversationMessages.push(buildToolResultTurn([
+                ...this.payloadToolResult(previousDecision),
+                ...pairable.map((e) => ({
+                    toolCallId: e.request.toolCallId as string,
+                    toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(e.request.name)}`,
+                    content: this.buildParallelSubAgentSummary([e]),
+                    isError: !e.result.success
+                }))
+            ], undefined) as AgentChatMessage);
+        }
+        if (unpairable.length > 0) {
             params.conversationMessages.push({
                 role: 'user',
-                content: `Parallel Sub-Agents Completed:\n\n${this.buildParallelSubAgentSummary(allExecutions)}`
+                content: `Parallel Sub-Agents Completed:\n\n${this.buildParallelSubAgentSummary(unpairable)}`
             });
         }
 
@@ -11107,7 +11257,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             if (previousDecision.nativeTurn?.sendResultsNatively && subAgentRequest.toolCallId) {
                 // the delegate_to_* call is answered as a tool result (same as the child path).
-                params.conversationMessages.push(buildToolResultTurn([{
+                params.conversationMessages.push(buildToolResultTurn([...this.payloadToolResult(previousDecision), {
                     toolCallId: subAgentRequest.toolCallId,
                     toolName: `${SUB_AGENT_TOOL_PREFIX}${sanitizeToolName(subAgentRequest.name)}`,
                     content: relatedResultMessage,

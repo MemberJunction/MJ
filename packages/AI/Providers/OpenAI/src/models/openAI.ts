@@ -125,7 +125,11 @@ export class OpenAILLM extends BaseLLM {
     private getReasoningLevel(effortLevel: string): OpenAIReasoningEffort {
         const numValue = Number.parseInt(effortLevel);
         if (isNaN(numValue)) {
-            const level = effortLevel.trim().toLowerCase();
+            const raw = effortLevel.trim().toLowerCase();
+            // Mirror of the Anthropic mapping: `effortLevel` is not scoped per vendor, so failover
+            // or model selection can deliver Anthropic's `max` here. It means the same thing as
+            // `xhigh` — normalize rather than throwing on the other vendor's word for the top band.
+            const level = raw === 'max' ? 'xhigh' : raw;
             if (OPENAI_REASONING_EFFORTS.includes(level as OpenAIReasoningEffort)) {
                 return level as OpenAIReasoningEffort;
             }
