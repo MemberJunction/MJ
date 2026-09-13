@@ -211,7 +211,12 @@ export interface OrganicKeyTransitiveViewConfig {
    Name: string;
    /** The schema to create the view in (defaults to the related entity's schema if not specified) */
    SchemaName?: string;
-   /** Raw SQL for the view body (the SELECT statement). CodeGen emits CREATE OR ALTER VIEW wrapping this. */
+   /**
+    * Raw SQL for the view body (the SELECT statement), written in the target platform's dialect.
+    * CodeGen wraps it in the platform's create-or-replace DDL (`CREATE OR ALTER VIEW` on SQL Server,
+    * `CREATE OR REPLACE VIEW` on PostgreSQL). On PostgreSQL the body is not auto-quoted, so
+    * mixed-case identifiers must be double-quoted.
+    */
    SQL: string;
 }
 
@@ -997,9 +1002,12 @@ export class ManageMetadataBase {
                      const viewSchema = re.TransitiveView.SchemaName || re.SchemaName;
                      const viewFullName = `${viewSchema}.${re.TransitiveView.Name}`;
 
-                     const viewSQL = `CREATE OR ALTER VIEW ${this.qs(viewSchema, re.TransitiveView.Name)} AS\n${re.TransitiveView.SQL}`;
+                     const viewSQL = this.dbProvider.generateCreateOrReplaceViewSQL(viewSchema, re.TransitiveView.Name, re.TransitiveView.SQL);
+                     // A view must be the only statement in its SQL Server batch, so the migration file
+                     // needs the provider's separator after it ('' on PostgreSQL, where a GO breaks replay).
                      await this.LogSQLAndExecute(pool, viewSQL,
-                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`);
+                        `Create transitive bridge view ${viewFullName} for organic key "${okConfig.Name}" on ${ownerEntityName}`,
+                        false, true, this.dbProvider.BatchSeparator);
 
                      // Auto-populate TransitiveObject from the view definition
                      re.TransitiveObject = viewFullName;
