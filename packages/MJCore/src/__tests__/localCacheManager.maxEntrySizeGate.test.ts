@@ -9,10 +9,15 @@
  * ArtifactMetadataEngine bulk-loading `MJ: Artifact Versions` with hundreds of
  * MB of Content on boot wiped the whole IndexedDB cache every login.
  *
- * The fix: SetRunViewResult and SetRunQueryResult now skip the write entirely
- * when the estimated entry size exceeds `maxEntryPercentOfCache` (default 25%)
- * of `maxSizeBytes`. Skipping is graceful — the query still returns data to
- * the caller, it just isn't cached.
+ * The fix: SetRunViewResult and SetRunQueryResult skip the write entirely when
+ * the estimated entry size exceeds the per-entry ceiling. Skipping is graceful —
+ * the query still returns data to the caller, it just isn't cached.
+ *
+ * The ceiling itself is `maxEntryPercentOfCache`, whose DEFAULT is `'auto'` —
+ * derived from `maxSizeBytes` rather than a small fixed fraction of it. See
+ * localCacheManager.largeEntryCeiling.test.ts for that half of the contract:
+ * these tests pin the gate mechanics, which are unchanged, using entries above
+ * any possible ceiling (larger than the whole budget).
  *
  * These tests cover:
  *   - The gate fires for oversized RunView entries (write skipped, no storage
@@ -138,10 +143,14 @@ describe('LocalCacheManager oversized-entry write gate', () => {
             expect(fps.has(fp)).toBe(false);
         });
 
-        it('An entry just over the cap (but under the budget) is also skipped', async () => {
-            // Cap is 25% of 1MB = 256KB; write ~400KB — under budget, over cap.
+        it('An entry just over an EXPLICIT cap (but under the budget) is also skipped', async () => {
+            // An explicitly configured percentage is a hard ceiling even for an entry the
+            // budget could hold: 25% of 1MB = 256KB, write ~400KB.
+            resetLocalCacheManager();
+            const capped = LocalCacheManager.Instance;
+            await capped.Initialize(mockStorage, { maxSizeBytes: BUDGET, maxEntryPercentOfCache: 25 });
             mockStorage.resetCallCounts();
-            await cacheManager.SetRunViewResult(
+            await capped.SetRunViewResult(
                 `${ENTITY.Name}|fp|midsize`,
                 { EntityName: ENTITY.Name } as Parameters<typeof cacheManager.SetRunViewResult>[1],
                 makeOversizedResults(400 * 1024),
@@ -234,14 +243,17 @@ describe('LocalCacheManager oversized-entry write gate', () => {
             await uncapped.Initialize(mockStorage, { maxSizeBytes: BUDGET, maxEntryPercentOfCache: 0 });
             mockStorage.resetCallCounts();
 
+            const fp = `${ENTITY.Name}|fp|uncapped`;
             await uncapped.SetRunViewResult(
-                `${ENTITY.Name}|fp|uncapped`,
+                fp,
                 { EntityName: ENTITY.Name } as Parameters<typeof cacheManager.SetRunViewResult>[1],
-                makeOversizedResults(400 * 1024), // over default cap, under budget
+                makeOversizedResults(BUDGET * 2), // larger than the whole budget — no ceiling can admit it
                 '2026-01-01T00:00:00Z'
             );
 
-            expect(mockStorage.setCallCount).toBe(1);
+            // Retrievability, not the raw set-call count: an entry this size makes eviction
+            // run, and eviction persists the registry through the same storage provider.
+            expect(await uncapped.GetRunViewResult(fp)).not.toBeNull();
         });
 
         it('A custom cap percentage is honored', async () => {

@@ -224,6 +224,14 @@ const cacheSettingsSchema = z.object({
   maxMemoryMB: z.number().optional().default(150),
   /** Maximum percentage of total cache memory that any single entity can occupy. Default: 50. Set to 0 to disable. */
   maxPercentOfCachePerEntity: z.number().optional().default(50),
+  /**
+   * Ceiling on any ONE cache entry. 'auto' (the default) derives it from maxMemoryMB, so the
+   * largest entity the server caches scales with the memory the cache was given; a number is an
+   * explicit stricter percentage of maxMemoryMB; 0 removes the ceiling. Leave it on 'auto' unless
+   * a specific entry must be kept out of the cache — an entry declined by the ceiling is re-read
+   * from the database on every call, and the server logs which maxMemoryMB would admit it.
+   */
+  maxEntryPercentOfCache: z.union([z.number(), z.literal('auto')]).optional().default('auto'),
   /** Default TTL in seconds. 0 = no TTL, rely on event-based invalidation. Default: 0. */
   defaultTTLSeconds: z.number().optional().default(0),
   /** Interval in seconds for periodic eviction sweep. 0 = disabled. Default: 300 (5 minutes). */
@@ -796,6 +804,7 @@ export const DEFAULT_SERVER_CONFIG: Partial<ConfigInfo> = {
   cacheSettings: {
     maxMemoryMB: 150,
     maxPercentOfCachePerEntity: 50,
+    maxEntryPercentOfCache: 'auto',
     defaultTTLSeconds: 0,
     evictionSweepIntervalSeconds: 300,
     verboseLogging: false,
