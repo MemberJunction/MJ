@@ -6,7 +6,7 @@
 **************************************************************************************************************/
 
 import { BaseEntity, BaseEntityEvent, IEntityDataProvider, IMetadataProvider, IRunViewProvider, ProviderConfigDataBase, RunViewResult,
-         EntityInfo, EntityFieldInfo, EntityFieldTSType, TenantContext,
+         EntityInfo, EntityField, EntityFieldInfo, EntityFieldTSType, TenantContext,
          RunViewParams, ProviderBase, ProviderType, UserInfo, UserRoleInfo, RecordChange,
          ILocalStorageProvider, EntitySaveOptions, EntityMergeOptions, LogError, LogStatus,
          TransactionGroupBase, TransactionItem, DatasetItemFilterType, DatasetResultType, DatasetStatusResultType, EntityRecordNameInput,
@@ -2141,6 +2141,47 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             return null;
         }
     }
+
+    /**
+     * Resolves the `EntityField` on `entity` that one of a CompositeKey's `FieldName`s refers to.
+     *
+     * The direct, case- and whitespace-insensitive name match is the normal path. It misses when
+     * the caller built the key from a HARDCODED column name — `CompositeKey.FromID(id)` invents
+     * `'ID'` — while the entity's real primary key is called something else (`cst_key`,
+     * `individual_id`). Every MJ core entity happens to be `ID`-keyed, so that mismatch is
+     * invisible across the whole core product and appears only on entities mapped from an
+     * external schema.
+     *
+     * When the key names exactly ONE column and the entity has exactly ONE primary key, the
+     * caller's intent is unambiguous — the single name it supplied can only mean "the primary
+     * key" — so the entity's primary key is used regardless of what the name was. Anything else
+     * (a composite key, or a name that is genuinely not a primary-key column) is a real defect
+     * and is now reported as one, naming the entity and the key it was handed. Previously both
+     * cases dereferenced `undefined` and surfaced as the bare TypeError
+     * `Cannot read properties of undefined (reading 'EntityFieldInfo')`, which says nothing
+     * about which entity or which key name was wrong.
+     */
+    protected ResolvePrimaryKeyField(entity: BaseEntity, keyFieldName: string, keyColumnCount: number): EntityField {
+        const target: string = (keyFieldName ?? '').trim().toLowerCase();
+        const direct: EntityField | undefined = entity.Fields.find(f => f.Name.trim().toLowerCase() === target);
+        if (direct) {
+            return direct;
+        }
+        if (keyColumnCount === 1 && entity.PrimaryKeys.length === 1) {
+            const single: EntityField | undefined = entity.FirstPrimaryKey; // first-pk-ok: guarded on BOTH lengths being 1 — a one-column key against a one-column PK, so the caller's single name can only mean this field
+            // A primary key declared in metadata but absent from the field collection would make
+            // this undefined; fall through to the named error rather than hand back nothing.
+            if (single) {
+                return single;
+            }
+        }
+        const declared: string = entity.EntityInfo.PrimaryKeys.map(pk => pk.Name).join(', ') || '(none)';
+        throw new Error(
+            `Primary key field '${keyFieldName}' does not exist on entity '${entity.EntityInfo.Name}' ` +
+            `(its primary key is: ${declared}). The record key was built with a field name this entity does not have.`
+        );
+    }
+
     public async Load(entity: BaseEntity, primaryKey: CompositeKey, EntityRelationshipsToLoad: string[] = null, user: UserInfo) : Promise<{}> {
         try {
             const vars = {};
@@ -2148,7 +2189,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
 
             for (let i = 0; i < primaryKey.KeyValuePairs.length; i++) {
-                const field: EntityFieldInfo = entity.Fields.find(f => f.Name.trim().toLowerCase() === primaryKey.KeyValuePairs[i].FieldName.trim().toLowerCase()).EntityFieldInfo;
+                const field: EntityFieldInfo = this.ResolvePrimaryKeyField(entity, primaryKey.KeyValuePairs[i].FieldName, primaryKey.KeyValuePairs.length).EntityFieldInfo;
                 const val = primaryKey.GetValueByIndex(i);
                 const pkeyGraphQLType: string = field.GraphQLType;
 
@@ -2269,7 +2310,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             let pkeyOuterParamString: string = '';
             let returnValues: string = '';
             for (let kv of entity.PrimaryKey.KeyValuePairs) {
-                const pk = entity.Fields.find(f => f.Name.trim().toLowerCase() === kv.FieldName.trim().toLowerCase()); // get the field for the primary key field
+                // Same resolution as the single-record Load above — one helper so the two cannot drift.
+                const pk: EntityField = this.ResolvePrimaryKeyField(entity, kv.FieldName, entity.PrimaryKey.KeyValuePairs.length);
                 vars[pk.CodeName] = pk.Value;
                 mutationInputTypes.push({varName: pk.CodeName, inputType: pk.EntityFieldInfo.GraphQLType + '!'}); // only used when doing a transaction group, but it is easier to do in this main loop
                 // GraphQL forbids '__'-prefixed arg/field names; sanitize a '__mj_'-prefixed PK to '_mj__' to match

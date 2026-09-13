@@ -718,6 +718,130 @@ describe('EntitySearchProvider', () => {
 });
 
 /**
+ * Bounded fan-out.
+ *
+ * The fan-out used to be `Promise.all(scoped.map(...))` over EVERY scoped entity. On a tenant with
+ * ~117 searchable entities that is ~117 simultaneous `LIKE '%term%'` RunViews against one
+ * connection pool. They do not error — they QUEUE behind each other, each one then exceeds its own
+ * `PerEntityTimeoutMS` budget, and the timeout wrapper resolves each to `[]`. The user sees a
+ * search that quietly returns nothing, and every individual piece of the system reports success.
+ * Silently missing results, not an error, is the defect.
+ *
+ * So the guarantees under test are: at most SEARCH_CONCURRENCY RunViews in flight at once, every
+ * entity still searched, and the result order identical to the unbounded version it replaces
+ * (the relevance sort is stable, so insertion order is what breaks ties between equal scores).
+ */
+describe('EntitySearchProvider fan-out concurrency', () => {
+    /** Must match EntitySearchProvider.SEARCH_CONCURRENCY (private — asserted behaviorally). */
+    const EXPECTED_CONCURRENCY = 8;
+    const ENTITY_COUNT = 40;
+
+    let provider: EntitySearchProvider;
+    let contextUser: UserInfo;
+
+    /** Peak simultaneous RunView calls observed, and the order calls were issued in. */
+    let inFlight: number;
+    let peakInFlight: number;
+    let callOrder: string[];
+
+    /** Pushes ENTITY_COUNT identically-shaped searchable entities named Entity00..Entity39. */
+    function pushEntities(count: number): string[] {
+        const names: string[] = [];
+        for (let i = 0; i < count; i++) {
+            const name = `Entity${String(i).padStart(2, '0')}`;
+            names.push(name);
+            mockEntities.push({
+                Name: name,
+                AllowUserSearchAPI: true,
+                Fields: [{ Name: 'Name', IncludeInUserSearchAPI: true, IsNameField: true, Sequence: 1 }],
+                NameField: { Name: 'Name' },
+            });
+        }
+        return names;
+    }
+
+    beforeEach(() => {
+        provider = new EntitySearchProvider();
+        contextUser = createMockUser();
+        mockEntities.length = 0;
+        mockRunViewFn.mockReset();
+        inFlight = 0;
+        peakInFlight = 0;
+        callOrder = [];
+
+        // Every entity returns exactly ONE hit whose Name contains the query, so every hit scores
+        // identically (name-field match on the only searchable field). With all scores equal the
+        // relevance sort cannot reorder anything, and the final order IS the fan-out order — which
+        // is precisely what an unordered fan-out would corrupt.
+        //
+        // The delays deliberately DESCEND with the entity index, so within any batch the later
+        // entities settle first. An implementation that appended results as they completed would
+        // therefore produce a visibly different order.
+        mockRunViewFn.mockImplementation(async (params: { EntityName: string }) => {
+            const entityName = params.EntityName;
+            callOrder.push(entityName);
+            inFlight++;
+            peakInFlight = Math.max(peakInFlight, inFlight);
+            const index = Number(entityName.replace('Entity', ''));
+            await new Promise(resolve => setTimeout(resolve, (ENTITY_COUNT - index) % 5));
+            inFlight--;
+            return {
+                Success: true,
+                Results: [{ ID: `${entityName}-rec`, Name: 'Test Widget' }],
+            };
+        });
+    });
+
+    it(`runs at most ${EXPECTED_CONCURRENCY} RunViews at a time across a ${ENTITY_COUNT}-entity fan-out`, async () => {
+        pushEntities(ENTITY_COUNT);
+
+        await provider.Search('Widget', 100, undefined, contextUser);
+
+        expect(peakInFlight).toBeGreaterThan(1); // still genuinely parallel, not serialized
+        expect(peakInFlight).toBeLessThanOrEqual(EXPECTED_CONCURRENCY);
+    });
+
+    it('still searches every entity — bounding the fan-out drops nothing', async () => {
+        const names = pushEntities(ENTITY_COUNT);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        expect(mockRunViewFn).toHaveBeenCalledTimes(ENTITY_COUNT);
+        expect([...callOrder].sort()).toEqual([...names].sort());
+        expect(results).toHaveLength(ENTITY_COUNT);
+    });
+
+    it('returns results in the same order as the unbounded fan-out did — entity order, not completion order', async () => {
+        const names = pushEntities(ENTITY_COUNT);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        // Equal scores + a stable sort means the output order is the fan-out order. `Promise.all`
+        // over the whole list produced exactly the scoped-entity order; the batched loop must too.
+        expect(results.map(r => r.EntityName)).toEqual(names);
+        expect(new Set(results.map(r => r.Score)).size, 'the fixture holds scores equal on purpose').toBe(1);
+    });
+
+    it('a fan-out smaller than the concurrency bound behaves exactly as before — one batch, order preserved', async () => {
+        const names = pushEntities(5);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        expect(peakInFlight).toBe(5);
+        expect(results.map(r => r.EntityName)).toEqual(names);
+    });
+
+    it('an exact multiple of the bound leaves no trailing entity unsearched', async () => {
+        const names = pushEntities(EXPECTED_CONCURRENCY * 2);
+
+        const results = await provider.Search('Widget', 100, undefined, contextUser);
+
+        expect(mockRunViewFn).toHaveBeenCalledTimes(EXPECTED_CONCURRENCY * 2);
+        expect(results.map(r => r.EntityName)).toEqual(names);
+    });
+});
+
+/**
  * Restore an env var to a prior value, deleting it when it was previously unset.
  */
 function restoreEnv(key: string, priorValue: string | undefined): void {
