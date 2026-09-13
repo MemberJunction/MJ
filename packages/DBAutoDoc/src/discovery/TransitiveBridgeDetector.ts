@@ -22,7 +22,7 @@
  */
 
 import { findBridgePaths, FKEdge } from './FKGraphWalker.js';
-import { generateBridgeView, GeneratedBridgeView } from './BridgeViewSQLGenerator.js';
+import { generateBridgeView, GeneratedBridgeView, BridgeViewProvider } from './BridgeViewSQLGenerator.js';
 import { OrganicKeyCluster, memberColumns } from '../types/organic-keys.js';
 import { DatabaseDocumentation, ForeignKeyReference } from '../types/state.js';
 
@@ -48,6 +48,8 @@ export interface TransitiveBridgeDetectorOptions {
     minPathConfidence?: number;
     /** Limit bridges per (hub, spoke) pair — keeps only the best path. Default true. */
     keepShortestOnly?: boolean;
+    /** Platform the generated bridge-view SQL is written for. Default `'sqlserver'`. */
+    provider?: BridgeViewProvider;
 }
 
 const DEFAULTS: Required<TransitiveBridgeDetectorOptions> = {
@@ -55,6 +57,7 @@ const DEFAULTS: Required<TransitiveBridgeDetectorOptions> = {
     minSoftFKConfidence: 0.6,
     minPathConfidence: 0.7,
     keepShortestOnly: true,
+    provider: 'sqlserver',
 };
 
 /**
@@ -137,7 +140,7 @@ export function detectTransitiveBridges(
         );
         if (!hubMatch) continue;
 
-        const view = generateBridgeView(path, spokePK);
+        const view = generateBridgeView(path, spokePK, { provider: o.provider });
         findings.push({
             hubSchema: hubMatch.schema,
             hubTable: hubMatch.table,

@@ -1,13 +1,20 @@
 /**
  * BridgeViewSQLGenerator — Pattern 3 SQL emission.
  *
- * Takes a BridgePath (from FKGraphWalker) and produces the CREATE VIEW SQL
- * statement that PR #2193's CodeGen ingest (`processOrganicKeyConfig`) will
- * EXECUTE when materializing the organic-key configuration.
+ * Takes a BridgePath (from FKGraphWalker) and produces the SELECT body of the
+ * bridge view that PR #2193's CodeGen ingest (`processOrganicKeyConfig`) will
+ * wrap in the platform's create-or-replace DDL and EXECUTE when materializing
+ * the organic-key configuration.
  *
- * Output SQL shape — minimal valid bridge view per the PR #2193 docs example:
+ * CodeGen executes the body verbatim, so it is emitted in the analyzed
+ * database's dialect: identifiers are quoted per `provider` (brackets on SQL
+ * Server, double quotes on PostgreSQL/Oracle, backticks on MySQL). On
+ * PostgreSQL that quoting is load-bearing — an unquoted mixed-case name folds
+ * to lower case and no longer matches the catalog.
  *
- *   CREATE OR ALTER VIEW [schema].[viewName] AS
+ * Output SQL shape (SQL Server shown) — minimal valid bridge view per the
+ * PR #2193 docs example; the view header is CodeGen's, not part of the body:
+ *
  *   SELECT
  *       [hub].[hubKeyField] AS [hubKeyField],
  *       [spoke].[spokePK]   AS [spokeOutputAlias]
@@ -32,6 +39,10 @@
  */
 
 import { BridgePath } from './FKGraphWalker.js';
+import { DatabaseConfig } from '../types/config.js';
+
+/** Database platform the bridge view body is written for. */
+export type BridgeViewProvider = NonNullable<DatabaseConfig['provider']>;
 
 /** Bundle returned for each bridge path. */
 export interface GeneratedBridgeView {
@@ -40,8 +51,8 @@ export interface GeneratedBridgeView {
     /** Default schema (caller may override). */
     schemaName: string;
     /** The bare SELECT body for the bridge view — exactly what TransitiveView.SQL should carry.
-     *  PR #2193's CodeGen wraps this in `CREATE OR ALTER VIEW <schema>.<name> AS`, so the
-     *  header must NOT be included here. */
+     *  CodeGen wraps it in the platform's create-or-replace view DDL, so the header must NOT be
+     *  included here. Written in the dialect of the generator's `provider`. */
     sql: string;
     /** The hub-key field projected by the view (matches TransitiveMatchFieldNames[0]). */
     hubKeyField: string;
@@ -65,11 +76,14 @@ export interface BridgeViewSQLGeneratorOptions {
     viewNamePattern?: string;
     /** Override the view's schema. Defaults to the SPOKE's schema (where it'll be most natural to find). */
     viewSchema?: string;
+    /** Platform whose identifier quoting the body uses. Default `'sqlserver'`, matching `DatabaseConfig.provider`. */
+    provider?: BridgeViewProvider;
 }
 
 const DEFAULTS: Required<BridgeViewSQLGeneratorOptions> = {
     viewNamePattern: 'vw{spoke}_{key}_bridge',
     viewSchema: '',
+    provider: 'sqlserver',
 };
 
 export function generateBridgeView(
@@ -78,6 +92,7 @@ export function generateBridgeView(
     opts: BridgeViewSQLGeneratorOptions = {},
 ): GeneratedBridgeView {
     const o = { ...DEFAULTS, ...opts };
+    const qident = identifierQuoter(o.provider);
     const viewName = buildViewName(o.viewNamePattern, path);
     const schemaName = o.viewSchema || path.spokeSchema;
     const spokeOutputField = `${path.spokeTable}_${spokePKColumn}`;
@@ -112,10 +127,10 @@ export function generateBridgeView(
     ];
 
     // ─── Final SQL — body only ──────────────────────────────────────────────
-    // PR #2193's CodeGen processOrganicKeyConfig() prepends `CREATE OR ALTER
-    // VIEW <schema>.<name> AS\n` to whatever's in TransitiveView.SQL. So we
-    // emit ONLY the SELECT body — never the CREATE VIEW header — otherwise
-    // SQL Server rejects the double-prefixed statement.
+    // CodeGen's processOrganicKeyConfig() wraps whatever's in TransitiveView.SQL
+    // in the platform's create-or-replace view DDL. So we emit ONLY the SELECT
+    // body — never a CREATE VIEW header — otherwise the database rejects the
+    // double-prefixed statement.
     const sql = [
         `SELECT`,
         '    ' + selectList.join(',\n    '),
@@ -145,6 +160,16 @@ function buildViewName(pattern: string, path: BridgePath): string {
     return cleaned;
 }
 
-function qident(name: string): string {
-    return `[${name.replace(/]/g, ']]')}]`;
+/** Returns the platform's identifier quoter, doubling the closing delimiter inside a name. */
+function identifierQuoter(provider: BridgeViewProvider): (name: string) => string {
+    switch (provider) {
+        case 'postgresql':
+        case 'oracle':
+            return (name) => `"${name.replace(/"/g, '""')}"`;
+        case 'mysql':
+            return (name) => `\`${name.replace(/`/g, '``')}\``;
+        case 'sqlserver':
+        default:
+            return (name) => `[${name.replace(/]/g, ']]')}]`;
+    }
 }
