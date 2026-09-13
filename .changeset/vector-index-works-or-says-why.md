@@ -47,3 +47,11 @@ won every time; document *types* were restart-only unconditionally because `_typ
 only inside `Refresh`. The cache now carries a staleness window (`StaleAfterMs`, default 60s) plus an
 `Invalidate()` hook for a host that wants an exact guarantee. Within the window the skip is preserved,
 so a vectorize run over many entities still does not re-read metadata per entity.
+
+Vectorizing also addresses the provider-side index by `ExternalID`, falling back to `Name`. `Name` is
+the MJ display label and only incidentally the provider's index name; where it was sanitized at
+creation or the row was renamed, upserting by `Name` addresses an index the provider does not have —
+and a create-on-write provider makes one, so the vectors land where nothing searches. This is the
+correction #4411 made for the Semantic search lane and the autotag vectorizer; the vectorize path was
+missed. The width backfill above populates `ExternalID` on rows that never recorded one, which is what
+makes this safe for existing indexes.

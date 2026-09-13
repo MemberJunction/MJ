@@ -139,8 +139,10 @@ export class EntityVectorSyncer extends VectorBase {
     // other drivers can read driver-specific settings (e.g. namespaceField).
     const vectorIndexProviderConfig = this.parseProviderConfig(vectorIndexEntity.ProviderConfig);
 
+    const providerIndexName = this.ResolveProviderIndexName(vectorIndexEntity);
+
     const vectorUpserter = this.createVectorUpserter(
-      entityDocument, templateContent, obj.vectorDB, vectorIndexEntity.Name, delayTimeMS,
+      entityDocument, templateContent, obj.vectorDB, providerIndexName, delayTimeMS,
       params.UpsertBatchCount || pipelineConfig?.upsertBatchSize,
       vectorIndexProviderConfig
     );
@@ -1119,6 +1121,24 @@ export class EntityVectorSyncer extends VectorBase {
     }
 
     return this.GetAIModel(vectorIndex.EmbeddingModelID);
+  }
+
+  /**
+   * The name the provider's index actually answers to.
+   *
+   * `Name` is the MJ display label and is only incidentally the provider's index name. Where the
+   * name was sanitized at creation to satisfy the provider's own naming rules, or an operator
+   * renamed the row afterwards, upserting by `Name` addresses an index that does not exist — and
+   * because a create-on-write provider will happily make one, the vectors land somewhere nothing
+   * ever searches. `ExternalID` is what the provider returned at creation, so it is the only
+   * name guaranteed to be right; `Name` remains the fallback for rows predating the write-back.
+   *
+   * This is the same correction MJ #4411 made for the Semantic search lane and the autotag
+   * vectorizer, both of which 404'd against Pinecone for exactly this reason. The vectorize
+   * path was missed.
+   */
+  protected ResolveProviderIndexName(vectorIndex: MJVectorIndexEntity): string {
+    return vectorIndex.ExternalID?.trim() || vectorIndex.Name;
   }
 
   /**

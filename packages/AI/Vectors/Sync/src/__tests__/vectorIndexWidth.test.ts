@@ -19,6 +19,9 @@
  * right.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import type { EmbedTextsResult } from '@memberjunction/ai';
 import type { MJEntityDocumentEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import type { IndexList, VectorDBBase } from '@memberjunction/ai-vectordb';
@@ -95,6 +98,9 @@ class TestableSyncer extends EntityVectorSyncer {
   }
   public resolveModel(doc: MJEntityDocumentEntity, index?: MJVectorIndexEntity) {
     return this.ResolveEmbeddingModel(doc, index);
+  }
+  public providerIndexName(index: MJVectorIndexEntity): string {
+    return this.ResolveProviderIndexName(index);
   }
 }
 
@@ -281,5 +287,80 @@ describe('EntityVectorSyncer.ResolveEmbeddingModel', () => {
     const doc = { Name: 'Contacts Search', AIModelID: MODEL_A } as unknown as MJEntityDocumentEntity;
     expect(syncer.resolveModel(doc).ID).toBe(MODEL_A);
     expect(getAIModelMock).toHaveBeenCalledWith(MODEL_A);
+  });
+});
+
+describe('EntityVectorSyncer.ResolveProviderIndexName', () => {
+  let syncer: TestableSyncer;
+  beforeEach(() => {
+    syncer = new TestableSyncer();
+  });
+
+  it('addresses the index by ExternalID, which is the name the provider gave it', () => {
+    // The upsert path used to pass Name. Where the provider sanitized the name at creation,
+    // that addresses an index the provider does not have — and a create-on-write provider
+    // makes one, so the vectors land in an index nothing ever searches.
+    const index = indexRow({ Name: 'Contacts (Prod)', ExternalID: 'contacts-prod' });
+    expect(syncer.providerIndexName(index)).toBe('contacts-prod');
+  });
+
+  it('falls back to Name for a row that predates the write-back', () => {
+    expect(syncer.providerIndexName(indexRow({ Name: 'Knowledge Index', ExternalID: null }))).toBe('Knowledge Index');
+  });
+
+  it('treats a blank or whitespace ExternalID as absent rather than as an index name', () => {
+    expect(syncer.providerIndexName(indexRow({ Name: 'Knowledge Index', ExternalID: '' }))).toBe('Knowledge Index');
+    expect(syncer.providerIndexName(indexRow({ Name: 'Knowledge Index', ExternalID: '   ' }))).toBe('Knowledge Index');
+  });
+
+  it('trims a padded ExternalID instead of sending the padding to the provider', () => {
+    expect(syncer.providerIndexName(indexRow({ ExternalID: '  contacts-prod  ' }))).toBe('contacts-prod');
+  });
+});
+
+describe('the vectorize path actually uses the resolved provider index name', () => {
+  // ResolveProviderIndexName being correct is worth nothing if the upsert call site goes back to
+  // passing `vectorIndexEntity.Name`, and that revert is invisible to every behavioural test here:
+  // `VectorizeEntity` needs a live provider, a template engine and a metadata provider to reach the
+  // upsert. So this pins the wiring at the source level. It is narrow on purpose — it reads only
+  // the argument list of the one call, not the whole file.
+  const source = readFileSync(
+    path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'models', 'entityVectorSync.ts'),
+    'utf8'
+  );
+
+  function argsOf(call: string): string {
+    const start = source.indexOf(call);
+    expect(start, `${call} not found — the call was renamed or removed`).toBeGreaterThan(-1);
+    const open = source.indexOf('(', start);
+    let depth = 0;
+    for (let i = open; i < source.length; i++) {
+      if (source[i] === '(') depth++;
+      else if (source[i] === ')') {
+        depth--;
+        if (depth === 0) return source.slice(open + 1, i);
+      }
+    }
+    throw new Error(`unbalanced parentheses after ${call}`);
+  }
+
+  it('passes the resolved name to the upserter, not the MJ display label', () => {
+    const args = argsOf('this.createVectorUpserter');
+    expect(args).toContain('providerIndexName');
+    // The defect being pinned: the provider-side index addressed by its MJ display name.
+    expect(args).not.toContain('vectorIndexEntity.Name');
+  });
+
+  it('resolves that name through ResolveProviderIndexName rather than inlining the fallback', () => {
+    // Inlining would work today but drifts from the search lane and the autotag vectorizer, which
+    // #4411 fixed the same way; one named decision keeps the three honest.
+    expect(source).toContain('this.ResolveProviderIndexName(vectorIndexEntity)');
+  });
+
+  it('still reports the index to the operator by its MJ display name', () => {
+    // The width-refusal message is read by a human, who knows the row by its label, not its
+    // provider-side id — so the creator side must keep using Name. Guards against an
+    // over-eager sweep replacing every occurrence.
+    expect(argsOf('this.createVectorCreator')).toContain('vectorIndexEntity.Name');
   });
 });
