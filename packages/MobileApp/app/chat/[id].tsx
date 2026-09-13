@@ -20,7 +20,7 @@ import { Icons } from '@/components/Icon';
 import { MarkdownView } from '@/components/markdown/MarkdownView';
 import { adaptConversation, adaptConversationToSummary, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
 import { sendMessage, getConversationDetailStatus, type SendProgress } from '@/data/services/agents';
-import { composeMessageWithAttachment, uploadAndAttachToMessage, type CapturedAttachment } from '@/data/services/attachments';
+import { attachCapturedFile, composeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -78,9 +78,8 @@ export default function ChatThreadScreen() {
             // hang off. Uploading here rather than before the send keeps a failed upload from
             // costing the user their message — the text goes either way.
             if (attachment && result.userMessageId) {
-                const stored = await uploadAndAttachToMessage(attachment, result.userMessageId);
-                if (!stored) setSendError('The message sent, but the attachment could not be uploaded.');
-                else if (!stored.attached) setSendError('The file uploaded, but could not be attached to this message.');
+                const stored = await attachCapturedFile(attachment, result.userMessageId);
+                if (!stored.ok) setSendError(`The message sent, but the attachment did not: ${stored.message}`);
             }
             // The user message + in-progress AI bubble now exist server-side; show them.
             setPendingUserText(null);

@@ -1,36 +1,39 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { CompositeKey, RunView } from '@memberjunction/core';
-import type { MJConversationDetailEntity, MJConversationEntity, MJFileEntity } from '@memberjunction/core-entities';
+import { RunView } from '@memberjunction/core';
+import type {
+    MJConversationDetailAttachmentEntity,
+    MJConversationDetailEntity,
+    MJConversationEntity,
+} from '@memberjunction/core-entities';
 import { initLiveProvider, hasToken, md } from './setup-live';
 import {
-    uploadAttachmentBytes,
-    attachFileToConversationDetail,
-    linkAttachmentToRecord,
-    type CapturedAttachment,
-} from '../../data/services/attachments';
+    attachCapturedFileToMessage,
+    base64SizeBytes,
+} from '../../data/services/attachment-storage';
+import type { CapturedAttachment } from '../../data/services/attachment-meta';
 
 /**
- * Live integration coverage for the attachment upload pipeline (G2).
+ * Live coverage for the attachment pipeline (G2), against a real MJAPI.
  *
- * Unit tests prove the mapping; only a live run proves the pipeline. This exercises the real
- * path end to end against MJAPI: bytes → MJ Storage → an `MJ: Files` catalog row → a
- * first-class `MJ: Conversation Detail Attachments` row that an agent can actually consume.
+ * Unit tests prove the mapping; only a live run proves the pipeline — and this one caught two
+ * things a mock never would. First, a stock `UI`-role user has `CanCreate` on
+ * `MJ: Conversation Detail Attachments` but **not** on `MJ: Files`, so an implementation that
+ * pushed every attachment through MJStorage was denied for every ordinary user. Second, the
+ * entity's own field descriptions say `InlineData` and `FileID` are mutually exclusive, with
+ * inline being the small-attachment path — which is exactly what the permission model expects.
  *
- * Unlike the older suites in this folder, this one **seeds and cleans up its own fixtures** —
- * it creates the conversation and message it attaches to, and deletes them afterwards. Suites
- * that assert against ambient data only pass on a database someone has already used, which is
- * exactly how a from-scratch database catches them.
- *
- * Gated on `MJ_TEST_JWT` like the rest of the folder.
+ * This suite **seeds and cleans up its own fixtures**, unlike the older suites in this folder,
+ * which assert against ambient data and therefore only pass on a database someone has already
+ * used.
  */
 const TAG = '(mj-integration-test — safe to delete)';
 
 describe.runIf(hasToken())('integration: attachments', () => {
     let conversationId = '';
     let detailId = '';
-    const createdFileIds: string[] = [];
+    const createdAttachmentIds: string[] = [];
 
-    /** A tiny but genuinely valid 1×1 PNG, so the server sees real bytes rather than junk. */
+    /** A genuinely valid 1×1 PNG, so the server sees real bytes rather than junk. */
     const PNG_BASE64 =
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -41,8 +44,7 @@ describe.runIf(hasToken())('integration: attachments', () => {
         conv.NewRecord();
         conv.Name = `Attachment pipeline ${TAG}`;
         conv.UserID = md().CurrentUser.ID;
-        const convSaved = await conv.Save();
-        expect(convSaved, `conversation save: ${conv.LatestResult?.CompleteMessage}`).toBe(true);
+        expect(await conv.Save(), `conversation save: ${conv.LatestResult?.CompleteMessage}`).toBe(true);
         conversationId = conv.ID;
 
         const detail = await md().GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', md().CurrentUser);
@@ -50,119 +52,99 @@ describe.runIf(hasToken())('integration: attachments', () => {
         detail.ConversationID = conversationId;
         detail.Message = `Attachment carrier ${TAG}`;
         detail.Role = 'User';
-        const detailSaved = await detail.Save();
-        expect(detailSaved, `detail save: ${detail.LatestResult?.CompleteMessage}`).toBe(true);
+        expect(await detail.Save(), `detail save: ${detail.LatestResult?.CompleteMessage}`).toBe(true);
         detailId = detail.ID;
     }, 60000);
 
-    it('uploads real bytes and creates an MJ: Files record', async () => {
-        const att = makeAttachment();
-        const result = await uploadAttachmentBytes(att, PNG_BASE64);
-        expect(result, 'upload returned null — check MJ Storage provider configuration').not.toBeNull();
-        expect(result!.id).toMatch(/^[0-9A-Fa-f-]{36}$/);
-        createdFileIds.push(result!.id);
+    afterAll(async () => {
+        // Self-cleaning: a suite that leaves fixtures behind makes the next from-scratch run less
+        // meaningful. Best-effort throughout — teardown must never fail the suite.
+        for (const id of createdAttachmentIds) {
+            try {
+                const a = await md().GetEntityObject<MJConversationDetailAttachmentEntity>(
+                    'MJ: Conversation Detail Attachments', md().CurrentUser);
+                if (await a.Load(id)) await a.Delete();
+            } catch { /* ignore */ }
+        }
+        try {
+            const d = await md().GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', md().CurrentUser);
+            if (detailId && await d.Load(detailId)) await d.Delete();
+        } catch { /* ignore */ }
+        try {
+            const c = await md().GetEntityObject<MJConversationEntity>('MJ: Conversations', md().CurrentUser);
+            if (conversationId && await c.Load(conversationId)) await c.Delete();
+        } catch { /* ignore */ }
+    }, 120000);
 
-        // The record must really exist — a returned id proves the mutation answered, not that it wrote.
-        const rv = new RunView();
-        const found = await rv.RunView<{ ID: string; Name: string }>({
-            EntityName: 'MJ: Files',
-            ExtraFilter: `ID='${result!.id}'`,
-            Fields: ['ID', 'Name'],
-            ResultType: 'simple',
-        });
-        expect(found.Success).toBe(true);
-        expect(found.Results?.length).toBe(1);
+    it('attaches a small image inline, as a real UI-role user can', async () => {
+        const att = makeAttachment();
+        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64);
+        expect(result.ok, result.ok ? '' : `attach failed: ${result.message}`).toBe(true);
+        if (!result.ok) return;
+        createdAttachmentIds.push(result.attachmentId);
+        expect(result.storedInline).toBe(true);
     }, 60000);
 
-    it('attaches an uploaded file to a message as a consumable multimodal attachment', async () => {
+    it('writes a row an agent can consume — inline bytes plus a resolved modality', async () => {
         const att = makeAttachment();
-        // `uploadAndAttachToMessage` is the composer's entry point, but it reads bytes through
-        // expo-file-system; from Node we drive its two steps directly against the same code.
-        const stored = await uploadAttachmentBytes(att, PNG_BASE64);
-        expect(stored, 'upload returned null').not.toBeNull();
-        createdFileIds.push(stored!.id);
-        const attached = await attachFileToConversationDetail(stored!.id, detailId, att);
-        expect(attached, 'file uploaded but did not attach').toBe(true);
+        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64);
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        createdAttachmentIds.push(result.attachmentId);
 
-        const rv = new RunView();
-        const rows = await rv.RunView<{ ID: string; FileID: string; MimeType: string; ModalityID: string }>({
+        const rows = await new RunView().RunView<{
+            ID: string; MimeType: string; ModalityID: string; InlineData: string; FileID: string | null; FileSizeBytes: number;
+        }>({
             EntityName: 'MJ: Conversation Detail Attachments',
-            ExtraFilter: `ConversationDetailID='${detailId}'`,
-            Fields: ['ID', 'FileID', 'MimeType', 'ModalityID'],
+            ExtraFilter: `ID='${result.attachmentId}'`,
+            Fields: ['ID', 'MimeType', 'ModalityID', 'InlineData', 'FileID', 'FileSizeBytes'],
             ResultType: 'simple',
         });
         expect(rows.Success).toBe(true);
-        const mine = (rows.Results ?? []).find((r) => r.FileID === stored!.id);
-        expect(mine, 'no attachment row found for the uploaded file').toBeTruthy();
-        expect(mine!.MimeType).toBe('image/png');
-        // The modality is the part that makes this reachable by a vision model rather than an opaque blob.
-        expect(mine!.ModalityID).toMatch(/^[0-9A-Fa-f-]{36}$/);
+        const row = rows.Results?.[0];
+        expect(row).toBeTruthy();
+        expect(row!.MimeType).toBe('image/png');
+        expect(row!.InlineData).toBe(PNG_BASE64);
+        // Mutually exclusive by contract: the inline branch must leave FileID null.
+        expect(row!.FileID ?? null).toBeNull();
+        // The modality is what makes this reachable by a vision model rather than an opaque blob.
+        expect(row!.ModalityID).toMatch(/^[0-9A-Fa-f-]{36}$/);
     }, 60000);
 
-    it('links a file to an arbitrary record without assuming an ID column', async () => {
+    it('refuses an oversized attachment with an actionable reason, not a permission error', async () => {
+        const att = { ...makeAttachment(), size: 5 * 1024 * 1024 };
+        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64);
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+        expect(result.reason).toBe('too-large');
+    }, 60000);
+
+    it('honours an agent threshold override below the system default', async () => {
         const att = makeAttachment();
-        const uploaded = await uploadAttachmentBytes(att, PNG_BASE64);
-        expect(uploaded).not.toBeNull();
-        createdFileIds.push(uploaded!.id);
-
-        const linked = await linkAttachmentToRecord(
-            uploaded!.id,
-            'MJ: Conversations',
-            CompositeKey.FromID(conversationId), // first-pk-ok: MJ core entity, single-column key
-        );
-        expect(linked).toBe(true);
+        // 10 bytes — smaller than our PNG, so the override must force the storage path.
+        const result = await attachCapturedFileToMessage(detailId, att, PNG_BASE64, 10);
+        expect(result.ok).toBe(false);
+        if (result.ok) return;
+        expect(result.reason).toBe('too-large');
     }, 60000);
 
-    afterAll(async () => {
-        // Self-cleaning, per the folder's rule: a suite that leaves fixtures behind makes the
-        // next from-scratch run less meaningful and pollutes whatever database it touched.
-        // Teardown is best-effort throughout — a cleanup failure must never fail the suite.
-        for (const fileId of createdFileIds) {
-            try {
-                const f = await md().GetEntityObject<MJFileEntity>('MJ: Files', md().CurrentUser);
-                if (await f.Load(fileId)) await f.Delete();
-            } catch { /* ignore */ }
-        }
-        if (detailId) {
-            try {
-                const d = await md().GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', md().CurrentUser);
-                if (await d.Load(detailId)) await d.Delete();
-            } catch { /* ignore */ }
-        }
-        if (conversationId) {
-            try {
-                const c = await md().GetEntityObject<MJConversationEntity>('MJ: Conversations', md().CurrentUser);
-                if (await c.Load(conversationId)) await c.Delete();
-            } catch { /* ignore */ }
-        }
-    }, 120000);
-
-    it('reports failure rather than throwing for a nonexistent conversation detail', async () => {
-        const att = makeAttachment();
-        const uploaded = await uploadAttachmentBytes(att, PNG_BASE64);
-        expect(uploaded).not.toBeNull();
-        createdFileIds.push(uploaded!.id);
-
-        const ok = await attachFileToConversationDetail(
-            uploaded!.id,
-            '00000000-0000-0000-0000-000000000000',
-            att,
-        );
-        expect(ok).toBe(false);
+    it('reports a save failure rather than throwing for a nonexistent message', async () => {
+        const result = await attachCapturedFileToMessage(
+            '00000000-0000-0000-0000-000000000000', makeAttachment(), PNG_BASE64);
+        expect(result.ok).toBe(false);
     }, 60000);
 
-    /**
-     * A captured attachment pointing at a data URI. `readAttachmentBase64` goes through
-     * `expo-file-system`, which does not exist under Node — so this suite exercises the
-     * upload and attach steps with bytes supplied directly, and leaves byte *reading* to the
-     * on-device tests where that module actually runs.
-     */
+    it('computes base64 size without decoding', () => {
+        expect(base64SizeBytes(PNG_BASE64)).toBeGreaterThan(60);
+        expect(base64SizeBytes(PNG_BASE64)).toBeLessThan(100);
+    });
+
     function makeAttachment(): CapturedAttachment {
         return {
             uri: `data:image/png;base64,${PNG_BASE64}`,
             name: `pixel-${Date.now()}.png`,
             mimeType: 'image/png',
-            size: 68,
+            size: base64SizeBytes(PNG_BASE64),
             kind: 'image',
         };
     }

@@ -24,6 +24,7 @@
     "@babel/standalone": "^7.29.1",
     "@expo/metro-config": "^54.0.17",
     "@memberjunction/ai": "6.1.0-edge.6",
+    "@memberjunction/ai-core-plus": "6.1.0-edge.6",
     "@memberjunction/ai-realtime-client": "6.1.0-edge.6",
     "@memberjunction/core": "6.1.0-edge.6",
     "@memberjunction/core-entities": "6.1.0-edge.6",
