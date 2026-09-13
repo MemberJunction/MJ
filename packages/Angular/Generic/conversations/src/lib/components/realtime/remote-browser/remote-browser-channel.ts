@@ -2,7 +2,8 @@ import type { Type } from '@angular/core';
 import type { Subscription } from 'rxjs';
 import { RegisterClass } from '@memberjunction/global';
 import { JSONValue, RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient, ChannelOnboardingDetails } from '../channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
+import { ChannelOnboardingDetails } from '@memberjunction/realtime-runtime';
 import { RemoteBrowserHumanInputEvent, RemoteBrowserSnapshotView, RemoteBrowserSurfaceComponent } from './remote-browser-surface.component';
 import {
   MapToolToAction,

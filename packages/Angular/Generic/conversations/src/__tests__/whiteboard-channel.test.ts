@@ -4,7 +4,7 @@ import '@angular/compiler';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { EventEmitter } from '@angular/core';
 import { MJGlobal } from '@memberjunction/global';
-import { BaseRealtimeChannelClient, RealtimeChannelContext } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient, RealtimeChannelContext } from '@memberjunction/realtime-runtime';
 import {
   RealtimeWhiteboardChannel, WHITEBOARD_INTERACTION_NOTE_THROTTLE_MS
 } from '../lib/components/realtime/whiteboard/whiteboard-channel';
