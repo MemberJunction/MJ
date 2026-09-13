@@ -2,7 +2,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { MJAccordionModule } from '@memberjunction/ng-ui-components';
 import { RealtimeDelegationCardVM, FriendlyStepLabel } from './realtime-session-state';
-import { ParsedDelegationArtifact } from '../../services/delegation-result-parser';
+import { ParsedDelegationArtifact } from '@memberjunction/realtime-runtime';
 
 /**
  * Renders a single delegation in the live session thread:

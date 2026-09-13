@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import type { Type } from '@angular/core';
 import { RealtimeToolDefinition } from '@memberjunction/ai';
-import { BaseRealtimeChannelClient } from '../lib/components/realtime/channels/base-realtime-channel-client';
+import { BaseRealtimeChannelClient } from '@memberjunction/realtime-runtime';
 
 /** A server-only channel: contributes tools + perception, but renders NO surface. */
 class ServerOnlyChannel extends BaseRealtimeChannelClient {
