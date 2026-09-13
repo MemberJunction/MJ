@@ -20,5 +20,9 @@
   },
   "primaryKey": {
     "ID": "C2445DAC-C01F-4AA1-946F-CE61A8A30648"
+  },
+  "sync": {
+    "lastModified": "2026-09-13T20:08:47.852Z",
+    "checksum": "998c8419c244848b0308ac928790d33cd0928bf11027687611a2a2362f7bf711"
   }
 }
