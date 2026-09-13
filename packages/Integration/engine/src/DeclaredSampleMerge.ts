@@ -51,13 +51,23 @@ export type FieldLength = number | null | undefined;
 /**
  * Effective length for a field the source both declared and was observed producing.
  *
- * `null` (unbounded) beats every number, on either side: a declaration of "unbounded" is a
- * deliberate statement that no width is safe, and an observation that exceeded the bounded ceiling
- * is the data saying the same thing. Otherwise the larger wins, and a missing side yields to the
- * present one.
+ * Unbounded beats every number, on either side: a declaration of "unbounded" is a deliberate
+ * statement that no width is safe, and an observation that exceeded the bounded ceiling is the data
+ * saying the same thing. Otherwise the larger wins, and a missing side yields to the present one.
+ *
+ * UNBOUNDED HAS TWO SPELLINGS and this function has to know both. This module writes it as `null`;
+ * the catalog and the dialects write it as `-1`, which is what `decideLengthOverlay` and both
+ * TypeMappers render as `(MAX)`. Treating `-1` as an ordinary number made `MergeLength(255, -1)`
+ * return 255 — a numeric comparison reading the WIDEST possible width as the narrowest — so a
+ * sample that proved no bounded width was safe was silently merged away, and records too long for
+ * the resulting column stopped arriving with the run still reporting success.
  */
 export function MergeLength(declared: FieldLength, observed: FieldLength): FieldLength {
-    if (declared === null || observed === null) return null;
+    const unbounded = (v: FieldLength): boolean => v === null || v === -1;
+    // Preserve the caller's own spelling: a source that said -1 gets -1 back, so the value stays
+    // legible to the catalog path that produced it.
+    if (unbounded(declared)) return declared;
+    if (unbounded(observed)) return observed;
     if (declared === undefined) return observed;
     if (observed === undefined) return declared;
     return Math.max(declared, observed);

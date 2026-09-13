@@ -72,6 +72,8 @@ interface PaginatedFetchResult {
     NextPage?: number;
     NextOffset?: number;
     NextCursor?: string;
+    /** MJ-RUN-35 — the total the source stated for this object, carried out to FetchBatchResult. */
+    SourceTotalRecords?: number;
 }
 
 /** One template variable resolved to its parent IntegrationObject + FK field. */
@@ -695,8 +697,23 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         deadlineMs?: number,
         watchKey?: string,
     ): AsyncGenerator<Record<string, unknown>> {
-        const obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
-        if (this.DetectTemplateVars(obj.APIPath).length === 0) {
+        // FIRST CONTACT MUST STILL SAMPLE. A runtime-discovered object has no persisted
+        // IntegrationObject yet — the pipeline samples BEFORE it persists — and this lookup used to
+        // throw right here, before the connector was ever consulted. The whole sampling fallback
+        // chain (this stream → fallback DiscoverFields) then ran without a single record: no
+        // statistical PK, no observed widths, ever, for exactly the objects discovery exists to
+        // learn. A missing row only means the record-constrained template-var sampler below cannot
+        // be used (it needs obj.APIPath / obj.ID); the generic FetchChanges loop needs neither and
+        // hands routing to the connector, which owns first contact. A connector that genuinely
+        // cannot route an unpersisted object still throws there — the previous behaviour, one call
+        // later, and now with the object's own error rather than a catalog miss.
+        let obj: ReturnType<typeof this.GetCachedObject> | null = null;
+        try {
+            obj = this.GetCachedObject(companyIntegration.IntegrationID, objectName);
+        } catch {
+            /* not persisted yet — take the generic loop below */
+        }
+        if (!obj || this.DetectTemplateVars(obj.APIPath).length === 0) {
             // FORWARD THE DEADLINE. Dropping it here silently un-bounds every REST connector that
             // lands on this fallback — which is every connector expressing parent scope as
             // CONFIGURATION rather than as URL template vars.
@@ -1324,6 +1341,8 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
         ctx: FetchContext
     ): Promise<PaginatedFetchResult> {
         const allRecords: Record<string, unknown>[] = [];
+        // MJ-RUN-35: the source's own stated total for this object, if any page states it.
+        let sourceTotalRecords: number | undefined;
         const batchLimit = ctx.BatchSize ?? Number.MAX_SAFE_INTEGER;
         let page = ctx.CurrentPage ?? 1;
         let offset = ctx.CurrentOffset ?? 0;
@@ -1378,6 +1397,12 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             page = paginationState.NextPage ?? page + 1;
             offset = paginationState.NextOffset ?? offset + records.length;
             cursor = paginationState.NextCursor;
+            // MJ-RUN-35: keep the source's own stated total so the engine can check its work.
+            // Last writer wins deliberately — the freshest page is the most current answer, and a
+            // page that omits it must not erase a total an earlier page gave.
+            if (typeof paginationState.TotalRecords === 'number' && paginationState.TotalRecords >= 0) {
+                sourceTotalRecords = paginationState.TotalRecords;
+            }
         }
 
         return {
@@ -1386,6 +1411,7 @@ export abstract class BaseRESTIntegrationConnector extends BaseIntegrationConnec
             NextPage: page,
             NextOffset: offset,
             NextCursor: cursor,
+            SourceTotalRecords: sourceTotalRecords,
         };
     }
 
