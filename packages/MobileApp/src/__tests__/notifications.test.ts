@@ -18,7 +18,18 @@ const state = vi.hoisted(() => ({
     deleteResult: true,
     currentUser: { ID: 'user-1' } as UserOrNull,
     lastSavedValue: null as string | null,
+    existingValue: null as string | null,
 }));
+
+vi.mock('@/data/preferences', () => {
+    const store = new Map<string, string>();
+    return {
+        PrefsStorage: {
+            getString: (k: string) => store.get(k),
+            set: (k: string, v: string) => { store.set(k, v); },
+        },
+    };
+});
 
 vi.mock('expo-notifications', () => ({
     IosAuthorizationStatus: { NOT_DETERMINED: 0, DENIED: 1, AUTHORIZED: 2, PROVISIONAL: 3, EPHEMERAL: 4 },
@@ -35,7 +46,8 @@ vi.mock('@memberjunction/core', () => {
         ID = 'setting-1';
         UserID = '';
         Setting = '';
-        Value: string | null = null;
+        // Seeded from `state.existingValue` so a test can express "this user already has tokens".
+        Value: string | null = state.existingValue;
         LatestResult = { CompleteMessage: 'err' };
         NewRecord(): void {}
         async Save(): Promise<boolean> {
@@ -79,6 +91,8 @@ beforeEach(() => {
     state.saveResult = true;
     state.deleteResult = true;
     state.currentUser = { ID: 'user-1' };
+    state.existingValue = null;
+    state.lastSavedValue = null;
     state.lastSavedValue = null;
 });
 
@@ -117,10 +131,32 @@ describe('GetExpoPushToken', () => {
 });
 
 describe('RegisterDeviceToken', () => {
-    it('persists the token as JSON for the current user', async () => {
+    it('persists the token under this device\'s slot', async () => {
         expect(await RegisterDeviceToken('tok-1')).toBe(true);
         expect(state.lastSavedValue).not.toBeNull();
-        expect(JSON.parse(state.lastSavedValue as string).token).toBe('tok-1');
+        const map = JSON.parse(state.lastSavedValue as string) as Record<string, { token: string }>;
+        const slots = Object.values(map);
+        expect(slots).toHaveLength(1);
+        expect(slots[0].token).toBe('tok-1');
+    });
+
+    it('keeps other devices when a second one registers', async () => {
+        // The single-token shape this replaces meant signing in on a tablet silently stopped the
+        // phone receiving notifications, with nothing to indicate why.
+        state.existingValue = JSON.stringify({
+            'other-device': { token: 'tok-other', platform: 'android', updatedAt: '2026-01-01T00:00:00.000Z' },
+        });
+        expect(await RegisterDeviceToken('tok-mine')).toBe(true);
+        const map = JSON.parse(state.lastSavedValue as string) as Record<string, { token: string }>;
+        expect(Object.values(map).map((t) => t.token).sort()).toEqual(['tok-mine', 'tok-other']);
+    });
+
+    it('migrates a legacy single-token value instead of discarding it', async () => {
+        state.existingValue = JSON.stringify({ token: 'legacy', platform: 'ios', updatedAt: 'x' });
+        expect(await RegisterDeviceToken('tok-new')).toBe(true);
+        const map = JSON.parse(state.lastSavedValue as string) as Record<string, { token: string }>;
+        // Same installation, so the legacy entry is replaced rather than duplicated.
+        expect(Object.values(map).map((t) => t.token)).toEqual(['tok-new']);
     });
 
     it('no-ops (false) when there is no current user', async () => {
@@ -155,16 +191,49 @@ describe('UnregisterDeviceToken', () => {
         expect(await UnregisterDeviceToken()).toBe(true);
     });
 
-    it('deletes the stored token row when present', async () => {
+    it('empties the stored map rather than deleting the row', async () => {
+        // The standard UI role has Update but deliberately NOT Delete on MJ: User Settings, so
+        // removing the last device has to clear the value — deleting would fail for the very
+        // people the setting belongs to.
+        let savedValue: string | null = null;
         state.runViewResults = [
             {
                 ID: 'setting-1',
-                async Delete(): Promise<boolean> {
+                Value: JSON.stringify({ 'this-device': { token: 't', platform: 'ios', updatedAt: 'x' } }),
+                async Save(): Promise<boolean> {
+                    savedValue = (this as { Value: string }).Value;
                     return true;
+                },
+                async Delete(): Promise<boolean> {
+                    throw new Error('Delete must not be attempted — the UI role cannot delete user settings');
                 },
                 LatestResult: { CompleteMessage: '' },
             },
         ];
         expect(await UnregisterDeviceToken()).toBe(true);
+        expect(savedValue).not.toBeNull();
+    });
+
+    it('leaves other devices registered when one unregisters', async () => {
+        let savedValue: string | null = null;
+        state.runViewResults = [
+            {
+                ID: 'setting-1',
+                Value: JSON.stringify({
+                    'other-device': { token: 'keep-me', platform: 'android', updatedAt: 'x' },
+                }),
+                async Save(): Promise<boolean> {
+                    savedValue = (this as { Value: string }).Value;
+                    return true;
+                },
+                async Delete(): Promise<boolean> {
+                    throw new Error('Delete must not be attempted');
+                },
+                LatestResult: { CompleteMessage: '' },
+            },
+        ];
+        expect(await UnregisterDeviceToken()).toBe(true);
+        const map = JSON.parse(savedValue as string) as Record<string, { token: string }>;
+        expect(map['other-device'].token).toBe('keep-me');
     });
 });

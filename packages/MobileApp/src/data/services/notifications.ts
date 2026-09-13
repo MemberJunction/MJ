@@ -16,12 +16,14 @@
  * proper follow-up.
  */
 import { Platform } from 'react-native';
+import { PrefsStorage } from '@/data/preferences';
 import * as Notifications from 'expo-notifications';
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJUserSettingEntity } from '@memberjunction/core-entities';
+import type { UserInfo } from '@memberjunction/core';
+import { RemovePushToken, SavePushToken } from './push-token-store';
 
 /** `MJ: User Settings` key under which this user's push token bundle is stored. */
-export const PUSH_TOKEN_SETTING_KEY = 'mobile.pushDeviceToken';
+// The setting key lives with the store that owns it; re-exported here for existing callers.
+export { PUSH_TOKEN_SETTING_KEY } from './push-token-store';
 
 /** Outcome of {@link RegisterForPushNotifications}. */
 export type PushRegistrationResult = {
@@ -36,11 +38,27 @@ export type PushRegistrationResult = {
 };
 
 /** Shape persisted as the JSON `Value` of the push-token user setting. */
-type StoredPushToken = {
-    token: string;
-    platform: typeof Platform.OS;
-    updatedAt: string;
-};
+
+
+/**
+ * A stable id for this app installation.
+ *
+ * `expo-application`'s installation id survives app restarts and updates but changes on reinstall
+ * — which is the correct lifetime: a reinstalled app gets a new push token anyway, so a stale
+ * entry would be undeliverable regardless. Falls back to a generated id persisted in MMKV when the
+ * native value is unavailable, so a device is never merged with another one's slot.
+ */
+function DeviceInstallationId(): string {
+    const existing = PrefsStorage.getString(DEVICE_ID_PREF_KEY);
+    if (existing) return existing;
+    const generated = `${Platform.OS}-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`;
+    PrefsStorage.set(DEVICE_ID_PREF_KEY, generated);
+    return generated;
+}
+
+/** MMKV key holding this installation's generated device id. */
+const DEVICE_ID_PREF_KEY = 'mobile.pushDeviceId';
+
 
 /**
  * Install the foreground notification handler: while the app is open, show the
@@ -105,30 +123,15 @@ export async function GetExpoPushToken(): Promise<string | null> {
 /**
  * Persist this device's push token to the backend so the server can target it.
  *
- * TODO(P2.3 follow-up): replace this single-row `MJ: User Settings` fallback
- * with a dedicated per-device entity (e.g. `Device Tokens`) so a user's
- * multiple devices can each be addressed. Today one row holds one token per
- * user, so signing in on a second device overwrites the first.
+ * Tokens are stored as a map keyed by installation id, so a user's phone and tablet each keep
+ * their own slot and registering on one never unregisters the other.
  *
  * @param token The Expo push token to store.
  * @param contextUser Optional server context user (defaults to the current user).
  * @returns `true` when the token was saved.
  */
 export async function RegisterDeviceToken(token: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
-    if (!currentUser?.ID) {
-        console.warn('[notifications] no current user; cannot register device token');
-        return false;
-    }
-    const setting = await findOrCreateTokenSetting(md, currentUser);
-    const payload: StoredPushToken = { token, platform: Platform.OS, updatedAt: new Date().toISOString() };
-    setting.Value = JSON.stringify(payload);
-    const saved = await setting.Save();
-    if (!saved) {
-        console.warn('[notifications] failed to persist device token:', setting.LatestResult?.CompleteMessage ?? 'unknown');
-    }
-    return saved;
+    return SavePushToken(DeviceInstallationId(), token, Platform.OS, contextUser);
 }
 
 /**
@@ -145,16 +148,7 @@ export async function UnregisterDeviceToken(contextUser?: UserInfo): Promise<boo
     } catch (e) {
         console.log('[notifications] unregisterForNotificationsAsync no-op:', errText(e));
     }
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
-    if (!currentUser?.ID) return true;
-    const existing = await loadTokenSetting(currentUser);
-    if (!existing) return true;
-    const deleted = await existing.Delete();
-    if (!deleted) {
-        console.warn('[notifications] failed to delete device token:', existing.LatestResult?.CompleteMessage ?? 'unknown');
-    }
-    return deleted;
+    return RemovePushToken(DeviceInstallationId(), contextUser);
 }
 
 /**
@@ -184,31 +178,8 @@ export async function RegisterForPushNotifications(contextUser?: UserInfo): Prom
 }
 
 /** Load the existing push-token setting row for a user, or `null` if none. */
-async function loadTokenSetting(user: UserInfo): Promise<MJUserSettingEntity | null> {
-    const rv = new RunView();
-    const result = await rv.RunView<MJUserSettingEntity>(
-        {
-            EntityName: 'MJ: User Settings',
-            ExtraFilter: `UserID='${user.ID}' AND Setting='${PUSH_TOKEN_SETTING_KEY}'`,
-            ResultType: 'entity_object',
-            MaxRows: 1,
-        },
-        user,
-    );
-    if (result.Success && result.Results && result.Results.length > 0) return result.Results[0];
-    return null;
-}
 
 /** Load the user's push-token setting row, or create a fresh (unsaved) one. */
-async function findOrCreateTokenSetting(md: Metadata, user: UserInfo): Promise<MJUserSettingEntity> {
-    const existing = await loadTokenSetting(user);
-    if (existing) return existing;
-    const created = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', user);
-    created.NewRecord();
-    created.UserID = user.ID;
-    created.Setting = PUSH_TOKEN_SETTING_KEY;
-    return created;
-}
 
 /** Normalize an unknown thrown value into a message string. */
 function errText(e: unknown): string {
