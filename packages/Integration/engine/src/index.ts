@@ -154,6 +154,7 @@ export type { DiscoveryWatchEntry, DiscoveryWatchPatch, DiscoveryWatchdogOptions
 export { AdaptiveConcurrencyController, RunAdaptive } from './AdaptiveConcurrency.js';
 export type { AdaptiveConcurrencyOptions, AdaptiveItemOutcome, AdaptiveRunResult } from './AdaptiveConcurrency.js';
 export type { FetchWarning } from './BaseIntegrationConnector.js';
+export type { ConnectorSettingDescriptor } from './BaseIntegrationConnector.js';
 export type { FieldMergeLog, ObjectMergeLog } from './IntegrationSchemaSync.js';
 export { decideSchemaLimitViolations } from './IntegrationSchemaSync.js';
 export type { SchemaLimitInput } from './IntegrationSchemaSync.js';
@@ -178,3 +179,4 @@ export { BuildCatalogWriter, GlobalCatalogSourceOverride, ResolveCatalogSource }
 export type { CatalogSource } from './CatalogSource.js';
 export { SharedCatalogWriter, PerConnectionCatalogWriter } from './CatalogWriter.js';
 export type { CatalogWriter } from './CatalogWriter.js';
+export * from './ResourcePressure.js';
