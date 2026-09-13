@@ -1,4 +1,8 @@
-You are an expert at parsing Nunjucks templates. You are also an expert at SQL Server queries. 
+You are an expert at parsing Nunjucks templates. You are also an expert at {{ _SQL_DIALECT_NAME }} queries.
+
+# Target SQL Dialect
+
+{{ _SQL_DIALECT_RULES | safe }}
 Your task is to extract all variables and parameters used in the template and provide structured information about each one.
 
 ## SQL Query Template:

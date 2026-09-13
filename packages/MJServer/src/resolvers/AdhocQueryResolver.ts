@@ -1,14 +1,13 @@
 import { Arg, Ctx, Query, Resolver, Field, Int, InputType } from 'type-graphql';
-import { DatabasePlatform, LogError } from '@memberjunction/core';
+import { DatabaseProviderBase, LogError, ResolvePlatformKey } from '@memberjunction/core';
 import { SQLExpressionValidator } from '@memberjunction/global';
 import { RenderPipeline } from '@memberjunction/generic-database-provider';
 import { AppContext } from '../types.js';
-import { GetReadOnlyDataSource, GetReadOnlyProvider } from '../util.js';
+import { GetReadOnlyProvider } from '../util.js';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { IsScopeLimitedPrincipal } from '../auth/scopeLimitedPrincipal.js';
 import { RunQueryResultType } from './QueryResolver.js';
 import { exactTotalFromPage, resolveAdhocTotalRowCount } from './adhoc-query-helpers.js';
-import sql from 'mssql';
 
 /**
  * Input type for executing ad-hoc SQL queries directly.
@@ -34,7 +33,7 @@ class AdhocQueryInput {
  *
  * Security:
  * - SQL validated via SQLExpressionValidator (full_query context) — blocks mutations, dangerous operations
- * - Executes on read-only connection pool only (no fallback to read-write)
+ * - Executes on the read-only PROVIDER only (no fallback to read-write)
  * - Configurable timeout (default 30s)
  * - Requires authenticated user (standard GraphQL auth, no @RequireSystemUser)
  * - Refuses scope-limited principals (see {@link IsScopeLimitedPrincipal}). Raw SQL bypasses
@@ -71,22 +70,30 @@ export class AdhocQueryResolver extends ResolverBase {
                 return this.buildErrorResult(validation.error || 'SQL validation failed');
             }
 
-            // 3. Get READ-ONLY data source (no fallback to read-write)
-            let readOnlyDS: sql.ConnectionPool;
+            // 3/4. Resolve the READ-ONLY PROVIDER (no fallback to read-write). ONE object
+            // answers both questions this resolver has to ask: which dialect to render,
+            // and what to execute the rendered SQL on.
+            //
+            // This used to demand a SQL Server connection pool (an mssql one) from
+            // `context.dataSources` before it would run anything. A PostgreSQL tenant
+            // never populates that, so every ad-hoc query on PG failed at this gate with
+            // "No read-only data source available" and the caller rendered stale/cached
+            // data. `provider.ExecuteSQL` is declared on DatabaseProviderBase and is
+            // implemented by every platform, so routing through the provider makes this
+            // path platform-agnostic instead of platform-assuming.
+            let roProvider: DatabaseProviderBase | null = null;
             try {
-                readOnlyDS = GetReadOnlyDataSource(context.dataSources, { allowFallbackToReadWrite: false });
+                roProvider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
             } catch {
+                roProvider = null;
+            }
+            if (!roProvider) {
                 return this.buildErrorResult('No read-only data source available for ad-hoc query execution');
             }
 
-            // 4. Resolve platform from the read-only provider for the render pipeline.
-            let platform: DatabasePlatform = 'sqlserver';
-            try {
-                const provider = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: false });
-                if (provider?.PlatformKey) platform = provider.PlatformKey;
-            } catch {
-                // Provider not configured — keep the default platform.
-            }
+            // The dialect the SQL is rendered for is the dialect of the connection it
+            // will be executed on — by construction, from the same provider.
+            const platform = ResolvePlatformKey(roProvider);
             const contextUser = context.userPayload?.userRecord;
 
             // 5. Route the SQL through RenderPipeline so composition tokens
@@ -125,7 +132,7 @@ export class AdhocQueryResolver extends ResolverBase {
             // a shared wall-clock deadline derived from the request's timeout budget.
             const deadline = startTime + (input.TimeoutSeconds ?? 30) * 1000;
             const { recordset, totalRowCount } = await this.executeDataAndCount(
-                readOnlyDS, dataSQL, countSQL, startRow, usePaging ? maxRows! : null, deadline
+                roProvider, dataSQL, countSQL, startRow, usePaging ? maxRows! : null, deadline
             );
             const executionTimeMs = Date.now() - startTime;
 
@@ -189,15 +196,14 @@ export class AdhocQueryResolver extends ResolverBase {
      * report a lower-bound total (`startRow + rowsReturned`) and let the data render.
      */
     private async executeDataAndCount(
-        ds: sql.ConnectionPool,
+        provider: DatabaseProviderBase,
         dataSQL: string,
         countSQL: string | null,
         startRow: number,
         maxRows: number | null,
         deadline: number,
     ): Promise<{ recordset: Record<string, unknown>[]; totalRowCount: number }> {
-        const dataResult = await this.runSqlWithDeadline<Record<string, unknown>>(ds, dataSQL, deadline);
-        const recordset = (dataResult.recordset ?? []) as Record<string, unknown>[];
+        const recordset = await this.runSqlWithDeadline<Record<string, unknown>>(provider, dataSQL, deadline);
 
         // Total already known from the page alone (unpaged, or a short page)? Skip the count.
         const exact = exactTotalFromPage(startRow, recordset.length, maxRows);
@@ -208,8 +214,8 @@ export class AdhocQueryResolver extends ResolverBase {
         // Full page — a COUNT(*) is required to know the true total.
         const lowerBound = startRow + recordset.length;
         try {
-            const countResult = await this.runSqlWithDeadline<{ TotalRowCount: number }>(ds, countSQL, deadline);
-            return { recordset, totalRowCount: resolveAdhocTotalRowCount(countResult.recordset, lowerBound) };
+            const countRows = await this.runSqlWithDeadline<{ TotalRowCount: number }>(provider, countSQL, deadline);
+            return { recordset, totalRowCount: resolveAdhocTotalRowCount(countRows, lowerBound) };
         } catch (countErr) {
             const msg = countErr instanceof Error ? countErr.message : String(countErr);
             LogError(`Ad-hoc query row-count failed; reporting a lower-bound total (${lowerBound}). ${msg}`);
@@ -218,27 +224,31 @@ export class AdhocQueryResolver extends ResolverBase {
     }
 
     /**
-     * Executes one SQL statement on the read-only pool, racing it against the shared
-     * wall-clock `deadline`. The timer is always cleared on completion so a settled
-     * query never leaves a dangling timeout armed.
+     * Executes one SQL statement on the read-only PROVIDER, racing it against the
+     * shared wall-clock `deadline`. The timer is always cleared on completion so a
+     * settled query never leaves a dangling timeout armed.
+     *
+     * Goes through `provider.ExecuteSQL` rather than an `mssql` Request, so the same
+     * code runs on SQL Server and PostgreSQL.
      */
     private async runSqlWithDeadline<T>(
-        ds: sql.ConnectionPool,
+        provider: DatabaseProviderBase,
         sqlText: string,
         deadline: number,
-    ): Promise<sql.IResult<T>> {
+    ): Promise<T[]> {
         const remaining = deadline - Date.now();
         if (remaining <= 0) {
             throw new Error('Query timeout exceeded');
         }
         let timer: ReturnType<typeof setTimeout> | undefined;
         try {
-            return await Promise.race([
-                new sql.Request(ds).query<T>(sqlText),
+            const rows = await Promise.race([
+                provider.ExecuteSQL<T>(sqlText),
                 new Promise<never>((_, reject) => {
                     timer = setTimeout(() => reject(new Error('Query timeout exceeded')), remaining);
                 }),
             ]);
+            return Array.isArray(rows) ? rows : [];
         } finally {
             if (timer) {
                 clearTimeout(timer);
