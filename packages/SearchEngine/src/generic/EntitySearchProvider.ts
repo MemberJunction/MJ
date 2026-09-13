@@ -67,26 +67,6 @@ export class EntitySearchProvider extends BaseSearchProvider {
     public static PerEntityTimeoutMS = envIntOverride('MJ_SEARCH_PER_ENTITY_TIMEOUT_MS', 3000);
 
     /**
-     * How many entity RunViews the fan-out runs at once.
-     *
-     * This used to be unbounded: `Promise.all(scoped.map(...))` over every scoped entity, which on
-     * a real tenant is ~117 simultaneous `LIKE '%term%'` RunViews against one connection pool.
-     * They do not fail — they QUEUE, each one then blows its own `PerEntityTimeoutMS` budget, and
-     * the timeout wrapper resolves each to `[]`. The user sees a search that returns a handful of
-     * results, or none, with no error anywhere: the whole fan-out is silently empty and every
-     * individual piece reports success. That silence is the defect being fixed here, not slowness.
-     *
-     * 8 is a measured-safe default, not a derived one: it keeps the in-flight query count below the
-     * point where queueing alone exhausts the per-entity budget on the pool sizes we have measured,
-     * while still overlapping enough work that a wide fan-out stays interactive. It is deliberately
-     * a fixed constant rather than another tunable — the bug is that the number was effectively
-     * "however many entities you have", and any value in this neighbourhood fixes it, so there is
-     * nothing here a deployment needs to discover and tune. `PerEntityFetchDepth` and
-     * `PerEntityTimeoutMS` above are the knobs for shaping cost; this one only stops the stampede.
-     */
-    private static readonly SEARCH_CONCURRENCY = 8;
-
-    /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
      *
      * @param query - The search query text
@@ -156,32 +136,20 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 Math.max(EntitySearchProvider.PerEntityFetchDepth, Math.ceil(topK / Math.max(1, scoped.length)))
             );
 
-            // Search the entities in parallel, threading per-entity ExtraFilter + UserSearchString
+            // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString
             // override; each call is gated by a hard PerEntityTimeoutMS timeout so a slow entity
             // cannot hold up the whole fan-out — partial results from the other entities still land.
-            //
-            // Bounded at SEARCH_CONCURRENCY (see the constant for why an unbounded fan-out returns
-            // silently empty results). Batches are awaited in order and their results appended in
-            // order, so `results` is in exactly the same order as `scoped` — identical to the
-            // unbounded `Promise.all(scoped.map(...))` this replaces. The flatten and relevance
-            // re-sort below are unchanged and order-independent, but keeping the order identical
-            // means tie-breaking between equally-scored hits does not change either.
-            const results: SearchResultItem[][] = [];
-            for (let start = 0; start < scoped.length; start += EntitySearchProvider.SEARCH_CONCURRENCY) {
-                const batch = scoped.slice(start, start + EntitySearchProvider.SEARCH_CONCURRENCY);
-                const batchResults = await Promise.all(
-                    batch.map(item =>
-                        this.searchOneEntity(
-                            item.EntityName,
-                            item.UserSearchString ?? effectiveQuery,
-                            perEntityLimit,
-                            contextUser,
-                            item.ExtraFilter
-                        )
-                    )
-                );
-                results.push(...batchResults);
-            }
+            const searchPromises = scoped.map(item =>
+                this.searchOneEntity(
+                    item.EntityName,
+                    item.UserSearchString ?? effectiveQuery,
+                    perEntityLimit,
+                    contextUser,
+                    item.ExtraFilter
+                )
+            );
+
+            const results = await Promise.all(searchPromises);
             // Re-score against the original query for field-match relevance (not the transform)
             // to keep snippets/field-match semantics consistent with what the user typed.
             const allResults = results.flat();

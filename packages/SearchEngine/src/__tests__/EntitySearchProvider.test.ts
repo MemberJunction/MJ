@@ -718,22 +718,29 @@ describe('EntitySearchProvider', () => {
 });
 
 /**
- * Bounded fan-out.
+ * Fan-out contract — what the entity fan-out must be true of, regardless of HOW it runs.
  *
- * The fan-out used to be `Promise.all(scoped.map(...))` over EVERY scoped entity. On a tenant with
- * ~117 searchable entities that is ~117 simultaneous `LIKE '%term%'` RunViews against one
- * connection pool. They do not error — they QUEUE behind each other, each one then exceeds its own
+ * The fan-out is `Promise.all(scoped.map(...))` over every scoped entity. On a tenant with ~117
+ * searchable entities that is ~117 simultaneous `LIKE '%term%'` RunViews against one connection
+ * pool. They do not error — they QUEUE behind each other, each then exceeds its own
  * `PerEntityTimeoutMS` budget, and the timeout wrapper resolves each to `[]`. The user sees a
- * search that quietly returns nothing, and every individual piece of the system reports success.
- * Silently missing results, not an error, is the defect.
+ * search that quietly returns nothing while every individual piece of the system reports success.
  *
- * So the guarantees under test are: at most SEARCH_CONCURRENCY RunViews in flight at once, every
- * entity still searched, and the result order identical to the unbounded version it replaces
- * (the relevance sort is stable, so insertion order is what breaks ties between equal scores).
+ * BOUNDING that fan-out, and making a timed-out entity distinguishable from one with no matches,
+ * are implemented on the sibling branch `mjc/explorer-stops-misreporting` (a worker pool plus an
+ * `Incomplete` marker on each per-entity result). The pin for the bound itself lives with that
+ * implementation, because the bound is the only thing it can assert — there is no
+ * implementation-agnostic way to state "at most N at once" without naming N.
+ *
+ * What CAN be stated independently of the scheduling strategy is everything the fan-out must not
+ * break while it is being bounded, and that is what this block pins: every scoped entity is
+ * actually searched, and the results come back in ENTITY order rather than COMPLETION order. The
+ * relevance sort is stable, so insertion order is what breaks ties between equally-scored hits —
+ * any rescheduling that appends results as they settle would silently reorder equal-scoring hits.
+ * These tests pass against the current `Promise.all` and against a bounded worker pool alike; they
+ * were run unmodified against the sibling branch's pool implementation and pass there too.
  */
 describe('EntitySearchProvider fan-out concurrency', () => {
-    /** Must match EntitySearchProvider.SEARCH_CONCURRENCY (private — asserted behaviorally). */
-    const EXPECTED_CONCURRENCY = 8;
     const ENTITY_COUNT = 40;
 
     let provider: EntitySearchProvider;
@@ -744,7 +751,7 @@ describe('EntitySearchProvider fan-out concurrency', () => {
     let peakInFlight: number;
     let callOrder: string[];
 
-    /** Pushes ENTITY_COUNT identically-shaped searchable entities named Entity00..Entity39. */
+    /** Pushes `count` identically-shaped searchable entities named Entity00..Entity(count-1). */
     function pushEntities(count: number): string[] {
         const names: string[] = [];
         for (let i = 0; i < count; i++) {
@@ -772,11 +779,12 @@ describe('EntitySearchProvider fan-out concurrency', () => {
         // Every entity returns exactly ONE hit whose Name contains the query, so every hit scores
         // identically (name-field match on the only searchable field). With all scores equal the
         // relevance sort cannot reorder anything, and the final order IS the fan-out order — which
-        // is precisely what an unordered fan-out would corrupt.
+        // is precisely what a rescheduled fan-out would corrupt.
         //
-        // The delays deliberately DESCEND with the entity index, so within any batch the later
-        // entities settle first. An implementation that appended results as they completed would
-        // therefore produce a visibly different order.
+        // The delays deliberately DESCEND with the entity index, so later entities settle first.
+        // An implementation that appended results as they completed — rather than by position —
+        // would therefore produce a visibly different order. A fake that settled in request order
+        // would have pinned nothing.
         mockRunViewFn.mockImplementation(async (params: { EntityName: string }) => {
             const entityName = params.EntityName;
             callOrder.push(entityName);
@@ -792,16 +800,7 @@ describe('EntitySearchProvider fan-out concurrency', () => {
         });
     });
 
-    it(`runs at most ${EXPECTED_CONCURRENCY} RunViews at a time across a ${ENTITY_COUNT}-entity fan-out`, async () => {
-        pushEntities(ENTITY_COUNT);
-
-        await provider.Search('Widget', 100, undefined, contextUser);
-
-        expect(peakInFlight).toBeGreaterThan(1); // still genuinely parallel, not serialized
-        expect(peakInFlight).toBeLessThanOrEqual(EXPECTED_CONCURRENCY);
-    });
-
-    it('still searches every entity — bounding the fan-out drops nothing', async () => {
+    it('searches every scoped entity — none is dropped from the fan-out', async () => {
         const names = pushEntities(ENTITY_COUNT);
 
         const results = await provider.Search('Widget', 100, undefined, contextUser);
@@ -811,32 +810,34 @@ describe('EntitySearchProvider fan-out concurrency', () => {
         expect(results).toHaveLength(ENTITY_COUNT);
     });
 
-    it('returns results in the same order as the unbounded fan-out did — entity order, not completion order', async () => {
+    it('returns results in ENTITY order, not completion order', async () => {
         const names = pushEntities(ENTITY_COUNT);
 
         const results = await provider.Search('Widget', 100, undefined, contextUser);
 
-        // Equal scores + a stable sort means the output order is the fan-out order. `Promise.all`
-        // over the whole list produced exactly the scoped-entity order; the batched loop must too.
         expect(results.map(r => r.EntityName)).toEqual(names);
         expect(new Set(results.map(r => r.Score)).size, 'the fixture holds scores equal on purpose').toBe(1);
     });
 
-    it('a fan-out smaller than the concurrency bound behaves exactly as before — one batch, order preserved', async () => {
+    it('runs a small fan-out genuinely in parallel, still in entity order', async () => {
         const names = pushEntities(5);
 
         const results = await provider.Search('Widget', 100, undefined, contextUser);
 
+        // Five entities is below any plausible concurrency bound, so all five overlap either way.
+        // A fully serialized fan-out would show a peak of 1 and fail here.
         expect(peakInFlight).toBe(5);
         expect(results.map(r => r.EntityName)).toEqual(names);
     });
 
-    it('an exact multiple of the bound leaves no trailing entity unsearched', async () => {
-        const names = pushEntities(EXPECTED_CONCURRENCY * 2);
+    it('leaves no entity unsearched at the tail of the fan-out', async () => {
+        // 16 entities: an exact multiple of the bound the sibling branch applies, which is where a
+        // batching loop with an off-by-one bound would silently drop the final group.
+        const names = pushEntities(16);
 
         const results = await provider.Search('Widget', 100, undefined, contextUser);
 
-        expect(mockRunViewFn).toHaveBeenCalledTimes(EXPECTED_CONCURRENCY * 2);
+        expect(mockRunViewFn).toHaveBeenCalledTimes(16);
         expect(results.map(r => r.EntityName)).toEqual(names);
     });
 });
