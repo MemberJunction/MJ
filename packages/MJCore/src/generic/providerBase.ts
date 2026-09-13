@@ -5256,6 +5256,25 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * arriving within the window of the previous one — which would silently drop the second of
      * two permission changes made less than the window apart.
      * @returns True if refresh is needed, false otherwise
+     *
+     * @remarks
+     * This is a **freshness question, not a load**, so it never throws on an unreachable
+     * server. {@link ReadRemoteMetadataTimestamps} reports whether the server was reached at
+     * all, and when it was NOT the honest answer here depends on whether we hold anything to
+     * serve:
+     *
+     * - **We hold local metadata** → answer `false` ("do not tear this down"). The cached
+     *   snapshot may be a few seconds stale; a rejected status query is no reason to throw
+     *   it away, and every caller of this method treats `false` as "carry on with what you
+     *   have".
+     * - **We hold nothing** → answer `true`, so the caller attempts a real load and fails
+     *   against the actual metadata fetch. That failure is the one worth surfacing.
+     *
+     * Before this, an unreachable status query propagated an exception out of
+     * {@link Config} and the Explorer's single boot catch turned it into a non-retryable
+     * "System Error" — the whole app dead over a freshness check it did not need an answer
+     * to. The two warm callers ({@link backgroundValidateAndRefresh},
+     * {@link preValidateAndRefresh}) already caught it; {@link Config} did not.
      */
     public async CheckToSeeIfRefreshNeeded(providerToUse?: IMetadataProvider, bypassMinCheckInterval?: boolean): Promise<boolean> {
         if (!this.AllowRefresh) return false;
@@ -5270,8 +5289,33 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
         this._lastRefreshCheckAt = now;
 
-        await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        const remoteTimestampsRead = await this.RefreshRemoteMetadataTimestamps(providerToUse);
+        // Read the reachability flag in the SAME synchronous turn the await above resumed in —
+        // before the next await can let a concurrent check overwrite it.
+        const serverReached = this._lastRemoteTimestampReadReached;
         await this.LoadLocalMetadataFromStorage();
+
+        if (!remoteTimestampsRead && !serverReached) {
+            // Could not ask the server. `LocalMetadataObsolete()` would answer `true` here
+            // purely because the remote timestamp list is empty — a "yes, reload everything"
+            // derived from the absence of an answer rather than from any comparison.
+            const haveLocal = (this._localMetadata?.AllEntities?.length ?? 0) > 0;
+            if (haveLocal) {
+                LogError(
+                    `[RefreshCheck] Could not read metadata timestamps from the server — serving the ` +
+                    `cached metadata snapshot (${this._localMetadata.AllEntities.length} entities) and ` +
+                    `deferring the staleness check to the next call.`
+                );
+                return false;
+            }
+            LogError(
+                `[RefreshCheck] Could not read metadata timestamps from the server and there is no ` +
+                `cached snapshot to fall back on — reporting a refresh as needed so the caller loads ` +
+                `metadata and surfaces the real failure.`
+            );
+            return true;
+        }
+
         return this.LocalMetadataObsolete();
     }
 
@@ -5519,7 +5563,23 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (cachedDataset && cachedDateStr) {
             // We have a candidate cache entry — confirm freshness with the server.
             const localDate = new Date(cachedDateStr);
-            const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
+            let status: DatasetStatusResultType;
+            try {
+                status = await this.GetDatasetStatusByName(datasetName, itemFilters);
+            }
+            catch (e) {
+                // We are HOLDING a complete cached dataset and only asked whether it is still
+                // current. A failed freshness question is not grounds for throwing the answer
+                // away and propagating: the line below re-fetches the whole dataset from the
+                // same unreachable server, so the alternative to serving this cache is an
+                // exception, not fresher data. Serve it and say so.
+                LogError(
+                    `GetAndCacheDatasetByName('${datasetName}'): the freshness check failed — ` +
+                    `${e instanceof Error ? e.message : String(e)}. Serving the cached dataset ` +
+                    `(cached ${cachedDateStr}), which may be stale.`
+                );
+                return cachedDataset;
+            }
             if (status && localDate.getTime() >= status.LatestUpdateDate.getTime()) {
                 // Timestamps suggest cache is fresh; verify per-entity row counts to
                 // catch deleted rows (timestamp comparison alone misses pure deletes).
@@ -5736,11 +5796,64 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
     /**
      * Retrieves the latest metadata update timestamps from the server.
-     * @returns Array of metadata update information
+     * @returns Array of metadata update information, or `undefined` when the server could not
+     * be asked (transport failure, timeout, gateway error) or answered unsuccessfully.
+     *
+     * @remarks
+     * This is the ONE network call behind every staleness check, and it is a question about
+     * freshness — never the metadata itself. A rejected status query therefore returns
+     * `undefined` (an absent answer) rather than propagating: its callers already treat a
+     * falsy result as "could not tell", while an exception out of here travelled unguarded
+     * through {@link RefreshRemoteMetadataTimestamps} → {@link CheckToSeeIfRefreshNeeded} →
+     * {@link Config} and killed the caller's whole bootstrap.
+     *
+     * The failure is logged at error level, not swallowed quietly: "we are running on a
+     * cached snapshot because the server did not answer" is something an operator needs to
+     * see in the console.
      */
     protected async GetLatestMetadataUpdates(providerToUse?: IMetadataProvider): Promise<MetadataInfo[]> {
-        // No schema filters for metadata — see comment in GetAllMetadata
-        const d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse)
+        return (await this.ReadRemoteMetadataTimestamps(providerToUse)).Timestamps;
+    }
+
+    /**
+     * The metadata-status read, with **why** it failed preserved.
+     *
+     * Two failures look the same to {@link GetLatestMetadataUpdates} — both give `undefined` —
+     * but they call for opposite responses, so callers that can act on the difference read it
+     * here instead:
+     *
+     * - `Reached: false` — the request never got an answer (transport failure, timeout, 504).
+     *   Transient. Nothing can be concluded about freshness, and a full metadata load would hit
+     *   the same wall, so the right move is to keep serving what we have.
+     * - `Reached: true` with no `Timestamps` — the server answered `Success: false`. A
+     *   *permanent* condition (the dataset is missing or misconfigured), not a network blip.
+     *   Degrading here would serve a stale cache forever; the historical behaviour of treating
+     *   it as "obsolete" and attempting the real load is correct, because `GetDatasetByName`
+     *   may well still work.
+     *
+     * Conflating the two is how a broken status endpoint would become permanently invisible.
+     */
+    protected async ReadRemoteMetadataTimestamps(
+        providerToUse?: IMetadataProvider
+    ): Promise<{ Reached: boolean; Timestamps: MetadataInfo[] | undefined }> {
+        let d: DatasetStatusResultType;
+        try {
+            // No schema filters for metadata — see comment in GetAllMetadata
+            d = await this.GetDatasetStatusByName(ProviderBase._mjMetadataDatasetName, null, this.CurrentUser, providerToUse)
+        }
+        catch (e) {
+            LogError(
+                `ReadRemoteMetadataTimestamps: the metadata status query failed — ` +
+                `${e instanceof Error ? e.message : String(e)}. Reporting the server as unreachable; ` +
+                `callers fall back to the cached metadata snapshot.`
+            );
+            return { Reached: false, Timestamps: undefined };
+        }
+        return { Reached: true, Timestamps: this.mapDatasetStatusToTimestamps(d) };
+    }
+
+    /** Shape a dataset-status answer into the timestamp list, or `undefined` if it failed. */
+    private mapDatasetStatusToTimestamps(d: DatasetStatusResultType): MetadataInfo[] | undefined {
         if (d && d.Success) {
             const ret = d.EntityUpdateDates.map(e => {
                 return {
@@ -5760,6 +5873,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             })
             return ret;
         }
+        return undefined;
     }
 
     /**
@@ -5768,14 +5882,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns True if timestamps were successfully refreshed
      */
     public async RefreshRemoteMetadataTimestamps(providerToUse?: IMetadataProvider): Promise<boolean> {
-        const mdTimeStamps = await this.GetLatestMetadataUpdates(providerToUse);  
-        if (mdTimeStamps) {
-            this._latestRemoteMetadataTimestamps = mdTimeStamps;
+        const read = await this.ReadRemoteMetadataTimestamps(providerToUse);
+        // Recorded rather than returned: this method's `boolean` contract is "did the timestamps
+        // refresh", and widening it would change a public signature that callers outside this
+        // class already consume. {@link CheckToSeeIfRefreshNeeded} reads the flag in the same
+        // synchronous turn this call resolves in, so no interleaving call can overwrite it first.
+        this._lastRemoteTimestampReadReached = read.Reached;
+        if (read.Timestamps) {
+            this._latestRemoteMetadataTimestamps = read.Timestamps;
             return true;
         }
         else
             return false;
     }
+
+    /**
+     * Whether the most recent {@link RefreshRemoteMetadataTimestamps} actually REACHED the
+     * server, regardless of whether it came back with usable timestamps.
+     *
+     * Starts `true` so that nothing reads "unreachable" before a read has been attempted.
+     * See {@link ReadRemoteMetadataTimestamps} for why the distinction exists.
+     */
+    private _lastRemoteTimestampReadReached: boolean = true;
 
     /**
      * Checks if local metadata is obsolete compared to remote metadata.
