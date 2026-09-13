@@ -705,14 +705,14 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
 
     // Step 1: Fetch new manifest
     const explicitUpgradeVersion = options.Version;
-    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined));
+    const targetVersion = explicitUpgradeVersion ?? (await GetLatestVersion(existingApp.RepositoryURL, context.GitHubOptions, existingApp.Subpath ?? undefined, existingApp.Name));
     if (!targetVersion) {
       return BuildFailureResult('Upgrade', options.AppName, '', 'Schema', startTime, 'Could not determine target version');
     }
 
     // If an explicit version was requested, validate the tag exists on GitHub
     if (explicitUpgradeVersion) {
-      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, existingApp.Subpath ?? undefined);
+      const tagResult = await ValidateGitHubTag(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, existingApp.Subpath ?? undefined, existingApp.Name);
       if (!tagResult.Exists) {
         return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, tagResult.ErrorMessage ?? `Version ${targetVersion} not found`);
       }
@@ -739,7 +739,7 @@ export async function UpgradeApp(options: UpgradeOptions, context: OrchestratorC
     const subpath = existingApp.Subpath ?? undefined;
 
     Callbacks?.OnProgress?.('Fetch', `Fetching manifest for ${options.AppName} v${targetVersion}...`);
-    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath);
+    const fetchResult = await FetchManifestFromGitHub(existingApp.RepositoryURL, targetVersion, context.GitHubOptions, subpath, existingApp.Name);
     if (!fetchResult.Success || !fetchResult.ManifestJSON) {
       return BuildFailureResult('Upgrade', options.AppName, targetVersion, 'Schema', startTime, fetchResult.ErrorMessage ?? 'Failed to fetch manifest');
     }
