@@ -34,4 +34,12 @@ already affected a tenant with many identity providers on a short screen. Both c
 their own content and centre with auto margins rather than `justify-content: center`, which would
 strand the overflow above the scroll origin.
 
+Review follow-ups: the card's focus ring took `border-radius: inherit`, which resolves to `0` on a
+pseudo-element (the property is not inherited, and `inherit` takes from the originating anchor
+rather than the positioned card), so it drew square around a rounded tile; the login screen gains
+the repo's first `@media (forced-colors: active)` block, since Windows High Contrast substitutes
+the card fill, border token and hover tint away and this is the one surface a user meets before
+any other; and a `@media (max-height: 480px)` branch handles landscape phones, where the
+width-only breakpoints left the centered layout's sign-in button off the bottom of the screen.
+
 No behaviour or visual change for an app that binds nothing, projects nothing and themes nothing.

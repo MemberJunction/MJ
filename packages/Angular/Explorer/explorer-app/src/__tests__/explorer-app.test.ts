@@ -124,6 +124,25 @@ describe('login surface composition contract', () => {
     expect(reverseAt).toBeLessThan(stackAt);
   });
 
+  it('draws the card focus ring on the card, not on the anchor box', () => {
+    // `border-radius: inherit` here resolved to 0: the property is not inherited, and on a
+    // pseudo-element `inherit` takes from the ORIGINATING element (the anchor, which has no
+    // radius) rather than the positioned ancestor the overlay is sized to. The ring rendered
+    // square around a rounded card. Naming the token is the fix; this pins it.
+    const overlay = componentCss.slice(componentCss.indexOf('.login-wrapper .login-card__anchor::after'));
+    const body = overlay.slice(overlay.indexOf('{') + 1, overlay.indexOf('}'));
+    expect(body).toContain('border-radius: var(--mj-login-card-radius)');
+    expect(body).not.toMatch(/border-radius:\s*inherit/);
+  });
+
+  it('keeps the card affordances alive under forced-colors', () => {
+    // Under Windows High Contrast the card's fill, border token and color-mix hover tint are all
+    // substituted away, so a link card would read identically to a static one without this.
+    const fc = componentCss.slice(componentCss.indexOf('@media (forced-colors: active)'));
+    expect(fc).toContain('border-color: CanvasText');
+    expect(fc).toContain('border-color: Highlight');
+  });
+
   it('makes a configured external card link tab-nap safe', () => {
     expect(componentHtml).toContain(`card.newTab ? 'noopener noreferrer' : null`);
     expect(componentHtml).toContain(`card.newTab ? '_blank' : null`);

@@ -264,8 +264,14 @@
   color: var(--mj-login-card-text-secondary);
 }
 
-/* Stretched link: the anchor's ::after covers the card, so the whole tile is the click target
-   while the accessible name stays the title alone. */
+/* Stretched link: the anchor's ::after covers the card, so the whole tile is the click target.
+   Two consequences worth knowing rather than rediscovering:
+   - The accessible name is the anchor's own text — the title, plus the "(opens in a new tab)"
+     hint when there is one. That hint belongs in the name, which is why it sits inside the
+     anchor rather than beside it.
+   - The overlay swallows drag-select across the card, the standard trade for a full-tile click
+     target. Card text is host-authored, so a deployment that needs its text selectable should
+     put the link in the text rather than configure `href` on the card. */
 .login-wrapper .login-card__anchor {
   color: inherit;
   text-decoration: none;
@@ -275,7 +281,11 @@
   content: '';
   position: absolute;
   inset: 0;
-  border-radius: inherit;
+  /* NOT `inherit`. border-radius is not an inherited property, and on a pseudo-element `inherit`
+     takes from the ORIGINATING element — the anchor, which has no radius — so it resolved to 0
+     and drew a square focus ring around a rounded card. `inset: 0` still sizes to .login-card
+     because that is the nearest positioned ancestor; only the radius had to be named. */
+  border-radius: var(--mj-login-card-radius);
 }
 
 .login-wrapper .login-card__anchor:focus-visible::after {
@@ -323,6 +333,27 @@
 @media (prefers-reduced-motion: reduce) {
   .login-wrapper .login-card--link {
     transition: none;
+  }
+}
+
+/* Windows High Contrast / forced-colors substitutes the user's own palette, so the card's fill,
+   its border token and the color-mix hover tint all flatten — a link card would look identical
+   to a static one. Re-express the affordances in system colours, which is the only vocabulary
+   that survives. This is the first forced-colors block in packages/Angular/; the login screen
+   earns it because it is pre-auth, so a forced-colors user meets it before any other surface
+   and has no alternative route in. */
+@media (forced-colors: active) {
+  .login-wrapper .login-card {
+    border-color: CanvasText;
+  }
+
+  .login-wrapper .login-card--link:hover {
+    border-color: Highlight;
+  }
+
+  /* The icon chip is a currentColor wash, which renders as nothing here. */
+  .login-wrapper .login-card__icon {
+    border: 1px solid CanvasText;
   }
 }
 
@@ -490,5 +521,47 @@
 
   .login-wrapper--centered .login-btn {
     padding: var(--mj-space-8) var(--mj-space-5);
+  }
+}
+
+/* ========================================
+   Short viewports (landscape phones)
+   ======================================== */
+
+/* The breakpoints above key on WIDTH, and a landscape phone (~844x390) is short rather than
+   narrow — so it takes the stacked branch and spends half the screen on a logo, while the
+   centered layout's auto-height story block pushes the sign-in options off the bottom entirely
+   (measured before this rule: a 342px banner and the button at y=467 on a 390px viewport).
+   Height is the axis that matters here, so these key on it.
+
+   ORDERING + SCOPE: this sits last so it wins over the centered block's `display: block` at the
+   same specificity. The stacked trim is deliberately ALSO width-scoped — an `auto` height on a
+   short but WIDE window would collapse the story panel to its content and leave the gradient
+   floating beside a full-height sign-in column. */
+@media (max-width: 900px) and (max-height: 480px) {
+  .login-wrapper .main-banner {
+    height: auto;
+    padding-block: var(--mj-space-4);
+  }
+}
+
+@media (max-height: 480px) {
+  /* The same call the stacked layout already makes when the banner is short: the logo carries
+     the brand, and the copy would cost the sign-in options their place on screen. */
+  .login-wrapper .main-banner .banner-welcome,
+  .login-wrapper .main-banner .banner-sub {
+    display: none;
+  }
+
+  .login-wrapper--centered {
+    padding-block: var(--mj-space-4);
+  }
+
+  .login-wrapper--centered .main-banner {
+    padding-bottom: var(--mj-space-5);
+  }
+
+  .login-wrapper--centered .login-btn {
+    padding-block: var(--mj-space-6);
   }
 }

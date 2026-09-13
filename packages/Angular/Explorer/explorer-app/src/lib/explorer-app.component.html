@@ -114,8 +114,9 @@
 
   <!-- Configured cards, rendered the same way in both regions; only the surface they sit on
        differs, and that is a class away rather than a second copy of the markup. A card with an
-       href stretches one anchor over the whole card (::after), so the click target is the card
-       while the accessible name stays the title. -->
+       href stretches one anchor over the whole card (::after), so the click target is the whole
+       tile while the accessible name is the anchor's own text — the title, and the new-tab hint
+       when there is one. -->
   <ng-template #loginCards let-cards let-onBanner="onBanner">
     <div class="login-cards" [class.login-cards--on-banner]="onBanner">
       @for (card of cards; track $index) {
