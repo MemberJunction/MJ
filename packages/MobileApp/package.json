@@ -33,6 +33,7 @@
     "@memberjunction/graphql-dataprovider": "6.1.0-edge.6",
     "@memberjunction/markdown-core": "6.1.0-edge.6",
     "@memberjunction/react-runtime": "6.1.0-edge.6",
+    "@memberjunction/realtime-runtime": "6.1.0-edge.6",
     "expo": "~54.0.37",
     "expo-audio": "~1.1.1",
     "expo-auth-session": "~7.0.0",
@@ -62,7 +63,8 @@
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
-    "react-native-url-polyfill": "^3.0.0"
+    "react-native-url-polyfill": "^3.0.0",
+    "react-native-webrtc": "^124.0.8"
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",

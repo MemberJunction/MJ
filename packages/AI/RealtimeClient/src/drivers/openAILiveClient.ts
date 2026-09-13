@@ -419,7 +419,20 @@ export class OpenAILiveClient extends BaseRealtimeClient {
         }
     }
 
-    private attachRemoteAudio(pc: IRealtimePeerConnection): void {
+    /**
+     * Attaches the agent's remote audio track to an output.
+     *
+     * `protected` rather than `private` so a non-browser host can substitute it, matching
+     * {@link createPeerConnection}, which is already a substitutable factory for exactly this
+     * reason. The two are halves of the same seam: a host that supplies its own peer connection
+     * necessarily supplies its own audio output too. Under React Native, for instance, the remote
+     * track is routed to the active output device automatically and there is no element to create,
+     * so the override is empty — but with `private` visibility the browser implementation would run
+     * and throw on `document`.
+     *
+     * Widening access is source- and binary-compatible; no existing caller changes.
+     */
+    protected attachRemoteAudio(pc: IRealtimePeerConnection): void {
         this.remoteAudioEl = this.createAudioSink();
         pc.ontrack = (e: RTCTrackEvent) => {
             if (this.remoteAudioEl && e.streams[0]) {

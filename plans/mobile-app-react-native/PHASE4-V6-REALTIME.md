@@ -386,3 +386,40 @@ native host generally cannot. The sample app is where that stops being a design 
 mechanism — whatever it has to do to register itself is, by definition, the porting story every
 other app inherits. If that mechanism is awkward, the architecture is wrong and the sample will
 show it.
+
+---
+
+## 10. 🚩 PROPOSED METADATA CHANGE — the `UI` role cannot start a realtime session
+
+**Proposal only. Applied to the local dev database for testing; NOT committed as a product change.**
+
+Found empirically while minting a realtime session as a normal user.
+
+| Entity | `UI` role | Consequence |
+|---|---|---|
+| `MJ: Conversations` | Read **+ Create + Update** | A user can start a text conversation with an agent |
+| `MJ: Conversation Details` | Read **+ Create + Update** | …and send messages in it |
+| `MJ: AI Agent Sessions` | **Read only** | …but **cannot start a voice session** |
+| `MJ: AI Agent Session Channels` | **Read only** | …and cannot attach a channel to one |
+
+`StartRealtimeClientSession` fails for any `UI`-role user with:
+
+```
+Failed to create agent session: … Does NOT have permission to Create MJ: AI Agent Sessions records.
+```
+
+**This is not mobile-specific.** `SessionManager.CreateSession` runs as the calling user on every
+host, so the same denial applies to MJ Explorer's voice overlay. Voice is a user-facing feature;
+a role that can hold a text conversation but not a spoken one looks like an oversight rather than
+a deliberate gate — especially since the session path *already* authorizes properly via `CanRun`
+on the target agent (per the Real-Time Co-Agents guide), making the entity-permission check a
+second, stricter gate that nothing else in the voice design anticipates.
+
+**Proposed fix:** grant the `UI` role `Create` (and `Update`, for `LastActiveAt` heartbeats and
+close-reason stamping) on `MJ: AI Agent Sessions` and `MJ: AI Agent Session Channels`, seeded as
+metadata alongside the existing conversation permissions.
+
+**Why it is not in this PR:** entity permissions are product-wide security metadata. Changing what
+every deployment's standard end-user role may create is a decision for the maintainers, not a side
+effect of a mobile feature branch. The local database has the grant applied so realtime work can
+proceed; the change is disclosed rather than smuggled.
