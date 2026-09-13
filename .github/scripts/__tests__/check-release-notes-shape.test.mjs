@@ -17,6 +17,25 @@ describe('check-release-notes-shape', () => {
         expect(codes).not.toContain('tldr-first');
     });
 
+    // A heading with nothing under it is the failure this gate exists for, with the
+    // heading left behind — and it is the MORE likely agent slip, not the less: the
+    // heading is in the prompt, so emitting the scaffold then truncating produces exactly
+    // this. Omitting the heading entirely is the case the prompt makes hardest.
+    it('flags a TL;DR heading with no content under it', () => {
+        const content = pad('# A release summary here\n\n## TL;DR\n\n## Bug Fixes\n- A fix.\n');
+        expect(checkReleaseNotesShape(content).map((p) => p.code)).toContain('tldr-empty');
+    });
+
+    it('flags a TL;DR holding only whitespace', () => {
+        const content = pad('# A release summary here\n\n## TL;DR\n   \n\t\n\n## Bug Fixes\n- A fix.\n');
+        expect(checkReleaseNotesShape(content).map((p) => p.code)).toContain('tldr-empty');
+    });
+
+    it('does not flag a TL;DR that is the file\'s last section but has content', () => {
+        const content = pad('# A release summary here\n\n## TL;DR\nReal summary prose.\n');
+        expect(checkReleaseNotesShape(content).map((p) => p.code)).not.toContain('tldr-empty');
+    });
+
     it('does not flag the standing-context line that follows the TL;DR bullets', () => {
         const content = pad('# A release summary here\n\n## TL;DR\n- One.\n\nEdge builds are prereleases.\n\n## Bug Fixes\n- A fix.\n');
         expect(checkReleaseNotesShape(content)).toEqual([]);

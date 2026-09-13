@@ -34,6 +34,7 @@
  *   node .github/scripts/check-release-notes-shape.mjs <file> [--min-bytes N]
  */
 import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 export const DEFAULT_MIN_BYTES = 400;
 const TLDR_HEADING = /^##[ \t]+TL;?DR[ \t]*$/i;
@@ -82,6 +83,29 @@ export function checkReleaseNotesShape(content, { minBytes = DEFAULT_MIN_BYTES }
             code: 'tldr-first',
             message: `the first section is "${lines[firstH2Index].trim()}" — it must be "## TL;DR" (see releases/README.md).`,
         });
+        // No emptiness check here on purpose: the first section is some OTHER heading, so
+        // its body is not the TL;DR's and reporting it empty would name the wrong section.
+        return problems;
+    }
+
+    // The TL;DR's body: heading to the next `## `, or to EOF when it is the last section.
+    // This mirrors the preamble slice above — which points BACKWARD, and is exactly why an
+    // empty section slipped through. Every other assertion about the TL;DR is positional
+    // (is it first, is it spelled right); none of them reads what is under it, so a heading
+    // with nothing beneath it satisfied all of them. That is the failure this whole gate
+    // exists for, with the heading left behind, and it is the more likely agent slip rather
+    // than the less: the heading is in the prompt, so emitting the scaffold and then
+    // truncating produces precisely this, while omitting the heading is what the prompt
+    // makes hardest.
+    const nextH2Index = lines.findIndex((l, i) => i > firstH2Index && H2.test(l));
+    const tldrBody = lines
+        .slice(firstH2Index + 1, nextH2Index === -1 ? lines.length : nextH2Index)
+        .filter((l) => l.trim() !== '');
+    if (tldrBody.length === 0) {
+        problems.push({
+            code: 'tldr-empty',
+            message: 'has a `## TL;DR` heading with nothing under it. The summary is the part most readers stop at; an empty section ships the announcement without it.',
+        });
     }
 
     return problems;
@@ -94,6 +118,8 @@ export const SELF_TEST_FIXTURES = [
     ['lowercase tl;dr', false, '# A release summary here\n\n## tl;dr\n- One.\n\n## Bug Fixes\n- A fix.\n'],
     ['standing-context paragraph after the TL;DR is legitimate', false, '# A release summary here\n\n## TL;DR\n- One.\n\nEdge builds are prereleases and never move latest.\n\n## Bug Fixes\n- A fix.\n'],
     ['stray intro paragraph ABOVE the TL;DR', true, '# A release summary here\n\nThe seventh Edge build of the 6.1 line.\n\n## TL;DR\n- One.\n\n## Bug Fixes\n- A fix.\n'],
+    ['empty TL;DR section', true, '# A release summary here\n\n## TL;DR\n\n## Bug Fixes\n- A fix.\n'],
+    ['TL;DR holding only whitespace', true, '# A release summary here\n\n## TL;DR\n   \n\t\n\n## Bug Fixes\n- A fix.\n'],
     ['no TL;DR at all', true, '# A release summary here\n\n## New Features\n- One.\n\n## Bug Fixes\n- A fix.\n'],
     ['TL;DR present but not first', true, '# A release summary here\n\n## New Features\n- One.\n\n## TL;DR\n- Two.\n'],
     ['no H1', true, '## TL;DR\n- One.\n\n## Bug Fixes\n- A fix.\n'],
@@ -102,7 +128,7 @@ export const SELF_TEST_FIXTURES = [
 ];
 
 // ── CLI ─────────────────────────────────────────────────────────────────────────
-const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isMain) {
     const args = process.argv.slice(2);
     const file = args.find((a) => !a.startsWith('--'));
