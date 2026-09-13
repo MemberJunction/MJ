@@ -2,7 +2,8 @@
  * Tests for the pure content builders behind `mj dev workspace`
  * (src/lib/dev-workspace/build.ts). Content rules reproduce the manual setup this
  * command replaces:
- * producer packages-only globs, the three .npmrc lines (and NO hoist block), the
+ * producer packages-only globs, the one .npmrc line (and NO hoist block), the pnpm
+ * settings rendered into pnpm-workspace.yaml (pnpm 10 reads them only there), the
  * devDependency union with highest-version-wins conflict logging, and the pnpm
  * packageManager pin.
  */
@@ -11,6 +12,7 @@ import {
   AssembleParentOverrides,
   BASELINE_DEV_DEPENDENCIES,
   BuildNpmrc,
+  BuildPnpmWorkspaceSettings,
   BuildRootPackageJson,
   BuildSentinel,
   BuildShellPeerGuidance,
@@ -20,13 +22,15 @@ import {
   FALLBACK_PNPM_PIN,
   NPMRC_BASE_LINES,
   ONLY_BUILT_DEPENDENCIES,
+  PEER_INSTALL_SETTINGS,
   PickTurboJson,
   ResolveDevDependencyUnion,
+  ResolveDuplicateProviderLinks,
   ResolveMemberPnpmBlocks,
   ResolvePnpmPin,
   SENTINEL_MARKER,
   SHELL_PROVIDED_PEERS,
-} from '../lib/dev-workspace/build.js';
+  AssertAppPackageNamesUnique } from '../lib/dev-workspace/build.js';
 import type { CandidateRepo } from '../lib/dev-workspace/types.js';
 
 /** Minimal CandidateRepo factory for pure-builder tests. */
@@ -126,6 +130,85 @@ describe('BuildWorkspaceYaml', () => {
     expect(BuildWorkspaceYaml([repo('bizapps-common'), repo('bizapps-accounting')])).not.toContain('/apps/');
   });
 
+  it('emits admitted app-shell globs (--apps) for that member only, after its packages globs', () => {
+    const yaml = BuildWorkspaceYaml([repo('Skip-Brain', { AppGlobs: ['apps/API', 'apps/MJAPI'] }), repo('bizapps-common')]);
+    expect(yaml).toContain("  - 'Skip-Brain/apps/API'");
+    expect(yaml).toContain("  - 'Skip-Brain/apps/MJAPI'");
+    expect(yaml.indexOf("'Skip-Brain/packages/*'")).toBeLessThan(yaml.indexOf("'Skip-Brain/apps/API'"));
+    expect(yaml).not.toContain('bizapps-common/apps');
+  });
+
+  it('AssertAppPackageNamesUnique passes on unique names and throws naming both sides on a collision', () => {
+    const pkg = (rel: string, name: string) => ({ RelPath: rel, PackageJson: { name } });
+    const ok = [
+      repo('Skip-Brain', { AppGlobs: ['apps/API'], Packages: [pkg('apps/API', 'skip_api_engine'), pkg('packages/core', '@skip-brain/core')] }),
+      repo('MJ', { Packages: [pkg('packages/MJAPI', 'mjapi')] }),
+    ];
+    expect(AssertAppPackageNamesUnique(ok)).toEqual(['skip_api_engine']);
+    const clash = [
+      repo('MJ', { Packages: [pkg('packages/MJAPI', 'mjapi')] }),
+      repo('Skip-Brain', { AppGlobs: ['apps/*'], Packages: [pkg('apps/MJAPI', 'mjapi')] }),
+    ];
+    expect(() => AssertAppPackageNamesUnique(clash)).toThrow(/'mjapi'.*MJ\/packages\/MJAPI.*Skip-Brain\/apps\/MJAPI/);
+    // two ordinary (non-app) packages sharing a name is not this guard's business
+    const plain = [repo('A', { Packages: [pkg('packages/x', 'dup')] }), repo('B', { Packages: [pkg('packages/y', 'dup')] })];
+    expect(AssertAppPackageNamesUnique(plain)).toEqual([]);
+  });
+
+  // pnpm 10 honours overrides / patches / peer rules ONLY in pnpm-workspace.yaml — a
+  // package.json#pnpm block at the root is ignored with a warning that drowns in the
+  // install output (946 overrides were silently inert in the field).
+  it('appends the pnpm settings as block YAML after the packages section', () => {
+    const yaml = BuildWorkspaceYaml([repo('a')], {
+      strictPeerDependencies: false,
+      autoInstallPeers: true,
+      peerDependencyRules: { allowedVersions: { 'nunjucks>chokidar': '5' }, ignoreMissing: ['axios'] },
+      overrides: { '@memberjunction/core': 'workspace:*', 'type-graphql': '2.0.0-beta.3', "it's": '1.0.0' },
+      patchedDependencies: { 'type-graphql@2.0.0-beta.3': 'MJ/patches/type-graphql@2.0.0-beta.3.patch' },
+      allowUnusedPatches: true,
+      packageExtensions: { 'express-rate-limit': { dependencies: { '@types/express': '^5.0.6' } } },
+      emptyList: [],
+      emptyMap: {},
+    });
+    const settingsSection = yaml.slice(yaml.indexOf('# pnpm settings'));
+    expect(settingsSection.split('\n').slice(1).join('\n')).toBe(
+      [
+        'strictPeerDependencies: false',
+        'autoInstallPeers: true',
+        'peerDependencyRules:',
+        '  allowedVersions:',
+        "    'nunjucks>chokidar': '5'",
+        '  ignoreMissing:',
+        "    - 'axios'",
+        'overrides:',
+        "  '@memberjunction/core': 'workspace:*'",
+        "  'type-graphql': '2.0.0-beta.3'",
+        "  'it''s': '1.0.0'",
+        'patchedDependencies:',
+        "  'type-graphql@2.0.0-beta.3': 'MJ/patches/type-graphql@2.0.0-beta.3.patch'",
+        'allowUnusedPatches: true',
+        'packageExtensions:',
+        "  'express-rate-limit':",
+        '    dependencies:',
+        "      '@types/express': '^5.0.6'",
+        'emptyList: []',
+        'emptyMap: {}',
+        '',
+      ].join('\n')
+    );
+    // the packages section is untouched by the settings
+    expect(packagesSectionGlobs(yaml)).toEqual(["  - 'a'", "  - 'a/packages/*'"]);
+  });
+
+  it('emits no settings section at all when none are passed (byte-stable for pre-existing callers)', () => {
+    expect(BuildWorkspaceYaml([repo('a')])).not.toContain('# pnpm settings');
+    expect(BuildWorkspaceYaml([repo('a')], {})).toBe(BuildWorkspaceYaml([repo('a')]));
+  });
+
+  it('refuses a settings value it cannot render rather than mis-rendering it', () => {
+    expect(() => BuildWorkspaceYaml([repo('a')], { bad: () => 1 })).toThrow(/pnpm settings may hold only/);
+  });
+
   it('enforces the detection preconditions: globs present, POSITIVE globs packages-rooted', () => {
     expect(() => BuildWorkspaceYaml([repo('bare', { WorkspaceGlobs: [] })])).toThrow(/no workspace globs/);
     expect(() => BuildWorkspaceYaml([repo('shelly', { WorkspaceGlobs: ['apps/*'] })])).toThrow(/not rooted under packages\//);
@@ -133,15 +216,19 @@ describe('BuildWorkspaceYaml', () => {
 });
 
 describe('BuildNpmrc', () => {
-  it('emits exactly the three proven settings lines', () => {
+  it('emits exactly the one settings line pnpm still needs there', () => {
     const lines = BuildNpmrc().trimEnd().split('\n');
     expect(lines[0].startsWith('#')).toBe(true);
     expect(lines.slice(1)).toEqual([...NPMRC_BASE_LINES]);
-    expect(NPMRC_BASE_LINES).toEqual([
-      'package-manager-strict=false',
-      'strict-peer-dependencies=true',
-      'auto-install-peers=true',
-    ]);
+    expect(NPMRC_BASE_LINES).toEqual(['package-manager-strict=false']);
+  });
+
+  // The peer switches moved to pnpm-workspace.yaml with the rest of the pnpm
+  // settings (pnpm 10 reads settings only there); .npmrc must not carry a second copy.
+  it('carries no peer settings — those live in pnpm-workspace.yaml', () => {
+    const npmrc = BuildNpmrc();
+    expect(npmrc).not.toContain('strict-peer-dependencies');
+    expect(npmrc).not.toContain('auto-install-peers');
   });
 
   // The 78-entry public-hoist-pattern block was deleted after an attribution audit
@@ -315,6 +402,75 @@ describe('CollectFamilyPackages', () => {
   });
 });
 
+// MJ and Skip-Brain both provide mj_generatedentities; the plain
+// workspace:* override handed Skip-Brain's packages MJ's copy (sort order) and their build
+// failed on missing Skip entities. pnpm's `parent>child` selector + root-relative `link:`
+// scopes each provider's copy to its own consumers (verified live).
+describe('ResolveDuplicateProviderLinks', () => {
+  const depOn = (relPath: string, name: string, deps: Record<string, string>) => ({ RelPath: relPath, PackageJson: { name, dependencies: deps } });
+  const mj = repo('MJ', {
+    Packages: [
+      pkg('packages/GeneratedEntities', 'mj_generatedentities'),
+      depOn('packages/MJAPI', 'mj_api', { mj_generatedentities: '1.0.0' }),
+      pkg('packages/MJCore', '@memberjunction/core'),
+    ],
+  });
+  const skip = repo('Skip-Brain', {
+    Packages: [
+      pkg('packages/GeneratedEntities', 'mj_generatedentities'),
+      depOn('packages/core', '@skip-brain/core', { mj_generatedentities: '0.0.0' }),
+      { RelPath: 'apps/API', PackageJson: { name: 'skip_api_engine', devDependencies: { mj_generatedentities: '0.0.0' } } },
+    ],
+  });
+
+  it('emits one consumer-scoped link per consumer inside each providing member, pointing at that member\'s copy', () => {
+    const duplicates = CollectFamilyPackages([mj, skip]).Duplicates;
+    const { Overrides, Links, Unlinked } = ResolveDuplicateProviderLinks([skip, mj], duplicates);
+    expect(Overrides).toEqual({
+      '@skip-brain/core>mj_generatedentities': 'link:Skip-Brain/packages/GeneratedEntities',
+      'mj_api>mj_generatedentities': 'link:MJ/packages/GeneratedEntities',
+      'skip_api_engine>mj_generatedentities': 'link:Skip-Brain/packages/GeneratedEntities',
+    });
+    // members by name, consumers by RelPath (apps/API sorts before packages/core) — deterministic, not alphabetical by name
+    expect(Links.map((l) => `${l.Repo}: ${l.Consumer}`)).toEqual(['MJ: mj_api', 'Skip-Brain: skip_api_engine', 'Skip-Brain: @skip-brain/core']);
+    expect(Unlinked).toEqual([]);
+  });
+
+  it('emits nothing when no name is duplicated', () => {
+    expect(ResolveDuplicateProviderLinks([mj], [])).toEqual({ Overrides: {}, Links: [], Unlinked: [] });
+  });
+
+  it('reports (never guesses) a consumer whose own name is duplicated, and one whose member has no copy', () => {
+    const mjWithActions = repo('MJ', {
+      Packages: [pkg('packages/GeneratedEntities', 'mj_generatedentities'), depOn('packages/GeneratedActions', 'mj_generatedactions', { mj_generatedentities: '1.0.0' })],
+    });
+    const skipWithActions = repo('Skip-Brain', {
+      Packages: [pkg('packages/GeneratedEntities', 'mj_generatedentities'), depOn('packages/GeneratedActions', 'mj_generatedactions', { mj_generatedentities: '0.0.0' })],
+    });
+    const outsider = repo('bizapps', { Packages: [depOn('packages/Tasks', 'tasks-server', { mj_generatedentities: '1.0.0' })] });
+    const duplicates = CollectFamilyPackages([mjWithActions, skipWithActions, outsider]).Duplicates;
+    const { Overrides, Unlinked } = ResolveDuplicateProviderLinks([mjWithActions, skipWithActions, outsider], duplicates);
+    expect(Overrides).toEqual({}); // the only consumers are ambiguous or copy-less — nothing is emitted blind
+    expect(Unlinked).toEqual([
+      { Consumer: 'mj_generatedactions', Package: 'mj_generatedentities', Repo: 'MJ', Reason: 'ambiguous-consumer' },
+      { Consumer: 'mj_generatedactions', Package: 'mj_generatedentities', Repo: 'Skip-Brain', Reason: 'ambiguous-consumer' },
+      { Consumer: 'tasks-server', Package: 'mj_generatedentities', Repo: 'bizapps', Reason: 'no-own-copy' },
+    ]);
+  });
+
+  it('lands in the assembled settings beside the plain workspace:* override and in the report', () => {
+    const result = BuildRootPackageJson('bluecypress', [mj, skip]);
+    const settings = result.PnpmSettings as { overrides: Record<string, string> };
+    expect(settings.overrides.mj_generatedentities).toBe('workspace:*');
+    expect(settings.overrides['@skip-brain/core>mj_generatedentities']).toBe('link:Skip-Brain/packages/GeneratedEntities');
+    expect(settings.overrides['mj_api>mj_generatedentities']).toBe('link:MJ/packages/GeneratedEntities');
+    expect(result.Report.DuplicateFamilyPackages).toEqual([{ Package: 'mj_generatedentities', Repos: ['MJ', 'Skip-Brain'] }]);
+    expect(result.Report.DuplicateProviderLinks).toHaveLength(3);
+    expect(result.Report.UnlinkedDuplicateConsumers).toEqual([]);
+    expect(BuildWorkspaceYaml([mj, skip], result.PnpmSettings)).toContain("\n  '@skip-brain/core>mj_generatedentities': 'link:Skip-Brain/packages/GeneratedEntities'\n");
+  });
+});
+
 describe('ResolveMemberPnpmBlocks', () => {
   it('hoists member overrides, re-roots patch paths, and carries packageExtensions + peer rules', () => {
     const result = ResolveMemberPnpmBlocks([
@@ -398,6 +554,67 @@ describe('AssembleParentOverrides', () => {
     expect(Overrides).toEqual({ 'chalk@^4': '4.1.2', 'chalk@^5': '5.9.9' });
     expect(SupersededPins).toEqual(['chalk@^5']);
   });
+
+  // SaaS's committed type-graphql@2.0.0-rc.3 out-voted MJ's
+  // patched 2.0.0-beta.3 in the lockfile pins, so MJ's patch never applied and every
+  // consumer of @memberjunction/server type-checked against the wrong type-graphql.
+  it('pins a patched package to the exact version its patch is keyed to, beating a lockfile pin', () => {
+    const { Overrides, SupersededPins, PatchPins } = AssembleParentOverrides(
+      { 'type-graphql': '2.0.0-rc.3', axios: '1.13.6' },
+      {},
+      [],
+      ['type-graphql@2.0.0-beta.3']
+    );
+    expect(Overrides).toEqual({ axios: '1.13.6', 'type-graphql': '2.0.0-beta.3' });
+    expect(SupersededPins).toEqual(['type-graphql']);
+    expect(PatchPins).toEqual(['type-graphql']);
+  });
+
+  it('a patched-package pin beats an explicit member override too (an override that strands a patch is reported)', () => {
+    const { Overrides, SupersededPins, PatchPins } = AssembleParentOverrides({}, { 'type-graphql': '2.0.0-rc.3' }, [], ['type-graphql@2.0.0-beta.3']);
+    expect(Overrides).toEqual({ 'type-graphql': '2.0.0-beta.3' });
+    expect(SupersededPins).toEqual(['type-graphql']);
+    expect(PatchPins).toEqual(['type-graphql']);
+  });
+
+  it('a patched-package pin takes the per-major selector shape when other majors are pinned, never forcing them', () => {
+    const { Overrides, SupersededPins, PatchPins } = AssembleParentOverrides(
+      { 'chalk@^5': '5.6.2', 'chalk@^4': '4.1.2' },
+      {},
+      [],
+      ['chalk@5.9.9']
+    );
+    expect(Overrides).toEqual({ 'chalk@^4': '4.1.2', 'chalk@^5': '5.9.9' });
+    expect(SupersededPins).toEqual(['chalk@^5']);
+    expect(PatchPins).toEqual(['chalk@^5']);
+  });
+
+  it('adds a patched-package pin the lockfiles never mentioned, and skips a patch key with no exact version', () => {
+    const { Overrides, SupersededPins, PatchPins } = AssembleParentOverrides({}, {}, [], ['type-graphql@2.0.0-beta.3', 'lodash', 'chalk@^5']);
+    expect(Overrides).toEqual({ 'type-graphql': '2.0.0-beta.3' });
+    expect(SupersededPins).toEqual([]);
+    expect(PatchPins).toEqual(['type-graphql']);
+  });
+
+  it('family workspace:* still beats a patched-package pin (local source always wins) and the pin is not reported', () => {
+    const { Overrides, SupersededPins, PatchPins } = AssembleParentOverrides({}, {}, ['@memberjunction/core'], ['@memberjunction/core@6.1.0']);
+    expect(Overrides).toEqual({ '@memberjunction/core': 'workspace:*' });
+    expect(SupersededPins).toEqual(['@memberjunction/core']);
+    expect(PatchPins).toEqual([]);
+  });
+});
+
+describe('BuildPnpmWorkspaceSettings', () => {
+  it('leads with the peer install switches, then the peer bridge, and omits empty sections', () => {
+    const settings = BuildPnpmWorkspaceSettings(
+      {},
+      { Overrides: {}, PatchedDependencies: {}, PackageExtensions: {}, PeerAllowedVersions: {}, PeerIgnoreMissing: [], Conflicts: [], Patches: [] }
+    );
+    expect(Object.keys(settings)).toEqual(['strictPeerDependencies', 'autoInstallPeers', 'peerDependencyRules']);
+    expect(settings.strictPeerDependencies).toBe(false);
+    expect(settings.autoInstallPeers).toBe(true);
+    expect(PEER_INSTALL_SETTINGS).toEqual({ strictPeerDependencies: false, autoInstallPeers: true });
+  });
 });
 
 describe('ResolvePnpmPin', () => {
@@ -424,7 +641,7 @@ describe('BuildRootPackageJson', () => {
     expect(() => BuildRootPackageJson('bluecypress', [])).toThrow(/at least one member/);
   });
 
-  it('builds the private root manifest with pin, union, and the peer bridge block', () => {
+  it('builds the private root manifest with pin and union, and returns the peer bridge as workspace-yaml settings', () => {
     const result = BuildRootPackageJson('bluecypress', [
       repo('MJ-repo', { RootPackageJson: { packageManager: 'pnpm@10.33.0', devDependencies: { turbo: '^2.5.0' } } }),
     ]);
@@ -433,16 +650,25 @@ describe('BuildRootPackageJson', () => {
       private: boolean;
       packageManager: string;
       devDependencies: Record<string, string>;
-      pnpm: { peerDependencyRules: { allowedVersions: Record<string, string>; ignoreMissing: string[] } };
+      pnpm?: unknown;
     };
     expect(manifest.name).toBe('bluecypress-dev-workspace');
     expect(manifest.private).toBe(true);
     expect(manifest.packageManager).toBe('pnpm@10.33.0');
     expect(result.PinSource).toBe('MJ-repo');
     expect(manifest.devDependencies.turbo).toBe('^2.5.0');
-    expect(manifest.pnpm.peerDependencyRules.allowedVersions['nunjucks>chokidar']).toBe('5');
-    expect(manifest.pnpm.peerDependencyRules.allowedVersions['@modelcontextprotocol/sdk>zod']).toBe('^3.24');
-    expect(manifest.pnpm.peerDependencyRules.ignoreMissing).toEqual(['axios']);
+    // pnpm 10 ignores a pnpm block at a workspace root — the settings go to pnpm-workspace.yaml instead
+    expect(manifest.pnpm).toBeUndefined();
+    const settings = result.PnpmSettings as {
+      strictPeerDependencies: boolean;
+      autoInstallPeers: boolean;
+      peerDependencyRules: { allowedVersions: Record<string, string>; ignoreMissing: string[] };
+    };
+    expect(settings.strictPeerDependencies).toBe(false);
+    expect(settings.autoInstallPeers).toBe(true);
+    expect(settings.peerDependencyRules.allowedVersions['nunjucks>chokidar']).toBe('5');
+    expect(settings.peerDependencyRules.allowedVersions['@modelcontextprotocol/sdk>zod']).toBe('^3.24');
+    expect(settings.peerDependencyRules.ignoreMissing).toEqual(['axios']);
     expect(result.Content.endsWith('\n')).toBe(true);
   });
 
@@ -453,8 +679,8 @@ describe('BuildRootPackageJson', () => {
   });
 
   // End-to-end absorption: everything the 299/299 field recipe did by hand
-  // (#3795 steps 3–5 + the workspace:* addendum) lands in one generated manifest.
-  it('assembles the fully-absorbed pnpm block: pins, hoisted overrides + patch, extensions, family workspace:*', () => {
+  // (#3795 steps 3–5 + the workspace:* addendum) lands in one settings block for pnpm-workspace.yaml.
+  it('assembles the fully-absorbed pnpm settings: pins, hoisted overrides + patch (pinned), extensions, family workspace:*', () => {
     const mj = repo('MJ', {
       RootPackageJson: {
         name: 'memberjunction-workspace',
@@ -487,32 +713,39 @@ describe('BuildRootPackageJson', () => {
       },
     });
     const result = BuildRootPackageJson('bluecypress', [mj]);
-    const manifest = JSON.parse(result.Content) as {
-      devDependencies: Record<string, string>;
-      pnpm: {
-        overrides: Record<string, string>;
-        patchedDependencies: Record<string, string>;
-        packageExtensions: Record<string, { dependencies: Record<string, string> }>;
-        peerDependencyRules: { allowedVersions: Record<string, string>; ignoreMissing: string[] };
-      };
+    const manifest = JSON.parse(result.Content) as { devDependencies: Record<string, string>; pnpm?: unknown };
+    expect(manifest.pnpm).toBeUndefined(); // pnpm 10 reads settings only from pnpm-workspace.yaml
+    const settings = result.PnpmSettings as {
+      strictPeerDependencies: boolean;
+      autoInstallPeers: boolean;
+      overrides: Record<string, string>;
+      patchedDependencies: Record<string, string>;
+      allowUnusedPatches: boolean;
+      packageExtensions: Record<string, { dependencies: Record<string, string> }>;
+      peerDependencyRules: { allowedVersions: Record<string, string>; ignoreMissing: string[] };
     };
-    expect(manifest.pnpm.overrides).toEqual({
+    expect(settings.strictPeerDependencies).toBe(false);
+    expect(settings.autoInstallPeers).toBe(true);
+    expect(settings.overrides).toEqual({
       '@memberjunction/core': 'workspace:*',
       '@memberjunction/integration-test-suite': 'workspace:*',
       '@types/express': '5.1.1', // EXACT — ^resolved passed 6 of 7 field breaks through
       axios: '1.13.6',
       jsdom: '26.1.0',
+      'type-graphql': '2.0.0-beta.3', // pinned from the patch key so the patch applies
     });
-    expect(manifest.pnpm.patchedDependencies).toEqual({
+    expect(settings.patchedDependencies).toEqual({
       'type-graphql@2.0.0-beta.3': 'MJ/patches/type-graphql@2.0.0-beta.3.patch',
     });
     // a member patch keyed to a version the parent graph never resolves must not
     // hard-fail the whole install (ERR_PNPM_UNUSED_PATCH) — found by the live smoke
-    expect((JSON.parse(result.Content) as { pnpm: { allowUnusedPatches: boolean } }).pnpm.allowUnusedPatches).toBe(true);
-    expect(manifest.pnpm.packageExtensions['express-rate-limit']).toEqual({ dependencies: { '@types/express': '^5.0.6' } });
-    expect(manifest.pnpm.peerDependencyRules.allowedVersions['nunjucks>chokidar']).toBe('5'); // baseline kept
-    expect(manifest.pnpm.peerDependencyRules.allowedVersions['foo>bar']).toBe('2'); // member unioned on top
-    expect(manifest.pnpm.peerDependencyRules.ignoreMissing).toEqual(['axios', 'graphql']);
+    expect(settings.allowUnusedPatches).toBe(true);
+    expect(settings.packageExtensions['express-rate-limit']).toEqual({ dependencies: { '@types/express': '^5.0.6' } });
+    expect(settings.peerDependencyRules.allowedVersions['nunjucks>chokidar']).toBe('5'); // baseline kept
+    expect(settings.peerDependencyRules.allowedVersions['foo>bar']).toBe('2'); // member unioned on top
+    expect(settings.peerDependencyRules.ignoreMissing).toEqual(['axios', 'graphql']);
+    // the yaml builder renders exactly these settings
+    expect(BuildWorkspaceYaml([mj], result.PnpmSettings)).toContain("\n  'type-graphql': '2.0.0-beta.3'\n");
     // devDependencies: @types skipped; the family workspace:* devDep KEPT (the package IS a member now)
     expect(manifest.devDependencies['@types/node']).toBeUndefined();
     expect(manifest.devDependencies['@memberjunction/integration-test-suite']).toBe('workspace:*');
@@ -521,6 +754,7 @@ describe('BuildRootPackageJson', () => {
     expect(result.Report.LockfilePinCount).toBe(2);
     expect(result.Report.FamilyOverrideCount).toBe(2);
     expect(result.Report.Patches).toHaveLength(1);
+    expect(result.Report.PatchPins).toEqual(['type-graphql']);
     expect(result.Report.SkippedTypesDevDeps).toEqual(['@types/node']);
     expect(result.Report.LockfileSkips).toEqual([
       { Repo: 'MJ', Skip: { Name: 'fstream', Version: 'tar-fs@3.1.1', Reason: 'non-semver resolution' } },

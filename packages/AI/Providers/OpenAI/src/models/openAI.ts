@@ -1,11 +1,22 @@
-import { AIErrorInfo, BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities } from "@memberjunction/ai";
+import { AIErrorInfo, BaseLLM, ChatMessage, ChatMessageRole, ChatParams, ChatResult, ClassifyParams, ClassifyResult, GetUserMessageFromChatParams, ModelUsage, SummarizeParams, SummarizeResult, StreamingChatCallbacks, ErrorAnalyzer, FileCapabilities, ChatToolCall, getToolResultBlocks, CHAT_FINISH_REASON_TOOL_CALLS,
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls } from "@memberjunction/ai";
 import { APIUserAbortError, OpenAI } from "openai";
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
-import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageParam, ChatCompletionSystemMessageParam, ChatCompletionUserMessageParam } from "openai/resources";
+import { ChatCompletionAssistantMessageParam, ChatCompletionContentPart, ChatCompletionMessageFunctionToolCall, ChatCompletionMessageParam, ChatCompletionMessageToolCall, ChatCompletionSystemMessageParam, ChatCompletionTool, ChatCompletionUserMessageParam } from "openai/resources";
 
 /**
  * OpenAI implementation of the BaseLLM class
  */
+/**
+ * The `reasoning_effort` values OpenAI accepts, in ascending order.
+ *
+ * Confirmed against the live API rather than taken from docs: the provider's rejection
+ * message for an unsupported value enumerates this exact set. `xhigh` and `none` sit outside MJ's
+ * numeric 1-100 effort scale by design — see {@link OpenAILLM.getReasoningLevel}.
+ */
+export const OPENAI_REASONING_EFFORTS = ['none', 'low', 'medium', 'high', 'xhigh'] as const;
+export type OpenAIReasoningEffort = (typeof OPENAI_REASONING_EFFORTS)[number];
+
 @RegisterClass(BaseLLM, 'OpenAILLM')
 export class OpenAILLM extends BaseLLM {
     private _openAI: OpenAI;
@@ -34,6 +45,16 @@ export class OpenAILLM extends BaseLLM {
      * OpenAI supports streaming
      */
     public override get SupportsStreaming(): boolean {
+        return true;
+    }
+
+    /**
+     * OpenAI natively supports tool calling (`tools` / `tool_calls` / `tool` role messages).
+     *
+     * Subclasses targeting OpenAI-compatible gateways inherit this; one whose endpoint does NOT
+     * accept a `tools` array should override it back to false.
+     */
+    public override get SupportsTools(): boolean {
         return true;
     }
 
@@ -71,22 +92,44 @@ export class OpenAILLM extends BaseLLM {
      * Check if the model supports reasoning via system prompt keywords
      * GPT-OSS models use "Reasoning: low/medium/high" in system prompt
      */
+    /**
+     * Clamps a reasoning level to the three the GPT-OSS *system prompt* channel understands.
+     *
+     * That path writes `Reasoning: <level>` into the system message rather than sending an API
+     * field, and the harmony format defines only low/medium/high — `Reasoning: xhigh` would be
+     * prose the model has never been trained on, which is worse than the nearest real level.
+     */
+    private clampToSystemPromptLevel(level: OpenAIReasoningEffort): 'low' | 'medium' | 'high' {
+        if (level === 'xhigh') return 'high';
+        if (level === 'none') return 'low';
+        return level;
+    }
+
     private supportsReasoningViaSystemPrompt(modelName: string): boolean {
         const lowerModel = modelName.toLowerCase();
         return lowerModel.includes('gpt-oss') || lowerModel.includes('gptoss');
     }
 
     /**
-     * Convert effort level to reasoning level string for system prompt
+     * Converts MJ's effort level to an OpenAI `reasoning_effort` value.
+     *
+     * Two input forms, deliberately not unified. **Numeric** 1-100 is MJ's cross-provider scale and
+     * its three bands are replicated in the Groq and Cerebras drivers, so the bucket boundaries are
+     * a shared convention and are left exactly as they were — re-banding them here would silently
+     * reclassify every documented `effortLevel: 85` and mean something different per provider.
+     * **Named** values pass through to the API instead, which is the only way to reach the two
+     * levels that have no place on a 1-100 scale: `'xhigh'` above the top band and `'none'` below
+     * the bottom one. Verified against the provider — OpenAI's own rejection message for
+     * an unsupported value enumerates exactly `none, low, medium, high, xhigh`.
      */
-    private getReasoningLevel(effortLevel: string): 'low' | 'medium' | 'high' {
+    private getReasoningLevel(effortLevel: string): OpenAIReasoningEffort {
         const numValue = Number.parseInt(effortLevel);
         if (isNaN(numValue)) {
             const level = effortLevel.trim().toLowerCase();
-            if (level === 'low' || level === 'medium' || level === 'high') {
-                return level as 'low' | 'medium' | 'high';
+            if (OPENAI_REASONING_EFFORTS.includes(level as OpenAIReasoningEffort)) {
+                return level as OpenAIReasoningEffort;
             }
-            throw new Error(`Invalid effortLevel: ${effortLevel}`);
+            throw new Error(`Invalid effortLevel: ${effortLevel} (expected 1-100 or one of ${OPENAI_REASONING_EFFORTS.join(', ')})`);
         }
         // Map numeric values to levels
         if (numValue <= 33) return 'low';
@@ -186,7 +229,7 @@ export class OpenAILLM extends BaseLLM {
         const supportsReasoningInSystemPrompt = this.supportsReasoningViaSystemPrompt(params.model);
 
         if (params.effortLevel && supportsReasoningInSystemPrompt) {
-            const reasoningLevel = this.getReasoningLevel(params.effortLevel);
+            const reasoningLevel = this.clampToSystemPromptLevel(this.getReasoningLevel(params.effortLevel));
             // Add or append to system message
             const systemMsg = messages.find(m => m.role === 'system');
             if (systemMsg) {
@@ -212,6 +255,9 @@ export class OpenAILLM extends BaseLLM {
             logprobs: params.includeLogProbs === true ? true : false,
             top_logprobs: params.includeLogProbs && params.topLogProbs ? params.topLogProbs : undefined,
         };
+
+        // Native tool calling (§5.1) — ephemeral per-call declarations, mapped straight through.
+        this.applyToolParams(openAIParams, params);
 
         //Reasoning effort level has been provided and it wasn't handled via system prompt
         if (params.effortLevel && !supportsReasoningInSystemPrompt) {
@@ -336,13 +382,18 @@ export class OpenAILLM extends BaseLLM {
                         }
                     }
                     
+                    const toolCalls = this.extractToolCalls(c.message?.tool_calls);
+
                     return {
                         message: {
                             role: ChatMessageRole.assistant,
                             content: content,
-                            thinking: thinking
+                            thinking: thinking,
+                            toolCalls: toolCalls
                         },
-                        finish_reason: c.finish_reason,
+                        // OpenAI already reports 'tool_calls' here; normalize defensively so the
+                        // value is consistent even if a compatible endpoint reports something else.
+                        finish_reason: toolCalls ? CHAT_FINISH_REASON_TOOL_CALLS : c.finish_reason,
                         index: c.index,
                         logprobs: c.logprobs // Include logprobs if present
                     }
@@ -401,7 +452,7 @@ export class OpenAILLM extends BaseLLM {
 
         // Handle reasoning for GPT-OSS models via system prompt
         if (params.effortLevel && this.supportsReasoningViaSystemPrompt(params.model)) {
-            const reasoningLevel = this.getReasoningLevel(params.effortLevel);
+            const reasoningLevel = this.clampToSystemPromptLevel(this.getReasoningLevel(params.effortLevel));
             // Add or append to system message
             const systemMsg = messages.find(m => m.role === 'system');
             if (systemMsg) {
@@ -770,7 +821,13 @@ export class OpenAILLM extends BaseLLM {
     }
 
     public ConvertMJToOpenAIChatMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
-        return messages.map(m => {
+        // flatMap, not map: one MJ `tool` turn carrying N results becomes N OpenAI `tool` messages,
+        // because OpenAI pairs each result to its call with a per-message `tool_call_id`.
+        return messages.flatMap(m => {
+            if (m.role === ChatMessageRole.tool) {
+                return this.convertToolResultMessage(m);
+            }
+
             const role = this.ConvertMJToOpenAIRole(m.role);
             let content: unknown = m.content;
             
@@ -826,16 +883,85 @@ export class OpenAILLM extends BaseLLM {
                     } as ChatCompletionUserMessageParam;
                 
                 case 'assistant':
-                    return { 
-                        role: 'assistant' as const, 
-                        content 
+                    return {
+                        role: 'assistant' as const,
+                        // OpenAI wants null, not '', when the turn is carried entirely by tool calls.
+                        content: (m.toolCalls?.length && !content) ? null : content,
+                        ...(m.toolCalls?.length ? { tool_calls: this.convertToolCallsToOpenAI(m.toolCalls) } : {})
                     } as ChatCompletionAssistantMessageParam;
-                
+
                 default:
                     throw new Error(`Unknown role ${m.role}`);
             }
         });
-    }    
+    }
+
+    /**
+     * Expands one MJ `tool` turn into OpenAI's per-result `tool` messages.
+     *
+     * @param message A `tool`-role message whose content holds `tool_result` blocks
+     * @returns One OpenAI tool message per result block
+     */
+    private convertToolResultMessage(message: ChatMessage): ChatCompletionMessageParam[] {
+        // Delegates to the shared OpenAI-shaped mapping in @memberjunction/ai. Groq and Cerebras
+        // speak the same wire format, and three copies of this would drift; the SDK type stays at
+        // this boundary so the compiler still checks the shape going into the request.
+        return buildOpenAICompatibleToolResults(message, 'OpenAI provider') as ChatCompletionMessageParam[];
+    }
+
+    /**
+     * Maps normalized tool calls onto OpenAI's `tool_calls`, whose arguments are a JSON STRING.
+     *
+     * @param toolCalls The normalized calls from a prior assistant turn
+     * @returns OpenAI-shaped tool calls
+     */
+    private convertToolCallsToOpenAI(toolCalls: ChatToolCall[]): ChatCompletionMessageFunctionToolCall[] {
+        return buildOpenAICompatibleToolCalls(toolCalls) as ChatCompletionMessageFunctionToolCall[];
+    }
+
+    /**
+     * Adds the native tool-calling fields to an outgoing request when the caller declared tools.
+     *
+     * OpenAI's `tool_choice` vocabulary is nearly the neutral one — `'auto' | 'none' | 'required'`
+     * pass through unchanged; only the named form is reshaped. Parallelism is a top-level request
+     * field here, unlike Anthropic where it hangs off the choice object.
+     *
+     * @param request The request body being assembled (mutated in place)
+     * @param params The chat params for this request
+     */
+    protected applyToolParams(
+        request: OpenAI.Chat.Completions.ChatCompletionCreateParams,
+        params: ChatParams
+    ): void {
+        if (!params.tools || params.tools.length === 0) {
+            return;
+        }
+
+        request.tools = buildOpenAICompatibleTools(params.tools) as ChatCompletionTool[];
+
+        if (params.toolChoice !== undefined) {
+            request.tool_choice = buildOpenAICompatibleToolChoice(params.toolChoice);
+        }
+
+        if (params.parallelToolCalls !== undefined) {
+            request.parallel_tool_calls = params.parallelToolCalls;
+        }
+    }
+
+    /**
+     * Normalizes OpenAI's `tool_calls` — whose arguments arrive as a JSON STRING — into
+     * {@link ChatToolCall}s with parsed arguments.
+     *
+     * A model can emit malformed JSON for a call's arguments. That is a tool-specific failure the
+     * caller must be able to see, so the call is still surfaced (with empty arguments) and logged
+     * rather than dropped — dropping it would look to the agent loop like the model said nothing.
+     *
+     * @param toolCalls The raw tool calls from the response, if any
+     * @returns The normalized calls, or undefined when the model called nothing
+     */
+    private extractToolCalls(toolCalls: ChatCompletionMessageToolCall[] | undefined): ChatToolCall[] | undefined {
+        return extractOpenAICompatibleToolCalls(toolCalls, 'OpenAI provider');
+    }
 
 
     /**

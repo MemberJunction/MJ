@@ -31,6 +31,12 @@ vi.mock('@memberjunction/global', () => ({
 }));
 
 // Mock @memberjunction/ai - provide the classes and constants the provider imports
+// Imported by PATH rather than through the package barrel: the barrel pulls in the whole AI
+// surface (and @memberjunction/global, which is mocked here), while this module depends only
+// on chat.types. The helpers are pure functions, so the real ones are what the driver should
+// be tested against — a mocked copy would be the second implementation the shared module exists to prevent.
+import * as actualToolMapping from '../../../../Core/src/generic/openAICompatibleTools';
+
 vi.mock('@memberjunction/ai', () => {
     class BaseModel {
         protected _apiKey: string;
@@ -82,7 +88,8 @@ vi.mock('@memberjunction/ai', () => {
     const ChatMessageRole = {
         system: 'system' as const,
         user: 'user' as const,
-        assistant: 'assistant' as const
+        assistant: 'assistant' as const,
+        tool: 'tool' as const
     };
     class ChatParams {
         messages: Array<{ role: string; content: unknown }> = [];
@@ -100,12 +107,24 @@ vi.mock('@memberjunction/ai', () => {
         ) {}
     }
     return {
+        // The OpenAI-shaped tool mapping is pure functions over plain data, and it lives in
+        // @memberjunction/ai precisely so there is ONE implementation. Re-mocking it here would
+        // recreate the drift the shared module exists to prevent, so use the real thing.
+        buildOpenAICompatibleTools: actualToolMapping.buildOpenAICompatibleTools,
+        buildOpenAICompatibleToolChoice: actualToolMapping.buildOpenAICompatibleToolChoice,
+        buildOpenAICompatibleToolCalls: actualToolMapping.buildOpenAICompatibleToolCalls,
+        buildOpenAICompatibleToolResults: actualToolMapping.buildOpenAICompatibleToolResults,
+        extractOpenAICompatibleToolCalls: actualToolMapping.extractOpenAICompatibleToolCalls,
         BaseLLM,
         ModelUsage,
         ChatResult,
         ChatMessageRole,
         ChatParams,
         ChatMessage: {} as unknown,
+        ChatToolCall: {} as unknown,
+        CHAT_FINISH_REASON_TOOL_CALLS: 'tool_calls',
+        getToolResultBlocks: (content: unknown) =>
+            Array.isArray(content) ? content.filter((b: { type: string }) => b.type === 'tool_result') : [],
         SummarizeParams: ChatParams,
         SummarizeResult,
         ClassifyParams: ChatParams,
@@ -220,8 +239,11 @@ describe('OpenAILLM', () => {
     });
 
     describe('getReasoningLevel', () => {
-        const callMethod = (effortLevel: string): 'low' | 'medium' | 'high' => {
+        const callMethod = (effortLevel: string): string => {
             return (instance as ReturnType<typeof Object.create>)['getReasoningLevel'](effortLevel);
+        };
+        const clamp = (level: string): string => {
+            return (instance as ReturnType<typeof Object.create>)['clampToSystemPromptLevel'](level);
         };
 
         it('should pass through string "low"', () => {
@@ -268,6 +290,38 @@ describe('OpenAILLM', () => {
 
         it('should throw for invalid string values', () => {
             expect(() => callMethod('extreme')).toThrow('Invalid effortLevel: extreme');
+        });
+
+        // 'xhigh' and 'none' are real OpenAI values that used to throw here. They are reachable
+        // ONLY by name: the numeric 1-100 scale is a cross-provider convention shared with the
+        // Groq and Cerebras drivers, so its bands stay put and these two sit outside them.
+        it('should pass through "xhigh" — above the numeric scale', () => {
+            expect(callMethod('xhigh')).toBe('xhigh');
+            expect(callMethod('XHigh')).toBe('xhigh');
+        });
+
+        it('should pass through "none" — below the numeric scale', () => {
+            expect(callMethod('none')).toBe('none');
+        });
+
+        it('should NOT reach xhigh from any numeric value', () => {
+            // Re-banding 1-100 to make room for xhigh would silently reclassify every documented
+            // `effortLevel: 85`, and would mean something different on each provider.
+            for (const n of ['67', '85', '99', '100']) {
+                expect(callMethod(n)).toBe('high');
+            }
+        });
+
+        it('should name the accepted values when rejecting', () => {
+            expect(() => callMethod('extreme')).toThrow(/none, low, medium, high, xhigh/);
+        });
+
+        // The GPT-OSS path writes `Reasoning: <level>` into the system prompt; harmony defines
+        // only three levels, so the two outside them must collapse to the nearest real one.
+        it('should clamp xhigh/none for the GPT-OSS system-prompt channel', () => {
+            expect(clamp('xhigh')).toBe('high');
+            expect(clamp('none')).toBe('low');
+            expect(clamp('medium')).toBe('medium');
         });
     });
 
@@ -484,6 +538,197 @@ describe('OpenAILLM', () => {
             const result = internals.finalizeStreamingResponse('all done', null, null);
             expect(result.success).toBe(true);
             expect(result.statusText).toBe('success');
+        });
+    });
+});
+
+// =============================================================================
+// Native tool calling — request mapping + response normalization (plan §5)
+// =============================================================================
+
+describe('OpenAILLM — native tool calling', () => {
+    let instance: OpenAILLM;
+
+    /** Points the mocked SDK at one canned completion, REPLACING any previous stub. */
+    const stubResponse = (choice: Record<string, unknown>): void => {
+        mockCreate.mockResolvedValue({
+            choices: [{ index: 0, finish_reason: 'stop', ...choice }],
+            usage: { prompt_tokens: 10, completion_tokens: 5 },
+            model: 'gpt-4o'
+        });
+    };
+
+    /** Invokes the protected driver entry point the way the base class would. */
+    const run = async (params: Record<string, unknown>): Promise<Record<string, unknown>> =>
+        (instance as ReturnType<typeof Object.create>)['nonStreamingChatCompletion']({
+            model: 'gpt-4o',
+            ...params
+        });
+
+    /** The request body the driver handed the SDK. */
+    const sentRequest = (): Record<string, unknown> => mockCreate.mock.calls[0][0];
+
+    const WEATHER_TOOL = {
+        name: 'get_weather',
+        description: 'Call this when the user asks about weather.',
+        inputSchema: { type: 'object', properties: { city: { type: 'string' } }, required: ['city'] }
+    };
+
+    beforeEach(() => {
+        vi.clearAllMocks();
+        instance = new OpenAILLM('test-api-key');
+        stubResponse({ message: { role: 'assistant', content: 'hello' } });
+    });
+
+    it('declares SupportsTools', () => {
+        expect(instance.SupportsTools).toBe(true);
+    });
+
+    describe('request mapping', () => {
+        it("maps tool declarations onto OpenAI's function-tool shape", async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'weather?' }], tools: [WEATHER_TOOL] });
+
+            expect(sentRequest().tools).toEqual([{
+                type: 'function',
+                function: {
+                    name: 'get_weather',
+                    description: 'Call this when the user asks about weather.',
+                    parameters: WEATHER_TOOL.inputSchema
+                }
+            }]);
+        });
+
+        it('sends no tool fields when the caller declares none', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'hi' }] });
+
+            expect(sentRequest().tools).toBeUndefined();
+            expect(sentRequest().tool_choice).toBeUndefined();
+        });
+
+        it.each(['auto', 'none', 'required'])("passes the string toolChoice '%s' straight through", async (choice) => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: choice });
+
+            expect(sentRequest().tool_choice).toBe(choice);
+        });
+
+        it('reshapes a named tool choice into the function form', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], toolChoice: { name: 'get_weather' } });
+
+            expect(sentRequest().tool_choice).toEqual({ type: 'function', function: { name: 'get_weather' } });
+        });
+
+        it('maps parallelToolCalls onto the top-level request field', async () => {
+            await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL], parallelToolCalls: false });
+
+            expect(sentRequest().parallel_tool_calls).toBe(false);
+        });
+    });
+
+    describe('conversation round-tripping (§5.3)', () => {
+        it('replays a prior assistant turn with tool_calls, stringifying the arguments', async () => {
+            await run({
+                messages: [
+                    { role: ChatMessageRole.user, content: 'weather?' },
+                    { role: ChatMessageRole.assistant, content: '', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' } }] },
+                    { role: ChatMessageRole.tool, content: [{ type: 'tool_result', content: '72F', toolCallId: 'call_1' }] }
+                ],
+                tools: [WEATHER_TOOL]
+            });
+
+            const messages = sentRequest().messages as Array<Record<string, unknown>>;
+            expect(messages[1]).toMatchObject({
+                role: 'assistant',
+                content: null,
+                tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{"city":"NYC"}' } }]
+            });
+        });
+
+        it('expands one tool turn into one OpenAI tool message per result', async () => {
+            await run({
+                messages: [
+                    { role: ChatMessageRole.assistant, content: '', toolCalls: [{ id: 'call_1', name: 'a', arguments: {} }, { id: 'call_2', name: 'b', arguments: {} }] },
+                    {
+                        role: ChatMessageRole.tool,
+                        content: [
+                            { type: 'tool_result', content: '72F', toolCallId: 'call_1' },
+                            { type: 'tool_result', content: '10:30', toolCallId: 'call_2' }
+                        ]
+                    }
+                ],
+                tools: [WEATHER_TOOL]
+            });
+
+            const messages = sentRequest().messages as Array<Record<string, unknown>>;
+            expect(messages).toHaveLength(3);
+            expect(messages[1]).toEqual({ role: 'tool', tool_call_id: 'call_1', content: '72F' });
+            expect(messages[2]).toEqual({ role: 'tool', tool_call_id: 'call_2', content: '10:30' });
+        });
+
+        it('marks a failed result in the text, since OpenAI has no error flag', async () => {
+            await run({
+                messages: [
+                    { role: ChatMessageRole.tool, content: [{ type: 'tool_result', content: 'boom', toolCallId: 'call_1', isError: true }] }
+                ]
+            });
+
+            const messages = sentRequest().messages as Array<Record<string, unknown>>;
+            expect(messages[0].content).toBe('ERROR: boom');
+        });
+
+        it('keeps assistant prose alongside tool_calls when the model produced both', async () => {
+            await run({
+                messages: [
+                    { role: ChatMessageRole.assistant, content: 'Let me check.', toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: {} }] }
+                ]
+            });
+
+            const messages = sentRequest().messages as Array<Record<string, unknown>>;
+            expect(messages[0].content).toBe('Let me check.');
+            expect(messages[0].tool_calls).toHaveLength(1);
+        });
+    });
+
+    describe('response normalization (§5.2)', () => {
+        it('parses the JSON-string arguments into an object', async () => {
+            stubResponse({
+                message: {
+                    role: 'assistant',
+                    content: null,
+                    tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{"city":"NYC"}' } }]
+                },
+                finish_reason: 'tool_calls'
+            });
+
+            const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL] });
+
+            expect(result.data.choices[0].message.toolCalls).toEqual([
+                { id: 'call_1', name: 'get_weather', arguments: { city: 'NYC' } }
+            ]);
+            expect(result.data.choices[0].finish_reason).toBe('tool_calls');
+        });
+
+        it('surfaces a call with malformed arguments rather than dropping it', async () => {
+            stubResponse({
+                message: {
+                    role: 'assistant',
+                    content: null,
+                    tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '{not json' } }]
+                },
+                finish_reason: 'tool_calls'
+            });
+
+            const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }], tools: [WEATHER_TOOL] });
+
+            expect(result.data.choices[0].message.toolCalls).toEqual([
+                { id: 'call_1', name: 'get_weather', arguments: {} }
+            ]);
+        });
+
+        it('leaves toolCalls undefined and finish_reason untouched on an ordinary turn', async () => {
+            const result = await run({ messages: [{ role: ChatMessageRole.user, content: 'x' }] });
+
+            expect(result.data.choices[0].message.toolCalls).toBeUndefined();
+            expect(result.data.choices[0].finish_reason).toBe('stop');
         });
     });
 });

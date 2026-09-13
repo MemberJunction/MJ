@@ -13,8 +13,7 @@ import {
   LoadRepo,
   MJ_MONOREPO_PACKAGE_NAME,
   ParseWorkspacePackagesGlobs,
-  SelectPackagesGlobs,
-} from '../lib/dev-workspace/detect.js';
+  SelectPackagesGlobs, SelectAppGlobs } from '../lib/dev-workspace/detect.js';
 import { CreateFixtureParent, RemoveFixture } from './dev-workspace-fixture.js';
 
 let parent: string | null = null;
@@ -119,6 +118,36 @@ describe('LoadRepo', () => {
     const repo = LoadRepo(parent, 'plain');
     expect(repo).not.toBeNull();
     expect(repo!.Reasons).toEqual([]);
+  });
+
+  it('admits explicitly allowed app-shell globs for a host member (--apps) and enumerates their packages', () => {
+    parent = CreateFixtureParent({
+      'Skip-Brain': {
+        RootPackageJson: { name: 'skip_brain' },
+        Packages: { agents: { name: '@skip-brain/agents' } },
+        Files: {
+          'apps/API/package.json': JSON.stringify({ name: 'skip_api_engine' }),
+          'apps/MJAPI/package.json': JSON.stringify({ name: 'skip_brain_mj_api' }),
+          'apps/Admin/package.json': JSON.stringify({ name: 'skip_brain_admin' }),
+        },
+      },
+    });
+    const plain = LoadRepo(parent, 'Skip-Brain')!;
+    expect(plain.Packages.map((p) => p.RelPath)).toEqual(['packages/agents']);
+    expect(plain.AppGlobs).toBeUndefined();
+    const withApps = LoadRepo(parent, 'Skip-Brain', { AppGlobs: ['apps/API', './apps/MJAPI', 'apps/API'] })!;
+    expect(withApps.AppGlobs).toEqual(['apps/API', 'apps/MJAPI']);
+    expect(withApps.Packages.map((p) => p.RelPath)).toEqual(['packages/agents', 'apps/API', 'apps/MJAPI']);
+    expect(withApps.Packages.map((p) => p.PackageJson.name)).toContain('skip_brain_mj_api');
+    expect(withApps.WorkspaceGlobs).toEqual(['packages/*']); // the packages-rooted rule is untouched
+  });
+
+  it('refuses negated, packages-rooted, escaping and odd-shaped --apps globs', () => {
+    expect(() => SelectAppGlobs(['!apps/x'])).toThrow(/negation/);
+    expect(() => SelectAppGlobs(['packages/x'])).toThrow(/packages-rooted/);
+    expect(() => SelectAppGlobs(['../x'])).toThrow(/without '\.\.'/);
+    expect(() => SelectAppGlobs(['apps/**'])).toThrow(/unsupported shape/);
+    expect(SelectAppGlobs(['apps/*', ' apps/API '])).toEqual(['apps/*', 'apps/API']);
   });
 
   it('defaults WorkspaceGlobs to packages/* for a repo with no pnpm-workspace.yaml', () => {

@@ -131,6 +131,14 @@ export interface CandidateRepo {
   Packages: MemberPackageInfo[];
   /** Positive globs whose shape the expander does not support — reported by the command, never silent. */
   UnsupportedGlobs: string[];
+  /**
+   * App-shell globs admitted for THIS member by `--apps <member>=<glob>[,<glob>]` (e.g. `apps/API`,
+   * `apps/MJAPI`): the runnable hosts of a repo like Skip-Brain, which the packages-rooted rule drops
+   * by default because shell names collide across repos (#3795). Admitted explicitly, per member, and
+   * checked for name collisions against every other workspace package before the yaml is written.
+   * Absent or empty unless the user asked.
+   */
+  AppGlobs?: string[];
   /** The member's committed lockfile data, an unsupported-format marker, or null when the repo commits none. */
   Lockfile: MemberLockfile | UnsupportedLockfile | null;
   /** Raw contents of the repo's root `turbo.json`, or null when absent. */
@@ -162,6 +170,23 @@ export interface DuplicateFamilyPackage {
   Repos: string[];
 }
 
+/**
+ * One consumer-scoped `link:` override that keeps a member's OWN copy of a
+ * duplicated package name in front of that member's own consumers (every
+ * MJ-based app repo ships a `mj_generatedentities` / `mj_generatedactions`, so
+ * two such repos in one workspace always collide on those names).
+ */
+export interface DuplicateProviderLink {
+  /** The consuming package's name (the `parent` of pnpm's `parent>child` override selector). */
+  Consumer: string;
+  /** The duplicated package name (the `child`). */
+  Package: string;
+  /** The override value: `link:<member>/<provider relPath>`, root-relative. */
+  Target: string;
+  /** The member whose copy this link keeps in front of the consumer. */
+  Repo: string;
+}
+
 /** Everything the parent-manifest assembly decided — the command reports ALL of it, never silently. */
 export interface ParentManifestReport {
   /** Lockfile-derived override entries emitted (EXACT versions; per-major `name@^N` keys for multi-major names). */
@@ -182,17 +207,33 @@ export interface ParentManifestReport {
   FamilyOverrideCount: number;
   /** Package names provided by more than one member. */
   DuplicateFamilyPackages: DuplicateFamilyPackage[];
+  /** Consumer-scoped `link:` overrides emitted so each providing member's own consumers get its own copy. */
+  DuplicateProviderLinks: DuplicateProviderLink[];
+  /**
+   * Consumers of a duplicated name that could NOT be given a scoped link: the consumer's own name
+   * is duplicated too (a `parent>child` selector would hit every copy), or the consumer lives in a
+   * member that provides no copy (it gets whichever provider pnpm picks — sort order).
+   */
+  UnlinkedDuplicateConsumers: Array<{ Consumer: string; Package: string; Repo: string; Reason: 'ambiguous-consumer' | 'no-own-copy' }>;
   /** `@types/*` devDependencies excluded from the union (duplicate @types = nominal-type break). */
   SkippedTypesDevDeps: string[];
   /** `workspace:` devDependency specifiers on packages NO member provides — dropped. */
   DroppedWorkspaceDevDeps: Array<{ Package: string; Repo: string }>;
-  /** Lockfile-derived pins displaced by an explicit member override or a family workspace:* override. */
+  /** Entries a stronger layer displaced: a member override, a patched-package pin, or a family workspace:* override. */
   SupersededPins: string[];
+  /** Override keys pinned to the exact version a member's patch is keyed to (a patch applies to that version only). */
+  PatchPins: string[];
 }
 
-/** Result of building the parent `package.json`. */
+/** Result of building the parent `package.json` and the pnpm settings that accompany it. */
 export interface RootPackageJsonResult {
   Content: string;
+  /**
+   * The pnpm settings for `pnpm-workspace.yaml` (peer switches, peer rules,
+   * overrides, patches, extensions). Kept OUT of the manifest: pnpm 10 ignores a
+   * `pnpm` block at a workspace root and reads these only from the workspace yaml.
+   */
+  PnpmSettings: Record<string, unknown>;
   Conflicts: DevDepConflict[];
   /** Which member repo (or fallback) supplied the pnpm `packageManager` pin. */
   PinSource: string;

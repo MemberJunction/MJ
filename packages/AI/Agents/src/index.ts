@@ -87,3 +87,7 @@ export {
   RerankObservabilityOptions,
   LLMReranker,
 } from '@memberjunction/ai-reranker';
+export * from './native-tools/action-tool-builder';
+export * from './native-tools/dual-channel';
+export * from './native-tools/control-tools';
+export * from './native-tools/tool-result-turns';
