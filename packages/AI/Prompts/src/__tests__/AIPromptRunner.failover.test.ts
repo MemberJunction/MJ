@@ -517,3 +517,110 @@ describe('ExecutePrompt — failover through the full pipeline', () => {
     expect(testLLM.CalledModels).toHaveLength(1); // single attempt, no failover
   });
 });
+
+// ===========================================================================
+// (e) The configured failover budget is HONOURED.
+//
+// `FailoverMaxAttempts` (defaulted to 3 by getFailoverConfiguration) was read into
+// failoverConfig.maxAttempts and then consulted by nobody: its only readers were
+// shouldAttemptFailover and transitionToNextCandidate, neither of which has a caller. The live
+// walk below iterated the FULL priority-ordered candidate list instead — every active model of
+// the prompt's type crossed with every active inference vendor, 317 entries on a stock tenant —
+// so one stalling or 5xx-ing provider was retried candidate after candidate. On a 2-vCPU box
+// running five entities in parallel that is what turned a 27-table CodeGen step into a
+// 20-minute one.
+//
+// These tests drive the real loop and assert on the number of calls a provider actually saw.
+// ===========================================================================
+describe('executeModelWithFailover — the configured attempt budget', () => {
+  /** Five candidates on five credentialed drivers, so nothing is skipped for missing keys. */
+  function fiveCredentialedCandidates(): TestCandidate[] {
+    return [
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 100),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 90),
+      candidate('m-groq', 'GroqLLM', 'v-groq', 'Groq', 'api-groq', 80),
+      candidate('m-deepseek', 'DeepSeekLLM', 'v-deepseek', 'DeepSeek', 'api-deepseek', 70),
+      candidate('m-gpt2', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt2', 60),
+    ];
+  }
+
+  it('stops after the default 3 attempts instead of walking all 5 candidates', async () => {
+    const candidates = fiveCredentialedCandidates();
+    // Every candidate fails with a failover-eligible NetworkError. Before the fix this walked
+    // all five; the 4th and 5th must now never be reached.
+    testLLM.Script(
+      ...Array.from({ length: 5 }, () => ({
+        kind: 'fail' as const,
+        error: new Error('fetch failed: network socket disconnected'),
+      })),
+    );
+
+    const result = await runFailover(runner, candidates, {}); // no FailoverMaxAttempts → 3
+
+    expect(result.success).toBe(false);
+    expect(testLLM.CalledModels).toEqual(['api-claude', 'api-gpt', 'api-groq']);
+    expect(testLLM.CalledModels).toHaveLength(3);
+  });
+
+  it('walks deeper when the prompt raises FailoverMaxAttempts — the cap is read, not hardcoded', async () => {
+    const candidates = fiveCredentialedCandidates();
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'recovered on the fifth candidate' },
+    );
+
+    const result = await runFailover(runner, candidates, { FailoverMaxAttempts: 5 });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('recovered on the fifth candidate');
+    expect(testLLM.CalledModels).toHaveLength(5);
+  });
+
+  it('does not spend the budget on candidates skipped for missing credentials', async () => {
+    // The three highest-priority candidates sit on drivers with no key in this environment, so
+    // the walk skips them without issuing a request. A budget counted off the LOOP INDEX would
+    // be exhausted by those three and would never reach the credentialed pair below — which is
+    // why the check is placed after the credential skip and counts only calls actually issued.
+    // Driver classes deliberately absent from DEFAULT_CONFIGURED_DRIVERS, so GetAIAPIKey returns ''
+    // for them and candidateHasCredentials is false.
+    const keyless = [
+      candidate('m-mistral', 'MistralLLM', 'v-mistral', 'Mistral', 'api-mistral', 100),
+      candidate('m-cohere', 'CohereLLM', 'v-cohere', 'Cohere', 'api-cohere', 95),
+      candidate('m-ollama', 'OllamaLLM', 'v-ollama', 'Ollama', 'api-ollama', 90),
+    ];
+    const credentialed = [
+      candidate('m-claude', 'AnthropicLLM', 'v-anthropic', 'Anthropic', 'api-claude', 80),
+      candidate('m-gpt', 'OpenAILLM', 'v-openai', 'OpenAI', 'api-gpt', 70),
+    ];
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'reached the credentialed candidate' },
+    );
+
+    const result = await runFailover(runner, [...keyless, ...credentialed], {});
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('reached the credentialed candidate');
+    // Only the two credentialed candidates were ever called; the keyless three cost nothing.
+    expect(testLLM.CalledModels).toEqual(['api-claude', 'api-gpt']);
+  });
+
+  it('treats a non-positive configured cap as unconfigured rather than as "no calls allowed"', async () => {
+    // A negative row must not stop the walk before the FIRST call — that would fail every prompt
+    // on the tenant. It falls back to the same default of 3.
+    const candidates = fiveCredentialedCandidates();
+    testLLM.Script(
+      { kind: 'fail', error: new Error('fetch failed: network socket disconnected') },
+      { kind: 'succeed', content: 'still ran despite a nonsense cap' },
+    );
+
+    const result = await runFailover(runner, candidates, { FailoverMaxAttempts: -1 });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.choices[0].message.content).toBe('still ran despite a nonsense cap');
+    expect(testLLM.CalledModels).toHaveLength(2);
+  });
+});
