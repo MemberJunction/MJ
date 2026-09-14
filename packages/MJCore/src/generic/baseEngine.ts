@@ -263,6 +263,41 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _provider: IMetadataProvider;
     private _dataChange$ = new Subject<EngineDataChangeEvent>();
     private _cacheChangeUnsubscribers: (() => void)[] = [];
+
+    /**
+     * Tail of the derived-state rebuild queue for this engine. See {@link RebuildDerivedState}.
+     */
+    private _derivedStateRebuild: Promise<void> = Promise.resolve();
+
+    /**
+     * Rebuilds derived state after a cache-change event, one rebuild at a time and without
+     * letting a failure escape.
+     *
+     * `AdditionalLoading` is subclass-supplied and may perform database I/O — some overrides
+     * call `Config()` on another engine, which issues queries. Cache-change events are
+     * dispatched per fingerprint from a fire-and-forget pub/sub callback, so a burst of them
+     * would otherwise run several of those overlapping on the same connection. Serializing
+     * them keeps the rebuild off the critical path of whatever else that connection is doing.
+     *
+     * Failures are logged rather than propagated: this runs from an event callback with no
+     * caller able to handle them, an unhandled rejection there would be lost anyway, and one
+     * engine's rebuild failing must not stop the next event from being applied.
+     */
+    protected RebuildDerivedState(contextUser?: UserInfo): Promise<void> {
+        this._derivedStateRebuild = this._derivedStateRebuild
+            .catch(() => undefined)
+            .then(async () => {
+                try {
+                    await this.AdditionalLoading(contextUser);
+                } catch (e) {
+                    LogError(
+                        `${this.constructor.name}: derived-state rebuild after a cache change failed — ` +
+                        `${e instanceof Error ? e.message : String(e)}`
+                    );
+                }
+            });
+        return this._derivedStateRebuild;
+    }
     private _propertySubjects: Map<string, BehaviorSubject<BaseEntity[]>> = new Map();
     private _isPermissionConstrained: boolean = false;
     private _deniedEntityNames: string[] = [];
@@ -2158,7 +2193,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                         // while its derived state is stale or empty, which is invisible to any
                         // row-count check and is not repaired by EnsureLoaded()/Config() because
                         // the config is still marked loaded.
-                        await this.AdditionalLoading(this._contextUser);
+                        await this.RebuildDerivedState(this._contextUser);
                         // Emit after the rebuild, never before, so subscribers cannot observe
                         // the property before its derived state is attached.
                         this.emitPropertyChange(config.PropertyName);
@@ -2177,7 +2212,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // Fallback: reload this config from the database. This also replaces the property,
         // so the derived state has to be rebuilt here too.
         await this.LoadSingleConfig(config, this._contextUser);
-        await this.AdditionalLoading(this._contextUser);
+        await this.RebuildDerivedState(this._contextUser);
     }
 
     /**

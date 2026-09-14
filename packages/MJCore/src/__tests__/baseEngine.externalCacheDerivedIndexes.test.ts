@@ -219,6 +219,45 @@ describe('BaseEngine.OnExternalCacheChange — derived-index rebuild', () => {
         expect(engine._models).toHaveLength(3);
     });
 
+    it('serializes rebuilds so concurrent cache events cannot overlap', async () => {
+        // The rebuild may perform database I/O (some AdditionalLoading overrides call
+        // Config() on another engine). Cache events are dispatched per fingerprint from a
+        // fire-and-forget callback, so overlapping rebuilds would share a connection.
+        let active = 0;
+        let maxConcurrent = 0;
+        vi.spyOn(engine as unknown as { AdditionalLoading: () => Promise<void> }, 'AdditionalLoading')
+            .mockImplementation(async () => {
+                active++;
+                maxConcurrent = Math.max(maxConcurrent, active);
+                await new Promise((r) => setTimeout(r, 5));
+                active--;
+            });
+
+        await Promise.all([
+            engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS)),
+            engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS)),
+            engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS)),
+        ]);
+
+        expect(maxConcurrent).toBe(1);
+    });
+
+    it('contains a rebuild failure instead of escaping the event callback', async () => {
+        // Nothing upstream of a pub/sub callback can handle a rejection, and one engine's
+        // failed rebuild must not stop the next event from being applied.
+        const failing = vi
+            .spyOn(engine as unknown as { AdditionalLoading: () => Promise<void> }, 'AdditionalLoading')
+            .mockRejectedValueOnce(new Error('rebuild blew up'));
+
+        await expect(
+            engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS))
+        ).resolves.toBeUndefined();
+
+        failing.mockRestore();
+        await engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS));
+        expect(attachedVendors()).toBe(3);
+    });
+
     it('does not rebuild when a newer refresh supersedes this event', async () => {
         // Claim a newer generation mid-flight so the event is dropped as stale.
         const internals = engine as unknown as {
