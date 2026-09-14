@@ -30,7 +30,7 @@ interface TopConsumer {
   Rank: number;
   Type: 'agent' | 'prompt';
   Name: string;
-  Cost: number;
+  Cost: number | null;
   Proportion: number;
 }
 
@@ -120,7 +120,7 @@ interface ErrorHotspot {
                 [class.consumer-type-pill--agent]="item.Type === 'agent'"
               >{{ item.Type }}</div>
               <div class="consumer-name" [title]="item.Name">{{ item.Name }}</div>
-              <div class="consumer-cost">\${{ FormatCost(item.Cost) }}</div>
+              <div class="consumer-cost">{{ item.Cost !== null ? '$' + FormatCost(item.Cost) : '\u2014' }}</div>
               <div class="consumer-bar-container">
                 <div
                   class="consumer-bar"
@@ -559,7 +559,10 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
 
   // ─── Formatting Helpers ──────────────────────────────────────────
 
-  FormatCost(cost: number): string {
+  FormatCost(cost: number | null): string {
+    if (cost === null || cost === undefined) {
+      return '\u2014';
+    }
     if (cost >= 1000) {
       return (cost / 1000).toFixed(1) + 'K';
     }
@@ -692,7 +695,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
         'up-is-neutral', 'var(--mj-brand-primary)'
       ),
       this.buildKpiCard(
-        'Total Cost', '$' + this.FormatCost(kpis.totalCost),
+        'Total Cost', kpis.totalCost !== null ? '$' + this.FormatCost(kpis.totalCost) : '\u2014',
         this.extractSparkline(trends, 'cost'),
         kpis.totalCost, this.previousKpis?.totalCost ?? null,
         'down-is-good', 'var(--mj-status-warning)'
@@ -734,7 +737,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     label: string,
     value: string,
     sparkline: number[],
-    current: number,
+    current: number | null,
     previous: number | null,
     goodDirection: 'up-is-good' | 'down-is-good' | 'up-is-neutral',
     borderColor: string
@@ -753,8 +756,8 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     };
   }
 
-  private computeDelta(current: number, previous: number | null): { percent: number; direction: 'up' | 'down' | 'stable' } {
-    if (previous == null || previous === 0) {
+  private computeDelta(current: number | null, previous: number | null): { percent: number; direction: 'up' | 'down' | 'stable' } {
+    if (current == null || previous == null || previous === 0) {
       return { percent: 0, direction: 'stable' };
     }
     const change = ((current - previous) / previous) * 100;
@@ -785,7 +788,8 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     const step = Math.max(1, Math.floor(trends.length / 7));
     const sampled: number[] = [];
     for (let i = 0; i < trends.length && sampled.length < 7; i += step) {
-      sampled.push(this.getMetricFromTrend(trends[i], metric));
+      const val = this.getMetricFromTrend(trends[i], metric);
+      sampled.push(val !== null ? val : 0);
     }
 
     // Normalize to 0-100 percentage
@@ -793,7 +797,7 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
     return sampled.map(v => Math.max(5, (v / maxVal) * 100));
   }
 
-  private getMetricFromTrend(trend: TrendData, metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): number {
+  private getMetricFromTrend(trend: TrendData, metric: 'executions' | 'cost' | 'tokens' | 'avgTime' | 'errors'): number | null {
     switch (metric) {
       case 'executions': return trend.executions;
       case 'cost': return trend.cost;
@@ -807,11 +811,6 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
 
   private buildTopConsumers(chartData: ChartData): TopConsumer[] {
     const consumers: TopConsumer[] = [];
-    const maxCost = Math.max(
-      ...chartData.costByModel.map(m => m.cost),
-      ...chartData.performanceMatrix.map(p => 1), // agents don't have cost here directly
-      1
-    );
 
     // Add model-based consumers (from prompt runs)
     for (const model of chartData.costByModel.slice(0, 5)) {
@@ -824,13 +823,18 @@ export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent imp
       });
     }
 
-    // Sort by cost descending, assign ranks
-    consumers.sort((a, b) => b.Cost - a.Cost);
-    const topCost = consumers.length > 0 ? consumers[0].Cost : 1;
+    // Sort by cost descending with nulls last, assign ranks
+    consumers.sort((a, b) => {
+      if (a.Cost === null && b.Cost === null) return 0;
+      if (a.Cost === null) return 1;
+      if (b.Cost === null) return -1;
+      return b.Cost - a.Cost;
+    });
+    const topCost = consumers.length > 0 && consumers[0].Cost !== null ? consumers[0].Cost : 1;
     return consumers.slice(0, 5).map((c, i) => ({
       ...c,
       Rank: i + 1,
-      Proportion: topCost > 0 ? c.Cost / topCost : 0
+      Proportion: c.Cost !== null && topCost > 0 ? c.Cost / topCost : 0
     }));
   }
 

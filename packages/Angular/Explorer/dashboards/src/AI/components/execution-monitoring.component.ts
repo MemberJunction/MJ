@@ -1710,8 +1710,8 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
   // Derived data streams
   kpiCards$: Observable<KPICardData[]>;
   performanceMatrix$: Observable<HeatmapData[]>;
-  costData$: Observable<{ model: string; cost: number; tokens: number }[]>;
-  tokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number; model: string }[]>;
+  costData$: Observable<{ model: string; cost: number | null; tokens: number }[]>;
+  tokenEfficiency$: Observable<{ inputTokens: number; outputTokens: number; cost: number | null; model: string }[]>;
 
   // Modal state
   selectedExecution: LiveExecution | null = null;
@@ -1889,10 +1889,10 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       },
       {
         title: 'Total Cost',
-        value: `$${kpis.totalCost.toFixed(4)}`,
+        value: kpis.totalCost !== null ? `$${kpis.totalCost.toFixed(4)}` : '\u2014',
         icon: 'fa-dollar-sign',
         color: 'warning',
-        subtitle: `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day`
+        subtitle: kpis.dailyCostBurn !== null ? `${kpis.costCurrency} • $${kpis.dailyCostBurn.toFixed(2)}/day` : kpis.costCurrency
       },
       {
         title: 'Success Rate',
@@ -1913,7 +1913,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
         value: this.formatTokens(kpis.totalTokens),
         icon: 'fa-coins',
         color: 'primary',
-        subtitle: `$${kpis.costPerToken.toFixed(6)}/token`
+        subtitle: kpis.costPerToken !== null ? `$${kpis.costPerToken.toFixed(6)}/token` : '\u2014'
       },
       {
         title: 'Top Model',
@@ -2010,25 +2010,28 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     this.setTimeRange(range);
   }
 
-  private getMetricValue(data: TrendData, metric: string): number {
+  private getMetricValue(data: TrendData, metric: string): number | null {
     switch (metric) {
       case 'executions': return data.executions;
       case 'cost': return data.cost;
       case 'tokens': return data.tokens;
       case 'avgTime': return data.avgTime;
       case 'errors': return data.errors;
-      default: return 0;
+      default: return null;
     }
   }
 
-  private formatMetricValue(metric: string, value: number): string {
+  private formatMetricValue(metric: string, value: number | null): string {
+    if (value === null || value === undefined) {
+      return '\u2014';
+    }
     switch (metric) {
       case 'executions': return value.toLocaleString();
       case 'cost': return `$${value.toFixed(4)}`;
       case 'tokens': return value.toLocaleString();
       case 'avgTime': return `${(value / 1000).toFixed(1)}s`;
       case 'errors': return value.toString();
-      default: return value.toString();
+      default: return String(value);
     }
   }
 
@@ -2093,21 +2096,31 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     return tokens.toString();
   }
 
-  formatCurrency(amount: number, decimals: number = 4): string {
+  formatCurrency(amount: number | null | undefined, decimals: number = 4): string {
+    if (amount === null || amount === undefined) {
+      return '\u2014';
+    }
     return `$${amount.toFixed(decimals)}`;
   }
 
-  formatCostPerToken(cost: number, tokens: number): string {
-    const costPer1K = tokens > 0 ? (cost / tokens) * 1000 : 0;
+  formatCostPerToken(cost: number | null | undefined, tokens: number): string {
+    if (cost === null || cost === undefined || tokens <= 0) {
+      return '\u2014';
+    }
+    const costPer1K = (cost / tokens) * 1000;
     return `$${costPer1K.toFixed(4)}/1K tokens`;
   }
 
-  getCostBarWidth(cost: number, maxCost: number): number {
-    return maxCost > 0 ? (cost / maxCost) * 100 : 0;
+  getCostBarWidth(cost: number | null | undefined, maxCost: number): number {
+    if (cost === null || cost === undefined || maxCost <= 0) {
+      return 0;
+    }
+    return (cost / maxCost) * 100;
   }
 
-  getMaxCost(costData: { cost: number }[]): number {
-    return Math.max(...costData.map(item => item.cost));
+  getMaxCost(costData: { cost: number | null }[]): number {
+    const priced = costData.map(item => item.cost).filter((c): c is number => c !== null && c !== undefined);
+    return priced.length > 0 ? Math.max(...priced) : 0;
   }
 
   getTokenRatio(input: number, output: number): string {

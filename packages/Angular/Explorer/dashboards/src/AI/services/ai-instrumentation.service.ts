@@ -1,13 +1,33 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { switchMap, shareReplay, tap, map } from 'rxjs/operators';
-import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
+import { RunView, RunQuery, Metadata, IMetadataProvider, IRunQueryProvider } from '@memberjunction/core';
+import { AIUsageCoverage, AIUsageHourlyRow } from './ai-usage-analytics.types';
+import {
+  DashboardKPIs,
+  TrendData,
+  LiveExecution,
+  computeKPIs,
+  computeTrends,
+  computeLiveExecutions,
+  computeCostByModel,
+  computePerformanceMatrix,
+  computeTokenEfficiency,
+  countActiveExecutions
+} from './ai-usage-analytics.compute';
+
+export {
+  DashboardKPIs,
+  TrendData,
+  LiveExecution,
+  AIUsageCoverage,
+  AIUsageHourlyRow
+};
 
 /**
- * Lightweight record types for dashboard aggregation.
- * We use ResultType: 'simple' with explicit Fields to avoid pulling
- * large text columns (InputData, OutputData, etc.) that can blow up
- * the GraphQL response beyond V8's string limit.
+ * Lightweight record types for live run monitoring and execution drill-down.
+ * We use ResultType: 'simple' with explicit Fields and MaxRows bounds
+ * to avoid unbounded reads and large payload transfers.
  */
 export interface PromptRunRecord {
   ID: string;
@@ -42,55 +62,18 @@ export interface AgentRunRecord {
   ErrorMessage: string | null;
 }
 
-/** Fields to request for prompt runs — only what the dashboard needs for aggregation */
-const PROMPT_RUN_FIELDS = [
+/** Fields to request for prompt runs — only what is needed for drilldown and live monitoring */
+export const PROMPT_RUN_FIELDS = [
   'ID', 'RunAt', 'CompletedAt', 'Success', 'Cost', 'TokensUsed',
   'TokensPrompt', 'TokensCompletion', 'TokensCacheRead', 'TokensCacheWrite', 'ExecutionTimeMS',
   'ModelID', 'Model', 'AgentID', 'Agent', 'Prompt', 'ErrorMessage'
 ];
 
-/** Fields to request for agent runs — only what the dashboard needs for aggregation */
-const AGENT_RUN_FIELDS = [
+/** Fields to request for agent runs — only what is needed for drilldown and live monitoring */
+export const AGENT_RUN_FIELDS = [
   'ID', 'StartedAt', 'CompletedAt', 'Status', 'Success',
   'TotalCost', 'TotalTokensUsed', 'AgentID', 'Agent', 'ErrorMessage'
 ];
-
-export interface DashboardKPIs {
-  totalExecutions: number;
-  activeExecutions: number;
-  totalCost: number;
-  costCurrency: string;
-  avgExecutionTime: number;
-  successRate: number;
-  totalTokens: number;
-  costPerToken: number;
-  topModel: string;
-  topAgent: string;
-  errorRate: number;
-  dailyCostBurn: number;
-  cacheHitRate: number;
-}
-
-export interface TrendData {
-  timestamp: Date;
-  executions: number;
-  cost: number;
-  tokens: number;
-  avgTime: number;
-  errors: number;
-}
-
-export interface LiveExecution {
-  id: string;
-  type: 'prompt' | 'agent';
-  name: string;
-  status: 'running' | 'completed' | 'failed';
-  startTime: Date;
-  duration?: number;
-  cost?: number;
-  tokens?: number;
-  progress?: number;
-}
 
 export interface ExecutionDetails {
   id: string;
@@ -99,7 +82,7 @@ export interface ExecutionDetails {
   status: string;
   startTime: Date;
   endTime?: Date;
-  cost: number;
+  cost: number | null;
   tokens: number;
   success: boolean;
   errorMessage?: string;
@@ -111,17 +94,20 @@ export interface ExecutionDetails {
 
 export interface ChartData {
   executionTrends: TrendData[];
-  costByModel: { model: string; cost: number; tokens: number }[];
+  costByModel: { model: string; cost: number | null; tokens: number }[];
   performanceMatrix: { agent: string; model: string; avgTime: number; successRate: number }[];
-  tokenEfficiency: { inputTokens: number; outputTokens: number; cost: number; model: string }[];
+  tokenEfficiency: { inputTokens: number; outputTokens: number; cost: number | null; model: string }[];
 }
 
 /** Internal shape for the single data load that all derived streams share */
 interface DashboardRawData {
-  promptRuns: PromptRunRecord[];
-  agentRuns: AgentRunRecord[];
+  hourlyRows: AIUsageHourlyRow[];
   livePromptRuns: PromptRunRecord[];
   liveAgentRuns: AgentRunRecord[];
+  modelNames: Map<string, string>;
+  agentNames: Map<string, string>;
+  start: Date;
+  end: Date;
 }
 
 @Injectable({
@@ -132,11 +118,22 @@ export class AIInstrumentationService {
 
   /** Set the metadata provider this service should use. Components should call this after injection. */
   public set Provider(value: IMetadataProvider | null) {
-      this._provider = value;
+    this._provider = value;
   }
 
   public get Provider(): IMetadataProvider {
-      return this._provider ?? Metadata.Provider;
+    if (this._provider) {
+      return this._provider;
+    }
+    return Metadata.Provider;
+  }
+
+  public get ProviderToUse(): IMetadataProvider {
+    return this.Provider;
+  }
+
+  public get RunQueryToUse(): IRunQueryProvider {
+    return <IRunQueryProvider><any>this.ProviderToUse;
   }
 
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
@@ -153,8 +150,8 @@ export class AIInstrumentationService {
   constructor() {}
 
   /**
-   * Single data load: fetches prompt runs and agent runs ONCE per refresh/date-range change.
-   * All downstream streams derive from this shared dataset.
+   * Single data load: fetches aggregated hourly facts via RunQuery and
+   * live runs via bounded RunViews once per refresh or date-range change.
    */
   private readonly rawData$ = combineLatest([this._refreshTrigger$, this._dateRange$]).pipe(
     tap(() => this._isLoading$.next(true)),
@@ -163,24 +160,32 @@ export class AIInstrumentationService {
     shareReplay(1)
   );
 
-  // Derived streams — pure in-memory transforms, no extra DB queries
+  // Derived streams — pure in-memory transforms via ai-usage-analytics.compute.ts
   readonly kpis$ = this.rawData$.pipe(
-    map(data => this.computeKPIs(data.promptRuns, data.agentRuns)),
+    map(data => {
+      const activeExecutions = countActiveExecutions(data.livePromptRuns, data.liveAgentRuns);
+      return computeKPIs(data.hourlyRows, activeExecutions, data.modelNames, data.agentNames);
+    }),
     shareReplay(1)
   );
 
   readonly trends$ = this.rawData$.pipe(
-    map(data => this.computeTrends(data.promptRuns, data.agentRuns)),
+    map(data => computeTrends(data.hourlyRows, data.start, data.end)),
     shareReplay(1)
   );
 
   readonly liveExecutions$ = this.rawData$.pipe(
-    map(data => this.computeLiveExecutions(data.livePromptRuns, data.liveAgentRuns)),
+    map(data => computeLiveExecutions(data.livePromptRuns, data.liveAgentRuns)),
     shareReplay(1)
   );
 
   readonly chartData$ = combineLatest([this.rawData$, this.trends$]).pipe(
-    map(([data, executionTrends]) => this.computeChartData(data.promptRuns, executionTrends)),
+    map(([data, executionTrends]) => ({
+      executionTrends,
+      costByModel: computeCostByModel(data.hourlyRows, data.modelNames),
+      performanceMatrix: computePerformanceMatrix(data.hourlyRows, data.modelNames, data.agentNames),
+      tokenEfficiency: computeTokenEfficiency(data.hourlyRows, data.modelNames)
+    })),
     shareReplay(1)
   );
 
@@ -189,374 +194,104 @@ export class AIInstrumentationService {
   }
 
   refresh(): void {
-    this._refreshTrigger$.next(this._refreshTrigger$.value + 1);
+    const nextVal = this._refreshTrigger$.value + 1;
+    this._refreshTrigger$.next(nextVal);
   }
 
   /**
    * Single batch query that loads all data needed by every dashboard widget.
-   * Uses ResultType: 'simple' with explicit Fields to minimize payload size.
+   * AIUsageHourly runs through RunQuery (Materialized).
+   * Live runs and dimension names are loaded with explicit MaxRows bounds.
    */
   private async loadAllData(): Promise<DashboardRawData> {
     const { start, end } = this._dateRange$.value;
     const now = new Date();
     const recentTime = new Date(now.getTime() - 5 * 60 * 1000);
 
-    const rv = RunView.FromMetadataProvider(this.Provider);
-    const [promptResults, agentResults, livePromptResults, liveAgentResults] = await rv.RunViews<PromptRunRecord | AgentRunRecord>([
-      {
-        EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `RunAt >= '${start.toISOString()}' AND RunAt <= '${end.toISOString()}'`,
-        Fields: PROMPT_RUN_FIELDS,
-        ResultType: 'simple'
-      },
-      {
-        EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `StartedAt >= '${start.toISOString()}' AND StartedAt <= '${end.toISOString()}'`,
-        Fields: AGENT_RUN_FIELDS,
-        ResultType: 'simple'
-      },
-      {
-        EntityName: 'MJ: AI Prompt Runs',
-        ExtraFilter: `RunAt >= '${recentTime.toISOString()}'`,
-        OrderBy: 'RunAt DESC',
-        Fields: PROMPT_RUN_FIELDS,
-        ResultType: 'simple'
-      },
-      {
-        EntityName: 'MJ: AI Agent Runs',
-        ExtraFilter: `StartedAt >= '${recentTime.toISOString()}'`,
-        OrderBy: 'StartedAt DESC',
-        Fields: AGENT_RUN_FIELDS,
-        ResultType: 'simple'
-      }
+    const rq = new RunQuery(this.RunQueryToUse);
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+
+    const [queryResult, rvResults] = await Promise.all([
+      rq.RunQuery({
+        QueryName: 'AIUsageHourly',
+        CategoryPath: '/MJ/AI/',
+        Parameters: {
+          start: start.toISOString(),
+          end: end.toISOString()
+        },
+        DataSource: 'Materialized'
+      }),
+      rv.RunViews<PromptRunRecord | AgentRunRecord | { ID: string; Name: string }>([
+        {
+          EntityName: 'MJ: AI Prompt Runs',
+          ExtraFilter: `RunAt >= '${recentTime.toISOString()}'`,
+          OrderBy: 'RunAt DESC',
+          Fields: PROMPT_RUN_FIELDS,
+          ResultType: 'simple',
+          MaxRows: 50
+        },
+        {
+          EntityName: 'MJ: AI Agent Runs',
+          ExtraFilter: `StartedAt >= '${recentTime.toISOString()}'`,
+          OrderBy: 'StartedAt DESC',
+          Fields: AGENT_RUN_FIELDS,
+          ResultType: 'simple',
+          MaxRows: 50
+        },
+        {
+          EntityName: 'MJ: AI Models',
+          Fields: ['ID', 'Name'],
+          ResultType: 'simple',
+          MaxRows: 500
+        },
+        {
+          EntityName: 'MJ: AI Agents',
+          Fields: ['ID', 'Name'],
+          ResultType: 'simple',
+          MaxRows: 500
+        }
+      ])
     ]);
 
-    return {
-      promptRuns: promptResults.Results as PromptRunRecord[],
-      agentRuns: agentResults.Results as AgentRunRecord[],
-      livePromptRuns: livePromptResults.Results as PromptRunRecord[],
-      liveAgentRuns: liveAgentResults.Results as AgentRunRecord[]
-    };
-  }
+    const hourlyRows = (queryResult && queryResult.Success && Array.isArray(queryResult.Results)
+      ? queryResult.Results
+      : []) as AIUsageHourlyRow[];
 
-  // ─── KPI Computation ─────────────────────────────────────────────
+    const livePromptRuns = (rvResults && rvResults[0] && Array.isArray(rvResults[0].Results)
+      ? rvResults[0].Results
+      : []) as PromptRunRecord[];
 
-  private computeKPIs(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): DashboardKPIs {
-    const totalExecutions = promptRuns.length + agentRuns.length;
-    const activeExecutions = this.countActiveExecutions(promptRuns, agentRuns);
-    const totalCost = this.sumCosts(promptRuns, agentRuns);
-    const totalTokens = this.sumTokens(promptRuns, agentRuns);
-    const avgExecutionTime = this.calculateAverageExecutionTime(promptRuns, agentRuns);
-    const successRate = this.calculateSuccessRate(promptRuns, agentRuns);
+    const liveAgentRuns = (rvResults && rvResults[1] && Array.isArray(rvResults[1].Results)
+      ? rvResults[1].Results
+      : []) as AgentRunRecord[];
 
-    return {
-      totalExecutions,
-      activeExecutions,
-      totalCost,
-      costCurrency: 'USD',
-      avgExecutionTime,
-      successRate,
-      totalTokens,
-      costPerToken: totalTokens > 0 ? totalCost / totalTokens : 0,
-      topModel: this.getTopModel(promptRuns),
-      topAgent: this.getTopAgent(agentRuns),
-      errorRate: 1 - successRate,
-      dailyCostBurn: this.calculateDailyCostBurn(promptRuns, agentRuns),
-      cacheHitRate: this.calculateCacheHitRate(promptRuns)
-    };
-  }
-
-  /** Share of input tokens served from the provider's prompt cache across the period's prompt runs. */
-  private calculateCacheHitRate(promptRuns: PromptRunRecord[]): number {
-    let uncached = 0, read = 0, write = 0;
-    for (const r of promptRuns) {
-      uncached += r.TokensPrompt || 0;
-      read += r.TokensCacheRead || 0;
-      write += r.TokensCacheWrite || 0;
-    }
-    const totalInput = uncached + read + write;
-    return totalInput > 0 ? read / totalInput : 0;
-  }
-
-  // ─── Trend Computation ────────────────────────────────────────────
-
-  private computeTrends(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): TrendData[] {
-    const { start, end } = this._dateRange$.value;
-    const bucketSizeMs = this.getBucketSizeMs(start, end);
-    const hourlyBuckets = this.createHourlyBuckets(start, end);
-
-    return hourlyBuckets.map(bucket => {
-      const bucketEnd = new Date(bucket.getTime() + bucketSizeMs);
-      const bucketPrompts = promptRuns.filter(r => {
-        const runAt = new Date(r.RunAt);
-        return runAt >= bucket && runAt < bucketEnd;
-      });
-      const bucketAgents = agentRuns.filter(r => {
-        const startedAt = new Date(r.StartedAt);
-        return startedAt >= bucket && startedAt < bucketEnd;
-      });
-
-      return {
-        timestamp: bucket,
-        executions: bucketPrompts.length + bucketAgents.length,
-        cost: this.sumCosts(bucketPrompts, bucketAgents),
-        tokens: this.sumTokens(bucketPrompts, bucketAgents),
-        avgTime: this.calculateAverageExecutionTime(bucketPrompts, bucketAgents),
-        errors: this.countErrors(bucketPrompts, bucketAgents)
-      };
-    });
-  }
-
-  // ─── Live Executions Computation ──────────────────────────────────
-
-  private computeLiveExecutions(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): LiveExecution[] {
-    const now = new Date();
-    const liveExecutions: LiveExecution[] = [];
-
-    for (const run of promptRuns) {
-      const isRunning = !run.CompletedAt && run.Success !== false;
-      const duration = run.CompletedAt
-        ? new Date(run.CompletedAt).getTime() - new Date(run.RunAt).getTime()
-        : now.getTime() - new Date(run.RunAt).getTime();
-
-      liveExecutions.push({
-        id: run.ID,
-        type: 'prompt',
-        name: run.Prompt || 'Unnamed Prompt',
-        status: isRunning ? 'running' : (run.Success ? 'completed' : 'failed'),
-        startTime: new Date(run.RunAt),
-        duration,
-        cost: run.Cost || 0,
-        tokens: run.TokensUsed || 0,
-        progress: isRunning ? Math.min(90, (duration / 30000) * 100) : 100
-      });
-    }
-
-    for (const run of agentRuns) {
-      const isRunning = run.Status === 'Running';
-      const duration = run.CompletedAt
-        ? new Date(run.CompletedAt).getTime() - new Date(run.StartedAt).getTime()
-        : now.getTime() - new Date(run.StartedAt).getTime();
-
-      liveExecutions.push({
-        id: run.ID,
-        type: 'agent',
-        name: run.Agent || 'Unnamed Agent',
-        status: run.Status.toLowerCase() as 'running' | 'completed' | 'failed',
-        startTime: new Date(run.StartedAt),
-        duration,
-        cost: run.TotalCost || 0,
-        tokens: run.TotalTokensUsed || 0,
-        progress: isRunning ? Math.min(90, (duration / 60000) * 100) : 100
-      });
-    }
-
-    return liveExecutions.sort((a, b) => b.startTime.getTime() - a.startTime.getTime());
-  }
-
-  // ─── Chart Data Computation ───────────────────────────────────────
-
-  private computeChartData(promptRuns: PromptRunRecord[], executionTrends: TrendData[]): ChartData {
-    return {
-      executionTrends,
-      costByModel: this.analyzeCostByModel(promptRuns),
-      performanceMatrix: this.analyzePerformanceMatrix(promptRuns),
-      tokenEfficiency: this.analyzeTokenEfficiency(promptRuns)
-    };
-  }
-
-  // ─── Helper Methods ───────────────────────────────────────────────
-
-  private countActiveExecutions(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): number {
-    const activePrompts = promptRuns.filter(r => !r.CompletedAt && r.Success !== false).length;
-    const activeAgents = agentRuns.filter(r => r.Status === 'Running').length;
-    return activePrompts + activeAgents;
-  }
-
-  private sumCosts(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): number {
-    const promptCost = promptRuns.reduce((sum, r) => sum + (r.Cost || 0), 0);
-    const agentCost = agentRuns.reduce((sum, r) => sum + (r.TotalCost || 0), 0);
-    return promptCost + agentCost;
-  }
-
-  private sumTokens(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): number {
-    const promptTokens = promptRuns.reduce((sum, r) => sum + (r.TokensUsed || 0), 0);
-    const agentTokens = agentRuns.reduce((sum, r) => sum + (r.TotalTokensUsed || 0), 0);
-    return promptTokens + agentTokens;
-  }
-
-  private calculateAverageExecutionTime(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): number {
-    const promptTimes = promptRuns
-      .filter(r => r.ExecutionTimeMS)
-      .map(r => r.ExecutionTimeMS!);
-
-    const agentTimes = agentRuns
-      .filter(r => r.StartedAt && r.CompletedAt)
-      .map(r => new Date(r.CompletedAt!).getTime() - new Date(r.StartedAt).getTime());
-
-    const allTimes = [...promptTimes, ...agentTimes];
-    return allTimes.length > 0 ? allTimes.reduce((sum, time) => sum + time, 0) / allTimes.length : 0;
-  }
-
-  private calculateSuccessRate(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): number {
-    const totalExecutions = promptRuns.length + agentRuns.length;
-    if (totalExecutions === 0) return 1;
-
-    const successfulPrompts = promptRuns.filter(r => r.Success).length;
-    const successfulAgents = agentRuns.filter(r => r.Success).length;
-
-    return (successfulPrompts + successfulAgents) / totalExecutions;
-  }
-
-  private countErrors(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): number {
-    const promptErrors = promptRuns.filter(r => !r.Success).length;
-    const agentErrors = agentRuns.filter(r => !r.Success).length;
-    return promptErrors + agentErrors;
-  }
-
-  private calculateDailyCostBurn(promptRuns: PromptRunRecord[], agentRuns: AgentRunRecord[]): number {
-    const now = new Date();
-    const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-
-    const todayPrompts = promptRuns.filter(r => new Date(r.RunAt) >= dayStart);
-    const todayAgents = agentRuns.filter(r => new Date(r.StartedAt) >= dayStart);
-
-    return this.sumCosts(todayPrompts, todayAgents);
-  }
-
-  private getBucketSizeMs(start: Date, end: Date): number {
-    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-    if (hours <= 24) return 60 * 60 * 1000;        // 1 hour
-    if (hours <= 24 * 7) return 4 * 60 * 60 * 1000; // 4 hours
-    return 24 * 60 * 60 * 1000;                      // 24 hours
-  }
-
-  private createHourlyBuckets(start: Date, end: Date): Date[] {
-    const buckets: Date[] = [];
-    const current = new Date(start);
-    const hours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
-
-    let bucketSize: number;
-    if (hours <= 24) {
-      bucketSize = 1;
-      current.setMinutes(0, 0, 0);
-    } else if (hours <= 24 * 7) {
-      bucketSize = 4;
-      current.setHours(Math.floor(current.getHours() / 4) * 4, 0, 0, 0);
-    } else {
-      bucketSize = 24;
-      current.setHours(0, 0, 0, 0);
-    }
-
-    while (current < end) {
-      buckets.push(new Date(current));
-      current.setHours(current.getHours() + bucketSize);
-    }
-
-    return buckets;
-  }
-
-  private getTopModel(promptRuns: PromptRunRecord[]): string {
-    const modelCounts = new Map<string, number>();
     const modelNames = new Map<string, string>();
-
-    for (const run of promptRuns) {
-      if (run.ModelID && run.Model) {
-        modelCounts.set(run.ModelID, (modelCounts.get(run.ModelID) || 0) + 1);
-        modelNames.set(run.ModelID, run.Model);
+    if (rvResults && rvResults[2] && Array.isArray(rvResults[2].Results)) {
+      for (const m of rvResults[2].Results as { ID: string; Name: string }[]) {
+        if (m && m.ID && m.Name) {
+          modelNames.set(m.ID, m.Name);
+        }
       }
     }
 
-    if (modelCounts.size === 0) return 'N/A';
-
-    const topModelId = Array.from(modelCounts.entries())
-      .sort(([,a], [,b]) => b - a)[0][0];
-
-    return modelNames.get(topModelId) || 'Unknown Model';
-  }
-
-  private getTopAgent(agentRuns: AgentRunRecord[]): string {
-    const agentCounts = new Map<string, number>();
     const agentNames = new Map<string, string>();
-
-    for (const run of agentRuns) {
-      if (run.AgentID && run.Agent) {
-        agentCounts.set(run.AgentID, (agentCounts.get(run.AgentID) || 0) + 1);
-        agentNames.set(run.AgentID, run.Agent);
+    if (rvResults && rvResults[3] && Array.isArray(rvResults[3].Results)) {
+      for (const a of rvResults[3].Results as { ID: string; Name: string }[]) {
+        if (a && a.ID && a.Name) {
+          agentNames.set(a.ID, a.Name);
+        }
       }
     }
 
-    if (agentCounts.size === 0) return 'N/A';
-
-    const topAgentId = Array.from(agentCounts.entries())
-      .sort(([,a], [,b]) => b - a)[0][0];
-
-    return agentNames.get(topAgentId) || 'Unknown Agent';
-  }
-
-  private analyzeCostByModel(promptRuns: PromptRunRecord[]): { model: string; cost: number; tokens: number }[] {
-    const modelStats = new Map<string, { cost: number; tokens: number; name: string }>();
-
-    for (const run of promptRuns) {
-      if (run.ModelID && run.Model) {
-        const existing = modelStats.get(run.ModelID) || { cost: 0, tokens: 0, name: run.Model };
-        existing.cost += run.Cost || 0;
-        existing.tokens += run.TokensUsed || 0;
-        modelStats.set(run.ModelID, existing);
-      }
-    }
-
-    return Array.from(modelStats.values())
-      .map(stats => ({ model: stats.name, cost: stats.cost, tokens: stats.tokens }))
-      .sort((a, b) => b.cost - a.cost);
-  }
-
-  private analyzePerformanceMatrix(promptRuns: PromptRunRecord[]): { agent: string; model: string; avgTime: number; successRate: number }[] {
-    const combinations = new Map<string, { times: number[]; successes: number; total: number; agentName: string; modelName: string }>();
-
-    for (const run of promptRuns) {
-      if (run.AgentID && run.ModelID && run.ExecutionTimeMS) {
-        const key = `${run.AgentID}:${run.ModelID}`;
-        const existing = combinations.get(key) || {
-          times: [], successes: 0, total: 0,
-          agentName: run.Agent || 'Unknown Agent',
-          modelName: run.Model || 'Unknown Model'
-        };
-
-        existing.times.push(run.ExecutionTimeMS);
-        existing.total += 1;
-        if (run.Success) existing.successes += 1;
-        combinations.set(key, existing);
-      }
-    }
-
-    return Array.from(combinations.values()).map(data => ({
-      agent: data.agentName,
-      model: data.modelName,
-      avgTime: data.times.reduce((sum, time) => sum + time, 0) / data.times.length,
-      successRate: data.successes / data.total
-    }));
-  }
-
-  private analyzeTokenEfficiency(promptRuns: PromptRunRecord[]): { inputTokens: number; outputTokens: number; cost: number; model: string }[] {
-    const modelEfficiency = new Map<string, { input: number; output: number; cost: number; name: string }>();
-
-    for (const run of promptRuns) {
-      if (run.ModelID && run.Model && run.TokensPrompt && run.TokensCompletion) {
-        const existing = modelEfficiency.get(run.ModelID) || { input: 0, output: 0, cost: 0, name: run.Model };
-        existing.input += run.TokensPrompt;
-        existing.output += run.TokensCompletion;
-        existing.cost += run.Cost || 0;
-        modelEfficiency.set(run.ModelID, existing);
-      }
-    }
-
-    return Array.from(modelEfficiency.values()).map(data => ({
-      inputTokens: data.input,
-      outputTokens: data.output,
-      cost: data.cost,
-      model: data.name
-    }));
+    return {
+      hourlyRows,
+      livePromptRuns,
+      liveAgentRuns,
+      modelNames,
+      agentNames,
+      start,
+      end
+    };
   }
 
   // ─── Execution Details (on-demand, not part of initial load) ──────
@@ -575,80 +310,99 @@ export class AIInstrumentationService {
   }
 
   private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {
-    const rv = RunView.FromMetadataProvider(this.Provider);
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const [result, childrenResult] = await rv.RunViews<PromptRunRecord>([
       {
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ID = '${promptRunId}'`,
         Fields: PROMPT_RUN_FIELDS,
-        ResultType: 'simple'
+        ResultType: 'simple',
+        MaxRows: 1
       },
       {
         EntityName: 'MJ: AI Prompt Runs',
         ExtraFilter: `ParentID = '${promptRunId}'`,
         Fields: PROMPT_RUN_FIELDS,
-        ResultType: 'simple'
+        ResultType: 'simple',
+        MaxRows: 100
       }
     ]);
 
-    const run = result.Results[0];
+    const run = result && result.Results && result.Results.length > 0 ? result.Results[0] : null;
     if (!run) throw new Error('Prompt run not found');
 
+    const childrenList = childrenResult && Array.isArray(childrenResult.Results) ? childrenResult.Results : [];
     const children = await Promise.all(
-      childrenResult.Results.map(child => this.getPromptExecutionDetails(child.ID))
+      childrenList.map(child => this.getPromptExecutionDetails(child.ID))
     );
+
+    const costVal = run.Cost !== null && run.Cost !== undefined ? run.Cost : null;
+    const tokensVal = typeof run.TokensUsed === 'number' ? run.TokensUsed : 0;
+    const promptName = run.Prompt ? run.Prompt : 'Unnamed Prompt';
+    const statusStr = run.Success ? 'completed' : 'failed';
+    const errMsg = run.ErrorMessage ? run.ErrorMessage : undefined;
+    const modelStr = run.Model ? run.Model : undefined;
 
     return {
       id: run.ID,
       type: 'prompt',
-      name: run.Prompt || 'Unnamed Prompt',
-      status: run.Success ? 'completed' : 'failed',
+      name: promptName,
+      status: statusStr,
       startTime: new Date(run.RunAt),
       endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
-      cost: run.Cost || 0,
-      tokens: run.TokensUsed || 0,
-      success: run.Success || false,
-      errorMessage: run.ErrorMessage || undefined,
+      cost: costVal,
+      tokens: tokensVal,
+      success: run.Success ? true : false,
+      errorMessage: errMsg,
       children,
-      model: run.Model || undefined
+      model: modelStr
     };
   }
 
   private async getAgentExecutionDetails(agentRunId: string): Promise<ExecutionDetails> {
-    const rv = RunView.FromMetadataProvider(this.Provider);
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const [result, childrenResult] = await rv.RunViews<AgentRunRecord>([
       {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ID = '${agentRunId}'`,
         Fields: AGENT_RUN_FIELDS,
-        ResultType: 'simple'
+        ResultType: 'simple',
+        MaxRows: 1
       },
       {
         EntityName: 'MJ: AI Agent Runs',
         ExtraFilter: `ParentRunID = '${agentRunId}'`,
         Fields: AGENT_RUN_FIELDS,
-        ResultType: 'simple'
+        ResultType: 'simple',
+        MaxRows: 100
       }
     ]);
 
-    const run = result.Results[0];
+    const run = result && result.Results && result.Results.length > 0 ? result.Results[0] : null;
     if (!run) throw new Error('Agent run not found');
 
+    const childrenList = childrenResult && Array.isArray(childrenResult.Results) ? childrenResult.Results : [];
     const children = await Promise.all(
-      childrenResult.Results.map(child => this.getAgentExecutionDetails(child.ID))
+      childrenList.map(child => this.getAgentExecutionDetails(child.ID))
     );
+
+    const costVal = run.TotalCost !== null && run.TotalCost !== undefined ? run.TotalCost : null;
+    const tokensVal = typeof run.TotalTokensUsed === 'number' ? run.TotalTokensUsed : 0;
+    const agentName = run.Agent ? run.Agent : 'Unnamed Agent';
+    const statusStr = run.Status ? run.Status.toLowerCase() : 'unknown';
+    const errMsg = run.ErrorMessage ? run.ErrorMessage : undefined;
 
     return {
       id: run.ID,
       type: 'agent',
-      name: run.Agent || 'Unnamed Agent',
-      status: run.Status.toLowerCase(),
+      name: agentName,
+      status: statusStr,
       startTime: new Date(run.StartedAt),
       endTime: run.CompletedAt ? new Date(run.CompletedAt) : undefined,
-      cost: run.TotalCost || 0,
-      tokens: run.TotalTokensUsed || 0,
-      success: run.Success || false,
-      errorMessage: run.ErrorMessage || undefined,
+      cost: costVal,
+      tokens: tokensVal,
+      success: run.Success ? true : false,
+      errorMessage: errMsg,
       parentId: undefined,
       children
     };
