@@ -18,7 +18,7 @@ import { mj_core_schema } from '../../config.js';
 
 
 
-import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
+import { MJAIActionEntity, MJAIAgentActionEntity, MJAIAgentArtifactTypeEntity, MJAIAgentCategoryEntity, MJAIAgentChannelEntity, MJAIAgentClientToolEntity, MJAIAgentCoAgentEntity, MJAIAgentConfigurationEntity, MJAIAgentCredentialEntity, MJAIAgentDataSourceEntity, MJAIAgentExampleEntity, MJAIAgentHarnessEntity, MJAIAgentLearningCycleEntity, MJAIAgentModalityEntity, MJAIAgentModelEntity, MJAIAgentNoteTypeEntity, MJAIAgentNoteEntity, MJAIAgentPermissionEntity, MJAIAgentPersonaEntity, MJAIAgentPromptEntity, MJAIAgentRelationshipEntity, MJAIAgentRequestTypeEntity, MJAIAgentRequestEntity, MJAIAgentRunMediaEntity, MJAIAgentRunStepEntity, MJAIAgentRunEntity, MJAIAgentSearchScopeEntity, MJAIAgentSessionBridgeParticipantEntity, MJAIAgentSessionBridgeEntity, MJAIAgentSessionChannelEntity, MJAIAgentSessionEntity, MJAIAgentSkillEntity, MJAIAgentStepPathEntity, MJAIAgentStepEntity, MJAIAgentTypeEntity, MJAIAgentEntity, MJAIArchitectureEntity, MJAIBridgeAgentIdentityEntity, MJAIBridgeProviderChannelEntity, MJAIBridgeProviderEntity, MJAIClientToolDefinitionEntity, MJAIConfigurationParamEntity, MJAIConfigurationEntity, MJAICredentialBindingEntity, MJAIModalityEntity, MJAIModelActionEntity, MJAIModelArchitectureEntity, MJAIModelCostEntity, MJAIModelModalityEntity, MJAIModelPersonaEntity, MJAIModelPriceTypeEntity, MJAIModelPriceUnitTypeEntity, MJAIModelTypeEntity, MJAIModelVendorEntity, MJAIModelEntity, MJAIPersonaVendorEntity, MJAIPersonaEntity, MJAIPromptCategoryEntity, MJAIPromptModelEntity, MJAIPromptRunMediaEntity, MJAIPromptRunEntity, MJAIPromptTypeEntity, MJAIPromptEntity, MJAIRemoteBrowserProviderEntity, MJAIResultCacheEntity, MJAISkillActionEntity, MJAISkillPermissionEntity, MJAISkillSearchScopeEntity, MJAISkillSubAgentEntity, MJAISkillEntity, MJAIUsageTypeEntity, MJAIVendorTypeDefinitionEntity, MJAIVendorTypeEntity, MJAIVendorEntity, MJAPIApplicationScopeEntity, MJAPIApplicationEntity, MJAPIKeyApplicationEntity, MJAPIKeyScopeEntity, MJAPIKeyUsageLogEntity, MJAPIKeyEntity, MJAPIScopeEntity, MJAccessControlRuleEntity, MJActionAuthorizationEntity, MJActionCategoryEntity, MJActionContextTypeEntity, MJActionContextEntity, MJActionExecutionLogEntity, MJActionFilterEntity, MJActionLibraryEntity, MJActionParamEntity, MJActionResultCodeEntity, MJActionEntity, MJApplicationEntityEntity, MJApplicationRoleEntity, MJApplicationSettingEntity, MJApplicationEntity, MJArchiveConfigurationEntityEntity, MJArchiveConfigurationEntity, MJArchiveRunDetailEntity, MJArchiveRunEntity, MJArtifactPermissionEntity, MJArtifactTypeEntity, MJArtifactUseEntity, MJArtifactVersionAttributeEntity, MJArtifactVersionEntity, MJArtifactEntity, MJAuditLogTypeEntity, MJAuditLogEntity, MJAuthenticationProviderEntity, MJAuthorizationRoleEntity, MJAuthorizationEntity, MJClusterAnalysisEntity, MJClusterAnalysisClusterEntity, MJCollectionArtifactEntity, MJCollectionPermissionEntity, MJCollectionEntity, MJCommunicationBaseMessageTypeEntity, MJCommunicationLogEntity, MJCommunicationProviderMessageTypeEntity, MJCommunicationProviderEntity, MJCommunicationRunEntity, MJCompanyEntity, MJCompanyIntegrationEntityMapEntity, MJCompanyIntegrationFieldMapEntity, MJCompanyIntegrationRecordMapEntity, MJCompanyIntegrationRunAPILogEntity, MJCompanyIntegrationRunDetailEntity, MJCompanyIntegrationRunEntity, MJCompanyIntegrationSyncWatermarkEntity, MJCompanyIntegrationEntity, MJComponentDependencyEntity, MJComponentLibraryEntity, MJComponentLibraryLinkEntity, MJComponentRegistryEntity, MJComponentEntity, MJContentFileTypeEntity, MJContentItemAttributeEntity, MJContentItemChunkEntity, MJContentItemDuplicateEntity, MJContentItemTagEntity, MJContentItemEntity, MJContentProcessRunDetailEntity, MJContentProcessRunPromptRunEntity, MJContentProcessRunEntity, MJContentSourceParamEntity, MJContentSourceTypeParamEntity, MJContentSourceTypeEntity, MJContentSourceEntity, MJContentTypeAttributeEntity, MJContentTypeEntity, MJConversationArtifactPermissionEntity, MJConversationArtifactVersionEntity, MJConversationArtifactEntity, MJConversationCompactionRunEntity, MJConversationDetailArtifactEntity, MJConversationDetailAttachmentEntity, MJConversationDetailRatingEntity, MJConversationDetailEntity, MJConversationSkillEntity, MJConversationWidgetInstanceEntity, MJConversationEntity, MJCountryEntity, MJCredentialCategoryEntity, MJCredentialTypeEntity, MJCredentialEntity, MJDashboardCategoryEntity, MJDashboardCategoryLinkEntity, MJDashboardCategoryPermissionEntity, MJDashboardPartTypeEntity, MJDashboardPermissionEntity, MJDashboardUserPreferenceEntity, MJDashboardUserStateEntity, MJDashboardEntity, MJDataContextItemEntity, MJDataContextEntity, MJDatasetItemEntity, MJDatasetEntity, MJDuplicateRunDetailMatchEntity, MJDuplicateRunDetailEntity, MJDuplicateRunEntity, MJEmployeeCompanyIntegrationEntity, MJEmployeeRoleEntity, MJEmployeeSkillEntity, MJEmployeeEntity, MJEncryptionAlgorithmEntity, MJEncryptionKeySourceEntity, MJEncryptionKeyEntity, MJEntityEntity, MJEntityAIActionEntity, MJEntityActionFilterEntity, MJEntityActionInvocationTypeEntity, MJEntityActionInvocationEntity, MJEntityActionParamEntity, MJEntityActionEntity, MJEntityCommunicationFieldEntity, MJEntityCommunicationMessageTypeEntity, MJEntityDocumentRunEntity, MJEntityDocumentSettingEntity, MJEntityDocumentTypeEntity, MJEntityDocumentEntity, MJEntityFieldPermissionEntity, MJEntityFieldValueEntity, MJEntityFieldEntity, MJEntityFormOverrideEntity, MJEntityOrganicKeyRelatedEntityEntity, MJEntityOrganicKeyEntity, MJEntityPermissionEntity, MJEntityRecordDocumentEntity, MJEntityRelationshipDisplayComponentEntity, MJEntityRelationshipEntity, MJEntitySettingEntity, MJEnvironmentEntity, MJErrorLogEntity, MJExperimentSessionIterationEntity, MJExperimentSessionEntity, MJExperimentEntity, MJExplorerNavigationItemEntity, MJExternalDataSourceTypeEntity, MJExternalDataSourceEntity, MJFileCategoryEntity, MJFileEntityRecordLinkEntity, MJFileStorageAccountPermissionEntity, MJFileStorageAccountEntity, MJFileStorageProviderEntity, MJFileEntity, MJFormChromeRuleEntity, MJGeneratedCodeCategoryEntity, MJGeneratedCodeEntity, MJIdentityClaimTypeEntity, MJIdentityClaimEntity, MJInstanceConfigurationEntity, MJIntegrationObjectFieldEntity, MJIntegrationObjectEntity, MJIntegrationSourceTypeEntity, MJIntegrationURLFormatEntity, MJIntegrationEntity, MJKnowledgeHubSavedSearchEntity, MJLibraryEntity, MJLibraryItemEntity, MJListCategoryEntity, MJListDetailEntity, MJListInvitationEntity, MJListShareEntity, MJListEntity, MJMCPServerConnectionPermissionEntity, MJMCPServerConnectionToolEntity, MJMCPServerConnectionEntity, MJMCPServerToolEntity, MJMCPServerEntity, MJMCPToolExecutionLogEntity, MJMCPToolFavoriteEntity, MJMLAlgorithmUseCaseRankingEntity, MJMLAlgorithmUseCaseEntity, MJMLAlgorithmEntity, MJMLModelScoringBindingEntity, MJMLModelEntity, MJMLTrainingPipelineEntity, MJMLTrainingRunEntity, MJMagicLinkInviteAllowedDomainEntity, MJMagicLinkInviteAllowedPathEntity, MJMagicLinkInviteApplicationEntity, MJMagicLinkInviteRoleEntity, MJMagicLinkInviteEntity, MJMagicLinkRedemptionEntity, MJMaterializedResultQueryEntity, MJMaterializedResultEntity, MJOAuthAuthServerMetadataCacheEntity, MJOAuthAuthorizationStateEntity, MJOAuthClientRegistrationEntity, MJOAuthTokenEntity, MJOpenAppDependencyEntity, MJOpenAppInstallHistoryEntity, MJOpenAppEntity, MJOutputDeliveryTypeEntity, MJOutputFormatTypeEntity, MJPermissionDomainEntity, MJProcessRunDetailEntity, MJProcessRunEntity, MJProjectEntity, MJPublicLinkEntity, MJQueryEntity, MJQueryCategoryEntity, MJQueryDependencyEntity, MJQueryEntityEntity, MJQueryFieldEntity, MJQueryParameterEntity, MJQueryPermissionEntity, MJQuerySQLEntity, MJQueueTaskEntity, MJQueueTypeEntity, MJQueueEntity, MJRSUPendingWorkEntity, MJRecommendationItemEntity, MJRecommendationProviderEntity, MJRecommendationRunEntity, MJRecommendationEntity, MJRecordChangeReplayRunEntity, MJRecordChangeEntity, MJRecordGeoCodeEntity, MJRecordLinkEntity, MJRecordMergeDeletionLogEntity, MJRecordMergeLogEntity, MJRecordProcessCategoryEntity, MJRecordProcessWatermarkEntity, MJRecordProcessEntity, MJRemoteOperationCategoryEntity, MJRemoteOperationEntity, MJResourceLinkEntity, MJResourcePermissionEntity, MJResourceTypeEntity, MJRoleEntity, MJRowLevelSecurityFilterEntity, MJSQLDialectEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity, MJScheduledJobEntity, MJSchemaInfoEntity, MJScopedPromptConfigEntity, MJScopedPromptPartEntity, MJSearchExecutionLogEntity, MJSearchProviderEntity, MJSearchScopeEntityEntity, MJSearchScopeExternalIndexEntity, MJSearchScopePermissionEntity, MJSearchScopeProviderEntity, MJSearchScopeStorageAccountEntity, MJSearchScopeTestQueryEntity, MJSearchScopeEntity, MJSignatureAccountEntity, MJSignatureProviderEntity, MJSignatureRequestDocumentEntity, MJSignatureRequestLogEntity, MJSignatureRequestRecipientEntity, MJSignatureRequestEntity, MJSkillEntity, MJStateProvinceEntity, MJTagAuditLogEntity, MJTagCoOccurrenceEntity, MJTagScopeEntity, MJTagSuggestionEntity, MJTagSynonymEntity, MJTaggedItemEntity, MJTagEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJTaskEntity, MJTemplateCategoryEntity, MJTemplateContentTypeEntity, MJTemplateContentEntity, MJTemplateParamEntity, MJTemplateEntity, MJTestRubricEntity, MJTestRunFeedbackEntity, MJTestRunOutputTypeEntity, MJTestRunOutputEntity, MJTestRunEntity, MJTestSuiteRunEntity, MJTestSuiteTestEntity, MJTestSuiteEntity, MJTestTypeEntity, MJTestEntity, MJThemeEntity, MJUserApplicationEntityEntity, MJUserApplicationEntity, MJUserFavoriteEntity, MJUserNotificationPreferenceEntity, MJUserNotificationTypeEntity, MJUserNotificationEntity, MJUserRecordLogEntity, MJUserRoleEntity, MJUserRoutineRecipientEntity, MJUserRoutineRunEntity, MJUserRoutineEntity, MJUserSettingEntity, MJUserViewCategoryEntity, MJUserViewRunDetailEntity, MJUserViewRunEntity, MJUserViewEntity, MJUserEntity, MJVectorDatabaseEntity, MJVectorIndexEntity, MJVersionInstallationEntity, MJVersionLabelItemEntity, MJVersionLabelRestoreEntity, MJVersionLabelEntity, MJViewTypeEntity, MJWorkspaceItemEntity, MJWorkspaceEntity } from '@memberjunction/core-entities';
     
 
 //****************************************************************************
@@ -267,6 +267,9 @@ export class MJAIAgentAction_ {
     @MaxLength(36)
     CompactPromptID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: `Whether this Action may be declared as a native tool for this agent (1, default). 0 keeps it out of the tool set on native turns; because the prose catalog is not rendered in native mode, the action is then unavailable on those turns. Use for actions an agent holds but should rarely reach for on its own.`}) 
+    DeclareAsNativeTool?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Agent?: string;
@@ -322,6 +325,9 @@ export class CreateMJAIAgentActionInput {
     @Field({ nullable: true })
     CompactPromptID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    DeclareAsNativeTool?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -364,6 +370,9 @@ export class UpdateMJAIAgentActionInput {
 
     @Field({ nullable: true })
     CompactPromptID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DeclareAsNativeTool?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -4186,6 +4195,204 @@ export class MJAIAgentPermissionResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: AI Agent Personas
+//****************************************************************************
+@ObjectType({ description: `Configures which personas an AI agent is permitted to wear, their preference order, and which persona serves as the agent\'s default identity.` })
+export class MJAIAgentPersona_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    AgentID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    PersonaID?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Indicates whether this persona is the default presentation for the agent when none is explicitly requested.`}) 
+    IsDefault?: boolean;
+        
+    @Field(() => Int, {nullable: true, description: `Ordering sequence for displaying available personas in user interfaces.`}) 
+    Sequence?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether the agent is allowed to use this persona. Set to 0 to explicitly disable or veto a persona.`}) 
+    IsAllowed?: boolean;
+        
+    @Field({nullable: true, description: `Optional JSON payload overriding or refining persona presentation specifically for this agent (e.g. Tone or SpeakingStyle adjustments).`}) 
+    StyleOverride?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    Agent?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Persona?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Personas
+//****************************************************************************
+@InputType()
+export class CreateMJAIAgentPersonaInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    PersonaID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAllowed?: boolean;
+
+    @Field({ nullable: true })
+    StyleOverride: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Agent Personas
+//****************************************************************************
+@InputType()
+export class UpdateMJAIAgentPersonaInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    AgentID?: string;
+
+    @Field({ nullable: true })
+    PersonaID?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsDefault?: boolean;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsAllowed?: boolean;
+
+    @Field({ nullable: true })
+    StyleOverride?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Agent Personas
+//****************************************************************************
+@ObjectType()
+export class RunMJAIAgentPersonaViewResult {
+    @Field(() => [MJAIAgentPersona_])
+    Results: MJAIAgentPersona_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIAgentPersona_)
+export class MJAIAgentPersonaResolver extends ResolverBase {
+    @Query(() => RunMJAIAgentPersonaViewResult)
+    async RunMJAIAgentPersonaViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentPersonaViewResult)
+    async RunMJAIAgentPersonaViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIAgentPersonaViewResult)
+    async RunMJAIAgentPersonaDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Agent Personas';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIAgentPersona_, { nullable: true })
+    async MJAIAgentPersona(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIAgentPersona_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Agent Personas', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIAgentPersonas')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Agent Personas', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Agent Personas', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIAgentPersona_)
+    async CreateMJAIAgentPersona(
+        @Arg('input', () => CreateMJAIAgentPersonaInput) input: CreateMJAIAgentPersonaInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Agent Personas', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIAgentPersona_)
+    async UpdateMJAIAgentPersona(
+        @Arg('input', () => UpdateMJAIAgentPersonaInput) input: UpdateMJAIAgentPersonaInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Agent Personas', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIAgentPersona_)
+    async DeleteMJAIAgentPersona(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Agent Personas', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Agent Prompts
 //****************************************************************************
 @ObjectType({ description: `Links AI agents with the prompts they use, including execution order and context handling.` })
@@ -5559,6 +5766,19 @@ detailed information about what validation rules failed.`})
     @Field({nullable: true, description: `JSON array of skill-invocation records (AgentSkillInvocation[]) associating this step with the skills involved in it, or NULL when no skills are in play. Each record carries SkillID, SkillName, ActivationType (requested = user /skill mention; auto = agent self-activation), Provenance of authority (the gate values that admitted the skill: AcceptsSkills, both ActivationMode dials, and who requested it), and an optional agent-stated Reason when self-activated. Population: Skill steps record the activation(s) they performed; Prompt steps record the full set of skills in effect for that turn; Actions and Sub-Agent steps record the skill(s) through which the executed tool became available (NULL means the tool was a native grant).`}) 
     Skills?: string;
         
+    @Field({nullable: true, description: `Which tool-calling path this step's model call took: Native (Actions as tools, envelope control flow), NativeImplicit (Actions, sub-agents, payload changes and ask_user as tools; plain text ends the turn), Envelope (prose action catalog + JSON envelope), or NativeFallback (a native attempt failed in a tools-specific way and completed via an envelope retry). NULL for steps that never reached a model call, and for rows predating the feature.`}) 
+    @MaxLength(25)
+    ToolCallingMode?: string;
+        
+    @Field(() => Int, {nullable: true, description: `How many native tool calls the model made on this step. 0 on a native-mode step where the model chose to answer with the envelope instead; NULL when the step took the envelope path or never reached a model call.`}) 
+    NativeToolCallCount?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `On a native-mode step where the model made tool calls: 1 when the same turn also carried a parseable JSON Loop envelope (the model answered on both channels; the loop dispatched the tool call and discarded the envelope), 0 when the tool calls came alone. NULL when the step made no tool calls or took the envelope path.`}) 
+    NativeDualChannel?: boolean;
+        
+    @Field(() => Boolean, {nullable: true, description: `For native tool-calling steps: 1 = the results of this step's tool calls were returned to the model as native tool-result turns, 0 = as the markdown action-results user message. NULL for envelope steps and for rows predating the feature.`}) 
+    NativeToolResultsSent?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     AgentRun?: string;
@@ -5656,6 +5876,18 @@ export class CreateMJAIAgentRunStepInput {
     @Field({ nullable: true })
     Skills: string | null;
 
+    @Field({ nullable: true })
+    ToolCallingMode: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NativeToolCallCount: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeDualChannel: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeToolResultsSent: boolean | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -5728,6 +5960,18 @@ export class UpdateMJAIAgentRunStepInput {
 
     @Field({ nullable: true })
     Skills?: string | null;
+
+    @Field({ nullable: true })
+    ToolCallingMode?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    NativeToolCallCount?: number | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeDualChannel?: boolean | null;
+
+    @Field(() => Boolean, { nullable: true })
+    NativeToolResultsSent?: boolean | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -9102,6 +9346,9 @@ if this limit is exceeded.`})
     @MaxLength(36)
     ConversationSummaryPromptID?: string;
         
+    @Field(() => Boolean, {nullable: true, description: `When native tool calling is in effect for a run, whether this agent's Actions are declared as native tools (1, default) or withheld so the agent runs on the envelope path with the prose action catalog (0). Set 0 for coordinator agents whose prompt forbids doing work themselves. Controls supply only: capability and preference on the model and prompt still decide whether declared tools are used.`}) 
+    DeclareActionsAsNativeTools?: boolean;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Parent?: string;
@@ -9410,6 +9657,9 @@ export class CreateMJAIAgentInput {
     @Field({ nullable: true })
     ConversationSummaryPromptID: string | null;
 
+    @Field(() => Boolean, { nullable: true })
+    DeclareActionsAsNativeTools?: boolean;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -9653,6 +9903,9 @@ export class UpdateMJAIAgentInput {
 
     @Field({ nullable: true })
     ConversationSummaryPromptID?: string | null;
+
+    @Field(() => Boolean, { nullable: true })
+    DeclareActionsAsNativeTools?: boolean;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -12539,6 +12792,186 @@ export class MJAIModelModalityResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: AI Model Personas
+//****************************************************************************
+@ObjectType({ description: `Specifies per-model persona availability overrides where a model\'s supported personas differ from its vendor\'s default catalog.` })
+export class MJAIModelPersona_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ModelID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    PersonaID?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Deterministic ordering sequence for persona priority at the model level.`}) 
+    Sequence?: number;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this persona is supported by the specific model. Set to 0 to explicitly disable an inherited vendor persona for this model.`}) 
+    IsSupported?: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Model?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Persona?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Personas
+//****************************************************************************
+@InputType()
+export class CreateMJAIModelPersonaInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    ModelID?: string;
+
+    @Field({ nullable: true })
+    PersonaID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSupported?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Model Personas
+//****************************************************************************
+@InputType()
+export class UpdateMJAIModelPersonaInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    ModelID?: string;
+
+    @Field({ nullable: true })
+    PersonaID?: string;
+
+    @Field(() => Int, { nullable: true })
+    Sequence?: number;
+
+    @Field(() => Boolean, { nullable: true })
+    IsSupported?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Model Personas
+//****************************************************************************
+@ObjectType()
+export class RunMJAIModelPersonaViewResult {
+    @Field(() => [MJAIModelPersona_])
+    Results: MJAIModelPersona_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIModelPersona_)
+export class MJAIModelPersonaResolver extends ResolverBase {
+    @Query(() => RunMJAIModelPersonaViewResult)
+    async RunMJAIModelPersonaViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIModelPersonaViewResult)
+    async RunMJAIModelPersonaViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIModelPersonaViewResult)
+    async RunMJAIModelPersonaDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Model Personas';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIModelPersona_, { nullable: true })
+    async MJAIModelPersona(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIModelPersona_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Model Personas', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIModelPersonas')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Model Personas', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Model Personas', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIModelPersona_)
+    async CreateMJAIModelPersona(
+        @Arg('input', () => CreateMJAIModelPersonaInput) input: CreateMJAIModelPersonaInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Model Personas', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIModelPersona_)
+    async UpdateMJAIModelPersona(
+        @Arg('input', () => UpdateMJAIModelPersonaInput) input: UpdateMJAIModelPersonaInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Model Personas', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIModelPersona_)
+    async DeleteMJAIModelPersona(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Model Personas', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Model Price Types
 //****************************************************************************
 @ObjectType({ description: `Defines the different types of pricing metrics used by AI model vendors (e.g., Tokens, Minutes, Characters, API Calls)` })
@@ -13730,6 +14163,489 @@ export class MJAIModelResolver extends ResolverBase {
 }
 
 //****************************************************************************
+// ENTITY CLASS for MJ: AI Persona Vendors
+//****************************************************************************
+@ObjectType({ description: `Concrete vendor and modality binding for a persona, mapping the abstract persona to a provider-specific wire asset identifier (voice ID or avatar ID).` })
+export class MJAIPersonaVendor_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    PersonaID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    VendorID?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    ModalityID?: string;
+        
+    @Field({nullable: true, description: `Vendor-specific asset name or identifier passed over the wire (e.g., alloy, sage, an ElevenLabs voice_id, or a HeyGen avatar_id).`}) 
+    @MaxLength(255)
+    APIName?: string;
+        
+    @Field({nullable: true, description: `Current operational status of this vendor persona binding.`}) 
+    @MaxLength(20)
+    Status?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Selection priority when multiple vendor bindings qualify for a given persona and modality. Higher numbers indicate higher priority.`}) 
+    Priority?: number;
+        
+    @Field({nullable: true, description: `Provider-specific configuration JSON (e.g., ElevenLabs stability, similarityBoost, style, useSpeakerBoost).`}) 
+    VendorSettings?: string;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    Persona?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Vendor?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(50)
+    Modality?: string;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Persona Vendors
+//****************************************************************************
+@InputType()
+export class CreateMJAIPersonaVendorInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    PersonaID?: string;
+
+    @Field({ nullable: true })
+    VendorID?: string;
+
+    @Field({ nullable: true })
+    ModalityID?: string;
+
+    @Field({ nullable: true })
+    APIName?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    VendorSettings: string | null;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Persona Vendors
+//****************************************************************************
+@InputType()
+export class UpdateMJAIPersonaVendorInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    PersonaID?: string;
+
+    @Field({ nullable: true })
+    VendorID?: string;
+
+    @Field({ nullable: true })
+    ModalityID?: string;
+
+    @Field({ nullable: true })
+    APIName?: string;
+
+    @Field({ nullable: true })
+    Status?: string;
+
+    @Field(() => Int, { nullable: true })
+    Priority?: number;
+
+    @Field({ nullable: true })
+    VendorSettings?: string | null;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Persona Vendors
+//****************************************************************************
+@ObjectType()
+export class RunMJAIPersonaVendorViewResult {
+    @Field(() => [MJAIPersonaVendor_])
+    Results: MJAIPersonaVendor_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIPersonaVendor_)
+export class MJAIPersonaVendorResolver extends ResolverBase {
+    @Query(() => RunMJAIPersonaVendorViewResult)
+    async RunMJAIPersonaVendorViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIPersonaVendorViewResult)
+    async RunMJAIPersonaVendorViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIPersonaVendorViewResult)
+    async RunMJAIPersonaVendorDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Persona Vendors';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIPersonaVendor_, { nullable: true })
+    async MJAIPersonaVendor(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIPersonaVendor_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Persona Vendors', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIPersonaVendors')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Persona Vendors', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Persona Vendors', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIPersonaVendor_)
+    async CreateMJAIPersonaVendor(
+        @Arg('input', () => CreateMJAIPersonaVendorInput) input: CreateMJAIPersonaVendorInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Persona Vendors', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIPersonaVendor_)
+    async UpdateMJAIPersonaVendor(
+        @Arg('input', () => UpdateMJAIPersonaVendorInput) input: UpdateMJAIPersonaVendorInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Persona Vendors', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIPersonaVendor_)
+    async DeleteMJAIPersonaVendor(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Persona Vendors', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
+// ENTITY CLASS for MJ: AI Personas
+//****************************************************************************
+@ObjectType({ description: `Abstract, provider-agnostic presentational identity (voice and/or visual appearance) that AI agents can assume when interacting with users.` })
+export class MJAIPersona_ {
+    @Field() 
+    @MaxLength(36)
+    ID: string;
+        
+    @Field({nullable: true, description: `Unique display name identifying this persona (e.g., Alloy, Aria, Sage). Globally unique across all sources to maintain deterministic cross-modality catalog curation.`}) 
+    @MaxLength(100)
+    Name?: string;
+        
+    @Field({nullable: true, description: `Optional description of the persona, its characteristics, and intended personality.`}) 
+    Description?: string;
+        
+    @Field({nullable: true, description: `The perceived gender presentation of this persona (e.g., Male, Female, Neutral, Non-Binary).`}) 
+    @MaxLength(50)
+    PerceivedGender?: string;
+        
+    @Field({nullable: true, description: `BCP 47 language and locale tag primarily associated with this persona (e.g., en-US, es-ES).`}) 
+    @MaxLength(20)
+    Locale?: string;
+        
+    @Field(() => Int, {nullable: true, description: `Approximate minimum perceived age for this persona, enabling numerical filtering.`}) 
+    PerceivedAgeRangeMin?: number;
+        
+    @Field(() => Int, {nullable: true, description: `Approximate maximum perceived age for this persona, enabling numerical filtering.`}) 
+    PerceivedAgeRangeMax?: number;
+        
+    @Field({nullable: true, description: `Core tonal quality for this persona (e.g., Warm, Authoritative, Enthusiastic, Calm). Injected into prompt context for conversational delivery.`}) 
+    @MaxLength(255)
+    Tone?: string;
+        
+    @Field({nullable: true, description: `Stylistic manner of speaking (e.g., Casual and conversational, Direct and concise, Academic).`}) 
+    @MaxLength(255)
+    SpeakingStyle?: string;
+        
+    @Field({nullable: true, description: `Additional descriptive keywords or JSON metadata capturing nuanced personality and presentation traits.`}) 
+    StyleDescriptors?: string;
+        
+    @Field({nullable: true, description: `URL to a sample audio file demonstrating this persona's voice.`}) 
+    @MaxLength(1000)
+    PreviewAudioURL?: string;
+        
+    @Field({nullable: true, description: `URL to a preview avatar image for this persona.`}) 
+    @MaxLength(1000)
+    PreviewImageURL?: string;
+        
+    @Field({nullable: true, description: `URL to a preview video demonstrating this persona's visual animation or avatar.`}) 
+    @MaxLength(1000)
+    PreviewVideoURL?: string;
+        
+    @Field({nullable: true, description: `Origin of this persona: BuiltIn (provided by system/catalog), Custom (user-defined), or Cloned (derived/voice-cloned).`}) 
+    @MaxLength(20)
+    Source?: string;
+        
+    @Field(() => Boolean, {nullable: true, description: `Whether this persona is currently active and available for selection.`}) 
+    IsActive?: boolean;
+        
+    @Field() 
+    _mj__CreatedAt: Date;
+        
+    @Field() 
+    _mj__UpdatedAt: Date;
+        
+    @Field(() => [String], { nullable: true, description: `Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.` })
+    ReadableFields___?: string[];
+        
+}
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Personas
+//****************************************************************************
+@InputType()
+export class CreateMJAIPersonaInput {
+    @Field({ nullable: true })
+    ID?: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description: string | null;
+
+    @Field({ nullable: true })
+    PerceivedGender: string | null;
+
+    @Field({ nullable: true })
+    Locale: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PerceivedAgeRangeMin: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PerceivedAgeRangeMax: number | null;
+
+    @Field({ nullable: true })
+    Tone: string | null;
+
+    @Field({ nullable: true })
+    SpeakingStyle: string | null;
+
+    @Field({ nullable: true })
+    StyleDescriptors: string | null;
+
+    @Field({ nullable: true })
+    PreviewAudioURL: string | null;
+
+    @Field({ nullable: true })
+    PreviewImageURL: string | null;
+
+    @Field({ nullable: true })
+    PreviewVideoURL: string | null;
+
+    @Field({ nullable: true })
+    Source?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+
+//****************************************************************************
+// INPUT TYPE for MJ: AI Personas
+//****************************************************************************
+@InputType()
+export class UpdateMJAIPersonaInput {
+    @Field()
+    ID: string;
+
+    @Field({ nullable: true })
+    Name?: string;
+
+    @Field({ nullable: true })
+    Description?: string | null;
+
+    @Field({ nullable: true })
+    PerceivedGender?: string | null;
+
+    @Field({ nullable: true })
+    Locale?: string | null;
+
+    @Field(() => Int, { nullable: true })
+    PerceivedAgeRangeMin?: number | null;
+
+    @Field(() => Int, { nullable: true })
+    PerceivedAgeRangeMax?: number | null;
+
+    @Field({ nullable: true })
+    Tone?: string | null;
+
+    @Field({ nullable: true })
+    SpeakingStyle?: string | null;
+
+    @Field({ nullable: true })
+    StyleDescriptors?: string | null;
+
+    @Field({ nullable: true })
+    PreviewAudioURL?: string | null;
+
+    @Field({ nullable: true })
+    PreviewImageURL?: string | null;
+
+    @Field({ nullable: true })
+    PreviewVideoURL?: string | null;
+
+    @Field({ nullable: true })
+    Source?: string;
+
+    @Field(() => Boolean, { nullable: true })
+    IsActive?: boolean;
+
+    @Field(() => [KeyValuePairInput], { nullable: true })
+    OldValues___?: KeyValuePairInput[];
+
+    @Field(() => RestoreContextInput, { nullable: true })
+    RestoreContext___?: RestoreContextInput;
+}
+    
+//****************************************************************************
+// RESOLVER for MJ: AI Personas
+//****************************************************************************
+@ObjectType()
+export class RunMJAIPersonaViewResult {
+    @Field(() => [MJAIPersona_])
+    Results: MJAIPersona_[];
+
+    @Field(() => String, {nullable: true})
+    UserViewRunID?: string;
+
+    @Field(() => Int, {nullable: true})
+    RowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    TotalRowCount: number;
+
+    @Field(() => Int, {nullable: true})
+    ExecutionTime: number;
+
+    @Field({nullable: true})
+    ErrorMessage?: string;
+
+    @Field(() => Boolean, {nullable: false})
+    Success: boolean;
+}
+
+@Resolver(MJAIPersona_)
+export class MJAIPersonaResolver extends ResolverBase {
+    @Query(() => RunMJAIPersonaViewResult)
+    async RunMJAIPersonaViewByID(@Arg('input', () => RunViewByIDInput) input: RunViewByIDInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByIDGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIPersonaViewResult)
+    async RunMJAIPersonaViewByName(@Arg('input', () => RunViewByNameInput) input: RunViewByNameInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        return super.RunViewByNameGeneric(input, provider, userPayload, pubSub);
+    }
+
+    @Query(() => RunMJAIPersonaViewResult)
+    async RunMJAIPersonaDynamicView(@Arg('input', () => RunDynamicViewInput) input: RunDynamicViewInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        input.EntityName = 'MJ: AI Personas';
+        return super.RunDynamicViewGeneric(input, provider, userPayload, pubSub);
+    }
+    @Query(() => MJAIPersona_, { nullable: true })
+    async MJAIPersona(@Arg('ID', () => String) ID: string, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine): Promise<MJAIPersona_ | null> {
+        this.CheckUserReadPermissions('MJ: AI Personas', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwAIPersonas')} WHERE ${provider.QuoteIdentifier('ID')}=${provider.BuildParameterPlaceholder(0)} ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: AI Personas', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, [ID], undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.MapFieldNamesToCodeNames('MJ: AI Personas', rows && rows.length > 0 ? rows[0] : null, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+    
+    @Mutation(() => MJAIPersona_)
+    async CreateMJAIPersona(
+        @Arg('input', () => CreateMJAIPersonaInput) input: CreateMJAIPersonaInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.CreateRecord('MJ: AI Personas', input, provider, userPayload, pubSub)
+    }
+        
+    @Mutation(() => MJAIPersona_)
+    async UpdateMJAIPersona(
+        @Arg('input', () => UpdateMJAIPersonaInput) input: UpdateMJAIPersonaInput,
+        @Ctx() { providers, userPayload }: AppContext,
+        @PubSub() pubSub: PubSubEngine
+    ) {
+        const provider = GetReadWriteProvider(providers);
+        return this.UpdateRecord('MJ: AI Personas', input, provider, userPayload, pubSub);
+    }
+    
+    @Mutation(() => MJAIPersona_)
+    async DeleteMJAIPersona(@Arg('ID', () => String) ID: string, @Arg('options___', () => DeleteOptionsInput) options: DeleteOptionsInput, @Ctx() { providers, userPayload }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        const provider = GetReadWriteProvider(providers);
+        const key = new CompositeKey([{FieldName: 'ID', Value: ID}]);
+        return this.DeleteRecord('MJ: AI Personas', key, options, provider, userPayload, pubSub);
+    }
+    
+}
+
+//****************************************************************************
 // ENTITY CLASS for MJ: AI Prompt Categories
 //****************************************************************************
 @ObjectType({ description: `Categories for organizing AI prompts in a hierarchical structure.` })
@@ -13970,6 +14886,9 @@ export class MJAIPromptModel_ {
     @Field(() => Int, {nullable: true, description: `Model-specific effort level override (1-100, where 1=minimal effort, 100=maximum effort). Allows customizing effort level per model - useful when a more capable model can use lower effort for tasks that require higher effort from lesser models. Takes precedence over agent and prompt effort levels but can be overridden by runtime parameters.`}) 
     EffortLevel?: number;
         
+    @Field({nullable: true, description: `Most-specific layer of the prompt configuration bag (JSON, IAIPromptModelConfiguration shape) — configuration for THIS prompt on THIS model. Deep-merges per key over the AIPrompt layer, which in turn sits above the model-catalog ModelConfiguration cascade. NULL = inherit the merged configuration unchanged.`}) 
+    PromptConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Prompt?: string;
@@ -14035,6 +14954,9 @@ export class CreateMJAIPromptModelInput {
     @Field(() => Int, { nullable: true })
     EffortLevel: number | null;
 
+    @Field({ nullable: true })
+    PromptConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -14083,6 +15005,9 @@ export class UpdateMJAIPromptModelInput {
 
     @Field(() => Int, { nullable: true })
     EffortLevel?: number | null;
+
+    @Field({ nullable: true })
+    PromptConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -14756,13 +15681,9 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     UsageTypeID?: string;
         
-    @Field({nullable: true, description: `If this prompt run was executed as part of an AI agent run, references that agent run. May be NULL for direct prompt runs or runs that pre-date attribution; backfilled from AIAgentRunStep.`}) 
-    @MaxLength(36)
-    AgentRunID?: string;
-        
-    @Field({nullable: true, description: `The user on whose behalf this prompt was executed. May be NULL for automated/unauthenticated runs or runs that pre-date attribution; backfilled from the parent AIAgentRun.`}) 
-    @MaxLength(36)
-    UserID?: string;
+    @Field({nullable: true, description: `Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`}) 
+    @MaxLength(25)
+    ToolCallingMode?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -14811,14 +15732,6 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     UsageType?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(255)
-    AgentRun?: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(100)
-    User?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -15114,10 +16027,7 @@ export class CreateMJAIPromptRunInput {
     UsageTypeID: string | null;
 
     @Field({ nullable: true })
-    AgentRunID: string | null;
-
-    @Field({ nullable: true })
-    UserID: string | null;
+    ToolCallingMode: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -15397,10 +16307,7 @@ export class UpdateMJAIPromptRunInput {
     UsageTypeID?: string | null;
 
     @Field({ nullable: true })
-    AgentRunID?: string | null;
-
-    @Field({ nullable: true })
-    UserID?: string | null;
+    ToolCallingMode?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
@@ -15839,6 +16746,9 @@ export class MJAIPrompt_ {
     @Field(() => Boolean, {nullable: true, description: `Only applies when SelectionStrategy is Specific. When 0 (default), if none of the explicitly configured AIPromptModel entries have valid API credentials the system automatically falls back to Default/ByPower model selection across all active models matching the prompt AIModelTypeID. When 1, the system will hard-fail with an error instead of falling back, ensuring only the explicitly configured models are ever used.`}) 
     RequireSpecificModels?: boolean;
         
+    @Field({nullable: true, description: `Per-prompt call-time configuration bag (JSON, IAIPromptConfiguration shape: LLM / Realtime / Vision / Audio sections). Base layer of the prompt Configuration cascade — AIPromptModel rows inherit from it per key and may override — and itself layered on top of the resolved AIModel/AIModelVendor ModelConfiguration. NULL = contributes nothing.`}) 
+    PromptConfiguration?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(255)
     Template?: string;
@@ -16025,6 +16935,9 @@ export class CreateMJAIPromptInput {
     @Field(() => Boolean, { nullable: true })
     RequireSpecificModels?: boolean;
 
+    @Field({ nullable: true })
+    PromptConfiguration: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -16190,6 +17103,9 @@ export class UpdateMJAIPromptInput {
 
     @Field(() => Boolean, { nullable: true })
     RequireSpecificModels?: boolean;
+
+    @Field({ nullable: true })
+    PromptConfiguration?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

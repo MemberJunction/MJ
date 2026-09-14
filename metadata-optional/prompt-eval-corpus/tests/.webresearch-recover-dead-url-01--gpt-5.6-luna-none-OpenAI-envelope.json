@@ -1,0 +1,111 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-recover-dead-url-01 [gpt-5.6-luna@none · OpenAI · envelope]",
+    "Description": "A source 404'd. The recovery is to find another source, not to re-fetch the dead URL.",
+    "InputDefinition": {
+      "payload": {
+        "sources": []
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Get details on the 2025 quantum computing roadmap from nature.com."
+        },
+        {
+          "role": "user",
+          "content": "[Action Result] Web Page Content FAILED: 404 Not Found for https://www.nature.com/articles/quantum-2025."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-recover-dead-url-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Google Custom Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Perplexity Search"
+              }
+            ],
+            "allowAdditionalActions": true
+          },
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Google Custom Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Perplexity Search"
+                  }
+                ],
+                "allowAdditionalActions": true
+              },
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "E8E2362C-C91B-448D-A7CA-1B4A6ACB1B4B"
+  }
+}

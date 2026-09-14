@@ -1,0 +1,72 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-disambig-document-not-record-01 [gemini-3.7-flash · Google · native-implicit-results]",
+    "Description": "The mirror: a narrative deliverable is a Document, not a Record. Both directions must hold or the model has a bias, not an understanding.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Draft a two-page onboarding guide for new hires and save it as a document."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-disambig-document-not-record-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Create Document"
+          }
+        ],
+        "allowAdditionalActions": true,
+        "forbiddenActions": [
+          "Create Record"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Create Document"
+              }
+            ],
+            "allowAdditionalActions": true,
+            "forbiddenActions": [
+              "Create Record"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "83BDCDBA-1ECA-4DD6-A11F-CADEF420CAE0"
+  }
+}

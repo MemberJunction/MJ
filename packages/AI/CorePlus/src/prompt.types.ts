@@ -10,7 +10,7 @@
  */
 
 import { MJAIPromptRunEntity, MJAIConfigurationEntity, MJAIVendorEntity } from '@memberjunction/core-entities';
-import { ChatResult, ChatMessage, AIAPIKey } from '@memberjunction/ai';
+import { ChatResult, ChatMessage, AIAPIKey, ChatTool, ChatToolChoice } from '@memberjunction/ai';
 import { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from './MJAIPromptEntityExtended';
 import { MJAIModelEntityExtended } from './MJAIModelEntityExtended';
@@ -612,6 +612,44 @@ export class AIPromptParams {
    */
   forceFullModelEvaluation?: boolean;
 
+  /**
+   * Tool declarations to offer the model via its NATIVE tool-calling API, rather than describing
+   * them as prose in the prompt.
+   *
+   * The runner never invents tools — it only forwards what a caller supplies here (the agent
+   * framework, or any direct caller). Supplying tools is necessary but not sufficient:
+   * they reach the provider only when the gate resolves true, which additionally requires the
+   * selected (model, vendor) to declare `LLM.SupportsNativeToolCalling` and the prompt cascade to
+   * ask for native mode via `LLM.UseNativeToolCalling` (or the model's
+   * `LLM.DefaultToNativeToolCalling`). With no tools supplied, native mode is a no-op and the run
+   * proceeds exactly as it does today.
+   *
+   * Because the gate is re-resolved per failover attempt, the same tools may be declared on one
+   * attempt and withheld on the next if failover lands on a model that does not support them.
+   */
+  tools?: ChatTool[];
+
+  /**
+   * How the model may use {@link AIPromptParams.tools}. Ignored when no tools are declared or when
+   * the gate resolves false. Omit to accept the provider's default (`'auto'`).
+   */
+  toolChoice?: ChatToolChoice;
+
+  /**
+   * Whether the model may emit several tool calls in one turn. Omit to accept the provider's
+   * default. Not every provider can express this — Gemini has no equivalent and ignores it.
+   */
+  parallelToolCalls?: boolean;
+
+  /**
+   * Names within {@link AIPromptParams.tools} that are CONTROL-FLOW tools — sub-agent dispatch
+   * (`delegate_to_*`), `payload_change_request`, `ask_user` — rather than Actions. The agent declares
+   * them without knowing which model will answer; the runner keeps them only when the selected
+   * model's `LLM.NativeControlFlow` resolves to `'implicit'` and strips them otherwise, so an N1
+   * hybrid model never sees them. Names not present in `tools` are ignored.
+   */
+  controlFlowToolNames?: readonly string[];
+
 
   /**
    * NOTE: Only applies when prompt.OutputType is 'object'
@@ -672,16 +710,24 @@ export class AIPromptParams {
    * 3. Prompt's EffortLevel property (prompt default)
    * 4. No effort level (provider default behavior)
    *
+   * A **provider-named** level may be given instead of a number, for the levels that have no place
+   * on the 1-100 scale — OpenAI's `'xhigh'` sits above its top band and `'none'` below its bottom
+   * one. A named level is passed to the driver verbatim and is the driver's to accept or reject;
+   * it is deliberately NOT mapped onto the numeric scale, because that scale's bands are a
+   * cross-provider convention and stretching them would change what an existing `85` means.
+   * Note a named level is not persisted to `AIPromptRun.EffortLevel`, which is numeric (1-100).
+   *
    * @example
    * ```typescript
    * const params = new AIPromptParams();
    * params.prompt = myPrompt;
    * params.effortLevel = 85; // High effort for thorough analysis
+   * params.effortLevel = 'xhigh'; // above the numeric scale — OpenAI reasoning models only
    *
    * const result = await AIPromptRunner.RunPrompt(params);
    * ```
    */
-  effortLevel?: number;
+  effortLevel?: number | string;
 
   /**
    * Optional maximum length for error messages returned in results.

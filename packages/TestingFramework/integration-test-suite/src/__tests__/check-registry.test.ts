@@ -216,6 +216,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'agent-external-harness': 7,
         'agent-loop-live': 7,
         'agent-loop-standin': 6,
+        'prompt-eval-harness': 7,
         'agent-memory-guards': 5,
         'agent-note-cache-types': 3,
         'agent-payload-guards': 9,
@@ -280,7 +281,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
         'runquery-params': 10,
         'runview-features': 6,
         'role-elevation': 6,
-        'runview-matrix': 18,
+        'runview-matrix': 19,
         'scheduled-jobs': 2,
         'scheduling-concurrency': 3,
         'scope-enforcement': 5,
@@ -324,7 +325,7 @@ describe('ALL-bundle coverage-loss guard (auto-derived from the registry)', () =
     });
 
     it('the pinned catalog covers exactly the bundles the IT metadata selects (sibling-parity owns name matching; this pins the COUNT of bundles)', () => {
-        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(92);
+        expect(Object.keys(EXPECTED_BUNDLE_COUNTS)).toHaveLength(93);
     });
 });
 

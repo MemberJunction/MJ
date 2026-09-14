@@ -1,0 +1,76 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-disambig-scheduled-job-family-01 [gemini-3.7-flash · Google · envelope]",
+    "Description": "Five scheduled-job actions differing only by verb. 'Show me what's scheduled' is a query, not a create, update, delete or execute.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "What jobs are currently scheduled?"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-disambig-scheduled-job-family-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Query Scheduled Jobs"
+          }
+        ],
+        "allowAdditionalActions": false,
+        "forbiddenActions": [
+          "Create Scheduled Job",
+          "Delete Scheduled Job",
+          "Execute Scheduled Job Now",
+          "Update Scheduled Job"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Query Scheduled Jobs"
+              }
+            ],
+            "allowAdditionalActions": false,
+            "forbiddenActions": [
+              "Create Scheduled Job",
+              "Delete Scheduled Job",
+              "Execute Scheduled Job Now",
+              "Update Scheduled Job"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "68DF40A5-BD72-4C55-A2BE-72C6E5BF72C8"
+  }
+}

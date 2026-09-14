@@ -1,0 +1,103 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-max-iteration-boundary-01 [claude-sonnet-5 · Anthropic · envelope]",
+    "Description": "At the iteration ceiling with partial results. The right decision is to return what exists; starting new work guarantees the run is killed mid-flight. Runs at toolChoice 'none' (added 2026-09-12): the framework forces 'none' on the final permitted iteration in production, so a native cell measured at 'auto' here was measuring a turn production never produces (results §14.3.4).",
+    "InputDefinition": {
+      "payload": {
+        "sources": [
+          {
+            "id": "src_001"
+          },
+          {
+            "id": "src_002"
+          }
+        ],
+        "findings": [
+          {
+            "content": "partial"
+          }
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research offshore wind capacity growth."
+        },
+        {
+          "role": "user",
+          "content": "[System] You have reached the maximum number of iterations for this run. Return your findings now."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-max-iteration-boundary-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete"
+          },
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          }
+        ],
+        "forbiddenActions": [
+          "Google Custom Search",
+          "Perplexity Search",
+          "Web Page Content"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "31280CE6-5EFC-4407-BEFB-339322D0CC2E",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "toolChoice": "none",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete"
+              },
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              }
+            ],
+            "forbiddenActions": [
+              "Google Custom Search",
+              "Perplexity Search",
+              "Web Page Content"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "0CA3AB9E-84A7-42B4-AD85-A72CE086A72E"
+  }
+}
