@@ -8,6 +8,7 @@ import { PromptFileLoader } from './PromptFileLoader.js';
 import { AIConfig, RetryConfig } from '../types/config.js';
 import { PromptExecutionResult } from '../types/prompts.js';
 import { createLLMInstance } from '../utils/llm-factory.js';
+import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
 import { CleanAndParseJSON } from '@memberjunction/global';
 
 export type GuardrailCheckFn = () => { canContinue: boolean; reason?: string };
@@ -348,7 +349,14 @@ export class PromptEngine {
       const llmStartTime = Date.now();
 
       try {
-        lastResult = await this.llm.ChatCompletion(params);
+        // Bounded: a stalled provider becomes a normal failure this retry loop can act on. Without
+        // the deadline the loop is unreachable — it only runs once the promise settles, and a
+        // provider that accepts the socket and stops sending never settles one.
+        lastResult = await withCallDeadline(
+          resolveCallTimeoutMs(this.config.callTimeoutMs),
+          `prompt for model ${params.model}`,
+          signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
+        );
       } catch (error) {
         // Network-level failure (fetch failed, timeout, etc.)
         const errMsg = (error as Error).message || '';
@@ -400,6 +408,10 @@ export class PromptEngine {
     if (lower.includes('429') || lower.includes('too many requests') || lower.includes('rate limit') || lower.includes('resource exhausted')) return true;
     // Network errors
     if (lower.includes('fetch failed') || lower.includes('econnreset') || lower.includes('etimedout') || lower.includes('socket hang up')) return true;
+    // A call we aborted ourselves for exceeding its wall-clock ceiling. Retriable, and safe to
+    // retry: the deadline aborts the request before rejecting, so the previous attempt is not
+    // still in flight competing with this one.
+    if (lower.includes('call timeout')) return true;
     // Server errors (500, 502, 503, 504)
     if (lower.includes('500') || lower.includes('502') || lower.includes('503') || lower.includes('504') || lower.includes('internal server error') || lower.includes('bad gateway') || lower.includes('service unavailable')) return true;
     // Not retryable: 400 bad request, 401 auth, 403 forbidden, JSON parse errors
