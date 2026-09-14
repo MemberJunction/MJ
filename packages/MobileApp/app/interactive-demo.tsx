@@ -15,26 +15,30 @@ import { Colors, Spacing, Type } from '@/theme/tokens';
  * compile (e.g. a release build that strips the compiler), the renderer degrades
  * to its "View on desktop" fallback.
  */
+// NOTE: the literals below are deliberate. This string is SOURCE CODE compiled on-device by the
+// react-runtime, so it executes in a sandbox where this module's imports — `Colors` included — are
+// not in scope. Referencing a token here throws `Property 'Colors' doesn't exist` at render. The
+// values are MJ's tokens, copied by hand precisely because they cannot be imported.
 const DEMO_CODE = `function DemoCounter({ utilities, styles }) {
   const [count, setCount] = useState(0);
   return (
     <div style={{ padding: 16, gap: 12 }}>
-      <span style={{ fontSize: 18, fontWeight: '700', color: Colors.ink }}>
+      <span style={{ fontSize: 18, fontWeight: '700', color: '#1a2b38' }}>
         Interactive component rendered on-device ✓
       </span>
-      <span style={{ fontSize: 15, color: Colors.ink2 }}>
+      <span style={{ fontSize: 15, color: '#445766' }}>
         Compiled from JSX via Hermes and mapped through the RN primitive shim.
       </span>
-      <div style={{ padding: 12, backgroundColor: Colors.surface2, borderRadius: 12 }}>
-        <span style={{ fontSize: 28, fontWeight: '700', color: Colors.brand }}>
+      <div style={{ padding: 12, backgroundColor: '#f1f5f8', borderRadius: 12 }}>
+        <span style={{ fontSize: 28, fontWeight: '700', color: '#0076b6' }}>
           Count: {count}
         </span>
       </div>
       <button
         onClick={() => setCount(count + 1)}
-        style={{ backgroundColor: Colors.brand, padding: 14, borderRadius: 12 }}
+        style={{ backgroundColor: '#0076b6', padding: 14, borderRadius: 12 }}
       >
-        <span style={{ color: Colors.inverse, fontWeight: '600', fontSize: 16 }}>Increment</span>
+        <span style={{ color: '#ffffff', fontWeight: '600', fontSize: 16 }}>Increment</span>
       </button>
     </div>
   );

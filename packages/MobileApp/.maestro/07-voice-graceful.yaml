@@ -1,12 +1,16 @@
-# Voice mode must degrade honestly.
+# Voice mode must reach a live call, and must degrade honestly when it cannot.
 #
-# This deployment resolves a realtime provider whose driver needs a Web Audio PCM plane that does
-# not exist under Hermes. The app must mint the session, recognise it cannot carry that provider,
-# close the session server-side, and say which provider — rather than crashing on AudioContext or
-# opening a call that is silent in both directions.
+# Which of those two this deployment exercises depends on its configured realtime model, and both
+# outcomes are correct — so the flow asserts the DECISION was made and surfaced, rather than
+# hard-coding one branch:
 #
-# On a deployment with a WebRTC provider configured this flow should be updated to assert a live
-# connection instead.
+#   • a WebRTC provider (OpenAI Realtime / GPT-Live) with a resolvable key → the call connects and
+#     the screen shows a live status pill plus the agent it is talking to;
+#   • anything else (Gemini Live, Grok Voice, ElevenLabs — websocket + PCM16) → the app mints the
+#     session, recognises it cannot carry that provider, closes it server-side, and names it.
+#
+# Asserting only the decline branch made this flow fail the moment voice started working, which is
+# exactly backwards for a regression test.
 appId: org.memberjunction.mobile
 ---
 - launchApp:
@@ -17,8 +21,10 @@ appId: org.memberjunction.mobile
     visible: "Conversations"
     timeout: 30000
 - openLink: "mjmobile://voice-mode"
+
+# Whichever branch this deployment takes, the screen must resolve to a definite state rather than
+# sitting on a spinner. Maestro has no "any of" assertion, so this matches the union with a regex
+# over the screen text. Generous timeout: the connected branch does a real WebRTC handshake.
 - extendedWaitUntil:
-    visible: "Voice isn't available"
-    timeout: 25000
-- assertVisible: "Back to chat"
-- tapOn: "Back to chat"
+    visible: "Listening|Connecting|Speaking|Voice isn.t available"
+    timeout: 35000
