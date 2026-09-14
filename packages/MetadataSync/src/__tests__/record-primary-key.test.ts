@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BaseEntity, EntityInfo } from '@memberjunction/core';
-import { extractPrimaryKeyValues, isCompletePrimaryKeyLookup } from '../lib/record-primary-key';
+import { createPrimaryKeyLookup, extractPrimaryKeyValues, hasCompletePrimaryKey } from '../lib/record-primary-key';
 
 /**
  * A subclass with no typed field properties — the same shape the ClassFactory hands back when an
@@ -58,20 +58,52 @@ describe('extractPrimaryKeyValues', () => {
     record.Set('Name', 'no key');
     expect(() => extractPrimaryKeyValues(record, info)).toThrow(/Cannot read primary key field 'ID' on a 'Test Widgets' record/);
   });
+
+  it('accepts real key values that only look empty: an empty string and the text null', () => {
+    const info = entityInfo(['ID']);
+    for (const value of ['', 'null', 'undefined']) {
+      const record = new UntypedEntity(info);
+      record.Set('ID', value);
+      expect(extractPrimaryKeyValues(record, info)).toEqual({ ID: value });
+    }
+  });
 });
 
-describe('isCompletePrimaryKeyLookup', () => {
-  it('accepts lookups where every segment has a value', () => {
-    expect(isCompletePrimaryKeyLookup('ID:abc')).toBe(true);
-    expect(isCompletePrimaryKeyLookup('OrderNo:42|TenantID:t-1')).toBe(true);
-    expect(isCompletePrimaryKeyLookup('ID:urn:x:1')).toBe(true);
+describe('hasCompletePrimaryKey', () => {
+  it('accepts keys where every field holds a value, including values that only look empty', () => {
+    expect(hasCompletePrimaryKey({ ID: 'abc' })).toBe(true);
+    expect(hasCompletePrimaryKey({ TenantID: 't-1', OrderNo: 42 })).toBe(true);
+    expect(hasCompletePrimaryKey({ ID: '' })).toBe(true);
+    expect(hasCompletePrimaryKey({ ID: 'null' })).toBe(true);
+    expect(hasCompletePrimaryKey({ Code: 'AB|CD' })).toBe(true);
   });
 
-  it('rejects empty lookups and segments holding undefined, null or nothing', () => {
-    expect(isCompletePrimaryKeyLookup('')).toBe(false);
-    expect(isCompletePrimaryKeyLookup('ID:undefined')).toBe(false);
-    expect(isCompletePrimaryKeyLookup('ID:null')).toBe(false);
-    expect(isCompletePrimaryKeyLookup('ID:')).toBe(false);
-    expect(isCompletePrimaryKeyLookup('OrderNo:42|TenantID:undefined')).toBe(false);
+  it('rejects a missing or empty key object and fields holding undefined or null', () => {
+    expect(hasCompletePrimaryKey(undefined)).toBe(false);
+    expect(hasCompletePrimaryKey({})).toBe(false);
+    expect(hasCompletePrimaryKey({ ID: undefined })).toBe(false);
+    expect(hasCompletePrimaryKey({ ID: null })).toBe(false);
+    expect(hasCompletePrimaryKey({ TenantID: 't-1', OrderNo: undefined })).toBe(false);
+  });
+});
+
+describe('createPrimaryKeyLookup', () => {
+  it('joins field:value segments sorted by field name', () => {
+    expect(createPrimaryKeyLookup({ ID: 'abc' })).toBe('ID:abc');
+    expect(createPrimaryKeyLookup({ TenantID: 't-1', OrderNo: 42 })).toBe('OrderNo:42|TenantID:t-1');
+  });
+
+  it('gives the same string for a number and its text, as file and database values can differ in type', () => {
+    expect(createPrimaryKeyLookup({ ID: 42 })).toBe(createPrimaryKeyLookup({ ID: '42' }));
+  });
+
+  it('keeps composite keys distinct when a value contains the separator', () => {
+    const a = createPrimaryKeyLookup({ A: '1|B:2', B: '3' });
+    const b = createPrimaryKeyLookup({ A: '1', B: '2|B:3' });
+    expect(a).not.toBe(b);
+  });
+
+  it('returns an empty string for a missing key object', () => {
+    expect(createPrimaryKeyLookup(undefined)).toBe('');
   });
 });

@@ -8,7 +8,7 @@ import { FileWriteBatch } from '../lib/file-write-batch';
 import { JsonWriteHelper } from '../lib/json-write-helper';
 import { RecordProcessor } from '../lib/RecordProcessor';
 import { SyncStateManager } from '../lib/sync-state-manager';
-import { extractPrimaryKeyValues } from '../lib/record-primary-key';
+import { createPrimaryKeyLookup, extractPrimaryKeyValues } from '../lib/record-primary-key';
 
 /** Validates that a string is a well-formed ISO 8601 timestamp. */
 function isValidISOTimestamp(value: string): boolean {
@@ -582,7 +582,7 @@ export class PullService {
       const primaryKey = extractPrimaryKeyValues(record, entityInfo);
 
       // Create lookup key
-      const lookupKey = this.createPrimaryKeyLookup(primaryKey);
+      const lookupKey = createPrimaryKeyLookup(primaryKey);
       const existingFileInfo = existingRecordsMap.get(lookupKey);
       
       if (existingFileInfo) {
@@ -632,7 +632,7 @@ export class PullService {
           if (Array.isArray(existingData)) {
             // Find the matching record in the array
             const matchingRecord = existingData.find(r => 
-              this.createPrimaryKeyLookup(r.primaryKey || {}) === this.createPrimaryKeyLookup(primaryKey)
+              createPrimaryKeyLookup(r.primaryKey) === createPrimaryKeyLookup(primaryKey)
             );
             existingRecordData = matchingRecord || existingData[0]; // Fallback to first if not found
           } else {
@@ -665,7 +665,7 @@ export class PullService {
           // Queue updated data for batched write
           if (Array.isArray(existingData)) {
             // Queue array update - batch will handle merging
-            const primaryKeyLookup = this.createPrimaryKeyLookup(primaryKey);
+            const primaryKeyLookup = createPrimaryKeyLookup(primaryKey);
             this.fileWriteBatch.queueArrayUpdate(filePath, mergedData, primaryKeyLookup);
           } else {
             // Queue single record update
@@ -725,7 +725,7 @@ export class PullService {
             
             // Use queueArrayUpdate to append the new record without overwriting existing updates
             // For new records, we can use a special lookup key since they don't exist yet
-            const newRecordLookup = this.createPrimaryKeyLookup(primaryKey);
+            const newRecordLookup = createPrimaryKeyLookup(primaryKey);
             this.fileWriteBatch.queueArrayUpdate(filePath, recordData, newRecordLookup);
             
             return { success: true, index };
@@ -969,7 +969,7 @@ export class PullService {
         
         for (const record of records) {
           if (record.primaryKey) {
-            const lookupKey = this.createPrimaryKeyLookup(record.primaryKey);
+            const lookupKey = createPrimaryKeyLookup(record.primaryKey);
             recordsMap.set(lookupKey, { filePath, recordData: record });
           }
         }
@@ -979,11 +979,6 @@ export class PullService {
     }
     
     return recordsMap;
-  }
-  
-  private createPrimaryKeyLookup(primaryKey: Record<string, any>): string {
-    const keys = Object.keys(primaryKey).sort();
-    return keys.map(k => `${k}:${primaryKey[k]}`).join('|');
   }
   
   private async mergeRecords(
