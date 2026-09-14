@@ -3202,6 +3202,24 @@ export class AIPromptRunner {
       return has;
     };
     let skippedForCredentials = 0;
+    // Calls actually issued to a provider during this walk. NOT the loop index: candidates skipped
+    // for missing credentials below never reach a provider and must not consume the budget, and a
+    // rate-limit retry re-runs the same index and must consume one.
+    let attemptedCalls = 0;
+    // `FailoverMaxAttempts` (defaulted to 3 by getFailoverConfiguration) bounds how many provider
+    // calls one prompt execution may make. Honouring it here is what makes the column live: the
+    // walk below is over the FULL priority-ordered candidate list — every active model of the
+    // prompt's type crossed with every active inference vendor, which is 317 entries on a stock
+    // tenant — and until now nothing consulted the configured cap, so a provider returning 5xx (or
+    // stalling, where there is no per-call deadline either) was retried against candidate after
+    // candidate. The intended semantics are the ones the existing `shouldAttemptFailover` helper
+    // documents: `attemptNumber` is 1-based and `attemptNumber > maxAttempts` is refused, i.e.
+    // maxAttempts is the TOTAL number of calls including the first, not the number of retries
+    // after it.
+    // A non-positive value would stop the walk before the FIRST call and fail every prompt on the
+    // tenant, so it is treated as "not configured" rather than "no calls allowed". `|| 3` in
+    // getFailoverConfiguration already turns 0/null into 3; this covers a negative row.
+    const maxAttemptedCalls = failoverConfig.maxAttempts > 0 ? failoverConfig.maxAttempts : 3;
 
     // Iterate through all candidates in priority order with instant failover
     for (let i = 0; i < allCandidates.length; i++) {
@@ -3220,6 +3238,30 @@ export class AIPromptRunner {
         skippedForCredentials++;
         continue;
       }
+
+      // Budget check AFTER the credential skip and BEFORE the call, so a keyless tail costs
+      // nothing and the cap counts only calls a provider actually saw. Stopping here leaves
+      // `lastError` holding the most recent real failure, which is what the caller needs to see —
+      // reporting "budget exhausted" instead would hide why the candidates failed.
+      if (attemptedCalls >= maxAttemptedCalls) {
+        LogStatusEx({
+          message:
+            `⛔ Failover budget reached for prompt "${prompt.Name}": ${attemptedCalls} of a ` +
+            `configured ${maxAttemptedCalls} attempt(s) used across ${allCandidates.length} ` +
+            `candidate(s). Stopping rather than walking the remaining candidates. Raise the ` +
+            `prompt's FailoverMaxAttempts to allow a deeper walk.`,
+          category: 'AI',
+          additionalArgs: [{
+            promptId: prompt.ID,
+            attemptedCalls,
+            maxAttemptedCalls,
+            candidateCount: allCandidates.length,
+            skippedForCredentials
+          }]
+        });
+        break;
+      }
+      attemptedCalls++;
 
       try {
         // Log the attempt if not the first one
