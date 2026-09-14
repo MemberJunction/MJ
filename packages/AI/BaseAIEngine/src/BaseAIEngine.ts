@@ -443,48 +443,75 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
         this._modelVendorsByModelID = null;
         this._promptModelsByPromptID = null;
 
+        // Each grouping below buckets the children in one pass, then gives each parent a
+        // finished array. Three properties follow from that shape:
+        //
+        //  1. Idempotent. This method runs after any reload of the underlying arrays, not
+        //     only the initial load — cross-server cache events and remote record mutations
+        //     both reach it with the existing parent objects still in place. Replacing each
+        //     collection outright means repeated calls converge instead of accumulating
+        //     duplicates the way appending into the previous contents would.
+        //  2. Linear. Bucketing once is O(parents + children); filtering the child array
+        //     separately for each parent is O(parents x children), which is significant for
+        //     the model/model-vendor pairing on a large catalog.
+        //  3. No partially-rebuilt parent is observable. Each collection goes from its old
+        //     contents to its new contents in a single call, so a reader can never catch one
+        //     emptied mid-rebuild — unlike clearing and then refilling.
+        const groupBy = <TChild>(children: TChild[], keyOf: (c: TChild) => string | null | undefined): Map<string, TChild[]> => {
+            const map = new Map<string, TChild[]>();
+            for (const child of children) {
+                const raw = keyOf(child);
+                if (!raw) continue;
+                const key = raw.toUpperCase();
+                const bucket = map.get(key);
+                if (bucket) bucket.push(child);
+                else map.set(key, [child]);
+            }
+            return map;
+        };
+        const keyFor = (id: string | null | undefined): string => (id ? id.toUpperCase() : '');
+        // These child collections are exposed as read-only getters over an internal array and
+        // cannot be reassigned, so the contents are replaced in place. A single splice() swaps
+        // them atomically with respect to any reader; the fallback path is for buckets large
+        // enough to exceed the argument limit on a spread call.
+        const replaceContents = <TChild>(target: TChild[], next: TChild[]): void => {
+            if (next.length <= 30000) {
+                target.splice(0, target.length, ...next);
+                return;
+            }
+            target.length = 0;
+            for (const item of next) target.push(item);
+        };
+
         // handle associating prompts with prompt categories
         //here we're using the underlying data (i.e _promptCategories and _prompts)
         //rather than the getter methods because the engine's Loaded property is still false
-        for(const PromptCategory of this._promptCategories){
-            this._prompts.filter((prompt: MJAIPromptEntityExtended) => {
-                return UUIDsEqual(prompt.CategoryID, PromptCategory.ID);
-            }).forEach((prompt: MJAIPromptEntityExtended) => {
-                if (!PromptCategory.Prompts) {
-                    // this is a duck typing check and means that at runtime
-                    // we didn't get MJAIPromptEntityExtended, but prob got the
-                    // MJAIPromptEntity class instead that doesn't have a Prompts property
-                    // in which case we need to emit a console error with clear information next
-                    console.error(`PromptCategory class does not have a Prompts property. This is indicative of
-                                a failure to properly include the MJAIPromptEntityExtended class (or a subclass thereof) and often means tree-shaking or similar processes has resulted in the class
-                                not being included in the runtime environment. Check to make sure the bootstrap package associated with your runtime has its dynamic class registrations properly being imported`)
-                }
-                else {
-                    PromptCategory.Prompts.push(prompt);
-                }
-            });
+        const promptsByCategory = groupBy(this._prompts, (p: MJAIPromptEntityExtended) => p.CategoryID);
+        for (const PromptCategory of this._promptCategories) {
+            if (!PromptCategory.Prompts) {
+                // this is a duck typing check and means that at runtime
+                // we didn't get MJAIPromptEntityExtended, but prob got the
+                // MJAIPromptEntity class instead that doesn't have a Prompts property
+                // in which case we need to emit a console error with clear information next
+                console.error(`PromptCategory class does not have a Prompts property. This is indicative of
+                            a failure to properly include the MJAIPromptEntityExtended class (or a subclass thereof) and often means tree-shaking or similar processes has resulted in the class
+                            not being included in the runtime environment. Check to make sure the bootstrap package associated with your runtime has its dynamic class registrations properly being imported`);
+                continue;
+            }
+            replaceContents(PromptCategory.Prompts, promptsByCategory.get(keyFor(PromptCategory.ID)) ?? []);
         }
 
-        // handle association agent actions, models, and notes with agents
-        for(const agent of this._agents){
-            this._agentActions.filter((action: MJAIAgentActionEntity) => {
-                return UUIDsEqual(action.AgentID, agent.ID);
-            }).forEach((action: MJAIAgentActionEntity) => {
-                agent.Actions.push(action);
-            });
-
-            this._agentNotes.filter((note: MJAIAgentNoteEntity) => {
-                return UUIDsEqual(note.AgentID, agent.ID);
-            }).forEach((note: MJAIAgentNoteEntity) => {
-                agent.Notes.push(note);
-            });
+        // handle association agent actions and notes with agents
+        const actionsByAgent = groupBy(this._agentActions, (a: MJAIAgentActionEntity) => a.AgentID);
+        const notesByAgent = groupBy(this._agentNotes, (n: MJAIAgentNoteEntity) => n.AgentID);
+        for (const agent of this._agents) {
+            if (agent.Actions) replaceContents(agent.Actions, actionsByAgent.get(keyFor(agent.ID)) ?? []);
+            if (agent.Notes) replaceContents(agent.Notes, notesByAgent.get(keyFor(agent.ID)) ?? []);
         }
 
+        const vendorsByModel = groupBy(this._modelVendors, (mv: MJAIModelVendorEntity) => mv.ModelID);
         for (const model of this._models) {
-            this._modelVendors.filter(mv => UUIDsEqual(mv.ModelID, model.ID))
-            .forEach((mv: MJAIModelVendorEntity) => {
-                model.ModelVendors.push(mv);
-            });
+            if (model.ModelVendors) replaceContents(model.ModelVendors, vendorsByModel.get(keyFor(model.ID)) ?? []);
         }
     }
 
