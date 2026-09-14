@@ -1,5 +1,43 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- 5e987a7: Knowledge Hub + universal search fixes found wiring a Dropbox team-space vault and a website crawl into Pinecone.
+  - **storage (Dropbox):** the refresh-token constructor path now marks the driver configured (callers that only construct the driver, like `AutotagCloudStorage`, were rejected with "Missing: Access Token"); optional `STORAGE_DROPBOX_PATH_ROOT` applies an SDK `pathRoot` so Business team-space paths resolve.
+  - **content-autotagging:** `AutotagCloudStorage` walks sub-folders under `PathPrefix` instead of one level; the vectorizer addresses the 3rd-party index by `VectorIndex.ExternalID` (fallback `Name`) instead of the display name; invalid-content deletions and failed content-item saves are now logged instead of silent.
+  - **search-engine:** `VectorSearchProvider` uses `VectorIndex.ExternalID` for the provider-side index name — the Semantic lane 404'd against Pinecone on every query when the MJ display name differed from the index name.
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [5e987a7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/aiengine@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/storage@6.1.0-edge.7
+  - @memberjunction/ai-prompts@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/tag-engine@6.1.0-edge.7
+  - @memberjunction/tag-engine-base@6.1.0-edge.7
+  - @memberjunction/ai-segmentation@6.1.0-edge.7
+  - @memberjunction/ai-vectors@6.1.0-edge.7
+  - @memberjunction/ai-vector-sync@6.1.0-edge.7
+  - @memberjunction/templates@6.1.0-edge.7
+  - @memberjunction/ai-vectordb@6.1.0-edge.7
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.7
+  - @memberjunction/network-utils@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

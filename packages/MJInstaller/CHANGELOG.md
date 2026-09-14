@@ -1,5 +1,7 @@
 # @memberjunction/installer
 
+## 6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

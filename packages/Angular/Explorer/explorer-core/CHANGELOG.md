@@ -1,5 +1,71 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [919f0c7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ng-base-forms@6.1.0-edge.7
+  - @memberjunction/ng-dashboards@6.1.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.7
+  - @memberjunction/ng-conversations@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ng-base-application@6.1.0-edge.7
+  - @memberjunction/ng-entity-form-dialog@6.1.0-edge.7
+  - @memberjunction/ng-entity-permissions@6.1.0-edge.7
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.7
+  - @memberjunction/ng-list-detail-grid@6.1.0-edge.7
+  - @memberjunction/ng-shared@6.1.0-edge.7
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.7
+  - @memberjunction/ng-artifacts@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.7
+  - @memberjunction/ng-file-storage@6.1.0-edge.7
+  - @memberjunction/ng-list-management@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ng-query-viewer@6.1.0-edge.7
+  - @memberjunction/ng-react@6.1.0-edge.7
+  - @memberjunction/ng-record-changes@6.1.0-edge.7
+  - @memberjunction/ng-record-selector@6.1.0-edge.7
+  - @memberjunction/ng-record-tags@6.1.0-edge.7
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.7
+  - @memberjunction/ng-search@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/ng-user-avatar@6.1.0-edge.7
+  - @memberjunction/communication-types@6.1.0-edge.7
+  - @memberjunction/entity-communications-client@6.1.0-edge.7
+  - @memberjunction/templates-base-types@6.1.0-edge.7
+  - @memberjunction/ng-auth-services@6.1.0-edge.7
+  - @memberjunction/ng-composer@6.1.0-edge.7
+  - @memberjunction/ng-container-directives@6.1.0-edge.7
+  - @memberjunction/ng-feedback@6.1.0-edge.7
+  - @memberjunction/ng-mj-livekit-room@6.1.0-edge.7
+  - @memberjunction/interactive-component-types@6.1.0-edge.7
+  - @memberjunction/ng-generic-dialog@6.1.0-edge.7
+  - @memberjunction/ng-export-service@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+  - @memberjunction/ng-word-cloud@6.1.0-edge.7
+  - @memberjunction/ng-pagination@6.1.0-edge.7
+  - @memberjunction/lists-base@6.1.0-edge.7
+  - @memberjunction/export-engine@6.1.0-edge.7
+  - @memberjunction/theme-engine@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

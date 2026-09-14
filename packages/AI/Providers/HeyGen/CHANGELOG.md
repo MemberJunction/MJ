@@ -1,5 +1,16 @@
 # @memberjunction/ai-heygen
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [61b5612]
+- Updated dependencies [076fa5d]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/network-utils@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

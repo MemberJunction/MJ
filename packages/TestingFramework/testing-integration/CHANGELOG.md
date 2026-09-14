@@ -1,5 +1,50 @@
 # @memberjunction/testing-integration
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- 8f63b57: Stop `rigs/lib/harness.ts` forwarding two symbols the framework package does not export.
+
+  The shim re-exported `createRunQueryFixtures` and `teardownRunQueryFixtures` from
+  `@memberjunction/testing-integration`. They are defined in `@memberjunction/integration-test-suite`
+  (`src/checks/runquery-cache.checks.ts`) — the framework package ships content-free by design — so
+  the module threw `SyntaxError: The requested module '@memberjunction/testing-integration' does not
+provide an export named 'createRunQueryFixtures'` at load, taking down every rig that imports the
+  shim before a single assertion ran. That is the nightly `Cross-server invalidation rig` failure,
+  plus five hand-run `ps-live-*` rigs.
+
+  Nothing consumed either symbol through the shim, and forwarding them contradicted the file's own
+  stated rule ("Every symbol forwarded here is DEFINED in `@memberjunction/testing-integration`"), so
+  they are removed rather than re-pointed. All 23 remaining forwarded symbols resolve against the
+  package's 90 exports.
+
+  Also removes the dangling comment in `testing-integration/src/index.ts` that still described the
+  removed re-exports — that sentence is why a consumer went on importing a symbol that had moved.
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [88f8898]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/server-bootstrap-lite@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/generic-database-provider@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/testing-engine@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/sqlserver-dataprovider@6.1.0-edge.7
+  - @memberjunction/testing-engine-base@6.1.0-edge.7
+  - @memberjunction/dynamic-packages@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

@@ -1,5 +1,68 @@
 # Change Log - @memberjunction/aiengine
 
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- a987913: Implement modality inheritance, AI Persona metadata catalog, and persona resolution across BaseAIEngine and realtime agents.
+  - BaseAIEngine: implement modality inheritance according to Agent -> Model -> System -> Default precedence, honoring InheritTypeModalities, AIModelType default input/output modalities, and junction IsSupported = 0 / IsAllowed = 0 vetoes.
+  - BaseAIEngine: cache and resolve AI Personas (GetModelPersonas, GetAgentPersonas, ResolveAgentPersona) incorporating agent style overrides and sequence ordering.
+  - AIEngine: delegate persona and modality getters and helper methods to BaseAIEngine.
+  - AIAgents: update GetRealtimeModelVoices to consult metadata personas first before falling back to driver SupportedVoices.
+  - Metadata: seed canonical modalities (metadata/ai-modalities/) and initial personas (metadata/ai-personas/, metadata/ai-persona-vendors/, metadata/ai-model-personas/, metadata/ai-agent-personas/).
+  - JSONType: simplify IAIPersonaVendorSettings to eliminate duplicate flat members and vendor namespacing.
+
+- 61b5612: Weekly AI model & vendor intelligence report (2026-09-13) + three metadata edits.
+  - **Promo expiry** `GLM-5.3-Flash` on OpenRouter. Z.AI's 50% launch promo ended 2026-09-09 16:00 UTC (24:00 Singapore), the instant last week's report predicted. The promo cost row is now `Status: "Expired"` with `EndedAt`, and a new row records the list rate ($0.15/$0.50 per 1M) from that same instant — so the historical rate is preserved rather than overwritten, which is what the 2026-08-31 changeset asked a later run to do. The Z.AI direct row already carried list pricing and is unchanged. One discrepancy is recorded rather than smoothed over: our promo row was captured at $0.05/$0.1667 while Z.AI's later materials describe the promo as $0.075/$0.25; the original figure is left as evidence of what we were quoted, and the divergence is noted in the row's `Comments`.
+  - **New inference provider** on `GPT-6 Astra`: Amazon Bedrock vendor row (`openai.gpt-6-astra`, GA 2026-09-08) and cost record at $10/$50 per 1M with $1 cache read and $12.50 cache write. That is the GLOBAL cross-Region Standard rate at the short-context tier (≤272K input) — the same convention the existing OpenAI-direct and Azure rows use. Above 272K the whole request rebills at $20/$75, and in-Region / US-geographic routes run 10% higher. Closes an item open since Astra's launch.
+  - **New model** `DeepSeek V4.1 Flash` (released 2026-09-10, supersedes `DeepSeek V4 Flash`). 552B MoE with native vision, 1,048,576-token context, 384K output. DeepSeek as Model Developer + Inference Provider (`deepseek-flash`) plus an OpenRouter inference row. Cost record carries the **off-peak** tier ($0.15/$0.60, $0.003 cached input); peak is exactly double during Mon–Fri 01:00–04:00 and 06:00–10:00 UTC. Recording a real tier rather than a blend is deliberate — the 2026-08-16 `DeepSeek V4 Pro` row was written at a figure matching neither tier and has been an open reconciliation item ever since. **No OpenRouter cost row was written**: the route exists but its rate was not confirmed, and an invented price is worse than an absent one.
+
+  Not applied, flagged in the report: Grok 4.7 (a third missed date — still in supplemental training with no model card or rate card), GPT Image 2.5 Flare/Sunburst and the FLUX family (both blocked on one image-model cost-schema decision), Sakana AI / Fugu Max (new vendor plus a missing driver class), and the carried-forward Claude 4 cost-row cleanup, `GLM 5.3` OpenRouter context-window discrepancy, and `DeepSeek V4 Pro` reconciliation.
+
+  The §0.3 pure-JSON pre-flight passes (`OK`) and every `@lookup:MJ: AI Vendors.Name=…` resolves.
+
+- 4cdfdcf: **A skill can bundle an action without putting it into the agent's run.**
+
+  Bundling an action into a skill (an `MJ: AI Skill Actions` row) put the action into the activating
+  agent's run — described to the model and executable — for the rest of the run. A skill whose reply
+  carries a menu (buttons the application wires to an action, pressed by the person on the next turn)
+  wants the association without the model ever calling the action on its own mid-conversation (#4226).
+  - `AISkillAction.ExposeToModel` (BIT, NOT NULL, default 1). `1` is today's behaviour. `0` keeps the
+    action bundled — SKILL.md export, tooling — but out of the run: not described to the model and not
+    executable by the agent; application code invokes it through the Actions API.
+  - `AIEngineBase.GetSkillExposedActionIDs(skillID)` returns the `ExposeToModel` subset;
+    `BaseAgent.enableSkillCapabilities` pushes that subset onto the run. `GetSkillActionIDs` (every
+    bundled action) is unchanged.
+  - SKILL.md round-trips the flag: the frontmatter gains an optional `codeOnlyActions` list (names, a
+    subset of `actions`), written on export for rows with the flag off and applied on import; a file
+    without the key leaves surviving rows' flags as they were.
+
+  Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+  rows keep today's behaviour).
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [5e987a7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/storage@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes
