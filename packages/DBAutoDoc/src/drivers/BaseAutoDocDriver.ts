@@ -17,6 +17,30 @@ import {
 } from '../types/driver.js';
 
 /**
+ * Outcome of a join-containment probe.
+ *
+ * A discriminated union on purpose: the success arm carries two counts and the
+ * failure arm carries a reason, so there is no representable value that lets a
+ * caller mistake "could not evaluate this join" for "this join matches nothing".
+ * Neither arm can carry a data value.
+ */
+export type DriverProbeOutcome =
+  | {
+      ok: true;
+      /** Distinct non-null child values sampled (at most the requested sampleSize). */
+      sampledValues: number;
+      /** How many of those exist in the parent column. */
+      matchedValues: number;
+    }
+  | {
+      ok: false;
+      /** Human-readable cause, safe to persist — never contains a data value. */
+      reason: string;
+      /** Provider error code where one is available (e.g. PostgreSQL SQLSTATE). */
+      code?: string;
+    };
+
+/**
  * Abstract base class for database drivers
  * All provider-specific implementations must extend this class
  */
@@ -178,6 +202,11 @@ export abstract class BaseAutoDocDriver {
   /**
    * Test value overlap between two columns (for FK detection)
    * Returns percentage of source values that exist in target (0-1)
+   *
+   * NOTE: this returns a bare number and reports every failure as 0, which the
+   * caller's containment gate reads as a refutation. Prefer
+   * {@link probeJoinContainment}, whose result distinguishes "measured zero" from
+   * "could not measure".
    */
   public abstract testValueOverlap(
     sourceTable: string,  // format: "schema.table"
@@ -186,6 +215,24 @@ export abstract class BaseAutoDocDriver {
     targetColumn: string,
     sampleSize: number
   ): Promise<number>;
+
+  /**
+   * Probe whether a candidate key's child values exist in the parent column.
+   *
+   * Returns COUNTS ONLY — the number of distinct non-null child values sampled and
+   * how many of those exist in the parent. Implementations must never return, log,
+   * or otherwise surface a data value: the entire contract is two integers.
+   *
+   * Unlike {@link testValueOverlap}, a failure is reported as `{ ok: false, reason }`
+   * rather than as zero overlap, so a caller can tell a join that matches nothing
+   * from a join it was unable to evaluate. Implementations must not throw.
+   */
+  public abstract probeJoinContainment(
+    child: { schema: string; table: string; column: string },
+    parent: { schema: string; table: string; column: string },
+    sampleSize: number,
+    timeoutMs: number
+  ): Promise<DriverProbeOutcome>;
 
   /**
    * Check if a combination of columns is unique (for composite PK detection)

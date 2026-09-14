@@ -2,6 +2,29 @@
  * Configuration types for DBAutoDoc
  */
 
+/** Bounds and thresholds for key verification. Every field has a documented default. */
+export interface KeyVerificationConfig {
+    /** Run the probe at all. Default true — `false` makes every key Unprobed, not Verified. */
+    enabled?: boolean;
+    /** Distinct child values sampled per probe. Default 1000. */
+    sampleSize?: number;
+    /** Hard cap on probes per run. Default 500. Past it, candidates are Unprobed. */
+    maxProbes?: number;
+    /** Per-probe timeout in ms. Default 5000. A slow probe is Unprobed, not Refuted. */
+    probeTimeoutMs?: number;
+    /**
+     * Containment floor for Verified. Default 0.05.
+     *
+     * Deliberately far below FKDetector's 75% GATE 6: that gate decides whether a
+     * *statistically discovered* FK is real, where near-perfect containment is the
+     * evidence. This floor answers a much weaker question — "does this join match
+     * anything at all?" — whose whole point is to catch the 0% case (a namespaced
+     * parent key, a type-mismatched cross-schema guess) without discarding a
+     * genuinely sparse soft key in a connector schema full of orphans.
+     */
+    minContainment?: number;
+}
+
 export interface DBAutoDocConfig {
   version: string;
   database: DatabaseConfig;
@@ -158,6 +181,13 @@ export interface AnalysisConfig {
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
   organicKeyDetection?: OrganicKeyDetectionConfig;
+  /**
+   * Bounds and thresholds for verifying a proposed key against the data before it is
+   * emitted. See `KeyVerificationConfig` in `discovery/JoinProbe.ts` for the defaults
+   * and the reasoning behind each one. Omitted means "use the defaults" — NOT "skip
+   * verification"; set `keyVerification.enabled: false` for that.
+   */
+  keyVerification?: KeyVerificationConfig;
 }
 
 /**
@@ -207,6 +237,14 @@ export interface OrganicKeyDetectionConfig {
   minDistinctTables?: number;
   /** Number of sample values per column to include in the embedding input and refiner prompt. Default: 5. */
   sampleValueCount?: number;
+  /**
+   * Set `AutoCreateRelatedViewOnForm` on every emitted organic key. Default FALSE.
+   *
+   * Was a hardcoded `true`: each emitted key auto-created one related-record grid per
+   * spoke — around 22 per key on a real run — each grid a value-join on a column the
+   * detector had never verified. A machine-proposed key should be opted into.
+   */
+  autoCreateRelatedViewOnForm?: boolean;
 
   // ─── LLM Refinement ──────────────────────────────────────────────────
   /** Concurrency for per-cluster LLM refinement calls. Default: 4. */

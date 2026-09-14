@@ -64,12 +64,23 @@ const NON_VALUEMATCHABLE_TYPES = /(binary|blob|image|varbinary|xml|geography|geo
 
 // ─── Prefilter cardinality cutoffs ───────────────────────────────────────────
 /**
- * A column with fewer than this many distinct values AND a uniqueness ratio below
- * {@link MIN_UNIQUENESS_RATIO} is treated as a low-cardinality categorical (boolean/enum),
- * not an identity-bearing column, and is dropped before clustering.
+ * Minimum distinct values for a column to be identity-bearing. Default 50.
+ *
+ * Raised from 10. At 10, a `payment_method_id` with 33 distinct values over 24,000
+ * rows is an identity-bearing key as far as the prefilter is concerned, and goes on
+ * to become an organic key whose related-record view value-joins a non-unique
+ * category column — an N×N join presented to the user as "related" rows. 50 is the
+ * floor an operator arrived at by post-filtering a real run's output.
  */
-const MIN_DISTINCT_FOR_KEY = 10;
-const MIN_UNIQUENESS_RATIO = 0.001;
+const MIN_DISTINCT_FOR_KEY = 50;
+/**
+ * Minimum distinct/total ratio for a column to be identity-bearing. Default 0.02.
+ *
+ * Raised from 0.001. At 0.001 a column needs only one distinct value per thousand
+ * rows to qualify, which every status, type and category column in a large table
+ * clears comfortably.
+ */
+const MIN_UNIQUENESS_RATIO = 0.02;
 
 // ─── Embedding-input sample caps ─────────────────────────────────────────────
 /** At most this many sample values are appended to a column's embedding text. */
@@ -300,8 +311,22 @@ function prefilter(state: DatabaseDocumentation, config: OrganicKeyDetectionConf
                 if (col.statistics) {
                     const distinct = col.statistics.distinctCount ?? 0;
                     const ratio = col.statistics.uniquenessRatio ?? 0;
-                    // Drop ultra-low-cardinality / near-boolean columns.
-                    if (distinct < MIN_DISTINCT_FOR_KEY && ratio < MIN_UNIQUENESS_RATIO) continue;
+                    // Drop low-cardinality / categorical columns.
+                    //
+                    // This was `distinct < MIN && ratio < MIN` — a conjunction, so a
+                    // column had to fail BOTH tests to be dropped. Clearing either one
+                    // was enough to be treated as identity-bearing, which is why the
+                    // gate never removed anything it was written to remove:
+                    //
+                    //   - a boolean on a 100-row table has distinct=2 (fails) but
+                    //     ratio=0.02 (passes), so the AND is false and it is KEPT;
+                    //   - a `payment_method_id` with 33 distinct over 24,000 rows has
+                    //     ratio=0.0014 (fails at the old floor) but distinct=33
+                    //     (passes at the old floor of 10), so it is KEPT.
+                    //
+                    // Both are categorical. A column must clear BOTH floors to count as
+                    // identity-bearing, so the correct operator is OR on the drop.
+                    if (distinct < MIN_DISTINCT_FOR_KEY || ratio < MIN_UNIQUENESS_RATIO) continue;
                 }
                 out.push({
                     schema: schema.name,
@@ -492,6 +517,13 @@ function resolveEmbeddingProvider(
         embed: (texts: string[]) => impl.embed(texts),
     };
 }
+
+/**
+ * Re-export for tests / observability, matching the `__test__` convention in Composer.
+ * The selectivity gate is the cheapest and highest-volume filter in the pipeline and is
+ * worth pinning directly rather than through a run that needs an LLM and an embedder.
+ */
+export const __test__ = { prefilter, MIN_DISTINCT_FOR_KEY, MIN_UNIQUENESS_RATIO };
 
 function emptyResult(columnsInScope: number): SemanticPhaseResult {
     return {

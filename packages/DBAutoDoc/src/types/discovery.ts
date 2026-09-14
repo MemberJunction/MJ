@@ -47,6 +47,40 @@ export interface FKEvidence {
 /**
  * Foreign key candidate discovered during analysis
  */
+/**
+ * Where a key came from. Recorded per key so a wrong inference can be traced back to
+ * whichever stage authored it, instead of a hand-written key and a hallucinated one
+ * sitting side by side looking equally authoritative.
+ */
+export type KeyProvenance = 'Declared' | 'Inferred' | 'LLM' | 'Organic';
+
+/**
+ * Whether the key was checked against the data, and what the check concluded.
+ *
+ * `Unprobed` is NOT a synonym for `Refuted`. `Refuted` means a probe ran and measured
+ * containment below the floor; `Unprobed` means no measurement exists. Collapsing the
+ * two is what lets a permissions failure masquerade as a disproved key.
+ */
+export type KeyVerificationStatus = 'Verified' | 'Refuted' | 'Unprobed';
+
+/**
+ * The provenance + verification record carried alongside an emitted key.
+ *
+ * `MatchedRows` / `SampledRows` are counts. There is deliberately no field here that
+ * can carry a data value.
+ */
+export interface KeyVerificationStamp {
+  Provenance: KeyProvenance;
+  Verification: KeyVerificationStatus;
+  VerifiedAt: string;
+  /** Null when Verification is 'Unprobed' — no measurement was taken. */
+  MatchedRows: number | null;
+  /** Null when Verification is 'Unprobed'. */
+  SampledRows: number | null;
+  /** Why it verified, why it was refuted, or why the probe could not run. */
+  VerificationNote: string;
+}
+
 export interface FKCandidate {
   schemaName: string;
   sourceTable: string;
@@ -59,6 +93,12 @@ export interface FKCandidate {
   discoveredInIteration: number;
   validatedByLLM: boolean;
   status: 'candidate' | 'confirmed' | 'rejected';
+  /**
+   * Provenance + probe result for this candidate. Optional so existing producers keep
+   * compiling; absent means nothing recorded which stage authored the key or whether
+   * anyone ever checked it against the data.
+   */
+  verification?: KeyVerificationStamp;
 }
 
 /**
