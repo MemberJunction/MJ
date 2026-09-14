@@ -15,7 +15,8 @@ import {
   AttachmentContent,
   AttachmentType
 } from '@memberjunction/ai-core-plus';
-import { GetAttachmentService } from '@memberjunction/aiengine';
+import type { IAttachmentBlobStore } from '@memberjunction/aiengine';
+import { GraphQLAttachmentBlobStore } from './graphql-attachment-blob-store';
 import { MessageAttachment } from '../components/message/message-item.component';
 import { PendingAttachment } from '@memberjunction/ng-composer';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -29,6 +30,20 @@ import { UUIDsEqual } from '@memberjunction/global';
   providedIn: 'root'
 })
 export class ConversationAttachmentService {
+  /**
+   * Where attachment bytes go when they are too large to store inline.
+   *
+   * Held directly rather than read off the shared `ConversationAttachmentService` in
+   * `@memberjunction/aiengine`. That package's entry point imports Node's `crypto`
+   * (`AIEngine.ts`, for an embedding-cache key), so a runtime import of it from here pulls the
+   * whole server AI engine into Explorer's browser bundle and the build fails to resolve `crypto`.
+   * The seam's *type* still comes from there — `import type` is erased, so it costs nothing — and
+   * the placement POLICY comes from `ConversationUtility` in `@memberjunction/ai-core-plus`, which
+   * is browser-safe. The shared service is a server-side consumer of the same seam, not a
+   * dependency of this one.
+   */
+  private readonly blobStore: IAttachmentBlobStore = new GraphQLAttachmentBlobStore();
+
   private _provider: IMetadataProvider | null = null;
 
   constructor() {}
@@ -232,7 +247,7 @@ export class ConversationAttachmentService {
           if (storeInline) {
             attachment.InlineData = base64Data;
           } else {
-            const stored = await GetAttachmentService().BlobStore?.Upload(
+            const stored = await this.blobStore.Upload(
               { FileName: pending.fileName, MimeType: pending.mimeType, Base64Data: base64Data },
               contextUser ?? md.CurrentUser,
               md,

@@ -21,6 +21,20 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
  * pluggable: the server binds an MJStorage implementation, a client binds a GraphQL-backed one,
  * and a host that supports only inline attachments binds nothing at all.
  *
+ * ## What is NOT yet portable, stated plainly
+ *
+ * This removes the *storage SDKs* from the attachment service's dependency graph. It does not yet
+ * make the containing package importable from a browser or React Native at runtime: this package's
+ * entry point also exports `AIEngine`, which imports Node's `crypto` at module scope for an
+ * embedding-cache key. A browser bundler cannot resolve that, so an Angular or RN host consumes the
+ * *type* from here (`import type`, fully erased) and the placement *policy* from
+ * `ConversationUtility` in `@memberjunction/ai-core-plus`, which is browser-safe — while holding its
+ * own `IAttachmentBlobStore` implementation rather than reaching through `GetAttachmentService()`.
+ *
+ * Fixing that one import — or splitting this package's entry points — would let a non-Node host use
+ * the shared service itself, not just the shared contract. It belongs to this package's owners
+ * rather than to the branch that discovered it.
+ *
  * ## Design notes
  *
  * **base64, never `Buffer`.** `Buffer` is a Node global; a base64 string crosses every runtime.
