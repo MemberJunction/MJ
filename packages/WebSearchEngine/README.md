@@ -284,6 +284,13 @@ Exceptions escaping a driver are caught, recorded as a transient attempt, and fa
 
 ## Setup after the migration
 
+> **This package does not compile until CodeGen has run.** The engine types its provider records as
+> `MJWebSearchProviderEntity`, the generated subclass for `MJ: Web Search Providers` — deliberately,
+> because a hand-written projection is a frozen copy that silently stops matching the table. Until
+> the migration and CodeGen have run, `tsc` reports exactly one error: that the entity does not
+> exist yet. That is expected, and it resolves with the same step that clears `check:codegen-tail`.
+
+
 The `WebSearchProvider` migration ships with an empty CodeGen tail, because it was authored without
 a database. To complete it locally:
 
@@ -295,9 +302,7 @@ pnpm mj codegen                      # entity subclass, resolvers, form, remote_
 pnpm run build
 ```
 
-Then add the Remote Operation's server half, which needs the base class CodeGen has just emitted.
-It imports from `@memberjunction/core-entities`, so add that back as a dependency of this package
-at the same time — it is deliberately not declared today, because nothing here imports it yet:
+Then add the Remote Operation's server half, which needs the base class CodeGen has just emitted:
 
 ```typescript
 // packages/WebSearchEngine/src/operations/WebSearchQueryOperation.ts

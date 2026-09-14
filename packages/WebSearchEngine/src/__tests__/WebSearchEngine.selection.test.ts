@@ -69,6 +69,10 @@ vi.mock('@memberjunction/credentials', () => ({
     },
 }));
 
+// Type-only at runtime — the engine's provider records are MJWebSearchProviderEntity, and the
+// fakes below satisfy the shape the engine actually reads.
+vi.mock('@memberjunction/core-entities', () => ({}));
+
 vi.mock('@memberjunction/network-utils', () => ({
     HttpGet: vi.fn(),
     HttpPost: vi.fn(),

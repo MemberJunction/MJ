@@ -14,6 +14,7 @@ import {
     RunView,
     UserInfo,
 } from '@memberjunction/core';
+import { MJWebSearchProviderEntity } from '@memberjunction/core-entities';
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseSingleton, MJGlobal } from '@memberjunction/global';
 import { BaseWebSearchProvider } from './BaseWebSearchProvider';
@@ -25,27 +26,6 @@ import {
     WebSearchResult,
     WebSearchResultCode,
 } from './types';
-
-/**
- * The provider columns this engine reads.
- *
- * Declared here rather than imported as `MJWebSearchProviderEntity` because the engine only ever
- * **reads** these rows — it never mutates or saves one. Per MJ's data-access rules that makes
- * `ResultType: 'simple'` with an explicit `Fields` list the correct choice, which needs a plain
- * row shape rather than a `BaseEntity` subclass. The generated entity class is what the Explorer
- * form and any future admin write path use.
- *
- * Keep this in sync with the `WebSearchProvider` table; a column added to the migration and not
- * added here is simply not read.
- */
-interface WebSearchProviderRecord {
-    Name: string;
-    DriverClass: string;
-    Priority: number;
-    ProviderConfig: string | null;
-    CredentialID: string | null;
-    MaxResultsOverride: number | null;
-}
 
 /** A loaded, initialised driver plus the metadata it came from. */
 interface ProviderEntry {
@@ -348,13 +328,15 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
             ? RunView.FromMetadataProvider(this._provider)
             : new RunView();
 
-        const result = await rv.RunView<WebSearchProviderRecord>(
+        // `entity_object` with the generated subclass, matching how SearchEngine types its own
+        // provider records. `Fields` is deliberately absent — it is ignored for entity_object, and
+        // a hand-listed projection is how a column added to the table later goes silently unread.
+        const result = await rv.RunView<MJWebSearchProviderEntity>(
             {
                 EntityName: WebSearchEngine.PROVIDER_ENTITY,
-                Fields: ['Name', 'DriverClass', 'Priority', 'ProviderConfig', 'CredentialID', 'MaxResultsOverride'],
                 ExtraFilter: `Status = 'Active'`,
                 OrderBy: 'Priority ASC, Name ASC',
-                ResultType: 'simple',
+                ResultType: 'entity_object',
             },
             contextUser,
         );
@@ -380,7 +362,7 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
 
     /** Instantiate, configure and availability-check one provider record. */
     private async initializeProvider(
-        record: WebSearchProviderRecord,
+        record: MJWebSearchProviderEntity,
         contextUser: UserInfo,
     ): Promise<void> {
         const driverClass = record.DriverClass;
@@ -433,12 +415,12 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
     }
 
     /** Remember why a configured provider is not serving, so an explicit request can say so. */
-    private recordUnavailable(record: WebSearchProviderRecord, failure: FailureShape): void {
+    private recordUnavailable(record: MJWebSearchProviderEntity, failure: FailureShape): void {
         this._unavailable.set(record.Name.toLowerCase(), failure);
         this._unavailable.set(record.DriverClass.toLowerCase(), failure);
     }
 
-    private parseProviderConfig(record: WebSearchProviderRecord): Record<string, unknown> | null {
+    private parseProviderConfig(record: MJWebSearchProviderEntity): Record<string, unknown> | null {
         if (!record.ProviderConfig) {
             return null;
         }
@@ -453,7 +435,7 @@ export class WebSearchEngine extends BaseSingleton<WebSearchEngine> {
 
     /** Decrypt the linked credential, when one is set. Null when absent or unreadable. */
     private async resolveCredentialValues(
-        record: WebSearchProviderRecord,
+        record: MJWebSearchProviderEntity,
         contextUser: UserInfo,
     ): Promise<Record<string, unknown> | null> {
         if (!record.CredentialID) {
