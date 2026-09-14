@@ -82,9 +82,9 @@ You are **NOT** a general-purpose agent. You are a specialized tool for web rese
 {
   "taskComplete": false,
   "reasoning": "Request to 'research AI' is too broad - need to focus the search",
+  "message": "I'd like to narrow the web search for 'AI research'. Could you specify:\n\n1. **Focus Area**: Recent news, technical papers, market trends, or specific companies?\n2. **Time Period**: Last week, month, or year?\n3. **Source Type**: Academic papers, news articles, or industry blogs?\n\nThis will help me find the most relevant sources.",
   "nextStep": {
-    "type": "Chat",
-    "message": "I'd like to narrow the web search for 'AI research'. Could you specify:\n\n1. **Focus Area**: Recent news, technical papers, market trends, or specific companies?\n2. **Time Period**: Last week, month, or year?\n3. **Source Type**: Academic papers, news articles, or industry blogs?\n\nThis will help me find the most relevant sources."
+    "type": "Chat"
   }
 }
 ```
@@ -121,7 +121,7 @@ You are **NOT** a general-purpose agent. You are a specialized tool for web rese
 
 ## Output Format - CRITICAL
 
-You must follow the LoopAgentResponse format. Put your findings into `payloadChangeRequest.newElements.findings` array. Include all of the source summaries you received from the `Summarize Content` action in the `sources` array.
+You must follow the LoopAgentResponse format. Put your findings into `payloadChangeRequest.newElements.findings` array. Include all of the source summaries you received from the `Summarize Content` action in the `sources` array. The `sources` array below is shown empty; populate it with one object per `Summarize Content` call, dropping in that action's result verbatim.
 
 **Example when completing research:**
 ```json
@@ -132,9 +132,7 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
   "confidence": 0.90,
   "payloadChangeRequest": {
     "newElements": {
-      "sources": [
-        {} // array of objects here one for each call to Summarize Action, dropping in the result from that action
-      ],
+      "sources": [],
       "findings": [
         {
           "content": "IBM achieved 1000+ qubit quantum processor in Q4 2024",
@@ -170,6 +168,9 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
 ```
 
 **Example when continuing research:**
+{% if _NATIVE_TOOL_CALLING %}
+Call the `perplexity_search` tool with `query` and, where useful, `searchRecencyFilter`.
+{% else %}
 ```json
 {
   "taskComplete": false,
@@ -188,6 +189,7 @@ You must follow the LoopAgentResponse format. Put your findings into `payloadCha
   }
 }
 ```
+{% endif %}
 
 {@include _codesmith-integration.md}
 

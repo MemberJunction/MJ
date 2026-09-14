@@ -1,0 +1,14 @@
+---
+"@memberjunction/sql-converter": minor
+"@memberjunction/sqlglot-ts": minor
+---
+
+Fix three PostgreSQL conversion defects, each of which produced a file the converter reported as clean and PostgreSQL then rejected at apply time.
+
+**1. BIT literals in `UPDATE … SET` and `WHERE`.** The split path already coerced BIT literals inside `INSERT … VALUES` (by ordinal position); it did not coerce them in `UPDATE "T" SET "Flag" = 1` or `WHERE "Flag" = 1` (by column name). Those are different syntactic sites needing different rewriters, and the rule-based path applies both while the split path applied only the first — so a CodeGen `UPDATE` against a core-metadata table failed with `operator does not exist: boolean = integer`. `assemblePgSQL` now applies `convertBooleanLiteralComparisons` alongside `castBooleanInsertValues`. Rewriting is still by known-boolean column name, so `"Sequence" = 1` on a non-boolean column is untouched.
+
+**2. A comma inside a CodeGen comment shifted every subsequent column.** `splitTopLevelValues` tracked quoted strings and nested parens but not SQL comments. CodeGen interleaves explanatory comments between values and one of them contains a comma — *"Apply-time sequence, not the literal CodeGen emitted (MJ#4202)"* — so the split counted a phantom value and every later column landed one ordinal early. Observed as `column "Scale" is of type integer but expression is of type boolean`: the flag intended for `AllowsNull` was written into `Scale`. The splitter now skips `/* … */` and `-- …` bodies (copying them through untouched) when looking for separators. This was latent in the INSERT coercion shipped previously; this release's content is simply the first to carry a comma in that position.
+
+**3. `CREATE INDEX` after FK-bearing DML.** PostgreSQL refuses to index a table carrying pending trigger events — `cannot CREATE INDEX "Entity" because it has pending trigger events` — which a migration hits whenever it seeds FK-bearing rows and then indexes the *referenced* table. SQL Server has no such restriction, so the T-SQL original is legal and the breakage exists only after conversion. The AST dialect now emits `SET CONSTRAINTS ALL IMMEDIATE;` ahead of a guarded `CREATE INDEX`, matching the statement-level form the committed ledger already uses for this purpose (`V202608042204__APIKey_Scope_RowFilterID.pg.sql`). It is emitted **only** when the guarded body actually creates an index, and it is semantically free — the deferred checks run now rather than at `COMMIT`, so anything that would have failed still fails, just earlier and attached to a clearer statement. Placement matters: issuing it *inside* the `DO` block does not clear events queued by earlier statements, which was verified live before the statement-level form was adopted.
+
+Covered by 3 new `MigrationConverter` tests and 2 new `mj_postgres` dialect tests, including negative cases that pin the narrowness of each rewrite.

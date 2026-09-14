@@ -20,5 +20,9 @@
   },
   "primaryKey": {
     "ID": "F1229933-5A20-4A1A-989E-B057432E1823"
+  },
+  "sync": {
+    "lastModified": "2026-09-09T11:23:36.233Z",
+    "checksum": "0ef02c59386c4c88800358a86e9ea2dc5f66462f042baeb3b538c6718b14d7fe"
   }
 }

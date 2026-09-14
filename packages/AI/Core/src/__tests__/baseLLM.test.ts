@@ -58,6 +58,16 @@ class TestLLM extends BaseLLM {
     }
 }
 
+/** A driver that DOES implement the tool mapping, for exercising the tool-aware base-class paths. */
+class ToolCapableTestLLM extends TestLLM {
+    public override get SupportsStreaming(): boolean {
+        return true;
+    }
+    public override get SupportsTools(): boolean {
+        return true;
+    }
+}
+
 describe('BaseLLM', () => {
     let llm: TestLLM;
 
@@ -418,6 +428,79 @@ describe('BaseLLM', () => {
         it('default base-class resetStreamingState is a no-op', () => {
             // Calling reset on a vanilla TestLLM doesn't throw and has no observable effect.
             expect(() => (llm as unknown as { resetStreamingState(): void }).resetStreamingState()).not.toThrow();
+        });
+    });
+});
+
+describe('BaseLLM — native tool calling', () => {
+    describe('SupportsTools', () => {
+        it('defaults to false so a driver without the mapping never receives tools', () => {
+            expect(new TestLLM().SupportsTools).toBe(false);
+        });
+
+        it('is true on a driver that implements the mapping', () => {
+            expect(new ToolCapableTestLLM().SupportsTools).toBe(true);
+        });
+    });
+
+    describe('streaming + tools (non-streaming only)', () => {
+        const toolParams = (): ChatParams => {
+            const params = new ChatParams();
+            params.messages = [{ role: 'user', content: 'hi' }];
+            params.tools = [{ name: 'get_weather', inputSchema: { type: 'object' } }];
+            params.streaming = true;
+            params.streamingCallbacks = { OnContent: vi.fn(), OnComplete: vi.fn(), OnError: vi.fn() };
+            return params;
+        };
+
+        it('takes the non-streaming path and flags the downgrade when tools are declared', async () => {
+            const llm = new ToolCapableTestLLM();
+            const result = await llm.ChatCompletion(toolParams());
+
+            expect(result.data.choices[0].message.content).toBe('test response');
+            expect(result.modelSpecificResponseDetails?.streamingSuppressedForTools).toBe(true);
+        });
+
+        it('does not invoke the streaming callbacks when it downgrades', async () => {
+            const llm = new ToolCapableTestLLM();
+            const params = toolParams();
+            await llm.ChatCompletion(params);
+
+            expect(params.streamingCallbacks!.OnContent).not.toHaveBeenCalled();
+            expect(params.streamingCallbacks!.OnComplete).not.toHaveBeenCalled();
+        });
+
+        it('still streams when no tools are declared', async () => {
+            const llm = new ToolCapableTestLLM();
+            const params = toolParams();
+            params.tools = undefined;
+
+            const result = await llm.ChatCompletion(params);
+
+            expect(result.data.choices[0].message.content).toBe('chunk1chunk2');
+            expect(result.modelSpecificResponseDetails?.streamingSuppressedForTools).toBeUndefined();
+        });
+
+        it('still streams when the driver cannot map tools — its tools are ignored, not a reason to downgrade', async () => {
+            class StreamingOnlyLLM extends TestLLM {
+                public override get SupportsStreaming(): boolean {
+                    return true;
+                }
+            }
+            const params = toolParams();
+
+            const result = await new StreamingOnlyLLM().ChatCompletion(params);
+
+            expect(result.data.choices[0].message.content).toBe('chunk1chunk2');
+        });
+
+        it('leaves a non-streaming tool request unflagged — nothing was downgraded', async () => {
+            const params = toolParams();
+            params.streaming = false;
+
+            const result = await new ToolCapableTestLLM().ChatCompletion(params);
+
+            expect(result.modelSpecificResponseDetails?.streamingSuppressedForTools).toBeUndefined();
         });
     });
 });

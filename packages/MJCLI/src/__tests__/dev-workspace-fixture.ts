@@ -5,14 +5,14 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import type { MemberPackageJson } from '../lib/dev-workspace/types.js';
+import type { MemberPackageJson, MjAppJson } from '../lib/dev-workspace/types.js';
 
 /** Declarative description of one fake repo checkout under the fixture parent. */
 export interface FixtureRepoSpec {
   /** Root package.json content; omit the property entirely for a dir with no manifest. */
   RootPackageJson?: MemberPackageJson;
-  /** Write an mj-app.json marker file. */
-  MjAppJson?: boolean;
+  /** `true` writes a bare marker; an object writes that exact mj-app.json content. */
+  MjAppJson?: boolean | MjAppJson;
   /** package.json contents keyed by directory path under the repo's packages dir (may be nested, e.g. `AI/Engine`). */
   Packages?: Record<string, MemberPackageJson>;
   /** Raw turbo.json contents. */
@@ -46,8 +46,9 @@ function writeFixtureRepo(repoDir: string, spec: FixtureRepoSpec): void {
   if (spec.RootPackageJson !== undefined) {
     writeFileSync(path.join(repoDir, 'package.json'), JSON.stringify(spec.RootPackageJson, null, 2), 'utf8');
   }
-  if (spec.MjAppJson === true) {
-    writeFileSync(path.join(repoDir, 'mj-app.json'), JSON.stringify({ name: path.basename(repoDir) }), 'utf8');
+  if (spec.MjAppJson !== undefined && spec.MjAppJson !== false) {
+    const content = spec.MjAppJson === true ? { name: path.basename(repoDir) } : spec.MjAppJson;
+    writeFileSync(path.join(repoDir, 'mj-app.json'), JSON.stringify(content, null, 2), 'utf8');
   }
   for (const [pkgDir, pkgJson] of Object.entries(spec.Packages ?? {})) {
     const dir = path.join(repoDir, 'packages', pkgDir);

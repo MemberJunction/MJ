@@ -1,4 +1,6 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage, ErrorAnalyzer, ChatMessage, ChatMessageContentBlock,
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls,
+    type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import Groq, { APIUserAbortError } from 'groq-sdk';
 import { ChatCompletion, ChatCompletionCreateParamsNonStreaming, ChatCompletionCreateParamsStreaming, ChatCompletionMessageParam, ChatCompletionContentPart, ChatCompletionChunk } from 'groq-sdk/resources/chat/completions';
@@ -180,16 +182,67 @@ export class GroqLLM extends BaseLLM {
      * Convert MJ messages to Groq-compatible format with proper multimodal support
      * Groq uses OpenAI-compatible format: { type: "image_url", image_url: { url: "..." } }
      */
+    /**
+     * Groq exposes OpenAI-compatible function calling across its hosted catalog, so the shared
+     * OpenAI-shaped mapping applies unchanged.
+     *
+     * This is load-bearing for MJ specifically: GPT-OSS-120B on Groq is the second-most-deployed
+     * (model, vendor) pair across the shipped agents, and until this override the capability gate
+     * resolved to the envelope for it regardless of metadata.
+     *
+     * **Parallel calls are NOT universal here.** Groq documents parallel tool calling on
+     * llama-3.3-70b, llama-3.1-8b, qwen3.6-27b and minimax-m2.7, but *not* on the gpt-oss models —
+     * which is exactly the family MJ deploys most. {@link applyToolParams} therefore forwards
+     * `parallel_tool_calls` only when the caller sets it explicitly, and never infers it. Groq's
+     * Compound models reject caller-supplied tools outright; that is a per-model catalog fact for
+     * the vendor-level capability flag, not something a driver can paper over.
+     */
+    public override get SupportsTools(): boolean {
+        return true;
+    }
+
+    /**
+     * Adds the native tool-calling fields when the caller declared tools.
+     *
+     * @param request The request body being assembled (mutated in place)
+     * @param params The chat params for this request
+     */
+    protected applyToolParams(
+        request: ChatCompletionCreateParamsNonStreaming | ChatCompletionCreateParamsStreaming,
+        params: ChatParams
+    ): void {
+        if (!params.tools || params.tools.length === 0) {
+            return;
+        }
+        request.tools = buildOpenAICompatibleTools(params.tools);
+        if (params.toolChoice !== undefined) {
+            request.tool_choice = buildOpenAICompatibleToolChoice(params.toolChoice);
+        }
+        // Deliberately only when asked — see SupportsTools on the gpt-oss parallel gap.
+        if (params.parallelToolCalls !== undefined) {
+            request.parallel_tool_calls = params.parallelToolCalls;
+        }
+    }
+
     private convertToGroqMessages(messages: ChatMessage[]): ChatCompletionMessageParam[] {
         const groqMessages: ChatCompletionMessageParam[] = [];
 
         for (const msg of messages) {
+            // A tool turn is not one message: it expands into one `tool` message per result, each
+            // carrying the id of the call it answers.
+            if (msg.role === ChatMessageRole.tool) {
+                groqMessages.push(...buildOpenAICompatibleToolResults(msg, 'Groq provider'));
+                continue;
+            }
+
             // Simple string content
             if (typeof msg.content === 'string') {
-                groqMessages.push({
-                    role: msg.role as 'system' | 'user' | 'assistant',
-                    content: msg.content
-                });
+                const role = toClassicChatMessageRole(msg.role);
+                groqMessages.push(role === 'assistant'
+                    // The assistant's own calls must ride along, or the tool results answering
+                    // them are orphaned and the request is rejected.
+                    ? { role, content: msg.content, ...(msg.toolCalls?.length ? { tool_calls: buildOpenAICompatibleToolCalls(msg.toolCalls) } : {}) }
+                    : { role, content: msg.content });
                 continue;
             }
 
@@ -214,9 +267,11 @@ export class GroqLLM extends BaseLLM {
                 // Note: audio_url, video_url, file_url not yet supported by Groq
             }
 
-            // If we have converted content blocks, use them; otherwise fall back to empty text
+            // If we have converted content blocks, use them; otherwise fall back to empty text.
+            // toClassicChatMessageRole rather than a cast: a `tool` role is handled above, and
+            // casting one through here would send a role the API rejects.
             groqMessages.push({
-                role: msg.role as 'system' | 'user' | 'assistant',
+                role: toClassicChatMessageRole(msg.role),
                 content: groqContent.length > 0 ? groqContent : ''
             } as ChatCompletionMessageParam);
         }
@@ -246,8 +301,13 @@ export class GroqLLM extends BaseLLM {
                 content: params.assistantPrefill
             });
         } else {
-            // Groq requires the last message to be a user message (when not using prefill)
-            if (messages.length > 0 && messages[messages.length - 1].role !== 'user') {
+            // Groq wants a user message last (when not using prefill) — but a `tool` message is a
+            // legitimate final turn in a tool conversation, and wedging a dummy user turn after
+            // the results would separate them from the assistant call they answer. Same hazard as
+            // the Anthropic alternation filler; skip the filler whenever tool results end the turn.
+            const last = messages[messages.length - 1];
+            const endsWithToolResults = last?.role === 'tool';
+            if (messages.length > 0 && last.role !== 'user' && !endsWithToolResults) {
                 messages.push({
                     role: 'user',
                     content: 'OK' // Dummy message to satisfy Groq's requirement
@@ -264,6 +324,7 @@ export class GroqLLM extends BaseLLM {
 
         // Add reasoning_effort if supported by the model
         this.setGroqParamsEffortLevel(groqParams, params);
+        this.applyToolParams(groqParams, params);
 
         // Add sampling and generation parameters
         if (params.topP != null) {
@@ -321,13 +382,18 @@ export class GroqLLM extends BaseLLM {
             // Extract thinking content if present using base class helper
             const extracted = this.extractThinkingFromContent(rawMessage);
 
+            const toolCalls = extractOpenAICompatibleToolCalls(
+                choice.message?.tool_calls as RawOpenAICompatibleToolCall[] | undefined, 'Groq provider');
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
                     content: extracted.content,
-                    thinking: extracted.thinking || choice.message.reasoning               
+                    thinking: extracted.thinking || choice.message.reasoning,
+                    ...(toolCalls ? { toolCalls } : {})
                 },
-                finish_reason: choice.finish_reason,
+                // Normalize the one value the tool surface defines; the rest passes through
+                // untouched (MJ#4335 tracks normalizing the others).
+                finish_reason: toolCalls ? 'tool_calls' : choice.finish_reason,
                 index: choice.index
             };
             return res;
@@ -427,6 +493,7 @@ export class GroqLLM extends BaseLLM {
         
         // Add reasoning_effort if supported by the model
         this.setGroqParamsEffortLevel(groqParams, params);
+        this.applyToolParams(groqParams, params);
         
         // Add sampling and generation parameters
         if (params.topP != null) {

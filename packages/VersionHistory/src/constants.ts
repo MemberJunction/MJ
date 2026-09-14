@@ -126,7 +126,15 @@ export async function loadRecordChangeSnapshot(
     const result = await rv.RunView<Record<string, unknown>>({
         EntityName: ENTITY_RECORD_CHANGES,
         ExtraFilter: sqlEquals('ID', recordChangeId),
-        Fields: ['ID', 'FullRecordJSON'],
+        // 'EntityID' is required, not decorative: field-level security projects a Record Change's
+        // payload against the entity the row is ABOUT, and a row arriving without EntityID cannot be
+        // resolved — so the payload is withheld. See guides/FIELD_LEVEL_SECURITY_GUIDE.md §3.2.
+        //
+        // For a restricted caller on a field-secured entity the snapshot comes back NARROWED, which
+        // is what both consumers want: RestoreEngine skips fields the snapshot omits (so a denied
+        // column keeps its stored value rather than being overwritten), and DiffEngine simply has
+        // nothing to show for them.
+        Fields: ['ID', 'EntityID', 'FullRecordJSON'],
         MaxRows: 1,
         ResultType: 'simple',
     }, contextUser);

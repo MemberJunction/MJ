@@ -16,6 +16,7 @@ import type { ParsedDelegationArtifact } from '../../services/delegation-result-
  */
 describe('RealtimeDelegationCardComponent (DOM)', () => {
   const workingCard = (overrides: Partial<RealtimeDelegationCardVM> = {}): RealtimeDelegationCardVM => ({
+    Kind: 'agent',
     CallID: 'call-1',
     AgentName: 'Sage',
     LatestMessage: 'Fetching the latest figures',
@@ -27,6 +28,7 @@ describe('RealtimeDelegationCardComponent (DOM)', () => {
   });
 
   const doneCard = (overrides: Partial<RealtimeDelegationCardVM> = {}): RealtimeDelegationCardVM => ({
+    Kind: 'agent',
     CallID: 'call-2',
     AgentName: 'Sage',
     LatestMessage: 'done',
@@ -125,5 +127,55 @@ describe('RealtimeDelegationCardComponent (DOM)', () => {
     const artifacts = capture(f.componentInstance.OpenArtifactRequested);
     click(f, '.artifact-link');
     expect(artifacts).toEqual([artifact]);
+  });
+
+  describe('direct action cards (Kind: action)', () => {
+    it('renders the working action card with action title, wrench icon, formatted detail, and no cancel button or open run link', () => {
+      const f = render(workingCard({
+        Kind: 'action',
+        AgentName: 'File Storage List Objects',
+        ToolName: 'File_Storage_List_Objects',
+        LatestStep: 'direct_action',
+        LatestMessage: 'Executing File Storage List Objects',
+        RunID: 'run-not-used'
+      }), { DevMode: true });
+
+      expect(query(f, '.work-card')).not.toBeNull();
+      expect(text(f, '.work-card__title')).toBe('File Storage List Objects');
+      expect(text(f, '.work-card__step')).toBe('Looking that up');
+      expect(text(f, '.work-card__detail')).toBe('Executing File Storage List Objects');
+      expect(text(f, '.work-card__detail')).not.toContain('_');
+      expect(query(f, '.avatar--action')).not.toBeNull();
+      expect(query(f, '.avatar--action .fa-wrench')).not.toBeNull();
+      // Direct actions have no cancel button
+      expect(query(f, '.cancel-work')).toBeNull();
+      // Direct actions have no open-run link even in dev mode with a RunID
+      expect(query(f, '.dev-link')).toBeNull();
+    });
+
+    it('renders the done action card with tool badge, action provenance tooltip, and no open run link or artifact chips', () => {
+      const f = render(doneCard({
+        Kind: 'action',
+        AgentName: 'Get Weather',
+        ToolName: 'Get_Weather',
+        Result: '72°F and sunny in Dallas',
+        Artifacts: [artifact],
+        RunID: 'run-not-used'
+      }), { DevMode: true });
+
+      expect(query(f, '.done-accordion')).not.toBeNull();
+      expect(text(f, '.done-chip__agent')).toBe('Get Weather');
+      expect(text(f, '.done-chip__preview')).toContain('72°F and sunny in Dallas');
+      // Provenance badge renders "tool" instead of "via <agent>"
+      expect(text(f, '.via-badge')).toContain('tool');
+      expect(text(f, '.via-badge')).not.toContain('via');
+      // Provenance title matches direct action phrasing
+      const shield = query(f, '.fa-shield-halved');
+      expect(shield?.getAttribute('title')).toBe('Result produced directly by the Get Weather action.');
+      // No open run link
+      expect(query(f, '.dev-link')).toBeNull();
+      // Direct actions never render artifact chips even if Artifacts were supplied in VM
+      expect(query(f, '.artifact-link')).toBeNull();
+    });
   });
 });
