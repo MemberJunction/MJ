@@ -1696,7 +1696,7 @@
   {
     "fields": {
       "Name": "Web Search",
-      "Description": "Searches the open web via DuckDuckGo and returns a ranked list of result URLs with titles and snippets. Use when you need to discover relevant pages but do not yet know specific URLs. To fetch the actual content of a known URL, use Web Page Content. Rate-limited; supports queueing.",
+      "Description": "Searches the open web through whichever provider the administrator has configured, and returns ranked results with titles, URLs and snippets. This is the provider-neutral entry point: which vendor serves the request (Brave, Tavily, Perplexity, or a fallback when the first choice is rate-limited) is decided by the MJ: Web Search Providers records and their Priority, not by the caller. Use this for any question needing current information from outside this MemberJunction instance. For content MJ holds, use Search instead.",
       "DriverClass": "__WebSearch",
       "Type": "Custom",
       "Status": "Active",
@@ -1712,7 +1712,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Keywords to search for",
+            "Description": "Search query text. Required. (Accepted as either SearchTerms or Query; Query is the preferred name.)",
             "IsRequired": true
           },
           "primaryKey": {
@@ -1730,7 +1730,7 @@
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Maximum number of results to return (default: 10, max: 30)",
+            "Description": "Desired number of results. Clamped to the serving provider's own cap, not rejected. Default: 10.",
             "IsRequired": false,
             "DefaultValue": "10"
           },
@@ -1745,30 +1745,11 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "Region",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "Regional search preference (default: 'us-en')",
-            "IsRequired": false,
-            "DefaultValue": "us-en"
-          },
-          "primaryKey": {
-            "ID": "46B4466B-7E1F-4DDE-81F9-AFAAAB263BE3"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.704Z",
-            "checksum": "5fb16a8e243ad30e21f01d042d9fcb614e5d2d3d71a9ac9c7d7fdfa4dad41984"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "SafeSearch",
             "Type": "Input",
             "ValueType": "Scalar",
             "IsArray": false,
-            "Description": "Safe search level - 'strict', 'moderate', 'off' (default: 'moderate')",
+            "Description": "Adult-content filter: 'off', 'moderate' or 'strict'. Default: moderate.",
             "IsRequired": false,
             "DefaultValue": "moderate"
           },
@@ -1783,29 +1764,10 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "DisableQueueing",
-            "Type": "Input",
-            "ValueType": "Scalar",
-            "IsArray": false,
-            "Description": "If true, fails immediately when rate limited instead of queueing (default: false)",
-            "IsRequired": false,
-            "DefaultValue": "false"
-          },
-          "primaryKey": {
-            "ID": "476061FF-D1AD-480A-9775-C6D3409A41BF"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.839Z",
-            "checksum": "be699ab9a1504af0471bbb9c9611793e38c23be4f77ed2e574b0b25235866a73"
-          }
-        },
-        {
-          "fields": {
-            "ActionID": "@parent:ID",
             "Name": "SearchResultDetails",
             "Type": "Output",
             "ValueType": "Simple Object",
-            "Description": "Comprehensive JSON object with search result details"
+            "Description": "The complete response envelope: query, results, provider used, and the full attempt list."
           },
           "primaryKey": {
             "ID": "5ED4B06C-78D3-4F23-B13E-E168A9014864"
@@ -1818,66 +1780,184 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "SearchUrl",
-            "Type": "Output",
+            "Name": "Query",
+            "Type": "Input",
             "ValueType": "Scalar",
-            "Description": "URL of the search results page"
+            "IsArray": false,
+            "Description": "Search query text. Required.",
+            "IsRequired": true
           },
           "primaryKey": {
-            "ID": "AE5C7C67-4C0C-44E5-97AE-AA7DDB1311E2"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.842Z",
-            "checksum": "4a50634fa6886779a85894f3f0b46663ac7bf7038d420973ffa34ccd52f3cafe"
+            "ID": "70254E54-C93D-4A25-96EC-97D1C4658648"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "SearchResults",
+            "Name": "Provider",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Pin the search to one provider by Name (e.g. 'Brave') or DriverClass. When set there is NO failover: if that provider is missing, inactive, unavailable or incapable of what was asked, the action fails rather than quietly using a different vendor. Omit to use the administrator's priority order.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C9C3C542-0200-4108-BAAB-BC07C5307A0D"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Restrict results to these domains, where the serving provider supports it. Array or comma-separated.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F8D31EEA-5AC9-468D-A9AC-E1AD54A3341C"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExcludeDomains",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": true,
+            "Description": "Exclude these domains, where the serving provider supports it. Array or comma-separated.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "05712275-D554-4640-9EE1-37F7DBADD7BD"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Freshness",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Restrict by recency: 'day', 'week', 'month' or 'year'. Omit for no recency constraint.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D3973928-157C-40A4-AC5A-0D585D68ED30"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Country",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Two-letter country code for result localisation, e.g. 'US', 'GB'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BEC429D2-8A54-44FB-B3B5-ACFD96D0012F"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Language",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Language code for results, e.g. 'en'.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "D3654D8B-6F57-4D3F-AAA9-C5D1350925E5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "IncludeAnswer",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Also return a synthesized answer. This restricts selection to providers that can produce one, so it changes which provider serves the request. Default: false.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "42F35BCA-4E9F-4A18-802B-4D8DF918E1CC"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Results",
             "Type": "Output",
             "ValueType": "Simple Object",
             "IsArray": true,
-            "Description": "Array of search result objects containing title, URL, and snippet"
+            "Description": "Ranked results, each with Title, URL, Snippet and (when the provider supplies them) DisplayURL, PublishedAt and Score.",
+            "IsRequired": false
           },
           "primaryKey": {
-            "ID": "BFA9FC38-FC0D-4826-88F4-5FD2C69C8AA7"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.843Z",
-            "checksum": "b462dc9c5471f697ccbe85282569425175c08bce78d9760e3c2a12c99f2226d7"
+            "ID": "ED09255B-EF07-4E58-9D9B-B2FF6D028972"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "SearchResultsCount",
+            "Name": "ResultCount",
             "Type": "Output",
             "ValueType": "Scalar",
-            "Description": "Total number of search results found"
+            "IsArray": false,
+            "Description": "Number of results returned. Zero is a valid answer to a narrow query.",
+            "IsRequired": false
           },
           "primaryKey": {
-            "ID": "263F09BE-9F27-49C3-BC7D-75F4FB31B091"
-          },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.845Z",
-            "checksum": "f7e9b536f4412cfdcf3a95a11d4e7a549ba3f1b9fa2e088a9bacc496f076f63b"
+            "ID": "CEE321CD-2174-4E5A-8770-91948E45569D"
           }
         },
         {
           "fields": {
             "ActionID": "@parent:ID",
-            "Name": "FirstSearchResult",
+            "Name": "ProviderUsed",
             "Type": "Output",
-            "ValueType": "Simple Object",
-            "Description": "Details of the first search result"
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the provider that actually served this result.",
+            "IsRequired": false
           },
           "primaryKey": {
-            "ID": "B2576969-FC51-4A03-80B1-7A17FA8B9815"
+            "ID": "238B57A3-D8EC-4D3B-ADA0-7F28B5F29377"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Answer",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Synthesized answer, present only when IncludeAnswer was requested and produced.",
+            "IsRequired": false
           },
-          "sync": {
-            "lastModified": "2025-12-30T23:06:48.846Z",
-            "checksum": "ede646addcf968af818ab731a209cc70e9ee149c3187b0fe08e34798dd8c1c30"
+          "primaryKey": {
+            "ID": "CCAA7858-9EDB-49CC-AB73-EFFC4D1B37A1"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Attempts",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Every provider tried, in order, with outcome and duration — including on success. This is what reveals a primary provider failing over to a secondary on every call.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FBC94552-BF83-4CF5-9A38-4032661501E2"
           }
         }
       ],

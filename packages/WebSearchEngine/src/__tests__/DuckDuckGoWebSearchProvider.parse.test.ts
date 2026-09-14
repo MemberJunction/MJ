@@ -1,6 +1,10 @@
 /**
  * Parsing DuckDuckGo result HTML.
  *
+ * Moved here from `CoreActions/__tests__/web-search-parse.test.ts` when the `Web Search` action
+ * became a provider-neutral router and the DuckDuckGo scraping moved into this driver. The
+ * defect it pins is unchanged, and so is the reason it must keep being pinned.
+ *
  * **The defect these pin.** The result block was captured with `<div class="...result...">(.*?)</div>`
  * — non-greedy, so it stopped at the first NESTED `</div>`. A result block contains nested divs, and
  * the link sits near the top of one while the snippet sits after that inner div. So the link and
@@ -14,15 +18,27 @@
  * The parse now slices from one result's start to the next, capturing the whole block including
  * nesting, without trying to balance tags with a regular expression.
  */
-import { describe, expect, it } from 'vitest';
-import { WebSearchAction } from '../custom/web/web-search.action';
+import { describe, expect, it, vi } from 'vitest';
 
-/** Reaches the private parser; it is the unit under test and has no public seam. */
+vi.mock('@memberjunction/core', () => ({ LogError: vi.fn(), UserInfo: class {} }));
+vi.mock('@memberjunction/global', () => ({ RegisterClass: () => (t: unknown) => t, MJGlobal: { Instance: { ClassFactory: {} } } }));
+vi.mock('@memberjunction/network-utils', () => ({ HttpGet: vi.fn(), IsHttpError: () => false }));
+
+import { DuckDuckGoWebSearchProvider } from '../providers/DuckDuckGoWebSearchProvider';
+
+/**
+ * Reaches the private parser; it is the unit under test and has no public seam.
+ *
+ * Normalised to the lowercase shape these assertions were written against, so the guard keeps
+ * testing the parse rather than the rename it survived when it moved into this package.
+ */
 function parse(html: string, maxResults = 10): Array<{ title: string; url: string; snippet: string }> {
-    const action = new WebSearchAction() as unknown as {
-        parseSearchResults(html: string, maxResults: number): Array<{ title: string; url: string; snippet: string }>;
+    const provider = new DuckDuckGoWebSearchProvider() as unknown as {
+        parseResultsHtml(html: string, maxResults: number): Array<{ Title: string; URL: string; Snippet: string }>;
     };
-    return action.parseSearchResults(html, maxResults);
+    return provider
+        .parseResultsHtml(html, maxResults)
+        .map((h) => ({ title: h.Title, url: h.URL, snippet: h.Snippet }));
 }
 
 /**
