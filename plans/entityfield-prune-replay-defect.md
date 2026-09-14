@@ -145,13 +145,33 @@ a heal at the end of an app repo "does not survive a subsequent core upgrade." I
 restores fields that *have* columns, and a later prune leaves them alone. The claim was asserted from
 the invocation count without reading the procedure — the count was right and the consequence was not.
 
-**The residual, stated at its real size.** Core's prune invocations are unscoped —
-measured on this branch: 60 committed migration files contain `spDeleteUnneededEntityFields`, **49
-`EXEC` blocks, 0 of them carrying `@IncludedSchemaNames`.** They evaluate every non-excluded schema,
-so they are a hazard for any ordering in which a core migration executes while an app's schema is
-half-built (a core migrate interleaved with an app install, not the documented sequential path).
-Scoping them to core's own schema would retire that class outright. It is worth doing and it is **not**
-a precondition for Phase 3 — that was the overstatement.
+**The residual, stated at its real size — and re-measured, because the first figure was wrong.**
+An earlier revision of this paragraph said "60 committed migration files." It was 61 then and it is
+61 now; the number was mis-measured, not stale. Worse, "60 files across 49 `EXEC` blocks" conflates
+two different things: 19 of those files only *define* the procedure or mention it in a comment. The
+figures that mean something, with the commands that produce them so the next person re-measures
+instead of re-quoting:
+
+```bash
+# 61 — files under migrations/ that mention the procedure at all
+git grep -l 'spDeleteUnneededEntityFields' HEAD -- 'migrations/' | wc -l
+# 49 — EXEC call sites (they are single-line; parameters are on the same line)
+git grep -h -iE 'EXEC[[:space:]]+.*spDeleteUnneededEntityFields' HEAD -- 'migrations/' | wc -l
+# 0 — call sites that pass @IncludedSchemaNames
+git grep -h -iE 'EXEC[[:space:]]+.*spDeleteUnneededEntityFields.*@IncludedSchemaNames' HEAD -- 'migrations/' | wc -l
+```
+
+So: **49 `EXEC` call sites spread over 42 files, 0 of them passing `@IncludedSchemaNames`** — every
+one carries `@ExcludedSchemaNames='sys,staging'` and nothing else. They therefore evaluate every
+non-excluded schema, which is a hazard for any ordering in which a core migration executes while an
+app's schema is half-built (a core migrate interleaved with an app install — not the documented
+sequential path).
+
+The parameter itself is **already there**: `V202608260829__v6.1.x__Heal_SPs_IncludedSchemaNames.sql`
+added `@IncludedSchemaNames NVARCHAR(MAX) = NULL` to `spDeleteUnneededEntityFields` and its sibling
+heal procedures, defaulting to today's behaviour. Retiring this class is therefore a call-site
+change, not a procedure change. It is worth doing and it is **not** a precondition for Phase 3 —
+that was the overstatement.
 
 ---
 
@@ -243,8 +263,10 @@ Port the guards to app repos **before** Phase 3 lands, so the gates catch any ba
   **sequence gate** must not: a baseline is a wholesale snapshot of a finished schema and the first thing
   to run, so its `EntityField` literals are self-consistent and have nothing to collide with (verified —
   166 literals across 12 entities in more-cheese and 121 across 10 in bizapps-common, with **zero**
-  duplicate `(EntityID, Sequence)` pairs). It stays `V`-only, which is what its own SCOPE comment said all
-  along. The **filename validator** must see baselines — a baseline's *name* is not "literal by
+  duplicate `(EntityID, Sequence)` pairs; bizapps-orders' baseline is not a third data point — it carries
+  **no `EntityField` rows at all**, they live in `V202607061432__…__Tables_and_Objects.sql`, which a
+  `V`-only gate already covers, so "no duplicates there" is vacuous and proves nothing either way).
+  It stays `V`-only, which is what its own SCOPE comment said all along. The **filename validator** must see baselines — a baseline's *name* is not "literal by
   construction" — and must additionally fail on `COUNT == 0`, because it was reporting *"All 0 migration
   filenames are valid!"* over a directory with a migration in it. The lesson is not "widen scope": it is
   **write the scope's reason into the fixture that pins it.** A fixture reading `'B-prefix is in scope'`
