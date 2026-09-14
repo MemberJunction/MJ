@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { Type } from '@/theme/tokens';
 import { ResolveTargetAgent } from '@/data/services/agents';
+import { GetDefaultAgentId, SetDefaultAgent } from '@/data/preferences';
+import { AgentPicker } from '@/components/AgentPicker';
 import type { RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
 import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
 
@@ -30,7 +32,17 @@ const DARK_BG = '#0d0d12';
  * Mockup: `plans/mobile-app-react-native/html/voice-mode.html`.
  */
 export default function VoiceModeScreen() {
-    const { conversationId } = useLocalSearchParams<{ conversationId?: string }>();
+    const { conversationId, agentId } = useLocalSearchParams<{ conversationId?: string; agentId?: string }>();
+
+    // Which agent this call is with. Seeded from the route (a caller that already knows), then the
+    // user's Profile default, and re-pinned to whatever the runtime actually resolved so the chip
+    // never claims an agent the session is not really talking to.
+    const [preferredAgentId, setPreferredAgentId] = useState<string | undefined>(agentId ?? GetDefaultAgentId());
+    const [agentName, setAgentName] = useState<string | null>(null);
+    const [pickerOpen, setPickerOpen] = useState(false);
+    // Bumped to restart the session — switching agent mid-call means a new session, since the
+    // agent's identity and tool set are fixed when the session is minted.
+    const [sessionEpoch, setSessionEpoch] = useState(0);
 
     const serviceRef = useRef<MobileVoiceSession | null>(null);
     const [state, setState] = useState<RealtimeConnectionState | 'idle' | 'unavailable'>('idle');
@@ -79,12 +91,13 @@ export default function VoiceModeScreen() {
 
         void (async () => {
             try {
-                const agent = await ResolveTargetAgent('');
+                const agent = await ResolveTargetAgent('', preferredAgentId);
                 if (!agent) {
                     setReason('backend');
                     setState('unavailable');
                     return;
                 }
+                setAgentName(agent.name ?? null);
                 // The runtime mints, checks this host's provider capability, and connects — or
                 // closes the minted session and reports 'error' when we cannot carry that provider.
                 // It does not throw: a failed start is reported through ConnectionState$ with the
@@ -110,7 +123,7 @@ export default function VoiceModeScreen() {
             subs.forEach((s) => s.unsubscribe());
             void service.EndRealtimeSession();
         };
-    }, [conversationId]);
+    }, [conversationId, preferredAgentId, sessionEpoch]);
 
     // ── Live audio-level poll (drives the waveform when the driver meters audio) ──
     useEffect(() => {
@@ -190,10 +203,37 @@ export default function VoiceModeScreen() {
                     )}
                     <Text style={[styles.listeningText, { color: status.accent }]}>{status.label}</Text>
                 </View>
+                <Pressable
+                    style={styles.agentChip}
+                    onPress={() => setPickerOpen(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Talking to ${agentName ?? 'an agent'}. Tap to change.`}
+                >
+                    <Text style={styles.agentChipText} numberOfLines={1}>{agentName ?? 'Agent'}</Text>
+                    <Icons.ChevronDown size={14} color="#b9b9c4" strokeWidth={2.4} />
+                </Pressable>
                 <Pressable hitSlop={8} style={styles.closeBtn} onPress={close}>
                     <Icons.ChevronLeft size={18} color="#f6f6f8" strokeWidth={2.2} />
                 </Pressable>
             </View>
+
+            <AgentPicker
+                Visible={pickerOpen}
+                Title="Talk to"
+                Subtitle="Switching starts a new call — an agent's identity is fixed when the session is created."
+                SelectedName={agentName ?? undefined}
+                OnClose={() => setPickerOpen(false)}
+                OnSelect={({ ID, Name }) => {
+                    setPickerOpen(false);
+                    if (ID === preferredAgentId) return;
+                    // Remember it as the account default too, so the next call and the next typed
+                    // message both go to whoever the user just chose.
+                    SetDefaultAgent(ID, Name);
+                    setAgentName(Name);
+                    setPreferredAgentId(ID);
+                    setSessionEpoch((n) => n + 1);
+                }}
+            />
 
             <View style={styles.stage}>
                 <View style={styles.orbFrame}>
@@ -325,6 +365,8 @@ const styles = StyleSheet.create({
     listeningPill: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 8, paddingRight: 14, paddingVertical: 6, borderRadius: 999, borderWidth: 1 },
     listeningDot: { width: 8, height: 8, borderRadius: 4 },
     listeningText: { fontSize: 12.5, fontWeight: Type.semibold },
+    agentChip: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: 150, marginLeft: 10, paddingLeft: 12, paddingRight: 9, paddingVertical: 6, borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.10)' },
+    agentChipText: { flexShrink: 1, fontSize: 12.5, fontWeight: Type.semibold, color: '#f6f6f8' },
     closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center' },
 
     stage: { alignItems: 'center', paddingTop: 30 },

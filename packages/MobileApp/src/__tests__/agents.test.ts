@@ -107,24 +107,54 @@ describe('ResolveTargetAgent', () => {
     });
 
     it('resolves an @mention against the agent roster (ignoring spaces/case)', async () => {
-        agentRows({ ID: '1', Name: 'Skip' }, { ID: '2', Name: 'Research Agent' });
+        agentRows({ ID: '1', Name: 'Sage' }, { ID: '2', Name: 'Research Agent' });
         const agent = await ResolveTargetAgent('@research please look into this');
         expect(agent?.id).toBe('2');
     });
 
-    it('falls back to Skip when an @mention does not match any agent', async () => {
-        agentRows({ ID: '1', Name: 'Skip' }, { ID: '2', Name: 'Research Agent' });
-        const agent = await ResolveTargetAgent('@nobody are you there');
-        expect(agent?.name).toBe('Skip');
+    it('lets an @mention outrank the caller’s preferred agent', async () => {
+        // Naming someone is the most specific signal a user can give; a stored default must not
+        // override what they just typed.
+        agentRows({ ID: '1', Name: 'Sage' }, { ID: '2', Name: 'Research Agent' });
+        const agent = await ResolveTargetAgent('@research look into this', '1');
+        expect(agent?.id).toBe('2');
     });
 
-    it('prefers a Skip-like agent when there is no mention', async () => {
-        agentRows({ ID: '1', Name: 'Analyst' }, { ID: '2', Name: 'Skip Assistant' });
+    it('uses the preferred agent when there is no mention', async () => {
+        // The bug this covers: voice mode passed nothing here, so the user's chosen default was
+        // ignored and resolution fell through to an alphabetical accident — "Actionsmith" on a
+        // stock deployment.
+        agentRows({ ID: '1', Name: 'Actionsmith' }, { ID: '2', Name: 'Sage' }, { ID: '3', Name: 'Analyst' });
+        const agent = await ResolveTargetAgent('', '3');
+        expect(agent?.id).toBe('3');
+    });
+
+    it('matches the preferred agent id case-insensitively — UUID casing differs by platform', async () => {
+        agentRows({ ID: 'AAAA-BBBB', Name: 'Analyst' }, { ID: '2', Name: 'Sage' });
+        expect((await ResolveTargetAgent('', 'aaaa-bbbb'))?.id).toBe('AAAA-BBBB');
+    });
+
+    it('falls through to Sage when the preferred agent no longer exists', async () => {
+        // A stale preference — an agent since deleted, or access revoked — must not fail the turn.
+        agentRows({ ID: '1', Name: 'Actionsmith' }, { ID: '2', Name: 'Sage' });
+        const agent = await ResolveTargetAgent('', 'deleted-agent');
+        expect(agent?.name).toBe('Sage');
+    });
+
+    it('prefers Sage when there is no mention and no preference', async () => {
+        // MJ's own code-const fallback, so a mobile turn lands on the same agent a web turn would.
+        agentRows({ ID: '1', Name: 'Actionsmith' }, { ID: '2', Name: 'Sage' });
         const agent = await ResolveTargetAgent('just a question');
         expect(agent?.id).toBe('2');
     });
 
-    it('falls back to the first agent when there is no Skip and no mention', async () => {
+    it('falls back to Sage when an @mention matches nothing', async () => {
+        agentRows({ ID: '1', Name: 'Actionsmith' }, { ID: '2', Name: 'Sage' });
+        const agent = await ResolveTargetAgent('@nobody are you there');
+        expect(agent?.name).toBe('Sage');
+    });
+
+    it('falls back to the first agent when the deployment has no Sage', async () => {
         agentRows({ ID: '9', Name: 'Analyst' }, { ID: '8', Name: 'Forecaster' });
         const agent = await ResolveTargetAgent('plain message');
         expect(agent?.id).toBe('9');

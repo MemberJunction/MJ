@@ -48,13 +48,33 @@ export async function LoadAgents(contextUser?: UserInfo): Promise<AgentOption[]>
 }
 
 /**
- * Resolve the agent to address for a message:
- *   1. If the message contains `@name`, match it against the agent list.
- *   2. Else prefer an agent named like "Skip".
- *   3. Else the first active agent.
+ * The agent MJ falls back to when nothing more specific applies.
+ *
+ * Matches `ConversationAgentRunner`'s own code-const fallback, so a mobile turn with no explicit
+ * choice reaches the same agent a web turn would.
+ */
+const FALLBACK_AGENT_NAME = 'sage';
+
+/**
+ * Resolve the agent to address, most specific signal first:
+ *
+ *   1. an `@name` in the message — the user naming someone outranks every default;
+ *   2. `preferredAgentId` — the caller's explicit choice, which for a person means the agent they
+ *      picked in Profile or on the voice screen;
+ *   3. an agent named like "Sage", MJ's own fallback;
+ *   4. the first agent, so a deployment with neither still works.
+ *
+ * Step 2 is the one that was missing. Without it the chain fell from an unmatched mention straight
+ * to an alphabetical accident — on a stock deployment, "Actionsmith" — so voice mode ignored the
+ * user's chosen default entirely and always talked to the wrong agent.
+ *
+ * @param messageText Text to scan for an `@mention`. Pass `''` when there is no message yet.
+ * @param preferredAgentId The caller's explicit choice, when it has one.
+ * @param contextUser Optional context user; defaults to the signed-in user.
  */
 export async function ResolveTargetAgent(
     messageText: string,
+    preferredAgentId?: string,
     contextUser?: UserInfo,
 ): Promise<AgentOption | null> {
     const agents = await LoadAgents(contextUser);
@@ -66,8 +86,16 @@ export async function ResolveTargetAgent(
         const byMention = agents.find((a) => a.name.toLowerCase().replace(/\s+/g, '').includes(mention));
         if (byMention) return byMention;
     }
-    const skip = agents.find((a) => a.name.toLowerCase().includes('skip'));
-    return skip ?? agents[0];
+
+    if (preferredAgentId) {
+        const preferred = agents.find((a) => a.id.toLowerCase() === preferredAgentId.toLowerCase());
+        // A stale preference — an agent since deleted or revoked — falls through rather than
+        // failing the turn.
+        if (preferred) return preferred;
+    }
+
+    const fallback = agents.find((a) => a.name.toLowerCase().includes(FALLBACK_AGENT_NAME));
+    return fallback ?? agents[0];
 }
 
 /** Progress update emitted while an agent run is in flight (via the push channel). */

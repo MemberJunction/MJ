@@ -6,7 +6,7 @@ import { useMMKVBoolean, useMMKVString } from 'react-native-mmkv';
 import { Metadata } from '@memberjunction/core';
 import { Icons } from '@/components/Icon';
 import { useMJ } from '@/providers/mj-provider';
-import { useAgents } from '@/hooks/useAgents';
+import { AgentPicker } from '@/components/AgentPicker';
 import { Env } from '@/config/env';
 import {
     PrefsStorage,
@@ -41,7 +41,7 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *   available, and Push requests permission + (un)registers the device token on
  *   toggle. The Voice toggle still only persists its state; full dark rendering
  *   for the Appearance choice is likewise a later task.
- * Interactions: open the default-agent picker ({@link AgentPickerModal}), cycle
+ * Interactions: open the default-agent picker ({@link AgentPicker}), cycle
  *   appearance, flip toggles, sign out (-> `/login`).
  * Mockup: `plans/mobile-app-react-native/html/profile.html`.
  */
@@ -185,12 +185,14 @@ export default function ProfileScreen() {
                 </Text>
             </ScrollView>
 
-            <AgentPickerModal
-                visible={agentPickerOpen}
-                selectedName={defaultAgentName}
-                onClose={() => setAgentPickerOpen(false)}
-                onSelect={(id, name) => {
-                    SetDefaultAgent(id, name);
+            <AgentPicker
+                Visible={agentPickerOpen}
+                Title="Default agent"
+                Subtitle="Answers when you don't @mention anyone."
+                SelectedName={defaultAgentName}
+                OnClose={() => setAgentPickerOpen(false)}
+                OnSelect={({ ID, Name }) => {
+                    SetDefaultAgent(ID, Name);
                     setAgentPickerOpen(false);
                 }}
             />
@@ -234,51 +236,6 @@ function ToggleRow({ icon, label, sub, value, onToggle, disabled }: { icon: Reac
                 <View style={[styles.toggleKnob, !value && styles.toggleKnobOff]} />
             </View>
         </Pressable>
-    );
-}
-
-/**
- * Bottom-sheet modal for choosing the default agent. Lists `useAgents()` results,
- * marks the currently `selectedName`, and reports the pick via `onSelect(id, name)`.
- *
- * @param visible  whether the sheet is shown.
- * @param selectedName  name of the currently selected default agent (for the checkmark).
- * @param onClose  dismiss without changing the selection.
- * @param onSelect  invoked with the chosen agent's id + name.
- */
-function AgentPickerModal({ visible, selectedName, onClose, onSelect }: { visible: boolean; selectedName?: string; onClose: () => void; onSelect: (id: string, name: string) => void }) {
-    const { agents, loading } = useAgents();
-    return (
-        <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-            <Pressable style={styles.modalBackdrop} onPress={onClose}>
-                <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-                    <View style={styles.modalHandle} />
-                    <Text style={styles.modalTitle}>Default agent</Text>
-                    <Text style={styles.modalSub}>Answers when you don&apos;t @mention anyone.</Text>
-                    {loading || agents === null ? (
-                        <View style={styles.modalLoading}><ActivityIndicator color={Colors.brand} /></View>
-                    ) : (
-                        <ScrollView style={styles.modalList}>
-                            {agents.map((a) => {
-                                const active = a.name === selectedName;
-                                return (
-                                    <Pressable key={a.id} style={styles.agentRow} onPress={() => onSelect(a.id, a.name)}>
-                                        <View style={[styles.agentAv, { backgroundColor: a.color }]}>
-                                            <Text style={styles.agentAvText}>{a.initial}</Text>
-                                        </View>
-                                        <Text style={styles.agentName}>{a.name}</Text>
-                                        {active ? <Text style={styles.agentCheck}>✓</Text> : null}
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-                    )}
-                    <Pressable style={styles.modalClose} onPress={onClose}>
-                        <Text style={styles.modalCloseText}>Close</Text>
-                    </Pressable>
-                </Pressable>
-            </Pressable>
-        </Modal>
     );
 }
 
