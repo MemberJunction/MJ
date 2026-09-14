@@ -313,7 +313,6 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     private _configRefreshGeneration: Map<string, number> = new Map();
 
-
     /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
      * current array immediately (BehaviorSubject semantics), then re-receive the same array
