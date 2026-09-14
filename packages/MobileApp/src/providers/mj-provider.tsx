@@ -17,6 +17,8 @@ import {
     LoadStoredTokens as loadMsalTokens,
     type MJAuthTokens,
 } from '@/auth/msal';
+import { ResetMentionCaches } from '@/data/mention-display';
+import { ResetModalityCache } from '@/data/services/attachment-storage';
 
 /**
  * MJ provider boot. Supports three auth paths in priority order:
@@ -283,6 +285,16 @@ export function MJProviderRoot({ children }: { children: ReactNode }) {
         await ClearAuth0Tokens();
         await clearMsalTokens();
         await SecureStore.deleteItemAsync(DEV_TOKEN_KEY).catch(() => undefined);
+
+        // Drop every per-user cache along with the credentials. These are process-wide singletons
+        // that survive a sign-out on their own, and two of them hold PERMISSION-FILTERED data: the
+        // mention engine's agent/skill rosters, and the user-settings cache. On a shared or demo
+        // device the next person to sign in would otherwise open the `@` picker and be served the
+        // previous user's run-permitted agents, because the engine short-circuits when it believes
+        // it is already initialized.
+        ResetMentionCaches();
+        ResetModalityCache();
+
         setAuthMethod(null);
         setError(null);
         setStatus('no-token');

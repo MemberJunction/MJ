@@ -10,6 +10,7 @@ import type {
     ConversationSummary,
 } from '@/data/types';
 import { Colors, ColorForAgent } from '@/theme/tokens';
+import { MentionsToPlainText } from './mention-display';
 
 /**
  * Derive the single uppercase avatar initial from an agent/participant name.
@@ -186,7 +187,8 @@ export function AdaptMessage(msg: ConversationMessage): AdaptedMessage {
         return {
             kind: 'user',
             id: d.ID,
-            text: d.Message ?? '',
+            // Mention tokens are stored as JSON for exact routing; a person must never see that.
+            text: MentionsToPlainText(d.Message),
             createdAt: date,
         };
     }

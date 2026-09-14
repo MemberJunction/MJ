@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icons } from '@/components/Icon';
 import { ChatColors, Colors, Radius, Type } from '@/theme/tokens';
+import { MentionsToPlainText } from '@/data/mention-display';
 import type {
     MJChatAgentPresenceProps,
     MJChatEmptyStateProps,
@@ -144,7 +145,7 @@ export function MJChatMessageBubbleDefault({ Message }: MJChatMessageRendererPro
         <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
             <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}>
                 <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAgent]}>
-                    {Message.Message ?? ''}
+                    {MentionsToPlainText(Message.Message)}
                 </Text>
             </View>
         </View>

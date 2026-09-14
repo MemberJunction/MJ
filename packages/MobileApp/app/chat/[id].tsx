@@ -22,7 +22,8 @@ import { AdaptConversation, AdaptConversationToSummary, type AdaptedAgentRef, ty
 import { SendMessage, GetConversationDetailStatus, type SendProgress } from '@/data/services/agents';
 import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { GetDefaultAgentId } from '@/data/preferences';
-import { FindActiveTrigger, SerializeMention, ApplyMention } from '@/chat/mentions/trigger';
+import { MentionsToPlainText } from '@/data/mention-display';
+import { FindActiveTrigger, SerializeMention, ApplyMention, MentionedAgentId } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { ChatColors, Colors, Radius, Shadow, Type } from '@/theme/tokens';
@@ -260,7 +261,7 @@ export default function ChatThreadScreen() {
                     {/* Optimistic pending user message while the agent runs */}
                     {pendingUserText ? (
                         <View style={styles.userMsgWrap}>
-                            <Text style={[styles.userMsg, styles.userMsgPending]}>{pendingUserText}</Text>
+                            <Text style={[styles.userMsg, styles.userMsgPending]}>{MentionsToPlainText(pendingUserText)}</Text>
                         </View>
                     ) : null}
 
@@ -476,7 +477,16 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
     // Caret position, tracked because a trigger is resolved against what is LEFT of the caret —
     // editing mid-message must filter on that, not on the whole line.
     const [caret, setCaret] = useState(0);
+    // Set only when a mention insert needs to MOVE the caret, then released on the next selection
+    // event so the field goes back to managing its own. A permanently controlled `selection` fights
+    // the user on every tap.
+    const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | undefined>(undefined);
     const trigger = FindActiveTrigger(text, caret);
+    // The `/` picker narrows to the skills the TARGET agent accepts, so it has to use the agent the
+    // turn will actually reach — an `@mention` already in the draft outranks the stored default,
+    // exactly as the send path resolves it. Narrowing against the default while the message is
+    // addressed to someone else offers skills the server will refuse and hides the ones it wants.
+    const targetAgentId = MentionedAgentId(text) ?? GetDefaultAgentId() ?? null;
     const canSend = (text.trim().length > 0 || attachment != null) && !disabled;
 
     /**
@@ -508,12 +518,15 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                 <MentionSuggestions
                     Trigger={trigger.Trigger}
                     Query={trigger.Query}
-                    TargetAgentID={GetDefaultAgentId() ?? null}
+                    TargetAgentID={targetAgentId}
                     OnSelect={(s) => {
                         const token = SerializeMention(s.type, s.id, s.name);
                         const next = ApplyMention(text, trigger, token);
                         setText(next.Text);
                         setCaret(next.Caret);
+                        // Push the caret past the inserted token so typing continues after it
+                        // rather than wherever the field decides to put it.
+                        setPendingSelection({ start: next.Caret, end: next.Caret });
                     }}
                 />
             ) : null}
@@ -530,13 +543,21 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                     multiline
                     value={text}
                     onChangeText={(t) => {
+                        // Only assume "caret at the end" when the text actually GREW at the end —
+                        // i.e. the user appended. The event order between onChangeText and
+                        // onSelectionChange differs by platform (iOS fires change first, Android
+                        // often fires selection first), so unconditionally writing `t.length` here
+                        // clobbered a correct mid-message caret on Android and no trigger ever
+                        // opened when editing mid-message.
+                        const appended = t.length > text.length && t.startsWith(text);
                         setText(t);
-                        // onChangeText fires before onSelectionChange, so assume the caret moved to
-                        // the end of what was just typed; the selection handler corrects it for
-                        // taps and arrow keys.
-                        setCaret(t.length);
+                        if (appended || t.length < caret) setCaret(t.length);
                     }}
-                    onSelectionChange={(e) => setCaret(e.nativeEvent.selection.end)}
+                    onSelectionChange={(e) => {
+                        setCaret(e.nativeEvent.selection.end);
+                        if (pendingSelection) setPendingSelection(undefined);
+                    }}
+                    selection={pendingSelection}
                     editable={!disabled}
                 />
             </View>

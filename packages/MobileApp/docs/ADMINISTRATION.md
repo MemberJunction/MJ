@@ -151,7 +151,8 @@ Work down this list; each step rules out a whole class of failure.
 | Symptom | Most likely cause |
 |---|---|
 | Login loops | Auth provider not configured for the app's redirect scheme |
-| `GraphQL Error (Code: unknown)` on every screen | App cannot reach MJAPI — check the host/port, and on an Android emulator remember `localhost` is the *emulator* (use `10.0.2.2`) |
+| `GraphQL Error (Code: unknown)` on every screen | App cannot reach MJAPI — check the host/port, and on an Android emulator remember `localhost` is the *emulator* (use `10.0.2.2`, or `adb reverse tcp:4001 tcp:4001`) |
+| Voice sits on "Connecting" forever on an Android emulator | The server hands the client a broker URL built from `MJAPI_PUBLIC_URL` / `GRAPHQL_BASE_URL` — locally `http://localhost:4001`, which on an emulator is the emulator. Run `adb reverse tcp:4001 tcp:4001`. Set `MJAPI_PUBLIC_URL` to a device-reachable host for real devices. |
 | Screens load but lists are empty | Entity permissions for the `UI` role |
 | "Dashboards · 0 available" with dashboards present | Historically an entity-name bug, fixed in v6.1; if it recurs, check `MJ: Dashboards` read permission |
 | Voice: 401 "Authentication required" | `realtime.enabled` is false (§3.1) |

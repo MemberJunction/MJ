@@ -8,7 +8,7 @@
  */
 
 import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import { ConversationsRuntime } from '@memberjunction/conversations-runtime';
+import { ConversationsRuntime, MentionAutocomplete } from '@memberjunction/conversations-runtime';
 import type { MJAIAgentEntity, MJConversationDetailEntity, MJConversationEntity } from '@memberjunction/core-entities';
 
 /** Default Environment ID — matches the EnvironmentID column default on MJ: Conversations. */
@@ -26,21 +26,17 @@ export type AgentOption = {
  * (sub-agents are orchestrated internally and shouldn't be addressed directly).
  */
 export async function LoadAgents(contextUser?: UserInfo): Promise<AgentOption[]> {
-    const rv = new RunView();
-    const result = await rv.RunView<MJAIAgentEntity>(
-        {
-            EntityName: 'MJ: AI Agents',
-            ExtraFilter: `Status='Active' AND ParentID IS NULL`,
-            OrderBy: 'Name',
-            MaxRows: 200,
-            ResultType: 'entity_object',
-        },
-        contextUser,
-    );
-    if (!result.Success) {
-        throw new Error(`Failed to load agents: ${result.ErrorMessage ?? 'unknown'}`);
-    }
-    return (result.Results ?? []).map((a) => ({
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client
+    const user = contextUser ?? md.CurrentUser;
+    if (!user) return [];
+
+    // Deliberately the SAME roster the `@` picker offers, from the same engine. This used to be its
+    // own `RunView` filtered only on `Status`/`ParentID`, which meant the Profile and voice pickers
+    // listed agents the mention picker correctly refused — restricted ones, and ones the user has no
+    // `run` grant for. Choosing one of those set it as the account default, and then every
+    // subsequent turn routed to an agent the server would refuse.
+    await MentionAutocomplete.Instance.initialize(user);
+    return MentionAutocomplete.Instance.getAvailableAgents().map((a) => ({
         id: a.ID,
         name: a.Name ?? '(unnamed agent)',
         description: a.Description,
@@ -202,7 +198,13 @@ export async function SendMessage(args: {
         // becomes a requested skill exactly as it would in a browser. Parsing here rather than in
         // the composer keeps the wire format the single source of truth: anything that can produce
         // those tokens gets the behaviour, including a message typed by hand.
-        const mentions = runtime.Mentions.parseMentions(text, [], undefined);
+        // The roster matters: JSON tokens carry their own ids, but a HAND-TYPED `@Sage` is resolved
+        // by name against this list. Passing `[]` — as this did — meant typed mentions silently
+        // never routed, while the picker's did, so the same text behaved differently depending on
+        // how it was produced. `MentionAutocomplete` already holds the permission-filtered roster.
+        await MentionAutocomplete.Instance.initialize(currentUser);
+        const roster = MentionAutocomplete.Instance.getAvailableAgents();
+        const mentions = runtime.Mentions.parseMentions(text, roster, undefined);
         const requestedSkillIDs = mentions.skillMentions.map((m) => m.id);
 
         const result = await runtime.AgentRunner.processMessage({

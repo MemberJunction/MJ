@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Metadata } from '@memberjunction/core';
 import {
@@ -57,7 +57,12 @@ export function MentionSuggestions({
         void (async () => {
             const md = new Metadata();  // global-provider-ok: single-provider mobile client
             const user = md.CurrentUser;
-            if (!user) return;
+            if (!user) {
+                // No user yet: stop showing a spinner that will never resolve. The list renders
+                // empty, and the next trigger re-mounts and retries.
+                if (!cancelled) setReady(true);
+                return;
+            }
             try {
                 await MentionAutocomplete.Instance.initialize(user);
             } catch {
@@ -70,9 +75,15 @@ export function MentionSuggestions({
         };
     }, [ready]);
 
-    const suggestions = ready
-        ? MentionAutocomplete.Instance.getSuggestions(Query, true, Trigger, TargetAgentID ?? null)
-        : [];
+    // Memoised deliberately. `getSuggestions` maps every permitted agent, asks for each one's
+    // configuration presets, and sorts with a comparator that rescores both operands on every
+    // comparison. Without this it re-ran on every parent render — and the composer's parent
+    // re-renders on `sending`, on `progress` (which ticks throughout an agent run), on `stalled`
+    // and on `sendError`, none of which can change the answer.
+    const suggestions = useMemo(
+        () => (ready ? MentionAutocomplete.Instance.getSuggestions(Query, true, Trigger, TargetAgentID ?? null) : []),
+        [ready, Query, Trigger, TargetAgentID],
+    );
 
     return (
         <View style={styles.sheet}>

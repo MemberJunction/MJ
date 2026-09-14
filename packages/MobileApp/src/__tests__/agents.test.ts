@@ -7,6 +7,11 @@ const state = vi.hoisted(() => ({
     lastProcessMessage: null as unknown,
     processMessageResult: { success: true } as unknown,
     /** What the runtime's mention parser reports for the composed text. */
+    /** Fires when the mocked runner actually runs, so ordering can be asserted honestly. */
+    onProcessMessage: null as (() => void) | null,
+    /** What `MentionAutocomplete.getAvailableAgents()` returns to the send path. */
+    agentRoster: [] as unknown[],
+    currentUser: { ID: 'user-1' } as { ID: string } | null,
     parsedMentions: {
         mentions: [],
         agentMention: null,
@@ -28,6 +33,14 @@ const state = vi.hoisted(() => ({
 // this suite about the part mobile still owns — framing a turn as two Conversation Detail rows —
 // and stops the real runtime (and the whole MJ entity layer behind it) loading under Node.
 vi.mock('@memberjunction/conversations-runtime', () => ({
+    // The send path asks the autocomplete engine for the permission-filtered agent roster so a
+    // hand-typed `@Name` can resolve; the parser mock below stands in for the resolution itself.
+    MentionAutocomplete: {
+        Instance: {
+            initialize: async () => undefined,
+            getAvailableAgents: () => state.agentRoster,
+        },
+    },
     ConversationsRuntime: {
         Instance: {
             Config: async () => undefined,
@@ -36,6 +49,7 @@ vi.mock('@memberjunction/conversations-runtime', () => ({
             },
             AgentRunner: {
                 processMessage: async (input: unknown) => {
+                    state.onProcessMessage?.();
                     state.lastProcessMessage = input;
                     return state.processMessageResult;
                 },
@@ -69,7 +83,9 @@ vi.mock('@memberjunction/core', () => {
         }
     }
     class Metadata {
-        CurrentUser = { ID: 'user-1' };
+        get CurrentUser() {
+            return state.currentUser;
+        }
         async GetEntityObject(): Promise<FakeDetail> {
             return new FakeDetail();
         }
@@ -85,11 +101,19 @@ vi.mock('@memberjunction/core', () => {
 import { LoadAgents, ResolveTargetAgent, SendMessage } from '@/data/services/agents';
 
 function agentRows(...rows: Array<{ ID: string; Name: string; Description?: string | null }>): void {
+    // `LoadAgents` now reads the permission-filtered roster from `MentionAutocomplete` rather than
+    // running its own unfiltered view, so the pickers and the `@` picker cannot disagree about who
+    // the user may address. Seeding both keeps the RunView-based tests in this file honest.
+    state.agentRoster = rows;
     state.runView = () => ({ Success: true, Results: rows });
 }
 
 beforeEach(() => {
     state.runView = () => ({ Success: true, Results: [] });
+    state.agentRoster = [];
+    // Reset here too: the "no user signed in" test below sets this to null, and without a reset
+    // every later test in this file would run as a signed-out user.
+    state.currentUser = { ID: 'user-1' };
 });
 
 describe('LoadAgents', () => {
@@ -111,9 +135,12 @@ describe('LoadAgents', () => {
         expect(agents[0].name).toBe('(unnamed agent)');
     });
 
-    it('throws when the RunView fails', async () => {
-        state.runView = () => ({ Success: false, ErrorMessage: 'db down' });
-        await expect(LoadAgents()).rejects.toThrow(/db down/);
+    it('returns nothing rather than throwing when no user is signed in', async () => {
+        // `LoadAgents` no longer runs its own view — it reads the permission-filtered roster from
+        // `MentionAutocomplete`, so the failure it has to handle is "nobody is signed in yet",
+        // which a cold launch hits before the provider has a token.
+        state.currentUser = null;
+        await expect(LoadAgents()).resolves.toEqual([]);
     });
 });
 
@@ -266,13 +293,10 @@ describe('SendMessage', () => {
         const calls: string[] = [];
         let seenId: string | null = null;
         state.processMessageResult = { success: true };
-    state.parsedMentions = {
-        mentions: [],
-        agentMention: null,
-        userMentions: [],
-        entityMentions: [],
-        skillMentions: [],
-    };
+        // 'run' is recorded by the mocked runtime when it is ACTUALLY invoked — not by this test
+        // after the await. Recording it here would make the assertion unconditionally true:
+        // reverse the order inside SendMessage and the old version still passed.
+        state.onProcessMessage = () => calls.push('run');
         await SendMessage({
             conversationId: 'c',
             text: 'x',
@@ -281,7 +305,6 @@ describe('SendMessage', () => {
                 seenId = id;
             },
         });
-        calls.push('run');
         expect(calls).toEqual(['attach', 'run']);
         expect(seenId).toBe(state.savedDetails[0].ID);
         expect(state.lastProcessMessage).not.toBeNull();

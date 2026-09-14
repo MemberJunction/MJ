@@ -105,3 +105,25 @@ export function ApplyMention(
         Caret: before.length + inserted.length,
     };
 }
+
+/**
+ * Reads the first agent mention out of composer text, if there is one.
+ *
+ * A deliberately small, synchronous scan rather than a call into the runtime parser: the composer
+ * needs this on every keystroke to decide what the `/` picker should offer, and the answer only
+ * depends on tokens the composer itself inserted.
+ *
+ * @param text The composer's current text.
+ * @returns The mentioned agent's id, or `null` when none is present.
+ */
+export function MentionedAgentId(text: string): string | null {
+    for (const match of text.matchAll(/@(\{[^}]+\})/g)) {
+        try {
+            const payload = JSON.parse(match[1]) as { type?: string; id?: string };
+            if (payload.type === 'agent' && payload.id) return payload.id;
+        } catch {
+            // A partially-typed token is not a mention yet.
+        }
+    }
+    return null;
+}

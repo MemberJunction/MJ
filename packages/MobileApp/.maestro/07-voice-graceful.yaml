@@ -22,9 +22,27 @@ appId: org.memberjunction.mobile
     timeout: 30000
 - openLink: "mjmobile://voice-mode"
 
-# Whichever branch this deployment takes, the screen must resolve to a definite state rather than
-# sitting on a spinner. Maestro has no "any of" assertion, so this matches the union with a regex
-# over the screen text. Generous timeout: the connected branch does a real WebRTC handshake.
+# The screen must RESOLVE, so "Connecting" does not count — that is the state it renders the
+# instant it mounts, and accepting it would let a permanently hung voice screen pass. Wait for a
+# terminal outcome instead: a live call, or the honest decline. Maestro has no "any of" assertion,
+# so the union is expressed as a regex. Generous timeout: the live branch does a real WebRTC
+# handshake against the provider.
+#
+# ENVIRONMENT NOTE — the live branch needs two things beyond a key:
+#   • a device that can capture audio (the iOS Simulator passes the host mic through; hardware
+#     works; a `-no-audio` Android emulator has no input device);
+#   • the SDP broker reachable AT THE URL THE SERVER HANDS THE CLIENT. The server builds that from
+#     `MJAPI_PUBLIC_URL` / `GRAPHQL_BASE_URL`, which locally is `http://localhost:4001`. On an
+#     Android emulator `localhost` is the EMULATOR, so `adb reverse tcp:4001 tcp:4001` is required
+#     or the handshake never completes and this assertion correctly fails. Android also negotiates
+#     noticeably slower than iOS under swiftshader, hence the generous timeout.
+#
 - extendedWaitUntil:
-    visible: "Listening|Connecting|Speaking|Voice isn.t available"
-    timeout: 35000
+    visible: "Listening|Speaking|Voice isn.t available"
+    timeout: 40000
+
+# Leave the way we came in. Without this the flow ends sitting on a live session, and the next
+# flow — which launches with clearState:false — inherits it.
+- tapOn:
+    text: "Back to chat|Back"
+    optional: true

@@ -26,10 +26,18 @@
  */
 
 /**
- * Semantic colour palette, carrying MemberJunction's token values.
+ * Semantic colour palette, carrying MemberJunction's SHIPPED DEFAULT token values —
+ * the literals in `_tokens.scss`, not what a particular deployment resolves at runtime.
  *
- * Verified against a running MJ Explorer by reading the computed custom properties off
- * `document.documentElement`, rather than transcribed by eye.
+ * That distinction cost a round of wrong values and is worth stating. Reading the computed
+ * properties off a running Explorer returns whatever THEME is active on that instance; the
+ * development tenant applies one, so `--mj-color-neutral-800` resolved to `#1a2b38` there while
+ * the shipped default is `#1e293b`. Both are "MJ's tokens" in some sense, but only the defaults
+ * belong in a file that claims to mirror `_tokens.scss`.
+ *
+ * **Known limitation:** a native build therefore cannot follow a deployment's custom theme. The
+ * web reads live custom properties; this is a compile-time copy. Runtime theming on mobile would
+ * mean shipping the token set over the API and resolving it at boot — worth doing, not done.
  */
 export const Colors = {
   // Surfaces
@@ -38,33 +46,33 @@ export const Colors = {
   /** `--mj-bg-surface` */
   surface: '#ffffff',
   /** `--mj-bg-surface-sunken` */
-  surface2: '#f1f5f8',
+  surface2: '#f1f5f9',
   /** `--mj-bg-surface-hover`, used as the user-message ground on light rows. */
-  userBg: '#f1f5f8',
+  userBg: '#f1f5f9',
 
   // Text
   /** `--mj-text-primary` */
-  ink: '#1a2b38',
+  ink: '#1e293b',
   /** `--mj-text-secondary` */
-  ink2: '#445766',
+  ink2: '#475569',
   /** `--mj-text-muted` */
-  ink3: '#617687',
+  ink3: '#64748b',
   /** `--mj-text-inverse` */
   inverse: '#ffffff',
 
   // Lines
   /** `--mj-border-subtle` */
-  line: '#f1f5f8',
+  line: '#f1f5f9',
   /** `--mj-border-default` */
-  line2: '#e1e9ef',
+  line2: '#e2e8f0',
   /** `--mj-border-strong` */
-  line3: '#cad6df',
+  line3: '#cbd5e1',
 
   // Brand
   /** `--mj-brand-primary` */
   brand: '#0076b6',
   /** `--mj-brand-primary-hover` */
-  brandHover: '#046aa3',
+  brandHover: '#006aa3',
   /** `--mj-brand-accent-subtle` */
   brandSoft: '#f0faff',
 
@@ -107,11 +115,11 @@ export const ChatColors = {
   /** `--mj-chat-bubble-agent-bg` */
   bubbleAgentBg: '#f8fafc',
   /** `--mj-chat-bubble-agent-text` */
-  bubbleAgentText: '#1a2b38',
+  bubbleAgentText: '#1e293b',
   /** `--mj-chat-composer-bg` */
   composerBg: '#ffffff',
   /** `--mj-chat-composer-border` */
-  composerBorder: '#e1e9ef',
+  composerBorder: '#e2e8f0',
   /** `--mj-chat-presence-pulse-color` */
   presencePulse: '#0076b6',
   /** `--mj-chat-voice-thinking` */
