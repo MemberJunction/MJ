@@ -401,8 +401,23 @@ jobs:
           git diff --name-only --exit-code -- . ":(exclude)$F" || {
             echo "::error::the agent modified files other than $F (listed above)."; exit 1; }
 
-      # Pre-labelled, because the label is the entire point: the docs site builds the
-      # line branch, so notes that stop at `next` are published nowhere.
+      # The label is the entire point: the docs site builds the line branch, so notes that
+      # stop at `next` are published nowhere. It used to be passed to `gh pr create`, which
+      # welded the two together — and on v6.1.0 (run 34805937932) that cost us the PR. Each
+      # line's `backport lts/<x>` label is created BY HAND when the line is cut, so on 6.1 it
+      # did not exist yet: the agent wrote the file, the branch was committed and PUSHED, and
+      # then `gh pr create --label` failed with `could not add label: 'backport lts/6.1' not
+      # found` and exited 1. What survived was a dangling branch and no PR — a run that looks
+      # half-successful, nine minutes of a human noticing, and the PR opened by hand. The
+      # FIRST release on every new LTS line hits this, which is precisely when nobody is
+      # watching for it.
+      #
+      # Hence the order below: create-label → create-PR → label-PR. A lost PR is worse than
+      # an unlabelled one. The PR is the irreplaceable artifact — it carries the generated
+      # notes and the branch they live on — while the label is one command for a human. So a
+      # label failure never aborts before the PR exists, and a labelling failure after it
+      # still fails the RUN, naming the exact remedy, so a green check never means "shipped"
+      # when the notes would publish nowhere.
       - name: Open the notes PR against next
         if: steps.pre.outputs.skip == 'false'
         env:
@@ -426,10 +441,31 @@ jobs:
 
           **Agent-written — review the content before merging.** Every claim should trace to the changesets in the release range. The workflow verifies the file's shape, not its accuracy.
 
-          The \`backport $LINE\` label is applied on creation and is load-bearing: the docs site builds \`$LINE\`, so notes that stop at \`next\` publish nothing.
+          The \`backport $LINE\` label is added by the workflow immediately after this PR is opened, and is load-bearing: the docs site builds \`$LINE\`, so notes that stop at \`next\` publish nothing. Do not remove it.
           BODY
 
-          gh pr create --base next --head "$BRANCH" \
+          # Idempotent by design: --force creates the label on a line that has never had one,
+          # and refreshes the colour/description on a line that has. Colour and wording match
+          # the hand-made `backport lts/5` / `backport lts/6.1` labels so the set stays uniform.
+          # NON-FATAL on purpose — see the note above this step. If the label cannot be made,
+          # the PR is still worth far more than the failure, and the labelling step below is
+          # where a human gets told what to do about it.
+          if ! gh label create "backport $LINE" --force \
+                 --color 0e8a16 \
+                 --description "Backport this merged PR to the $LINE line (opens a cherry-pick PR automatically)"; then
+            echo "::error::could not create or update the 'backport $LINE' label. Continuing anyway so the PR still gets opened; the labelling step below will fail the run with the remedy if the label is genuinely missing."
+          fi
+
+          PR_URL=$(gh pr create --base next --head "$BRANCH" \
             --title "docs(releases): add v$VERSION release notes" \
-            --label "backport $LINE" \
-            --body-file /tmp/pr-body.md
+            --body-file /tmp/pr-body.md)
+          # gh prints the URL on stdout; an empty capture means it succeeded without telling us
+          # which PR it made, and we must not go on to label a PR we cannot name.
+          [ -n "$PR_URL" ] || {
+            echo "::error::gh pr create exited 0 but printed no PR URL. Branch $BRANCH is pushed — find or open its PR by hand and add the 'backport $LINE' label."; exit 1; }
+          echo "::notice::opened $PR_URL for v$VERSION ($LINE)"
+
+          if ! gh pr edit "$PR_URL" --add-label "backport $LINE"; then
+            echo "::error::$PR_URL is open but UNLABELLED. Without 'backport $LINE' these notes merge into next and publish nowhere, because the docs site builds $LINE. Fix by hand: gh label create \"backport $LINE\" --color 0e8a16 --description \"Backport this merged PR to the $LINE line (opens a cherry-pick PR automatically)\" && gh pr edit $PR_URL --add-label \"backport $LINE\". Failing the run so this is not read as a finished release."
+            exit 1
+          fi

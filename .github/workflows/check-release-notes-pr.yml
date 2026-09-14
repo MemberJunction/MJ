@@ -1,0 +1,130 @@
+name: Release Notes PR Gate
+
+# Re-checks the FORM of a release-notes PR against the PR head, so a human approver can
+# spend their whole read on whether the notes are TRUE.
+#
+# WHY THIS EXISTS SEPARATELY FROM generate-release-notes.yml: that workflow already runs
+# check-release-notes-shape.mjs on the file it just generated. That check sees the file as
+# the agent left it in the runner — not as it exists on the PR. Anything after that point is
+# unverified: a hand-edit on the branch, a correction pushed during review, a notes file
+# added to a PR nobody generated. `next-protect` sets `dismiss_stale_reviews_on_push: true`,
+# so a post-approval push re-opens the review — this gate makes the machine-checkable half of
+# that re-review automatic, leaving the human the half only a human can do.
+#
+# It deliberately checks form, never content. Whether "fixes the connection-pool leak" is a
+# true statement about v6.1.0 is not something CI can know.
+#
+# ─────────────────────────────────────────────────────────────────────────────────────────
+# THERE IS NO `paths:` FILTER HERE, AND ONE MUST NEVER BE ADDED.
+#
+# This workflow is intended to be a REQUIRED status check on `next`. GitHub reports a
+# required check that never ran as "Expected — waiting for status to be reported", forever:
+# it does not resolve, and the PR cannot merge. A `paths:` filter would therefore not make
+# this cheaper, it would wedge every feature PR into `next` that happens not to touch
+# `releases/`.
+#
+# So the workflow runs on EVERY PR into `next` and no-ops to success when no release-notes
+# file changed. That no-op is the common case and costs a checkout plus a diff. Tidying the
+# trigger with a `paths:` filter is the single most likely way for this file to be broken by
+# someone trying to improve it.
+# ─────────────────────────────────────────────────────────────────────────────────────────
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [next]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check release-notes PR shape and scope
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the PR head
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          # Full history: the scope and shape checks below diff against the base branch, and
+          # a shallow clone has no merge base to diff from.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Check scope and shape
+        env:
+          # Via env, never interpolated into the `run:` script — a ref name must never be able
+          # to reach the shell. Same rule the other workflows in this repo follow.
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+
+          # The filename forms the repo actually ships (see `ls releases/`): plain releases
+          # like v6.1.0.md, and prereleases like v6.1.0-edge.7.md. releases/README.md is the
+          # format definition, not notes, and deliberately does not match.
+          NOTES_PATTERN='^releases/v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?\.md$'
+
+          git rev-parse --verify --quiet "origin/$BASE_REF" >/dev/null || {
+            echo "::error::origin/$BASE_REF is not in this checkout, so the base diff cannot be computed. The checkout step above must keep fetch-depth: 0. Failing rather than passing a gate that checked nothing."
+            exit 1
+          }
+
+          CHANGED=$(git diff --name-only "origin/$BASE_REF...HEAD")
+
+          NOTES=()
+          OTHERS=()
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            if [[ "$path" =~ $NOTES_PATTERN ]]; then
+              NOTES+=("$path")
+            else
+              OTHERS+=("$path")
+            fi
+          done <<< "$CHANGED"
+
+          # The no-op path — every PR into next that is not a notes PR lands here. See the
+          # header: this must be a success, not a skip, or the required check never resolves.
+          if [ "${#NOTES[@]}" -eq 0 ]; then
+            echo "::notice::No release-notes files changed in this PR — nothing for this gate to check."
+            exit 0
+          fi
+
+          echo "Release-notes files in this PR:"
+          printf '  %s\n' "${NOTES[@]}"
+
+          # SCOPE. A notes PR carrying anything else is the shape that makes single-human
+          # approval unsafe: the approver is reading prose for accuracy and is in exactly the
+          # wrong frame of mind to notice a source change riding along. Such a PR is not
+          # forbidden — it just does not get this gate's shortcut, and falls back to ordinary
+          # review, which is what failing here forces.
+          if [ "${#OTHERS[@]}" -gt 0 ]; then
+            echo "::error::This PR changes release notes AND ${#OTHERS[@]} other file(s). A release-notes PR must contain nothing but the notes, so it can be reviewed for accuracy alone. Split the other changes into their own PR."
+            for path in "${OTHERS[@]}"; do
+              echo "::error file=$path::not a release-notes file — remove it from this PR or move the notes to a PR of their own."
+            done
+            exit 1
+          fi
+
+          # SHAPE. The same script generate-release-notes.yml runs on the freshly generated
+          # file, run here against what the PR actually carries. Never reimplement its rules:
+          # the format has exactly one definition (releases/README.md) and exactly one checker.
+          #
+          # Known consequence, so it is not a surprise later: only v6.1.0.md and
+          # v6.1.0-edge.7.md meet the current rules. Everything shipped before `## TL;DR` was
+          # required predates them. That is harmless while those files sit untouched — this
+          # gate reads the DIFF, not the directory — but a PR that edits an old notes file for
+          # a typo will be asked to bring it up to format. Fix the file; do not weaken the gate
+          # for the whole era.
+          FAILED=0
+          for path in "${NOTES[@]}"; do
+            # Every file is checked even after one fails, so a PR touching several notes files
+            # reports all of its problems in one run instead of one per push.
+            node .github/scripts/check-release-notes-shape.mjs "$path" || FAILED=1
+          done
+          if [ "$FAILED" -ne 0 ]; then
+            echo "::error::Release notes failed the shape check above. The format is defined in releases/README.md; the checker is .github/scripts/check-release-notes-shape.mjs and can be run locally with: npm run check:release-notes -- <file>"
+            exit 1
+          fi
+
+          echo "::notice::Release-notes PR is well-formed and touches nothing else. Content accuracy is still a human's call."

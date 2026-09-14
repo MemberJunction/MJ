@@ -65,6 +65,11 @@ on:
       # root-bin removal from silently breaking manifest regeneration, so a PR weakening the
       # guard must run it.
       - '.github/scripts/check-mj-cli-resolution.mjs'
+      # And again for the App-token-never-merges guard (guards job). It encodes an agreement
+      # the platform cannot enforce — the release bot is a `next-protect` bypass actor, so a
+      # workflow that both mints its token and merges a PR writes to next unreviewed — which
+      # means a PR that weakens the guard is exactly the PR that must run its suite.
+      - '.github/scripts/check-app-token-no-merge.mjs'
       # The remote-cache preflight runs as a step in this workflow (see "Verify turbo
       # remote-cache configuration"), and its own suite lives in __tests__ above.
       - '.github/scripts/check-turbo-cache-env.mjs'
@@ -191,6 +196,24 @@ jobs:
       - name: MJ CLI resolution guard
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
+
+      # App-token-never-merges guard. The release bot is a BYPASS ACTOR on `next-protect`:
+      # it is the one identity that can land a PR in next with no approving review. It is
+      # meant to OPEN release-notes PRs so the build engineer is not approving his own, and
+      # never to merge them — but permissions cannot draw that line, because merging needs
+      # the same `contents: write` the bot must hold to push the branch. So the boundary is
+      # this check or it is folklore. See the script header for what it deliberately does
+      # not prove, and for the opt-out that makes a legitimate exception reviewable.
+      #
+      # `!cancelled()` like its neighbours: each guard reports its own verdict and must not
+      # be suppressed by another's failure.
+      #
+      # Note on coverage: this workflow's PR trigger is path-filtered, so a PR that edits ONLY
+      # some OTHER workflow does not run this step — the push-to-next and nightly runs (which
+      # carry no paths filter) are the backstop for that case.
+      - name: App-token-never-merges guard
+        if: ${{ !cancelled() }}
+        run: node .github/scripts/check-app-token-no-merge.mjs
 
       # Repo-wide compliance scanners. They live in packages/MJGlobal/src/__tests__ for historical
       # reasons but scan `packages/**` off disk and assert about every package, so they belong here
