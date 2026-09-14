@@ -26,6 +26,21 @@ import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
+ * How long to keep the composer blocked on an agent run before releasing the UI.
+ *
+ * Generous on purpose: a real run that takes this long is unusual, and interrupting one early
+ * would be worse than waiting. This is a recovery path, not a timeout policy — the run itself is
+ * never cancelled.
+ */
+const AGENT_RUN_WATCHDOG_MS = 90_000;
+
+/** Resolves after `ms`. */
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+
+/**
  * Chat thread (hero screen) — a single MJ conversation with its agent(s).
  *
  * Route: `/chat/:id` (Expo Router dynamic segment, `app/chat/[id].tsx`); also
@@ -56,6 +71,7 @@ export default function ChatThreadScreen() {
     const { conversations: allConversations, refresh: refreshList } = useConversations();
 
     const [sending, setSending] = useState(false);
+    const [stalled, setStalled] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
     const [pendingUserText, setPendingUserText] = useState<string | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
@@ -67,11 +83,12 @@ export default function ChatThreadScreen() {
         if (!id || !text.trim()) return;
         setSending(true);
         setSendError(null);
+        setStalled(false);
         setPendingUserText(text.trim());
         setProgress({ currentStep: 'starting', message: 'Sending…' });
         try {
             let attachmentWarning: string | null = null;
-            const result = await SendMessage({
+            const send = SendMessage({
                 conversationId: id,
                 text: text.trim(),
                 // The Profile screen's default-agent picker was write-only: it stored a choice
@@ -94,6 +111,37 @@ export default function ChatThreadScreen() {
                       }
                     : undefined,
             });
+
+            // `SendMessage` resolves only when the agent run finishes, which is what lets this
+            // screen show a real reply rather than a placeholder. The failure mode is the app being
+            // backgrounded, or the status socket dropping: the promise then never settles, and the
+            // composer stays disabled behind a bubble that spins for the rest of the session.
+            //
+            // The run does not need this screen — it is server-side and keeps going — so on a
+            // timeout the UI is released and told to refresh, rather than the turn being cancelled.
+            const outcome = await Promise.race([
+                send.then((r) => ({ kind: 'done' as const, r })),
+                delay(AGENT_RUN_WATCHDOG_MS).then(() => ({ kind: 'stalled' as const })),
+            ]);
+
+            if (outcome.kind === 'stalled') {
+                setStalled(true);
+                setPendingUserText(null);
+                await refresh();
+                void refreshList();
+                // Fold the eventual result back in whenever it lands, so a slow-but-successful run
+                // still updates the thread without the user doing anything.
+                void send
+                    .then(async () => {
+                        setStalled(false);
+                        await refresh();
+                        void refreshList();
+                    })
+                    .catch(() => setStalled(false));
+                return;
+            }
+
+            const result = outcome.r;
             if (attachmentWarning) setSendError(attachmentWarning);
             // The user message + in-progress AI bubble now exist server-side; show them.
             setPendingUserText(null);
@@ -224,6 +272,15 @@ export default function ChatThreadScreen() {
                                 <Text style={styles.agentName}>Working…</Text>
                             </View>
                             {progress?.message ? <Text style={styles.progressText}>{progress.message}</Text> : null}
+                        </View>
+                    ) : null}
+
+                    {stalled ? (
+                        <View style={styles.stalledBox}>
+                            <Text style={styles.stalledText}>
+                                This is taking longer than usual. The agent is still working — pull down to refresh,
+                                or leave and come back; the reply will be here.
+                            </Text>
                         </View>
                     ) : null}
 
@@ -499,6 +556,9 @@ const styles = StyleSheet.create({
     userMsgPending: { opacity: 0.55 },
     mention: { fontWeight: Type.semibold, color: Colors.ink },
     progressText: { fontSize: 13, color: Colors.ink3, marginTop: 2, fontStyle: 'italic' },
+    // Informational, not an error: the run did not fail, this screen simply stopped waiting on it.
+    stalledBox: { marginHorizontal: 16, marginTop: 8, padding: 12, borderRadius: Radius.md, backgroundColor: Colors.surface2, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },
+    stalledText: { fontSize: 13, lineHeight: 19, color: Colors.ink2 },
     sendErrorBox: { backgroundColor: Colors.dangerSoft, borderRadius: Radius.lg, padding: 12, marginTop: 4, marginBottom: 8 },
     sendErrorText: { fontSize: 13, color: Colors.danger, lineHeight: 18 },
 

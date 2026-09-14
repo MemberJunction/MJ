@@ -1,5 +1,5 @@
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJApplicationEntity } from '@memberjunction/core-entities';
+import { Metadata, type ApplicationInfo, type UserInfo } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 import type { MobileNavItem } from './BaseMobileResource';
 
 /**
@@ -9,6 +9,15 @@ import type { MobileNavItem } from './BaseMobileResource';
  * every application in a deployment — identity, ordering, and navigation — and `MJ: User
  * Applications` already says which of them a given user has. Duplicating that for mobile would
  * create a second source of truth that drifts the first time somebody adds an app.
+ *
+ * ## Why this queries nothing
+ *
+ * Both halves are already in memory by the time this runs. Applications ride in the metadata
+ * payload as `ApplicationInfo` — carrying `Status`, `DefaultNavItems`, `Icon`, `Color` and
+ * `DefaultSequence`, everything the launcher renders — and `UserInfoEngine` caches the user's
+ * `MJ: User Applications` rows and hands them back in MJ's canonical order. Re-querying either is
+ * two network round trips per navigation on a phone, one of them an unbounded `entity_object`
+ * hydration of every application row in the deployment, for data the client already holds.
  */
 
 /** An application the current user can open, with its navigation. */
@@ -32,73 +41,54 @@ export type MobileApplication = {
 };
 
 /**
- * Loads the applications available to the current user, ordered for display.
+ * Loads the applications available to the current user, in MJ's canonical display order.
  *
  * Falls back to every application flagged `DefaultForNewUser` when the user has no explicit
- * `MJ: User Applications` rows — which is exactly what a freshly-provisioned user looks like, and
- * showing them an empty launcher would be a worse answer than showing them the defaults.
+ * `MJ: User Applications` rows — which is exactly what a freshly-provisioned user looks like.
  *
  * @param contextUser Optional context user; defaults to the signed-in user.
  */
 export async function LoadUserApplications(contextUser?: UserInfo): Promise<MobileApplication[]> {
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
-    const rv = new RunView();
+    await UserInfoEngine.Instance.Config(false, currentUser);
 
-    const [userApps, allApps] = await rv.RunViews(
-        [
-            {
-                EntityName: 'MJ: User Applications',
-                ExtraFilter: currentUser?.ID ? `UserID='${currentUser.ID}' AND IsActive=1` : 'IsActive=1',
-                Fields: ['ApplicationID', 'Sequence'],
-                ResultType: 'simple',
-            },
-            {
-                EntityName: 'MJ: Applications',
-                // Same predicate MJ Explorer applies in `ApplicationManager` and `UserInfoEngine`:
-                // an application an administrator has retired must not keep appearing, and a
-                // deployment ships at least one (`Admin (Deprecated)`). Filtering in SQL rather
-                // than after the fact also keeps the hydration off retired rows.
-                ExtraFilter: "Status = 'Active'",
-                OrderBy: 'DefaultSequence ASC, Name ASC',
-                ResultType: 'entity_object',
-            },
-        ],
-        currentUser,
-    );
+    // Only Active applications are ever shown — the same predicate `ApplicationManager` and
+    // `UserInfoEngine.GetDefaultApplicationsForNewUser` apply on the web. A deployment ships at
+    // least one Deprecated application, so this is not hypothetical.
+    const active = md.Applications.filter((a) => a.Status === 'Active');
+    const byId = new Map(active.map((a) => [a.ID.toLowerCase(), a]));
 
-    if (!allApps?.Success) return [];
+    // Already ordered by MJ's canonical `compareUserApplications` (user sequence → the
+    // application's DefaultSequence → name). The engine filters by user but not by IsActive, so
+    // that predicate stays here.
+    const userRows = UserInfoEngine.Instance.UserApplications.filter((ua) => ua.IsActive);
 
-    const applications = (allApps.Results ?? []) as MJApplicationEntity[];
-    const userRows = (userApps?.Success ? userApps.Results ?? [] : []) as Array<{
-        ApplicationID: string;
-        Sequence: number | null;
-    }>;
+    const scoped: Array<{ app: ApplicationInfo; sequence: number }> = userRows.length
+        ? userRows
+              .map((ua) => ({ app: byId.get(ua.ApplicationID.toLowerCase()), sequence: ua.Sequence ?? 0 }))
+              .filter((entry): entry is { app: ApplicationInfo; sequence: number } => entry.app !== undefined)
+        : // A freshly-provisioned user has no rows at all, and an empty launcher is a worse answer
+          // than the defaults they are about to be granted anyway.
+          active
+              .filter((a) => a.DefaultForNewUser)
+              .map((a) => ({ app: a, sequence: a.DefaultSequence ?? 0 }))
+              .sort(
+                  (x, y) =>
+                      x.sequence - y.sequence ||
+                      x.app.Name.localeCompare(y.app.Name),
+              );
 
-    const userSequence = new Map(userRows.map((r) => [r.ApplicationID.toLowerCase(), r.Sequence ?? 0]));
-    const scoped = userSequence.size
-        ? applications.filter((a) => userSequence.has(a.ID.toLowerCase()))
-        : applications.filter((a) => a.DefaultForNewUser);
-
-    return scoped
-        .map((a) => ({
-            ID: a.ID,
-            Name: a.Name,
-            Description: a.Description ?? null,
-            Icon: a.Icon ?? null,
-            Color: a.Color ?? null,
-            Sequence: userSequence.get(a.ID.toLowerCase()) ?? a.DefaultSequence ?? 0,
-            DefaultSequence: a.DefaultSequence ?? 0,
-            NavItems: ParseNavItems(a.DefaultNavItems),
-        }))
-        // Explorer's `compareUserApplications` order, so the launcher and the web app agree:
-        // the user's own sequence, then the application's default sequence, then name.
-        .sort(
-            (a, b) =>
-                a.Sequence - b.Sequence ||
-                (a.DefaultSequence ?? 0) - (b.DefaultSequence ?? 0) ||
-                a.Name.localeCompare(b.Name),
-        );
+    return scoped.map(({ app, sequence }) => ({
+        ID: app.ID,
+        Name: app.Name,
+        Description: app.Description ?? null,
+        Icon: app.Icon ?? null,
+        Color: app.Color ?? null,
+        Sequence: sequence,
+        DefaultSequence: app.DefaultSequence ?? 0,
+        NavItems: ParseNavItems(app.DefaultNavItems),
+    }));
 }
 
 /**

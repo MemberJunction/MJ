@@ -10,28 +10,32 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
  * on a device.
  */
 const state = vi.hoisted(() => ({
-    userAppRows: [] as Array<{ ApplicationID: string; Sequence: number | null }>,
-    userAppSuccess: true,
+    /** `MJ: User Applications` rows as `UserInfoEngine` hands them back — already ordered. */
+    userAppRows: [] as Array<{ ApplicationID: string; Sequence: number | null; IsActive: boolean }>,
+    /** `ApplicationInfo` rows as they arrive in the metadata payload. */
     applications: [] as Array<Record<string, unknown>>,
-    appsSuccess: true,
-    lastQueries: [] as unknown[],
 }));
 
 vi.mock('@memberjunction/core', () => {
     class Metadata {
         CurrentUser = { ID: 'user-1' };
-    }
-    class RunView {
-        async RunViews(params: unknown[]): Promise<Array<{ Success: boolean; Results: unknown[] }>> {
-            state.lastQueries = params;
-            return [
-                { Success: state.userAppSuccess, Results: state.userAppRows },
-                { Success: state.appsSuccess, Results: state.applications },
-            ];
+        get Applications() {
+            return state.applications;
         }
     }
-    return { Metadata, RunView };
+    return { Metadata };
 });
+
+vi.mock('@memberjunction/core-entities', () => ({
+    UserInfoEngine: {
+        Instance: {
+            Config: async () => undefined,
+            get UserApplications() {
+                return state.userAppRows;
+            },
+        },
+    },
+}));
 
 import { LoadUserApplications, ParseNavItems, DefaultNavItem } from '@/host/applications';
 
@@ -46,16 +50,14 @@ function app(over: Partial<Record<string, unknown>> = {}): Record<string, unknow
         DefaultSequence: 100,
         DefaultForNewUser: true,
         DefaultNavItems: null,
+        Status: 'Active',
         ...over,
     };
 }
 
 beforeEach(() => {
     state.userAppRows = [];
-    state.userAppSuccess = true;
     state.applications = [app()];
-    state.appsSuccess = true;
-    state.lastQueries = [];
 });
 
 describe('ParseNavItems', () => {
@@ -154,17 +156,21 @@ describe('DefaultNavItem', () => {
     });
 });
 
+/** A `MJ: User Applications` row, active unless a test says otherwise. */
+function userApp(applicationId: string, sequence: number, over: Partial<{ IsActive: boolean }> = {}) {
+    return { ApplicationID: applicationId, Sequence: sequence, IsActive: true, ...over };
+}
+
 describe('LoadUserApplications', () => {
-    it('scopes to the user\'s own applications when they have them', async () => {
+    it("scopes to the user's own applications when they have them", async () => {
         state.applications = [app({ ID: 'app-1', Name: 'Mine' }), app({ ID: 'app-2', Name: 'Theirs' })];
-        state.userAppRows = [{ ApplicationID: 'app-2', Sequence: 5 }];
-        const apps = await LoadUserApplications();
-        expect(apps.map((a) => a.Name)).toEqual(['Theirs']);
+        state.userAppRows = [userApp('app-2', 5)];
+        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Theirs']);
     });
 
     it('matches application ids case-insensitively — UUID casing differs by platform', async () => {
         state.applications = [app({ ID: 'AAAA-BBBB', Name: 'Mine' })];
-        state.userAppRows = [{ ApplicationID: 'aaaa-bbbb', Sequence: 1 }];
+        state.userAppRows = [userApp('aaaa-bbbb', 1)];
         expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Mine']);
     });
 
@@ -174,50 +180,45 @@ describe('LoadUserApplications', () => {
         expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Shown']);
     });
 
-    it('orders by the user\'s sequence, then by name', async () => {
+    it('preserves the order UserInfoEngine already sorted the rows into', async () => {
+        // The engine applies MJ's canonical `compareUserApplications` (user sequence → the
+        // application's DefaultSequence → name). Re-sorting here would be a second, divergent
+        // implementation of an ordering the web app has already decided.
         state.applications = [
             app({ ID: 'a', Name: 'Beta' }),
             app({ ID: 'b', Name: 'Alpha' }),
             app({ ID: 'c', Name: 'Gamma' }),
         ];
-        state.userAppRows = [
-            { ApplicationID: 'c', Sequence: 1 },
-            { ApplicationID: 'a', Sequence: 2 },
-            { ApplicationID: 'b', Sequence: 2 },
-        ];
-        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Gamma', 'Alpha', 'Beta']);
+        state.userAppRows = [userApp('c', 1), userApp('a', 2), userApp('b', 2)];
+        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Gamma', 'Beta', 'Alpha']);
     });
 
-    it("breaks a sequence tie on the application's own sequence before name", async () => {
-        // MJ Explorer's `compareUserApplications` order. Sorting straight to name after the user
-        // sequence puts the launcher in a different order from the web app for the same user.
-        state.applications = [
-            app({ ID: 'a', Name: 'Alpha', DefaultSequence: 20 }),
-            app({ ID: 'b', Name: 'Beta', DefaultSequence: 10 }),
-        ];
-        state.userAppRows = [
-            { ApplicationID: 'a', Sequence: 1 },
-            { ApplicationID: 'b', Sequence: 1 },
-        ];
-        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Beta', 'Alpha']);
+    it('hides applications an administrator retired', async () => {
+        // A deployment ships at least one Deprecated application, so this is not hypothetical.
+        state.applications = [app({ ID: 'a', Name: 'Live' }), app({ ID: 'b', Name: 'Retired', Status: 'Deprecated' })];
+        state.userAppRows = [userApp('a', 1), userApp('b', 2)];
+        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Live']);
     });
 
-    it('asks the server for Active applications only', async () => {
-        // An administrator retiring an application has to take effect on mobile too; a deployment
-        // ships at least one Deprecated row.
-        await LoadUserApplications();
-        const appsQuery = state.lastQueries[1] as { ExtraFilter?: string };
-        expect(appsQuery.ExtraFilter).toContain("Status = 'Active'");
+    it('hides an application the user has deactivated for themselves', async () => {
+        // The engine filters its cache by user but NOT by IsActive, so that predicate is ours.
+        state.applications = [app({ ID: 'a', Name: 'On' }), app({ ID: 'b', Name: 'Off' })];
+        state.userAppRows = [userApp('a', 1), userApp('b', 2, { IsActive: false })];
+        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['On']);
     });
 
-    it('returns nothing when the applications query fails', async () => {
-        state.appsSuccess = false;
-        expect(await LoadUserApplications()).toEqual([]);
+    it('skips a user row whose application is no longer in metadata', async () => {
+        state.applications = [app({ ID: 'a', Name: 'Still here' })];
+        state.userAppRows = [userApp('a', 1), userApp('deleted-app', 2)];
+        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Still here']);
     });
 
-    it('still lists applications when only the user-application query fails', async () => {
-        state.userAppSuccess = false;
-        expect((await LoadUserApplications()).length).toBe(1);
+    it('issues no queries at all — both halves are already cached', async () => {
+        // `Metadata.Applications` rides in the metadata payload and `UserInfoEngine` caches the
+        // user rows. Re-querying was two round trips per navigation, one an unbounded
+        // entity_object hydration of every application in the deployment.
+        state.userAppRows = [userApp('app-1', 1)];
+        await expect(LoadUserApplications()).resolves.toBeDefined();
     });
 
     it('parses each application\'s nav items', async () => {
