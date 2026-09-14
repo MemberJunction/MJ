@@ -77,14 +77,28 @@ Data reaches screens through the hook → service → MJ object model chain
 ### `app/chat/[id].tsx` — Chat thread — `/chat/:id`
 - **Purpose:** render one conversation + composer and drive send → agent-run →
   reply. Accepts an optional `?autosend=<text>` deep-link param.
-- **Data:** `useConversation(id)`, `useConversations()`, `adaptConversation` /
-  `adaptConversationToSummary`; `sendMessage` triggers the agent run and
-  `getConversationDetailStatus` polls the AI `Conversation Detail` status (up to
-  ~24× / 2.5 s) because the push WebSocket may not deliver completion on RN.
+- **Data:** `useConversation(id)`, `useConversations()`, `AdaptConversation` /
+  `AdaptConversationToSummary`; `SendMessage` runs the agent and resolves only when the
+  turn completes, so the AI `Conversation Detail` status is read once afterwards rather
+  than polled. A 90 s watchdog releases the UI if the run never settles (backgrounded app,
+  dropped socket) — the run is server-side and is never cancelled, and its result is folded
+  back in whenever it lands.
+- **Composer:** three pickers, matching the web — `@` agents and people, `#` records and
+  queries, `/` skills. Suggestions come from `MentionAutocomplete` in
+  `@memberjunction/conversations-runtime`: permission-filtered, with `/` narrowed to the
+  skills the target agent actually accepts. The composer owns the list view and nothing
+  else. A picked suggestion serializes to `@{"type":…}` — byte-identical to what the Angular
+  editor produces — and the runtime's `MentionParser` reads it back on send, so `@agent`
+  routes the turn (outranking the stored default) and `/skill` becomes `requestedSkillIDs`.
+  The action strip below the input mirrors Explorer's order (skills, mention, attach, voice,
+  send); its buttons type the trigger character rather than driving a parallel code path.
 - **Key components:** `ChatHeader`, `RecentsStrip` (+ `RecentChip`),
-  `MessageRenderer` (user bubbles with `@mention` parsing via `parseUserMessage`;
-  agent blocks rendered with `MarkdownView`), `ArtifactDockHandle`
-  (→ `/artifacts/[id]`), `Composer` (send, or mic → `/voice-mode`).
+  `MessageRenderer` (feed layout — the web's default; `MJChatMessageBubbleDefault` is the
+  bubble alternative, selectable through the `messageRenderer` slot), `MentionSuggestions`,
+  `ArtifactDockHandle` (→ `/artifacts/[id]`), `Composer`.
+- **Extending it:** see [`src/chat/README.md`](../src/chat/README.md) — props, `On*` events
+  including the cancelable `OnBeforeSend`, a `ref` handle, and the seven named slots whose
+  contracts mirror `ng-conversations`' `slot-interfaces.ts`.
 - **Interactions:** send with an optimistic pending bubble + live progress,
   pull-to-refresh, recents chips, deep-link autosend.
 - **Mockup:** `chat-thread.html`.

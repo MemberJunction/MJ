@@ -24,7 +24,29 @@ UI layer is deliberately thin. That lets MJ run **three** UIs over **one** brain
 | **MJ Mobile** (this package) | **React Native / Expo** | full non-visual layer; **0%** UI reuse |
 
 The mobile UI is a fresh codebase (RN has no Angular component reuse), but it
-calls into the **same** `@memberjunction/*` classes. Nothing about the entity
+calls into the **same** `@memberjunction/*` classes.
+
+### 1a. When reuse is blocked, move the code — don't copy it
+
+Twice now a capability the native app needed was pure TypeScript sitting inside an
+Angular package, reachable by Explorer and by nothing else:
+
+| Moved | From | To | Size |
+|---|---|---|---|
+| `RealtimeSessionRuntime` | `ng-conversations` | `@memberjunction/realtime-runtime` | 2,768 lines |
+| `MentionAutocomplete` | `ng-conversations` | `@memberjunction/conversations-runtime` | 503 lines |
+
+Neither imported anything from `@angular/*`. Both were Angular-coupled purely by
+**location**, and both would otherwise have forced a second implementation on mobile —
+of session orchestration in the first case, and of agent/skill **run-permission
+filtering** in the second. A second copy of a permission rule is the copy that drifts,
+and it drifts toward showing someone something they may not use.
+
+**The test, when you hit this:** does the file import from `@angular/*`? If not, and a
+non-Angular host needs it, it is in the wrong package. Move it and leave a thin shim
+behind so existing call sites do not change — `RealtimeSessionService` and
+`MentionAutocompleteService` both still resolve from `ng-conversations` under their
+original names. Nothing about the entity
 model, agent runner, or provider is re-implemented here — this package is
 presentation plus a thin service layer.
 

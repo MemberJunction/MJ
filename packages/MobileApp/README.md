@@ -342,4 +342,15 @@ than opening a session that would be silent in both directions.
 | **Phase 4** | App hosting, `conversations-runtime` adoption, realtime voice over WebRTC | **Shipped** — see below |
 
 Live tracking: [`PLAN_CHECKLIST.md`](PLAN_CHECKLIST.md).
+
+## Documentation
+
+| Audience | Document |
+|---|---|
+| **Administrators** — permissions, enabling voice, diagnosing an install | [`docs/ADMINISTRATION.md`](docs/ADMINISTRATION.md) |
+| Developers — how the app is put together | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) |
+| Developers — working on the chat surface, and extending it | [`src/chat/README.md`](src/chat/README.md) |
+| Developers — screen-by-screen reference | [`docs/SCREENS.md`](docs/SCREENS.md) |
+| Developers — artifact + markdown rendering | [`docs/RENDERING.md`](docs/RENDERING.md) |
+| Contributors — setup, conventions, testing | [`docs/CONTRIBUTING.md`](docs/CONTRIBUTING.md) |
 </content>
