@@ -28,7 +28,7 @@ export function extractPrimaryKeyValues(record: BaseEntity, entityInfo: EntityIn
   const values: PrimaryKeyValues = {};
   for (const pk of entityInfo.PrimaryKeys) {
     const value = record.Get(pk.Name);
-    if (value === undefined || value === null) {
+    if (!isPresentKeyValue(value)) {
       throw new Error(
         `Cannot read primary key field '${pk.Name}' on a '${entityInfo.Name}' record. ` +
           `Refusing to write it: a record without its key would overwrite other records in the same file.`
@@ -40,16 +40,29 @@ export function extractPrimaryKeyValues(record: BaseEntity, entityInfo: EntityIn
 }
 
 /**
- * True when every `field:value` segment of a primary-key lookup string (the format
- * `createPrimaryKeyLookup` builds: sorted segments joined by `|`) carries a value.
+ * True when a key field holds a value. Only a missing value counts as absent: an empty string, or
+ * the text `null`, is a real key value.
  */
-export function isCompletePrimaryKeyLookup(lookup: string): boolean {
-  if (!lookup) {
-    return false;
-  }
-  return lookup.split('|').every((segment) => {
-    const separator = segment.indexOf(':');
-    const value = separator >= 0 ? segment.slice(separator + 1) : '';
-    return value !== '' && value !== 'undefined' && value !== 'null';
-  });
+function isPresentKeyValue(value: PrimaryKeyValues[string]): boolean {
+  return value !== undefined && value !== null;
+}
+
+/** True when `primaryKey` has at least one field and every field holds a value. */
+export function hasCompletePrimaryKey(primaryKey: RecordData['primaryKey']): boolean {
+  const values = Object.values(primaryKey ?? {});
+  return values.length > 0 && values.every(isPresentKeyValue);
+}
+
+/**
+ * Builds the string pull uses to match a database record to a file entry: `field:value` segments,
+ * sorted by field name, joined by `|`. `\` and `|` inside a value are escaped, so a value that
+ * contains the separator can't make two different keys produce the same string. The string is only
+ * ever compared in memory — never parsed or persisted.
+ */
+export function createPrimaryKeyLookup(primaryKey: RecordData['primaryKey']): string {
+  const values = primaryKey ?? {};
+  return Object.keys(values)
+    .sort()
+    .map((field) => `${field}:${String(values[field]).replace(/[\\|]/g, '\\$&')}`)
+    .join('|');
 }
