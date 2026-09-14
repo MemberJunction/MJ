@@ -13,6 +13,9 @@ export { ConversationsRuntime } from './ConversationsRuntime';
 
 // Sub-components and their public types
 export { MentionParser, type Mention, type MentionParseResult } from './mentions/MentionParser';
+export { MentionAutocomplete } from './mentions/MentionAutocomplete';
+export { IntersectAcceptedSkills } from './mentions/SkillNarrowing';
+export type { MentionSuggestion, MentionSuggestionPreset } from './mentions/MentionSuggestion';
 export {
     ConversationBridge,
     type ConversationSwitchEvent,
