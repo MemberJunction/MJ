@@ -1,5 +1,55 @@
 # @memberjunction/ng-bootstrap
 
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [919f0c7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ng-core-entity-forms@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ng-dashboards@6.1.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.7
+  - @memberjunction/ng-conversations@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/tag-engine-base@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/ng-explorer-core@6.1.0-edge.7
+  - @memberjunction/ng-explorer-settings@6.1.0-edge.7
+  - @memberjunction/ng-shared@6.1.0-edge.7
+  - @memberjunction/ng-artifacts@6.1.0-edge.7
+  - @memberjunction/ng-clustering@6.1.0-edge.7
+  - @memberjunction/ng-dashboard-viewer@6.1.0-edge.7
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.7
+  - @memberjunction/ng-file-storage@6.1.0-edge.7
+  - @memberjunction/communication-types@6.1.0-edge.7
+  - @memberjunction/entity-communications-base@6.1.0-edge.7
+  - @memberjunction/ai-realtime-client@6.1.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.7
+  - @memberjunction/ng-auth-services@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

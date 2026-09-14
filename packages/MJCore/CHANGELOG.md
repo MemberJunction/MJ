@@ -1,5 +1,204 @@
 # Change Log - @memberjunction/core
 
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- c996a56: Field-Level Security: per-field Read/Update/Create control by role.
+
+  Field security is switched **on or off per entity**, explicitly, via a new
+  `Entity.EnableFieldLevelSecurity` flag. Nothing is inferred from whether permission rows happen to
+  exist, so adding a rule can never change access on an entity that has not opted in.
+
+  A new `EntityFieldPermission` table holds one row per (field, role) with three independent
+  verbs — `ReadAccess`, `UpdateAccess`, `CreateAccess` — each `Allow`, `Deny`, or `No Access`:
+  - **`No Access`** is neutral, and the default. It grants nothing and blocks nothing; another
+    role's Allow still wins.
+  - **`Allow`** grants the action for that role.
+  - **`Deny`** wins over everything. One Deny anywhere across the user's roles beats any number of
+    Allows.
+
+  **Read is required for Update and Create.** A field a user cannot see is one they cannot change,
+  so this is enforced twice: a CHECK constraint refuses the combination within a row, and the
+  aggregation clamps it again across roles — because two individually legal rows held by one user
+  (role A grants Read+Update, role B denies Read) would otherwise aggregate to write-only access
+  that no constraint could see.
+
+  **Turning the flag on is safe.** It snapshots the entity's existing entity-level permissions into
+  per-field rows, so enabling changes nothing until an administrator tightens a specific field.
+  Turning it off keeps the rows, inactive, so re-enabling does not lose the configuration. Those rows
+  maintain themselves: adding a column, granting a role entity access, or dropping either one is
+  reconciled automatically, and an administrator's tightening is never overwritten by that process.
+
+  **Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+  permission evaluation. That includes the **MJ system user**, the account the server runs its own
+  work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+  written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+  that _denies_ anything to a role the system user holds is refused, and so is giving that account a
+  role which already denies a field. Grants save normally, since they are what the server's own
+  access depends on. Restricting that account would matter because its engine caches are
+  process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+  somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
+  Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
+
+  Enforcement (server-side and authoritative):
+  - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
+    paths, and from single-record GraphQL responses.
+  - **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+    audit entity's own field security is off — so without a dedicated control, anyone with entity read
+    on it could read a denied field straight out of the payload, in the default configuration. Each
+    row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+    denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+    withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+    appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+    generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+    when, by whom, and which of the fields they may read. It fails closed when the subject entity
+    cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+    projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+    in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+    not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+    Change from a caller carrying any denial ignores every payload column the client sends and
+    reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+    save-SQL generation writes every field, so without this a restricted user editing `Comments`
+    would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+    manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+    only the stored value is ever persisted.
+  - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
+    expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
+    values back without the column ever appearing in a result. `UserSearchString` is not rejected;
+    denied fields are simply excluded from the search.
+  - **Writes.** A save that changes a field the user cannot update is rejected. Values a client
+    sends for fields it cannot read are ignored — such a field was absent from every payload that
+    client received, so any value coming back is fabricated by the transport.
+  - **Creates.** A value supplied for a field the user may not create is dropped and the column
+    takes its default. This never rejects: an error naming the field would confirm it exists and is
+    restricted, and silently defaulting is what an unrestricted user gets by leaving it blank.
+  - **Typed accessors.** `BaseEntity.Get()` and `.Set()` throw for a field the user cannot read, so
+    a restricted field surfaces as a clear failure rather than a silent blank. Entity forms check
+    access before rendering, so a denied field is simply not shown.
+  - **Direct database connections (SQL Server only).** CodeGen emits column-level `DENY SELECT` on
+    base views for roles with an explicit `ReadAccess = 'Deny'` rule on an enabled entity, restricted
+    to custom DBA-created roles, and skips any role a service login belongs to. PostgreSQL emits
+    nothing — it has no DENY, so Deny-wins cannot be expressed there. See the guide.
+
+  RunView caching is unchanged for everyone else: the server keeps full-width slots shared across
+  users and narrows each response at read time, so a permission change takes effect on the next
+  metadata refresh without invalidating cached results. Browsers key their own cache on the fields
+  the user may see, so tightening access does not leave a stale column on screen.
+
+  Also in this release:
+  - **Permission removal now reaches the database.** CodeGen reads live permission state and
+    re-asserts it each run, so deleting a permission row actually revokes the grant or deny.
+    Previously CodeGen only ever added grants, so a deleted `EntityPermission` row left its `GRANT`
+    in place until the view happened to be rebuilt.
+  - **Partial entity objects are now safe.** `EntityField` gains a not-loaded marker, set when the
+    data an entity was loaded from left a field out. Such fields are skipped on save, are never
+    dirty, and are exempt from the required-field check, so the stored value is kept instead of
+    being overwritten with a default. This fixes silent data loss when a user edits an unrelated
+    field on a record containing columns they cannot read.
+  - **`entity_object` requests always fetch every column the user may see**, whether or not the
+    query is cacheable. This was already true on the server but not for clients, so a client could
+    build a partial entity and write defaults over real data on the next save.
+  - **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+    reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+    every user of the process, so its contents must not depend on the first caller's permissions — one
+    carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+    that then serves everyone until restart. The identity is sticky once applied, so a later
+    `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+    Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+    Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+    ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+    implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+    database with no such row — the engine degrades to acting as the caller exactly as before, with a
+    once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+    security rather than because of it: neither depends on the other, though it is what lets the guide
+    say engine caches cannot be narrowed by a restricted caller.
+
+  New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
+  restricting anything. Saved queries are not field-filtered; run access to a query is the grant.
+
+- c996a56: Field-Level Security: NOT NULL columns can now be restricted.
+
+  **BREAKING (GraphQL schema).** Generated object types lose non-nullability on roughly **2,150 of
+  4,650 restrictable fields, across all 384 generated object types** — `String!` becomes `String`, and
+  likewise for the other scalars. Any external consumer holding GraphQL types generated against the
+  previous schema will fail to compile against this one until those types are regenerated; a consumer
+  that reads the fields without regenerating sees no runtime change. Input types are **not** affected,
+  so no write contract changes. Non-nullability is retained only where field security is structurally
+  incapable of stripping a value: primary keys and `__mj_` system columns.
+
+  The guide previously said not to restrict a NOT NULL column, because the generated GraphQL object
+  types marked those fields non-nullable and an FLS-omitted value then failed response serialization.
+  That constraint is gone, and with it the largest gap in what the feature could actually protect —
+  roughly 2,150 of 4,650 restrictable fields were off-limits, including the ~400 foreign-key display
+  columns that inherit non-nullability from the key they display ("hide which client this contract
+  belongs to" is a common ask, and it did not work).
+
+  The underlying error was one wrong inference. A column's NOT NULL constraint and a GraphQL `!` say
+  different things — "no ROW stores an empty value here" versus "every RESPONSE, to every caller,
+  carries a value here" — and the second does not follow from the first. They coincided only while
+  every caller saw every column of every row they could read, which is exactly what field security
+  ends. Generated output types are now non-nullable only where FLS is structurally incapable of
+  stripping a field: primary keys and `__mj_` system columns. **Input types are unchanged** — they
+  carry the write contract, which the database constraint does still govern.
+
+  Symptoms this removes, all of which required a denied NOT NULL column: single-record loads nulling
+  the entire record, typed list queries nulling the entire query, and — the worst — a mutation whose
+  write landed in the database while its response failed to serialize, so the client reported a
+  failed save for an edit that had actually succeeded.
+
+  **`ReadableFields___`** is added to every generated object type. Deleting a denied key server-side
+  is not sufficient on its own: GraphQL emits every field the client _selected_, so a denied field
+  that was asked for arrives as an explicit `null` indistinguishable from a genuine one. The client
+  cannot settle that from its own metadata — that copy is stale in the window after a permission
+  change, and may be filtered away entirely once metadata tiering lands. The server now states it
+  in-band for the request that actually ran. It lists **readable** fields rather than denied ones
+  deliberately: naming denied fields would hand back precisely what metadata filtering exists to
+  withhold.
+
+  Also in this release:
+  - **Read-only fields no longer receive write permissions.** A joined display column or computed
+    field cannot be written through the API by anyone, so Update and Create verbs on one decide
+    nothing. Reconciliation was authoring `Allow` on both across ~1,000 such fields per qualifying
+    role — rows that read as granted permissions and were inert. They are now `No Access`, the
+    save-time guard refuses a rule that sets them, and the system-user access guard no longer reads
+    their absence as lost access. Read is untouched.
+  - **Two paths that returned a record's NAME without checking field security are closed.** The
+    `GetEntityRecordName` query took no user context at all, so a caller denied read on an entity's
+    name field could still obtain it — and the foreign-key control in forms falls through to that
+    query _precisely when_ the joined display column is denied, so the fallback that exists to handle
+    a denial was the thing that defeated it. Separately, `BaseEntity.GetRecordName()` read through
+    `Get()`, which throws for a denied field, and it runs automatically after every load and save —
+    so denying an entity's name field made every record on it fail to open. Both now degrade to the
+    primary key.
+  - **A write refusal on a field you can read now names the missing permission** rather than using
+    the ambiguous "does not exist on entity … or you do not have access to it". That wording exists
+    to stop a caller probing which columns a deployment treats as sensitive, which is a question
+    about fields they cannot _read_; when they can see the field and its value, it only tells them a
+    field they are looking at might not exist. Read denials keep the ambiguous wording.
+  - **The view-configuration panel no longer offers denied fields as columns.**
+
+### Patch Changes
+
+- cf2484c: Review follow-ups to #4358 and #4366.
+  - `EntityPermissionInfo.IsDeny` — one predicate for "this is a Deny row" (case- and whitespace-insensitive; blank Type is Allow), used by `GetUserPermisions` and now by both RLS readers: `UserExemptFromRowLevelSecurity` and `GetUserRowLevelSecurityInfo` skip Deny rows, so a set `Can*` flag on a Deny row is never read as a grant. Unreachable in practice (a user carrying a Deny row fails the permission gate first), but the methods now implement the invariant their docs state. Tests cover the Deny axis with typed builders.
+  - The materialization leak gate's comments no longer claim parity with the runtime RLS reader; they say the gate is deliberately wider.
+  - Input dialog: `box-sizing: border-box` parity with the rating dialog. The dialog container documents its contract — component bodies pad themselves.
+
+- 97aefcc: `EntityInfo.GetUserRowLevelSecurityInfo` now collects a row filter only from a permission row that GRANTS the operation.
+
+  The filters of a user's roles are OR'd together, so a filter collected from a row whose `Can*` flag is false widened the clause: a user granted Create by role A (bound to F1) created against `F1 OR F2` whenever role B kept a leftover `CreateRLSFilterID = F2` beside `CanCreate = false`. Nothing clears the filter column when the flag is cleared, and `GetUserPermisions` ORs the flags across roles, so such a user passed the permission gate on role A alone. The check is now `ep.CanCreate && ep.CreateRLSFilterID` (and likewise Read/Update/Delete). Granting rows are unchanged. Companion to the `UserExemptFromRowLevelSecurity` fix in the same shape. Regression tests in `entityInfo.rlsFilterCollection.test.ts`.
+
+- 7fcdc2d: A save refused by a server-side `ValidateAsync()` now highlights the offending field(s) in the form — red border plus the inline message — exactly as a synchronous `Validate()` refusal does, instead of only toasting. `ResolverBase` write refusals carry `extensions.validationErrors` (and `SaveEntityGraphOperation` a `ValidationErrors` output) beside the unchanged message; `GraphQLDataProvider` rehydrates them into `LatestResult.Errors`; `BaseFormComponent` publishes both refusal kinds through one path; `mj-form-field` keeps a server-reported error visible on a field the user had already edited until they edit it again. Errors with no field source stay toast-only.
+
+  A `ValidateAsync()` that runs in the browser benefits too: its refusal used to surface as a bare "Error saving record" toast (that path leaves `LatestResult.Message` empty), and now highlights the field the same way. The client's `LatestResult.CompleteMessage` carries the refusal text once — the provider marks the result when its `Message` already renders the rehydrated `Errors`.
+
+- Updated dependencies [c996a56]
+- Updated dependencies [44fca09]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/sql-dialect@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

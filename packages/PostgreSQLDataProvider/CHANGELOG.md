@@ -1,5 +1,24 @@
 # @memberjunction/postgresql-dataprovider
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [44fca09]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [88f8898]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/generic-database-provider@6.1.0-edge.7
+  - @memberjunction/sql-dialect@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/query-processor@6.1.0-edge.7
+  - @memberjunction/ai-vectordb@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

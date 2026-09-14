@@ -1,5 +1,55 @@
 # @memberjunction/ai-engine-base
 
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- a987913: Implement modality inheritance, AI Persona metadata catalog, and persona resolution across BaseAIEngine and realtime agents.
+  - BaseAIEngine: implement modality inheritance according to Agent -> Model -> System -> Default precedence, honoring InheritTypeModalities, AIModelType default input/output modalities, and junction IsSupported = 0 / IsAllowed = 0 vetoes.
+  - BaseAIEngine: cache and resolve AI Personas (GetModelPersonas, GetAgentPersonas, ResolveAgentPersona) incorporating agent style overrides and sequence ordering.
+  - AIEngine: delegate persona and modality getters and helper methods to BaseAIEngine.
+  - AIAgents: update GetRealtimeModelVoices to consult metadata personas first before falling back to driver SupportedVoices.
+  - Metadata: seed canonical modalities (metadata/ai-modalities/) and initial personas (metadata/ai-personas/, metadata/ai-persona-vendors/, metadata/ai-model-personas/, metadata/ai-agent-personas/).
+  - JSONType: simplify IAIPersonaVendorSettings to eliminate duplicate flat members and vendor namespacing.
+
+- 4cdfdcf: **A skill can bundle an action without putting it into the agent's run.**
+
+  Bundling an action into a skill (an `MJ: AI Skill Actions` row) put the action into the activating
+  agent's run — described to the model and executable — for the rest of the run. A skill whose reply
+  carries a menu (buttons the application wires to an action, pressed by the person on the next turn)
+  wants the association without the model ever calling the action on its own mid-conversation (#4226).
+  - `AISkillAction.ExposeToModel` (BIT, NOT NULL, default 1). `1` is today's behaviour. `0` keeps the
+    action bundled — SKILL.md export, tooling — but out of the run: not described to the model and not
+    executable by the agent; application code invokes it through the Actions API.
+  - `AIEngineBase.GetSkillExposedActionIDs(skillID)` returns the `ExposeToModel` subset;
+    `BaseAgent.enableSkillCapabilities` pushes that subset onto the run. `GetSkillActionIDs` (every
+    bundled action) is unchanged.
+  - SKILL.md round-trips the flag: the frontmatter gains an optional `codeOnlyActions` list (names, a
+    subset of `actions`), written on export for rows with the flag off and applied on import; a file
+    without the key leaves surviving rows' flags as they were.
+
+  Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+  rows keep today's behaviour).
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/templates-base-types@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

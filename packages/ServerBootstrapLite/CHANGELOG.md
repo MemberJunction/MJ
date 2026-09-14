@@ -1,5 +1,109 @@
 # @memberjunction/server-bootstrap-lite
 
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [5e987a7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [35ace7c]
+- Updated dependencies [88f8898]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai-agents@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/generic-database-provider@6.1.0-edge.7
+  - @memberjunction/core-entities-server@6.1.0-edge.7
+  - @memberjunction/storage@6.1.0-edge.7
+  - @memberjunction/content-autotagging@6.1.0-edge.7
+  - @memberjunction/search-engine@6.1.0-edge.7
+  - @memberjunction/ai-anthropic@6.1.0-edge.7
+  - @memberjunction/ai-openai@6.1.0-edge.7
+  - @memberjunction/ai-gemini@6.1.0-edge.7
+  - @memberjunction/ai-cerebras@6.1.0-edge.7
+  - @memberjunction/ai-groq@6.1.0-edge.7
+  - @memberjunction/ai-lmstudio@6.1.0-edge.7
+  - @memberjunction/ai-inception@6.1.0-edge.7
+  - @memberjunction/testing-engine@6.1.0-edge.7
+  - @memberjunction/ai-prompts@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ai-agent-harness@6.1.0-edge.7
+  - @memberjunction/ai-agent-manager@6.1.0-edge.7
+  - @memberjunction/ai-form-builder@6.1.0-edge.7
+  - @memberjunction/tag-engine-base@6.1.0-edge.7
+  - @memberjunction/predictive-studio@6.1.0-edge.7
+  - @memberjunction/ai-recommendations-rex@6.1.0-edge.7
+  - @memberjunction/ai-reranker@6.1.0-edge.7
+  - @memberjunction/ai-vector-dupe@6.1.0-edge.7
+  - @memberjunction/actions-apollo@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-accounting@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-crm@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-formbuilders@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-lms@6.1.0-edge.7
+  - @memberjunction/actions-bizapps-social@6.1.0-edge.7
+  - @memberjunction/core-actions@6.1.0-edge.7
+  - @memberjunction/actions@6.1.0-edge.7
+  - @memberjunction/communication-types@6.1.0-edge.7
+  - @memberjunction/doc-utils@6.1.0-edge.7
+  - @memberjunction/encryption@6.1.0-edge.7
+  - @memberjunction/queue@6.1.0-edge.7
+  - @memberjunction/react-linter@6.1.0-edge.7
+  - @memberjunction/record-comparison@6.1.0-edge.7
+  - @memberjunction/record-set-processor@6.1.0-edge.7
+  - @memberjunction/scheduling-actions@6.1.0-edge.7
+  - @memberjunction/scheduling-engine-base@6.1.0-edge.7
+  - @memberjunction/scheduling-engine@6.1.0-edge.7
+  - @memberjunction/task-graph@6.1.0-edge.7
+  - @memberjunction/templates@6.1.0-edge.7
+  - @memberjunction/geo-core@6.1.0-edge.7
+  - @memberjunction/ai-vectors-pinecone@6.1.0-edge.7
+  - @memberjunction/ai-assemblyai@6.1.0-edge.7
+  - @memberjunction/ai-azure@6.1.0-edge.7
+  - @memberjunction/ai-bedrock@6.1.0-edge.7
+  - @memberjunction/ai-betty-bot@6.1.0-edge.7
+  - @memberjunction/ai-blackforestlabs@6.1.0-edge.7
+  - @memberjunction/ai-cohere@6.1.0-edge.7
+  - @memberjunction/ai-elevenlabs@6.1.0-edge.7
+  - @memberjunction/ai-fireworks@6.1.0-edge.7
+  - @memberjunction/ai-heygen@6.1.0-edge.7
+  - @memberjunction/ai-inworld@6.1.0-edge.7
+  - @memberjunction/ai-llamacpp@6.1.0-edge.7
+  - @memberjunction/ai-local-embeddings@6.1.0-edge.7
+  - @memberjunction/ai-minimax@6.1.0-edge.7
+  - @memberjunction/ai-mistral@6.1.0-edge.7
+  - @memberjunction/ai-ollama@6.1.0-edge.7
+  - @memberjunction/ai-openrouter@6.1.0-edge.7
+  - @memberjunction/ai-vertex@6.1.0-edge.7
+  - @memberjunction/ai-zhipu@6.1.0-edge.7
+  - @memberjunction/ai-xai@6.1.0-edge.7
+  - @memberjunction/ai-vectors-memory@6.1.0-edge.7
+  - @memberjunction/ai-vectors-qdrant@6.1.0-edge.7
+  - @memberjunction/ai-vectors-sqlserver@6.1.0-edge.7
+  - @memberjunction/ai-vectors-pgvector@6.1.0-edge.7
+  - @memberjunction/data-context-server@6.1.0-edge.7
+  - @memberjunction/ai-provider-bundle@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

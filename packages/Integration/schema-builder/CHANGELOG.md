@@ -1,5 +1,21 @@
 # @memberjunction/integration-schema-builder
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [44fca09]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/sql-dialect@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/integration-engine@6.1.0-edge.7
+  - @memberjunction/schema-engine@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

@@ -1,5 +1,37 @@
 # @memberjunction/ng-explorer-app
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [919f0c7]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ng-bootstrap@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/ng-conversations@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ng-base-application@6.1.0-edge.7
+  - @memberjunction/ng-explorer-core@6.1.0-edge.7
+  - @memberjunction/ng-shared@6.1.0-edge.7
+  - @memberjunction/ng-workspace-initializer@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ai-agent-client@6.1.0-edge.7
+  - @memberjunction/ng-auth-services@6.1.0-edge.7
+  - @memberjunction/ng-feedback@6.1.0-edge.7
+  - @memberjunction/ng-agent-client@6.1.0-edge.7
+  - @memberjunction/ng-explorer-service-worker@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

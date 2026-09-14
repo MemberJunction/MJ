@@ -1,5 +1,55 @@
 # @memberjunction/ng-conversations
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- 919f0c7: Input dialog (rename conversation, and every `dialogService.input()` prompt) gets the same horizontal padding as the rating dialog. The dialog container pads only string content, so a component body's message, labels and inputs sat flush against the dialog edges while the header and footer were padded.
+- cf2484c: Review follow-ups to #4358 and #4366.
+  - `EntityPermissionInfo.IsDeny` — one predicate for "this is a Deny row" (case- and whitespace-insensitive; blank Type is Allow), used by `GetUserPermisions` and now by both RLS readers: `UserExemptFromRowLevelSecurity` and `GetUserRowLevelSecurityInfo` skip Deny rows, so a set `Can*` flag on a Deny row is never read as a grant. Unreachable in practice (a user carrying a Deny row fails the permission gate first), but the methods now implement the invariant their docs state. Tests cover the Deny axis with typed builders.
+  - The materialization leak gate's comments no longer claim parity with the runtime RLS reader; they say the gate is deliberately wider.
+  - Input dialog: `box-sizing: border-box` parity with the rating dialog. The dialog container documents its contract — component bodies pad themselves.
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ng-testing@6.1.0-edge.7
+  - @memberjunction/ng-artifacts@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-code-editor@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.7
+  - @memberjunction/ng-tasks@6.1.0-edge.7
+  - @memberjunction/ng-user-routines@6.1.0-edge.7
+  - @memberjunction/conversations-runtime@6.1.0-edge.7
+  - @memberjunction/ai-realtime-client@6.1.0-edge.7
+  - @memberjunction/ai-agent-client@6.1.0-edge.7
+  - @memberjunction/ng-composer@6.1.0-edge.7
+  - @memberjunction/ng-container-directives@6.1.0-edge.7
+  - @memberjunction/ng-media-player@6.1.0-edge.7
+  - @memberjunction/interactive-component-types@6.1.0-edge.7
+  - @memberjunction/ng-forms@6.1.0-edge.7
+  - @memberjunction/ng-whiteboard@6.1.0-edge.7
+  - @memberjunction/ng-agent-client@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes

@@ -1,5 +1,88 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- ee15cf7: Add AI Persona foundation schema (`AIPersona`, `AIPersonaVendor`, `AIModelPersona`, `AIAgentPersona`) and strongly typed JSONType interfaces (`IAIPersonaStyleDescriptors`, `IAIPersonaVendorSettings`, `IAIAgentPersonaStyleOverride`).
+  - Introduce `AIPersona` catalog table with deterministic global name uniqueness for cross-modality catalog curation.
+  - Introduce `AIPersonaVendor` for concrete vendor and modality bindings with typed `VendorSettingsObject` (`IAIPersonaVendorSettings` with native ElevenLabs settings).
+  - Introduce `AIModelPersona` for model availability and priority sequences.
+  - Introduce `AIAgentPersona` for agent persona assignments with filtered unique index `UQ_AIAgentPersona_OneDefaultPerAgent` and typed `StyleOverrideObject` (`IAIAgentPersonaStyleOverride`).
+  - Add strongly-typed `<Field>Object` accessors in `MJAIPersonaEntity`, `MJAIPersonaVendorEntity`, and `MJAIAgentPersonaEntity`.
+  - Scope CodeGen remote operations emission to `includeSchemas` and partition core vs non-core operations.
+
+- 4cdfdcf: **A skill can bundle an action without putting it into the agent's run.**
+
+  Bundling an action into a skill (an `MJ: AI Skill Actions` row) put the action into the activating
+  agent's run — described to the model and executable — for the rest of the run. A skill whose reply
+  carries a menu (buttons the application wires to an action, pressed by the person on the next turn)
+  wants the association without the model ever calling the action on its own mid-conversation (#4226).
+  - `AISkillAction.ExposeToModel` (BIT, NOT NULL, default 1). `1` is today's behaviour. `0` keeps the
+    action bundled — SKILL.md export, tooling — but out of the run: not described to the model and not
+    executable by the agent; application code invokes it through the Actions API.
+  - `AIEngineBase.GetSkillExposedActionIDs(skillID)` returns the `ExposeToModel` subset;
+    `BaseAgent.enableSkillCapabilities` pushes that subset onto the run. `GetSkillActionIDs` (every
+    bundled action) is unchanged.
+  - SKILL.md round-trips the flag: the frontmatter gains an optional `codeOnlyActions` list (names, a
+    subset of `actions`), written on export for rows with the flag off and applied on import; a file
+    without the key leaves surviving rows' flags as they were.
+
+  Migration `V202609111449__v6.1.x__Skill_Action_Expose_To_Model.sql` (additive, defaulted; existing
+  rows keep today's behaviour).
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/ai-engine-base@6.1.0-edge.7
+  - @memberjunction/ai@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/graphql-dataprovider@6.1.0-edge.7
+  - @memberjunction/ng-base-forms@6.1.0-edge.7
+  - @memberjunction/ng-versions@6.1.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.7
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/ng-base-application@6.1.0-edge.7
+  - @memberjunction/ng-shared@6.1.0-edge.7
+  - @memberjunction/ng-testing@6.1.0-edge.7
+  - @memberjunction/ng-action-gallery@6.1.0-edge.7
+  - @memberjunction/ng-actions@6.1.0-edge.7
+  - @memberjunction/ng-agents@6.1.0-edge.7
+  - @memberjunction/ng-ai-test-harness@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-code-editor@6.1.0-edge.7
+  - @memberjunction/ng-flow-editor@6.1.0-edge.7
+  - @memberjunction/ng-hierarchy-tree@6.1.0-edge.7
+  - @memberjunction/ng-join-grid@6.1.0-edge.7
+  - @memberjunction/ng-list-management@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ng-record-process-studio@6.1.0-edge.7
+  - @memberjunction/ng-resource-permissions@6.1.0-edge.7
+  - @memberjunction/ng-search@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/ng-task-graph-editor@6.1.0-edge.7
+  - @memberjunction/ng-trees@6.1.0-edge.7
+  - @memberjunction/templates-base-types@6.1.0-edge.7
+  - @memberjunction/ng-link-directives@6.1.0-edge.7
+  - @memberjunction/ng-deep-diff@6.1.0-edge.7
+  - @memberjunction/ng-entity-relationship-diagram@6.1.0-edge.7
+  - @memberjunction/ng-timeline@6.1.0-edge.7
+  - @memberjunction/ng-tabstrip@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Minor Changes

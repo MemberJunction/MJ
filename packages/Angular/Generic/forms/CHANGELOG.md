@@ -1,5 +1,15 @@
 # @memberjunction/ng-forms
 
+## 6.1.0-edge.7
+
+### Patch Changes
+
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+  - @memberjunction/ai-core-plus@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+
 ## 6.1.0-edge.6
 
 ### Patch Changes
