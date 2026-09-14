@@ -1,5 +1,5 @@
 /**
- * transaction-groups.checks.ts — the 'transaction-groups' bundle (TG1–TG5): the TransactionGroup
+ * transaction-groups.checks.ts — the 'transaction-groups' bundle (TG1–TG6): the TransactionGroup
  * atomicity + security contract, exercised CLIENT-FIRST over the real GraphQL wire (Domain 2 of
  * the integration-test expansion catalog: CD8 / CD9 / SEC1).
  *
@@ -27,8 +27,15 @@
  *                (TransactionResolver had no CheckAPIKeyScopeAuthorization call at all), this
  *                check FAILS: the mutation succeeds and the row is created — that proven-to-fail
  *                red run is the point of the pin.
+ *   - TG6        **Refusal-reporting pin (issue #4309)**: a group in which the server refuses a row
+ *                at Save()/Validate() time must report Success:false with the reason — and, when
+ *                only SOME rows are refused, must NOT commit the survivors. Sent as a RAW wire
+ *                mutation for the same reason the defect is only reachable that way: ordinary
+ *                validation is symmetric, so a real client refuses the bad row locally and it
+ *                never reaches the resolver. Before the fix, this returns Success:true with the
+ *                survivor committed and the refusal silently dropped.
  *
- * MUTATION TIER: TG2–TG5 write to the database (`RequiresMutation: true`). TG1 is read-only.
+ * MUTATION TIER: TG2–TG6 write to the database (`RequiresMutation: true`). TG1 is read-only.
  * TG5 additionally requires the CLIENT transport (a live MJAPI to attack over the wire) and
  * skips-as-pass loudly on the server transport, where no wire — and hence no API-key scope
  * ceiling — exists to exercise.
@@ -39,9 +46,9 @@
  * fixtures (key + scope rules + usage logs) self-clean in the check's own try/finally,
  * mirroring the `api-keys` bundle's AK3.
  */
-import { Metadata, RunView, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
+import { BaseEntityResult, Metadata, RunView, TransactionGroupBase, TransactionVariable } from '@memberjunction/core';
 import type { RunViewParams, UserInfo, IMetadataProvider } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { GraphQLDataProvider, GraphQLTransactionGroup } from '@memberjunction/graphql-dataprovider';
 import {
     MJActionCategoryEntity,
@@ -357,6 +364,100 @@ export const TransactionGroupsChecks: NamedCheck[] = [
                     await key.Delete().catch(() => undefined);
                 }
             }
+        }
+    },
+    {
+        Id: 'transaction-groups.TG6',
+        Name: 'TG6: #4309 pin — a group with a server-refused row reports failure and does not commit the survivors',
+        // MUTATION-GATED because item 0 is a genuine Create: if the fix regresses, it PERSISTS
+        // (that is the defect). Teardown's prefix sweep removes it either way, but a real INSERT
+        // does not belong in the lane defined as non-mutating.
+        RequiresMutation: true,
+        Fn: async (ctx: IntegrationCheckContext) => {
+            const f = fx(ctx);
+            const wire = resolveWireProvider(ctx);
+            if (!wire) {
+                // Same reasoning as TG5: IT47 declares transport 'client', so a missing wire in a
+                // client-transport run is a wiring regression, not a reason to skip a pin.
+                throw new Error('TG6: no GraphQLDataProvider resolvable in a client-transport run — the #4309 pin cannot execute (wiring regression)');
+            }
+
+            // RAW wire, not queueCreate(), and that IS the point. The refusal has to happen ON THE
+            // SERVER: BaseEntity.Save() validates whichever class the LOCAL ClassFactory resolves,
+            // and ordinary field validation is symmetric — a client holds the same generated rules,
+            // refuses the bad row itself, and never enrols it. Only a payload assembled past the
+            // client (this mutation, or a server-only guard subclass like MJUserRoleEntityServer)
+            // reaches the resolver with a row the server will refuse.
+            const survivorName = `${f.Prefix}-refusal-survivor ${FIXTURE_TAG}`;
+            const results = await wire.ExecuteGQL(EXECUTE_TG_MUTATION, {
+                group: {
+                    Items: [
+                        {
+                            EntityName: CATEGORY_ENTITY,
+                            EntityObjectJSON: JSON.stringify({ Name: survivorName, Status: 'Active' }),
+                            OperationType: 'Create'
+                        },
+                        {
+                            // Name is NOT NULL with no default, so the server's Validate() refuses
+                            // this row and Save() returns false — it never enrols in the group.
+                            EntityName: CATEGORY_ENTITY,
+                            EntityObjectJSON: JSON.stringify({ Status: 'Active' }),
+                            OperationType: 'Create'
+                        }
+                    ],
+                    Variables: []
+                }
+            });
+
+            const tgResult = (results as WireGraphQLResponse['data'])?.ExecuteTransactionGroup;
+            Assert(tgResult != null, 'TG6: ExecuteTransactionGroup returned no payload');
+
+            Assert(
+                tgResult!.Success === false,
+                'TG6 (#4309): a transaction group whose row the server REFUSED reported Success:true. A refused row ' +
+                'never enrols (AddTransaction is only reached from inside ProviderToUse.Save), so the group either ' +
+                'reaches Submit() empty — its legitimate "nothing to do" branch — or commits only the survivors. ' +
+                'ExecuteTransactionGroup must check what Save()/Delete() RETURN.'
+            );
+
+            // The half that matters most: a PARTIAL refusal must not leave the accepted row behind.
+            const leaked = await categoryRows(ctx, `Name='${survivorName.replace(/'/g, "''")}'`);
+            AssertEqual(
+                leaked.length, 0,
+                'TG6 (#4309): the accepted row COMMITTED while its sibling was refused — a partially-refused group ' +
+                'must fail whole rather than persist the survivors under an unqualified success'
+            );
+
+            // And the reason has to travel, or the caller is told it failed without being told why.
+            //
+            // Asserted against the REASON-BEARING fields only — Message, Error and Errors[].Message —
+            // never the serialized blob. `ErrorMessages` carries a whole `BaseEntityResult`, and one
+            // of those ALWAYS includes `OriginalValues: [{FieldName, Value}, …]`, one entry per
+            // field of the entity. The literal key `"FieldName"` lowercases to `"fieldname"`, which
+            // contains `"name"` — so a substring test over the raw JSON is satisfied by any non-null
+            // result whether or not a reason was reported, and the failure it names can never fire.
+            // This check shipped that way and the gauntlet caught it; keep the extraction narrow.
+            const reasons = (tgResult!.ErrorMessages ?? [])
+                .map(m => SafeJSONParse<Partial<BaseEntityResult>>(m ?? ''))
+                .flatMap(r => r ? [
+                    r.Message,
+                    r.Error ? BaseEntityResult.ErrorText(r.Error) : null,
+                    ...(r.Errors ?? []).map(e => e?.Message)
+                ] : [])
+                .filter((t): t is string => typeof t === 'string' && t.trim().length > 0);
+
+            // Wording-independent half: the server said SOMETHING about why.
+            Assert(
+                reasons.length > 0,
+                `TG6: the server reported no reason at all for the refused row, so no UI can explain the failure: ${JSON.stringify(tgResult!.ErrorMessages ?? []).slice(0, 400)}`
+            );
+            // And it points at the offending column, which is what lets a UI mark the bad field.
+            Assert(
+                reasons.some(r => r.toLowerCase().includes('name')),
+                `TG6: the refusal reason did not name the offending column, so no UI can point at the bad field: ${JSON.stringify(reasons).slice(0, 400)}`
+            );
+
+            console.log('      → refused row reported Success:false; survivor not committed; reason carried in ErrorMessages');
         }
     }
 ];
