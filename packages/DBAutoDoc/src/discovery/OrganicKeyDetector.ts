@@ -21,8 +21,9 @@ import { DatabaseDocumentation } from '../types/state.js';
 import { OrganicKeyCluster, OrganicKeyDetectionPhase } from '../types/organic-keys.js';
 import { runSemanticPhase, ProgressCallback } from './SemanticPhase.js';
 import { runStructuralPhase } from './StructuralPhase.js';
-import { compose } from './Composer.js';
+import { compose, ClusterVerification } from './Composer.js';
 import { DetectedOrganicKeysOutput } from './OrganicKeyTranslator.js';
+import { KeyVerifier } from './JoinProbe.js';
 
 export interface OrganicKeyDetectionResult {
     clusters: OrganicKeyCluster[];
@@ -40,17 +41,44 @@ export interface OrganicKeyDetectionResult {
         outputKeys: number;
         outputSpokes: number;
         transitiveBridges: number;
+        /** Clusters the value-overlap probe refuted outright. */
+        clustersDroppedUnverified: number;
+        /** Members dropped for not sharing the anchor's value space. */
+        membersDroppedUnverified: number;
+        /** Probes spent, and the cap they ran under. */
+        probesUsed: number;
+        probesAllowed: number;
     };
+    /** Per-cluster probe record, so a dropped key can be explained rather than just missing. */
+    verification: ClusterVerification[];
 }
 
 export interface DetectorRunOptions {
     onProgress?: ProgressCallback;
 }
 
+/** Emit-time behaviour for the detector. */
+export interface OrganicKeyEmitOptions {
+    /**
+     * Set `AutoCreateRelatedViewOnForm` on emitted keys. Default false — a
+     * machine-proposed key should not silently create a grid per spoke on every form.
+     */
+    autoCreateRelatedViewOnForm?: boolean;
+}
+
 export class OrganicKeyDetector {
+    /**
+     * @param keyVerifier - Probes each cluster member against the cluster anchor before
+     *                      the key is emitted. Pass the SAME instance the analysis engine
+     *                      got, so one probe budget covers the whole run. When null, keys
+     *                      are emitted unverified — the previous behaviour — and the
+     *                      per-cluster record says they were never checked.
+     */
     constructor(
         private readonly config: OrganicKeyDetectionConfig,
         private readonly aiConfig: AIConfig,
+        private readonly keyVerifier: KeyVerifier | null = null,
+        private readonly emitOptions: OrganicKeyEmitOptions = {},
     ) {}
 
     public async detect(
@@ -63,8 +91,19 @@ export class OrganicKeyDetector {
         const a = await runSemanticPhase(state, this.config, this.aiConfig, progress);
         const b = runStructuralPhase(state, a.clusters);
         progress(`structural: ${b.summary.transitiveBridgesFound} bridges`);
-        const c = compose(a.clusters, b.bridges);
-        progress(`compose: emitted ${c.emitted}/${a.clusters.length} clusters (${c.summary.outputKeys} keys, ${c.summary.outputSpokes} spokes)`);
+        const c = await compose(a.clusters, b.bridges, this.keyVerifier, {
+            autoCreateRelatedViewOnForm: this.emitOptions.autoCreateRelatedViewOnForm,
+        });
+        // Report what the probe removed, not just what survived: "emitted 5 clusters" and
+        // "emitted 5 of 161, 156 refuted" are the same output and completely different
+        // facts about the schema.
+        const budget = this.keyVerifier ? this.keyVerifier.budget : null;
+        progress(
+            `compose: emitted ${c.emitted}/${a.clusters.length} clusters (${c.summary.outputKeys} keys, ${c.summary.outputSpokes} spokes)`
+            + (budget
+                ? `; probe refuted ${c.droppedUnverified} clusters and ${c.droppedMembers} members using ${budget.probesUsed}/${budget.probesAllowed} probes`
+                : '; keys NOT verified (no probe configured)')
+        );
 
         // Net additional clusters produced by the concept-name split (sub-clusters created
         // beyond the raw clusterer output, counting both kept and dropped sub-clusters).
@@ -103,7 +142,12 @@ export class OrganicKeyDetector {
                 outputKeys: c.summary.outputKeys,
                 outputSpokes: c.summary.outputSpokes,
                 transitiveBridges: b.summary.transitiveBridgesFound,
+                clustersDroppedUnverified: c.droppedUnverified,
+                membersDroppedUnverified: c.droppedMembers,
+                probesUsed: budget ? budget.probesUsed : 0,
+                probesAllowed: budget ? budget.probesAllowed : 0,
             },
+            verification: c.verification,
         };
     }
 

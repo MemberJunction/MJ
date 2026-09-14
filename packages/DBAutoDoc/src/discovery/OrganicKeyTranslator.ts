@@ -90,10 +90,25 @@ export interface TransitiveSpokeInput {
  * The caller (Composer) is responsible for filtering. Anything passed in
  * gets emitted.
  */
+/** Emit-time options for {@link translateClusters}. */
+export interface TranslateOptions {
+    /**
+     * Value for `AutoCreateRelatedViewOnForm` on every emitted key. Default FALSE.
+     *
+     * This was a hardcoded `true`, so every emitted key auto-created a related-record
+     * grid per spoke — around 22 grids per key on a real run, none of them asked for,
+     * each one a value-join on a column the detector had never verified. Opting in is
+     * the right default for a machine-proposed key.
+     */
+    autoCreateRelatedViewOnForm?: boolean;
+}
+
 export function translateClusters(
     clusters: OrganicKeyCluster[],
     transitiveSpokes: TransitiveSpokeInput[] = [],
+    options: TranslateOptions = {},
 ): DetectedOrganicKeysOutput {
+    const autoCreateRelatedView = options.autoCreateRelatedViewOnForm ?? false;
     // Step 1 — group by normalized canonical concept name.
     const byConcept = new Map<string, OrganicKeyCluster[]>();
     for (const cluster of clusters) {
@@ -185,7 +200,7 @@ export function translateClusters(
                 MatchFieldNames: ownerColumns,
                 NormalizationStrategy: ownerNormalization,
                 CustomNormalizationExpression: ownerCustomExpression,
-                AutoCreateRelatedViewOnForm: true,
+                AutoCreateRelatedViewOnForm: autoCreateRelatedView,
                 RelatedEntities: spokes,
             });
         }

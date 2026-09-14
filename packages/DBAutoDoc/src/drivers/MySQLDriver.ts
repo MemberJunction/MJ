@@ -5,7 +5,8 @@
 
 import mysql from 'mysql2/promise';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome } from './BaseAutoDocDriver.js';
+import { describeProbeFailure, extractSqlState } from './probeErrors.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -853,6 +854,63 @@ export class MySQLDriver extends BaseAutoDocDriver {
       return matchingCount / totalSource;
     } catch (error) {
       return 0;
+    }
+  }
+
+  /**
+   * Probe whether a candidate key's child values exist in the parent column.
+   *
+   * Returns two integers and nothing else. Both sides are cast to `CHAR` so the
+   * comparison is consistent with the other two drivers rather than subject to
+   * MySQL's own coercion rules, and `MAX_EXECUTION_TIME` bounds the probe
+   * server-side.
+   */
+  public async probeJoinContainment(
+    child: { schema: string; table: string; column: string },
+    parent: { schema: string; table: string; column: string },
+    sampleSize: number,
+    timeoutMs: number
+  ): Promise<DriverProbeOutcome> {
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { ok: false, reason: 'no MySQL connection pool available' };
+      }
+
+      const childCol = this.escapeIdentifier(child.column);
+      const parentCol = this.escapeIdentifier(parent.column);
+      const query = `
+        SELECT /*+ MAX_EXECUTION_TIME(${Math.max(1, Math.floor(timeoutMs))}) */
+               COUNT(*) AS sampled_values,
+               COUNT(p.v) AS matched_values
+        FROM (
+          SELECT DISTINCT CAST(${childCol} AS CHAR) AS v
+          FROM ${this.escapeIdentifier(child.schema)}.${this.escapeIdentifier(child.table)}
+          WHERE ${childCol} IS NOT NULL
+          LIMIT ${Math.max(1, Math.floor(sampleSize))}
+        ) c
+        LEFT JOIN (
+          SELECT DISTINCT CAST(${parentCol} AS CHAR) AS v
+          FROM ${this.escapeIdentifier(parent.schema)}.${this.escapeIdentifier(parent.table)}
+          WHERE ${parentCol} IS NOT NULL
+        ) p ON c.v = p.v
+      `;
+
+      const [rows] = await this.pool.query(query);
+      const list = Array.isArray(rows) ? (rows as Array<Record<string, unknown>>) : [];
+      const row = list.length > 0 ? list[0] : undefined;
+      if (!row) {
+        return { ok: false, reason: 'probe returned no rows' };
+      }
+      return {
+        ok: true,
+        sampledValues: Number(row.sampled_values),
+        matchedValues: Number(row.matched_values)
+      };
+    } catch (error) {
+      return { ok: false, reason: describeProbeFailure(error), code: extractSqlState(error) };
     }
   }
 

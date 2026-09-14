@@ -25,6 +25,7 @@ import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
 import { OrganicKeyDetector } from '../discovery/OrganicKeyDetector.js';
+import { KeyVerifier } from '../discovery/JoinProbe.js';
 import { DetectedOrganicKeysOutput } from '../discovery/OrganicKeyTranslator.js';
 
 export interface AnalysisOptions {
@@ -281,6 +282,17 @@ export class AnalysisOrchestrator {
       const iterationTracker = new IterationTracker();
       const analysisEngine = new AnalysisEngine(this.config, promptEngine, stateManager, iterationTracker, this.onProgress);
 
+      // ONE verifier for the whole run, shared by the LLM-FK path and the organic-key
+      // path. Deliberately shared rather than one each: the probe cap is the cost bound,
+      // and two verifiers would mean two full allowances against a live customer
+      // database. A single instance also means a candidate probed by one path is not
+      // re-probed by the other.
+      const keyVerifier = new KeyVerifier(
+        db ? db.getDriver() : null,
+        this.config.analysis.keyVerification ?? {}
+      );
+      analysisEngine.setKeyVerifier(keyVerifier);
+
       // Create analysis run
       const run = stateManager.createAnalysisRun(
         state,
@@ -409,7 +421,12 @@ export class AnalysisOrchestrator {
       if (this.config.analysis.organicKeyDetection?.enabled) {
         this.onProgress('Running organic-key detection');
         try {
-          const detector = new OrganicKeyDetector(this.config.analysis.organicKeyDetection, this.config.ai);
+          const detector = new OrganicKeyDetector(
+            this.config.analysis.organicKeyDetection,
+            this.config.ai,
+            keyVerifier,
+            { autoCreateRelatedViewOnForm: this.config.analysis.organicKeyDetection.autoCreateRelatedViewOnForm },
+          );
           const okResult = await detector.detect(state, {
             onProgress: (msg) => this.onProgress(msg),
           });
@@ -420,6 +437,10 @@ export class AnalysisOrchestrator {
             clustersFound: okResult.summary.clustersFound,
             clustersEmitted: okResult.summary.clustersEmitted,
             outputKeys: okResult.summary.outputKeys,
+            clustersDroppedUnverified: okResult.summary.clustersDroppedUnverified,
+            membersDroppedUnverified: okResult.summary.membersDroppedUnverified,
+            probesUsed: okResult.summary.probesUsed,
+            probesAllowed: okResult.summary.probesAllowed,
           });
         } catch (err) {
           // Non-fatal — organic-key detection is optional enrichment. Log and continue.

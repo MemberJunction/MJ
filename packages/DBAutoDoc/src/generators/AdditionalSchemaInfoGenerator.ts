@@ -1,4 +1,45 @@
 /**
+ * Describe a discovered FK, including what the probe measured.
+ *
+ * The confidence number alone is the LLM's self-report; the containment counts are the
+ * only part of this sentence grounded in the data.
+ */
+function describeDiscoveredFK(fk: FKCandidate): string {
+  const base = `AI-discovered relationship (confidence: ${fk.confidence}%)`;
+  const v = fk.verification;
+  if (!v) return base;
+  if (v.Verification === 'Verified' && v.MatchedRows !== null && v.SampledRows !== null) {
+    return `${base} — join verified, ${v.MatchedRows}/${v.SampledRows} sampled values matched`;
+  }
+  if (v.Verification === 'Refuted') {
+    return `${base} — join REFUTED: ${v.VerificationNote}`;
+  }
+  return `${base} — join NOT verified: ${v.VerificationNote}`;
+}
+
+/**
+ * Find the verification stamp for a column that was stamped `isForeignKey` by a
+ * discovery stage, so the introspected-FK branch can report provenance for keys that
+ * did not actually come from a database constraint.
+ *
+ * Returns undefined for a genuinely introspected FK — a real constraint needs no probe,
+ * and claiming a verification nobody performed would be the same defect in reverse.
+ */
+function findVerificationForColumn(
+  schemaName: string,
+  tableName: string,
+  columnName: string,
+  discoveredFKs: FKCandidate[]
+): KeyVerificationStamp | undefined {
+  const match = discoveredFKs.find(fk =>
+    fk.schemaName === schemaName &&
+    fk.sourceTable === tableName &&
+    fk.sourceColumn === columnName
+  );
+  return match?.verification;
+}
+
+/**
  * Generates additionalSchemaInfo.json compatible with MemberJunction CodeGen.
  *
  * CodeGen uses this file to set IsSoftPrimaryKey / IsSoftForeignKey flags on
@@ -18,7 +59,7 @@
  */
 
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
-import { PKCandidate, FKCandidate } from '../types/discovery.js';
+import { PKCandidate, FKCandidate, KeyVerificationStamp } from '../types/discovery.js';
 import { DetectedOrganicKeysOutput, OrganicKeyConfig } from '../discovery/OrganicKeyTranslator.js';
 
 export interface AdditionalSchemaInfoOptions {
@@ -53,6 +94,15 @@ interface SoftFKEntry {
   RelatedTable: string;
   RelatedField: string;
   Description?: string;
+  /**
+   * Which stage authored this key, and whether anyone checked it against the data.
+   *
+   * Without it a wrong inferred key and a correct hand-written one sit side by side in
+   * this file with nothing to tell them apart — a consumer choosing between them has no
+   * signal, and a later run cannot tell which of its own outputs was ever verified.
+   * Counts only; never a value.
+   */
+  Verification?: KeyVerificationStamp;
 }
 
 /** Per-column value-list entry emitted in Fields[] when enum detection is active */
@@ -271,7 +321,7 @@ export class AdditionalSchemaInfoGenerator {
     // Source 1: Hard keys from introspection (skip if discoveredOnly)
     if (!discoveredOnly) {
       this.collectIntrospectedPKs(table, pks);
-      this.collectIntrospectedFKs(schema, table, fks);
+      this.collectIntrospectedFKs(schema, table, fks, discoveredFKs);
     }
 
     // Source 2: AI-discovered keys
@@ -356,7 +406,8 @@ export class AdditionalSchemaInfoGenerator {
   private collectIntrospectedFKs(
     schema: SchemaDefinition,
     table: TableDefinition,
-    fks: SoftFKEntry[]
+    fks: SoftFKEntry[],
+    discoveredFKs: FKCandidate[] = []
   ): void {
     const existingKeys = new Set(fks.map(f => `${f.FieldName}->${f.RelatedTable}.${f.RelatedField}`));
 
@@ -367,12 +418,19 @@ export class AdditionalSchemaInfoGenerator {
         const key = `${col.name}->${ref.table}.${ref.referencedColumn}`;
         if (!existingKeys.has(key)) {
           existingKeys.add(key);
+          // NOTE: this branch has no confidence, status or containment gate — whatever
+          // set `col.isForeignKey` gets emitted. The LLM-proposed FK path stamps exactly
+          // these two fields on the column, so before the probe gate existed an
+          // unverified key reached the output here even when the `discovered.foreignKeys`
+          // filter would have rejected it. The provenance below is what makes that
+          // visible rather than indistinguishable from a real introspected constraint.
           fks.push({
             FieldName: col.name,
             SchemaName: ref.schema || schema.name,
             RelatedTable: ref.table,
             RelatedField: ref.referencedColumn,
-            Description: col.description
+            Description: col.description,
+            Verification: findVerificationForColumn(schema.name, table.name, col.name, discoveredFKs)
           });
         }
       }
@@ -445,7 +503,8 @@ export class AdditionalSchemaInfoGenerator {
           SchemaName: fk.targetSchema || schemaName,
           RelatedTable: fk.targetTable,
           RelatedField: fk.targetColumn,
-          Description: `AI-discovered relationship (confidence: ${fk.confidence}%)`
+          Description: describeDiscoveredFK(fk),
+          Verification: fk.verification
         });
       }
     }

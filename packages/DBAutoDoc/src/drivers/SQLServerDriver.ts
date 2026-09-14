@@ -5,7 +5,8 @@
 
 import sql from 'mssql';
 import { RegisterClass } from '@memberjunction/global';
-import { BaseAutoDocDriver } from './BaseAutoDocDriver.js';
+import { BaseAutoDocDriver, DriverProbeOutcome } from './BaseAutoDocDriver.js';
+import { describeProbeFailure, extractSqlState } from './probeErrors.js';
 import {
   AutoDocSchema,
   AutoDocTable,
@@ -21,6 +22,29 @@ import {
   AutoDocValueDistribution,
   AutoDocExistingDescription
 } from '../types/driver.js';
+
+/** Sentinel returned by {@link withDeadline} when the wait elapsed. */
+const TIMED_OUT = Symbol('probe-timed-out');
+
+/**
+ * Resolve `p`, or {@link TIMED_OUT} if it has not settled within `ms`.
+ *
+ * Bounds the CALLER's wait, not the server's work — the statement keeps running. Used
+ * only where the driver offers no statement-level timeout.
+ */
+async function withDeadline<T>(p: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      p,
+      new Promise<typeof TIMED_OUT>((resolve) => {
+        timer = setTimeout(() => resolve(TIMED_OUT), ms);
+      })
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
 
 /**
  * SQL Server driver implementation
@@ -834,6 +858,81 @@ export class SQLServerDriver extends BaseAutoDocDriver {
       return row.matching_count / row.total_source;
     } catch (error) {
       return 0;
+    }
+  }
+
+  /**
+   * Probe whether a candidate key's child values exist in the parent column.
+   *
+   * Returns two integers and nothing else. Both sides are cast to `NVARCHAR(4000)`
+   * so the comparison works across the type pairs soft keys actually use (a
+   * `uniqueidentifier` parent against a `varchar` child, an `int` parent against a
+   * `nvarchar` child) instead of relying on SQL Server's implicit conversion, which
+   * differs from PostgreSQL's and would make the same schema probe differently on
+   * the two engines. `LOCK_TIMEOUT` plus a query-level `OPTION (MAXDOP 1)` keep one
+   * probe from becoming the run's dominant cost.
+   */
+  public async probeJoinContainment(
+    child: { schema: string; table: string; column: string },
+    parent: { schema: string; table: string; column: string },
+    sampleSize: number,
+    timeoutMs: number
+  ): Promise<DriverProbeOutcome> {
+    try {
+      if (!this.pool) {
+        await this.connect();
+      }
+      if (!this.pool) {
+        return { ok: false, reason: 'no SQL Server connection pool available' };
+      }
+
+      const childCol = this.escapeIdentifier(child.column);
+      const parentCol = this.escapeIdentifier(parent.column);
+      const query = `
+        SET LOCK_TIMEOUT ${Math.max(1, Math.floor(timeoutMs))};
+        WITH ChildSample AS (
+          SELECT DISTINCT TOP ${Math.max(1, Math.floor(sampleSize))}
+            CAST(${childCol} AS NVARCHAR(4000)) AS v
+          FROM ${this.escapeIdentifier(child.schema)}.${this.escapeIdentifier(child.table)}
+          WHERE ${childCol} IS NOT NULL
+        ),
+        ParentValues AS (
+          SELECT DISTINCT CAST(${parentCol} AS NVARCHAR(4000)) AS v
+          FROM ${this.escapeIdentifier(parent.schema)}.${this.escapeIdentifier(parent.table)}
+          WHERE ${parentCol} IS NOT NULL
+        )
+        SELECT COUNT(*) AS sampled_values,
+               COUNT(p.v) AS matched_values
+        FROM ChildSample c
+        LEFT JOIN ParentValues p ON c.v = p.v
+        OPTION (MAXDOP 1)
+      `;
+
+      // `mssql` exposes no per-request statement timeout (only a pool-level
+      // `requestTimeout`), so the wait is bounded client-side. Note the difference from
+      // the PostgreSQL driver, where `statement_timeout` aborts the query server-side:
+      // here a probe that overruns stops being waited on, but the statement continues
+      // on the server until it finishes. `SET LOCK_TIMEOUT` above caps the common case
+      // — blocking on someone else's lock — which is the one worth bounding.
+      const bound = Math.max(1, Math.floor(timeoutMs));
+      const result = await withDeadline(
+        this.pool.request().query<{ sampled_values: number; matched_values: number }>(query),
+        bound
+      );
+      if (result === TIMED_OUT) {
+        return { ok: false, reason: 'probe exceeded its timeout' };
+      }
+      const row = result.recordset && result.recordset.length > 0 ? result.recordset[0] : undefined;
+      if (!row) {
+        return { ok: false, reason: 'probe returned no rows' };
+      }
+      return {
+        ok: true,
+        sampledValues: Number(row.sampled_values),
+        matchedValues: Number(row.matched_values)
+      };
+    } catch (error) {
+      return { ok: false, reason: describeProbeFailure(error), code: extractSqlState(error) };
     }
   }
 
