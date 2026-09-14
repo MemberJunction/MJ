@@ -1081,6 +1081,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateAIPromptRun]
     @OutputUnitsUsed decimal(19, 8) = NULL,
     @UsageTypeID_Clear bit = 0,
     @UsageTypeID uniqueidentifier = NULL,
+    @ToolCallingMode_Clear bit = 0,
+    @ToolCallingMode nvarchar(25) = NULL,
     @AgentRunID_Clear bit = 0,
     @AgentRunID uniqueidentifier = NULL,
     @UserID_Clear bit = 0,
@@ -1184,6 +1186,7 @@ BEGIN
                 [InputUnitsUsed],
                 [OutputUnitsUsed],
                 [UsageTypeID],
+                [ToolCallingMode],
                 [AgentRunID],
                 [UserID]
             )
@@ -1279,6 +1282,7 @@ BEGIN
                 CASE WHEN @InputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@InputUnitsUsed, NULL) END,
                 CASE WHEN @OutputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@OutputUnitsUsed, NULL) END,
                 CASE WHEN @UsageTypeID_Clear = 1 THEN NULL ELSE ISNULL(@UsageTypeID, NULL) END,
+                CASE WHEN @ToolCallingMode_Clear = 1 THEN NULL ELSE ISNULL(@ToolCallingMode, NULL) END,
                 CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, NULL) END,
                 CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, NULL) END
             )
@@ -1376,6 +1380,7 @@ BEGIN
                 [InputUnitsUsed],
                 [OutputUnitsUsed],
                 [UsageTypeID],
+                [ToolCallingMode],
                 [AgentRunID],
                 [UserID]
             )
@@ -1470,6 +1475,7 @@ BEGIN
                 CASE WHEN @InputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@InputUnitsUsed, NULL) END,
                 CASE WHEN @OutputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@OutputUnitsUsed, NULL) END,
                 CASE WHEN @UsageTypeID_Clear = 1 THEN NULL ELSE ISNULL(@UsageTypeID, NULL) END,
+                CASE WHEN @ToolCallingMode_Clear = 1 THEN NULL ELSE ISNULL(@ToolCallingMode, NULL) END,
                 CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, NULL) END,
                 CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, NULL) END
             )
@@ -1668,6 +1674,8 @@ CREATE PROCEDURE [${flyway:defaultSchema}].[spUpdateAIPromptRun]
     @OutputUnitsUsed decimal(19, 8) = NULL,
     @UsageTypeID_Clear bit = 0,
     @UsageTypeID uniqueidentifier = NULL,
+    @ToolCallingMode_Clear bit = 0,
+    @ToolCallingMode nvarchar(25) = NULL,
     @AgentRunID_Clear bit = 0,
     @AgentRunID uniqueidentifier = NULL,
     @UserID_Clear bit = 0,
@@ -1766,6 +1774,7 @@ BEGIN
         [InputUnitsUsed] = CASE WHEN @InputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@InputUnitsUsed, [InputUnitsUsed]) END,
         [OutputUnitsUsed] = CASE WHEN @OutputUnitsUsed_Clear = 1 THEN NULL ELSE ISNULL(@OutputUnitsUsed, [OutputUnitsUsed]) END,
         [UsageTypeID] = CASE WHEN @UsageTypeID_Clear = 1 THEN NULL ELSE ISNULL(@UsageTypeID, [UsageTypeID]) END,
+        [ToolCallingMode] = CASE WHEN @ToolCallingMode_Clear = 1 THEN NULL ELSE ISNULL(@ToolCallingMode, [ToolCallingMode]) END,
         [AgentRunID] = CASE WHEN @AgentRunID_Clear = 1 THEN NULL ELSE ISNULL(@AgentRunID, [AgentRunID]) END,
         [UserID] = CASE WHEN @UserID_Clear = 1 THEN NULL ELSE ISNULL(@UserID, [UserID]) END
     WHERE

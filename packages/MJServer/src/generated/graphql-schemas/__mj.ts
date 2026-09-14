@@ -15681,6 +15681,10 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     UsageTypeID?: string;
         
+    @Field({nullable: true, description: `Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`}) 
+    @MaxLength(25)
+    ToolCallingMode?: string;
+        
     @Field({nullable: true, description: `If this prompt run was executed as part of an AI agent run, references that agent run. May be NULL for direct prompt runs or runs that pre-date attribution; backfilled from AIAgentRunStep.`}) 
     @MaxLength(36)
     AgentRunID?: string;
@@ -15688,10 +15692,6 @@ export class MJAIPromptRun_ {
     @Field({nullable: true, description: `The user on whose behalf this prompt was executed. May be NULL for automated/unauthenticated runs or runs that pre-date attribution; backfilled from the parent AIAgentRun.`}) 
     @MaxLength(36)
     UserID?: string;
-        
-    @Field({nullable: true, description: `Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`}) 
-    @MaxLength(25)
-    ToolCallingMode?: string;
         
     @Field({nullable: true}) 
     @MaxLength(255)
@@ -16043,13 +16043,13 @@ export class CreateMJAIPromptRunInput {
     UsageTypeID: string | null;
 
     @Field({ nullable: true })
+    ToolCallingMode: string | null;
+
+    @Field({ nullable: true })
     AgentRunID: string | null;
 
     @Field({ nullable: true })
     UserID: string | null;
-
-    @Field({ nullable: true })
-    ToolCallingMode: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
@@ -16329,13 +16329,13 @@ export class UpdateMJAIPromptRunInput {
     UsageTypeID?: string | null;
 
     @Field({ nullable: true })
+    ToolCallingMode?: string | null;
+
+    @Field({ nullable: true })
     AgentRunID?: string | null;
 
     @Field({ nullable: true })
     UserID?: string | null;
-
-    @Field({ nullable: true })
-    ToolCallingMode?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];
