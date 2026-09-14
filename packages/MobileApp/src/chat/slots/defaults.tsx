@@ -16,7 +16,14 @@ import type {
  * the public surface rather than private internals.
  */
 
-/** Default `emptyState` — greeting, optional subtext, and tappable suggested prompts. */
+/**
+ * Default `emptyState` — greeting, subtext, and a two-column grid of starter cards.
+ *
+ * Geometry is taken from MJ Explorer at its phone breakpoint rather than invented: 180×78 cards in
+ * two columns with 6px gutters, `--mj-bg-surface-card` ground, a 1px `--mj-border-default` hairline
+ * and `--mj-radius-md` corners. Someone who starts a conversation on the web and then on a phone
+ * should not notice they moved.
+ */
 export function MJChatEmptyStateDefault({
     Greeting,
     Subtext,
@@ -25,25 +32,34 @@ export function MJChatEmptyStateDefault({
 }: MJChatEmptyStateProps) {
     return (
         <View style={styles.emptyWrap}>
+            <View style={styles.emptyIcon}>
+                <Icons.Send size={22} color={Colors.brand} strokeWidth={2} />
+            </View>
             <Text style={styles.emptyTitle}>{Greeting}</Text>
             {Subtext ? <Text style={styles.emptyBody}>{Subtext}</Text> : null}
             {SuggestedPrompts?.length ? (
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.promptRow}
-                >
-                    {SuggestedPrompts.map((p) => (
-                        <Pressable
-                            key={p}
-                            style={styles.prompt}
-                            accessibilityRole="button"
-                            onPress={() => OnPromptSelected(p)}
-                        >
-                            <Text style={styles.promptText} numberOfLines={2}>{p}</Text>
-                        </Pressable>
-                    ))}
-                </ScrollView>
+                <View style={styles.promptGrid}>
+                    {SuggestedPrompts.map((p) => {
+                        // The web shows a bold title and a description; a single string carries both
+                        // when separated by an em dash, and degrades to a title-only card otherwise.
+                        const [title, ...rest] = p.split(' — ');
+                        const description = rest.join(' — ');
+                        return (
+                            <Pressable
+                                key={p}
+                                style={styles.promptCard}
+                                accessibilityRole="button"
+                                accessibilityLabel={title}
+                                onPress={() => OnPromptSelected(p)}
+                            >
+                                <Text style={styles.promptTitle} numberOfLines={1}>{title}</Text>
+                                {description ? (
+                                    <Text style={styles.promptDesc} numberOfLines={2}>{description}</Text>
+                                ) : null}
+                            </Pressable>
+                        );
+                    })}
+                </View>
             ) : null}
         </View>
     );
@@ -70,7 +86,7 @@ export function MJChatAgentPresenceDefault({ State, AgentName, Mode }: MJChatAge
 /** Colour and wording per presence state, so the dot and the label never disagree. */
 const PRESENCE_TONE: Record<MJChatAgentPresenceProps['State'], { color: string; label: string }> = {
     idle: { color: Colors.ink3, label: 'Ready' },
-    listening: { color: '#2ec4a3', label: 'Listening' },
+    listening: { color: Colors.positive, label: 'Listening' },
     thinking: { color: Colors.warn, label: 'Working' },
     speaking: { color: Colors.brand, label: 'Speaking' },
 };
@@ -104,12 +120,25 @@ export function MJChatHeaderDefault({
 }
 
 const styles = StyleSheet.create({
-    emptyWrap: { alignItems: 'center', paddingHorizontal: 28, paddingTop: 60, gap: 8 },
-    emptyTitle: { fontSize: 19, fontWeight: Type.semibold, color: Colors.ink, textAlign: 'center' },
-    emptyBody: { fontSize: 14, color: Colors.ink3, textAlign: 'center', lineHeight: 20 },
-    promptRow: { gap: 8, paddingTop: 14, paddingHorizontal: 2 },
-    prompt: { maxWidth: 220, paddingHorizontal: 13, paddingVertical: 9, borderRadius: Radius.lg, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },
-    promptText: { fontSize: 13.5, color: Colors.ink2 },
+    // 12px side margins, matching Explorer's `.empty-state-container`.
+    emptyWrap: { alignItems: 'center', paddingHorizontal: 12, paddingTop: 16 },
+    emptyIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: Colors.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
+    emptyTitle: { fontSize: Type.title, fontWeight: Type.semibold, color: Colors.ink, textAlign: 'center' },
+    emptyBody: { fontSize: Type.small, color: Colors.ink3, textAlign: 'center', lineHeight: 20, marginTop: 6, paddingHorizontal: 8 },
+    // Two columns with 6px gutters — `flexWrap` is RN's grid here, and `48%` leaves room for the gap.
+    promptGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 18, width: '100%' },
+    promptCard: {
+        width: '48.5%',
+        minHeight: 78,
+        backgroundColor: Colors.bg,
+        borderRadius: Radius.md,
+        borderWidth: 1,
+        borderColor: Colors.line2,
+        padding: 10,
+        justifyContent: 'center',
+    },
+    promptTitle: { fontSize: Type.small, fontWeight: Type.semibold, color: Colors.ink },
+    promptDesc: { fontSize: Type.caption, color: Colors.ink3, marginTop: 3, lineHeight: 16 },
 
     presence: { flexDirection: 'row', alignItems: 'center', gap: 7 },
     presenceProminent: { paddingVertical: 6 },

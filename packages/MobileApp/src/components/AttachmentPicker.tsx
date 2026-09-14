@@ -118,7 +118,7 @@ function PickerRow({ icon, label, sublabel, busy, disabled, onPress }: {
 }
 
 const styles = StyleSheet.create({
-    scrim: { flex: 1, backgroundColor: 'rgba(13,13,16,0.35)', justifyContent: 'flex-end' },
+    scrim: { flex: 1, backgroundColor: 'rgba(7,25,39,0.35)', justifyContent: 'flex-end' },
     sheet: { backgroundColor: Colors.bg, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingHorizontal: 14, paddingTop: 8, paddingBottom: 28, ...Shadow.cardLarge },
     grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: Colors.line2, marginBottom: 12 },
     title: { fontSize: 12, fontWeight: Type.bold, color: Colors.ink3, letterSpacing: 1.2, textTransform: 'uppercase', paddingHorizontal: 6, paddingBottom: 8 },

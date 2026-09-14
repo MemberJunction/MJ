@@ -314,8 +314,8 @@ function openTarget(url: string | undefined): void {
 }
 
 const styles = StyleSheet.create({
-    notice: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', margin: 16, marginBottom: 0, padding: 12, backgroundColor: 'rgba(184,122,31,0.10)', borderWidth: 1, borderColor: 'rgba(184,122,31,0.25)', borderRadius: 12 },
-    noticeText: { flex: 1, fontSize: 12.5, color: '#8e5c14', lineHeight: 17 },
+    notice: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', margin: 16, marginBottom: 0, padding: 12, backgroundColor: Colors.warnSoft, borderWidth: 1, borderColor: Colors.warn, borderRadius: 12 },
+    noticeText: { flex: 1, fontSize: 12.5, color: Colors.warn, lineHeight: 17 },
 
     loadingBlock: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
     errorText: { fontSize: 13, color: Colors.danger, textAlign: 'center' },

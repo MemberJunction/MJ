@@ -223,7 +223,7 @@ function FooterNav() {
                 <Icons.ChevronRight size={16} color={Colors.ink3} />
             </Pressable>
             <Pressable style={styles.footerRow} onPress={() => router.push('/profile')}>
-                <View style={[styles.footerIcon, { backgroundColor: '#b87a1f' }]}>
+                <View style={[styles.footerIcon, { backgroundColor: Colors.warn }]}>
                     <Text style={styles.profileInitial}>A</Text>
                 </View>
                 <View style={styles.footerBody}>
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
     agentTag: { flex: 1, fontSize: 11, color: Colors.ink3, fontWeight: Type.medium },
     liveTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3' },
+    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.positive },
     liveText: { fontSize: 11, fontWeight: Type.semibold, color: Colors.brand },
     badge: { backgroundColor: Colors.brand, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 999 },
     badgeText: { fontSize: 10.5, fontWeight: Type.bold, color: Colors.inverse },
@@ -289,5 +289,5 @@ const styles = StyleSheet.create({
     footerBody: { flex: 1 },
     footerLabel: { fontSize: 14.5, fontWeight: Type.semibold, color: Colors.ink },
     footerSub: { fontSize: 11.5, color: Colors.ink3, marginTop: 1 },
-    profileInitial: { color: '#ffffff', fontWeight: '700', fontSize: 13 },
+    profileInitial: { color: Colors.inverse, fontWeight: '700', fontSize: 13 },
 });

@@ -92,7 +92,7 @@ export function AgentPicker({
 }
 
 const styles = StyleSheet.create({
-    backdrop: { flex: 1, backgroundColor: 'rgba(13,13,16,0.35)', justifyContent: 'flex-end' },
+    backdrop: { flex: 1, backgroundColor: 'rgba(7,25,39,0.35)', justifyContent: 'flex-end' },
     sheet: { backgroundColor: Colors.bg, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 28, maxHeight: '70%' },
     handle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: Colors.line2, marginBottom: 12 },
     title: { fontSize: 18, fontWeight: '700', color: Colors.ink },

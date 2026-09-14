@@ -25,7 +25,7 @@ import { GetDefaultAgentId } from '@/data/preferences';
 import { FindActiveTrigger, SerializeMention, ApplyMention } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
 import { useConversation, useConversations } from '@/hooks/useConversations';
-import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
+import { ChatColors, Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
  * How long to keep the composer blocked on an agent run before releasing the UI.
@@ -479,6 +479,20 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
     const trigger = FindActiveTrigger(text, caret);
     const canSend = (text.trim().length > 0 || attachment != null) && !disabled;
 
+    /**
+     * Opens a picker from its toolbar button by typing the trigger for the user.
+     *
+     * The buttons and the typed characters are the same affordance — pressing the skills button
+     * and typing `/` must land in the same place — so the button writes the character rather than
+     * driving a parallel code path.
+     */
+    const insertTrigger = (ch: string) => {
+        const needsSpace = text.length > 0 && !/\s$/.test(text);
+        const next = `${text}${needsSpace ? ' ' : ''}${ch}`;
+        setText(next);
+        setCaret(next.length);
+    };
+
     const submit = () => {
         if (!canSend) return;
         const body = ComposeMessageWithAttachment(text, attachment);
@@ -509,9 +523,6 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                 </View>
             ) : null}
             <View style={styles.composer}>
-                <Pressable style={styles.attachBtn} onPress={() => setPickerVisible(true)} disabled={disabled} hitSlop={6}>
-                    <Icons.Paperclip size={20} color={Colors.ink3} strokeWidth={2} />
-                </Pressable>
                 <TextInput
                     placeholder="Reply, @mention an agent, or / for a skill…"
                     placeholderTextColor={Colors.ink3}
@@ -528,15 +539,59 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                     onSelectionChange={(e) => setCaret(e.nativeEvent.selection.end)}
                     editable={!disabled}
                 />
-                {canSend ? (
-                    <Pressable style={styles.sendBtn} onPress={submit}>
-                        <Icons.Send size={18} color={Colors.inverse} strokeWidth={2.2} />
-                    </Pressable>
-                ) : (
-                    <Pressable style={styles.micBtn} onPress={() => router.push({ pathname: '/voice-mode', params: { conversationId } })} disabled={disabled}>
-                        <Icons.Mic size={18} color={Colors.inverse} strokeWidth={2.2} />
-                    </Pressable>
-                )}
+            </View>
+            {/*
+              * The action strip sits BELOW the input, as it does on the web — 32x32 icon buttons on
+              * a 34px pitch with a 36x36 send at the end. Order matches Explorer exactly (skills,
+              * plan mode, attach, voice, send) so muscle memory carries across.
+              */}
+            <View style={styles.composerActions}>
+                <Pressable
+                    style={styles.actionBtn}
+                    onPress={() => insertTrigger('/')}
+                    disabled={disabled}
+                    accessibilityRole="button"
+                    accessibilityLabel="Skills"
+                >
+                    <Icons.Sparkle size={18} color={Colors.ink2} strokeWidth={2} />
+                </Pressable>
+                <Pressable
+                    style={styles.actionBtn}
+                    onPress={() => insertTrigger('@')}
+                    disabled={disabled}
+                    accessibilityRole="button"
+                    accessibilityLabel="Mention an agent"
+                >
+                    <Icons.Send size={18} color={Colors.ink2} strokeWidth={2} />
+                </Pressable>
+                <Pressable
+                    style={styles.actionBtn}
+                    onPress={() => setPickerVisible(true)}
+                    disabled={disabled}
+                    accessibilityRole="button"
+                    accessibilityLabel="Attach a file"
+                >
+                    <Icons.Paperclip size={18} color={Colors.ink2} strokeWidth={2} />
+                </Pressable>
+                <Pressable
+                    style={styles.actionBtn}
+                    onPress={() => router.push({ pathname: '/voice-mode', params: { conversationId } })}
+                    disabled={disabled}
+                    accessibilityRole="button"
+                    accessibilityLabel="Start a voice call"
+                >
+                    <Icons.Mic size={18} color={Colors.ink2} strokeWidth={2} />
+                </Pressable>
+                <View style={{ flex: 1 }} />
+                <Pressable
+                    style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
+                    onPress={submit}
+                    disabled={!canSend}
+                    accessibilityRole="button"
+                    accessibilityLabel="Send"
+                >
+                    <Icons.Send size={17} color={canSend ? Colors.inverse : Colors.ink3} strokeWidth={2.2} />
+                </Pressable>
             </View>
             <AttachmentPicker
                 visible={pickerVisible}
@@ -554,19 +609,19 @@ const styles = StyleSheet.create({
     notFoundError: { fontSize: 13, color: Colors.danger, textAlign: 'center' },
     notFoundLink: { fontSize: 14, color: Colors.brand, fontWeight: Type.semibold },
 
-    header: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2, backgroundColor: 'rgba(250,250,247,0.92)' },
+    header: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2, backgroundColor: Colors.bg },
     iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
     headerCenter: { flex: 1, alignItems: 'center' },
     headerTitle: { fontSize: Type.body, fontWeight: Type.semibold, color: Colors.ink, letterSpacing: -0.1, maxWidth: 220 },
     headerSubrow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
     headerSub: { fontSize: 11, color: Colors.ink3 },
-    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3', marginLeft: 4 },
+    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.positive, marginLeft: 4 },
 
     recents: { maxHeight: 48 },
     recentsContent: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 10, gap: 6, flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
     chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, paddingVertical: 6, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: 999, maxWidth: 180 },
     chipActive: { backgroundColor: Colors.ink, borderColor: Colors.ink },
-    chipPulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3' },
+    chipPulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.positive },
     chipText: { fontSize: 12.5, fontWeight: Type.medium, color: Colors.ink2 },
     chipTextActive: { color: Colors.inverse },
 
@@ -604,14 +659,19 @@ const styles = StyleSheet.create({
     actionChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },
     actionChipText: { fontSize: 12.5, fontWeight: Type.medium, color: Colors.ink },
 
-    dockHandle: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: 'rgba(250,250,247,0.92)', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
+    dockHandle: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: Colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
     dockIcon: { width: 22, height: 22, borderRadius: 6, backgroundColor: Colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
     dockText: { flex: 1, fontSize: 12.5, color: Colors.ink2, fontWeight: Type.medium },
     dockTextBold: { color: Colors.ink, fontWeight: Type.semibold },
 
+    composerActions: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 10, paddingBottom: 8, paddingTop: 2 },
+    actionBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
+    sendBtnDisabled: { backgroundColor: Colors.line2 },
     composerWrap: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2 },
     attachRow: { paddingBottom: 8 },
-    composer: { backgroundColor: Colors.surface, borderRadius: 24, paddingLeft: 8, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, minHeight: 48, ...Shadow.card },
+    // Explorer's composer is a plain bordered box, not a pill: `--mj-chat-composer-bg` on a 1px
+    // `--mj-chat-composer-border` hairline with `--mj-radius-lg` corners, and no shadow.
+    composer: { backgroundColor: ChatColors.composerBg, borderRadius: Radius.composer, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 4, borderWidth: 1, borderColor: ChatColors.composerBorder, minHeight: 56 },
     attachBtn: { width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' },
     composerInput: { flex: 1, fontSize: 15.5, color: Colors.ink, paddingVertical: 9, maxHeight: 120 },
     micBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },

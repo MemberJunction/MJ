@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
     title: { flex: 1, textAlign: 'center', fontSize: 15, fontWeight: Type.semibold, color: Colors.ink },
 
     profileBlock: { alignItems: 'center', paddingHorizontal: 24, paddingBottom: 18 },
-    avBig: { width: 78, height: 78, borderRadius: 39, backgroundColor: '#b87a1f', alignItems: 'center', justifyContent: 'center', ...Shadow.cardLarge },
+    avBig: { width: 78, height: 78, borderRadius: 39, backgroundColor: Colors.warn, alignItems: 'center', justifyContent: 'center', ...Shadow.cardLarge },
     avBigText: { color: Colors.inverse, fontSize: 30, fontWeight: '700' },
     name: { fontSize: 22, fontWeight: '700', letterSpacing: -0.4, marginTop: 14, color: Colors.ink },
     email: { fontSize: 13.5, color: Colors.ink3, marginTop: 4 },
@@ -265,8 +265,8 @@ const styles = StyleSheet.create({
     rowValue: { fontSize: 13, color: Colors.ink3 },
 
     toggle: { width: 42, height: 26, borderRadius: 13, backgroundColor: Colors.brand, padding: 2 },
-    toggleOff: { backgroundColor: 'rgba(13,13,16,0.15)' },
-    toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#ffffff', alignSelf: 'flex-end', ...Shadow.card },
+    toggleOff: { backgroundColor: 'rgba(7,25,39,0.15)' },
+    toggleKnob: { width: 22, height: 22, borderRadius: 11, backgroundColor: Colors.surface, alignSelf: 'flex-end', ...Shadow.card },
     toggleKnobOff: { alignSelf: 'flex-start' },
 
     signOut: { margin: 14, padding: 14, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, borderRadius: Radius.lg, alignItems: 'center' },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
 
     versionFooter: { textAlign: 'center', fontSize: 11, color: Colors.ink3, marginTop: 8 },
 
-    modalBackdrop: { flex: 1, backgroundColor: 'rgba(13,13,16,0.35)', justifyContent: 'flex-end' },
+    modalBackdrop: { flex: 1, backgroundColor: 'rgba(7,25,39,0.35)', justifyContent: 'flex-end' },
     modalSheet: { backgroundColor: Colors.bg, borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 28, maxHeight: '70%' },
     modalHandle: { alignSelf: 'center', width: 38, height: 4, borderRadius: 2, backgroundColor: Colors.line2, marginBottom: 12 },
     modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.ink },

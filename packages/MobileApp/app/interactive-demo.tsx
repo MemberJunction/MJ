@@ -19,22 +19,22 @@ const DEMO_CODE = `function DemoCounter({ utilities, styles }) {
   const [count, setCount] = useState(0);
   return (
     <div style={{ padding: 16, gap: 12 }}>
-      <span style={{ fontSize: 18, fontWeight: '700', color: '#0d0d10' }}>
+      <span style={{ fontSize: 18, fontWeight: '700', color: Colors.ink }}>
         Interactive component rendered on-device ✓
       </span>
-      <span style={{ fontSize: 15, color: '#4a4a52' }}>
+      <span style={{ fontSize: 15, color: Colors.ink2 }}>
         Compiled from JSX via Hermes and mapped through the RN primitive shim.
       </span>
-      <div style={{ padding: 12, backgroundColor: '#f6f5ef', borderRadius: 12 }}>
-        <span style={{ fontSize: 28, fontWeight: '700', color: '#264FAF' }}>
+      <div style={{ padding: 12, backgroundColor: Colors.surface2, borderRadius: 12 }}>
+        <span style={{ fontSize: 28, fontWeight: '700', color: Colors.brand }}>
           Count: {count}
         </span>
       </div>
       <button
         onClick={() => setCount(count + 1)}
-        style={{ backgroundColor: '#264FAF', padding: 14, borderRadius: 12 }}
+        style={{ backgroundColor: Colors.brand, padding: 14, borderRadius: 12 }}
       >
-        <span style={{ color: '#ffffff', fontWeight: '600', fontSize: 16 }}>Increment</span>
+        <span style={{ color: Colors.inverse, fontWeight: '600', fontSize: 16 }}>Increment</span>
       </button>
     </div>
   );
