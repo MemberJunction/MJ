@@ -23,7 +23,6 @@ import { RunView, RunQuery, Metadata } from '@memberjunction/core';
 import type { AggregateResult } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import type { MJAIModelCostEntity, MJMaterializedResultEntity } from '@memberjunction/core-entities';
-import { MaterializationRefresher } from '@memberjunction/materialization';
 import {
     AIEngineBase,
     BasePriceUnitType,
@@ -682,6 +681,12 @@ export const AiCostChecks: NamedCheck[] = [
 
                 const exec = Metadata.Provider as unknown as { ExecuteSQL?: unknown }; // global-provider-ok: integration test script — single-provider process by design
                 if (typeof exec?.ExecuteSQL === 'function') {
+                    const modName: string = '@memberjunction/materialization';
+                    const { MaterializationRefresher } = (await import(modName)) as {
+                        MaterializationRefresher: new () => {
+                            RefreshOne: (entity: MJMaterializedResultEntity, user: unknown, provider: unknown) => Promise<{ Success: boolean; ErrorMessage?: string }>;
+                        };
+                    };
                     const refresher = new MaterializationRefresher();
                     const refreshRes = await refresher.RefreshOne(mrEntity, ctx.User, Metadata.Provider); // global-provider-ok: integration test script — single-provider process by design
                     Assert(refreshRes.Success, `RefreshOne failed for ${mrInfo.TableName}: ${refreshRes.ErrorMessage}`);
