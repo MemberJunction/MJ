@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icons } from '@/components/Icon';
 import { RecordForm } from '@/components/RecordForm';
@@ -55,7 +55,7 @@ export default function RecordEditScreen() {
                 <View style={styles.iconBtn} />
             </View>
 
-            <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView style={styles.flex} behavior="padding">
                 <EditBody
                     loading={loading}
                     error={error}

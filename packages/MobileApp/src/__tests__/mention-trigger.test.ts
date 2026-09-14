@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { FindActiveTrigger, SerializeMention, ApplyMention, SerializeDraft } from '@/chat/mentions/trigger';
+import { SplitMentionSegments } from '@/chat/mentions/ChipText';
 
 /**
  * Unit tests for composer trigger detection.
@@ -137,5 +138,47 @@ describe('SerializeDraft', () => {
         const out = SerializeDraft('@Sage ask @Sage again', [sage]);
         expect(out.match(/@\{/g)).toHaveLength(1);
         expect(out).toContain('ask @Sage again');
+    });
+});
+
+describe('SplitMentionSegments', () => {
+    const sage = { Type: 'agent', ID: 'a1', Name: 'Sage', Prefix: '@' } as const;
+    const skill = { Type: 'skill', ID: 's1', Name: 'Summarize', Prefix: '/' } as const;
+
+    it('marks the mention run and leaves the rest plain', () => {
+        expect(SplitMentionSegments('@Sage what is on my plate', [sage])).toEqual([
+            { Text: '@Sage', IsMention: true },
+            { Text: ' what is on my plate', IsMention: false },
+        ]);
+    });
+
+    it('handles a mention in the middle of a sentence', () => {
+        expect(SplitMentionSegments('ask @Sage please', [sage])).toEqual([
+            { Text: 'ask ', IsMention: false },
+            { Text: '@Sage', IsMention: true },
+            { Text: ' please', IsMention: false },
+        ]);
+    });
+
+    it('marks several mentions, each once', () => {
+        const out = SplitMentionSegments('@Sage /Summarize this', [sage, skill]);
+        expect(out.filter((s) => s.IsMention).map((s) => s.Text)).toEqual(['@Sage', '/Summarize']);
+    });
+
+    it('stops highlighting a mention the user partly deleted', () => {
+        // Correct feedback: once it no longer matches, it will not be sent as a mention either —
+        // the same rule SerializeDraft applies, so what is highlighted is what will be sent.
+        const out = SplitMentionSegments('@Sag what is on my plate', [sage]);
+        expect(out.some((s) => s.IsMention)).toBe(false);
+    });
+
+    it('returns a single plain run when there are no mentions', () => {
+        expect(SplitMentionSegments('just a message', [])).toEqual([
+            { Text: 'just a message', IsMention: false },
+        ]);
+    });
+
+    it('returns nothing for empty text', () => {
+        expect(SplitMentionSegments('', [])).toEqual([]);
     });
 });

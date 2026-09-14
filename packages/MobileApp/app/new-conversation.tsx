@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-    ActivityIndicator, KeyboardAvoidingView, Platform, Pressable,
+    ActivityIndicator, KeyboardAvoidingView, Pressable,
     ScrollView, StyleSheet, Text, TextInput, View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -89,7 +89,7 @@ export default function NewConversationScreen() {
 
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
                 <View style={styles.header}>
                     <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.back()}>
                         <Icons.ChevronLeft size={22} color={Colors.ink} strokeWidth={2.2} />

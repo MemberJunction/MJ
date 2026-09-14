@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     KeyboardAvoidingView,
-    Platform,
     Pressable,
     RefreshControl,
     ScrollView,
@@ -25,6 +24,7 @@ import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
 import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
+import { ChipText } from '@/chat/mentions/ChipText';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { ChatColors, Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -229,9 +229,17 @@ export default function ChatThreadScreen() {
 
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+            {/*
+              * `padding` on BOTH platforms, deliberately. The usual advice is `undefined` on
+              * Android because `windowSoftInputMode="adjustResize"` resizes the window for you —
+              * but this app runs edge-to-edge (`edgeToEdgeEnabled=true`, the Expo SDK 54 default),
+              * and under edge-to-edge the window is NOT resized: the app draws behind the keyboard.
+              * With `undefined` the composer and its suggestion list sat under the keyboard,
+              * unreachable, on every Android device.
+              */}
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                behavior="padding"
                 keyboardVerticalOffset={0}
             >
                 <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} />
@@ -554,7 +562,6 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                     placeholderTextColor={Colors.ink3}
                     style={styles.composerInput}
                     multiline
-                    value={text}
                     onChangeText={(t) => {
                         // Only assume "caret at the end" when the text actually GREW at the end —
                         // i.e. the user appended. The event order between onChangeText and
@@ -572,7 +579,14 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                     }}
                     selection={pendingSelection}
                     editable={!disabled}
-                />
+                >
+                    {/*
+                      * Children rather than `value`: a TextInput that has children uses them as its
+                      * content, which is the only way to style individual runs. That is what turns
+                      * an inserted mention into a chip instead of plain text.
+                      */}
+                    <ChipText Text={text} Mentions={inserted} />
+                </TextInput>
             </View>
             {/*
               * The action strip sits BELOW the input, as it does on the web — 32x32 icon buttons on
