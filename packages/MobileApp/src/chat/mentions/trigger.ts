@@ -127,3 +127,48 @@ export function MentionedAgentId(text: string): string | null {
     }
     return null;
 }
+
+/** A mention the user inserted, tracked so display text can be turned back into wire format. */
+export type InsertedMention = {
+    /** Discriminator — `agent`, `user`, `entity`, `query`, `skill`. */
+    Type: string;
+    /** Record id. */
+    ID: string;
+    /** The name as shown, and as it appears in the composer's text. */
+    Name: string;
+    /**
+     * The trigger character it was inserted with.
+     *
+     * Kept so the draft reads the way the user invoked it — a skill picked from `/` shows as
+     * `/Summarize`, not `@Summarize`. The WIRE format is always `@{…}` regardless; this is purely
+     * what the human sees, and what {@link SerializeDraft} looks for when converting back.
+     */
+    Prefix: MentionTriggerChar;
+};
+
+/**
+ * Re-serializes a readable draft into the wire format before sending.
+ *
+ * The composer deliberately holds READABLE text — `@Sage what is on my plate` — because a
+ * `TextInput` can only show its own string, and showing `@{"type":"agent","id":"AA6A…"}` while
+ * someone types is indefensible. The web solves the same problem with chip elements in a
+ * contenteditable; React Native has no such affordance, so the composer tracks what it inserted and
+ * converts at the boundary.
+ *
+ * Each mention is matched ONCE, in order, against its own `@Name`. A mention the user has since
+ * deleted simply fails to match and is dropped — which is the correct reading of "they removed it".
+ *
+ * @param text The readable draft.
+ * @param mentions The mentions inserted into it, oldest first.
+ * @returns The draft with each surviving mention replaced by its JSON token.
+ */
+export function SerializeDraft(text: string, mentions: InsertedMention[]): string {
+    let out = text;
+    for (const m of mentions) {
+        const display = `${m.Prefix}${m.Name}`;
+        const at = out.indexOf(display);
+        if (at === -1) continue;   // the user deleted it
+        out = out.slice(0, at) + SerializeMention(m.Type, m.ID, m.Name) + out.slice(at + display.length);
+    }
+    return out;
+}

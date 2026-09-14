@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { FindActiveTrigger, SerializeMention, ApplyMention } from '@/chat/mentions/trigger';
+import { FindActiveTrigger, SerializeMention, ApplyMention, SerializeDraft } from '@/chat/mentions/trigger';
 
 /**
  * Unit tests for composer trigger detection.
@@ -96,5 +96,46 @@ describe('ApplyMention', () => {
         const result = ApplyMention(text, trigger, '@TOKEN');
         expect(result.Text).toBe('@TOKEN  rest');
         expect(result.Caret).toBe('@TOKEN '.length);
+    });
+});
+
+describe('SerializeDraft', () => {
+    const sage = { Type: 'agent', ID: 'a1', Name: 'Sage', Prefix: '@' } as const;
+    const skill = { Type: 'skill', ID: 's1', Name: 'Summarize', Prefix: '/' } as const;
+
+    it('converts a readable draft back to the wire format', () => {
+        // The composer shows `@Sage` because a TextInput can only display its own string, and
+        // showing raw JSON while someone types is indefensible. The conversion happens here.
+        const out = SerializeDraft('@Sage what is on my plate', [sage]);
+        expect(out).toBe('@{"type":"agent","id":"a1","name":"Sage"} what is on my plate');
+    });
+
+    it('keeps the trigger the user typed, so a skill reads as /Name not @Name', () => {
+        // The wire format is always `@{…}`; the DISPLAY should match how it was invoked.
+        const out = SerializeDraft('/Summarize this', [skill]);
+        expect(out).toBe('@{"type":"skill","id":"s1","name":"Summarize"} this');
+    });
+
+    it('converts several mentions, each exactly once', () => {
+        const out = SerializeDraft('@Sage please /Summarize this', [sage, skill]);
+        expect(out).toContain('"id":"a1"');
+        expect(out).toContain('"id":"s1"');
+        expect(out.match(/@\{/g)).toHaveLength(2);
+    });
+
+    it('drops a mention the user deleted', () => {
+        // Removing the text is how a user un-mentions someone; the tracked id must not resurrect it.
+        expect(SerializeDraft('never mind', [sage])).toBe('never mind');
+    });
+
+    it('leaves text with no mentions untouched', () => {
+        expect(SerializeDraft('just a message', [])).toBe('just a message');
+    });
+
+    it('does not double-replace when the same name appears twice', () => {
+        // One tracked mention means one token, even if the name occurs again as ordinary words.
+        const out = SerializeDraft('@Sage ask @Sage again', [sage]);
+        expect(out.match(/@\{/g)).toHaveLength(1);
+        expect(out).toContain('ask @Sage again');
     });
 });

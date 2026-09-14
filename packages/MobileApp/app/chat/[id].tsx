@@ -23,7 +23,7 @@ import { SendMessage, GetConversationDetailStatus, type SendProgress } from '@/d
 import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
-import { FindActiveTrigger, SerializeMention, ApplyMention, MentionedAgentId } from '@/chat/mentions/trigger';
+import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { ChatColors, Colors, Radius, Shadow, Type } from '@/theme/tokens';
@@ -481,12 +481,21 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
     // event so the field goes back to managing its own. A permanently controlled `selection` fights
     // the user on every tap.
     const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | undefined>(undefined);
+    // The composer holds READABLE text; these carry the ids so it can be re-serialized on send.
+    const [inserted, setInserted] = useState<InsertedMention[]>([]);
     const trigger = FindActiveTrigger(text, caret);
     // The `/` picker narrows to the skills the TARGET agent accepts, so it has to use the agent the
     // turn will actually reach — an `@mention` already in the draft outranks the stored default,
     // exactly as the send path resolves it. Narrowing against the default while the message is
     // addressed to someone else offers skills the server will refuse and hides the ones it wants.
-    const targetAgentId = MentionedAgentId(text) ?? GetDefaultAgentId() ?? null;
+    // The `/` picker narrows to the target agent's accepted skills, so it must use the agent the
+    // turn will actually reach — an inserted agent mention outranks the stored default, exactly as
+    // the send path resolves it.
+    const targetAgentId =
+        inserted.find((m) => m.Type === 'agent' && text.includes(`${m.Prefix}${m.Name}`))?.ID ??
+        MentionedAgentId(text) ??
+        GetDefaultAgentId() ??
+        null;
     const canSend = (text.trim().length > 0 || attachment != null) && !disabled;
 
     /**
@@ -505,9 +514,11 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
 
     const submit = () => {
         if (!canSend) return;
-        const body = ComposeMessageWithAttachment(text, attachment);
+        // Convert the readable draft back to the wire format the runtime parses.
+        const body = ComposeMessageWithAttachment(SerializeDraft(text, inserted), attachment);
         const pending = attachment;
         setText('');
+        setInserted([]);
         setAttachment(null);
         onSend(body, pending);
     };
@@ -520,8 +531,10 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                     Query={trigger.Query}
                     TargetAgentID={targetAgentId}
                     OnSelect={(s) => {
-                        const token = SerializeMention(s.type, s.id, s.name);
-                        const next = ApplyMention(text, trigger, token);
+                        // Insert the readable form and remember the id; `SerializeDraft` converts
+                        // back to the wire format at send time.
+                        setInserted((prev) => [...prev, { Type: s.type, ID: s.id, Name: s.name, Prefix: trigger.Trigger }]);
+                        const next = ApplyMention(text, trigger, `${trigger.Trigger}${s.name}`);
                         setText(next.Text);
                         setCaret(next.Caret);
                         // Push the caret past the inserted token so typing continues after it
