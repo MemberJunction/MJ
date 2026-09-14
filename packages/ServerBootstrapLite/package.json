@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "prebuild": "if [ -d dist ]; then node ../../packages/MJCLI/bin/run.js codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), using existing manifest'; else touch .needs-manifest-rebuild; fi",
+    "prebuild": "if [ -d dist ]; then node ../../packages/MJCLI/bin/run.js codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --exclude-packages @memberjunction/web-search-engine --output ./src/generated/mj-class-registrations.ts || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), using existing manifest'; else touch .needs-manifest-rebuild; fi",
     "build": "tsc && tsc-alias -f",
     "postbuild": "if [ -f .needs-manifest-rebuild ]; then rm .needs-manifest-rebuild && (node ../../packages/MJCLI/bin/run.js codegen manifest --exclude-packages @memberjunction/communication --exclude-packages @memberjunction/content-autotagging --exclude-packages @memberjunction/entity-communications --exclude-packages @memberjunction/queue --exclude-packages @memberjunction/storage --exclude-packages @memberjunction/server --output ./src/generated/mj-class-registrations.ts && tsc && tsc-alias -f || echo 'Warning: workspace CLI not built yet (build @memberjunction/cli first), manifest will be generated on next build'); fi",
     "watch": "tsc --watch",
@@ -107,7 +107,8 @@
     "@memberjunction/tag-engine-base": "6.1.0",
     "@memberjunction/task-graph": "6.1.0",
     "@memberjunction/templates": "6.1.0",
-    "@memberjunction/testing-engine": "6.1.0"
+    "@memberjunction/testing-engine": "6.1.0",
+    "@memberjunction/web-search-engine": "6.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",

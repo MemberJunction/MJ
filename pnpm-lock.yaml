@@ -14149,6 +14149,9 @@ importers:
       '@memberjunction/testing-integration':
         specifier: 6.1.0
         version: link:../TestingFramework/testing-integration
+      '@memberjunction/web-search-engine':
+        specifier: 6.1.0
+        version: link:../WebSearchEngine
       cosmiconfig:
         specifier: ^9.0.0
         version: 9.0.0(typescript@5.9.3)
