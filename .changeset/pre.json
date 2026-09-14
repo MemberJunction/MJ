@@ -1,5 +1,5 @@
 {
-  "mode": "pre",
+  "mode": "exit",
   "tag": "edge",
   "initialVersions": {
     "@memberjunction/a2aserver": "6.0.0",
