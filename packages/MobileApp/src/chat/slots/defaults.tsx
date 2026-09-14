@@ -1,10 +1,11 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icons } from '@/components/Icon';
-import { Colors, Radius, Type } from '@/theme/tokens';
+import { ChatColors, Colors, Radius, Type } from '@/theme/tokens';
 import type {
     MJChatAgentPresenceProps,
     MJChatEmptyStateProps,
     MJChatHeaderProps,
+    MJChatMessageRendererProps,
 } from '../slots';
 
 /**
@@ -119,6 +120,37 @@ export function MJChatHeaderDefault({
     );
 }
 
+
+/**
+ * Alternative `messageRenderer` — a side-aligned coloured bubble.
+ *
+ * MJ ships two message renderers on the web and so does this app: the FEED layout (avatar, name,
+ * timestamp) is the default, and this bubble layout is the alternative a host selects by passing it
+ * as the `messageRenderer` slot. Identity comes from side and colour rather than from an avatar —
+ * user on the right in `--mj-chat-bubble-user-bg`, agent on the left in the card ground.
+ *
+ * Measurements are the web component's, converted from rem at a 16px root: 70% max width,
+ * 10px/14px padding, 16px corners with the speaker's trailing corner tightened to 4px, 15px text
+ * at 1.4 line-height.
+ *
+ * ```tsx
+ * <MJChat ConversationID={id} Slots={{ messageRenderer: MJChatMessageBubbleDefault }} />
+ * ```
+ */
+export function MJChatMessageBubbleDefault({ Message }: MJChatMessageRendererProps) {
+    if (!Message) return null;
+    const isUser = (Message.Role ?? '').toLowerCase() === 'user';
+    return (
+        <View style={[styles.bubbleRow, isUser && styles.bubbleRowUser]}>
+            <View style={[styles.bubble, isUser ? styles.bubbleUser : styles.bubbleAgent]}>
+                <Text style={[styles.bubbleText, isUser ? styles.bubbleTextUser : styles.bubbleTextAgent]}>
+                    {Message.Message ?? ''}
+                </Text>
+            </View>
+        </View>
+    );
+}
+
 const styles = StyleSheet.create({
     // 12px side margins, matching Explorer's `.empty-state-container`.
     emptyWrap: { alignItems: 'center', paddingHorizontal: 12, paddingTop: 16 },
@@ -144,6 +176,16 @@ const styles = StyleSheet.create({
     presenceProminent: { paddingVertical: 6 },
     presenceDot: { width: 8, height: 8, borderRadius: 4 },
     presenceText: { fontSize: 12.5, color: Colors.ink3, fontWeight: Type.medium },
+
+    // Bubble renderer — the web component's rem measurements at a 16px root.
+    bubbleRow: { flexDirection: 'row', justifyContent: 'flex-start', paddingVertical: 4, paddingHorizontal: 12 },
+    bubbleRowUser: { justifyContent: 'flex-end' },
+    bubble: { maxWidth: '70%', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16 },
+    bubbleAgent: { backgroundColor: ChatColors.bubbleAgentBg, borderBottomLeftRadius: 4 },
+    bubbleUser: { backgroundColor: ChatColors.bubbleUserBg, borderBottomRightRadius: 4 },
+    bubbleText: { fontSize: 15, lineHeight: 21 },
+    bubbleTextAgent: { color: ChatColors.bubbleAgentText },
+    bubbleTextUser: { color: ChatColors.bubbleUserText },
 
     header: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
     headerBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
