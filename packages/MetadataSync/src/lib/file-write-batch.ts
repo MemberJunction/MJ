@@ -2,7 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { RecordData } from './sync-engine';
 import { JsonWriteHelper } from './json-write-helper';
-import { isCompletePrimaryKeyLookup } from './record-primary-key';
+import { createPrimaryKeyLookup, hasCompletePrimaryKey } from './record-primary-key';
 
 /**
  * Represents a pending change to a file
@@ -49,13 +49,14 @@ export class FileWriteBatch {
    * @param primaryKeyLookup - Primary key lookup string to identify the record
    */
   queueArrayUpdate(filePath: string, updatedRecord: RecordData, primaryKeyLookup: string): void {
-    // Array updates match entries by this key. An incomplete one ("ID:undefined") matches every
-    // other incomplete one, so each queued record would overwrite the last and a batch of N new
-    // records would write exactly one (#3415). Refuse rather than lose data.
-    if (!isCompletePrimaryKeyLookup(primaryKeyLookup)) {
+    // Array updates match entries by primary key. A record whose key has no value ({ ID: undefined },
+    // written to the file as `primaryKey: {}`) matches every other such record, so each queued record
+    // would overwrite the last and a batch of N new records would write exactly one (#3415).
+    // Refuse rather than lose data.
+    if (!hasCompletePrimaryKey(updatedRecord.primaryKey)) {
       throw new Error(
-        `Refusing to queue an update to ${path.basename(filePath)} with an incomplete primary key ('${primaryKeyLookup}'): ` +
-          `it would overwrite other records in the file.`
+        `Refusing to queue an update to ${path.basename(filePath)} for a record with an incomplete primary key ` +
+          `(${JSON.stringify(updatedRecord.primaryKey ?? {})}): it would overwrite other records in the file.`
       );
     }
     const absolutePath = path.resolve(filePath);
@@ -124,7 +125,7 @@ export class FileWriteBatch {
             if (change.primaryKeyLookup) {
               // Find existing record with matching primary key
               const index = contentArray.findIndex(r =>
-                this.createPrimaryKeyLookup(r.primaryKey || {}) === change.primaryKeyLookup
+                createPrimaryKeyLookup(r.primaryKey) === change.primaryKeyLookup
               );
 
               if (index >= 0) {
@@ -223,13 +224,5 @@ export class FileWriteBatch {
       this.changes.set(filePath, []);
     }
     this.changes.get(filePath)!.push(change);
-  }
-  
-  /**
-   * Create a primary key lookup string (same logic as PullService)
-   */
-  private createPrimaryKeyLookup(primaryKey: Record<string, any>): string {
-    const keys = Object.keys(primaryKey).sort();
-    return keys.map(k => `${k}:${primaryKey[k]}`).join('|');
   }
 }
