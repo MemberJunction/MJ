@@ -121,4 +121,22 @@ describe('PullService.pull — records whose entity subclass is not registered',
 
     expect(await readCompanies(dir)).toHaveLength(5);
   });
+
+  it('pulls key values containing the separator, an empty string, or the text null — and matches them on the next pull', async () => {
+    const dir = await createEntityDir(root);
+    const keys = ['AB|CD', 'AB', '', 'null', 'a\\|b'];
+    const companies = (): BaseEntity[] =>
+      keys.map((key) => {
+        const record = new UntypedCompany(companyInfo);
+        record.Set('ID', key);
+        record.Set('Name', `Company ${key}`);
+        return record;
+      });
+
+    expect(await pull(dir, companies())).toMatchObject({ created: keys.length });
+    expect(await pull(dir, companies())).toMatchObject({ created: 0, updated: keys.length });
+
+    const written = await readCompanies(dir);
+    expect(written.map((r) => r.primaryKey?.ID)).toEqual(keys);
+  });
 });

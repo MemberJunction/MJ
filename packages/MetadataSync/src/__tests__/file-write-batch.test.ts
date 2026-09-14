@@ -4,6 +4,7 @@ import os from 'os';
 import path from 'path';
 import { FileWriteBatch } from '../lib/file-write-batch';
 import { RecordData } from '../lib/sync-engine';
+import { createPrimaryKeyLookup } from '../lib/record-primary-key';
 
 function record(id: string, name: string): RecordData {
   return { primaryKey: { ID: id }, fields: { Name: name } };
@@ -36,11 +37,29 @@ describe('FileWriteBatch array updates', () => {
     expect(written[1].fields.Name).toBe('two (updated)');
   });
 
-  it('refuses an update whose key is incomplete, before anything is written', async () => {
+  it('refuses a record whose key is incomplete, before anything is written', async () => {
     const batch = new FileWriteBatch();
-    expect(() => batch.queueArrayUpdate(file, record('x', 'x'), 'ID:undefined')).toThrow(/incomplete primary key/);
-    expect(() => batch.queueArrayUpdate(file, record('x', 'x'), '')).toThrow(/incomplete primary key/);
+    const noValue: RecordData = { primaryKey: { ID: undefined }, fields: { Name: 'x' } };
+    const noKey: RecordData = { primaryKey: {}, fields: { Name: 'x' } };
+    const noKeyObject: RecordData = { fields: { Name: 'x' } };
+    expect(() => batch.queueArrayUpdate(file, noValue, 'ID:undefined')).toThrow(/incomplete primary key/);
+    expect(() => batch.queueArrayUpdate(file, noKey, '')).toThrow(/incomplete primary key/);
+    expect(() => batch.queueArrayUpdate(file, noKeyObject, '')).toThrow(/incomplete primary key/);
     expect(batch.getPendingFileCount()).toBe(0);
     expect(await fs.readJson(file)).toHaveLength(2);
+  });
+
+  it('accepts key values containing the separator, an empty string or the text null, and updates them in place', async () => {
+    const keys = ['AB|CD', '', 'null'];
+    await fs.writeJson(file, keys.map((id) => record(id, `old ${id}`)));
+    const batch = new FileWriteBatch();
+    for (const id of keys) {
+      batch.queueArrayUpdate(file, record(id, `new ${id}`), createPrimaryKeyLookup({ ID: id }));
+    }
+    await batch.flush();
+
+    const written: RecordData[] = await fs.readJson(file);
+    expect(written.map((r) => r.primaryKey?.ID)).toEqual(keys);
+    expect(written.map((r) => r.fields.Name)).toEqual(keys.map((id) => `new ${id}`));
   });
 });

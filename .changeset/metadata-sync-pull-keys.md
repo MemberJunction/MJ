@@ -13,4 +13,7 @@ that was duplicated on the next pull, and existing records were never refreshed 
 
 - Keys are now read through `BaseEntity.Get()`, which works with or without the subclass, and a
   record whose key genuinely has no value stops the pull instead of overwriting others.
-- `FileWriteBatch` refuses an array update with an incomplete key.
+- `FileWriteBatch` refuses an array update for a record whose key has a field with no value. Real
+  key values that only look empty — an empty string, the text `null` — are accepted.
+- The string pull matches records by is built in one place, and `|` inside a key value is escaped,
+  so a value containing the separator can no longer be mistaken for a different key.
