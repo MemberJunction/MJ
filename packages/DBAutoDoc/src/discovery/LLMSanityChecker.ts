@@ -5,6 +5,7 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
+import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
 import { AIConfig } from '../types/config.js';
 import { createLLMInstance } from '../utils/llm-factory.js';
@@ -69,7 +70,19 @@ export class LLMSanityChecker {
     };
 
     console.log(`[LLMSanityChecker] Calling LLM for sanity check...`);
-    const chatResult: ChatResult = await this.llm.ChatCompletion(params);
+    // Bounded. This call reviews the ENTIRE candidate set in one request, so its prompt grows with
+    // the schema and it is the single largest call the discovery phase makes — and it had no
+    // deadline, no retry and no failover, so a stall here parked the whole run.
+    //
+    // The throw is deliberately NOT caught here: the caller in DiscoveryEngine already treats an
+    // exception from this checker as fatal to the iteration, whereas a returned failure is
+    // swallowed into "no candidates were invalid" — which would silently pass every statistically
+    // derived key through unreviewed. A timeout must not look like an all-clear.
+    const chatResult: ChatResult = await withCallDeadline(
+      resolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+      'PK/FK sanity check',
+      signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
+    );
 
     if (!chatResult.success) {
       console.warn(`[LLMSanityChecker] LLM call failed: ${chatResult.errorMessage}`);

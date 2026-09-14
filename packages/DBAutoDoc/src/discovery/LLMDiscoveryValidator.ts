@@ -5,7 +5,8 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
+import { createLLMInstance } from '../utils/llm-factory.js';
+import { resolveCallTimeoutMs, withCallDeadline } from '../utils/call-deadline.js';
 import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { ColumnStatsCache } from './ColumnStatsCache.js';
 import { SchemaDefinition } from '../types/state.js';
@@ -28,20 +29,16 @@ export class LLMDiscoveryValidator {
     private statsCache: ColumnStatsCache,
     private schemas: SchemaDefinition[]
   ) {
-    // Create LLM instance using MJ ClassFactory
-    const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-      BaseLLM,
-      aiConfig.provider,
-      aiConfig.apiKey
-    );
-
-    if (!llm) {
-      throw new Error(
-        `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`
-      );
-    }
-
-    this.llm = llm;
+    // Use the shared factory, like every other LLM call site in this package.
+    //
+    // This constructor previously passed `aiConfig.provider` straight to the ClassFactory as the
+    // registration key. Provider names are lower-case words ('gemini'); registered class keys are
+    // driver names ('GeminiLLM'). The two never match, so the documented provider values could not
+    // resolve here at all — the lookup either returned nothing and threw, or picked up whatever a
+    // base registration happened to supply, which would be the wrong vendor and the wrong billing.
+    // `createLLMInstance` maps provider -> driver class, lower-cases the key, and throws with the
+    // supported list when the provider is genuinely unknown.
+    this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
   }
 
   /**
@@ -77,7 +74,14 @@ export class LLMDiscoveryValidator {
       responseFormat: 'JSON'
     };
 
-    const chatResult: ChatResult = await this.llm.ChatCompletion(params);
+    // Bounded. This runs once per candidate table inside a sequential loop, so one stalled call
+    // parks every table after it — the discovery phase would appear to be working and simply never
+    // reach its next table.
+    const chatResult: ChatResult = await withCallDeadline(
+      resolveCallTimeoutMs(this.aiConfig.callTimeoutMs),
+      `relationship validation for ${schemaName}.${tableName}`,
+      signal => this.llm.ChatCompletion({ ...params, cancellationToken: signal })
+    );
 
     if (!chatResult.success) {
       return {

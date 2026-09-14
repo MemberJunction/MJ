@@ -82,6 +82,20 @@ export interface AIConfig {
   apiKey: string;
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Wall-clock ceiling, in milliseconds, on EACH model call. `0` disables the bound.
+   * Default: 120000 (two minutes).
+   *
+   * Every LLM call in this package was previously unbounded. The retry machinery below cannot
+   * help: it only engages once a promise settles, and a provider that accepts the socket and then
+   * stops sending never settles one. `maxTokens` bounds the RESPONSE, not the wait.
+   *
+   * The bound is applied two ways at once, mirroring how `AIPromptRunner` bounds its own calls:
+   * the request is aborted through `ChatParams.cancellationToken` (which the provider drivers
+   * forward to their SDKs, so the socket is torn down rather than abandoned) AND the awaited
+   * promise is rejected, so a driver that ignores the signal still cannot park a caller forever.
+   */
+  callTimeoutMs?: number;
   /** @deprecated Use rateLimits.requestsPerMinute instead */
   requestsPerMinute?: number;
   effortLevel?: number; // Optional effort level 1-100 (1=lowest, 100=highest). Not all models support this.
