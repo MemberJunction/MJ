@@ -168,7 +168,24 @@ agent change, no redeploy.
 | `TavilyWebSearchProvider` | 20 | yes | Returns extracted page content rather than snippets plus links. Aggregator |
 | `PerplexityWebSearchProvider` | 30 | yes | Hits from the raw `/search` endpoint; Sonar only when an answer is asked for |
 | `GoogleCustomSearchWebSearchProvider` | 40 | no | **Discontinued 2027-01-01.** Present so existing keys keep working through the transition |
-| `DuckDuckGoWebSearchProvider` | 90 | no | Keyless last resort. Thin coverage — treat reliance on it as *unconfigured* |
+| `DuckDuckGoWebSearchProvider` | 90 | no | Keyless last resort, Instant Answer API only. Answers a minority of queries — treat reliance on it as *unconfigured*. No HTML fallback, [by design](#why-duckduckgo-has-no-html-fallback) |
+
+### Why DuckDuckGo has no HTML fallback
+
+An earlier revision fell back to fetching and regex-parsing DuckDuckGo's HTML results page, which
+answered far more queries than the Instant Answer API does. It was removed deliberately.
+
+Running regular expressions over remote HTML is running them over **attacker-influenceable input**,
+and CodeQL flagged the parser with two high-severity findings: polynomial backtracking in the result
+patterns (the `[^"]*…[^"]*` shape) and incomplete sanitization in its tag-stripping.
+
+Hardening those patterns would have *narrowed* the surface; deleting the parser *removes* it. For a
+fallback inside a last-resort provider this engine already tells operators not to rely on, the
+capability was not worth the exposure — and "the regex looks safe now" is exactly the kind of claim
+that is true when written and wrong later.
+
+**If you need real web coverage, configure a provider with an API.** That is what the rest of this
+package is for.
 
 ### Credentials
 
