@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Execution Trace Explorer</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --mj-bg-page: #f8f9fa;
+    --mj-bg-surface: white;
+    --mj-bg-surface-card: #f5f7fa;
+    --mj-bg-surface-sunken: #f0f2f5;
+    --mj-text-primary: #334155;
+    --mj-text-secondary: #64748b;
+    --mj-text-muted: #94a3b8;
+    --mj-brand-primary: #264FAF;
+    --mj-brand-primary-soft: #eef2fb;
+    --mj-border-default: #e2e8f0;
+    --mj-border-subtle: #f1f5f9;
+    --mj-status-success: #16a34a;
+    --mj-status-success-bg: #f0fdf4;
+    --mj-status-warning: #ea580c;
+    --mj-status-warning-bg: #fff7ed;
+    --mj-status-error: #dc2626;
+    --mj-status-error-bg: #fef2f2;
+    --mj-status-info: #0284c7;
+    --mj-status-info-bg: #f0f9ff;
+    --span-agent: #264FAF;
+    --span-step: #7c3aed;
+    --span-tool: #0891b2;
+    --span-action: #16a34a;
+    --span-external: #ea580c;
+    --sidebar-width: 230px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--mj-bg-page); color: var(--mj-text-primary); line-height: 1.5; display: flex; min-height: 100vh; font-size: 14px;
+  }
+  .sidebar { width: var(--sidebar-width); min-width: var(--sidebar-width); background: var(--mj-bg-surface); border-right: 1px solid var(--mj-border-default); position: fixed; top:0; left:0; bottom:0; overflow-y:auto; }
+  .brand { padding: 18px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 10px; font-weight: 700; color: var(--mj-brand-primary); font-size: 15px; }
+  .nav-section { padding: 14px 16px 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--mj-text-muted); }
+  .nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 16px; color: var(--mj-text-secondary); font-weight: 500; border-left: 3px solid transparent; }
+  .nav-item.active { color: var(--mj-brand-primary); border-left-color: var(--mj-brand-primary); background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface)); font-weight: 600; }
+  .nav-item i { width: 16px; text-align: center; font-size: 13px; }
+
+  .main { margin-left: var(--sidebar-width); flex: 1; display: flex; flex-direction: column; }
+  .topbar { background: var(--mj-bg-surface); border-bottom: 1px solid var(--mj-border-default); padding: 16px 28px; display: flex; align-items: center; justify-content: space-between; }
+  .topbar h1 { font-size: 19px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+  .topbar h1 i { color: var(--mj-brand-primary); }
+  .topbar .sub { color: var(--mj-text-secondary); font-size: 12.5px; margin-top: 3px; }
+  .btn { border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); color: var(--mj-text-secondary); padding: 7px 14px; border-radius: 6px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; cursor: default; }
+  .btn-primary { background: var(--mj-brand-primary); border-color: var(--mj-brand-primary); color: white; }
+
+  .content { padding: 22px 28px 40px; }
+
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 22px; }
+  .kpi { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 16px 18px; }
+  .kpi .label { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--mj-text-muted); margin-bottom: 8px; }
+  .kpi .value { font-size: 28px; font-weight: 800; }
+  .kpi .value.err { color: var(--mj-status-error); }
+  .kpi .delta { font-size: 12px; font-weight: 600; margin-top: 4px; color: var(--mj-text-muted); }
+
+  .card { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; margin-bottom: 20px; }
+  .card-header { padding: 14px 18px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; }
+  .card-header h2 { font-size: 14.5px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .card-header h2 i { color: var(--mj-brand-primary); }
+
+  .trace-meta { display: flex; gap: 26px; padding: 12px 18px; background: var(--mj-bg-surface-card); border-bottom: 1px solid var(--mj-border-default); font-size: 12.5px; }
+  .trace-meta .m .k { color: var(--mj-text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+  .trace-meta .m .v { font-weight: 700; font-family: ui-monospace, monospace; }
+
+  .waterfall { padding: 18px 18px 8px; }
+  .wf-ruler { display: flex; justify-content: space-between; font-size: 10.5px; color: var(--mj-text-muted); margin-bottom: 8px; padding-left: 240px; }
+  .wf-row { display: flex; align-items: center; margin-bottom: 7px; }
+  .wf-label { width: 240px; flex-shrink: 0; font-size: 12px; display: flex; align-items: center; gap: 7px; padding-right: 10px; }
+  .wf-label i { width: 13px; text-align: center; font-size: 11px; }
+  .wf-track { position: relative; flex: 1; height: 24px; background: var(--mj-bg-surface-sunken); border-radius: 5px; }
+  .wf-bar { position: absolute; top: 3px; bottom: 3px; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 10.5px; font-weight: 700; color: white; white-space: nowrap; overflow: hidden; }
+  .legend { display: flex; gap: 16px; padding: 4px 18px 16px; font-size: 11.5px; color: var(--mj-text-secondary); flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  .detail-panel { padding: 4px 18px 4px; }
+  .evidence-row { display: flex; justify-content: space-between; padding: 9px 0; border-bottom: 1px dashed var(--mj-border-subtle); font-size: 12.5px; }
+  .evidence-row:last-child { border-bottom: none; }
+  .evidence-row .k { color: var(--mj-text-muted); }
+  .evidence-row .v { font-weight: 600; font-family: ui-monospace, monospace; font-size: 12px; text-align: right; max-width: 60%; }
+  .tag-ok { color: var(--mj-status-success); background: var(--mj-status-success-bg); font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 5px; }
+  .tag-err { color: var(--mj-status-error); background: var(--mj-status-error-bg); font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 5px; }
+
+  .grid-2 { display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; align-items: start; }
+</style>
+</head>
+<body>
+  <div class="sidebar">
+    <div class="brand"><i class="fa-solid fa-cube"></i> MJ Explorer</div>
+    <div class="nav-section">Monitoring</div>
+    <div class="nav-item"><i class="fa-solid fa-gauge-high"></i> AI Usage Analytics</div>
+    <div class="nav-item active"><i class="fa-solid fa-diagram-project"></i> Trace Explorer</div>
+    <div class="nav-item"><i class="fa-solid fa-shield-halved"></i> Tenant Isolation</div>
+    <div class="nav-item"><i class="fa-solid fa-chart-line"></i> Agent Trust Trend</div>
+    <div class="nav-section">Configuration</div>
+    <div class="nav-item"><i class="fa-solid fa-robot"></i> AI Agents</div>
+    <div class="nav-item"><i class="fa-solid fa-bolt"></i> Actions</div>
+  </div>
+
+  <div class="main">
+    <div class="topbar">
+      <div>
+        <h1><i class="fa-solid fa-diagram-project"></i> Trace Explorer</h1>
+        <div class="sub">One causal chain, from the user-visible event down through every nested call</div>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button class="btn"><i class="fa-solid fa-magnifying-glass"></i> Find trace by ID</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-file-export"></i> Export OTLP</button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Traces today</div><div class="value">1,842</div><div class="delta">across 6 agents, 14 actions</div></div>
+        <div class="kpi"><div class="label">Ended in error</div><div class="value err">7</div><div class="delta">0.38% error rate</div></div>
+        <div class="kpi"><div class="label">P95 duration</div><div class="value">4.6s</div><div class="delta">↓ 0.3s vs last week</div></div>
+        <div class="kpi"><div class="label">Slowest span type</div><div class="value" style="color:var(--span-external)">External</div><div class="delta">DB/HTTP calls, avg 1.9s</div></div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <h2><i class="fa-solid fa-timeline"></i> Trace <span style="font-family:ui-monospace,monospace;font-weight:600;">trc_8f21c…</span></h2>
+            <span class="tag-err">1 error</span>
+          </div>
+          <div class="trace-meta">
+            <div class="m"><div class="k">Triggered by</div><div class="v">Chat message, Member Renewal Assistant</div></div>
+            <div class="m"><div class="k">Started</div><div class="v">Today, 9:14:02 AM</div></div>
+            <div class="m"><div class="k">Total duration</div><div class="v">6.2s</div></div>
+          </div>
+          <div class="legend">
+            <span><span class="swatch" style="background:var(--span-agent)"></span> Agent Run</span>
+            <span><span class="swatch" style="background:var(--span-step)"></span> Agent Step</span>
+            <span><span class="swatch" style="background:var(--span-tool)"></span> Tool Call</span>
+            <span><span class="swatch" style="background:var(--span-action)"></span> Action</span>
+            <span><span class="swatch" style="background:var(--span-external)"></span> External Call</span>
+          </div>
+          <div class="waterfall">
+            <div class="wf-ruler"><span>0s</span><span>1.5s</span><span>3s</span><span>4.5s</span><span>6.2s</span></div>
+
+            <div class="wf-row">
+              <div class="wf-label"><i class="fa-solid fa-robot" style="color:var(--span-agent)"></i> Renewal Assistant run</div>
+              <div class="wf-track"><div class="wf-bar" style="left:0%; width:100%; background:var(--span-agent);">6.2s total</div></div>
+            </div>
+            <div class="wf-row">
+              <div class="wf-label" style="padding-left:16px;"><i class="fa-solid fa-shoe-prints" style="color:var(--span-step)"></i> Step: Load member record</div>
+              <div class="wf-track"><div class="wf-bar" style="left:1%; width:8%; background:var(--span-step);">0.3s</div></div>
+            </div>
+            <div class="wf-row">
+              <div class="wf-label" style="padding-left:16px;"><i class="fa-solid fa-shoe-prints" style="color:var(--span-step)"></i> Step: Check suppression rules</div>
+              <div class="wf-track"><div class="wf-bar" style="left:10%; width:6%; background:var(--span-step);">0.2s</div></div>
+            </div>
+            <div class="wf-row">
+              <div class="wf-label" style="padding-left:32px;"><i class="fa-solid fa-wrench" style="color:var(--span-tool)"></i> Tool: summarize_history</div>
+              <div class="wf-track"><div class="wf-bar" style="left:17%; width:22%; background:var(--span-tool);">1.4s</div></div>
+            </div>
+            <div class="wf-row">
+              <div class="wf-label" style="padding-left:48px;"><i class="fa-solid fa-database" style="color:var(--span-external)"></i> External: DB query (history)</div>
+              <div class="wf-track"><div class="wf-bar" style="left:18%; width:12%; background:var(--span-external);">0.7s</div></div>
+            </div>
+            <div class="wf-row">
+              <div class="wf-label" style="padding-left:32px;"><i class="fa-solid fa-bolt" style="color:var(--span-action)"></i> Action: Send Renewal Email</div>
+              <div class="wf-track"><div class="wf-bar" style="left:40%; width:58%; background:var(--span-action);">3.6s</div></div>
+            </div>
+            <div class="wf-row">
+              <div class="wf-label" style="padding-left:48px;"><i class="fa-solid fa-globe" style="color:var(--span-external)"></i> External: SendGrid API call</div>
+              <div class="wf-track"><div class="wf-bar" style="left:70%; width:26%; background:var(--mj-status-error);">2.4s — 429 rate limited</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-circle-info"></i> Span detail</h2></div>
+            <div class="detail-panel">
+              <div class="evidence-row"><span class="k">Span type</span><span class="v">External Call</span></div>
+              <div class="evidence-row"><span class="k">Span ID</span><span class="v">spn_9c14…</span></div>
+              <div class="evidence-row"><span class="k">Parent span</span><span class="v">Action: Send Renewal Email</span></div>
+              <div class="evidence-row"><span class="k">Duration</span><span class="v">2.4s</span></div>
+              <div class="evidence-row"><span class="k">Status</span><span class="v"><span class="tag-err">HTTP 429</span></span></div>
+              <div class="evidence-row"><span class="k">Underlying record</span><span class="v">MJ: Action Execution Logs #77e2…</span></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header"><h2><i class="fa-solid fa-lightbulb"></i> Why this matters</h2></div>
+            <div style="padding:14px 18px; font-size:12.5px; color:var(--mj-text-secondary); line-height:1.6;">
+              Without a shared trace, this rate-limit error shows up only inside an isolated Action
+              execution log — nothing ties it back to the agent run, the member, or the fact that the
+              slow "summarize_history" tool call earlier in the same trace pushed this send past a
+              provider's per-second limit. One trace, one causal story.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
