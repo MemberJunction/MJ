@@ -16,6 +16,7 @@ import type { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJButtonDirective } from '@memberjunction/ng-ui-components';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { UserInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { REALTIME_ADVANCED_SESSION_CONTROLS, UserHoldsAuthorization } from '../../services/user-authorization';
@@ -369,6 +370,17 @@ const RECORDING_CONSENT_KEY = 'mj.realtimeVoice.recordingConsent.v1';
     `]
 })
 export class RealtimeAgentPickerComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
+    /**
+     * The authenticated user context (forwarded from the host composer / chat area).
+     * Falls back to `this.ProviderToUse?.CurrentUser` when not provided.
+     */
+    @Input() CurrentUser: UserInfo | null = null;
+
+    /** Returns the explicit CurrentUser input or falls back to ProviderToUse.CurrentUser. */
+    public get EffectiveUser(): UserInfo | null {
+        return this.CurrentUser ?? this.ProviderToUse?.CurrentUser ?? null;
+    }
+
     /** Agents the user can call — same cached set the @mention / routing logic uses. */
     @Input() Agents: MJAIAgentEntityExtended[] = [];
 
@@ -460,20 +472,47 @@ export class RealtimeAgentPickerComponent extends BaseAngularComponent implement
             ? this.DefaultAgentId
             : this.FilteredAgents[0]?.ID ?? null;
         this.SelectedAgentId = initial;
-        this.CanOverrideSessionConfig = UserHoldsAuthorization(
-            this.ProviderToUse?.CurrentUser,
-            REALTIME_ADVANCED_SESSION_CONTROLS,
-            this.ProviderToUse
-        );
-        if (this.CanOverrideSessionConfig) {
-            void this.loadVoiceModels();
-        }
+        void this.checkAuthorizationAndLoadModels();
         // Preselect the persisted co-agent preference when it's still a valid candidate.
         if (this.DefaultCoAgentId && this.CoAgents.some(a => UUIDsEqual(a.ID, this.DefaultCoAgentId))) {
             this.SelectedCoAgentId = this.DefaultCoAgentId;
             void this.reloadPairings();
         }
         this.RecordingConsent = this.readPersistedRecordingConsent();
+    }
+
+    /**
+     * Checks whether the user holds the advanced-session-controls authorization and, if so,
+     * loads the available realtime voice models and voices. If the initially evaluated user
+     * lacks the authorization, attempts a one-time RefreshCurrentUser() on the provider in
+     * case role assignments were granted after client metadata was cached.
+     */
+    private async checkAuthorizationAndLoadModels(): Promise<void> {
+        this.CanOverrideSessionConfig = UserHoldsAuthorization(
+            this.EffectiveUser,
+            REALTIME_ADVANCED_SESSION_CONTROLS,
+            this.ProviderToUse
+        );
+
+        if (!this.CanOverrideSessionConfig && this.ProviderToUse?.RefreshCurrentUser) {
+            try {
+                const refreshed = await this.ProviderToUse.RefreshCurrentUser();
+                if (refreshed) {
+                    this.CanOverrideSessionConfig = UserHoldsAuthorization(
+                        refreshed,
+                        REALTIME_ADVANCED_SESSION_CONTROLS,
+                        this.ProviderToUse
+                    );
+                }
+            } catch (e) {
+                console.warn('[RealtimeAgentPicker] Failed to refresh CurrentUser for authorization check:', e);
+            }
+        }
+
+        if (this.CanOverrideSessionConfig) {
+            await this.loadVoiceModels();
+        }
+        this.cdr.markForCheck();
     }
 
     /** Reads the per-user recording-consent preference (defensive: any failure → off). */

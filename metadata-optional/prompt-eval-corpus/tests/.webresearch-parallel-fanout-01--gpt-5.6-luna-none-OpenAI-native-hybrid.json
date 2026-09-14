@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-parallel-fanout-01 [gpt-5.6-luna@none · OpenAI · native-hybrid]",
+    "Description": "Two independent searches warranted in one turn. the provider matrix showed parallel-call support varies by generation even within one vendor; this is the corpus-level version.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Search both Google and Perplexity for 2025 solid-state battery commercialization news."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-parallel-fanout-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Google Custom Search"
+          },
+          {
+            "name": "Perplexity Search"
+          }
+        ],
+        "allowAdditionalActions": false
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Google Custom Search"
+              },
+              {
+                "name": "Perplexity Search"
+              }
+            ],
+            "allowAdditionalActions": false
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "16BF28FA-C9ED-4832-A1CA-ED84B4CBED86"
+  }
+}

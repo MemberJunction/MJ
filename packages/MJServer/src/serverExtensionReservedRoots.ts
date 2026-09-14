@@ -20,6 +20,8 @@ export const CORE_STATIC_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = [
     '/media',
     '/oauth',
     '/health',
+    '/realtime',
+    '/realtime-proxy',
 ];
 
 /**
@@ -30,9 +32,6 @@ export const CORE_CONSTANT_RESERVED_SERVER_EXTENSION_ROOTS: readonly string[] = 
     '/auth',              // AUTH_CATALOG_MOUNT_PATH
     '/magic-link',        // MAGIC_LINK_MOUNT_PATH
     '/widget',            // WIDGET_MOUNT_PATH
-    '/telephony/twilio',  // TWILIO_TELEPHONY_MOUNT_PATH
-    '/telephony/vonage',  // VONAGE_TELEPHONY_MOUNT_PATH
-    '/meetings/teams',    // TEAMS_MEETINGS_MOUNT_PATH
 ];
 
 /**

@@ -19,7 +19,6 @@ export class MJAIPromptModelFormComponent extends BaseFormComponent {
             { sectionKey: 'promptModelMapping', sectionName: 'Prompt & Model Mapping', isExpanded: true },
             { sectionKey: 'vendorConfiguration', sectionName: 'Vendor & Configuration', isExpanded: true },
             { sectionKey: 'executionParallelSettings', sectionName: 'Execution & Parallel Settings', isExpanded: true },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJAICredentialBindings', sectionName: 'AI Credential Bindings', isExpanded: false }
         ]);

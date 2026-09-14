@@ -1009,6 +1009,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             await this.saveResultsToContentItemAttribute(LLMResults, contextUser);
             await this.saveContentItemTags(LLMResults.contentItemID as string, LLMResults, contextUser);
         } else if (LLMResults.isValidContent === false) {
+            LogStatus(`[Autotag] LLM judged content item ${LLMResults.contentItemID} INVALID — deleting it. Title: ${String(LLMResults.title ?? '')} | Reason/description: ${String(LLMResults.description ?? LLMResults.reason ?? '')}`.slice(0, 600));
             await this.deleteInvalidContentItem(LLMResults.contentItemID as string, contextUser);
         } else {
             LogError(`[Autotag] Unexpected LLM format for item ${LLMResults.contentItemID} — isValidContent missing. Keys: ${Object.keys(LLMResults).join(', ')}`);
@@ -2749,7 +2750,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const driverClass = aiModel.DriverClass;
         const embeddingModelName = aiModel.APIName ?? aiModel.Name;
 
-        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${vectorIndex.Name}"`);
+        // The 3rd-party index is addressed by ExternalID (the provider-side name); Name is the MJ display label.
+        const externalIndexName = vectorIndex.ExternalID?.trim() || vectorIndex.Name;
+        LogStatus(`VectorizeContentItems: USING embedding model "${aiModel.Name}" (${driverClass}), vector DB "${vectorDBClassKey}", index "${externalIndexName}" (Vector Index "${vectorIndex.Name}")`);
 
         const embedding = this.createEmbeddingInstance(driverClass);
         const vectorDB = this.createVectorDBInstance(vectorDBClassKey);
@@ -2757,7 +2760,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         return {
             embedding,
             vectorDB,
-            indexName: vectorIndex.Name,
+            indexName: externalIndexName,
             embeddingModelName,
             embeddingModelID,
             dimensions: vectorIndex.Dimensions ?? undefined,

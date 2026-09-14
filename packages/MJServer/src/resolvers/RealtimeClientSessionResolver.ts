@@ -49,6 +49,7 @@ import {
     ParseRealtimeTypeConfiguration,
     ResolveEffectiveRealtimeConfig,
     RealtimeAllowedAgent,
+    RealtimeDirectActionsConfig,
     REALTIME_ADVANCED_SESSION_CONTROLS_AUTHORIZATION,
     resolveRecordingStorageAccountID,
     storeRealtimeRecording,
@@ -181,6 +182,11 @@ interface RealtimeSessionConfig {
      * model-named colleague against it without re-resolving the cascade. Absent ⇒ single-target behavior.
      */
     allowedAgents?: RealtimeAllowedAgent[];
+    /**
+     * The session's effective direct actions configuration (derived from the full config cascade at start).
+     * Persisted so each relayed direct action call enforces against the exact same config used for projection.
+     */
+    directActions?: RealtimeDirectActionsConfig;
     /**
      * Per-session override for the agent's media kit — a `MJ: Collections` id that takes precedence
      * over the agent's `DefaultMediaCollectionID` when the server-side `MediaChannelServer` resolves
@@ -525,6 +531,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                     'under the system user (scoped-anonymous caller).',
             );
         }
+        LogStatus(
+            `ExecuteRealtimeSessionTool: dispatching relayed tool '${toolName}' (callId: ${callId}) for session ${agentSessionId}...`,
+        );
+        const startTime = Date.now();
         const { ResultJson, PausedRunID, Artifacts } = await this.clientSessionService.ExecuteRelayedTool(
             {
                 AgentSessionID: agentSessionId,
@@ -532,6 +542,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                 // Multi-target (Move 4): the session's persisted allowed-agent union — a model-named
                 // colleague in the call is validated against this; absent ⇒ single-target behavior.
                 AllowedAgents: await this.filterAllowedAgentsByCanRun(config.allowedAgents, contextUser),
+                DirectActions: config.directActions,
                 // Attribution follows the VISITOR even when `runUser` is elevated: the delegated run
                 // row and its context-memory scope must stay the person's, not the system user's.
                 AttributionUserID: contextUser.ID,
@@ -545,6 +556,23 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             runUser,
             provider,
         );
+        const durationMs = Date.now() - startTime;
+        LogStatus(
+            `ExecuteRealtimeSessionTool: completed relayed tool '${toolName}' (callId: ${callId}) in ${durationMs}ms`,
+        );
+
+        if (toolName !== 'invoke-target-agent') {
+            await this.persistDirectActionTurn(
+                session,
+                callId,
+                toolName,
+                argsJson,
+                ResultJson,
+                durationMs,
+                contextUser,
+                provider,
+            );
+        }
 
         // Roll the paused-run id forward in the session config: clear the one we just consumed, and
         // store a new one only if the (resumed or fresh) run paused again awaiting feedback.
@@ -832,8 +860,9 @@ export class RealtimeClientSessionResolver extends ResolverBase {
 
     /**
      * Relays a co-agent CHANNEL tool-call (browser_ / Whiteboard_ etc.) onto the session's co-agent
-     * AIPromptRun.Messages — run-only observability so the run captures what the co-agent DID, not just
-     * what it said. Deliberately NOT a ConversationDetail turn (the chat thread stays speech-only).
+     * AIPromptRun.Messages and records the tool execution facts as a hidden ConversationDetail turn.
+     * HiddenToUser=true ensures chat components stay speech-only while allowing session review to
+     * reconstruct action cards dynamically on load (Option 1).
      * Ownership-gated; best-effort (a missing prompt run / save failure simply returns false).
      *
      * @returns `true` when the tool turn was recorded on the run.
@@ -848,6 +877,20 @@ export class RealtimeClientSessionResolver extends ResolverBase {
     ): Promise<boolean> {
         const { contextUser, provider } = this.requireUserAndProvider(userPayload, providers);
         const session = await this.loadOwnedActiveSession(agentSessionId, contextUser, provider);
+
+        // Persist the tool turn facts into a hidden ConversationDetail turn so session review
+        // can reconstruct the tool card dynamically on load (Option 1). Best-effort.
+        await this.persistDirectActionTurn(
+            session,
+            undefined,
+            toolName,
+            argsJson,
+            resultJson,
+            undefined,
+            contextUser,
+            provider,
+        );
+
         const promptRunID = this.readPromptRunID(session);
         if (!promptRunID) {
             return false;
@@ -1701,6 +1744,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         await this.persistObservabilityRunIDs(
             session, targetAgentId, prep.CoAgentRunID, prep.PromptRunID, prep.CoAgentRunStepID,
             applicationId, prep.EffectiveConfig?.realtime?.allowedAgents,
+            prep.EffectiveConfig?.realtime?.directActions,
         );
 
         const cfg = prep.ClientConfig;
@@ -1734,6 +1778,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
         coAgentRunStepID?: string,
         applicationID?: string,
         allowedAgents?: RealtimeAllowedAgent[],
+        directActions?: RealtimeDirectActionsConfig,
     ): Promise<void> {
         // Preserve any server-authoritative voice deadline stamped at session start (this rebuilds the
         // full config, so read the existing value forward rather than dropping it).
@@ -1746,6 +1791,7 @@ export class RealtimeClientSessionResolver extends ResolverBase {
             maxSessionDeadlineIso: existing?.maxSessionDeadlineIso,
             applicationID,
             allowedAgents: allowedAgents && allowedAgents.length > 0 ? allowedAgents : undefined,
+            directActions,
         };
         session.Config_ = JSON.stringify(config);
         const saved = await session.Save();
@@ -2476,6 +2522,10 @@ export class RealtimeClientSessionResolver extends ResolverBase {
                             typeof parsed.maxSessionDeadlineIso === 'string' ? parsed.maxSessionDeadlineIso : undefined,
                         applicationID: typeof parsed.applicationID === 'string' ? parsed.applicationID : undefined,
                         allowedAgents: Array.isArray(parsed.allowedAgents) ? parsed.allowedAgents : undefined,
+                        directActions:
+                            parsed.directActions && typeof parsed.directActions === 'object' && typeof parsed.directActions.enabled === 'boolean'
+                                ? (parsed.directActions as RealtimeDirectActionsConfig)
+                                : undefined,
                     };
                 }
             } catch {
@@ -2685,5 +2735,81 @@ export class RealtimeClientSessionResolver extends ResolverBase {
      */
     private mapTranscriptRole(role: string): 'AI' | 'Error' | 'User' {
         return role.trim().toLowerCase() === 'user' ? 'User' : 'AI';
+    }
+
+    /**
+     * Persists a direct action or channel tool execution as a hidden ConversationDetail turn.
+     * Stored as stable facts (Role: 'AI', HiddenToUser: true, ExternalID: callId, CompletionTime: durationMs,
+     * Message: JSON-serialized tool facts) so that session review can reconstruct the action card dynamically
+     * on load (Option 1) without polluting user-facing speech chat bubbles.
+     */
+    private async persistDirectActionTurn(
+        session: MJAIAgentSessionEntity,
+        callId: string | undefined,
+        toolName: string,
+        argsJson: string | undefined | null,
+        resultJson: string | undefined | null,
+        durationMs: number | undefined,
+        contextUser: UserInfo,
+        provider: IMetadataProvider,
+    ): Promise<boolean> {
+        if (!session.ConversationID) {
+            return false;
+        }
+        try {
+            const writeUser = ResolveScopedAnonymousRunUser(contextUser);
+            const detail = await provider.GetEntityObject<MJConversationDetailEntity>(
+                CONVERSATION_DETAIL_ENTITY,
+                writeUser,
+            );
+            detail.NewRecord();
+            detail.ConversationID = session.ConversationID;
+            detail.Role = 'AI';
+            detail.HiddenToUser = true;
+            detail.AgentSessionID = session.ID;
+            detail.UserID = contextUser.ID;
+            if (callId) {
+                detail.ExternalID = callId;
+            }
+            if (typeof durationMs === 'number' && durationMs >= 0) {
+                detail.CompletionTime = durationMs;
+            }
+
+            let success = true;
+            if (resultJson) {
+                try {
+                    const parsed = JSON.parse(resultJson) as { success?: boolean; error?: string };
+                    if (parsed.success === false) {
+                        success = false;
+                    }
+                } catch {
+                    // Plain-text output treated as success
+                }
+            }
+            detail.Status = success ? 'Complete' : 'Error';
+
+            const factPayload = {
+                type: 'realtime_tool_execution',
+                callId: callId ?? null,
+                toolName,
+                argsJson: argsJson ?? null,
+                resultJson: resultJson ?? null,
+                success,
+                durationMs: durationMs ?? 0,
+            };
+            detail.Message = JSON.stringify(factPayload);
+
+            const saved = await detail.Save();
+            if (!saved) {
+                LogError(
+                    `RealtimeClientSessionResolver.persistDirectActionTurn save failed: ${detail.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+                );
+            }
+            return saved;
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            LogError(`RealtimeClientSessionResolver.persistDirectActionTurn unexpected error: ${message}`);
+            return false;
+        }
     }
 }

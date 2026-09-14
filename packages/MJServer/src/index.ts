@@ -44,14 +44,10 @@ import { setupRESTEndpoints } from './rest/setupRESTEndpoints.js';
 import { createOAuthCallbackHandler } from './rest/OAuthCallbackHandler.js';
 import { createSignatureWebhookHandler } from './rest/SignatureWebhookHandler.js';
 import { createMediaStreamRouter } from './rest/MediaStreamHandler.js';
+import { createRealtimeSdpBrokerRouter } from './rest/RealtimeSdpBrokerHandler.js';
+import { REALTIME_SDP_EXCHANGE_PATH } from '@memberjunction/ai';
 import { createMagicLinkHandler, createMagicLinkJwksRouter, registerMagicLinkAuthProvider, MAGIC_LINK_MOUNT_PATH } from './auth/magicLink/index.js';
 import { createWidgetHandler, WIDGET_MOUNT_PATH } from './realtimeWidget/index.js';
-import { createTwilioTelephonyHandler, TWILIO_TELEPHONY_MOUNT_PATH, SetTwilioTelephonyService } from './telephony/index.js';
-import { createVonageTelephonyHandler, VONAGE_TELEPHONY_MOUNT_PATH, SetVonageTelephonyService } from './telephony/index.js';
-import { RingCentralTelephonyService, SetRingCentralTelephonyService } from './telephony/index.js';
-import { createTeamsMeetingsHandler, TEAMS_MEETINGS_MOUNT_PATH, SetTeamsMeetingsService, GetTeamsMeetingsService, StartCalendarScheduler } from './telephony/index.js';
-import { InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from './telephony/index.js';
-
 import { resolve } from 'node:path';
 import { DataSourceInfo, raiseEvent } from './types.js';
 
@@ -81,7 +77,7 @@ import {
   MJCompanyIntegrationFieldMapEntity,
   MJScheduledJobEntity,
 } from '@memberjunction/core-entities';
-import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount } from '@memberjunction/server-extensions-core';
+import { ServerExtensionLoader, ServerExtensionConfig, mergeServerExtensionConfigs, prepareServerExtensionConfigs, describeServerExtensionMount, InstallMediaUpgradeDispatcher, IsGraphQLWsPath } from '@memberjunction/server-extensions-core';
 import { coreReservedServerExtensionRoots } from './serverExtensionReservedRoots.js';
 import { MetadataCacheRefreshIntervalSeconds } from './providerConfigUnits.js';
 
@@ -113,8 +109,16 @@ export * from 'type-graphql';
 export { Int, Float, ID } from 'type-graphql';
 export { NewUserBase } from './auth/newUsers.js';
 export { configInfo, DEFAULT_SERVER_CONFIG } from './config.js';
-export { ServerExtensionLoader, BaseServerExtension } from '@memberjunction/server-extensions-core';
-export type { ServerExtensionConfig, ExtensionInitResult, ExtensionHealthResult } from '@memberjunction/server-extensions-core';
+export { ServerExtensionLoader, BaseServerExtension, DefaultServerExtensionServiceRegistry } from '@memberjunction/server-extensions-core';
+export type {
+    ServerExtensionConfig,
+    ServerExtensionPhase,
+    ServerExtensionServiceRegistry,
+    ServerExtensionInitContext,
+    ExtensionInitResult,
+    ExtensionHealthResult,
+    LoadExtensionsOptions,
+} from '@memberjunction/server-extensions-core';
 export * from './directives/index.js';
 export { NoLog, hasNoLogParameter, getNoLogFields } from './logging/NoLog.js';
 export * from './entitySubclasses/MJEntityPermissionEntityServer.server.js';
@@ -136,6 +140,16 @@ export * from './auth/actingContextResolver.js';
 export { ResolveConfiguredPrincipal, resolvePrincipalFrom } from './auth/principals.js';
 export type { ResolvablePrincipal, PrincipalResolution, PrincipalResolutionReason } from './auth/principals.js';
 export { CloneUserForSessionContext } from './auth/sessionUserClone.js';
+
+let _currentExtensionLoader: ServerExtensionLoader | null = null;
+
+/**
+ * Returns the active ServerExtensionLoader instance for the running server.
+ * Returns null if the server has not been started yet.
+ */
+export function GetServerExtensionLoader(): ServerExtensionLoader | null {
+    return _currentExtensionLoader;
+}
 
 export * from './generic/PushStatusResolver.js';
 export * from './generic/PubSubManager.js';
@@ -1167,6 +1181,15 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     startupLog.LogIf('verbose', '[OAuth] Callback route registered at /oauth/callback');
   }
 
+  // ─── Core HTTP Routes (Static Core Infrastructure) ─────────────────────────
+  // IMPORTANT ARCHITECTURAL NOTE:
+  // The route mounts below are strictly reserved for core framework infrastructure (OAuth, eSignature,
+  // media streaming, realtime WebRTC broker, magic-link, widgets).
+  // ALL new custom routes, external webhooks, vendor adapters, and application integrations MUST be
+  // implemented as Server Extensions (subclasses of BaseServerExtension in @memberjunction/server-extensions-core)
+  // mounted via ServerExtensionLoader — NEVER hardcoded as ad-hoc app.use() in serve().
+  // See guides/SERVER_EXTENSIONS_GUIDE.md for complete patterns and best practices.
+
   // ─── eSignature webhook (unauthenticated, registered BEFORE auth) ─────
   // Called by external signature providers (DocuSign Connect, etc.) without an MJ bearer token.
   // The provider DRIVER verifies the payload signature/HMAC; MJ auth does not apply here.
@@ -1179,6 +1202,12 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // auth middleware (an <audio>/<video> element can't send Authorization headers).
   app.use('/media', cors<cors.CorsRequest>(), createMediaStreamRouter());
   startupLog.LogIf('verbose', '[Media] Streaming route registered at /media/:fileId');
+
+  // ─── Realtime WebRTC SDP broker (ticket-gated, registered BEFORE auth) ───────
+  if (configInfo.realtime?.enabled) {
+    app.use(REALTIME_SDP_EXCHANGE_PATH, cors<cors.CorsRequest>(), createRealtimeSdpBrokerRouter());
+    startupLog.LogIf('verbose', `[Realtime] WebRTC SDP broker registered at ${REALTIME_SDP_EXCHANGE_PATH}`);
+  }
 
   // ─── Magic-link routes (MJ-issued, app-scoped external access) ───────────
   // Public router (JWKS + redeem) mounts BEFORE the auth middleware; the
@@ -1213,61 +1242,74 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     startupLog.LogIf('verbose', `[Widget] Public routes registered at ${WIDGET_MOUNT_PATH}/session and ${WIDGET_MOUNT_PATH}/session/refresh`);
   }
 
-  // ─── Telephony (Twilio) ingress: inbound voice webhook + Media-Streams WSS (PUBLIC) ──
-  // Carriers cannot present an MJ JWT — the X-Twilio-Signature HMAC is the gate. The
-  // public webhook router mounts BEFORE the auth middleware; the Media-Streams WSS attaches
-  // to the shared HTTP server. The outbound PlaceTwilioCall mutation reuses the same service.
-  if (configInfo.telephony?.enabled && configInfo.telephony.twilio) {
-    const twilioHandler = createTwilioTelephonyHandler(oauthPublicUrl, configInfo.telephony.twilio);
-    app.use(TWILIO_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), twilioHandler.publicRouter);
-    twilioHandler.attachMediaStreamServer();
-    SetTwilioTelephonyService(twilioHandler.service);
-    startupLog.LogIf('verbose', `[Telephony] Twilio routes registered at ${TWILIO_TELEPHONY_MOUNT_PATH}/voice + Media-Streams WSS`);
+  // ─── Server extensions loader & shared service registry ───────────────────
+  const extensionLoader = new ServerExtensionLoader();
+  _currentExtensionLoader = extensionLoader;
+
+  // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
+  // Backwards-compatibility shim: synthesize ServerExtensionConfig entries from legacy configInfo.telephony
+  const telephonyExtensionConfigs: ServerExtensionConfig[] = [];
+  if (configInfo.telephony?.enabled) {
+    if (configInfo.telephony.twilio) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'TwilioTelephonyExtension',
+        RootPath: '/telephony/twilio',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.twilio as unknown as Record<string, unknown>,
+      });
+    }
+    if (configInfo.telephony.vonage) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'VonageTelephonyExtension',
+        RootPath: '/telephony/vonage',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.vonage as unknown as Record<string, unknown>,
+      });
+    }
+    if (configInfo.telephony.ringcentral) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'RingCentralTelephonyExtension',
+        RootPath: '/telephony/ringcentral',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.ringcentral as unknown as Record<string, unknown>,
+      });
+    }
+    if (configInfo.telephony.teams?.enabled) {
+      telephonyExtensionConfigs.push({
+        Enabled: true,
+        DriverClass: 'TeamsMeetingsExtension',
+        RootPath: '/meetings/teams',
+        Phase: 'pre-auth',
+        Settings: configInfo.telephony.teams as unknown as Record<string, unknown>,
+      });
+    }
   }
 
-  // ─── Telephony (Vonage) ingress: inbound answer/event webhooks + media WSS (PUBLIC) ──
-  // Carriers cannot present an MJ JWT — the Vonage signed-request HMAC / webhook JWT is the gate.
-  // The public router mounts BEFORE the auth middleware; the media WSS attaches to the shared
-  // HTTP server. The outbound PlaceVonageCall mutation reuses the same service.
-  if (configInfo.telephony?.enabled && configInfo.telephony.vonage) {
-    const vonageHandler = createVonageTelephonyHandler(oauthPublicUrl, configInfo.telephony.vonage);
-    app.use(VONAGE_TELEPHONY_MOUNT_PATH, cors<cors.CorsRequest>(), vonageHandler.publicRouter);
-    vonageHandler.attachMediaStreamServer();
-    SetVonageTelephonyService(vonageHandler.service);
-    startupLog.LogIf('verbose', `[Telephony] Vonage routes registered at ${VONAGE_TELEPHONY_MOUNT_PATH}/answer + /event + media WSS`);
-  }
+  const rawHostExtensions = (configInfo.serverExtensions ?? []) as ServerExtensionConfig[];
+  const mergedHostExtensions = mergeServerExtensionConfigs(telephonyExtensionConfigs, rawHostExtensions);
 
-  // ─── Telephony (RingCentral) ingress: SIP softphone registration (no HTTP webhook / media WSS) ──
-  // RingCentral's only bidirectional-audio transport is a registered SIP softphone — inbound calls arrive
-  // as SIP INVITEs on its own SIP/TLS connection, so there is no public webhook or media WSS to mount.
-  // start() registers the softphone fire-and-forget so SIP registration never blocks boot; the outbound
-  // PlaceRingCentralCall mutation reuses the same service via the runtime holder.
-  if (configInfo.telephony?.enabled && configInfo.telephony.ringcentral) {
-    const ringCentralService = new RingCentralTelephonyService(configInfo.telephony.ringcentral);
-    SetRingCentralTelephonyService(ringCentralService);
-    void ringCentralService.start();
-    startupLog.LogIf('verbose', `[Telephony] RingCentral SIP softphone starting (codec ${configInfo.telephony.ringcentral.codec ?? 'OPUS/16000'})`);
+  // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
+  // (and remains the only source for host-only extensions such as Slack/Teams).
+  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
+  // so a new pre-auth app.use(...) in serve() must also be added to
+  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
+  const extensionConfigs = prepareServerExtensionConfigs(
+    mergeServerExtensionConfigs(
+      options?.serverExtensions ?? [],
+      mergedHostExtensions,
+    ),
+    {
+      onInvalid: (message) => LogError(message),
+      onOverlap: (message) => LogStatus(message),
+      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
+    },
+  );
+  for (const cfg of extensionConfigs) {
+    LogStatus(`Server extension ${describeServerExtensionMount(cfg)}`);
   }
-
-  // ─── Teams meetings ingress: Graph change-notification webhook (PUBLIC) ──────────────
-  // Graph cannot present an MJ JWT — the subscription validationToken handshake + the per-
-  // notification clientState shared secret are the gate. The public webhook router mounts
-  // BEFORE the auth middleware. The ACS application-hosted-media audio plane is owned by the
-  // server's native ACS media adapter, which attaches transports to the shared registry
-  // (a media WSS is not needed here). The StartTeamsMeetingSession mutation reuses the same
-  // service via the runtime holder.
-  if (configInfo.telephony?.enabled && configInfo.telephony.teams?.enabled) {
-    const teamsHandler = createTeamsMeetingsHandler(configInfo.telephony.teams);
-    app.use(TEAMS_MEETINGS_MOUNT_PATH, cors<cors.CorsRequest>(), teamsHandler.publicRouter);
-    SetTeamsMeetingsService(teamsHandler.service);
-    startupLog.LogIf('verbose', `[Meetings] Teams routes registered at ${TEAMS_MEETINGS_MOUNT_PATH}/notifications`);
-  }
-
-  // Install the single path-routing WebSocket-upgrade dispatcher AFTER all media WSS routes have
-  // registered. ws 8.x has each {server}-bound WebSocketServer 400 paths it doesn't own, so the GraphQL
-  // socket and the telephony media sockets cannot coexist as separate {server} servers — this strips the
-  // auto-listeners and routes upgrades by path. No-op when no media routes registered (telephony off).
-  InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath);
 
   // ─── Global CORS (before auth so 401 responses include CORS headers) ─────
   // Without this, the browser blocks 401 responses from the auth middleware
@@ -1295,35 +1337,16 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     maxAge: configInfo.cors?.maxAge ?? 86400,
   }));
 
-  // ─── Server extensions (before auth — extensions handle their own auth) ─────
+  // ─── Pre-auth server extensions (before auth — extensions handle their own auth) ─────
   // Slack uses HMAC signature verification, Teams uses Bot Framework JWT validation.
   // These must be registered before the unified auth middleware so webhook
   // requests aren't rejected for lacking an MJ bearer token.
-  const extensionLoader = new ServerExtensionLoader();
-  // Open App packages publish their extensions; host mj.config.cjs overlays by DriverClass
-  // (and remains the only source for host-only extensions such as Slack/Teams).
-  // extraReservedRoots is derived from the mounts registered above plus graphqlRootPath
-  // so a new pre-auth app.use(...) in serve() must also be added to
-  // coreReservedServerExtensionRoots() — otherwise an Open App can claim it.
-  const extensionConfigs = prepareServerExtensionConfigs(
-    mergeServerExtensionConfigs(
-      options?.serverExtensions ?? [],
-      (configInfo.serverExtensions ?? []) as ServerExtensionConfig[],
-    ),
-    {
-      onInvalid: (message) => LogError(message),
-      onOverlap: (message) => LogStatus(message),
-      extraReservedRoots: coreReservedServerExtensionRoots(graphqlRootPath),
-    },
-  );
-  // These routes mount BEFORE createUnifiedAuthMiddleware. Name every one so an
-  // operator who installed an Open App for its entities can see the pre-auth HTTP
-  // surface and suppress it with host serverExtensions[].Enabled = false.
-  for (const cfg of extensionConfigs) {
-    LogStatus(`Server extension ${describeServerExtensionMount(cfg)}`);
-  }
   if (extensionConfigs.length > 0) {
-    await extensionLoader.LoadExtensions(app, extensionConfigs);
+    await extensionLoader.LoadExtensions(app, extensionConfigs, {
+      phase: 'pre-auth',
+      httpServer,
+      publicUrl: oauthPublicUrl,
+    });
   }
 
   // Extension health endpoint (always available, returns empty array if no extensions)
@@ -1372,6 +1395,34 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     app.use(WIDGET_MOUNT_PATH, cors<cors.CorsRequest>(), widgetAuthenticatedRouter);
     startupLog.LogIf('verbose', `[Widget] Authenticated route registered at ${WIDGET_MOUNT_PATH}/resolve-identity`);
   }
+
+  // ─── Post-auth server extensions ──────────────────────────────────────────
+  // Extensions declaring Phase: 'post-auth' mount after the unified auth middleware
+  // and are protected by JWT authentication by default.
+  if (extensionConfigs.length > 0) {
+    await extensionLoader.LoadExtensions(app, extensionConfigs, {
+      phase: 'post-auth',
+      httpServer,
+      publicUrl: oauthPublicUrl,
+    });
+  }
+
+  // ─── Cross-extension lifecycle hook: OnAllExtensionsMounted ───────────────
+  // Called after all extensions across both pre-auth and post-auth phases are mounted.
+  // Extensions can wire themselves to services registered by other extensions or core.
+  await extensionLoader.NotifyAllExtensionsMounted({
+    httpServer,
+    publicUrl: oauthPublicUrl,
+  });
+
+  // Install the single path-routing WebSocket-upgrade dispatcher AFTER all extensions across both
+  // pre-auth and post-auth phases have mounted and registered their media WSS routes. ws 8.x has each
+  // {server}-bound WebSocketServer 400 paths it doesn't own, so the GraphQL socket and the telephony
+  // media sockets cannot coexist as separate {server} servers — this strips the auto-listeners and
+  // routes upgrades by path. No-op when no media routes registered (telephony off).
+  InstallMediaUpgradeDispatcher(httpServer, webSocketServer, graphqlRootPath, (req, socket, head) => {
+    return RealtimeProxyServer.Instance.TryHandleUpgrade(req, socket, head);
+  });
 
   // ─── REST API endpoints (auth already handled by unified middleware) ─────
   const restApiConfig = {
@@ -1538,22 +1589,6 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       .catch(err => console.warn(`[TaskGraphDispatcher] Startup failed: ${err}`));
   }
 
-  // Launch the calendar / scheduled-bridge loop (M2): poll agent calendars for meeting invites and
-  // start due meeting bridges. Mirrors the SessionJanitor lifecycle (run-once + interval, timer
-  // unref'd). Gated on Teams meetings being enabled (the provider whose scheduled-join is wired) and
-  // reuses the SAME meetings service as the ingress; identities without configured calendar creds are
-  // skipped, so this is a harmless no-op until a Graph-backed identity + token are configured.
-  if (resumeUser && configInfo.telephony?.teams?.enabled) { // global-provider-ok: server-owned background poller under the server's provider + system user
-    const teamsMeetingsService = GetTeamsMeetingsService();
-    if (teamsMeetingsService) {
-      StartCalendarScheduler({
-        Provider: Metadata.Provider, // global-provider-ok: server-owned background poller under the server's single default provider + system user
-        ContextUser: resumeUser,
-        TeamsService: teamsMeetingsService,
-        TeamsConfig: configInfo.telephony.teams,
-      });
-    }
-  }
 
   // Set up graceful shutdown handlers
   const gracefulShutdown = async (signal: string) => {
@@ -1563,6 +1598,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     if (extensionLoader.ExtensionCount > 0) {
       try {
         await extensionLoader.ShutdownAll();
+        _currentExtensionLoader = null;
         console.log('✅ Server extensions shut down');
       } catch (error) {
         console.error('❌ Error shutting down server extensions:', error);
