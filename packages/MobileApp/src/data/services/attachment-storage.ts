@@ -72,19 +72,57 @@ function modalityNameForAttachmentType(type: string): 'Image' | 'Audio' | 'Video
     }
 }
 
-/** Resolves an `MJ: AI Modalities` row id by name, or `null` when the deployment lacks it. */
+/**
+ * The deployment's modality ids, keyed by lower-cased name.
+ *
+ * `MJ: AI Modalities` is a handful of rows that do not change while an app is running, so the whole
+ * table is read once and kept. The alternative — a filtered `RunView` per attachment — costs a round
+ * trip on the one code path a user is already waiting on (they just took a photo), and forces a
+ * name to be interpolated into SQL for a value that was never dynamic to begin with.
+ */
+let modalityIdsByName: Map<string, string> | null = null;
+
+/**
+ * Resolves an `MJ: AI Modalities` row id by name, or `null` when the deployment lacks it.
+ *
+ * Loads and memoises the whole (tiny) table on first use. A failed load is NOT cached, so a lookup
+ * during a network blip does not poison every later attachment in the session.
+ */
 async function resolveModalityId(name: string, contextUser: UserInfo): Promise<string | null> {
-    const result = await new RunView().RunView<{ ID: string }>(
-        {
-            EntityName: 'MJ: AI Modalities',
-            ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
-            Fields: ['ID'],
-            MaxRows: 1,
-            ResultType: 'simple',
-        },
-        contextUser,
-    );
-    return result.Success && result.Results?.length ? result.Results[0].ID : null;
+    if (!modalityIdsByName) {
+        const result = await new RunView().RunView<{ ID: string; Name: string }>(
+            {
+                EntityName: 'MJ: AI Modalities',
+                Fields: ['ID', 'Name'],
+                ResultType: 'simple',
+            },
+            contextUser,
+        );
+        if (!result.Success) return null;
+        modalityIdsByName = new Map(
+            (result.Results ?? []).map((m) => [m.Name.toLowerCase(), m.ID] as const),
+        );
+    }
+    return modalityIdsByName.get(name.toLowerCase()) ?? null;
+}
+
+/**
+ * Forgets the cached modalities.
+ *
+ * Exists for tests and for a sign-out, where the next user may be on a different deployment.
+ */
+export function ResetModalityCache(): void {
+    modalityIdsByName = null;
+}
+
+/**
+ * Test-only access to {@link resolveModalityId}.
+ *
+ * Exported rather than reaching into the module's internals, so the caching contract is covered
+ * without making the resolver itself part of the module's real API.
+ */
+export function ResolveModalityIdForTest(name: string, contextUser: UserInfo): Promise<string | null> {
+    return resolveModalityId(name, contextUser);
 }
 
 /**
