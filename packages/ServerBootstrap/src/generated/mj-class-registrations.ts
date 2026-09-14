@@ -1300,7 +1300,7 @@ import {
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
-// @memberjunction/core-actions (147 classes)
+// @memberjunction/core-actions (148 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1310,6 +1310,7 @@ import {
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2400,6 +2401,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2514,11 +2516,11 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SearchQueryCatalogAction,
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
-    SendSingleMessageAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_5: any[] = [
+    SendSingleMessageAction,
     SendToAudienceAction,
     ShareListAction,
     SlackWebhookAction,
@@ -2574,7 +2576,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1039;
+export const CLASS_REGISTRATIONS_COUNT = 1040;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
