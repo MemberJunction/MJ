@@ -6,6 +6,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MJChatEmptyStateDefault } from '@/chat/slots/defaults';
+import { MentionsToPlainText } from '@/data/mention-display';
 import { MJComposer } from '@/chat/composer/MJComposer';
 import { AttachmentPicker } from '@/components/AttachmentPicker';
 import { Icons } from '@/components/Icon';
@@ -77,8 +78,11 @@ export default function NewConversationScreen() {
         setBusy(true);
         setError(null);
         try {
-            // Title from the first ~6 words of the prompt
-            const title = body.split(/\s+/).slice(0, 6).join(' ');
+            // Title from the first ~6 words of the prompt — of the READABLE prompt. `body` is the
+            // wire format, so a message that opens with a mention would otherwise name the
+            // conversation `@{"type":"agent","id":"55…` and show that in the thread header and the
+            // conversation list. Same conversion the thread applies to message text.
+            const title = MentionsToPlainText(body).split(/\s+/).slice(0, 6).join(' ');
             const conv = await CreateConversation(title);
             if (!conv) {
                 setError('Could not create the conversation.');

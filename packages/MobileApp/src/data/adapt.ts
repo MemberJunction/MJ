@@ -73,8 +73,12 @@ export function AdaptConversationToSummary(item: ConversationListItem): Conversa
         });
     return {
         id: conv.ID,
-        title: conv.Name ?? '(untitled)',
-        snippet: item.latestSnippet ?? '(no messages yet)',
+        // Both run through the mention conversion for the same reason message bodies do: a title
+        // derived from a message that opened with a mention, and a snippet that IS the last message,
+        // would otherwise show the raw `@{"type":…}` wire format in the list. Converting at display
+        // also repairs conversations already named that way in the database.
+        title: MentionsToPlainText(conv.Name) || '(untitled)',
+        snippet: MentionsToPlainText(item.latestSnippet) || '(no messages yet)',
         timestamp: relativeTimeLabel(item.latestAt),
         agents,
         messageCount: item.messageCount,
@@ -236,7 +240,7 @@ export function AdaptConversation(load: ConversationDetailLoad) {
     }
     return {
         id: load.conversation.ID,
-        title: load.conversation.Name ?? '(untitled)',
+        title: MentionsToPlainText(load.conversation.Name) || '(untitled)',
         participants: Array.from(participants.values()),
         messageCount: load.messages.length,
         live: load.messages.some((m) => m.detail.Status === 'In-Progress'),

@@ -186,3 +186,47 @@ describe('adapt', () => {
         });
     });
 });
+
+/**
+ * Titles and snippets are wire-format sources too.
+ *
+ * The thread's message bodies were fixed for this; the conversation's NAME was not — and the name
+ * is derived from the first words of the first message. A conversation opened with `@Sage …` was
+ * therefore titled `@{"type":"agent","id":"55…`, which showed in the thread header and in every row
+ * of the conversation list.
+ */
+describe('mention tokens in titles and snippets', () => {
+    const MENTION = '@{"type":"agent","id":"55E3BE9F-0000-0000-0000-000000000001","name":"Sage"}';
+
+    it('renders a mention in the list row title as the display name', () => {
+        const row = AdaptConversationToSummary(
+            listItem({ entity: { ID: 'c1', Name: `${MENTION} what is on my plate` } }),
+        );
+        expect(row.title).toBe('@Sage what is on my plate');
+        expect(row.title).not.toContain('{"type"');
+    });
+
+    it('renders a mention in the list snippet as the display name', () => {
+        const row = AdaptConversationToSummary(
+            listItem({ latestSnippet: `${MENTION} how is the pipeline` }),
+        );
+        expect(row.snippet).toBe('@Sage how is the pipeline');
+    });
+
+    it('renders a mention in the thread header title as the display name', () => {
+        const adapted = AdaptConversation({
+            conversation: { ID: 'c1', Name: `${MENTION} pipeline` } as unknown as ConversationDetailLoad['conversation'],
+            messages: [],
+            artifacts: [],
+        });
+        expect(adapted.title).toBe('@Sage pipeline');
+    });
+
+    it('still falls back when the name and snippet are absent', () => {
+        const row = AdaptConversationToSummary(
+            listItem({ entity: { ID: 'c1', Name: null }, latestSnippet: null }),
+        );
+        expect(row.title).toBe('(untitled)');
+        expect(row.snippet).toBe('(no messages yet)');
+    });
+});

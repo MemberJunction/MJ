@@ -106,6 +106,48 @@ The `Before*` half of MJ's cancelable event contract (see
 />
 ```
 
+### 2.3 The composer's feature switches
+
+`MJComposer` is one component shared by the chat thread and the new-conversation screen, so a host
+configures the composer once and both surfaces follow. The switches are named for the Angular
+composer's inputs:
+
+```tsx
+<MJComposer
+    OnSend={send}
+    EnableMentions        // `@` agents and people
+    EnableEntityMentions  // `#` records and queries
+    EnableSkillCommands   // `/` skills, narrowed to the addressed agent
+    EnableAttachments
+    EnableRealtime        // the voice launcher
+    SubmitOnEnter="hardware-keyboard"
+/>
+```
+
+`SubmitOnEnter` deserves a note, because native React Native cannot express the desktop rule
+faithfully. Its key event is `{ key: string }` and nothing more — no modifier bits — so **a hardware
+Shift+Return is indistinguishable from a plain Return on iOS and Android**. React-native-web does
+report `shiftKey`, and the resolver honours it wherever a platform supplies it.
+
+That is why the default is `hardware-keyboard` rather than `always`:
+
+| Policy | Return on a hardware keyboard | Return on an on-screen keyboard |
+|---|---|---|
+| `hardware-keyboard` (default) | sends | inserts a newline |
+| `always` | sends | sends |
+| `never` | inserts a newline | inserts a newline |
+
+An on-screen keyboard has no Shift to escape to, so `always` leaves a phone user with no way at all
+to type a second line — which is why every mainstream phone chat app sends from the button there.
+Pick `always` only if you ship your own newline affordance.
+
+One rule outranks all three, and it matches the web exactly: **while a mention picker is open with
+results, Return completes the mention** instead of sending. An open-but-empty picker deliberately
+lets Return through — the same call `mention-editor.component.ts` makes on the web.
+
+The precedence lives in `MobileApp/src/chat/composer/enter-key.ts` as a pure function, so it is
+unit-tested rather than device-tested.
+
 ---
 
 ## 3. Theming

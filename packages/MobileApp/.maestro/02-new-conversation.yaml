@@ -31,3 +31,17 @@ appId: org.memberjunction.mobile
 - extendedWaitUntil:
     visible: "Agents & people"
     timeout: 15000
+
+# Return on a PHONE keyboard must not send.
+#
+# `SubmitOnEnter` defaults to `hardware-keyboard`: Return sends where a real keyboard is attached
+# (the desktop expectation), and stays a newline on an on-screen keyboard — which has no Shift to
+# escape to, so sending there would leave a user unable to type a second line at all. This asserts
+# the phone half, the half a well-meaning change to `always` would silently break.
+#
+# The `@` above left the picker open, and an open picker OWNS the Return key (it completes the
+# mention) — so clear the field first and assert the plain case, not an ambiguous one.
+- eraseText
+- inputText: "a second thought"
+- pressKey: Enter
+- assertVisible: "Welcome to Conversations"

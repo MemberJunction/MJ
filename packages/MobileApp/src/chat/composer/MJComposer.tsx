@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Icons } from '@/components/Icon';
@@ -15,8 +15,15 @@ import {
     type InsertedMention,
     type MentionTriggerChar,
 } from '../mentions/trigger';
+import type { MentionSuggestion } from '@memberjunction/conversations-runtime';
 import { MentionSuggestions } from '../mentions/MentionSuggestions';
 import { ChipText } from '../mentions/ChipText';
+import {
+    ResolveEnterAction,
+    ShiftFromKeyEvent,
+    useHardwareKeyboard,
+    type EnterPolicy,
+} from './enter-key';
 
 /**
  * @fileoverview The one message composer, shared by every surface that sends a message.
@@ -47,6 +54,12 @@ export type MJComposerProps = {
     EnableAttachments?: boolean;
     /** Show the voice-call launcher. */
     EnableRealtime?: boolean;
+    /**
+     * When Return sends instead of inserting a newline. Defaults to `hardware-keyboard`, which
+     * matches the desktop composer wherever a real keyboard is attached without stranding a
+     * soft-keyboard user who has no Shift+Enter to fall back on. See `enter-key.ts`.
+     */
+    SubmitOnEnter?: EnterPolicy;
 };
 
 /**
@@ -72,6 +85,7 @@ export function MJComposer({
     EnableSkillCommands = true,
     EnableAttachments = true,
     EnableRealtime = true,
+    SubmitOnEnter = 'hardware-keyboard',
 }: MJComposerProps) {
     const [text, setText] = useState('');
     const [attachment, setAttachment] = useState<CapturedAttachment | null>(null);
@@ -107,6 +121,33 @@ export function MJComposer({
         GetDefaultAgentId() ??
         null;
     const canSend = (text.trim().length > 0 || attachment != null) && !Disabled;
+    // The open picker's current results. Held here (published by `MentionSuggestions`) because the
+    // Return key's owner depends on whether there is anything to pick, and only the list knows.
+    const [suggestions, setSuggestions] = useState<MentionSuggestion[]>([]);
+    const hardwareKeyboard = useHardwareKeyboard();
+    const suggestionsOpen = trigger != null && suggestions.length > 0;
+
+    /**
+     * What Return does right now.
+     *
+     * Recomputed every render because `submitBehavior` below has to be in the right mode BEFORE the
+     * key is pressed — native RN decides whether to insert the newline or raise a submit event from
+     * that prop, and there is no preventDefault to fall back on after the fact.
+     */
+    const enterAction = (shiftHeld: boolean | undefined) =>
+        ResolveEnterAction({
+            Policy: SubmitOnEnter,
+            ShiftHeld: shiftHeld,
+            HardwareKeyboard: hardwareKeyboard,
+            SuggestionsOpen: suggestionsOpen,
+            CanSend: canSend,
+        });
+    // Shift is unknowable ahead of the press on native, so the prop is computed for the common
+    // (unmodified) case; a platform that DOES report Shift corrects it in `onKeyPress` below.
+    const enterSubmits = enterAction(undefined) !== 'newline';
+    // Set when `onKeyPress` handled a Return, so the `onSubmitEditing` that may follow on the same
+    // press is a no-op rather than a second send.
+    const enterHandledRef = useRef(false);
 
     /**
      * Opens a picker from its toolbar button by typing the trigger for the user.
@@ -120,6 +161,39 @@ export function MJComposer({
         const next = `${text}${needsSpace ? ' ' : ''}${ch}`;
         setText(next);
         setCaret(next.length);
+    };
+
+    /**
+     * Inserts a chosen suggestion — the one path a tap and a Return press both take, so the two
+     * can never drift into inserting different things.
+     */
+    const selectSuggestion = (s: MentionSuggestion) => {
+        if (!trigger) return;
+        // Insert the readable form and remember the id; `SerializeDraft` converts
+        // back to the wire format at send time.
+        setInserted((prev) => [...prev, { Type: s.type, ID: s.id, Name: s.name, Prefix: trigger.Trigger }]);
+        const next = ApplyMention(text, trigger, `${trigger.Trigger}${s.name}`);
+        setText(next.Text);
+        setCaret(next.Caret);
+        // Push the caret past the inserted token so typing continues after it
+        // rather than wherever the field decides to put it.
+        setPendingSelection({ start: next.Caret, end: next.Caret });
+    };
+
+    /**
+     * Runs a resolved Return press.
+     *
+     * Reached from `onSubmitEditing` (native, where `submitBehavior` already suppressed the
+     * newline) and from `onKeyPress` (platforms that report modifiers). `guard` de-duplicates the
+     * two on any platform that fires both.
+     */
+    const runEnter = (action: ReturnType<typeof enterAction>) => {
+        if (action === 'select-suggestion') {
+            const top = suggestions[0];
+            if (top) selectSuggestion(top);
+            return;
+        }
+        if (action === 'send') submit();
     };
 
     const submit = () => {
@@ -140,17 +214,8 @@ export function MJComposer({
                     Trigger={trigger.Trigger}
                     Query={trigger.Query}
                     TargetAgentID={targetAgentId}
-                    OnSelect={(s) => {
-                        // Insert the readable form and remember the id; `SerializeDraft` converts
-                        // back to the wire format at send time.
-                        setInserted((prev) => [...prev, { Type: s.type, ID: s.id, Name: s.name, Prefix: trigger.Trigger }]);
-                        const next = ApplyMention(text, trigger, `${trigger.Trigger}${s.name}`);
-                        setText(next.Text);
-                        setCaret(next.Caret);
-                        // Push the caret past the inserted token so typing continues after it
-                        // rather than wherever the field decides to put it.
-                        setPendingSelection({ start: next.Caret, end: next.Caret });
-                    }}
+                    OnSelect={selectSuggestion}
+                    OnResults={setSuggestions}
                 />
             ) : null}
             {attachment ? (
@@ -181,6 +246,29 @@ export function MJComposer({
                     }}
                     selection={pendingSelection}
                     editable={!Disabled}
+                    /*
+                     * The ONLY lever that stops a multiline field from inserting the newline: RN
+                     * decides in the native text view, before JS sees the key, so this has to be
+                     * in the right mode ahead of the press. 'submit' raises onSubmitEditing
+                     * WITHOUT blurring, which keeps the keyboard up between messages.
+                     */
+                    submitBehavior={enterSubmits ? 'submit' : 'newline'}
+                    onSubmitEditing={() => {
+                        if (enterHandledRef.current) {
+                            // onKeyPress already ran this press (a platform reporting modifiers).
+                            enterHandledRef.current = false;
+                            return;
+                        }
+                        runEnter(enterAction(undefined));
+                    }}
+                    onKeyPress={(e) => {
+                        const shift = ShiftFromKeyEvent(e.nativeEvent);
+                        // Nothing to add unless the platform actually told us about the modifier;
+                        // native RN's key event carries only `key`, and onSubmitEditing has it.
+                        if (e.nativeEvent.key !== 'Enter' || shift === undefined) return;
+                        enterHandledRef.current = true;
+                        runEnter(enterAction(shift));
+                    }}
                 >
                     {/*
                       * Children rather than `value`: a TextInput that has children uses them as its

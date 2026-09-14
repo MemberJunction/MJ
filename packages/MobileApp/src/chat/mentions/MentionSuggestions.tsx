@@ -35,17 +35,23 @@ const TRIGGER_LABEL: Record<MentionTriggerChar, string> = {
  *   the skills that agent accepts — the server enforces the same intersection, so this keeps the
  *   list honest rather than offering something that would be rejected.
  * @param OnSelect Called with the chosen suggestion.
+ * @param OnResults Called whenever the ranked result set changes. The composer needs it to answer
+ *   a question only this component can: whether the open picker has anything to pick. That decides
+ *   who owns a Return press — on the web an open-but-empty dropdown deliberately lets Enter fall
+ *   through to sending, and mobile has to make the same call.
  */
 export function MentionSuggestions({
     Trigger,
     Query,
     TargetAgentID,
     OnSelect,
+    OnResults,
 }: {
     Trigger: MentionTriggerChar;
     Query: string;
     TargetAgentID?: string | null;
     OnSelect: (suggestion: MentionSuggestion) => void;
+    OnResults?: (suggestions: MentionSuggestion[]) => void;
 }) {
     const [ready, setReady] = useState(MentionAutocomplete.Instance.IsInitialized);
 
@@ -84,6 +90,22 @@ export function MentionSuggestions({
         () => (ready ? MentionAutocomplete.Instance.getSuggestions(Query, true, Trigger, TargetAgentID ?? null) : []),
         [ready, Query, Trigger, TargetAgentID],
     );
+
+    // Published from an effect rather than during render so the parent's state update never lands
+    // mid-render. `suggestions` is memoised, so this fires only when the set actually changed.
+    useEffect(() => {
+        OnResults?.(suggestions);
+        // `OnResults` is deliberately out of the dep list: hosts pass an inline arrow, and
+        // depending on it would re-publish on every parent render — the exact loop the memo above
+        // exists to prevent.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [suggestions]);
+
+    // Closing the picker must retract its results too. Without this the composer would still
+    // believe a list was open after the trigger went away, and Return would try to pick from it
+    // instead of sending.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    useEffect(() => () => OnResults?.([]), []);
 
     return (
         <View style={styles.sheet}>
