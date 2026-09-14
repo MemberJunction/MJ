@@ -69,7 +69,6 @@ vi.mock('@memberjunction/credentials', () => ({
     },
 }));
 
-vi.mock('@memberjunction/core-entities', () => ({}));
 vi.mock('@memberjunction/network-utils', () => ({
     HttpGet: vi.fn(),
     HttpPost: vi.fn(),

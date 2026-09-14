@@ -15066,9 +15066,6 @@ importers:
       '@memberjunction/core':
         specifier: 6.1.0
         version: link:../MJCore
-      '@memberjunction/core-entities':
-        specifier: 6.1.0
-        version: link:../MJCoreEntities
       '@memberjunction/credentials':
         specifier: 6.1.0
         version: link:../Credentials/Engine

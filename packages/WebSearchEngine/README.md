@@ -278,7 +278,9 @@ pnpm mj codegen                      # entity subclass, resolvers, form, remote_
 pnpm run build
 ```
 
-Then add the Remote Operation's server half, which needs the base class CodeGen has just emitted:
+Then add the Remote Operation's server half, which needs the base class CodeGen has just emitted.
+It imports from `@memberjunction/core-entities`, so add that back as a dependency of this package
+at the same time — it is deliberately not declared today, because nothing here imports it yet:
 
 ```typescript
 // packages/WebSearchEngine/src/operations/WebSearchQueryOperation.ts
