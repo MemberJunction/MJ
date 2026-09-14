@@ -193,10 +193,15 @@ class TestableOrganicKeys extends ManageMetadataBase {
   }
 }
 
-/** Answers the lookups the method makes: entities resolve, the key already exists, the mapping is new. */
-function createConnection(dialect: SQLDialect): CodeGenConnection {
-  const answer = async (sql: string): Promise<CodeGenQueryResult> => {
-    if (sql.includes('vwEntities')) return { recordset: [{ ID: 'entity-id', Name: 'Employees' }] };
+/**
+ * Answers the lookups the method makes: entities resolve (except tables named in `missingTables`),
+ * the key already exists, the mapping is new.
+ */
+function createConnection(dialect: SQLDialect, missingTables: string[] = []): CodeGenConnection {
+  const answer = async (sql: string, params?: Record<string, unknown>): Promise<CodeGenQueryResult> => {
+    if (sql.includes('vwEntities')) {
+      return missingTables.includes(String(params?.TableName)) ? { recordset: [] } : { recordset: [{ ID: 'entity-id', Name: 'Employees' }] };
+    }
     if (sql.includes('EntityOrganicKeyRelatedEntity')) return { recordset: [] };
     if (sql.includes('EntityOrganicKey')) return { recordset: [{ ID: 'organic-key-id' }] };
     return { recordset: [] };
@@ -312,6 +317,46 @@ describe('processOrganicKeyConfig — transitive bridge view DDL', () => {
 
     expect(result).toMatchObject({ success: false, failedCount: 1 });
     expect(logError).toHaveBeenCalledWith(expect.stringContaining('Failed to process "Broken Link"'));
+    expect(logged.some(([, query]) => query.includes('"hr"."vwBridgeEmployeeAttribute"'))).toBe(true);
+  });
+
+  it('counts every key on a table whose entity is not found as failed, and still processes other tables', async () => {
+    const goodKey = organicKeyConfig.hr[0].OrganicKeys[0];
+    const config = {
+      hr: [
+        { TableName: 'Ghost', OrganicKeys: [goodKey, { ...goodKey, Name: 'Second Ghost Link' }] },
+        organicKeyConfig.hr[0],
+      ],
+    };
+    vi.mocked(ManageMetadataBase.getSoftPKFKConfig).mockReturnValue(config);
+    const provider = new PostgreSQLCodeGenProvider();
+
+    const result = await new TestableOrganicKeys(provider).Run(createConnection(provider.Dialect, ['Ghost']));
+
+    expect(result).toMatchObject({ success: false, failedCount: 2 });
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('entity "hr.Ghost" not found'));
+    expect(logged.some(([, query]) => query.includes('"hr"."vwBridgeEmployeeAttribute"'))).toBe(true);
+  });
+
+  it('writes nothing for a key whose related entity is not found — no orphan view, no key row', async () => {
+    const goodKey = organicKeyConfig.hr[0].OrganicKeys[0];
+    const goodRelated = goodKey.RelatedEntities[0];
+    const halfKey = {
+      ...goodKey,
+      Name: 'Half Link',
+      RelatedEntities: [
+        { ...goodRelated, TransitiveView: { Name: 'vwBridgeHalf', SQL: BRIDGE_BODY } },
+        { ...goodRelated, TableName: 'MissingAttribute', TransitiveView: undefined },
+      ],
+    };
+    vi.mocked(ManageMetadataBase.getSoftPKFKConfig).mockReturnValue({ hr: [{ TableName: 'Employee', OrganicKeys: [halfKey, goodKey] }] });
+    const provider = new PostgreSQLCodeGenProvider();
+
+    const result = await new TestableOrganicKeys(provider).Run(createConnection(provider.Dialect, ['MissingAttribute']));
+
+    expect(result).toMatchObject({ success: false, failedCount: 1 });
+    expect(logError).toHaveBeenCalledWith(expect.stringContaining('related entity "hr.MissingAttribute" not found'));
+    expect(logged.some(([, query, description]) => query.includes('vwBridgeHalf') || `${query} ${description}`.includes('Half Link'))).toBe(false);
     expect(logged.some(([, query]) => query.includes('"hr"."vwBridgeEmployeeAttribute"'))).toBe(true);
   });
 

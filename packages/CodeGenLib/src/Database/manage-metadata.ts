@@ -980,24 +980,29 @@ export class ManageMetadataBase {
 
       for (const tableConfig of allOrganicKeys) {
          // Resolve the owning entity
-         const ownerResult = await this.runQueryWithParams(pool, `
-            ${this.selectTop(1, 'ID, Name',
-               `FROM ${this.qs(schema, 'vwEntities')}
-            WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-               OR Name = @TableName`,
-               'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-         `, { 'TableName': tableConfig.TableName, 'SchemaName': tableConfig.SchemaName });
-
-         if (ownerResult.recordset.length === 0) {
-            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping`);
+         const owner = await this.findOrganicKeyEntity(pool, tableConfig.SchemaName, tableConfig.TableName);
+         if (!owner) {
+            // Every key declared on this table goes unapplied, so each one counts as a failure.
+            failedCount += tableConfig.OrganicKeys.length;
+            logError(`    > Organic keys config: entity "${tableConfig.SchemaName}.${tableConfig.TableName}" not found — skipping its ${tableConfig.OrganicKeys.length} organic key(s)`);
             continue;
          }
 
-         const ownerEntityId = ownerResult.recordset[0].ID;
-         const ownerEntityName = ownerResult.recordset[0].Name;
+         const ownerEntityId = owner.ID;
+         const ownerEntityName = owner.Name;
 
          for (const okConfig of tableConfig.OrganicKeys) {
             try {
+               // Resolve every related entity BEFORE writing anything for this key. Step 1 creates
+               // bridge views (in the database and the migration log) and step 2 records the key, so
+               // discovering a missing related entity in step 3 would leave an orphan view and a key
+               // with a mapping missing.
+               const relatedEntities = await this.resolveOrganicKeyRelatedEntities(pool, okConfig);
+               if (!relatedEntities) {
+                  failedCount++;
+                  continue;
+               }
+
                // Step 1: Create transitive views if defined
                for (const re of okConfig.RelatedEntities) {
                   if (re.TransitiveView) {
@@ -1060,22 +1065,9 @@ export class ManageMetadataBase {
                }
 
                // Step 3: Upsert EntityOrganicKeyRelatedEntity for each related entity
-               for (const reConfig of okConfig.RelatedEntities) {
-                  const relResult = await this.runQueryWithParams(pool, `
-                     ${this.selectTop(1, 'ID, Name',
-                        `FROM ${this.qs(schema, 'vwEntities')}
-                     WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
-                        OR Name = @TableName`,
-                        'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
-                  `, { 'TableName': reConfig.TableName, 'SchemaName': reConfig.SchemaName });
-
-                  if (relResult.recordset.length === 0) {
-                     logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — skipping`);
-                     continue;
-                  }
-
-                  const relEntityId = relResult.recordset[0].ID;
-                  const relEntityName = relResult.recordset[0].Name;
+               for (const { config: reConfig, entity: relEntity } of relatedEntities) {
+                  const relEntityId = relEntity.ID;
+                  const relEntityName = relEntity.Name;
 
                   // Check if this related entity mapping already exists
                   const existingRel = await this.runQueryWithParams(pool,
@@ -1138,6 +1130,45 @@ export class ManageMetadataBase {
       }
 
       return { success: failedCount === 0, createdCount, updatedCount, failedCount };
+   }
+
+   /**
+    * Finds the entity an organic-key config names: by base table + schema, else by entity name.
+    * Returns `null` when neither matches.
+    */
+   private async findOrganicKeyEntity(pool: CodeGenConnection, schemaName: string, tableName: string): Promise<{ ID: string; Name: string } | null> {
+      const result = await this.runQueryWithParams(pool, `
+         ${this.selectTop(1, 'ID, Name',
+            `FROM ${this.qs(mj_core_schema(), 'vwEntities')}
+         WHERE (BaseTable = @TableName AND SchemaName = @SchemaName)
+            OR Name = @TableName`,
+            'CASE WHEN BaseTable = @TableName AND SchemaName = @SchemaName THEN 0 ELSE 1 END')}
+      `, { 'TableName': tableName, 'SchemaName': schemaName });
+      const row = result.recordset[0];
+      return row ? { ID: row.ID, Name: row.Name } : null;
+   }
+
+   /**
+    * Resolves every related entity of an organic key, in config order. Logs each one that doesn't
+    * resolve and returns `null` if any is missing, so the caller can skip the key before writing any
+    * of it.
+    */
+   private async resolveOrganicKeyRelatedEntities(
+      pool: CodeGenConnection,
+      okConfig: OrganicKeyConfig
+   ): Promise<{ config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] | null> {
+      const resolved: { config: OrganicKeyRelatedEntityConfig; entity: { ID: string; Name: string } }[] = [];
+      let missing = 0;
+      for (const reConfig of okConfig.RelatedEntities) {
+         const entity = await this.findOrganicKeyEntity(pool, reConfig.SchemaName, reConfig.TableName);
+         if (entity) {
+            resolved.push({ config: reConfig, entity });
+         } else {
+            missing++;
+            logError(`    > Organic key "${okConfig.Name}": related entity "${reConfig.SchemaName}.${reConfig.TableName}" not found — the key is not applied`);
+         }
+      }
+      return missing === 0 ? resolved : null;
    }
 
    /**
