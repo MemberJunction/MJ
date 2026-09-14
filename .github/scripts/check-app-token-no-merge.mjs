@@ -10,17 +10,28 @@
  * with no approving review at all — every other actor, the build engineer included, is
  * held to the rule.
  *
- * That power is deliberate and narrow. The bot exists so that release-notes PRs are
- * AUTHORED by something other than the person who has to approve them: GitHub will not let
- * you approve your own PR, so a build engineer who opens his own notes PR needs to find a
- * second human for a file the release already produced. A bot author dissolves that. What
- * the bot must never do is MERGE — because a bot that both opens and merges a PR into
- * `next` is not a review process, it is a direct write with extra steps.
+ * That power is deliberate and narrow, and it is worth being exact about what it is FOR,
+ * because the obvious guess is wrong. The App exists because `MJ-GH-bot` — the account behind
+ * `MJ_GH_BOT_GITHUB_TOKEN`, which the release path pushes with — is an OUTSIDE COLLABORATOR
+ * and lost its bypass when the ruleset changed on 2026-09-03, stranding v6.1.0-edge.6
+ * mid-release. A GitHub App can be a bypass actor and consumes no org seat, which made it the
+ * only no-cost fix. So the App's job TODAY is publish.yml's direct pushes to `next` and the
+ * back-merge fallback PR. It is not in the release-notes path at all: that PR is opened by
+ * MJ-GH-bot, and the notes branch is pushed by the notes job's own `GITHUB_TOKEN`. (History:
+ * verify-release-app-token.yml. Mint sites: publish.yml.)
  *
- * Permissions cannot express that boundary. Merging a PR needs `contents: write`, and the
- * bot must already hold `contents: write` to push the notes branch at all; the token that
- * pushes is the token that could merge. So the line between "opens" and "merges" lives
- * nowhere the platform enforces it — it lives in an agreement. Agreements about CI decay
+ * What the App must never do is MERGE a pull request — an identity that can both open a PR
+ * and merge it into `next` is not a review process, it is a direct write with extra steps.
+ * That matters most for the direction this repo is heading rather than for where it stands:
+ * a release-notes PR needs an author other than the build engineer who has to approve it,
+ * because GitHub will not let you approve your own PR, and moving that authorship onto the
+ * App is the obvious way to get it. This guard exists so that move cannot quietly bring
+ * merge rights along with it.
+ *
+ * Permissions cannot express that boundary. Merging a PR needs `contents: write`, and the App
+ * must already hold `contents: write` to push `next` at all — which is the entire reason it
+ * exists. The token that pushes is the token that could merge. So the line between "opens"
+ * and "merges" lives nowhere the platform enforces it — it lives in an agreement. Agreements about CI decay
  * into folklore in about six months, usually when the person who made them is on holiday
  * and something needs to ship. This script is that agreement, written where it cannot be
  * forgotten: a red check with the reason in it.
@@ -110,6 +121,48 @@ export const MERGE_RULES = [
 ];
 
 /**
+ * Fold backslash-continued physical lines into the LOGICAL lines a shell actually executes.
+ *
+ * Every rule above describes one shell command, but a command is a logical line: a trailing
+ * backslash continues it onto the next physical line. Scanning physical lines therefore let a
+ * line break step around every rule — `gh pr \` + `merge --squash` matched nothing at all. The
+ * shipped `--auto` case passed only because `merge` and `--auto` happened to land on the same
+ * physical line, which made the gap look narrower than it was.
+ *
+ * A continuation is an ODD number of trailing backslashes; an even number is an escaped
+ * backslash that ends the line for real (`echo "a\\"`), and gluing there would invent commands
+ * the shell never runs.
+ *
+ * Each logical line keeps the line number it STARTS on, so an error still points at the line a
+ * reader would click, and the continued remainder is joined with a single space so the echoed
+ * text stays readable.
+ *
+ * @param {string[]} lines physical lines
+ * @returns {{text: string, line: number}[]} one entry per logical line
+ */
+function toLogicalLines(lines) {
+    const logical = [];
+    let open = null;
+    for (const [index, physical] of lines.entries()) {
+        const trailing = /(\\+)$/.exec(physical);
+        const continues = trailing !== null && trailing[1].length % 2 === 1;
+        const text = continues ? physical.slice(0, -1) : physical;
+
+        if (open === null) open = { text, line: index + 1 };
+        else open.text += ` ${text.trim()}`;
+
+        if (!continues) {
+            logical.push(open);
+            open = null;
+        }
+    }
+    // A file whose last line ends in a backslash has an unterminated command; keep it rather
+    // than dropping it, or the final command in such a file would be invisible to every rule.
+    if (open !== null) logical.push(open);
+    return logical;
+}
+
+/**
  * Scan one workflow's text. Pure — no I/O, no exits.
  *
  * @param {string} content the workflow YAML, verbatim
@@ -121,20 +174,19 @@ export function checkWorkflowContent(content, { file = '<workflow>' } = {}) {
         throw new TypeError(`checkWorkflowContent expects the workflow text as a string, received ${typeof content}`);
     }
 
-    const lines = content.replace(/\r\n/g, '\n').split('\n');
+    const lines = toLogicalLines(content.replace(/\r\n/g, '\n').split('\n'));
 
     // The violation is the PAIR, so the token mint is the cheap discriminator and goes first.
     // A workflow that merges WITHOUT an App token is subject to `next-protect` like every
     // other actor and is none of this guard's business — including its opt-out markers, which
     // are inert there. publish.yml mints tokens constantly and merges nothing; it must stay
     // silent too.
-    const mints = lines.flatMap((line, index) => (APP_TOKEN.test(line) ? [index + 1] : []));
+    const mints = lines.flatMap(({ text, line }) => (APP_TOKEN.test(text) ? [line] : []));
     if (mints.length === 0) return [];
 
     const problems = [];
     const merges = [];
-    for (const [index, line] of lines.entries()) {
-        const lineNumber = index + 1;
+    for (const { text: line, line: lineNumber } of lines) {
         const rule = MERGE_RULES.find((r) => r.test(line));
         if (!rule) continue;
 

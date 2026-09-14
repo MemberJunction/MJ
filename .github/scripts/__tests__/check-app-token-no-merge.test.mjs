@@ -80,12 +80,28 @@ describe('a workflow that mints a token AND merges a PR', () => {
         expect(p.message).toContain(OPT_OUT_MARKER);
     });
 
-    it('flags an auto-merge queued without `gh pr merge` on one line', () => {
+    // Physical lines are folded into shell LOGICAL lines before any rule runs, so this is
+    // `gh pr merge --auto --squash "$PR"` by the time it is classified — which is what it is.
+    // It was reported as `auto-merge` before folding only because `gh pr` and `merge` sat on
+    // different physical lines and the plainer rule could not see the command at all.
+    it('flags a `gh pr merge` whose arguments are wrapped onto the next line', () => {
         const p = flagged(`
       - name: Queue the merge
         run: |
           gh pr \\
             merge --auto --squash "$PR"
+`);
+        expect(p.code).toBe('gh-pr-merge');
+    });
+
+    // Keeps the `--auto` half of the auto-merge rule under test on its own. Folding moved the
+    // two wrapped fixtures onto the `gh-pr-merge` rule, and without this case no test would
+    // exercise "an auto-merge flag beside a merge signal" for a command that `gh pr merge`
+    // cannot match — here because the CLI is invoked through a variable.
+    it('flags an auto-merge queued through a gh invoked by variable, which `gh pr merge` cannot match', () => {
+        const p = flagged(`
+      - name: Queue the merge
+        run: "$GH" pr merge --auto --squash "$PR"
 `);
         expect(p.code).toBe('auto-merge');
     });
@@ -124,6 +140,60 @@ describe('a workflow that mints a token AND merges a PR', () => {
         expect(p.line).toBeGreaterThan(0);
         expect(p.message).toContain('gh pr merge "$PR" --squash');
         expect(p.message).toContain('.github/workflows/example.yml');
+    });
+
+    // A shell command is a LOGICAL line: a trailing backslash continues it onto the next
+    // physical line. The guard scans physical lines, so before this suite every rule could be
+    // stepped around with a line break — including the plainest one, `gh pr` + `merge`. The
+    // two-line `--auto` case above passed only because `merge` and `--auto` happened to land
+    // together on the second line.
+    it('flags `gh pr merge` split across two lines by a backslash continuation', () => {
+        const p = flagged(`
+      - name: Merge it
+        run: |
+          gh pr \\
+            merge --squash "$PR"
+`);
+        expect(p.code).toBe('gh-pr-merge');
+    });
+
+    it('flags a merge whose every argument is on its own physical line', () => {
+        const p = flagged(`
+      - name: Queue it
+        run: |
+          gh pr \\
+            merge \\
+            --auto \\
+            --squash "$PR"
+`);
+        expect(p.code).toBe('gh-pr-merge');
+    });
+
+    it('reports a continued command at the line where it STARTS, not where it ends', () => {
+        const content = workflow(`
+      - name: Merge it
+        run: |
+          gh pr \\
+            merge --squash "$PR"
+`);
+        const [problem] = checkWorkflowContent(content);
+        const lines = content.split('\n');
+        // The reported line must be the one a reader would click: `gh pr \`, the command's start.
+        expect(lines[problem.line - 1]).toContain('gh pr');
+        expect(lines[problem.line - 1]).not.toContain('merge --squash');
+    });
+
+    it('does not join lines whose backslash is not a continuation', () => {
+        // `\\n` inside a quoted string ends with `n`, not with a backslash, so the next line is
+        // a separate command and must not be glued on. Gluing would invent commands that the
+        // shell never runs, which is the false-positive direction of the same mistake.
+        const content = workflow(`
+      - name: Not a continuation
+        run: |
+          printf 'gh pr \\n'
+          merge_helper --squash "$PR"
+`);
+        expect(checkWorkflowContent(content)).toEqual([]);
     });
 
     it('reports every merge line, not just the first', () => {
