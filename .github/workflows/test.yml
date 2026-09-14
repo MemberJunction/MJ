@@ -197,13 +197,14 @@ jobs:
         if: ${{ !cancelled() }}
         run: node .github/scripts/check-mj-cli-resolution.mjs packages
 
-      # App-token-never-merges guard. The release bot is a BYPASS ACTOR on `next-protect`:
-      # it is the one identity that can land a PR in next with no approving review. It is
-      # meant to OPEN release-notes PRs so the build engineer is not approving his own, and
-      # never to merge them — but permissions cannot draw that line, because merging needs
-      # the same `contents: write` the bot must hold to push the branch. So the boundary is
-      # this check or it is folklore. See the script header for what it deliberately does
-      # not prove, and for the opt-out that makes a legitimate exception reviewable.
+      # App-token-never-merges guard. `blue-cypress-ci-bot` is a BYPASS ACTOR on
+      # `next-protect`: the one identity that can land a commit in next with no approving
+      # review. It holds that power so publish.yml can push `next` directly after a release,
+      # and it must never merge a PR — but permissions cannot draw that line, because merging
+      # needs the same `contents: write` it must already hold to push. So the boundary is this
+      # check or it is folklore. See the script header for what it deliberately does not
+      # prove, for the opt-out that makes a legitimate exception reviewable, and for why the
+      # rule matters most if release-notes authorship ever moves onto the App.
       #
       # `!cancelled()` like its neighbours: each guard reports its own verdict and must not
       # be suppressed by another's failure.
@@ -750,8 +751,12 @@ jobs:
             pnpm run build
           fi
 
-      # The guard-script unit suites (371 tests, ~4s) — they gate the gates, including the
-      # shard planner whose failure mode is a silently empty test tier.
+      # Every guard-script unit suite under .github/scripts/__tests__ — they gate the gates,
+      # including the shard planner whose failure mode is a silently empty test tier. Kept
+      # unconditional because the whole tier runs in a few seconds; no test COUNT is quoted
+      # here on purpose, because the one that used to be (371) was stale by 250 within a
+      # month and a number nobody re-measures is worse than no number. The cost claim is the
+      # part a reader acts on, and `vitest` prints both on every run.
       - name: Guard-script unit tests
         run: npx vitest run --config .github/scripts/vitest.config.mts
 
