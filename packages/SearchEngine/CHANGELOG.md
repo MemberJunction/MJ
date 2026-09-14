@@ -1,5 +1,539 @@
 # @memberjunction/search-engine
 
+## 6.1.0
+
+### Minor Changes
+
+- 71817db: Make the entity-search per-entity timeout configurable and lower its default. `EntitySearchProvider`'s hard per-entity fan-out timeout was a `private static readonly PER_ENTITY_TIMEOUT_MS = 30_000`, so a deployment could not tune it. It is now a **public static `PerEntityTimeoutMS`** (default lowered from 30000ms to **3000ms**), mirroring the existing deployment-adjustable `PerEntityFetchDepth` static.
+
+  The 3s default keeps interactive/omnibar fan-outs responsive by dropping a pathological entity promptly instead of stalling the whole fan-out. Deployments doing large unindexed LIKE scans that need the old behavior can raise it — either by assigning the static at startup or by overriding the default with an environment variable at process start:
+
+  ```ts
+  import { EntitySearchProvider } from "@memberjunction/search-engine";
+  EntitySearchProvider.PerEntityTimeoutMS = 30_000;
+  ```
+
+  ```bash
+  # equivalent env-var override, read once when the module loads
+  MJ_SEARCH_PER_ENTITY_TIMEOUT_MS=30000
+  ```
+
+  All three deployment-adjustable search statics now accept an env-var default override, read once at module load (mirroring the `MJ_INTEGRATION_*` numeric ceilings):
+
+  | Static                                       | Environment variable                        | Default |
+  | -------------------------------------------- | ------------------------------------------- | ------- |
+  | `EntitySearchProvider.PerEntityTimeoutMS`    | `MJ_SEARCH_PER_ENTITY_TIMEOUT_MS`           | `3000`  |
+  | `EntitySearchProvider.PerEntityFetchDepth`   | `MJ_SEARCH_PER_ENTITY_FETCH_DEPTH`          | `15`    |
+  | `FullTextSearchProvider.PerEntityFetchDepth` | `MJ_SEARCH_FULLTEXT_PER_ENTITY_FETCH_DEPTH` | `15`    |
+
+  A positive value is floored to an integer. A value that is _present but invalid_ (non-numeric or non-positive) falls back to the built-in default and logs a `warning`-severity message so an ops-side typo surfaces at boot; an unset variable is silent.
+
+  Behavior change: the per-entity timeout now defaults to 3000ms (was 30000ms). The constant also becomes public and writable (formerly private readonly).
+
+- 88d751d: **Scoped Search now carries the skill principal — and judges it.**
+
+  `ScopeDimensionResolver` binds `Principals.SkillID` into a dimension's expansion query, and
+  `principalsFrom()` sources that from `SearchParams.AISkillID`. `SearchParams` declares the field and
+  `ScopeExplanation.test.ts` asserts on it — but the `Scoped Search` action never set it. The string
+  "skill" did not appear in that file. So the slot existed, was typed, was tested, and no caller could
+  reach it: a scope whose bound depends on the active skill resolved `SkillID` as null forever.
+
+  Adds an optional `AISkillID` input, threaded onto `SearchParams.AISkillID` the way `AIAgentID`
+  already is. Omit it and the skill principal stays null, so no caller gains a skill it did not ask for.
+
+  **Three behaviour changes to note, none of which is the skill threading itself.** First, the
+  `AgentUnscopedAll` fallback is now gated on wieldability, so an install where an agent is
+  `SearchScopeAccess='All'` _and_ the user holds no direct or role grant previously got `Allowed:
+Search` and now additionally requires the agent to be in the metadata cache and runnable by that
+  user. This reaches `SearchKnowledge` and `StreamScopedSearch` as well as the action. Second, a
+  supplied skill is judged wherever it is named, not only at its `All` fallback: a skill binds into
+  the expansion query, whose output _is_ the bound for a `restricts: true` dimension, so judging it
+  only where it grants would let a user holding their own grant widen with any skill they named.
+  The agent is deliberately NOT judged that way — `AIAgentID` is also attribution, and gating it at
+  the point of supply turns an analytics field into a retrieval outage. The skill check does NOT judge the agent —
+  `GetSkillsForAgent` filters the user's rights on the SKILL (`AISkillPermissionHelper`), never on
+  the agent — so the agent is judged at the fallbacks instead, where it widens. Both `'All'` arms
+  consult it, including the skill's: a skill widens through the agent it would activate on, so
+  naming a skill must not buy access to an agent the caller may not run. A stale metadata cache is
+  distinguished from a denial in the MESSAGE, but it does not buy access: an agent that
+  cannot be evaluated cannot back a widening fallback either. (An earlier revision let it through on
+  the reasoning that a cache blip should not refuse a user whose own grant covered the scope — which is
+  impossible, since a direct or role grant returns before any fallback is reached. What it actually did
+  was grant `Search` to users with no grant at all whenever an agent was missing from the cache.)
+
+  Third: **a skill supplied with NO agent is now refused outright**. At base, step 4b granted
+  `SkillUnscopedAll` with no agent at all — an agent-free skill id was a standalone grant, so
+  'refused' replaces an actual widening, not a no-op. A skill is judged relative to the agent it would activate on, so there is nothing to
+  judge it against. The `Scoped Search` action always has an agent, so this is reachable only
+  through `ExplainScope({ AISkillID })` with no `AIAgentID` — most likely a preview UI that lets
+  a skill be picked before an agent. Such a call now returns `PrincipalNotActivatable` rather
+  than quietly resolving on the user's own grant.
+
+  Also at the same call sites: the caller's tenant (`PrimaryScopeRecordID`) now reaches the
+  permission decision everywhere it is available — previously every tenant-scoped grant,
+  including a tenant-scoped `None` (an explicit per-tenant deny), was discarded before the
+  verdict. Denial messages no longer echo principal names back to the caller (ids + `Source`
+  only; audit rows and server logs keep the full reason). The GraphQL resolvers refuse a
+  supplied-but-unloadable `agentID` instead of silently proceeding with an unjudged principal,
+  and the `SearchScopes` listing hides scopes under the same rule (it takes no searchContext, so
+  no tenant applies there). The resolver's `ExtraFilter` interpolations now use `EscapeSQLString`.
+
+  **The skill is a principal, so it is also permission-checked.** `SearchScopePermissionResolver`
+  already had three rules that only fire when `Skill` is supplied — `SkillNone` and
+  `SkillAssignedNotListed` reject a scope the user's own roles allow, and `SkillUnscopedAll` grants one
+  they do not. The action never passed it. Threading the ID without the gate would have enabled the
+  widening half of a two-part mechanism and left the deciding half unwired, and would have put the
+  search at odds with `ExplainScope`, which does pass it — the preview/enforcement drift this code has
+  already been bitten by once. So the skill is resolved _before_ the permission check, handed to
+  `ResolveEffectivePermission`, and attributed on every denial row.
+
+  A value that is not a UUID, or that will not load, is refused with `INVALID_PARAM` rather than
+  dropped: continuing with a null skill would bind an unjudged ID into the expansion query.
+
+  **A principal may only WIDEN if the caller may wield it — checked where it widens.**
+
+  `AgentUnscopedAll` and `SkillUnscopedAll` are the only places a principal changes an outcome: by the
+  time they are reached the user has no grant of their own, and `SearchScopeAccess='All'` is about to
+  supply one. Both permission models are open by default — no permission rows means anyone may run it —
+  so an id a caller merely NAMED could grant `Search` on any scope.
+
+  Two checks do this, split because they answer different questions.
+  `skillIsActivatable()` runs wherever a skill is NAMED (step 1e) and asks
+  `GetSkillsForAgent(agent, user)` — the same call `BaseAgent.preActivateRequestedSkills` gates real
+  activation on. `agentIsWieldable()` runs at the WIDENING fallbacks and asks for Run on the agent.
+  Both fallbacks consult it, the skill's included: `GetSkillsForAgent` filters SKILL permissions
+  (`AISkillPermissionHelper`) and never `AIAgentPermission`, so vouching for a skill says nothing about
+  whether the caller may run the agent it would activate on. Failing either check REFUSES, with
+  `PrincipalNotActivatable` — a widening fallback needs the principal positively confirmed, not merely
+  un-denied.
+
+  **Deliberately NOT gated at the point the id is supplied.** `AIAgentID` is attribution far more often
+  than it is authorization — `agent-pre-execution-rag` threads it purely so `SearchExecutionLog` can
+  attribute the search — and gating supply rather than grant turns an analytics field into a retrieval
+  outage on any install with explicit `AI Agent Permission` rows. A test pins that a non-`'All'` agent
+  supplied WITHOUT a skill never reaches the check — which is the RAG path's shape today. Note a
+  non-`'All'` agent DOES reach it when an `'All'` skill is supplied, because that skill widens through
+  it; if the RAG path ever starts threading `AISkillID`, this is the interaction to re-examine.
+
+  A stale metadata cache is reported as itself. `GetUserAgentPermissions` throws when the agent is
+  absent from `AIEngine.Instance.Agents` and fails closed to all-false, so an agent created after the
+  cache loaded would otherwise read as "not permitted" — a metadata-load problem wearing an
+  authorization message.
+
+  Because the policy sits in the resolver, `ExplainScope` inherits it: preview and search reach the same
+  verdict by running the same code rather than by two copies agreeing.
+
+  **`ExplainScope` inherits the same judgement** (`@memberjunction/search-engine`). It already loaded the skill
+  principal and applied its rules, so without this a preview would report `SkillUnscopedAll` as a grant
+  while the real search refused — the preview-vs-enforcement drift that file already carries a regression
+  test about. Both paths now judge both principals on identical terms, and on the explain path a principal refused
+  for a PRINCIPAL-SIDE reason — `PrincipalNotActivatable`, `AgentNone`, `AgentAssignedNotListed`,
+  `SkillNone`, `SkillAssignedNotListed` — is no longer bound into dimension resolution;
+  `deriveServerValue` parameterises server-authored SQL with it, which is the thing the action refuses
+  outright rather than continuing with. A refusal for a USER-side reason (no grant) still binds them,
+  deliberately: dropping them there drives the expansion query with nulls, which makes a required
+  dimension throw and the explanation announce a dimension failure that does not exist.
+
+  On containment, stated accurately: an expansion query is server-authored SQL, but MJ renders query
+  parameters through Nunjucks with `autoescape: false` and escaping is opt-in (`| sqlString`, or a
+  declared validation chain). So MJ does not itself guarantee that naming a skill cannot widen or
+  inject — the query author does, and the permission gate above is what MJ enforces. Scopes that never
+  reference `SkillID` are unaffected in either direction.
+
+- b6416f4: Search: verify that a result group's records belong to the entity it is attributed to
+
+  `SearchEngine.filterEntityResults` groups results by `EntityName`, resolves that entity, checks
+  `CanRead`, and then — when the entity has no row filter for the caller, or the caller is exempt from row
+  filtering — admitted the whole group without checking the record ids were that entity's records at all.
+
+  `CanRead` establishes that a user may read an entity. It does not establish that a result _is_ one of
+  that entity's rows. And `EntityName` is provider output: the vector lane reads it from the vector's own
+  `Entity` metadata key, and the 3rd-party lanes (Azure AI Search, Elasticsearch, Typesense, OpenSearch)
+  use the index or collection name. Whoever populates an index therefore chose which entity's permissions
+  were evaluated for its documents — label an index after an entity the caller can read, and its documents
+  were admitted, with each result's Title, Snippet and RawMetadata rendered from that index's own metadata.
+
+  The check now runs for those groups. It is the same query the row-filter path already used — a
+  primary-key `IN` against the attributed entity's own view, keeping only the ids that come back — so this
+  reuses an existing, tested code path rather than adding a mechanism.
+
+  **Lanes that queried the entity directly are exempt, so the common path costs nothing.** An `entity` or
+  `fulltext` result's ids came out of a `RunView` against that entity and are its records by construction.
+  Everything else is verified, including any `SourceType` a 3rd-party provider defines — an allowlist, so
+  an unanticipated source type is verified by default rather than trusted by default. A mixed group is
+  partitioned: the self-evident results pass straight through and only the rest are queried.
+
+  Row-filtered groups behave exactly as before; that path already verified ownership as a side effect of
+  filtering. RLS-**exempt** callers are now verified too, deliberately: exemption says which _rows of an
+  entity_ a user may see, not whether a result belongs to that entity.
+
+  **Behaviour change worth noting before upgrading:** a deployment that has been returning results whose
+  `EntityName` does not match the entity their ids belong to will see those results disappear. That is the
+  intent, but it is a change — if search results drop after this upgrade, the labels were wrong, and
+  `Residual permission filter removed N result(s)` in the log identifies where.
+
+  `filterByRowLevelSecurity` is renamed `verifyOwnershipAndRowFilters` to match what it now does; it is
+  private, so nothing outside the class is affected.
+
+  **Why `minor` rather than `patch`:** this change is code-only, but it ships in the same branch as a
+  `metadata/` JSONType addition, and the bump rule is evaluated per branch — see
+  `.claude/rules/changesets.md`.
+
+- ae2baef: Content vectors: declare the entity on the content source, and let `explicit` omit the per-vector key
+
+  Minor rather than patch on both: this adds a property to the `ContentSource.Configuration` JSONType, so
+  it changes metadata rather than code alone.
+
+  `VectorSearchProvider` could attribute a match two ways: an `Entity` key in the vector's own metadata,
+  or an Entity Document targeting the index. Neither covers the ContentSource pipeline running
+  `fieldStrategy: 'explicit'`, where metadata carries only the configured fields — `ContentSourceID` is
+  present, the identity keys are not — and where the caller may not use Entity Documents at all.
+
+  That gap is not cosmetic. `SearchEngine.filterEntityResults` groups results by `EntityName` and
+  resolves each group with `EntityByName()` to evaluate CanRead and row-level security. An unresolvable
+  name yields no `EntityInfo`, the method returns before admitting the group, and **the results are
+  silently discarded** — `Residual permission filter removed N result(s)` is the only trace.
+
+  A content source can now declare what its vectors are, via `VectorEntityName` on its `Configuration`
+  JSON — the same place every other per-source vector knob already lives (`EnableVectorization`,
+  `VectorIDStrategy`, `ChunkTextStorage`, `VectorMetadata`). When a match omits `Entity`, its
+  `ContentSourceID` resolves through `KnowledgeHubMetadataEngine.GetContentSourceByID()` — an O(1) lookup
+  against an already-cached collection — to that declaration.
+
+  **The declaration is validated before it is trusted, twice.** Whatever it resolves to becomes the
+  entity whose CanRead and row-level security `filterEntityResults` evaluates, and that method never
+  checks the matched record ids belong to it. So the name must (a) resolve in metadata — an unresolvable
+  name would otherwise silently delete a source's results rather than mislabel them — and (b) be one of
+  `MJ: Content Items` / `MJ: Content Item Chunks`, or an IS-A subtype of one. Without (b) an arbitrary
+  entity name in a writable configuration blob would decide which permissions apply. The canonical name
+  from metadata is what gets used, so casing and whitespace cannot fork the grouping.
+
+  Two properties worth calling out, because they are why this sits where it does rather than being
+  inferred from somewhere else:
+  - **Per match, not per index.** One vector index can serve many content sources, so an index-wide
+    answer is wrong as soon as a second source shares the index. `ContentSourceID` travels on the vector.
+  - **Declared, not guessed** — and validated, per above. Since attribution decides _which_ entity's
+    permissions are evaluated, an inferred or unchecked name would put the wrong object's rules in front
+    of the records — worse than no attribution, which merely drops them.
+
+  Declaring it per source also lets a source name an **ISA extension** instead of the base entity it
+  inherits from. That distinction is a security one: row-level security typically lives on the
+  extension, so a hardcoded or index-wide base-entity name evaluates the wrong entity's RLS.
+
+  Resolution order is most-specific-first: the match's own `Entity` key, then its content source's
+  declaration, then the index's Entity Documents, then `'Unknown'` as before. A source that declares
+  nothing — or declares something that fails validation — is simply absent from the lookup, so its matches
+  behave exactly as they do today.
+
+  Also fixed, both pre-existing:
+  - `convertMatches` applied the resolved fallback with `??` while the "does this match need one" test is
+    falsy, so an `Entity: ''` resolved a name and then discarded it — the result was dropped with the
+    resolution already paid for.
+  - `convertMatches` had the same `??` on `RecordID`, so a producer writing `RecordID: ''` shipped an empty
+    record id instead of falling through to the vector's own id — dropped by the permission filter on an
+    `IN ('')`, or returned as a result that cannot be opened.
+
+  `extractDisplayTitle` is deliberately left reading `meta['Entity']` rather than the resolved name, with a
+  comment saying so. It looks like an oversight and is not: when the metadata carries no name fields it
+  falls through to `` `${fallbackEntity} Record` ``, and that string is the sentinel
+  `SearchEnricher.resolveRecordNames` matches to replace the title with the live name from the database.
+  Feeding the resolved entity in makes the name-field branch succeed off the embedding-time snapshot, the
+  sentinel never forms, and a renamed record shows a stale title until it is re-embedded.
+
+  Failures decline rather than guess, and each declines narrowly: a source whose `Configuration` will not
+  parse is skipped on its own (one guard per source, not one around the batch, so a single bad blob cannot
+  downgrade every match after it to a different entity's permissions), and a `KnowledgeHubMetadataEngine`
+  load that is **permission-constrained** declines explicitly instead of reading its empty collections as
+  "nothing declared" — otherwise attribution would silently depend on who was searching.
+
+  **Attribution failure is now audible.** A batch containing matches that no step could name logs the
+  count, the index, a sample of vector ids, and the three ways to fix it — once per index per batch, and
+  only when it happens. Before this, such matches were discarded by `filterEntityResults` with no log on
+  that path at all; the sole trace was the aggregate `Residual permission filter removed N result(s)`,
+  whose wording blames incomplete provider push-down. So the one signal a deployment got pointed away from
+  the cause, which is why "vectors are in the index and never surface" was undiagnosable.
+
+  **And the write side can now drop the key.** With a declaration in place, `'explicit'` genuinely omits
+  `Entity` and writes `ContentSourceID` instead — the source becomes the single place the answer lives
+  rather than a string repeated on every vector. Previously the key could not be removed by configuration
+  at all on this pipeline: it is written _before_ the `explicit` early return (the EntityDocument pipeline
+  has it the other way around), and there is no `IncludeEntity` toggle beside `IncludeEntityIcon` /
+  `IncludeUpdatedAt` / `IncludeTags` / `IncludeText`.
+
+  The declaration is validated where it is written, not only where it is read. It must resolve in
+  metadata, and it must name `MJ: Content Item Chunks` or an IS-A subtype — because omission requires
+  `'alwaysChunk'`, which makes every vector a chunk row whose id is a chunk key. A name that fails either
+  check keeps the `Entity` key and logs once per run. This fails _safe_ rather than closed, and
+  deliberately so: the reader can only refuse a bad declaration after the fact, by which point the vectors
+  carry no entity at all, so correcting the configuration would not recover them without a re-embed.
+
+  Omission is therefore gated on all four of `'explicit'`, a declaration resolving to the chunk entity,
+  `ChunkTextStorage: 'alwaysChunk'` and `VectorIDStrategy: 'recordId'`, with
+  `ContentSourceID` then written unconditionally. Each condition keeps the guarantee that every vector
+  carries either `Entity` or a key that resolves to a declared entity:
+  - **`'mixed'`** emits ContentItem-level vectors for single-chunk items and ContentItemChunk-level vectors
+    for the rest — two entities from one source, which one declaration cannot describe.
+  - **`'hash'`** leaves no recoverable record id, since `'explicit'` drops `RecordID` too and the vector's
+    own id is a digest rather than the row's. Attribution would succeed and then hand search an id that
+    resolves against no row — the same disappearance, one step later.
+  - **Other field strategies** document a populated metadata set; dropping a key their consumers are told
+    is always present would be a behavior change for them.
+
+  Anything else keeps writing `Entity` exactly as before, and existing vectors are untouched — they keep
+  resolving through their stored key (resolution step 1), so no re-index is required.
+
+  Integration coverage comes with it: `IT — content-vectorization` gains CV7 (a declaring source omits
+  `Entity`, promotes `ContentSourceID`, and its vector id is the chunk row's PK) and CV8 (three refusal
+  paths — no opt-in, an unresolvable name, and a declaration naming the item entity — each keep the key).
+
+  No schema change and no migration. It does add a property to the `ContentSource.Configuration` JSONType,
+  so `mj sync push` + `mj codegen` are needed before the typed accessor exists; until then both sides read
+  it through a locally-declared interface that is deleted at that point. Behaviour is unchanged for callers
+  whose matches carry `Entity` metadata and for any index resolving through an Entity Document.
+
+### Patch Changes
+
+- 5e987a7: Knowledge Hub + universal search fixes found wiring a Dropbox team-space vault and a website crawl into Pinecone.
+  - **storage (Dropbox):** the refresh-token constructor path now marks the driver configured (callers that only construct the driver, like `AutotagCloudStorage`, were rejected with "Missing: Access Token"); optional `STORAGE_DROPBOX_PATH_ROOT` applies an SDK `pathRoot` so Business team-space paths resolve.
+  - **content-autotagging:** `AutotagCloudStorage` walks sub-folders under `PathPrefix` instead of one level; the vectorizer addresses the 3rd-party index by `VectorIndex.ExternalID` (fallback `Name`) instead of the display name; invalid-content deletions and failed content-item saves are now logged instead of silent.
+  - **search-engine:** `VectorSearchProvider` uses `VectorIndex.ExternalID` for the provider-side index name — the Semantic lane 404'd against Pinecone on every query when the MJ display name differed from the index name.
+
+- 0acf96e: Make the SearchScope permission resolver replaceable.
+
+  `SearchEngine` authorizes every search through `SearchScopePermissionResolver`, which answers from `__mj.SearchScopePermission` rows keyed by `UserID` or by one of the user's MJ Roles. That covers MJ's own permission model completely — but it is not the only shape a permission model can take, and until now it was the only one the search path could consult.
+
+  A consumer whose entitlements are neither a user nor an MJ Role has no row that can express them. Its grants are therefore invisible to the check that actually runs, and the failure is silent in the worst way: the grant is configured, an administrator can see it, and the search simply returns nothing. The resolver was a module-level singleton imported directly by `SearchEngine`, so the only remedies were to project the consumer's model into `SearchScopePermission` as derived per-user rows — permission state that can drift from its source — or to fork the search path.
+
+  This adds the seam that was missing:
+  - **`SearchScopePermissionResolverBase`** — the abstract contract registrations bind to.
+  - **`SEARCH_SCOPE_PERMISSION_RESOLVER_KEY`** — the ClassFactory key. There is exactly one resolver per deployment (a consumer _replaces_ the policy rather than selecting among several), so a single shared key is the right shape, and it keeps the registry free of the keyless-registration warning.
+  - **`GetSearchScopePermissionResolver()`** — returns the highest-priority registration, falling back to MJ's own.
+
+  **Every path that authorizes a scope now goes through the seam**, not just `SearchEngine`. This matters more than it sounds: a seam honoured on some paths and not others is worse than no seam, because the resulting behaviour is inconsistent rather than merely absent — the same grant authorizes a search issued one way and silently denies it issued another. The five call sites are `SearchEngine.searchOneScope`, `SearchKnowledgeResolver` (both the single-scope check and the visible-scope-list filter), `SearchKnowledgeStreamResolver`, and the `__Scoped_Search` core action. The last is the agent-facing path, so an override that did not reach it would be invisible to exactly the callers most likely to need it.
+
+  Resolution happens per call rather than being cached at module load. A registration made during application startup would otherwise be missed depending on import order — a failure mode that presents as "my resolver works in tests but not in the server", which is expensive to diagnose. The class is stateless and construction is trivial, so there is nothing to gain by caching.
+
+  The intended shape for an override is to subclass the stock resolver and compose with it, **passing no priority**:
+
+  ```ts
+  @RegisterClass(
+    SearchScopePermissionResolverBase,
+    SEARCH_SCOPE_PERMISSION_RESOLVER_KEY,
+  )
+  export class MyResolver extends SearchScopePermissionResolver {
+    public override async ResolveEffectivePermission(
+      input: ResolvePermissionInput,
+    ) {
+      const stock = await super.ResolveEffectivePermission(input);
+      if (stock.Allowed) return stock; // never narrow what MJ already granted
+      return this.myOwnGrantCheck(input); // only ever widen
+    }
+  }
+  ```
+
+  Subclassing is what orders the registration, and it does so more reliably than a number can. `ClassFactory.Register` treats an omitted priority as _one higher than the highest already registered for this (base, key)_, and a subclass cannot be defined without its parent module having loaded first — so MJ's registration always runs before the consumer's, and the consumer always lands above it. The ordering is a side effect of the language rather than a convention anyone has to remember.
+
+  A hardcoded priority forfeits that. Two consumers that pick the same number collide, `Register` warns, and resolution degrades to whichever was registered last — a load-order bug wearing the costume of a configuration value. The priority argument stays for cases where subclassing is genuinely impossible.
+
+  **Nothing changes for existing consumers.** MJ's resolver registers itself as the default, so behaviour is identical when nothing else is registered. `DefaultSearchScopePermissionResolver` is retained and still exported so existing imports keep compiling; it is marked `@deprecated` because it always yields MJ's own implementation and therefore bypasses any registered override.
+
+  The failure posture is unchanged and worth restating for anyone writing an override: `SearchEngine` treats a resolver throw as **denied**, never as allowed. An override that cannot reach its own store must not accidentally open a scope.
+
+  7 tests covering the default, the fallback, an honoured registration, late registration (imperative, because `@RegisterClass` evaluates at module load and so cannot demonstrate lateness), composition with `super`, the deprecated constant, and that a subclass of the stock resolver satisfies the base contract.
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 1748491: Search results open for entities whose primary key is not named `ID`, and round-trip composite primary keys end to end.
+
+  Clicking a universal-search result failed with `InnerLoad returned false for key ID=<value>` for any entity whose key column has another name (`individual_id`, `organization_id`, …). Every search navigation site built the key as `{ FieldName: 'ID', Value: RecordID }` or `CompositeKey.FromID(RecordID)`, and `Load()` correctly rejects a field that is not one of the entity's primary keys. MJ supports primary keys with any column name(s) and type(s), so the fix uses the entity's metadata everywhere instead of a literal.
+
+  **The contract.** A search result's `RecordID` is a _compact_ `CompositeKey` segment: the bare value for a single-column key (so `IN (...)` filters, dedup keys and persisted ids are unchanged), the full `Field1|Value1||Field2|Value2` segment for a composite key. `CompositeKey.LoadFromURLSegment(entity, s)` already reads both forms; two new statics make it the one-liner every consumer calls, and one new serializer produces it:
+  - `CompositeKey.FromURLSegment(entityInfo, recordId)` — the inverse of the compact form; falls back to an `ID` key only when the entity cannot be resolved.
+  - `CompositeKey.FromEntityRecord(entityInfo, row)` — the key from a RunView row using the entity's real primary key column(s).
+  - `FieldValueCollection.ToCompactURLSegment()` — bare value for one column, prefixed segment for several (or when a lone value itself contains `|`).
+  - `ToWhereClause()` now doubles embedded quotes, since it builds SQL from record ids that can come from an external index.
+
+  **Consumers** (`ng-explorer-core`, `ng-search`): the shell dropdown, the "See all results" page, the omnibar palette (the default search surface — not named in the report), the FK-cell "open related record" path in views and single-search-result, and the two recents name lookups all resolve the key with `FromURLSegment` against the entity's metadata.
+
+  **Producers** (`core`, `search-engine`, `ai-vectors-memory`): `EntitySearchProvider` read `record.ID`, which is `''` for these entities — `SearchFusion` drops empty ids, so the entity lane silently contributed nothing for them; it now builds the key from `PrimaryKeys`. The full-text lane, `SearchEntity`'s lexical pass and its permission filter (`ID IN (...)`, `Fields: ['ID']`), and the in-process `SimpleVectorDatabase` (`row['ID']`, `` `ID|…` ``) do the same. `VectorSearchProvider` no longer flattens a composite key to bare values joined by `||`, which nothing could parse.
+
+  **Permission filter** (`search-engine`): `verifyOwnershipAndRowFilters` verified results with `FirstPrimaryKey IN (...)`. Once composite entities emit real segments that check could never match and — it fails closed — every composite-key result would be dropped as unauthorized. Composite keys now verify with one `(F1=… AND F2=…)` term per record; single-column keys keep the `IN` fast path. Matching is on primary-key values in metadata order, UUID-normalized, so an externally indexed id still matches the row the database returns.
+
+  **Recents** (`ng-shared-generic`): `RecentAccessService` persisted `Values(',')`, which drops field names; composite keys written there could never be reopened. It now writes the compact segment. Existing single-value rows are unchanged and read back as before.
+
+  Also fixed in `core`: `EmbeddedRecord` built its parent-load key with `FromID` for a single-column key, which fails for any embedded entity whose key isn't named `ID`.
+
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [5ecfdb4]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [ada8784]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [11de1a3]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [5e987a7]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [9cbe17f]
+- Updated dependencies [97cbf5f]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [1100077]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [bc45ded]
+- Updated dependencies [28cd302]
+- Updated dependencies [29c3dc8]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [394d276]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/aiengine@6.1.0
+  - @memberjunction/ai@6.1.0
+  - @memberjunction/storage@6.1.0
+  - @memberjunction/ai-vectordb@6.1.0
+
 ## 6.1.0-edge.7
 
 ### Patch Changes
