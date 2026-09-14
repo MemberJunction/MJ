@@ -32,6 +32,13 @@ describe('describeMissingEntitySubclass', () => {
     expect(message).toMatch(/dynamicPackages\.server/);
   });
 
+  it('still gives the push warning for an entity already reported by a pull', () => {
+    expect(describeMissingEntitySubclass('MJ_Test: Round-trip Widgets', { operation: 'pull' })).toMatch(/virtual properties/);
+    expect(describeMissingEntitySubclass('MJ_Test: Round-trip Widgets', { operation: 'push' })).toMatch(/will NOT run/);
+    expect(describeMissingEntitySubclass('MJ_Test: Round-trip Widgets')).toBeNull();
+    expect(describeMissingEntitySubclass('MJ_Test: Round-trip Widgets', { operation: 'pull' })).toBeNull();
+  });
+
   it('returns null for an entity whose subclass is registered', () => {
     MJGlobal.Instance.ClassFactory.Register(BaseEntity, RegisteredTestEntity, 'MJ_Test: Registered Widgets');
     expect(describeMissingEntitySubclass('MJ_Test: Registered Widgets')).toBeNull();

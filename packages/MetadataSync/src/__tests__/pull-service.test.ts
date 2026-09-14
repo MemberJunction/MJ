@@ -13,6 +13,7 @@ import os from 'os';
 import path from 'path';
 import { BaseEntity, EntityInfo, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { PullService } from '../services/PullService';
+import { FileWriteBatch } from '../lib/file-write-batch';
 import { SyncEngine, RecordData } from '../lib/sync-engine';
 import { resetMissingEntitySubclassWarnings } from '../lib/entity-subclass-guard';
 
@@ -48,7 +49,7 @@ function runViewResult(records: BaseEntity[]): RunViewResult<BaseEntity> {
 }
 
 /** The entity directory layout from the bug report: one array file new records are appended to. */
-async function createEntityDir(root: string, backupDirectory?: string): Promise<string> {
+async function createEntityDir(root: string, pullOverrides: { backupDirectory?: string; updateExistingRecords?: boolean } = {}): Promise<string> {
   const dir = path.join(root, 'companies');
   await fs.ensureDir(dir);
   await fs.writeJson(path.join(dir, '.mj-sync.json'), {
@@ -61,7 +62,7 @@ async function createEntityDir(root: string, backupDirectory?: string): Promise<
       updateExistingRecords: true,
       mergeStrategy: 'merge',
       backupBeforeUpdate: true,
-      ...(backupDirectory ? { backupDirectory } : {}),
+      ...pullOverrides,
     },
   });
   return dir;
@@ -166,35 +167,60 @@ describe('PullService.pull — backupBeforeUpdate', () => {
     return (await fs.pathExists(backupDir)) ? (await fs.readdir(backupDir)).sort() : [];
   }
 
-  it('keeps a backup of the file after a successful pull, including one that only gained new records', async () => {
-    const dir = await createEntityDir(root);
-    await pull(dir, 2); // creates .companies.json — nothing existed to back up
-    expect(await backups(path.join(dir, '.backups'))).toEqual([]);
+  async function readCompanies(dir: string): Promise<RecordData[]> {
+    return fs.readJson(path.join(dir, '.companies.json'));
+  }
 
-    await pull(dir, 4); // 2 updated + 2 appended to the existing file
+  /** Makes the next flush fail after it has started rewriting files. */
+  function failNextFlush(): void {
+    vi.spyOn(FileWriteBatch.prototype, 'flush').mockImplementationOnce(async function (this: FileWriteBatch) {
+      for (const file of this.getPendingFiles()) {
+        await fs.writeJson(file, []);
+      }
+      throw new Error('disk full');
+    });
+  }
 
-    const kept = await backups(path.join(dir, '.backups'));
-    expect(kept).toHaveLength(1);
-    expect(kept[0]).toMatch(/^\.companies\..+\.backup$/);
-    const backedUp: RecordData[] = await fs.readJson(path.join(dir, '.backups', kept[0]));
-    expect(backedUp).toHaveLength(2); // the file as it was before this pull
-  });
-
-  it('adds a new timestamped backup on every pull that rewrites the file', async () => {
+  it('removes its backups after a successful pull', async () => {
     const dir = await createEntityDir(root);
     await pull(dir, 2);
-    await pull(dir, 3);
-    await new Promise((resolve) => setTimeout(resolve, 5)); // distinct millisecond timestamps
     await pull(dir, 4);
 
-    expect(await backups(path.join(dir, '.backups'))).toHaveLength(2);
+    expect(await fs.pathExists(path.join(dir, '.backups'))).toBe(false);
+    expect(await readCompanies(dir)).toHaveLength(4);
   });
 
-  it('honours a nested backupDirectory', async () => {
-    const dir = await createEntityDir(root, 'backups/pull');
-    await pull(dir, 1);
+  it('restores a file that only gained new records when the pull fails', async () => {
+    const dir = await createEntityDir(root, { updateExistingRecords: false });
     await pull(dir, 2);
 
-    expect(await backups(path.join(dir, 'backups', 'pull'))).toHaveLength(1);
+    failNextFlush();
+    await expect(pull(dir, 4)).rejects.toThrow(/disk full/);
+
+    expect((await readCompanies(dir)).map((r) => r.primaryKey?.ID)).toEqual([idOf(1), idOf(2)]);
+  });
+
+  it('restores from a nested backupDirectory, and treats an absolute one as inside the folder', async () => {
+    for (const backupDirectory of ['backups/pull', '/abs-backups']) {
+      const dir = await createEntityDir(root, { backupDirectory });
+      await fs.remove(path.join(dir, '.companies.json'));
+      await pull(dir, 2);
+
+      failNextFlush();
+      await expect(pull(dir, 3)).rejects.toThrow(/disk full/);
+
+      expect(await readCompanies(dir)).toHaveLength(2);
+      expect(await backups(path.join(dir, backupDirectory))).toHaveLength(1);
+    }
+  });
+
+  it('refuses a backupDirectory outside the folder of the files, before writing anything', async () => {
+    const dir = await createEntityDir(root, { backupDirectory: '../escaped' });
+    await pull(dir, 1);
+
+    await expect(pull(dir, 2)).rejects.toThrow(/points outside/);
+
+    expect(await readCompanies(dir)).toHaveLength(1);
+    expect(await fs.pathExists(path.join(root, 'escaped'))).toBe(false);
   });
 });

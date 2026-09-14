@@ -1383,8 +1383,8 @@ Parallel `--parallel-batch-size` defaults to **10**. Isolation is **per JSON-roo
 | `updateExistingRecords` | boolean | true | Update existing records in local files |
 | `preserveFields` | string[] | [] | Fields that retain local values during updates |
 | `mergeStrategy` | string | "merge" | How to merge: "merge", "overwrite", or "skip" |
-| `backupBeforeUpdate` | boolean | false | Create timestamped backups before updates |
-| `backupDirectory` | string | ".backups" | Directory for backup files |
+| `backupBeforeUpdate` | boolean | false | Back up every file a pull rewrites. The backups restore the files if the pull fails and are removed once it succeeds |
+| `backupDirectory` | string | ".backups" | Directory for backup files, relative to the folder of the files being backed up. It must stay inside that folder |
 | `filter` | string | -- | SQL WHERE clause for filtering records |
 | `externalizeFields` | array/object | -- | Fields to save as external files |
 | `excludeFields` | string[] | [] | Fields to omit from pulled data |

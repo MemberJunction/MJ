@@ -11,6 +11,24 @@ import { SyncStateManager } from '../lib/sync-state-manager';
 import { extractPrimaryKeyValues } from '../lib/record-primary-key';
 import { describeMissingEntitySubclass } from '../lib/entity-subclass-guard';
 
+/**
+ * Resolves `pull.backupDirectory` against the directory of the file being backed up (default
+ * `.backups`). An absolute path is taken as relative to that directory, as `path.join` always has.
+ *
+ * @throws when the result is outside that directory (`../..`): pull must not write copies of
+ *         metadata files elsewhere on disk.
+ */
+function resolveBackupDirectory(fileDir: string, backupDirName?: string): string {
+  const backupDir = path.join(fileDir, backupDirName || '.backups');
+  const relative = path.relative(fileDir, backupDir);
+  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error(
+      `pull.backupDirectory '${backupDirName}' points outside ${fileDir}. It must be a directory inside the folder of the files it backs up.`
+    );
+  }
+  return backupDir;
+}
+
 /** Validates that a string is a well-formed ISO 8601 timestamp. */
 function isValidISOTimestamp(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})?)?$/.test(value);
@@ -209,8 +227,7 @@ export class PullService {
       // Write all batched file changes at once
       if (!options.dryRun) {
         // Back up every existing file this pull is about to rewrite — updated and appended-to
-        // alike — before anything is written. The backups are kept (backupBeforeUpdate documents
-        // "timestamped backups", not temporary ones) and double as the rollback source on failure.
+        // alike — before anything is written, so a failed pull can restore all of them.
         if (entityConfig.pull?.backupBeforeUpdate) {
           await this.backupPendingFiles(entityConfig.pull.backupDirectory, options.verbose, callbacks);
         }
@@ -219,7 +236,12 @@ export class PullService {
           callbacks?.onSuccess?.(`Wrote ${filesWritten} files with consistent property ordering`);
         }
       }
-
+      
+      // Operation succeeded - clean up backup files
+      if (!options.dryRun) {
+        await this.cleanupBackupFiles();
+      }
+      
     } catch (error) {
       callbacks?.onError?.(`Pull operation failed: ${(error as any).message || error}`);
       
@@ -368,9 +390,8 @@ export class PullService {
   }
   
   /**
-   * Deletes the backup files this pull created, and their `.backups` directory when it ends up
-   * empty. Pull no longer calls this itself: `backupBeforeUpdate` backups are kept after a
-   * successful pull. Callers that want rollback-only semantics can still call it explicitly.
+   * Clean up backup files created during the pull operation
+   * Should be called after successful pull operations to remove persistent backup files
    */
   async cleanupBackupFiles(): Promise<void> {
     if (this.createdBackupFiles.length === 0 && this.createdBackupDirs.size === 0) {
@@ -1078,7 +1099,7 @@ export class PullService {
   private async createBackup(filePath: string, backupDirName?: string): Promise<string> {
     const dir = path.dirname(filePath);
     const fileName = path.basename(filePath);
-    const backupDir = path.resolve(dir, backupDirName || '.backups');
+    const backupDir = resolveBackupDirectory(dir, backupDirName);
 
     // Ensure backup directory exists
     await fs.ensureDir(backupDir);
