@@ -197,11 +197,22 @@ export async function SendMessage(args: {
         const runtime = ConversationsRuntime.Instance;
         await runtime.Config(false, currentUser);
 
+        // Mentions the user inserted in the composer are parsed by the SAME runtime parser the web
+        // uses, from the same `@{"type":…}` tokens — so an `@agent` routes the turn and a `/skill`
+        // becomes a requested skill exactly as it would in a browser. Parsing here rather than in
+        // the composer keeps the wire format the single source of truth: anything that can produce
+        // those tokens gets the behaviour, including a message typed by hand.
+        const mentions = runtime.Mentions.parseMentions(text, [], undefined);
+        const requestedSkillIDs = mentions.skillMentions.map((m) => m.id);
+
         const result = await runtime.AgentRunner.processMessage({
             conversationId,
             message: userDetail,
             conversationDetailId: aiDetail.ID,
-            explicitAgentId: agentId ?? null,
+            // An @mention outranks the caller's choice — naming someone is the most specific signal
+            // a user can give, and it is the rule the web follows too.
+            explicitAgentId: mentions.agentMention?.id ?? agentId ?? null,
+            ...(requestedSkillIDs.length ? { requestedSkillIDs } : {}),
             onProgress: onProgress
                 ? (p) => onProgress({ currentStep: p.step ?? 'working', message: p.message ?? '' })
                 : undefined,

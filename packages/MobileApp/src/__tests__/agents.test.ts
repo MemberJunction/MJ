@@ -6,6 +6,20 @@ const state = vi.hoisted(() => ({
     runView: (): { Success: boolean; Results?: unknown[]; ErrorMessage?: string } => ({ Success: true, Results: [] }),
     lastProcessMessage: null as unknown,
     processMessageResult: { success: true } as unknown,
+    /** What the runtime's mention parser reports for the composed text. */
+    parsedMentions: {
+        mentions: [],
+        agentMention: null,
+        userMentions: [],
+        entityMentions: [],
+        skillMentions: [],
+    } as {
+        mentions: unknown[];
+        agentMention: { id: string } | null;
+        userMentions: unknown[];
+        entityMentions: unknown[];
+        skillMentions: Array<{ id: string }>;
+    },
     saveResult: true,
     savedDetails: [] as Array<Record<string, unknown>>,
 }));
@@ -17,6 +31,9 @@ vi.mock('@memberjunction/conversations-runtime', () => ({
     ConversationsRuntime: {
         Instance: {
             Config: async () => undefined,
+            Mentions: {
+                parseMentions: () => state.parsedMentions,
+            },
             AgentRunner: {
                 processMessage: async (input: unknown) => {
                     state.lastProcessMessage = input;
@@ -166,6 +183,13 @@ describe('SendMessage', () => {
         state.savedDetails = [];
         state.lastProcessMessage = null;
         state.processMessageResult = { success: true };
+    state.parsedMentions = {
+        mentions: [],
+        agentMention: null,
+        userMentions: [],
+        entityMentions: [],
+        skillMentions: [],
+    };
         state.saveResult = true;
     });
 
@@ -242,6 +266,13 @@ describe('SendMessage', () => {
         const calls: string[] = [];
         let seenId: string | null = null;
         state.processMessageResult = { success: true };
+    state.parsedMentions = {
+        mentions: [],
+        agentMention: null,
+        userMentions: [],
+        entityMentions: [],
+        skillMentions: [],
+    };
         await SendMessage({
             conversationId: 'c',
             text: 'x',
@@ -266,5 +297,30 @@ describe('SendMessage', () => {
         });
         expect(result).toMatchObject({ success: false, errorMessage: 'upload refused' });
         expect(state.lastProcessMessage).toBeNull();
+    });
+
+    it('routes the turn to an @mentioned agent, outranking the caller\'s choice', async () => {
+        // Naming someone is the most specific signal a user can give; the same rule the web follows.
+        state.parsedMentions.agentMention = { id: 'mentioned-agent' };
+        await SendMessage({ conversationId: 'c', text: '@sage hello', agentId: 'default-agent' });
+        expect((state.lastProcessMessage as { explicitAgentId: string }).explicitAgentId).toBe('mentioned-agent');
+    });
+
+    it('passes /skill mentions through as requestedSkillIDs', async () => {
+        // The composer serializes a picked skill into the same JSON token the web produces, so the
+        // server intersects it against the agent's accepted skills and the user's Run permission
+        // exactly as it would for a browser turn.
+        state.parsedMentions.skillMentions = [{ id: 'skill-1' }, { id: 'skill-2' }];
+        await SendMessage({ conversationId: 'c', text: 'do it /summarize' });
+        expect((state.lastProcessMessage as { requestedSkillIDs: string[] }).requestedSkillIDs).toEqual([
+            'skill-1',
+            'skill-2',
+        ]);
+    });
+
+    it('omits requestedSkillIDs entirely when no skill was mentioned', async () => {
+        // An empty array is not the same as absent — the runtime only forwards the field when set.
+        await SendMessage({ conversationId: 'c', text: 'plain message' });
+        expect(state.lastProcessMessage as Record<string, unknown>).not.toHaveProperty('requestedSkillIDs');
     });
 });

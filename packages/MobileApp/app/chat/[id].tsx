@@ -22,6 +22,8 @@ import { AdaptConversation, AdaptConversationToSummary, type AdaptedAgentRef, ty
 import { SendMessage, GetConversationDetailStatus, type SendProgress } from '@/data/services/agents';
 import { AttachCapturedFile, ComposeMessageWithAttachment, type CapturedAttachment } from '@/data/services/attachments';
 import { GetDefaultAgentId } from '@/data/preferences';
+import { FindActiveTrigger, SerializeMention, ApplyMention } from '@/chat/mentions/trigger';
+import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -471,6 +473,10 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
     const [text, setText] = useState('');
     const [attachment, setAttachment] = useState<CapturedAttachment | null>(null);
     const [pickerVisible, setPickerVisible] = useState(false);
+    // Caret position, tracked because a trigger is resolved against what is LEFT of the caret —
+    // editing mid-message must filter on that, not on the whole line.
+    const [caret, setCaret] = useState(0);
+    const trigger = FindActiveTrigger(text, caret);
     const canSend = (text.trim().length > 0 || attachment != null) && !disabled;
 
     const submit = () => {
@@ -484,6 +490,19 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
 
     return (
         <View style={styles.composerWrap}>
+            {trigger ? (
+                <MentionSuggestions
+                    Trigger={trigger.Trigger}
+                    Query={trigger.Query}
+                    TargetAgentID={GetDefaultAgentId() ?? null}
+                    OnSelect={(s) => {
+                        const token = SerializeMention(s.type, s.id, s.name);
+                        const next = ApplyMention(text, trigger, token);
+                        setText(next.Text);
+                        setCaret(next.Caret);
+                    }}
+                />
+            ) : null}
             {attachment ? (
                 <View style={styles.attachRow}>
                     <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
@@ -494,12 +513,19 @@ function Composer({ onSend, disabled, conversationId }: { onSend: (text: string,
                     <Icons.Paperclip size={20} color={Colors.ink3} strokeWidth={2} />
                 </Pressable>
                 <TextInput
-                    placeholder="Reply or @mention an agent…"
+                    placeholder="Reply, @mention an agent, or / for a skill…"
                     placeholderTextColor={Colors.ink3}
                     style={styles.composerInput}
                     multiline
                     value={text}
-                    onChangeText={setText}
+                    onChangeText={(t) => {
+                        setText(t);
+                        // onChangeText fires before onSelectionChange, so assume the caret moved to
+                        // the end of what was just typed; the selection handler corrects it for
+                        // taps and arrow keys.
+                        setCaret(t.length);
+                    }}
+                    onSelectionChange={(e) => setCaret(e.nativeEvent.selection.end)}
                     editable={!disabled}
                 />
                 {canSend ? (
