@@ -120,6 +120,12 @@ Governance, Consent & Data Rights) remain **completely unimplemented** with no f
 worth noting since "merged" and "shipped" are not the same thing here. Flagging both again, briefly,
 not re-litigating further.
 
+## Decision record
+
+**2026-09-14** — Reviewed by AN-BC. All three ideas are noted as interesting but not current
+priorities. No follow-up implementation PRs are planned at this time. This PR is being merged to
+record both the proposals and this decision in the repository history.
+
 ## Sources consulted this week
 
 See the "Sources" section at the bottom of each idea doc for full citations. Headline external
