@@ -15681,6 +15681,14 @@ export class MJAIPromptRun_ {
     @MaxLength(36)
     UsageTypeID?: string;
         
+    @Field({nullable: true, description: `If this prompt run was executed as part of an AI agent run, references that agent run. May be NULL for direct prompt runs or runs that pre-date attribution; backfilled from AIAgentRunStep.`}) 
+    @MaxLength(36)
+    AgentRunID?: string;
+        
+    @Field({nullable: true, description: `The user on whose behalf this prompt was executed. May be NULL for automated/unauthenticated runs or runs that pre-date attribution; backfilled from the parent AIAgentRun.`}) 
+    @MaxLength(36)
+    UserID?: string;
+        
     @Field({nullable: true, description: `Which tool-calling path this run actually took. 'Native' = Actions declared as tools, control flow in the JSON envelope (the hybrid). 'NativeImplicit' = Actions, sub-agents, payload_change_request and ask_user declared as tools; a tool call continues the loop and plain text ends the turn. 'Envelope' = no tools declared — the vendor-agnostic JSON-envelope path, including a prompt that asked for native mode on a model/vendor without the capability (also logs a warning). 'NativeFallback' = a native attempt failed in a tools-specific way and completed via a single envelope retry. NULL = pre-feature rows or a run that never reached a model call.`}) 
     @MaxLength(25)
     ToolCallingMode?: string;
@@ -15732,6 +15740,14 @@ export class MJAIPromptRun_ {
     @Field({nullable: true}) 
     @MaxLength(50)
     UsageType?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(255)
+    AgentRun?: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(100)
+    User?: string;
         
     @Field({nullable: true}) 
     @MaxLength(36)
@@ -16027,6 +16043,12 @@ export class CreateMJAIPromptRunInput {
     UsageTypeID: string | null;
 
     @Field({ nullable: true })
+    AgentRunID: string | null;
+
+    @Field({ nullable: true })
+    UserID: string | null;
+
+    @Field({ nullable: true })
     ToolCallingMode: string | null;
 
     @Field(() => RestoreContextInput, { nullable: true })
@@ -16305,6 +16327,12 @@ export class UpdateMJAIPromptRunInput {
 
     @Field({ nullable: true })
     UsageTypeID?: string | null;
+
+    @Field({ nullable: true })
+    AgentRunID?: string | null;
+
+    @Field({ nullable: true })
+    UserID?: string | null;
 
     @Field({ nullable: true })
     ToolCallingMode?: string | null;
@@ -66821,6 +66849,13 @@ export class MJQuery_ {
     @Field(() => Boolean, {nullable: true, description: `Author's declared intent that this Query should be materialized. CodeGen scans for IsMaterialized = 1 and, if the query qualifies (§9/§10), materializes it. The authoritative state lives on the linked MJ: Materialized Results row (found via the MaterializedResultQuery join table).`}) 
     IsMaterialized?: boolean;
         
+    @Field({nullable: true, description: `Cron expression specifying the schedule for background refresh of this query when materialized.`}) 
+    @MaxLength(255)
+    MaterializationRefreshSchedule?: string;
+        
+    @Field({nullable: true, description: `Intended workload for materialization storage (e.g. OLAP, Hybrid, InvertedIndex).`}) 
+    MaterializationIntendedWorkload?: string;
+        
     @Field({nullable: true}) 
     @MaxLength(50)
     Category?: string;
@@ -66919,6 +66954,12 @@ export class CreateMJQueryInput {
     @Field(() => Boolean, { nullable: true })
     IsMaterialized?: boolean;
 
+    @Field({ nullable: true })
+    MaterializationRefreshSchedule: string | null;
+
+    @Field({ nullable: true })
+    MaterializationIntendedWorkload: string | null;
+
     @Field(() => RestoreContextInput, { nullable: true })
     RestoreContext___?: RestoreContextInput;
 }
@@ -67000,6 +67041,12 @@ export class UpdateMJQueryInput {
 
     @Field(() => Boolean, { nullable: true })
     IsMaterialized?: boolean;
+
+    @Field({ nullable: true })
+    MaterializationRefreshSchedule?: string | null;
+
+    @Field({ nullable: true })
+    MaterializationIntendedWorkload?: string | null;
 
     @Field(() => [KeyValuePairInput], { nullable: true })
     OldValues___?: KeyValuePairInput[];

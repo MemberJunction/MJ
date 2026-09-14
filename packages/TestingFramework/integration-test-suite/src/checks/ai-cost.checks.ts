@@ -670,6 +670,7 @@ export const AiCostChecks: NamedCheck[] = [
                 MaxRows: 1
             }, ctx.User);
             Assert(mrRes.Success, `MaterializedResult lookup failed: ${mrRes.ErrorMessage}`);
+            let mrStatus: string | null = null;
             if ((mrRes.Results ?? []).length > 0) {
                 const mrInfo = mrRes.Results![0];
                 Assert(mrInfo.RefreshSchedule !== null && mrInfo.RefreshSchedule.trim().length > 0, `AIUsageHourly MaterializedResult must have RefreshSchedule IS NOT NULL, got: ${mrInfo.RefreshSchedule}`);
@@ -687,9 +688,11 @@ export const AiCostChecks: NamedCheck[] = [
 
                     await mrEntity.Load(mrInfo.ID);
                     AssertEqual(mrEntity.Status, 'Active', `MaterializedResult status must be Active after RefreshOne, got: ${mrEntity.Status}`);
+                    mrStatus = mrEntity.Status;
                 } else {
                     console.warn('  ⚠ AC11: Metadata.Provider does not implement ExecuteSQL (client provider run path) — skipping RefreshOne live execution'); // global-provider-ok: integration test script — single-provider process by design
-                    Assert(mrInfo.Status === 'Active' || mrInfo.Status === 'Building', `MaterializedResult status must be Active or Building, got: ${mrInfo.Status}`);
+                    AssertEqual(mrInfo.Status, 'Active', `MaterializedResult status must be Active, got: ${mrInfo.Status}`);
+                    mrStatus = mrInfo.Status;
                 }
             } else {
                 console.log(`      → AC11: MaterializedResult for AIUsageHourly not minted (deterministic CI runs without CodeGen) — DataSource: 'Materialized' will test fallback-to-live safety net`);
@@ -724,7 +727,10 @@ export const AiCostChecks: NamedCheck[] = [
             Assert(hourlyRes.Success, `AIUsageHourly live query failed: ${hourlyRes.ErrorMessage}`);
 
             const hourlyTotal = (hourlyRes.Results ?? []).reduce(
-                (sum: number, r: Record<string, unknown>) => sum + Number(r.OwnCost ?? r.TotalCost ?? 0),
+                (sum: number, r: Record<string, unknown>) => {
+                    Assert(typeof r.OwnCost === 'number' && Number.isFinite(r.OwnCost), `AIUsageHourly live row OwnCost must be a finite number, got: ${r.OwnCost}`);
+                    return sum + (r.OwnCost as number);
+                },
                 0
             );
 
@@ -740,6 +746,9 @@ export const AiCostChecks: NamedCheck[] = [
             );
 
             // (d) Materialized path: DataSource: 'Materialized' fallback-safe parity
+            if ((mrRes.Results ?? []).length > 0) {
+                AssertEqual(mrStatus, 'Active', `MaterializedResult status must be Active prior to reading DataSource: 'Materialized'`);
+            }
             const matRes = await rq.RunQuery({
                 QueryName: 'AIUsageHourly',
                 CategoryPath: '/MJ/AI/',
@@ -749,7 +758,10 @@ export const AiCostChecks: NamedCheck[] = [
             Assert(matRes.Success, `AIUsageHourly with DataSource: 'Materialized' failed: ${matRes.ErrorMessage}`);
 
             const matTotal = (matRes.Results ?? []).reduce(
-                (sum: number, r: Record<string, unknown>) => sum + Number(r.OwnCost ?? r.TotalCost ?? 0),
+                (sum: number, r: Record<string, unknown>) => {
+                    Assert(typeof r.OwnCost === 'number' && Number.isFinite(r.OwnCost), `AIUsageHourly materialized row OwnCost must be a finite number, got: ${r.OwnCost}`);
+                    return sum + (r.OwnCost as number);
+                },
                 0
             );
             const diffMat = Math.abs(matTotal - hourlyTotal);

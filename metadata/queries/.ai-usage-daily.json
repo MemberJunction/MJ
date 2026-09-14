@@ -11,7 +11,8 @@
       "QualityRank": 9,
       "ExecutionCostRank": 3,
       "UsesTemplate": true,
-      "IsMaterialized": true
+      "IsMaterialized": true,
+      "MaterializationRefreshSchedule": "0 20 0 * * *"
     },
     "relatedEntities": {},
     "primaryKey": {

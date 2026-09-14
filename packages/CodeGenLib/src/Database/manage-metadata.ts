@@ -1800,9 +1800,15 @@ export class ManageMetadataBase {
       // Gate the ExternalDataSourceID column ref so the SELECT stays valid on a DB without the EDS schema
       // (PostgreSQL today). When absent, no query can be external, so the flag defaults false everywhere.
       const queryHasEDSCol = await this.queryHasExternalDataSourceColumn(pool);
+      const queryHasSchedCol = await this.queryHasMaterializationRefreshScheduleColumn(pool);
+      const queryHasWorkloadCol = await this.queryHasMaterializationIntendedWorkloadColumn(pool);
+      const selectCols = ['ID', 'Name', 'SQL'];
+      if (queryHasEDSCol) selectCols.push('ExternalDataSourceID');
+      if (queryHasSchedCol) selectCols.push('MaterializationRefreshSchedule');
+      if (queryHasWorkloadCol) selectCols.push('MaterializationIntendedWorkload');
       const flagged = await this.runQueryWithParams(
          pool,
-         `SELECT ID, Name, SQL${queryHasEDSCol ? ', ExternalDataSourceID' : ''} FROM ${this.qs(coreSchema, 'Query')} WHERE IsMaterialized = ${this.boolLit(true)}`,
+         `SELECT ${selectCols.join(', ')} FROM ${this.qs(coreSchema, 'Query')} WHERE IsMaterialized = ${this.boolLit(true)}`,
          {},
       );
       if (flagged.recordset.length === 0) return { success: true, processedCount: 0, mintedCount: 0 };
@@ -2010,8 +2016,8 @@ export class ManageMetadataBase {
          //    Query.MaterializedResultID column (those direct FKs formed a circular dependency CodeGen rejects;
          //    the join table carries the relationship with both FKs pointing outward).
          const queryConfig = queryConfigs.find((c) => c.QueryName.trim().toLowerCase() === queryName.trim().toLowerCase());
-         const refreshSchedule = queryConfig?.RefreshSchedule;
-         const intendedWorkload = queryConfig?.IntendedWorkload;
+         const refreshSchedule = (q.MaterializationRefreshSchedule as string | undefined | null)?.trim() || queryConfig?.RefreshSchedule;
+         const intendedWorkload = (q.MaterializationIntendedWorkload as string | undefined | null)?.trim() || queryConfig?.IntendedWorkload;
 
          const existing = await this.runQueryWithParams(
             pool,
@@ -2753,6 +2759,14 @@ export class ManageMetadataBase {
     */
    protected async queryHasIsMaterializedColumn(pool: CodeGenConnection): Promise<boolean> {
       return await this.columnExistsInCoreSchema(pool, 'Query', 'IsMaterialized');
+   }
+
+   protected async queryHasMaterializationRefreshScheduleColumn(pool: CodeGenConnection): Promise<boolean> {
+      return await this.columnExistsInCoreSchema(pool, 'Query', 'MaterializationRefreshSchedule');
+   }
+
+   protected async queryHasMaterializationIntendedWorkloadColumn(pool: CodeGenConnection): Promise<boolean> {
+      return await this.columnExistsInCoreSchema(pool, 'Query', 'MaterializationIntendedWorkload');
    }
 
    /**

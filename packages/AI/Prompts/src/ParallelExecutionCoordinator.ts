@@ -13,6 +13,7 @@ import {
   TokenUsageUpdate,
   ProgressCallbacksInterface,
   IParallelExecutionCoordinator,
+  JudgeRanking,
 } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptParams } from '@memberjunction/ai-core-plus';
@@ -892,8 +893,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       // Update ResultSelector JudgeScore from rankings if not already set
       const topRanking = rankings.find((r) => r.rank === 1) || rankings[0];
-      if (resultSelectorPromptRun && resultSelectorPromptRun.JudgeScore == null && typeof (topRanking as any)?.score === 'number') {
-        resultSelectorPromptRun.JudgeScore = (topRanking as any).score;
+      if (resultSelectorPromptRun && resultSelectorPromptRun.JudgeScore == null && typeof topRanking?.score === 'number') {
+        resultSelectorPromptRun.JudgeScore = topRanking.score;
         await resultSelectorPromptRun.Save();
       }
 
@@ -902,8 +903,8 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
         if (result.promptRun) {
           result.promptRun.JudgeID = judgePrompt.ID;
           const ranking = rankings.find((r) => r.candidateId === result.task.taskId);
-          if (ranking && typeof (ranking as any).score === 'number') {
-            result.promptRun.JudgeScore = (ranking as any).score;
+          if (ranking && typeof ranking.score === 'number') {
+            result.promptRun.JudgeScore = ranking.score;
           }
           if (result.task.taskId === bestCandidateId) {
             result.promptRun.WasSelectedResult = true;
@@ -958,7 +959,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param judgeResult - Raw result from the judge prompt
    * @returns Array of ranking objects or null if parsing fails
    */
-  private parseJudgeResult(judgeResult: string): Array<{ candidateId: string; rank: number; rationale: string; score?: number }> | null {
+  private parseJudgeResult(judgeResult: string): JudgeRanking[] | null {
     try {
       // Try to extract JSON from the result (in case there's extra text)
       const jsonMatch = judgeResult.match(/\{[\s\S]*\}/);
@@ -968,9 +969,9 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
 
       if (parsed.rankings && Array.isArray(parsed.rankings)) {
         return parsed.rankings.map((ranking: Record<string, unknown>) => ({
-          candidateId: ranking.candidateId,
-          rank: ranking.rank,
-          rationale: ranking.rationale || 'No rationale provided',
+          candidateId: String(ranking.candidateId),
+          rank: Number(ranking.rank),
+          rationale: (ranking.rationale as string) || 'No rationale provided',
           score: typeof ranking.score === 'number' ? ranking.score : undefined,
         }));
       }
@@ -989,7 +990,7 @@ export class ParallelExecutionCoordinator extends AIPromptRunner implements IPar
    * @param results - Array of execution results to rank
    * @param rankings - Rankings from the judge
    */
-  private applyRankingsToResults(results: ExecutionTaskResult[], rankings: Array<{ candidateId: string; rank: number; rationale: string }>): void {
+  private applyRankingsToResults(results: ExecutionTaskResult[], rankings: JudgeRanking[]): void {
     for (const result of results) {
       const ranking = rankings.find((r) => r.candidateId === result.task.taskId);
       if (ranking) {

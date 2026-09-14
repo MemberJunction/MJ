@@ -7,6 +7,8 @@ import type { UserInfo } from '@memberjunction/core';
 class TestableManageMetadata extends ManageMetadataBase {
     public executedSQL: Array<{ sql: string; description: string }> = [];
     public existingMaterializedResultRows: Array<{ ID: string }> = [];
+    public queryMaterializationRefreshSchedule: string | null = null;
+    public queryMaterializationIntendedWorkload: string | null = null;
 
     constructor() {
         super();
@@ -25,6 +27,7 @@ class TestableManageMetadata extends ManageMetadataBase {
             generateMaterializedTableSQL: () => 'CREATE TABLE test',
             generateMaterializedWrapperViewSQL: () => 'CREATE VIEW test',
             BatchSeparator: 'GO',
+            quoteSQLForExecution: (s: string) => s,
         };
     }
 
@@ -38,6 +41,14 @@ class TestableManageMetadata extends ManageMetadataBase {
 
     protected override async queryHasExternalDataSourceColumn(_pool: CodeGenConnection): Promise<boolean> {
         return false;
+    }
+
+    protected override async queryHasMaterializationRefreshScheduleColumn(_pool: CodeGenConnection): Promise<boolean> {
+        return true;
+    }
+
+    protected override async queryHasMaterializationIntendedWorkloadColumn(_pool: CodeGenConnection): Promise<boolean> {
+        return true;
     }
 
     protected override async materializedResultTableExists(_pool: CodeGenConnection): Promise<boolean> {
@@ -60,6 +71,8 @@ class TestableManageMetadata extends ManageMetadataBase {
                         ID: '00B15E3C-A9F1-4E0A-A3D2-BC34FB585931',
                         Name: 'AIUsageHourly',
                         SQL: 'SELECT HourBucket, COUNT(*) AS RunCount FROM [__mj].vwAIUsageFacts WHERE IsCompleted = 1 GROUP BY HourBucket',
+                        MaterializationRefreshSchedule: this.queryMaterializationRefreshSchedule,
+                        MaterializationIntendedWorkload: this.queryMaterializationIntendedWorkload,
                     },
                 ],
             } as CodeGenQueryResult;
@@ -185,6 +198,47 @@ describe('ManageMetadataBase: MaterializedQueries schedule and workload configur
         expect(updateSql).toBeDefined();
         expect(updateSql!.sql).toContain("[RefreshSchedule]='0 5 * * * *'");
         expect(updateSql!.sql).toContain("[IntendedWorkload]='Hourly snapshot of AI metrics'");
+
+        spy.mockRestore();
+    });
+
+    it('reads MaterializationRefreshSchedule and MaterializationIntendedWorkload directly from Query row', async () => {
+        // No soft config defined; Query row supplies the schedule and workload
+        mm.queryMaterializationRefreshSchedule = '0 5 * * * *';
+        mm.queryMaterializationIntendedWorkload = 'Query column workload note';
+        mm.existingMaterializedResultRows = []; // triggers INSERT
+
+        await mm.callProcessQueryMaterializations(fakePool, fakeUser);
+
+        const insertSql = mm.executedSQL.find(e => e.description.includes('Insert MJ: Materialized Results'));
+        expect(insertSql).toBeDefined();
+        expect(insertSql!.sql).toContain('[RefreshSchedule]');
+        expect(insertSql!.sql).toContain("'0 5 * * * *'");
+        expect(insertSql!.sql).toContain('[IntendedWorkload]');
+        expect(insertSql!.sql).toContain("'Query column workload note'");
+    });
+
+    it('prefers Query column values over soft config when both are present', async () => {
+        const spy = vi.spyOn(ManageMetadataBase, 'getSoftPKFKConfig').mockReturnValue({
+            MaterializedQueries: [
+                {
+                    QueryName: 'AIUsageHourly',
+                    RefreshSchedule: '0 0 * * * *',
+                    IntendedWorkload: 'Soft config workload',
+                },
+            ],
+        });
+
+        mm.queryMaterializationRefreshSchedule = '0 5 * * * *';
+        mm.queryMaterializationIntendedWorkload = 'Query column workload';
+        mm.existingMaterializedResultRows = [{ ID: 'existing-mr-1' }]; // triggers UPDATE
+
+        await mm.callProcessQueryMaterializations(fakePool, fakeUser);
+
+        const updateSql = mm.executedSQL.find(e => e.description.includes('Update MJ: Materialized Results'));
+        expect(updateSql).toBeDefined();
+        expect(updateSql!.sql).toContain("[RefreshSchedule]='0 5 * * * *'");
+        expect(updateSql!.sql).toContain("[IntendedWorkload]='Query column workload'");
 
         spy.mockRestore();
     });

@@ -141,6 +141,20 @@ export interface ExecutionTaskResult {
 }
 
 /**
+ * Represents a candidate ranking produced by an AI judge.
+ */
+export interface JudgeRanking {
+  /** Identifier of the candidate task that was evaluated */
+  candidateId: string;
+  /** Numerical rank (1 = best) */
+  rank: number;
+  /** Rationale explaining the rank */
+  rationale: string;
+  /** Optional numerical score assigned by the judge */
+  score?: number;
+}
+
+/**
  * Groups execution tasks by their execution group number.
  * Tasks within the same group are executed in parallel,
  * while different groups are executed sequentially.
