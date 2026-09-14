@@ -58,6 +58,10 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
   private originalCwd: string | null = null;
   private mjConfig: MJConfig | null = null;
   private configLoaded = false;
+  /** The mj.config.cjs object as the file exports it — before defaults are merged in. */
+  private rawMJConfig: Record<string, unknown> | null = null;
+  /** Absolute path of the mj.config.cjs that was loaded, when one was found. */
+  private mjConfigFilePath: string | undefined;
 
   public constructor() {
     super();
@@ -139,15 +143,38 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
       // This ensures environment variables are used for database settings
       // when not explicitly set in the config file
       const userConfig = result?.config ?? {};
+      this.rawMJConfig = userConfig;
+      this.mjConfigFilePath = result?.filepath;
       this.mjConfig = mergeConfigs(DEFAULT_SYNC_CONFIG, userConfig) as MJConfig;
       this.configLoaded = true;
       return this.mjConfig;
     } catch (error) {
       console.error('Error loading MJ config:', error);
       this.mjConfig = null;
+      this.rawMJConfig = null;
+      this.mjConfigFilePath = undefined;
       this.configLoaded = true;
       return null;
     }
+  }
+
+  /**
+   * The loaded mj.config.cjs exactly as the file exports it (no defaults merged), or `null` when
+   * none was loaded. The dynamic-package loader reads `dynamicPackages` / `codeGeneration` from it.
+   */
+  getRawMJConfig(): Record<string, unknown> | null {
+    if (!this.configLoaded) {
+      this.loadMJConfig();
+    }
+    return this.rawMJConfig;
+  }
+
+  /** Absolute path of the loaded mj.config.cjs — the anchor dynamic packages resolve from. */
+  getMJConfigFilePath(): string | undefined {
+    if (!this.configLoaded) {
+      this.loadMJConfig();
+    }
+    return this.mjConfigFilePath;
   }
 
   /**

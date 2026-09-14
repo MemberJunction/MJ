@@ -1,0 +1,43 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { BaseEntity } from '@memberjunction/core';
+import { MJGlobal } from '@memberjunction/global';
+import { describeMissingEntitySubclass, resetMissingEntitySubclassWarnings } from '../lib/entity-subclass-guard';
+
+class RegisteredTestEntity extends BaseEntity {}
+
+describe('describeMissingEntitySubclass', () => {
+  beforeEach(() => {
+    resetMissingEntitySubclassWarnings();
+  });
+
+  it('warns once for an entity with no registered subclass, then goes quiet', () => {
+    const first = describeMissingEntitySubclass('MJ_Test: Unregistered Widgets');
+    expect(first).toMatch(/No entity subclass is registered for 'MJ_Test: Unregistered Widgets'/);
+    expect(first).toMatch(/MJ_DYNAMIC_PACKAGES=none/);
+    expect(describeMissingEntitySubclass('mj_test: unregistered widgets')).toBeNull();
+  });
+
+  it('phrases the consequence conditionally under dry-run and names both package sources', () => {
+    const message = describeMissingEntitySubclass('MJ_Test: DryRun Widgets', { dryRun: true });
+    expect(message).toMatch(/would be written/);
+    expect(message).toMatch(/codeGeneration\.packages\.entities/);
+    expect(message).toMatch(/dynamicPackages\.server/);
+  });
+
+  it('describes the pull consequence — missing computed values, not skipped Save() logic — for a pull', () => {
+    const message = describeMissingEntitySubclass('MJ_Test: Pulled Widgets', { operation: 'pull' });
+    expect(message).toMatch(/records are read through the generic BaseEntity/);
+    expect(message).toMatch(/virtual properties/);
+    expect(message).not.toMatch(/Save\(\)/);
+    expect(message).toMatch(/dynamicPackages\.server/);
+  });
+
+  it('returns null for an entity whose subclass is registered', () => {
+    MJGlobal.Instance.ClassFactory.Register(BaseEntity, RegisteredTestEntity, 'MJ_Test: Registered Widgets');
+    expect(describeMissingEntitySubclass('MJ_Test: Registered Widgets')).toBeNull();
+  });
+
+  it('ignores blank names', () => {
+    expect(describeMissingEntitySubclass('   ')).toBeNull();
+  });
+});

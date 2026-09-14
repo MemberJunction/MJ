@@ -72,6 +72,11 @@ export {
   getDataProvider
 } from './lib/provider-utils';
 
+// Open App / generated-package loading for `mj sync` (5.x port of @memberjunction/dynamic-packages)
+export { loadSyncDynamicPackages } from './lib/sync-dynamic-packages';
+export type { LoadSyncDynamicPackagesOptions } from './lib/sync-dynamic-packages';
+export { describeMissingEntitySubclass } from './lib/entity-subclass-guard';
+
 // Validation types
 export type {
   ValidationResult,

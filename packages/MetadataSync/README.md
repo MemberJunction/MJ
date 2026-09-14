@@ -1084,6 +1084,27 @@ The following improvements apply automatically with no flags required:
 
 **Batched pull queries** -- Pull operations pre-fetch related entities with a single `IN` query per type, replacing the previous N+1 query pattern (one query per parent record per related type).
 
+## Which entity class does a sync use?
+
+`mj sync push` writes through `BaseEntity.Save()` and `mj sync pull` reads through entity objects,
+so an entity's custom validation, `Save()` override, lifecycle hooks and computed properties apply
+**only if the class that carries them is registered in the CLI process**. MJ core's classes always
+are (the CLI imports the class-registration manifest). An installed Open App's classes and the
+host's own generated entities are loaded by `mj sync push` / `mj sync pull` from `mj.config.cjs`
+before the database provider opens — the same way MJAPI loads them at boot:
+
+- `codeGeneration.packages.entities` / `.actions` — the host's generated packages
+- `dynamicPackages.server[]` — Open App server packages (written by `mj app install`)
+
+Entries honour `Enabled`, and can be scoped with `Processes` / `ExcludeProcesses` (process IDs
+`cli:sync:push` and `cli:sync:pull`; `'cli:sync'` covers both — e.g. for a package the host's
+MJAPI already imports statically). `MJ_DYNAMIC_PACKAGES=none mj sync push` skips them
+deliberately (restoring a dump, bulk ingestion without side effects). Run with `--verbose` to see
+what was loaded.
+
+When no subclass is registered for an entity, push and pull **warn once per entity** ("No entity
+subclass is registered for 'X' …"); the warning never changes the exit code.
+
 ## Configuration
 
 The tool uses the existing `mj.config.cjs` for database configuration and a hierarchical structure of `.mj-sync.json` and `.mj-folder.json` files for sync behavior.
