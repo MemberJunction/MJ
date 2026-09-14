@@ -1,0 +1,58 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "adversarial-chat-message-placement-01 [gemini-3.7-flash · Google · envelope]",
+    "Description": "Detects the nested-message defect: seven shipped exemplars put the chat text at nextStep.message, where the runtime cannot see it and forces a Retry. The message matcher only passes if the text is top-level, exactly as the runtime reads it.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Look into that thing we discussed."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "adversarial-chat-message-placement-01",
+      "expect": {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        }
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "332E82FE-9138-4376-AD92-38390093383A"
+  }
+}

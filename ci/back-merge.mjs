@@ -17,6 +17,29 @@ import fs from 'node:fs';
 export const LOCKFILE = 'pnpm-lock.yaml';
 
 /**
+ * Git remote to PUSH `next` through.
+ *
+ * `next` is protected by ruleset `next-protect`, whose bypass list accepts only roles,
+ * teams and GitHub Apps — never an individual user. The release PAT's account
+ * (`MJ-GH-bot`) is an outside collaborator, so it cannot be granted a bypass at all, and
+ * as of 2026-09-03 it no longer has one: every push to `next` from publish.yml was
+ * rejected with GH013 until the `blue-cypress-ci-bot` App was added as a bypass actor.
+ *
+ * The workflow therefore adds a second remote authenticated as that App and points this
+ * at it. Reads still go through `origin` on the PAT — only the write to `next` moves, so
+ * pushes to `main` and `lts/**` and every `gh` call are untouched.
+ *
+ * Defaults to `origin` so a developer running `pnpm run mergemain` by hand behaves exactly
+ * as before (and succeeds if they are in `break-glass`).
+ *
+ * @returns {string} remote name
+ */
+export function nextPushRemote() {
+    const remote = (process.env.MJ_NEXT_PUSH_REMOTE ?? '').trim();
+    return remote === '' ? 'origin' : remote;
+}
+
+/**
  * Paths a conflicted back-merge may resolve without a human.
  *
  * The lockfile qualifies because it is *derived* — regenerated from the package.json files

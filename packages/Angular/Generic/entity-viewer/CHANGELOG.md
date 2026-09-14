@@ -1,5 +1,504 @@
 # @memberjunction/ng-entity-viewer
 
+## 6.1.0
+
+### Minor Changes
+
+- 394d276: UI capabilities hoisted from the BizApps accounting app (battle-tested there against live data):
+  - **`mj-left-nav` desktop collapse (opt-in):** `[Collapsible]` + two-way `[(Collapsed)]` + `CollapsedWidth` render a locked-position double-angle toggle chip and an icons-only collapsed strip — labels visually hidden but kept in the a11y tree, section labels folded to divider lines, badges docked on the icon corner, per-item tooltips auto-enabled (`IconOnly` also available standalone for externally-narrowed rails). Consumer owns/persists the state; deliberately no hover-to-peek. Richer rail content is handled rather than assumed away: tree sections fold to their top level while collapsed (with a top-level item standing in as active — `aria-current="true"` — for an active descendant, and `ExpandedIds` untouched so the tree returns intact on expand), icon-less items render a label monogram instead of collapsing to a blank hit-target, and the whole collapsed behavior is viewport-gated to match its ≥701px styling, so a persisted `Collapsed` never follows the user into the ≤700px drawer.
+  - **New `mj-workspace-card` + `mj-workspace-tab-strip` + `MJWorkspaceTabStore`:** the workspace pattern — browser-style draft tabs (open/switch/drag-reorder/close, dirty-dot, rejected/complete states) over a pure, exhaustively unit-tested tab state machine, wrapped in a slotted card frame (identity band, scrolling body, opt-in standardized confirm/draft/discard footer). Plus `mjTip`, a delayed non-interactive truncation tooltip.
+  - **`mj-entity-data-grid`:** new `[FillWidth]` input appends an inert trailing filler column so row banding reaches the container edge without stretching real columns; `width: 'auto'` + `maxWidth` column configs now actually map to AG Grid flex sizing (previously silently ignored) and survive saved-grid-state restores; `computeFieldsList` exported from `record.util` and now takes the host's column list, so a page that declares `[Columns]` gets those fields SELECTed instead of rendering empty cells — including columns declared `visible: false`, which stay in the column model and can be re-shown, and with names resolved to the entity's own casing so a differently-cased column is never requested twice.
+
+- c996a56: Field-Level Security: NOT NULL columns can now be restricted.
+
+  **BREAKING (GraphQL schema).** Generated object types lose non-nullability on roughly **2,150 of
+  4,650 restrictable fields, across all 384 generated object types** — `String!` becomes `String`, and
+  likewise for the other scalars. Any external consumer holding GraphQL types generated against the
+  previous schema will fail to compile against this one until those types are regenerated; a consumer
+  that reads the fields without regenerating sees no runtime change. Input types are **not** affected,
+  so no write contract changes. Non-nullability is retained only where field security is structurally
+  incapable of stripping a value: primary keys and `__mj_` system columns.
+
+  The guide previously said not to restrict a NOT NULL column, because the generated GraphQL object
+  types marked those fields non-nullable and an FLS-omitted value then failed response serialization.
+  That constraint is gone, and with it the largest gap in what the feature could actually protect —
+  roughly 2,150 of 4,650 restrictable fields were off-limits, including the ~400 foreign-key display
+  columns that inherit non-nullability from the key they display ("hide which client this contract
+  belongs to" is a common ask, and it did not work).
+
+  The underlying error was one wrong inference. A column's NOT NULL constraint and a GraphQL `!` say
+  different things — "no ROW stores an empty value here" versus "every RESPONSE, to every caller,
+  carries a value here" — and the second does not follow from the first. They coincided only while
+  every caller saw every column of every row they could read, which is exactly what field security
+  ends. Generated output types are now non-nullable only where FLS is structurally incapable of
+  stripping a field: primary keys and `__mj_` system columns. **Input types are unchanged** — they
+  carry the write contract, which the database constraint does still govern.
+
+  Symptoms this removes, all of which required a denied NOT NULL column: single-record loads nulling
+  the entire record, typed list queries nulling the entire query, and — the worst — a mutation whose
+  write landed in the database while its response failed to serialize, so the client reported a
+  failed save for an edit that had actually succeeded.
+
+  **`ReadableFields___`** is added to every generated object type. Deleting a denied key server-side
+  is not sufficient on its own: GraphQL emits every field the client _selected_, so a denied field
+  that was asked for arrives as an explicit `null` indistinguishable from a genuine one. The client
+  cannot settle that from its own metadata — that copy is stale in the window after a permission
+  change, and may be filtered away entirely once metadata tiering lands. The server now states it
+  in-band for the request that actually ran. It lists **readable** fields rather than denied ones
+  deliberately: naming denied fields would hand back precisely what metadata filtering exists to
+  withhold.
+
+  Also in this release:
+  - **Read-only fields no longer receive write permissions.** A joined display column or computed
+    field cannot be written through the API by anyone, so Update and Create verbs on one decide
+    nothing. Reconciliation was authoring `Allow` on both across ~1,000 such fields per qualifying
+    role — rows that read as granted permissions and were inert. They are now `No Access`, the
+    save-time guard refuses a rule that sets them, and the system-user access guard no longer reads
+    their absence as lost access. Read is untouched.
+  - **Two paths that returned a record's NAME without checking field security are closed.** The
+    `GetEntityRecordName` query took no user context at all, so a caller denied read on an entity's
+    name field could still obtain it — and the foreign-key control in forms falls through to that
+    query _precisely when_ the joined display column is denied, so the fallback that exists to handle
+    a denial was the thing that defeated it. Separately, `BaseEntity.GetRecordName()` read through
+    `Get()`, which throws for a denied field, and it runs automatically after every load and save —
+    so denying an entity's name field made every record on it fail to open. Both now degrade to the
+    primary key.
+  - **A write refusal on a field you can read now names the missing permission** rather than using
+    the ambiguous "does not exist on entity … or you do not have access to it". That wording exists
+    to stop a caller probing which columns a deployment treats as sensitive, which is a question
+    about fields they cannot _read_; when they can see the field and its value, it only tells them a
+    field they are looking at might not exist. Read denials keep the ambiguous wording.
+  - **The view-configuration panel no longer offers denied fields as columns.**
+
+- 6ecfaa0: Relationship `UI.sortKey` orders first-class related rail items after Details. Hug-height related grids use a top-aligned inline empty state. Left-nav labels cap at 200px and show the full title on hover.
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- e9c5b90: Add EntityViewerConfig.chrome (`workspace` | `embedded`). Embedded hides filter, view-mode toggle, record count, and pagination, and seeds the Grid plug-in with toolbar and pager off. Hosted grids no longer show a second Search box — the container already owns filter text.
+- 78ea840: The entity data grid's load-error state now leads with a human message ("The server may be busy or briefly unreachable — retrying usually fixes this") instead of the raw transport error, keeps the technical detail as a de-emphasized parenthetical, and logs every load failure via LogError.
+- 469461a: Photo/logo/avatar cells crop, center, and scale to the cell (28px circle in the grid, 48px circle on cards, 40px circle on timeline). AG Grid injects HTML without Angular attributes, so size is also inlined on the img. Timeline auto-binds PhotoURL/LogoURL as the card image. The header/pager total is a `count_only` RunView with IgnoreMaxRows so UserViewMaxRows (default 1000) cannot cap the count.
+- 2d14c62: Add Image, Color, and JSON to EntityField.ExtendedType. Forms render an image thumbnail (including inline base64 / data URIs) with an edit-mode upload capped at the field's MaxLength, a color swatch + hex editor, and a pretty-printed JSON textarea. Entity-viewer grid/cards/timeline key image cells off ExtendedType rather than field-name heuristics. PhotoURL, LogoURL, and ImageURL are reclassified to Image with AutoUpdateExtendedType locked so CodeGen cannot overwrite them.
+- 8d880cc: Split geo **read** (`SupportsGeoCoding`, maps, distance, virtual PrimaryAddress / `__mj_Latitude_{FK}`) from geo **write** (GeoCodeSyncService only when 1+ writable Geo\* fields exist; skip provider when native lat/lng already set). mj-sync `push.skipGeoCoding` per entity. Parallel push default 10 uses `CreateIndependentInstance()` (shared pool, own TX) instead of defaulting to 1. Durable AfterCreate without a queue submitter defers until transaction depth is 0 (fire-and-forget), not nested in the save.
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- b46330e: Skip ClassFactory.CreateInstance when a view-type DriverClass has no registered descriptor. Seeded rows like TagCloudViewType no longer dump a fallback warning at Explorer boot.
+- Updated dependencies [4273317]
+- Updated dependencies [394d276]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [c1fea88]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [59def38]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [8288711]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [d26e202]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [394d276]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [394d276]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-shared-generic@6.1.0
+  - @memberjunction/ng-ui-components@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ng-base-types@6.1.0
+  - @memberjunction/ng-entity-action-ux@6.1.0
+  - @memberjunction/ng-export-service@6.1.0
+  - @memberjunction/ng-filter-builder@6.1.0
+  - @memberjunction/ng-list-management@6.1.0
+  - @memberjunction/ng-map-view@6.1.0
+  - @memberjunction/ng-notifications@6.1.0
+  - @memberjunction/ng-pagination@6.1.0
+  - @memberjunction/ng-record-changes@6.1.0
+  - @memberjunction/ng-timeline@6.1.0
+  - @memberjunction/actions-base@6.1.0
+  - @memberjunction/export-engine@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- c996a56: Field-Level Security: NOT NULL columns can now be restricted.
+
+  **BREAKING (GraphQL schema).** Generated object types lose non-nullability on roughly **2,150 of
+  4,650 restrictable fields, across all 384 generated object types** — `String!` becomes `String`, and
+  likewise for the other scalars. Any external consumer holding GraphQL types generated against the
+  previous schema will fail to compile against this one until those types are regenerated; a consumer
+  that reads the fields without regenerating sees no runtime change. Input types are **not** affected,
+  so no write contract changes. Non-nullability is retained only where field security is structurally
+  incapable of stripping a value: primary keys and `__mj_` system columns.
+
+  The guide previously said not to restrict a NOT NULL column, because the generated GraphQL object
+  types marked those fields non-nullable and an FLS-omitted value then failed response serialization.
+  That constraint is gone, and with it the largest gap in what the feature could actually protect —
+  roughly 2,150 of 4,650 restrictable fields were off-limits, including the ~400 foreign-key display
+  columns that inherit non-nullability from the key they display ("hide which client this contract
+  belongs to" is a common ask, and it did not work).
+
+  The underlying error was one wrong inference. A column's NOT NULL constraint and a GraphQL `!` say
+  different things — "no ROW stores an empty value here" versus "every RESPONSE, to every caller,
+  carries a value here" — and the second does not follow from the first. They coincided only while
+  every caller saw every column of every row they could read, which is exactly what field security
+  ends. Generated output types are now non-nullable only where FLS is structurally incapable of
+  stripping a field: primary keys and `__mj_` system columns. **Input types are unchanged** — they
+  carry the write contract, which the database constraint does still govern.
+
+  Symptoms this removes, all of which required a denied NOT NULL column: single-record loads nulling
+  the entire record, typed list queries nulling the entire query, and — the worst — a mutation whose
+  write landed in the database while its response failed to serialize, so the client reported a
+  failed save for an edit that had actually succeeded.
+
+  **`ReadableFields___`** is added to every generated object type. Deleting a denied key server-side
+  is not sufficient on its own: GraphQL emits every field the client _selected_, so a denied field
+  that was asked for arrives as an explicit `null` indistinguishable from a genuine one. The client
+  cannot settle that from its own metadata — that copy is stale in the window after a permission
+  change, and may be filtered away entirely once metadata tiering lands. The server now states it
+  in-band for the request that actually ran. It lists **readable** fields rather than denied ones
+  deliberately: naming denied fields would hand back precisely what metadata filtering exists to
+  withhold.
+
+  Also in this release:
+  - **Read-only fields no longer receive write permissions.** A joined display column or computed
+    field cannot be written through the API by anyone, so Update and Create verbs on one decide
+    nothing. Reconciliation was authoring `Allow` on both across ~1,000 such fields per qualifying
+    role — rows that read as granted permissions and were inert. They are now `No Access`, the
+    save-time guard refuses a rule that sets them, and the system-user access guard no longer reads
+    their absence as lost access. Read is untouched.
+  - **Two paths that returned a record's NAME without checking field security are closed.** The
+    `GetEntityRecordName` query took no user context at all, so a caller denied read on an entity's
+    name field could still obtain it — and the foreign-key control in forms falls through to that
+    query _precisely when_ the joined display column is denied, so the fallback that exists to handle
+    a denial was the thing that defeated it. Separately, `BaseEntity.GetRecordName()` read through
+    `Get()`, which throws for a denied field, and it runs automatically after every load and save —
+    so denying an entity's name field made every record on it fail to open. Both now degrade to the
+    primary key.
+  - **A write refusal on a field you can read now names the missing permission** rather than using
+    the ambiguous "does not exist on entity … or you do not have access to it". That wording exists
+    to stop a caller probing which columns a deployment treats as sensitive, which is a question
+    about fields they cannot _read_; when they can see the field and its value, it only tells them a
+    field they are looking at might not exist. Read denials keep the ambiguous wording.
+  - **The view-configuration panel no longer offers denied fields as columns.**
+
+### Patch Changes
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/actions-base@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.7
+  - @memberjunction/ng-list-management@6.1.0-edge.7
+  - @memberjunction/ng-map-view@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ng-record-changes@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/ng-filter-builder@6.1.0-edge.7
+  - @memberjunction/ng-timeline@6.1.0-edge.7
+  - @memberjunction/ng-export-service@6.1.0-edge.7
+  - @memberjunction/ng-pagination@6.1.0-edge.7
+  - @memberjunction/export-engine@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- e9c5b90: Add EntityViewerConfig.chrome (`workspace` | `embedded`). Embedded hides filter, view-mode toggle, record count, and pagination, and seeds the Grid plug-in with toolbar and pager off. Hosted grids no longer show a second Search box — the container already owns filter text.
+- 78ea840: The entity data grid's load-error state now leads with a human message ("The server may be busy or briefly unreachable — retrying usually fixes this") instead of the raw transport error, keeps the technical detail as a de-emphasized parenthetical, and logs every load failure via LogError.
+- 469461a: Photo/logo/avatar cells crop, center, and scale to the cell (28px circle in the grid, 48px circle on cards, 40px circle on timeline). AG Grid injects HTML without Angular attributes, so size is also inlined on the img. Timeline auto-binds PhotoURL/LogoURL as the card image. The header/pager total is a `count_only` RunView with IgnoreMaxRows so UserViewMaxRows (default 1000) cannot cap the count.
+- 2d14c62: Add Image, Color, and JSON to EntityField.ExtendedType. Forms render an image thumbnail (including inline base64 / data URIs) with an edit-mode upload capped at the field's MaxLength, a color swatch + hex editor, and a pretty-printed JSON textarea. Entity-viewer grid/cards/timeline key image cells off ExtendedType rather than field-name heuristics. PhotoURL, LogoURL, and ImageURL are reclassified to Image with AutoUpdateExtendedType locked so CodeGen cannot overwrite them.
+- 8d880cc: Split geo **read** (`SupportsGeoCoding`, maps, distance, virtual PrimaryAddress / `__mj_Latitude_{FK}`) from geo **write** (GeoCodeSyncService only when 1+ writable Geo\* fields exist; skip provider when native lat/lng already set). mj-sync `push.skipGeoCoding` per entity. Parallel push default 10 uses `CreateIndependentInstance()` (shared pool, own TX) instead of defaulting to 1. Durable AfterCreate without a queue submitter defers until transaction depth is 0 (fire-and-forget), not nested in the save.
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b915983]
+- Updated dependencies [b7819d2]
+- Updated dependencies [c1fea88]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ng-base-types@6.1.0-edge.6
+  - @memberjunction/ng-entity-action-ux@6.1.0-edge.6
+  - @memberjunction/ng-export-service@6.1.0-edge.6
+  - @memberjunction/ng-filter-builder@6.1.0-edge.6
+  - @memberjunction/ng-list-management@6.1.0-edge.6
+  - @memberjunction/ng-map-view@6.1.0-edge.6
+  - @memberjunction/ng-notifications@6.1.0-edge.6
+  - @memberjunction/ng-pagination@6.1.0-edge.6
+  - @memberjunction/ng-record-changes@6.1.0-edge.6
+  - @memberjunction/ng-shared-generic@6.1.0-edge.6
+  - @memberjunction/ng-timeline@6.1.0-edge.6
+  - @memberjunction/ng-ui-components@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/actions-base@6.1.0-edge.6
+  - @memberjunction/export-engine@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

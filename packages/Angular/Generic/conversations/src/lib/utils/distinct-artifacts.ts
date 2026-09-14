@@ -7,6 +7,8 @@
  * versions, and only the latest should render. This helper reconciles both.
  */
 
+import { NormalizeUUID } from '@memberjunction/global';
+
 /** Minimal shape needed to dedupe artifacts — satisfied by `LazyArtifactInfo`. */
 export interface DistinctArtifactKey {
   artifactId: string;
@@ -19,13 +21,22 @@ export interface DistinctArtifactKey {
  * retained (so a report and an image both surface); multiple versions of the
  * SAME artifact collapse to the latest. Input order of distinct artifacts is
  * preserved (first-seen wins for ordering).
+ *
+ * Ids are grouped as UUIDs, not as raw strings: SQL Server returns them upper-case and PostgreSQL
+ * lower-case, so a list assembled from differently-cased sources would otherwise render the same
+ * artifact as two cards.
+ *
+ * Related but NOT interchangeable: `snapshotArtifactVersions` in `artifact-panel-action.ts` reduces
+ * the whole conversation to id → max version for a before/after diff. This one is per-message and
+ * returns the objects themselves.
  */
 export function selectDistinctLatestArtifacts<T extends DistinctArtifactKey>(list: readonly T[]): T[] {
   const latestByArtifact = new Map<string, T>();
   for (const info of list) {
-    const existing = latestByArtifact.get(info.artifactId);
+    const key = NormalizeUUID(info.artifactId);
+    const existing = latestByArtifact.get(key);
     if (!existing || info.versionNumber > existing.versionNumber) {
-      latestByArtifact.set(info.artifactId, info);
+      latestByArtifact.set(key, info);
     }
   }
   return Array.from(latestByArtifact.values());

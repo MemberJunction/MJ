@@ -1,0 +1,74 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-disambig-web-not-internal-01 [gemini-3.7-flash · Google · native-implicit-results]",
+    "Description": "The mirror of the previous case: a question about the outside world must NOT go to internal search. Catches a model that has learned one habit.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "What did the Fed announce about interest rates this week?"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-disambig-web-not-internal-01",
+      "expect": {
+        "kind": "action",
+        "actions": [
+          {
+            "name": "Perplexity Search"
+          }
+        ],
+        "allowAdditionalActions": true,
+        "forbiddenActions": [
+          "Scoped Search",
+          "Get Record"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Perplexity Search"
+              }
+            ],
+            "allowAdditionalActions": true,
+            "forbiddenActions": [
+              "Scoped Search",
+              "Get Record"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "D270DB01-49A8-4C42-A64A-A8C5B94BA8C7"
+  }
+}

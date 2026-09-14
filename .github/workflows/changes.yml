@@ -108,6 +108,16 @@ jobs:
             '${{ steps.base.outputs.sha }}' \
             '${{ github.sha }}'
 
+      - name: Self-test spDeleteUnneededEntityFields detector
+        run: node .github/scripts/check-migration-no-prune.mjs --self-test
+
+      - name: Check changed migrations do not contain spDeleteUnneededEntityFields
+        if: steps.check_migrations.outputs.has_migrations == 'true'
+        run: |
+          node .github/scripts/check-migration-no-prune.mjs \
+            '${{ steps.base.outputs.sha }}' \
+            '${{ github.sha }}'
+
       - name: Check CodeGen tail matches committed migrations (#3737)
         # Lives in THIS job rather than a workflow of its own, and is NOT gated on
         # has_migrations. Both are deliberate:

@@ -1,4 +1,6 @@
-import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage } from '@memberjunction/ai';
+import { AIErrorInfo, BaseLLM, ChatParams, ChatResult, ChatResultChoice, ChatMessage, ChatMessageRole, toClassicChatMessageRole, ClassifyParams, ClassifyResult, SummarizeParams, SummarizeResult, ModelUsage,
+    buildOpenAICompatibleTools, buildOpenAICompatibleToolChoice, buildOpenAICompatibleToolCalls, buildOpenAICompatibleToolResults, extractOpenAICompatibleToolCalls,
+    type OpenAICompatibleMessage, type RawOpenAICompatibleToolCall } from '@memberjunction/ai';
 import { RegisterClass, ToJSONSafe } from '@memberjunction/global';
 import { Cerebras, APIUserAbortError } from '@cerebras/cerebras_cloud_sdk';
 import { Chat, ChatCompletion } from '@cerebras/cerebras_cloud_sdk/resources/chat';
@@ -43,6 +45,26 @@ export class CerebrasLLM extends BaseLLM {
      * Cerebras supports streaming
      */
     public override get SupportsStreaming(): boolean {
+        return true;
+    }
+
+    /**
+     * Cerebras exposes OpenAI-compatible function calling, including parallel calls and a strict
+     * (constrained-decoding) mode, so the shared OpenAI-shaped mapping applies unchanged.
+     *
+     * This matters more than the model count suggests: GPT-OSS-120B on Cerebras is the single
+     * most-deployed model across MJ's shipped agents, and until this override it was the one
+     * configuration native tool calling could not reach — the capability gate resolved to the
+     * envelope no matter what metadata said.
+     *
+     * Two Cerebras-specific caveats, both handled by callers rather than here. Its catalog rotates
+     * aggressively, so a model that supports tools today may not be served tomorrow — verify at
+     * integration time. And it has a documented tool-hallucination quirk: it can emit a call to a
+     * tool that was never declared. {@link extractOpenAICompatibleToolCalls} surfaces such a call
+     * rather than dropping it, which is deliberate — the agent loop must be able to see a bad call
+     * and reject it by name, not receive silence.
+     */
+    public override get SupportsTools(): boolean {
         return true;
     }
 
@@ -174,6 +196,89 @@ export class CerebrasLLM extends BaseLLM {
     /**
      * Implementation of non-streaming chat completion for Cerebras
      */
+
+    /**
+     * Builds the Cerebras message array from MJ messages.
+     *
+     * Shared by the streaming and non-streaming paths so a tool conversation cannot round-trip
+     * correctly on one and silently break on the other. Two things it must do that a naive
+     * `.map()` cannot: a `tool`-role turn expands into **N** provider messages (one per result),
+     * and an assistant turn has to carry its `tool_calls` forward or the results answering them
+     * are orphaned and the request is rejected.
+     */
+    protected convertMessages(params: ChatParams): OpenAICompatibleMessage[] {
+        const out: OpenAICompatibleMessage[] = [];
+        for (const m of params.messages) {
+            if (m.role === ChatMessageRole.tool) {
+                out.push(...buildOpenAICompatibleToolResults(m, 'Cerebras provider'));
+                continue;
+            }
+            const content = typeof m.content === 'string'
+                ? m.content
+                // Multimodal content is not supported here; keep the text so the turn survives.
+                : m.content.filter(block => block.type === 'text').map(block => block.content).join('\n\n');
+            const role = toClassicChatMessageRole(m.role);
+            out.push(role === 'assistant'
+                ? { role, content, ...(m.toolCalls?.length ? { tool_calls: buildOpenAICompatibleToolCalls(m.toolCalls) } : {}) }
+                : { role, content });
+        }
+        return out;
+    }
+
+    /**
+     * Adds the native tool-calling fields when the caller declared tools.
+     *
+     * `parallel_tool_calls` is forwarded only when the caller set it explicitly. Cerebras supports
+     * parallel calls at the API level but per-model, and sending the flag unasked would impose a
+     * default the caller never chose on a catalog that rotates.
+     */
+    protected applyToolParams(request: Chat.ChatCompletionCreateParams, params: ChatParams): void {
+        if (!params.tools || params.tools.length === 0) {
+            return;
+        }
+        const body = request as unknown as Record<string, unknown>;
+        body.tools = buildOpenAICompatibleTools(params.tools);
+        if (params.toolChoice !== undefined) {
+            body.tool_choice = buildOpenAICompatibleToolChoice(params.toolChoice);
+        }
+        if (params.parallelToolCalls !== undefined) {
+            body.parallel_tool_calls = params.parallelToolCalls;
+        }
+    }
+
+    /**
+     * Sets `response_format`, unless tools are going out on the same request.
+     *
+     * Cerebras rejects the two together outright — `400 "tools" is incompatible with
+     * "response_format"` — in every forcing mode, measured across the whole provider matrix.
+     * No request
+     * carrying both succeeds on this vendor, so the choice is not between two working requests but
+     * between one working request and a guaranteed failure.
+     *
+     * Tools win. A tool declaration is a decision channel the caller is relying on; JSON mode is a
+     * formatting constraint the prompt itself already states in every MJ prompt that sets it, and
+     * a model that ignores it produces output the envelope parser tolerates. Dropping it is loud
+     * rather than silent, because a caller who set it deliberately should be able to find out why
+     * their request did not carry it.
+     */
+    protected applyResponseFormat(request: Chat.ChatCompletionCreateParams, params: ChatParams): void {
+        const format = params.responseFormat;
+        if (format !== 'JSON' && format !== 'ModelSpecific') {
+            return;
+        }
+        if ((request as unknown as Record<string, unknown>).tools !== undefined) {
+            console.warn(
+                `CerebrasLLM: dropping response_format ('${format}') from the request to ` +
+                `'${params.model}' because it declares tools — Cerebras rejects the two together ` +
+                `(400 "tools" is incompatible with "response_format").`
+            );
+            return;
+        }
+        request.response_format = format === 'JSON'
+            ? { type: 'json_object' }
+            : params.modelSpecificResponseFormat;
+    }
+
     protected async nonStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
 
@@ -182,33 +287,16 @@ export class CerebrasLLM extends BaseLLM {
             return this.buildCancelledResult(startTime);
         }
 
-        // Convert messages to format expected by Cerebras
-        const messages = params.messages.map(m => {
-            if (typeof m.content === 'string') {
-                return {
-                    role: m.role,
-                    content: m.content
-                };
-            } else {
-                // Multimodal content not fully supported yet
-                // Convert to string by joining text content
-                const contentStr = m.content
-                    .filter(block => block.type === 'text')
-                    .map(block => block.content)
-                    .join('\n\n');
-                return {
-                    role: m.role,
-                    content: contentStr
-                };
-            }
-        })  
-        
+        const messages = this.convertMessages(params);
+
         const cerebrasParams: Chat.ChatCompletionCreateParams = {
             model: params.model,
             messages: messages,
             max_tokens: params.maxOutputTokens,
             temperature: params.temperature
         };
+
+        this.applyToolParams(cerebrasParams, params);
         
         // Add reasoning_effort if supported by the model
         this.setCerebrasParamsEffortLevel(cerebrasParams, params);
@@ -218,25 +306,31 @@ export class CerebrasLLM extends BaseLLM {
             cerebrasParams.stop = params.stopSequences;
         }
 
-        // Handle response format if specified
-        switch (params.responseFormat) {
-            case 'Any':
-            case 'Text':
-            case 'Markdown':
-                break;
-            case 'JSON':
-                cerebrasParams.response_format = { type: "json_object" };
-                break;
-            case 'ModelSpecific':
-                cerebrasParams.response_format = params.modelSpecificResponseFormat;
-                break;
-        }
+        this.applyResponseFormat(cerebrasParams, params);
 
         // Forward the cancellation token to the Cerebras SDK's RequestOptions so an abort tears down the
         // underlying HTTP socket rather than merely abandoning this promise.
-        let chatResponse: ChatCompletion;
+        /**
+         * NARROWED TO THE NON-STREAMING MEMBER OF THE UNION, DELIBERATELY.
+         *
+         * Newer versions of the SDK export `ChatCompletion` as a UNION:
+         *   ChatCompletion.ChatCompletionResponse | ChatCompletion.ChatChunkResponse | ChatCompletion.ErrorChunkResponse
+         * Only the first carries `choices`, `usage` and `model`, so holding the bare union makes all
+         * three reads below fail to compile (TS2339). This method is `nonStreamingChatCompletion` and
+         * never sets `stream`, so the non-streaming member is correct by construction rather than by
+         * assumption; the other two arrive only on a stream, and a transport failure throws into the
+         * catch below rather than returning an error chunk here. The cast is erased at runtime.
+         *
+         * WHICH VERSIONS THIS BITES: the lockfile resolves `@cerebras/cerebras_cloud_sdk` to 1.64.1,
+         * where `ChatCompletion` is not a union, so this file compiles without the narrowing and CI
+         * has always been green. The declared range is `^1.64.1`, which admits 1.91.0 — where it IS a
+         * union. So this is a LATENT break rather than a current one: it surfaces for anyone who
+         * installs fresh outside the lockfile, and it becomes CI's problem the moment the lockfile is
+         * refreshed, where it would arrive attached to an unrelated dependency bump.
+         */
+        let chatResponse: ChatCompletion.ChatCompletionResponse;
         try {
-            chatResponse = await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken });
+            chatResponse = (await this.client.chat.completions.create(cerebrasParams, { signal: params.cancellationToken })) as ChatCompletion.ChatCompletionResponse;
         } catch (error) {
             if (this.isCancellation(error, params.cancellationToken)) {
                 return this.buildCancelledResult(startTime);
@@ -246,7 +340,7 @@ export class CerebrasLLM extends BaseLLM {
         const endTime = new Date();
 
         // Cast to any to extract the choices
-        const choices: ChatResultChoice[] = (chatResponse.choices as Array<ChatCompletion.ChatCompletionResponse.Choice>).map((choice: any) => {
+        const choices: ChatResultChoice[] = chatResponse.choices.map((choice: any) => {
             const rawMessage = choice.message.content;
             // in some cases, Cerebras models do thinking and return that as the first part 
             // of the message the very first characters will be <think> and it ends with
@@ -254,19 +348,28 @@ export class CerebrasLLM extends BaseLLM {
             // Extract thinking content if present using base class helper
             const extracted = this.extractThinkingFromContent(rawMessage);
 
+            const toolCalls = extractOpenAICompatibleToolCalls(
+                choice.message?.tool_calls as RawOpenAICompatibleToolCall[] | undefined, 'Cerebras provider');
             const res: ChatResultChoice = {
                 message: {
                     role: ChatMessageRole.assistant,
                     content: extracted.content,
-                    thinking: extracted.thinking || choice.message.reasoning // Include reasoning field if present
+                    thinking: extracted.thinking || choice.message.reasoning, // Include reasoning field if present
+                    ...(toolCalls ? { toolCalls } : {})
                 },
-                finish_reason: choice.finish_reason,
+                // Normalize the one value the tool surface defines; everything else passes through
+                // untouched (MJ#4335 tracks normalizing the rest).
+                finish_reason: toolCalls ? 'tool_calls' : choice.finish_reason,
                 index: choice.index
             };
             return res;
         });
          
          
+        // Cast retained deliberately: `usage` is declared `Usage | null | undefined` on the union
+        // member, and the reads below assume it is present. This package compiles without
+        // strictNullChecks, so dropping the cast would look clean and merely hide that assumption
+        // until the day strict is turned on. `choices` needs no such cast — it is a required field.
         const usage = chatResponse.usage as ChatCompletion.ChatCompletionResponse.Usage
         // OpenAI-compatible cache reporting (if Cerebras enables prompt caching for the model): the
         // cache-read count is nested at prompt_tokens_details.cached_tokens and is INCLUDED in
@@ -317,27 +420,8 @@ export class CerebrasLLM extends BaseLLM {
             return this.emptyStream();
         }
 
-        // Convert messages to format expected by Cerebras
-        const messages = params.messages.map(m => {
-            if (typeof m.content === 'string') {
-                return {
-                    role: m.role,
-                    content: m.content
-                };
-            } else {
-                // Multimodal content not fully supported yet
-                // Convert to string by joining text content
-                const contentStr = m.content
-                    .filter(block => block.type === 'text')
-                    .map(block => block.content)
-                    .join('\n\n');
-                return {
-                    role: m.role,
-                    content: contentStr
-                };
-            }
-        })  
-        
+        const messages = this.convertMessages(params);
+
         const cerebrasParams: Chat.ChatCompletionCreateParams = {
             model: params.model,
             messages: messages,
@@ -345,7 +429,12 @@ export class CerebrasLLM extends BaseLLM {
             temperature: params.temperature,
             stream: true
         };
-        
+
+        // Declared on the streaming path too, so a tool conversation cannot round-trip on one path
+        // and silently lose its declarations on the other. BaseLLM downgrades a streaming request
+        // to non-streaming when tools are present, so this is belt and braces.
+        this.applyToolParams(cerebrasParams, params);
+
         // Add reasoning_effort if supported by the model
         this.setCerebrasParamsEffortLevel(cerebrasParams, params);
 
@@ -354,15 +443,7 @@ export class CerebrasLLM extends BaseLLM {
             cerebrasParams.stop = params.stopSequences;
         }
 
-        // Set response format if specified
-        switch (params.responseFormat) {
-            case 'JSON':
-                cerebrasParams.response_format = { type: "json_object" };
-                break;
-            case 'ModelSpecific':
-                cerebrasParams.response_format = params.modelSpecificResponseFormat;
-                break;
-        }
+        this.applyResponseFormat(cerebrasParams, params);
 
         // Forward the cancellation token so an abort closes the streaming socket, and wrap the stream
         // so the abort is reported as a cancellation rather than a truncated success.

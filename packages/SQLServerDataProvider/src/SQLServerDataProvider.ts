@@ -362,6 +362,20 @@ export class SQLServerDataProvider
 
   // Instance SQL execution queue for serializing transaction queries
   // Non-transactional queries bypass this queue for maximum parallelism
+  /**
+   * The promise of the most recently ENQUEUED transactional query. The queue below is a strictly
+   * serial `concatMap`, so once this settles every query enqueued before it has finished — which
+   * makes it a deterministic "queue is drained" signal for commit/rollback (see drainSQLQueue).
+   * Rejections are swallowed on this tracker only; the enqueuer still receives them.
+   */
+  private _lastQueuedSQL: Promise<unknown> = Promise.resolve();
+
+  /**
+   * How long commit/rollback wait for a request that bypassed the instance SQL queue before failing
+   * loudly. Instance-level so a test can shorten it; production leaves the default.
+   */
+  protected _activeRequestWaitMs = 2000;
+
   private _sqlQueue$ = new Subject<{
     id: string;
     query: string;
@@ -855,12 +869,23 @@ export class SQLServerDataProvider
   protected override BuildSoftLinkDependencySQL(entityName: string, compositeKey: CompositeKey): string {
     // we need to go through ALL of the entities in the system and find all of the EntityFields that have a non-null EntityIDFieldName
     // for each of these, we generate a SQL Statement that will return the EntityName, RelatedEntityName, FieldName, and the primary key values of the related entity
+    //
+    // The entity we are finding dependents OF is `entityName` - the target. Every WHERE clause below
+    // filters on THAT entity's ID and THAT record's key; `entity` in the loop is the *holder* of the
+    // link (e.g. `MJ: Task Links`), which is a different thing entirely.
+    const targetEntity = this.EntityByName(entityName);
+    if (!targetEntity) {
+      throw new Error(`Entity ${entityName} not found in metadata`);
+    }
+    // The canonical stored encoding of the target record's key - `ID|<guid>` (see CompositeKey.ToRecordID).
+    // A RecordID column holds this, not the bare primary key value.
+    const targetRecordID = compositeKey.ToRecordID();
+
     let sSQL = '';
     this.Entities.forEach((entity) => {
       // we build a string that will concatenate all of the primary key values into a single string, this is because the primary key could be a composite key
       // we do this in SQL by combining the pirmary key name and value for each row using the default separator defined by the CompositeKey class
       // the output of this should be like the following 'Field1|Value1||Field2|Value2||Field3|Value3' where the || is the CompositeKey.DefaultFieldDelimiter and the | is the CompositeKey.DefaultValueDelimiter
-      const quotes = entity.FirstPrimaryKey.NeedsQuotes ? "'" : ''; // first-pk-ok: a soft-link column stores one bare key value; matched against the first key value below by design
       const primaryKeySelectString = `CONCAT(${entity.PrimaryKeys.map((pk) => `'${pk.Name}|', CAST([${pk.Name}] AS NVARCHAR(MAX))`).join(`,'${CompositeKey.DefaultFieldDelimiter}',`)})`;
 
       // for this entity, check to see if it has any fields that are soft links, and for each of those, generate the SQL
@@ -871,19 +896,34 @@ export class SQLServerDataProvider
         // there is a layer of indirection here because each ROW in each of the entity records for this entity/field combination could point to a DIFFERENT
         // entity. We find out which entity it is pointed to via the EntityIDFieldName in the field definition, so we have to filter the rows in the entity
         // based on that.
+        //
+        // Both literals are always quoted regardless of any primary key type: the discriminator column
+        // is a uniqueidentifier FK to __mj.Entity, and the payload column is nvarchar. Deriving quoting
+        // from the holder's primary key type emitted unquoted literals for an integer-keyed holder.
         sSQL += `SELECT
                             '${entityName}' AS EntityName,
                             '${entity.Name}' AS RelatedEntityName,
                             ${primaryKeySelectString} AS PrimaryKeyValue,
-                            '${f.Name}' AS FieldName
+                            '${f.Name}' AS FieldName,
+                            1 AS IsSoftLink,
+                            '${f.EntityIDFieldName}' AS EntityIDFieldName
                         FROM
                             [${entity.SchemaName}].[${entity.BaseView}]
                         WHERE
-                            [${f.EntityIDFieldName}] = ${quotes}${entity.ID}${quotes} AND
-                            [${f.Name}] = ${quotes}${compositeKey.GetValueByIndex(0)}${quotes}`; // we only use the first primary key value, this is because we don't yet support composite primary keys
+                            [${f.EntityIDFieldName}] = '${targetEntity.ID}' AND
+                            [${f.Name}] = '${this.escapeSQLLiteral(targetRecordID)}'`;
       });
     });
     return sSQL;
+  }
+
+  /**
+   * Escapes a value for interpolation into a single-quoted T-SQL string literal. The soft-link and
+   * hard-link dependency queries are assembled as SQL text rather than parameterized, so a value
+   * carrying an apostrophe has to be doubled or it terminates the literal.
+   */
+  protected escapeSQLLiteral(value: string): string {
+    return value.replace(/'/g, "''");
   }
 
   protected override BuildHardLinkDependencySQL(entityDependencies: EntityDependency[], compositeKey: CompositeKey): string {
@@ -899,7 +939,9 @@ export class SQLServerDataProvider
                         '${entityDependency.EntityName}' AS EntityName,
                         '${entityDependency.RelatedEntityName}' AS RelatedEntityName,
                         ${primaryKeySelectString} AS PrimaryKeyValue,
-                        '${entityDependency.FieldName}' AS FieldName
+                        '${entityDependency.FieldName}' AS FieldName,
+                        0 AS IsSoftLink,
+                        NULL AS EntityIDFieldName
                     FROM
                         [${relatedEntityInfo.SchemaName}].[${relatedEntityInfo.BaseView}]
                     WHERE
@@ -1744,7 +1786,7 @@ export class SQLServerDataProvider
     
     // For transactional queries, use the instance queue to ensure serialization
     // This prevents EREQINPROG errors when multiple queries try to use the same transaction
-    return new Promise((resolve, reject) => {
+    const queued = new Promise<sql.IResult<any>>((resolve, reject) => {
       this._sqlQueue$.next({
         id: uuidv4(),
         query,
@@ -1755,6 +1797,9 @@ export class SQLServerDataProvider
         reject
       });
     });
+    // Track it so commit/rollback can wait for the queue to drain without polling (#4447).
+    this._lastQueuedSQL = queued.catch(() => undefined);
+    return queued;
   }
 
   /**
@@ -2369,7 +2414,7 @@ IF ${varName} IS NOT NULL
   /**
    * Internal mssql transaction interface to safely inspect `_activeRequest` without `any`.
    */
-  private async waitForActiveRequest(timeoutMs = 2000): Promise<void> {
+  private async waitForActiveRequest(timeoutMs = this._activeRequestWaitMs): Promise<void> {
     if (!this._transaction) {
       return;
     }
@@ -2380,10 +2425,35 @@ IF ${varName} IS NOT NULL
     const start = Date.now();
     while (tx._activeRequest) {
       if (Date.now() - start > timeoutMs) {
-        LogError(`waitForActiveRequest: timed out after ${timeoutMs}ms waiting for active request on transaction`);
-        break;
+        // Do NOT fall through to commit/rollback: with a request still in flight mssql rejects both
+        // ("Can't commit transaction. There is a request in progress."), and the original error then
+        // named a symptom rather than the cause. A request can only still be here if it bypassed the
+        // serial queue that drainSQLQueue() already waited on, so say that (#4447).
+        throw new Error(
+          `A request is still in flight on the transaction after ${timeoutMs}ms; it did not go through ` +
+          `the instance SQL queue. Await every query issued on the transaction before committing or rolling back.`
+        );
       }
       await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    }
+  }
+
+  /**
+   * Waits until every transactional query enqueued so far has finished. Loops because a query can be
+   * enqueued while we wait; it returns only once a full wait completed with nothing new arriving.
+   *
+   * Replaces polling a private mssql field on a 2-second budget. That poll gave up silently and the
+   * caller then committed over the in-flight request — which is exactly what made ~21% of integration
+   * runs fail inside `mj sync push` (#4447). Every transactional query is serialized through the
+   * instance queue while commit/rollback bypass it, so this is the drain the poll was approximating.
+   */
+  private async drainSQLQueue(): Promise<void> {
+    for (;;) {
+      const last = this._lastQueuedSQL;
+      await last;
+      if (this._lastQueuedSQL === last) {
+        return;
+      }
     }
   }
 
@@ -2391,13 +2461,17 @@ IF ${varName} IS NOT NULL
     if (!this._transaction) {
       throw new Error('No active transaction to commit');
     }
-    try {
-      await this.waitForActiveRequest();
-      await this._transaction.commit();
-    } finally {
-      this._transaction = null;
-      this._transactionState$.next(false);
-    }
+    // Drain first: every transactional query is serialized through the instance queue and commit
+    // bypasses it, so without this a commit can race a queued query still executing on the handle.
+    await this.drainSQLQueue();
+    await this.waitForActiveRequest();
+    await this._transaction.commit();
+    // Clear the handle only on SUCCESS. On failure it must survive so the base class's
+    // AbandonPhysicalTransaction can roll the doomed handle back. Nulling it first — as the old
+    // `finally` did — made that abandon a no-op, leaked the server-side transaction, and turned the
+    // caller's own rollback into 'No active transaction to rollback' (#4447).
+    this._transaction = null;
+    this._transactionState$.next(false);
   }
 
   protected override async AfterPhysicalCommit(): Promise<void> {
@@ -2430,6 +2504,7 @@ IF ${varName} IS NOT NULL
       throw new Error('No active transaction to rollback');
     }
     try {
+      await this.drainSQLQueue();
       await this.waitForActiveRequest();
       await this._transaction.rollback();
     } finally {

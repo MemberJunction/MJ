@@ -11,6 +11,8 @@
     "src/lib/panel/collapsible-panel.component.dom.test.ts",
     "src/lib/field/form-field.component.ts",
     "src/lib/field/form-field.component.dom.test.ts",
+    "src/lib/base-form-component.ts",
+    "src/lib/base-form-component.validation.dom.test.ts",
     "src/lib/isa-related-panel/isa-related-card.component.ts",
     "src/lib/isa-related-panel/isa-related-card.component.dom.test.ts",
     "src/lib/explorer-entity-data-grid.component.ts",

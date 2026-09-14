@@ -1,0 +1,362 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "webresearch-multiturn-write-then-finish-01 [claude-haiku-4-5-20251001 · Anthropic · envelope]",
+    "Description": "A complete Web Research pass in the neutral tool form: one search, a Summarize Content call per source (three), and a payload write holding three findings with quotes, three summarized sources and the search query — everything the agent prompt's completion example asks for. The result of the write confirmed it was applied. The right decision is to finish (or hand back to the parent). Searching or summarizing again is the failure.",
+    "InputDefinition": {
+      "payload": {
+        "topic": "grid-scale battery storage 2025",
+        "findings": [
+          {
+            "content": "IEA: utility-scale storage additions reached ~70 GW in 2025, up 40% year on year, led by China, the US and Europe.",
+            "source": {
+              "type": "web",
+              "url": "https://example.org/iea-2025",
+              "title": "Batteries and Secure Energy Transitions 2025",
+              "domain": "example.org",
+              "retrievedAt": "2025-12-01T12:00:00Z"
+            },
+            "quote": "Utility-scale battery additions reached roughly 70 GW in 2025, a 40% increase on 2024.",
+            "relevance": "Directly addresses 2025 grid-scale storage growth, cost or technology trends",
+            "credibility": "high",
+            "reasoning": "Primary industry or agency publication"
+          },
+          {
+            "content": "NREL: LFP pack costs fell to ~$95/kWh in 2025; installed four-hour systems ~$250/kWh, both down ~20% year on year.",
+            "source": {
+              "type": "web",
+              "url": "https://example.org/nrel-costs",
+              "title": "Utility-Scale Battery Storage Cost Benchmark 2025",
+              "domain": "example.org",
+              "retrievedAt": "2025-12-01T12:00:00Z"
+            },
+            "quote": "LFP pack costs declined to approximately $95/kWh in 2025.",
+            "relevance": "Directly addresses 2025 grid-scale storage growth, cost or technology trends",
+            "credibility": "high",
+            "reasoning": "Primary industry or agency publication"
+          },
+          {
+            "content": "BNEF: cumulative grid-scale storage passes 400 GWh in 2025; first 100 MW-class long-duration pilots (iron-air, sodium-ion); interconnection queues are the 2026 constraint.",
+            "source": {
+              "type": "web",
+              "url": "https://example.org/bnef-outlook",
+              "title": "Energy Storage Market Outlook 2H 2025",
+              "domain": "example.org",
+              "retrievedAt": "2025-12-01T12:00:00Z"
+            },
+            "quote": "Cumulative grid-scale storage capacity is set to exceed 400 GWh by the end of 2025.",
+            "relevance": "Directly addresses 2025 grid-scale storage growth, cost or technology trends",
+            "credibility": "high",
+            "reasoning": "Primary industry or agency publication"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_001",
+            "type": "web",
+            "url": "https://example.org/iea-2025",
+            "title": "Batteries and Secure Energy Transitions 2025",
+            "domain": "example.org",
+            "searchedAt": "2025-12-01T12:00:00Z",
+            "summary": "IEA reports utility-scale battery storage additions of about 70 GW in 2025, up 40% year on year, led by China, the United States and Europe. Four-hour lithium iron phosphate systems dominate new builds; the agency attributes the growth to falling pack prices and grid-services revenue."
+          },
+          {
+            "id": "src_002",
+            "type": "web",
+            "url": "https://example.org/nrel-costs",
+            "title": "Utility-Scale Battery Storage Cost Benchmark 2025",
+            "domain": "example.org",
+            "searchedAt": "2025-12-01T12:00:00Z",
+            "summary": "NREL's 2025 benchmark puts LFP pack costs at about $95/kWh and installed four-hour system costs near $250/kWh, both down roughly 20% from 2024, with balance-of-system and interconnection now the largest cost shares."
+          },
+          {
+            "id": "src_003",
+            "type": "web",
+            "url": "https://example.org/bnef-outlook",
+            "title": "Energy Storage Market Outlook 2H 2025",
+            "domain": "example.org",
+            "searchedAt": "2025-12-01T12:00:00Z",
+            "summary": "BNEF projects cumulative grid-scale storage to pass 400 GWh by end-2025, notes long-duration pilots (iron-air, sodium-ion) reaching 100 MW scale, and flags interconnection queues as the main constraint on 2026 deployment."
+          }
+        ],
+        "searchQueries": [
+          "grid-scale battery storage developments 2025"
+        ]
+      },
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Research grid-scale battery storage developments in 2025."
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_0",
+              "name": "perplexity_search",
+              "arguments": {
+                "Query": "grid-scale battery storage developments 2025"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_0",
+              "toolName": "perplexity_search",
+              "isError": false,
+              "content": "1. https://example.org/iea-2025 — Batteries and Secure Energy Transitions 2025: IEA: utility-scale storage additions reached ~70 GW in 2025, up 40% year on year, led by China, the US and Europe.\n2. https://example.org/nrel-costs — Utility-Scale Battery Storage Cost Benchmark 2025: NREL: LFP pack costs fell to ~$95/kWh in 2025; installed four-hour systems ~$250/kWh, both down ~20% year on year.\n3. https://example.org/bnef-outlook — Energy Storage Market Outlook 2H 2025: BNEF: cumulative grid-scale storage passes 400 GWh in 2025; first 100 MW-class long-duration pilots (iron-air, sodium-ion); interconnection queues are the 2026 constraint."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_1",
+              "name": "summarize_content",
+              "arguments": {
+                "url": "https://example.org/iea-2025",
+                "instructions": "Summarize 2025 grid-scale battery storage developments: capacity added, costs, technologies, constraints. Keep figures and cite the source.",
+                "format": "paragraph"
+              }
+            },
+            {
+              "id": "call_2",
+              "name": "summarize_content",
+              "arguments": {
+                "url": "https://example.org/nrel-costs",
+                "instructions": "Summarize 2025 grid-scale battery storage developments: capacity added, costs, technologies, constraints. Keep figures and cite the source.",
+                "format": "paragraph"
+              }
+            },
+            {
+              "id": "call_3",
+              "name": "summarize_content",
+              "arguments": {
+                "url": "https://example.org/bnef-outlook",
+                "instructions": "Summarize 2025 grid-scale battery storage developments: capacity added, costs, technologies, constraints. Keep figures and cite the source.",
+                "format": "paragraph"
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_1",
+              "toolName": "summarize_content",
+              "isError": false,
+              "content": "IEA reports utility-scale battery storage additions of about 70 GW in 2025, up 40% year on year, led by China, the United States and Europe. Four-hour lithium iron phosphate systems dominate new builds; the agency attributes the growth to falling pack prices and grid-services revenue."
+            },
+            {
+              "type": "tool_result",
+              "toolCallId": "call_2",
+              "toolName": "summarize_content",
+              "isError": false,
+              "content": "NREL's 2025 benchmark puts LFP pack costs at about $95/kWh and installed four-hour system costs near $250/kWh, both down roughly 20% from 2024, with balance-of-system and interconnection now the largest cost shares."
+            },
+            {
+              "type": "tool_result",
+              "toolCallId": "call_3",
+              "toolName": "summarize_content",
+              "isError": false,
+              "content": "BNEF projects cumulative grid-scale storage to pass 400 GWh by end-2025, notes long-duration pilots (iron-air, sodium-ion) reaching 100 MW scale, and flags interconnection queues as the main constraint on 2026 deployment."
+            }
+          ]
+        },
+        {
+          "role": "assistant",
+          "content": "",
+          "toolCalls": [
+            {
+              "id": "call_4",
+              "name": "payload_change_request",
+              "arguments": {
+                "newElements": {
+                  "findings": [
+                    {
+                      "content": "IEA: utility-scale storage additions reached ~70 GW in 2025, up 40% year on year, led by China, the US and Europe.",
+                      "source": {
+                        "type": "web",
+                        "url": "https://example.org/iea-2025",
+                        "title": "Batteries and Secure Energy Transitions 2025",
+                        "domain": "example.org",
+                        "retrievedAt": "2025-12-01T12:00:00Z"
+                      },
+                      "quote": "Utility-scale battery additions reached roughly 70 GW in 2025, a 40% increase on 2024.",
+                      "relevance": "Directly addresses 2025 grid-scale storage growth, cost or technology trends",
+                      "credibility": "high",
+                      "reasoning": "Primary industry or agency publication"
+                    },
+                    {
+                      "content": "NREL: LFP pack costs fell to ~$95/kWh in 2025; installed four-hour systems ~$250/kWh, both down ~20% year on year.",
+                      "source": {
+                        "type": "web",
+                        "url": "https://example.org/nrel-costs",
+                        "title": "Utility-Scale Battery Storage Cost Benchmark 2025",
+                        "domain": "example.org",
+                        "retrievedAt": "2025-12-01T12:00:00Z"
+                      },
+                      "quote": "LFP pack costs declined to approximately $95/kWh in 2025.",
+                      "relevance": "Directly addresses 2025 grid-scale storage growth, cost or technology trends",
+                      "credibility": "high",
+                      "reasoning": "Primary industry or agency publication"
+                    },
+                    {
+                      "content": "BNEF: cumulative grid-scale storage passes 400 GWh in 2025; first 100 MW-class long-duration pilots (iron-air, sodium-ion); interconnection queues are the 2026 constraint.",
+                      "source": {
+                        "type": "web",
+                        "url": "https://example.org/bnef-outlook",
+                        "title": "Energy Storage Market Outlook 2H 2025",
+                        "domain": "example.org",
+                        "retrievedAt": "2025-12-01T12:00:00Z"
+                      },
+                      "quote": "Cumulative grid-scale storage capacity is set to exceed 400 GWh by the end of 2025.",
+                      "relevance": "Directly addresses 2025 grid-scale storage growth, cost or technology trends",
+                      "credibility": "high",
+                      "reasoning": "Primary industry or agency publication"
+                    }
+                  ],
+                  "sources": [
+                    {
+                      "id": "src_001",
+                      "type": "web",
+                      "url": "https://example.org/iea-2025",
+                      "title": "Batteries and Secure Energy Transitions 2025",
+                      "domain": "example.org",
+                      "searchedAt": "2025-12-01T12:00:00Z",
+                      "summary": "IEA reports utility-scale battery storage additions of about 70 GW in 2025, up 40% year on year, led by China, the United States and Europe. Four-hour lithium iron phosphate systems dominate new builds; the agency attributes the growth to falling pack prices and grid-services revenue."
+                    },
+                    {
+                      "id": "src_002",
+                      "type": "web",
+                      "url": "https://example.org/nrel-costs",
+                      "title": "Utility-Scale Battery Storage Cost Benchmark 2025",
+                      "domain": "example.org",
+                      "searchedAt": "2025-12-01T12:00:00Z",
+                      "summary": "NREL's 2025 benchmark puts LFP pack costs at about $95/kWh and installed four-hour system costs near $250/kWh, both down roughly 20% from 2024, with balance-of-system and interconnection now the largest cost shares."
+                    },
+                    {
+                      "id": "src_003",
+                      "type": "web",
+                      "url": "https://example.org/bnef-outlook",
+                      "title": "Energy Storage Market Outlook 2H 2025",
+                      "domain": "example.org",
+                      "searchedAt": "2025-12-01T12:00:00Z",
+                      "summary": "BNEF projects cumulative grid-scale storage to pass 400 GWh by end-2025, notes long-duration pilots (iron-air, sodium-ion) reaching 100 MW scale, and flags interconnection queues as the main constraint on 2026 deployment."
+                    }
+                  ],
+                  "searchQueries": [
+                    "grid-scale battery storage developments 2025"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "role": "tool",
+          "content": [
+            {
+              "type": "tool_result",
+              "toolCallId": "call_4",
+              "toolName": "payload_change_request",
+              "isError": false,
+              "content": "Your payload change was applied. Continue: call another tool if there is more to do, or reply in plain text when the task is complete."
+            }
+          ]
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "webresearch-multiturn-write-then-finish-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "taskComplete",
+            "forbiddenActions": [
+              "Perplexity Search",
+              "Google Custom Search",
+              "Web Page Content",
+              "Summarize Content"
+            ]
+          },
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            },
+            "forbiddenActions": [
+              "Perplexity Search",
+              "Google Custom Search",
+              "Web Page Content",
+              "Summarize Content"
+            ]
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Web Research Agent",
+      "modelId": "4FD92457-0BA8-486F-978A-E5947154F4F4",
+      "vendorId": "DAA5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "envelope",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "taskComplete",
+                "forbiddenActions": [
+                  "Perplexity Search",
+                  "Google Custom Search",
+                  "Web Page Content",
+                  "Summarize Content"
+                ]
+              },
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                },
+                "forbiddenActions": [
+                  "Perplexity Search",
+                  "Google Custom Search",
+                  "Web Page Content",
+                  "Summarize Content"
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "31309AD3-4383-4BBB-AC44-83BD4F4583BE"
+  }
+}

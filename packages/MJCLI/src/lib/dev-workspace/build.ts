@@ -13,11 +13,18 @@
  *    so detection filters them out before they reach this module). A member with no
  *    workspace file of its own contributes the proven `packages/*` default; the MJ
  *    monorepo contributes its 42 nested globs (#3795).
- *  - .npmrc: exactly three settings lines. There is deliberately no
+ *    The same file carries the pnpm SETTINGS (overrides, patches, peer rules):
+ *    pnpm 10 reads them only from `pnpm-workspace.yaml` — a `pnpm` block in the
+ *    root package.json is ignored with a per-field warning that drowns in the
+ *    install output (946 overrides silently inert).
+ *  - .npmrc: exactly one settings line. There is deliberately no
  *    `public-hoist-pattern[]` block — see "Why no hoist block" below.
- *  - package.json: private root manifest, pnpm `packageManager` pin, the
+ *    A package name two members both provide (every MJ-based app repo has a
+ *    `mj_generatedentities`) gets consumer-scoped `link:` overrides so each
+ *    member's own consumers keep its own copy — see {@link ResolveDuplicateProviderLinks}.
+ *  - package.json: private root manifest, pnpm `packageManager` pin, and the
  *    devDependency union of member roots (highest version wins, every conflict
- *    reported), and the proven peerDependencyRules bridge block.
+ *    reported). No `pnpm` block — see pnpm-workspace.yaml above.
  *  - turbo.json: copied verbatim from a member, with a minimal fallback.
  *
  * Why no hoist block: the 78-entry `public-hoist-pattern[]` set the manual setup
@@ -37,15 +44,22 @@
  *
  * @module lib/dev-workspace/build
  */
-import { DeriveLockfilePins, type LockfilePinsResult } from './lockfile.js';
+import { DeriveLockfilePins, IsResolvedVersion, MajorOf, type LockfilePinsResult } from './lockfile.js';
 import type {
   CandidateRepo,
   DevDepConflict,
+  DuplicateClientPackage,
   DuplicateFamilyPackage,
+  DuplicateProviderLink,
+  MemberPackageJson,
+  MjAppPackageEntry,
+  OpenAppClientPackage,
   PackageExtension,
   ParentManifestReport,
   RootPackageJsonResult,
+  ShellPeerGap,
   TurboJsonResult,
+  WorkspaceShell,
   WorkspaceSentinel,
 } from './types.js';
 
@@ -69,12 +83,26 @@ export const ONLY_BUILT_DEPENDENCIES: readonly string[] = [
   'tesseract.js',
 ];
 
-/** The three .npmrc settings lines — strict peers has been the standard since 2026-08-07. */
-export const NPMRC_BASE_LINES: readonly string[] = [
-  'package-manager-strict=false',
-  'strict-peer-dependencies=true',
-  'auto-install-peers=true',
-];
+/**
+ * The one .npmrc settings line. The peer settings that used to sit beside it
+ * (`strict-peer-dependencies`, `auto-install-peers`) now live in
+ * `pnpm-workspace.yaml` with the rest of the pnpm settings — see
+ * {@link PEER_INSTALL_SETTINGS}.
+ */
+export const NPMRC_BASE_LINES: readonly string[] = ['package-manager-strict=false'];
+
+/**
+ * Peer-resolution settings for the parent workspace, emitted into
+ * `pnpm-workspace.yaml`. Peers are auto-installed but NOT strict: a mixed
+ * workspace links MJ from source while a member may still resolve published
+ * packages (Skip-Brain's `@mj-biz-apps/*` 5.33) whose peer ranges name an older
+ * MJ major than the linked source — a strict install fails on peers no member
+ * can fix, while a non-strict one reports them and completes.
+ */
+export const PEER_INSTALL_SETTINGS = {
+  strictPeerDependencies: false,
+  autoInstallPeers: true,
+} as const;
 
 /**
  * Packages an MJ library declares as a `peerDependency` because the choice belongs
@@ -85,6 +113,11 @@ export const NPMRC_BASE_LINES: readonly string[] = [
  *
  * Kept here (rather than as prose) so the command's guidance text has one source of
  * truth. Grouped by the MJ package whose peer declaration creates the requirement.
+ *
+ * Scope: this list covers MJ's OWN libraries. Open App client packages declare shell-provided
+ * peers too, and they are NOT enumerated here — MJ's CLI does not hardcode knowledge of specific
+ * Open App repos. They are DERIVED instead, per shell, by {@link ResolveShellPeerGaps} from the
+ * members' committed `mj-app.json` files (#4364).
  */
 export const SHELL_PROVIDED_PEERS: ReadonlyArray<{ Library: string; Peers: readonly string[] }> = [
   {
@@ -163,7 +196,7 @@ function yamlListEntry(name: string): string {
  * Negations are exempt (a `!**\/dist\/**` guard survives verbatim): they only
  * subtract, so re-prefixing one can never admit anything.
  */
-function memberGlobLines(member: Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs'>): string[] {
+function memberGlobLines(member: Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs' | 'AppGlobs'>): string[] {
   if (member.WorkspaceGlobs.length === 0) {
     throw new Error(`Member ${member.Name} has no workspace globs — detection must supply at least the packages/* default`);
   }
@@ -176,6 +209,85 @@ function memberGlobLines(member: Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs'>)
     }
     lines.push(negated ? `  - '!${member.Name}/${body}'` : `  - '${member.Name}/${glob}'`);
   }
+  // App shells the user admitted for this member with --apps (already validated by SelectAppGlobs).
+  for (const glob of member.AppGlobs ?? []) {
+    if (glob.startsWith('!') || glob.startsWith('packages/')) {
+      throw new Error(`Member ${member.Name} app glob '${glob}' is not an admitted app-shell glob — SelectAppGlobs must run first`);
+    }
+    lines.push(`  - '${member.Name}/${glob}'`);
+  }
+  return lines;
+}
+
+/**
+ * The #3795 guard, made explicit for admitted app shells: every package an `--apps` glob
+ * enumerates must have a name no other workspace package uses, or pnpm would silently pick one.
+ * Throws naming both sides; returns the admitted app package names otherwise. Pure.
+ */
+export function AssertAppPackageNamesUnique(
+  members: ReadonlyArray<Pick<CandidateRepo, 'Name' | 'Packages' | 'AppGlobs'>>
+): string[] {
+  const isUnder = (relPath: string, glob: string): boolean =>
+    glob.endsWith('/*') ? relPath.startsWith(`${glob.slice(0, -2)}/`) && !relPath.slice(glob.length - 1).includes('/') : relPath === glob;
+  const owners = new Map<string, string>(); // package name -> "member/relPath"
+  const appNames: string[] = [];
+  for (const member of members) {
+    for (const pkg of member.Packages) {
+      const name = pkg.PackageJson.name;
+      if (!name) continue;
+      const isApp = (member.AppGlobs ?? []).some((g) => isUnder(pkg.RelPath, g));
+      const here = `${member.Name}/${pkg.RelPath}`;
+      const other = owners.get(name);
+      if (other !== undefined && (isApp || appNames.includes(name))) {
+        throw new Error(`--apps: package name '${name}' is declared by both ${other} and ${here} — app-shell names must be unique across the workspace`);
+      }
+      if (other === undefined) owners.set(name, here);
+      if (isApp) appNames.push(name);
+    }
+  }
+  return appNames;
+}
+
+/** A YAML mapping key: bare when it is a plain identifier (the pnpm setting names), single-quoted otherwise. */
+function yamlKey(key: string): string {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(key) ? key : yamlScalar(key);
+}
+
+/** A YAML scalar: booleans and numbers bare, strings always single-quoted (a `'` doubles). */
+function yamlScalar(value: unknown): string {
+  if (typeof value === 'boolean' || typeof value === 'number') return String(value);
+  if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
+  throw new Error(`pnpm settings may hold only strings, numbers, booleans, arrays and objects — got ${typeof value}`);
+}
+
+/**
+ * Renders one JSON-shaped record as block-style YAML lines at the given indent.
+ * Deliberately tiny: the pnpm settings are strings, booleans, string lists and
+ * nested records, nothing else — anything else throws rather than mis-rendering.
+ */
+function yamlMappingLines(record: Readonly<Record<string, unknown>>, indent: number): string[] {
+  const pad = ' '.repeat(indent);
+  const lines: string[] = [];
+  for (const [key, value] of Object.entries(record)) {
+    if (Array.isArray(value)) {
+      if (value.length === 0) {
+        lines.push(`${pad}${yamlKey(key)}: []`);
+        continue;
+      }
+      lines.push(`${pad}${yamlKey(key)}:`);
+      for (const item of value) lines.push(`${pad}  - ${yamlScalar(item)}`);
+    } else if (value !== null && typeof value === 'object') {
+      const nested = value as Record<string, unknown>;
+      if (Object.keys(nested).length === 0) {
+        lines.push(`${pad}${yamlKey(key)}: {}`);
+        continue;
+      }
+      lines.push(`${pad}${yamlKey(key)}:`);
+      lines.push(...yamlMappingLines(nested, indent + 2));
+    } else {
+      lines.push(`${pad}${yamlKey(key)}: ${yamlScalar(value)}`);
+    }
+  }
   return lines;
 }
 
@@ -183,8 +295,16 @@ function memberGlobLines(member: Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs'>)
  * Builds `pnpm-workspace.yaml`: per member (sorted by name) the repo root plus the
  * member's own packages-rooted workspace globs re-prefixed with its directory name.
  * Producer packages only — never `apps/*` (app-shell names collide across repos).
+ *
+ * `settings` — the assembled pnpm settings from {@link BuildRootPackageJson}
+ * (`PnpmSettings`: overrides, patches, peer rules, the peer install switches) —
+ * are appended as block YAML. pnpm 10 honours them ONLY in this file; the same
+ * block in the root package.json is ignored with a per-field warning.
  */
-export function BuildWorkspaceYaml(members: ReadonlyArray<Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs'>>): string {
+export function BuildWorkspaceYaml(
+  members: ReadonlyArray<Pick<CandidateRepo, 'Name' | 'WorkspaceGlobs' | 'AppGlobs'>>,
+  settings: Readonly<Record<string, unknown>> = {}
+): string {
   if (members.length === 0) {
     throw new Error('BuildWorkspaceYaml requires at least one member repo');
   }
@@ -198,6 +318,10 @@ export function BuildWorkspaceYaml(members: ReadonlyArray<Pick<CandidateRepo, 'N
   // keeps regenerated output byte-identical for pre-existing workspaces.
   for (const member of [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0))) {
     lines.push(...memberGlobLines(member));
+  }
+  if (Object.keys(settings).length > 0) {
+    lines.push('', '# pnpm settings — pnpm 10 reads these ONLY from this file; a package.json#pnpm block is ignored at a workspace root.');
+    lines.push(...yamlMappingLines(settings, 0));
   }
   return `${lines.join('\n')}\n`;
 }
@@ -217,7 +341,7 @@ export function BuildShellPeerGuidance(): string[] {
 }
 
 /**
- * Builds `.npmrc`: exactly the three proven settings lines.
+ * Builds `.npmrc`: exactly the one settings line pnpm still needs there.
  *
  * No `public-hoist-pattern[]` block by design — see the "Why no hoist block" note
  * at the top of this module.
@@ -362,6 +486,11 @@ function workspaceName(parentDirName: string): string {
   return `${cleaned.length > 0 ? cleaned : 'mj'}-dev-workspace`;
 }
 
+/** Members in plain codepoint order by name — the order every derivation resolves ties in. */
+function sortedByName(members: readonly CandidateRepo[]): CandidateRepo[] {
+  return [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0));
+}
+
 /**
  * Collects every package name the workspace members provide, from the members'
  * OWN package enumerations. These names get `workspace:*` overrides in the
@@ -376,7 +505,7 @@ export function CollectFamilyPackages(members: readonly CandidateRepo[]): {
   Duplicates: DuplicateFamilyPackage[];
 } {
   const providers = new Map<string, Set<string>>();
-  for (const member of [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0))) {
+  for (const member of sortedByName(members)) {
     for (const pkg of member.Packages) {
       const name = pkg.PackageJson.name;
       if (name === undefined || name.length === 0) continue;
@@ -390,6 +519,268 @@ export function CollectFamilyPackages(members: readonly CandidateRepo[]): {
     if (repos.size > 1) duplicates.push({ Package: name, Repos: [...repos].sort() });
   }
   return { Names: [...providers.keys()].sort(), Duplicates: duplicates.sort((a, b) => (a.Package < b.Package ? -1 : 1)) };
+}
+
+/** The consumer-scoped links for duplicated family names plus every consumer that could not get one. */
+export interface DuplicateProviderLinksResult {
+  /** `<consumer>><package>` -> `link:<member>/<relPath>` — ready to merge into the parent overrides. */
+  Overrides: Record<string, string>;
+  Links: DuplicateProviderLink[];
+  Unlinked: Array<{ Consumer: string; Package: string; Repo: string; Reason: 'ambiguous-consumer' | 'no-own-copy' }>;
+}
+
+/** True when any dependency section of the manifest names `name`. */
+function declaresDependency(manifest: CandidateRepo['Packages'][number]['PackageJson'], name: string): boolean {
+  return [manifest.dependencies, manifest.devDependencies, manifest.peerDependencies].some((section) => section !== undefined && name in section);
+}
+
+/**
+ * Keeps each member's OWN copy of a duplicated package name in front of that
+ * member's own consumers. A plain `name: workspace:*` override can only pick
+ * one provider (pnpm takes the first by sort order), so every MJ-based app repo's
+ * `mj_generatedentities` / `mj_generatedactions` collided as soon as two such
+ * repos shared a workspace: Skip-Brain's packages type-checked against MJ's
+ * generated entities and could not find their own.
+ * pnpm's `parent>child` override selector with a root-relative `link:` value
+ * scopes the fix to the consumer: `@skip-brain/core>mj_generatedentities:
+ * link:Skip-Brain/packages/GeneratedEntities` (verified live).
+ *
+ * Two consumer shapes cannot be linked and are reported instead: a consumer whose
+ * own name is duplicated (the selector would hit every copy of it), and a consumer
+ * in a member that provides no copy (nothing of its own to link to — it gets the
+ * sort-order provider like before). Pure; deterministic over sorted names.
+ */
+export function ResolveDuplicateProviderLinks(
+  members: readonly CandidateRepo[],
+  duplicates: readonly DuplicateFamilyPackage[]
+): DuplicateProviderLinksResult {
+  const duplicatedNames = new Set(duplicates.map((d) => d.Package));
+  const overrides: Record<string, string> = {};
+  const links: DuplicateProviderLink[] = [];
+  const unlinked: DuplicateProviderLinksResult['Unlinked'] = [];
+  const sortedMembers = [...members].sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0));
+  for (const dup of [...duplicates].sort((a, b) => (a.Package < b.Package ? -1 : 1))) {
+    for (const member of sortedMembers) {
+      const provider = [...member.Packages]
+        .filter((p) => p.PackageJson.name === dup.Package)
+        .sort((a, b) => (a.RelPath < b.RelPath ? -1 : 1))[0];
+      for (const consumer of [...member.Packages].sort((a, b) => (a.RelPath < b.RelPath ? -1 : 1))) {
+        const consumerName = consumer.PackageJson.name;
+        if (consumerName === undefined || consumerName === dup.Package || !declaresDependency(consumer.PackageJson, dup.Package)) continue;
+        if (provider === undefined) {
+          unlinked.push({ Consumer: consumerName, Package: dup.Package, Repo: member.Name, Reason: 'no-own-copy' });
+        } else if (duplicatedNames.has(consumerName)) {
+          unlinked.push({ Consumer: consumerName, Package: dup.Package, Repo: member.Name, Reason: 'ambiguous-consumer' });
+        } else {
+          const target = `link:${member.Name}/${provider.RelPath}`;
+          overrides[`${consumerName}>${dup.Package}`] = target;
+          links.push({ Consumer: consumerName, Package: dup.Package, Target: target, Repo: member.Name });
+        }
+      }
+    }
+  }
+  return { Overrides: sortedRecord(overrides), Links: links, Unlinked: unlinked };
+}
+
+/**
+ * Indexes every package the workspace members provide, by package name. One lookup structure
+ * serves both "does the workspace provide this?" (what {@link CollectFamilyPackages} answers with
+ * a name list) and "what does this package declare?" — the peer resolution in
+ * {@link ResolveShellPeerGaps} needs the manifest, not just the name.
+ */
+export function IndexWorkspacePackages(members: readonly CandidateRepo[]): Map<string, MemberPackageJson> {
+  const index = new Map<string, MemberPackageJson>();
+  for (const member of sortedByName(members)) {
+    for (const pkg of member.Packages) {
+      const name = pkg.PackageJson.name;
+      if (name === undefined || name.length === 0) continue;
+      if (!index.has(name)) index.set(name, pkg.PackageJson);
+    }
+  }
+  return index;
+}
+
+/**
+ * The client-side packages the members' own `mj-app.json` files declare.
+ *
+ * These are invisible to every other derivation in this module: nothing in the tree DEPENDS on
+ * them. A host registers them (`dynamicPackages.client`) and `mj codegen manifest` appends a
+ * side-effect import to the app shell's generated class-registrations manifest — so the shell
+ * imports a package it never declared, and pnpm, correctly, never linked (#4364). Emitting them as
+ * parent dependencies is the only place that can be fixed.
+ *
+ * Deliberately registration-INDEPENDENT: a member's client package is collected whether or not a
+ * host has registered it, per the linking ⊥ registration axiom
+ * (`guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` §17). Over-linking is the sanctioned direction —
+ * an unregistered package resolves but does not load.
+ */
+/**
+ * Validates and returns one declared package array from a member's `mj-app.json`.
+ *
+ * `mj-app.json` is committed in a SIBLING repo and hand-editable, so its parsed shape is genuinely
+ * unknown here — {@link MjAppJson} is an assertion about a file this repo does not own, and
+ * `readJsonFile` validates only that the TEXT parses. Narrowing it with real guards is what makes
+ * that type true for every consumer downstream, and it is the same fail-fast-and-name-the-file
+ * contract `readJsonFile` already sets ("Unparseable JSON at <path>"). Without it a missing `name`
+ * surfaced as `Cannot read properties of undefined (reading 'length')`, which names neither the
+ * repo nor the file — and a developer may have a dozen of them.
+ */
+function readDeclaredEntries(member: CandidateRepo, section: 'client' | 'shared'): MjAppPackageEntry[] {
+  const declared: unknown = member.MjAppJson?.packages?.[section];
+  if (declared === undefined || declared === null) return [];
+  const where = `${member.Name}/mj-app.json: packages.${section}`;
+  if (!Array.isArray(declared)) {
+    throw new Error(`${where} must be an array of package entries, got ${typeof declared}`);
+  }
+  for (const [index, entry] of declared.entries()) {
+    if (entry === null || typeof entry !== 'object') {
+      throw new Error(`${where}[${index}] must be an object, got ${entry === null ? 'null' : typeof entry}`);
+    }
+    if (typeof (entry as { name?: unknown }).name !== 'string') {
+      throw new Error(`${where}[${index}] has no "name" string — a package entry must name its package`);
+    }
+  }
+  return declared as MjAppPackageEntry[];
+}
+
+/**
+ * Every package a member declares that an app shell will be asked to import.
+ *
+ * This set mirrors the HOST's rule exactly, because the host is the only thing that decides what
+ * the shell imports. `GetClientPackagesFromManifest`
+ * (`packages/OpenApp/Engine/src/install/config-manager.ts`) builds the client dynamic-package list
+ * as `[...packages.client, ...packages.shared]` with **no role test** — its own comment: "every
+ * client/shared package is emitted regardless of startupExport — client entries are side-effect
+ * imports" — and `mj codegen manifest --open-app-client-bootstrap` turns every enabled entry into
+ * an import in the shell's generated class-registrations manifest, with no role field even present
+ * on its entry type.
+ *
+ * So there is deliberately no `role` filter here. An earlier revision kept only `role: 'bootstrap'`
+ * on the premise that other roles "are imported normally"; the host contradicts that, and `role`
+ * is a required seven-value enum whose `components` / `module` members are the documented Angular
+ * roles. Anything narrower leaves a schema-valid package imported by the shell and linked by
+ * nobody — the exact page-load-with-a-green-build failure this module exists to prevent (#4364).
+ *
+ * `packages.server[]` is NOT here, and that is not an oversight: the host routes it to
+ * `dynamicPackages.server`, a Node process that resolves importer-relative rather than from the
+ * vite root, so it is not part of the shell's resolution problem.
+ */
+function readShellImportedEntries(member: CandidateRepo): MjAppPackageEntry[] {
+  return [...readDeclaredEntries(member, 'client'), ...readDeclaredEntries(member, 'shared')];
+}
+
+export function CollectOpenAppClientPackages(
+  members: readonly CandidateRepo[],
+  workspacePackages: ReadonlyMap<string, MemberPackageJson>
+): { Packages: OpenAppClientPackage[]; Duplicates: DuplicateClientPackage[] } {
+  const collected = new Map<string, OpenAppClientPackage>();
+  const declaredBy = new Map<string, string[]>();
+  for (const member of sortedByName(members)) {
+    // Detection carried this rather than throwing, so an excluded sibling's broken file could not
+    // abort the command. This is the consumer that actually reads the declaration, so it raises.
+    if (member.MjAppJsonError) {
+      throw new Error(`${member.Name}/mj-app.json could not be read: ${member.MjAppJsonError}`);
+    }
+    const seenInMember = new Set<string>();
+    for (const entry of readShellImportedEntries(member)) {
+      if (entry.name.length === 0) continue;
+      // One repo naming a package in BOTH client[] and shared[] is not an ambiguity — it is one
+      // member declaring one package twice, and the link target is not in question.
+      if (!seenInMember.has(entry.name)) {
+        seenInMember.add(entry.name);
+        declaredBy.set(entry.name, [...(declaredBy.get(entry.name) ?? []), member.Name]);
+      }
+      if (collected.has(entry.name)) continue;
+      collected.set(entry.name, { Package: entry.name, Repo: member.Name, Provided: workspacePackages.has(entry.name) });
+    }
+  }
+  const byPackage = (a: { Package: string }, b: { Package: string }) => (a.Package < b.Package ? -1 : a.Package > b.Package ? 1 : 0);
+  return {
+    Packages: [...collected.values()].sort(byPackage),
+    Duplicates: [...declaredBy.entries()]
+      .filter(([, repos]) => repos.length > 1)
+      .map(([Package, Repos]) => ({ Package, Repos }))
+      .sort(byPackage),
+  };
+}
+
+/** The prefix every MJ Angular library carries — the surface an Open App client package registers into. */
+const MJ_ANGULAR_PREFIX = '@memberjunction/ng-';
+
+/**
+ * The MJ Angular app shells the workspace enumerates — the shells that could actually host an Open
+ * App client package.
+ *
+ * Structural, with no configuration, and all three conditions earn their place:
+ *  - depends on `@angular/core` — a LIBRARY takes it as a peer, so this alone separates app from library;
+ *  - carries an Angular application builder (`@angular/cli` / `@angular/build`) in devDependencies;
+ *  - declares at least one `@memberjunction/ng-*` package — it has an MJ Angular surface.
+ *
+ * The third condition is not decoration. Without it the sole other Angular app in the MJ monorepo,
+ * `mj_angular_elements_demo`, is reported as missing five peers of packages it will never load —
+ * five warnings on every regenerate, which is how a report teaches people to stop reading it. It
+ * declares zero `@memberjunction/ng-*` packages while MJExplorer declares 22, and an Open App
+ * client package peer-depends on eleven of them, so a shell with none cannot be hosting one. It is
+ * a predicate, deliberately not a count threshold.
+ *
+ * Scope, stated rather than implied: only packages the workspace enumerates are candidates, and
+ * detection filters members' `apps/*` globs out because every Open App repo names its shells
+ * `mj_api`/`mj_explorer` and they collide (#3795). A shell under `apps/` is outside the workspace
+ * by design and is not checked here.
+ */
+export function CollectWorkspaceShells(members: readonly CandidateRepo[]): WorkspaceShell[] {
+  const shells: WorkspaceShell[] = [];
+  for (const member of sortedByName(members)) {
+    for (const pkg of member.Packages) {
+      const { name, dependencies = {}, devDependencies = {} } = pkg.PackageJson;
+      if (name === undefined || name.length === 0) continue;
+      const isApp = dependencies['@angular/core'] !== undefined;
+      const hasBuilder = devDependencies['@angular/cli'] !== undefined || devDependencies['@angular/build'] !== undefined;
+      const hostsMJAngular = Object.keys(dependencies).some((dep) => dep.startsWith(MJ_ANGULAR_PREFIX));
+      if (!isApp || !hasBuilder || !hostsMJAngular) continue;
+      shells.push({
+        Name: name,
+        RelPath: pkg.RelPath,
+        Repo: member.Name,
+        Declares: [...Object.keys(dependencies), ...Object.keys(devDependencies)].sort(),
+      });
+    }
+  }
+  return shells.sort((a, b) => (a.Name < b.Name ? -1 : a.Name > b.Name ? 1 : 0));
+}
+
+/**
+ * Peers of the registered client-side packages that a shell cannot resolve.
+ *
+ * A peer is a gap for a shell when the workspace does not PROVIDE it and the shell does not
+ * DECLARE it. Both halves are required: without the first, every `@memberjunction/*` peer is
+ * noise; without the second, `@angular/core` is a false positive in every shell.
+ *
+ * Why this must not be auto-added to the parent manifest: an Angular dev server externalizes
+ * `@angular/*` and resolves it from the VITE ROOT (the shell), so the copy `auto-install-peers`
+ * places in the consumer's own tree is never consulted — measured, with a control, on 2026-09-11.
+ * The fix belongs in the shell's own tracked package.json, which is what {@link SHELL_PROVIDED_PEERS}
+ * has always said and what MJExplorer already does for `@angular/service-worker`.
+ */
+export function ResolveShellPeerGaps(
+  clientPackages: readonly OpenAppClientPackage[],
+  shells: readonly WorkspaceShell[],
+  workspacePackages: ReadonlyMap<string, MemberPackageJson>,
+  overrides: Readonly<Record<string, string>>
+): ShellPeerGap[] {
+  const gaps: ShellPeerGap[] = [];
+  for (const shell of shells) {
+    const declares = new Set(shell.Declares);
+    for (const client of clientPackages) {
+      const manifest = workspacePackages.get(client.Package);
+      if (manifest === undefined) continue; // unprovided: reported by OpenAppClientPackages, nothing to resolve
+      for (const [peer, range] of Object.entries(manifest.peerDependencies ?? {})) {
+        if (workspacePackages.has(peer) || declares.has(peer)) continue;
+        gaps.push({ Shell: shell.Name, Package: client.Package, Peer: peer, Range: range, Pin: findPeerPin(overrides, peer, range) });
+      }
+    }
+  }
+  return gaps;
 }
 
 /** Records a first-member-wins value, reporting any differing later declaration as a conflict. */
@@ -489,6 +880,31 @@ function overrideKeyName(key: string): string {
   return at <= 0 ? key : key.slice(0, at);
 }
 
+/** First integer in a version or range — `^21.1.3` -> `21`, `21.2.22` -> `21`. Null when there is none. */
+function majorOf(versionOrRange: string): string | null {
+  return /(\d+)/.exec(versionOrRange)?.[1] ?? null;
+}
+
+/**
+ * The exact version the parent's assembled overrides pin for a peer, or null when nothing does.
+ *
+ * Must not be a bare `overrides[peer]` lookup. {@link DeriveLockfilePins} emits a bare key ONLY
+ * when a package resolves to a single major across every member's graph; the moment two majors
+ * exist anywhere it emits per-major selector keys instead (`chalk@^5` / `chalk@^4`). A bare lookup
+ * misses those entirely and the command then reports "nothing in the parent pins it" for a peer the
+ * parent does pin — inverting the one actionable fact the warning carries. When several majors are
+ * pinned, the useful one is the major the client package actually asks for.
+ */
+function findPeerPin(overrides: Readonly<Record<string, string>>, peer: string, range: string): string | null {
+  const exact = overrides[peer];
+  if (exact !== undefined) return exact;
+  const matches = Object.entries(overrides).filter(([key]) => overrideKeyName(key) === peer);
+  if (matches.length === 0) return null;
+  const wantedMajor = majorOf(range);
+  const sameMajor = matches.find(([key]) => majorOf(key.slice(peer.length)) === wantedMajor);
+  return (sameMajor ?? matches[0])[1];
+}
+
 /** Removes every pin entry (plain or per-major selector) for a name; records what was displaced. */
 function displacePinsForName(overrides: Record<string, string>, name: string, newValue: string, superseded: Set<string>): void {
   for (const key of Object.keys(overrides)) {
@@ -499,18 +915,62 @@ function displacePinsForName(overrides: Record<string, string>, name: string, ne
 }
 
 /**
- * Layers the three override sources into the parent `pnpm.overrides`, weakest
- * first: lockfile-derived pins < explicit member overrides < family
- * `workspace:*` (local source always wins). A member's or family's whole-name
- * entry displaces every per-major pin selector for that name (a plain key and
- * a `name@^N` selector must not fight). Displacements are returned so the
- * command reports them — nothing is overwritten silently.
+ * Pins a patched package to the exact version its patch is keyed to. A patch
+ * `name@version` only ever applies to that version: letting a lockfile pin or a
+ * member override resolve `name` elsewhere leaves the patch inert (pnpm merely
+ * warns "patches were not used" — SaaS's committed
+ * `type-graphql@2.0.0-rc.3` out-voted MJ's patched `2.0.0-beta.3`, and every
+ * consumer of MJ's server then type-checked against the wrong type-graphql).
+ * The pin takes the per-major selector shape when other majors of the name are
+ * already pinned (never forcing another major), the plain name otherwise.
+ * Returns the override key it wrote, or null when the patch key is not pinnable
+ * (a range or a bare name — pnpm allows those; there is nothing exact to pin).
+ */
+function pinPatchedPackage(overrides: Record<string, string>, patchKey: string, superseded: Set<string>): string | null {
+  const name = overrideKeyName(patchKey);
+  const version = name === patchKey ? '' : patchKey.slice(name.length + 1);
+  if (!IsResolvedVersion(version)) return null;
+  const selector = `${name}@^${MajorOf(version)}`;
+  const otherSelectors = Object.keys(overrides).filter((key) => key !== name && overrideKeyName(key) === name);
+  const target = otherSelectors.length > 0 ? selector : name;
+  if (target === selector && name in overrides) {
+    // a plain-name entry and a selector must not fight: the plain entry gives way
+    if (overrides[name] !== version) superseded.add(name);
+    delete overrides[name];
+  } else if (target === name) {
+    displacePinsForName(overrides, name, version, superseded);
+  }
+  if (target in overrides && overrides[target] !== version) superseded.add(target);
+  overrides[target] = version;
+  return target;
+}
+
+/** The assembled parent overrides plus every decision the layering made. */
+export interface AssembledOverrides {
+  Overrides: Record<string, string>;
+  /** Entries a stronger layer displaced (lockfile pins, member overrides, or both). */
+  SupersededPins: string[];
+  /** Override keys written from a member's `patchedDependencies` key — the patched exact version wins. */
+  PatchPins: string[];
+}
+
+/**
+ * Layers the override sources into the parent overrides, weakest first:
+ * lockfile-derived pins < explicit member overrides < patched-package pins <
+ * family `workspace:*` (local source always wins). A member's or family's
+ * whole-name entry displaces every per-major pin selector for that name (a plain
+ * key and a `name@^N` selector must not fight). Displacements are returned so
+ * the command reports them — nothing is overwritten silently.
+ *
+ * `patchedPackages` are the members' `patchedDependencies` keys (`name@version`);
+ * see {@link pinPatchedPackage} for why a patch outranks an override.
  */
 export function AssembleParentOverrides(
   lockfilePins: Record<string, string>,
   memberOverrides: Record<string, string>,
-  familyNames: readonly string[]
-): { Overrides: Record<string, string>; SupersededPins: string[] } {
+  familyNames: readonly string[],
+  patchedPackages: readonly string[] = []
+): AssembledOverrides {
   const overrides: Record<string, string> = { ...lockfilePins };
   const superseded = new Set<string>();
   for (const [key, version] of Object.entries(memberOverrides)) {
@@ -522,68 +982,112 @@ export function AssembleParentOverrides(
     }
     overrides[key] = version;
   }
+  const patchPins = new Set<string>();
+  for (const patchKey of [...patchedPackages].sort()) {
+    const written = pinPatchedPackage(overrides, patchKey, superseded);
+    if (written !== null) patchPins.add(written);
+  }
   for (const name of familyNames) {
     displacePinsForName(overrides, name, 'workspace:*', superseded);
     overrides[name] = 'workspace:*';
+    for (const key of [...patchPins]) if (overrideKeyName(key) === name) patchPins.delete(key); // source beats patch
   }
-  return { Overrides: sortedRecord(overrides), SupersededPins: [...superseded].sort() };
+  return { Overrides: sortedRecord(overrides), SupersededPins: [...superseded].sort(), PatchPins: [...patchPins].sort() };
 }
 
-/** Builds the manifest's `pnpm` block from the assembled parts, omitting empty sections. */
-function buildPnpmBlock(
-  overrides: Record<string, string>,
-  blocks: MemberPnpmBlocksResult
-): Record<string, unknown> {
+/**
+ * Builds the pnpm settings for `pnpm-workspace.yaml` from the assembled parts,
+ * omitting empty sections: the peer install switches, the peer bridge rules, the
+ * layered overrides, hoisted patches and package extensions. Key order is fixed
+ * so a regenerated workspace is byte-identical.
+ */
+export function BuildPnpmWorkspaceSettings(overrides: Record<string, string>, blocks: MemberPnpmBlocksResult): Record<string, unknown> {
   const peerDependencyRules = {
     allowedVersions: sortedRecord({ ...PEER_DEPENDENCY_RULES.allowedVersions, ...blocks.PeerAllowedVersions }),
     ignoreMissing: [...new Set([...PEER_DEPENDENCY_RULES.ignoreMissing, ...blocks.PeerIgnoreMissing])].sort(),
   };
-  const block: Record<string, unknown> = { peerDependencyRules };
-  if (Object.keys(overrides).length > 0) block.overrides = overrides;
+  const settings: Record<string, unknown> = { ...PEER_INSTALL_SETTINGS, peerDependencyRules };
+  if (Object.keys(overrides).length > 0) settings.overrides = overrides;
   if (Object.keys(blocks.PatchedDependencies).length > 0) {
-    block.patchedDependencies = blocks.PatchedDependencies;
+    settings.patchedDependencies = blocks.PatchedDependencies;
     // A member patch is keyed to pkg@version; when the parent graph never resolves
     // that exact version, pnpm hard-fails the WHOLE install with ERR_PNPM_UNUSED_PATCH.
     // One member's stale patch must not brick every member's workspace — allow it,
-    // and rely on the assembly report, which names every hoisted patch.
-    block.allowUnusedPatches = true;
+    // and rely on the assembly report, which names every hoisted patch. (The
+    // patched-package pins in AssembleParentOverrides make this the rare case.)
+    settings.allowUnusedPatches = true;
   }
-  if (Object.keys(blocks.PackageExtensions).length > 0) block.packageExtensions = blocks.PackageExtensions;
-  return block;
+  if (Object.keys(blocks.PackageExtensions).length > 0) settings.packageExtensions = blocks.PackageExtensions;
+  return settings;
 }
 
 /**
- * Builds the private parent `package.json`: pnpm pin, the cleaned member
- * devDependency union, and the full absorbed `pnpm` block — member overrides and
- * patches hoisted, lockfile-derived pins, and `workspace:*` overrides for every
- * member-provided package. Every decision lands in the returned Report.
+ * Builds the private parent `package.json` — pnpm pin and the cleaned member
+ * devDependency union — and, alongside it, the pnpm settings the workspace yaml
+ * carries: member overrides and patches hoisted, lockfile-derived pins,
+ * patched-package pins, and `workspace:*` overrides for every member-provided
+ * package. The settings are returned rather than written into the manifest
+ * because pnpm 10 ignores a `pnpm` block at a workspace root. Every decision
+ * lands in the returned Report.
  */
+/**
+ * The parent manifest's `dependencies`: every member-PROVIDED client-side package at
+ * `workspace:*`.
+ *
+ * This key is what puts the package at the parent's `node_modules` root, which is the only place
+ * an app shell that never declared it can resolve it from. An unprovided package is skipped — a
+ * `workspace:*` specifier on a package nothing provides is unresolvable and fails the install, the
+ * same reasoning as the devDependency union's `DroppedWorkspace` branch.
+ */
+export function BuildClientDependencies(clientPackages: readonly OpenAppClientPackage[]): Record<string, string> {
+  const deps: Record<string, string> = {};
+  for (const client of clientPackages) {
+    if (client.Provided) deps[client.Package] = 'workspace:*';
+  }
+  return deps;
+}
+
 export function BuildRootPackageJson(parentDirName: string, members: readonly CandidateRepo[]): RootPackageJsonResult {
   if (members.length === 0) {
     throw new Error('BuildRootPackageJson requires at least one member repo');
   }
+  const workspacePackages = IndexWorkspacePackages(members);
+  const clients = CollectOpenAppClientPackages(members, workspacePackages);
+  const clientPackages = clients.Packages;
+  const clientDependencies = BuildClientDependencies(clientPackages);
   const family = CollectFamilyPackages(members);
   const union = ResolveDevDependencyUnion(members, new Set(family.Names));
+  // A provided client package is by definition family-provided, so classifyDevDep already mapped it
+  // to workspace:* in the union — and a member devDepending on its own client package is ordinary.
+  // Emitting it in both blocks of a GENERATED manifest is noise, not a conflict (identical
+  // specifier), so `dependencies` keeps it: that block is what puts the package at the parent root,
+  // which is the whole point of registering it.
+  for (const name of Object.keys(clientDependencies)) delete union.DevDependencies[name];
   const pins = DeriveLockfilePins(
     members.flatMap((m) => (m.Lockfile !== null && m.Lockfile.Kind !== 'unsupported' ? [{ Repo: m.Name, Lockfile: m.Lockfile }] : [])),
     new Set(family.Names)
   );
   const blocks = ResolveMemberPnpmBlocks(members);
-  const assembled = AssembleParentOverrides(pins.Pins, blocks.Overrides, family.Names);
+  const assembled = AssembleParentOverrides(pins.Pins, blocks.Overrides, family.Names, Object.keys(blocks.PatchedDependencies));
+  const duplicateLinks = ResolveDuplicateProviderLinks(members, family.Duplicates);
+  const shellPeerGaps = ResolveShellPeerGaps(clientPackages, CollectWorkspaceShells(members), workspacePackages, assembled.Overrides);
   const { Pin, Source } = ResolvePnpmPin(members);
   const manifest = {
     name: workspaceName(parentDirName),
     private: true,
     packageManager: Pin,
+    // Omitted entirely when empty, so a parent with no Open App member regenerates byte-identically.
+    ...(Object.keys(clientDependencies).length > 0 ? { dependencies: clientDependencies } : {}),
     devDependencies: union.DevDependencies,
-    pnpm: buildPnpmBlock(assembled.Overrides, blocks),
   };
   return {
     Content: `${JSON.stringify(manifest, null, 2)}\n`,
+    // scoped `consumer>package` keys sit beside the plain ones — they never collide
+    PnpmSettings: BuildPnpmWorkspaceSettings(sortedRecord({ ...assembled.Overrides, ...duplicateLinks.Overrides }), blocks),
     Conflicts: union.Conflicts,
     PinSource: Source,
     Pin,
-    Report: buildManifestReport(members, family, union, pins, blocks, assembled.SupersededPins),
+    Report: buildManifestReport(members, family, union, pins, blocks, assembled, duplicateLinks, clients, shellPeerGaps),
   };
 }
 
@@ -594,7 +1098,10 @@ function buildManifestReport(
   union: DevDependencyUnionResult,
   pins: LockfilePinsResult,
   blocks: MemberPnpmBlocksResult,
-  supersededPins: string[]
+  assembled: AssembledOverrides,
+  duplicateLinks: DuplicateProviderLinksResult,
+  clients: { Packages: OpenAppClientPackage[]; Duplicates: DuplicateClientPackage[] },
+  shellPeerGaps: ShellPeerGap[]
 ): ParentManifestReport {
   const lockfileSkips = members.flatMap((m) =>
     m.Lockfile !== null && m.Lockfile.Kind !== 'unsupported' ? m.Lockfile.Skipped.map((skip) => ({ Repo: m.Name, Skip: skip })) : []
@@ -612,9 +1119,15 @@ function buildManifestReport(
     Patches: blocks.Patches,
     FamilyOverrideCount: family.Names.length,
     DuplicateFamilyPackages: family.Duplicates,
+    DuplicateProviderLinks: duplicateLinks.Links,
+    UnlinkedDuplicateConsumers: duplicateLinks.Unlinked,
     SkippedTypesDevDeps: [...union.SkippedTypes].sort(),
     DroppedWorkspaceDevDeps: union.DroppedWorkspace,
-    SupersededPins: supersededPins,
+    SupersededPins: assembled.SupersededPins,
+    PatchPins: assembled.PatchPins,
+    OpenAppClientPackages: clients.Packages,
+    ShellPeerGaps: shellPeerGaps,
+    DuplicateClientPackages: clients.Duplicates,
   };
 }
 
