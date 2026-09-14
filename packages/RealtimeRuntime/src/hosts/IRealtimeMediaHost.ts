@@ -56,6 +56,22 @@ export interface IRealtimeMediaHost {
     AcquireMicrophone(): Promise<MediaStream>;
 
     /**
+     * OPTIONAL: returns the platform's audio state to what it was before
+     * {@link AcquireMicrophone} changed it.
+     *
+     * Acquiring a microphone is not always a symmetric act. A browser hands back a stream and
+     * nothing else changes, so most hosts omit this. iOS is the counter-example: a voice call
+     * requires putting the shared audio session into a record-and-play category with the speaker
+     * route, and that setting outlives the call — every later sound in the app plays through the
+     * call route, at call volume, until something puts it back.
+     *
+     * Called by the runtime on teardown, after the microphone tracks are stopped, on every exit
+     * path including a failed start. Best-effort: a rejection is logged and swallowed, because
+     * restoring audio state is never worth failing the end of a call over.
+     */
+    ReleaseMicrophone?(): Promise<void> | void;
+
+    /**
      * OPTIONAL: creates a recorder for this session's audio, when the platform can record and the
      * user has consented.
      *

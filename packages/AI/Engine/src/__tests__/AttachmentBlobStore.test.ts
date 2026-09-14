@@ -22,6 +22,8 @@ import {
 class RecordingBlobStore implements IAttachmentBlobStore {
     public Uploads: AttachmentBlobUploadInput[] = [];
     public DeletedIds: string[] = [];
+    /** What {@link Delete} reports — `false` means "the bytes are still there". */
+    public DeleteSucceeds = true;
 
     public async Upload(input: AttachmentBlobUploadInput) {
         this.Uploads.push(input);
@@ -35,11 +37,34 @@ class RecordingBlobStore implements IAttachmentBlobStore {
     }
     public async Delete(fileId: string) {
         this.DeletedIds.push(fileId);
-        return true;
+        return this.DeleteSucceeds;
     }
 }
 
 const contextUser = { ID: 'user-1', Name: 'Tester', Email: 't@example.test' } as never;
+
+/** A minimal attachment row, enough for the delete path to load and act on. */
+class FakeAttachment {
+    public FileID: string | null = 'file-1';
+    public Deleted = false;
+    public async Load(): Promise<boolean> {
+        return true;
+    }
+    public async Delete(): Promise<boolean> {
+        this.Deleted = true;
+        return true;
+    }
+}
+
+/**
+ * A provider that hands back one attachment row.
+ *
+ * Passing a provider explicitly is how these tests avoid the global `Metadata.Provider` — the
+ * service already accepts one per call for exactly this reason (server isolation).
+ */
+function providerReturning(attachment: FakeAttachment) {
+    return { GetEntityObject: async () => attachment } as never;
+}
 
 describe('attachment blob seam', () => {
     beforeEach(() => {
@@ -57,6 +82,16 @@ describe('attachment blob seam', () => {
 
         it('returns null from GetDownloadUrl instead of throwing', async () => {
             await expect(GetAttachmentService().GetDownloadUrl('f1', contextUser)).resolves.toBeNull();
+        });
+
+        it('refuses to delete a storage-backed attachment it cannot unstore', async () => {
+            // With no store, the bytes are unreachable — so the row has to stay, or it becomes a
+            // pointer-less file on a host that simply is not configured for storage.
+            const attachment = new FakeAttachment();
+            await expect(
+                GetAttachmentService().DeleteAttachment('att-1', contextUser, providerReturning(attachment)),
+            ).resolves.toBe(false);
+            expect(attachment.Deleted).toBe(false);
         });
 
         it('names the condition distinctly, so callers can tell a deployment shape from an incident', () => {
@@ -84,6 +119,43 @@ describe('attachment blob seam', () => {
             await expect(GetAttachmentService().GetDownloadUrl('f1', contextUser)).resolves.toBe(
                 'https://example.test/file',
             );
+        });
+
+        it('passes the upload through to the bound store', async () => {
+            const result = await store.Upload(
+                { FileName: 'a.png', MimeType: 'image/png', Base64Data: 'YQ==' },
+                contextUser,
+            );
+            expect(result).toMatchObject({ Success: true, FileID: 'file-1' });
+            expect(store.Uploads).toHaveLength(1);
+            expect(store.Uploads[0].Base64Data).toBe('YQ==');
+        });
+
+        it('deletes the attachment row once the store confirms the bytes are gone', async () => {
+            const attachment = new FakeAttachment();
+            const deleted = await GetAttachmentService().DeleteAttachment(
+                'att-1',
+                contextUser,
+                providerReturning(attachment),
+            );
+            expect(deleted).toBe(true);
+            expect(store.DeletedIds).toEqual(['file-1']);
+            expect(attachment.Deleted).toBe(true);
+        });
+
+        it('keeps the attachment row when the store could not remove the bytes', async () => {
+            // A `false` from the store means the content is still there. Deleting the row anyway
+            // orphans it — content nothing points at, which is the exact failure the seam's
+            // contract forbids and which three doc comments promised was handled.
+            store.DeleteSucceeds = false;
+            const attachment = new FakeAttachment();
+            const deleted = await GetAttachmentService().DeleteAttachment(
+                'att-1',
+                contextUser,
+                providerReturning(attachment),
+            );
+            expect(deleted).toBe(false);
+            expect(attachment.Deleted).toBe(false);
         });
 
         it('is swappable at runtime, which is the whole point of the seam', async () => {

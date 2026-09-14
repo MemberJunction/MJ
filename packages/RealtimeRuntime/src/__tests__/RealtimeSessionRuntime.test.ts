@@ -1,8 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseRealtimeClient } from '@memberjunction/ai-realtime-client';
+import type { IMetadataProvider } from '@memberjunction/core';
 import {
     RealtimeSessionRuntime,
     type IRealtimeMediaHost,
     type IRealtimeSessionRecorder,
+    type StartRealtimeClientSessionResult,
 } from '../index';
 
 /**
@@ -153,5 +157,179 @@ describe('host provider capability filter', () => {
         expect(canUse.call(runtime, 'openai-live')).toBe(true);
         expect(canUse.call(runtime, 'gemini')).toBe(false);
         expect(runtime.Asked).toEqual(['openai-live', 'gemini']);
+    });
+});
+
+describe('session lifecycle, driven end to end with fakes', () => {
+    /**
+     * A realtime client that connects to nothing.
+     *
+     * Registered under a provider key so the runtime's real ClassFactory resolution runs — the same
+     * lookup a device does — rather than being handed an instance.
+     */
+    @RegisterClass(BaseRealtimeClient, 'fake-provider')
+    class FakeRealtimeClient extends BaseRealtimeClient {
+        public static DisconnectCalls = 0;
+        public async Connect(): Promise<void> {}
+        public SendText(): void {}
+        public CancelActiveResponse(): void {}
+        public SendContextNote(): void {}
+        public RequestSpokenUpdate(): void {}
+        public SendToolResult(): void {}
+        public SetMuted(): void {}
+        public async Disconnect(): Promise<void> {
+            FakeRealtimeClient.DisconnectCalls++;
+        }
+        public get IsBusy(): boolean {
+            return false;
+        }
+        public get IsAudioPlaying(): boolean {
+            return false;
+        }
+    }
+
+    /**
+     * Records every GraphQL relay the runtime makes, so teardown can be asserted on.
+     *
+     * `sessionId` + `PushStatusUpdates` stand in for the transport's delegated-run progress topic —
+     * the runtime subscribes to it the moment a session goes live, so a provider without them
+     * cannot get a session started at all.
+     */
+    class RecordingProvider {
+        public Mutations: string[] = [];
+        public readonly sessionId = 'transport-session-1';
+        public async ExecuteGQL(query: string): Promise<unknown> {
+            this.Mutations.push(query);
+            return {};
+        }
+        public PushStatusUpdates(): { subscribe(): { unsubscribe(): void } } {
+            return { subscribe: () => ({ unsubscribe: () => undefined }) };
+        }
+    }
+
+    /** A host that also reports whether the runtime handed the microphone back. */
+    class ReleasingHost extends FakeMediaHost {
+        public ReleaseCalls = 0;
+        public async ReleaseMicrophone(): Promise<void> {
+            this.ReleaseCalls++;
+        }
+    }
+
+    function mintedSession(provider: string): StartRealtimeClientSessionResult {
+        return {
+            AgentSessionId: 'session-1',
+            ConversationId: 'conv-1',
+            Provider: provider,
+            Model: 'model-1',
+            EphemeralToken: 'token',
+            ExpiresAt: '2030-01-01T00:00:00Z',
+            SessionConfigJson: '{}',
+            ModelName: 'Fake Realtime',
+            NarrationInstructionsTemplate: null,
+            PriorChannelStatesJson: null,
+        };
+    }
+
+    /** Builds a runtime wired to a recording provider, with recording consent off. */
+    function build(host: IRealtimeMediaHost) {
+        const runtime = new RealtimeSessionRuntime(host);
+        const provider = new RecordingProvider();
+        runtime.Provider = provider as unknown as IMetadataProvider;
+        return { runtime, provider };
+    }
+
+    /** The mutation names the runtime sent, for readable assertions. */
+    function mutationNames(provider: RecordingProvider): string[] {
+        return provider.Mutations.map((m) => m.match(/mutation (\w+)/)?.[1] ?? m.trim().slice(0, 20));
+    }
+
+    it('goes live through real driver resolution, then closes the server session once', async () => {
+        const { runtime, provider } = build(new FakeMediaHost());
+        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+        expect(runtime.IsActive).toBe(true);
+        expect(runtime.CurrentAgentSessionId).toBe('session-1');
+
+        await runtime.EndRealtimeSession();
+        expect(runtime.IsActive).toBe(false);
+        expect(mutationNames(provider).filter((n) => n === 'CloseAgentSession')).toHaveLength(1);
+    });
+
+    it('coalesces concurrent teardowns instead of racing into two of everything', async () => {
+        // An explicit stop followed by the host unmounting fires this twice. `teardown` flips the
+        // active flag last, so without coalescing the second call passes the guard and runs
+        // alongside the first: two Disconnects, two CloseAgentSession mutations, two ended events.
+        const { runtime, provider } = build(new FakeMediaHost());
+        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+        FakeRealtimeClient.DisconnectCalls = 0;
+
+        await Promise.all([runtime.EndRealtimeSession(), runtime.EndRealtimeSession()]);
+
+        expect(FakeRealtimeClient.DisconnectCalls).toBe(1);
+        expect(mutationNames(provider).filter((n) => n === 'CloseAgentSession')).toHaveLength(1);
+    });
+
+    it('hands the microphone back to the host on teardown', async () => {
+        // Stopping the tracks is not the same thing: iOS stays in a record-and-play audio category
+        // for the rest of the app's life unless something puts it back.
+        const host = new ReleasingHost();
+        const { runtime } = build(host);
+        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+        await runtime.EndRealtimeSession();
+        expect(host.ReleaseCalls).toBe(1);
+    });
+
+    it('releases a start the host abandoned while the microphone was being acquired', async () => {
+        // The window is real: tapping back during the ~1-2s mint/permission sequence used to leave
+        // a live microphone, a live provider connection and an Active server session behind.
+        let releaseMic: (() => void) | null = null;
+        class SlowHost extends ReleasingHost {
+            public override async AcquireMicrophone(): Promise<MediaStream> {
+                await new Promise<void>((resolve) => {
+                    releaseMic = resolve;
+                });
+                return super.AcquireMicrophone();
+            }
+        }
+        const host = new SlowHost();
+        const { runtime, provider } = build(host);
+
+        const starting = runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+        await runtime.EndRealtimeSession();   // user leaves mid-start
+        releaseMic!();                        // the microphone now arrives, for nobody
+        await starting;
+
+        expect(runtime.IsActive).toBe(false);
+        expect(runtime.CurrentAgentSessionId).toBeNull();
+        // Closed exactly once, by whichever half got there — never left Active for the janitor.
+        expect(mutationNames(provider).filter((n) => n === 'CloseAgentSession')).toHaveLength(1);
+    });
+
+    it('declines an unusable provider through the shared teardown, and says which one', async () => {
+        class WebRtcOnly extends RealtimeSessionRuntime {
+            protected override hostCanUseProvider(p: string): boolean {
+                return p !== 'gemini';
+            }
+        }
+        const runtime = new WebRtcOnly(new FakeMediaHost());
+        const provider = new RecordingProvider();
+        runtime.Provider = provider as unknown as IMetadataProvider;
+
+        const states: string[] = [];
+        runtime.ConnectionState$.subscribe((s) => states.push(s));
+
+        await runtime.StartRealtimeSessionFromResult(mintedSession('gemini'));
+
+        expect(runtime.IsActive).toBe(false);
+        expect(states).toContain('error');
+        expect(runtime.LastStartError?.message).toContain('gemini');
+        // The minted row is durable, so declining still has to close it.
+        expect(mutationNames(provider)).toContain('CloseAgentSession');
+    });
+
+    it('clears the last start error when a later session starts cleanly', async () => {
+        const { runtime } = build(new FakeMediaHost());
+        await runtime.StartRealtimeSessionFromResult(mintedSession('fake-provider'));
+        expect(runtime.LastStartError).toBeNull();
+        await runtime.EndRealtimeSession();
     });
 });

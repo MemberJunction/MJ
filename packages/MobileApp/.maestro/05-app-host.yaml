@@ -7,7 +7,12 @@ appId: org.memberjunction.mobile
 ---
 - launchApp:
     clearState: false
-- openLink: "org.memberjunction.mobile:///apps"
+# Wait for the app to finish booting before deep-linking. A link fired at a still-starting app is
+# silently dropped on Android — which is how these flows "failed" while the screens were fine.
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
+- openLink: "mjmobile://apps"
 - assertVisible: "Apps"
 # Applications come from MJ: Applications metadata — no mobile code declares them. The list is
 # fetched from MJAPI, so wait for it rather than racing the request.
@@ -19,7 +24,7 @@ appId: org.memberjunction.mobile
     timeout: 20000
 
 # Open the sample application and confirm its registered surface mounted.
-- openLink: "org.memberjunction.mobile:///apps/D4DF5208-17B7-4254-A740-D2653BB0D2CA"
+- openLink: "mjmobile://apps/D4DF5208-17B7-4254-A740-D2653BB0D2CA"
 - extendedWaitUntil:
     visible: "Capture a field note…"
     timeout: 20000

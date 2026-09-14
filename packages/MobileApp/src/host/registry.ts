@@ -1,4 +1,5 @@
 import { LoadFieldNotesMobileResource } from '@/sample-app/FieldNotesResource';
+import { LoadGenericMobileResources } from './generic-resources';
 
 /**
  * @fileoverview The build-time manifest of hosted application surfaces.
@@ -35,6 +36,9 @@ import { LoadFieldNotesMobileResource } from '@/sample-app/FieldNotesResource';
  * registration.
  */
 export function LoadHostedMobileResources(): void {
+    // Generic resource types — surfaces the shell itself provides for nav items that name a record
+    // rather than a driver class. Registered first so an application can override one by name.
+    LoadGenericMobileResources();
     // Sample application — the worked example behind the authoring guide.
     LoadFieldNotesMobileResource();
 }

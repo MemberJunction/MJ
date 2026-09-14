@@ -1,6 +1,6 @@
 import { mediaDevices } from 'react-native-webrtc';
 import type { IRealtimeMediaHost } from '@memberjunction/realtime-runtime';
-import { RequestMicrophonePermission, ConfigureVoiceAudioSession } from './rn-audio-adapter';
+import { RequestMicrophonePermission, ConfigureVoiceAudioSession, ResetVoiceAudioSession } from './rn-audio-adapter';
 
 /**
  * @fileoverview React Native's implementation of the realtime runtime's media seam.
@@ -47,5 +47,17 @@ export class RNRealtimeMediaHost implements IRealtimeMediaHost {
             throw new Error('No microphone is available on this device.');
         }
         return stream as unknown as MediaStream;
+    }
+
+    /**
+     * Returns the shared audio session to its normal, non-recording configuration.
+     *
+     * {@link AcquireMicrophone} puts iOS into a record-and-play category with the speaker route so
+     * the call sounds right. That setting is process-wide and outlives the call: without this,
+     * every later sound the app plays — a notification, a video in a chat attachment — goes out on
+     * the call route at call volume for the rest of the app's lifetime.
+     */
+    public async ReleaseMicrophone(): Promise<void> {
+        await ResetVoiceAudioSession();
     }
 }

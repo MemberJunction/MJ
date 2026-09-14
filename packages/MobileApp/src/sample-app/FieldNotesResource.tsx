@@ -55,16 +55,23 @@ function FieldNotesScreen({ ApplicationName, NavItem }: MobileResourceProps) {
 
     const load = useCallback(async () => {
         setError(null);
-        const result = await new RunView().RunView<{ ID: string; Name: string; __mj_UpdatedAt: string }>({
-            EntityName: 'MJ: Conversations',
-            OrderBy: '__mj_UpdatedAt DESC',
-            Fields: ['ID', 'Name', '__mj_UpdatedAt'],
-            MaxRows: 25,
-            ResultType: 'simple',
-        });
-        if (!result.Success) {
-            setError(result.ErrorMessage ?? 'Could not load notes.');
-        } else {
+        // `RunView` reports query failures on the result rather than throwing — but the TRANSPORT
+        // underneath it does throw, on a dead network or an expired token. A screen that only
+        // checks `Success` therefore shows "Loading…" forever on a train, which is the state a
+        // mobile app spends real time in. Both paths end in the same visible error, and `finally`
+        // is what guarantees the spinner always clears.
+        try {
+            const result = await new RunView().RunView<{ ID: string; Name: string; __mj_UpdatedAt: string }>({
+                EntityName: 'MJ: Conversations',
+                OrderBy: '__mj_UpdatedAt DESC',
+                Fields: ['ID', 'Name', '__mj_UpdatedAt'],
+                MaxRows: 25,
+                ResultType: 'simple',
+            });
+            if (!result?.Success) {
+                setError(result?.ErrorMessage ?? 'Could not load notes.');
+                return;
+            }
             setNotes(
                 (result.Results ?? []).map((r) => ({
                     ID: r.ID,
@@ -72,8 +79,11 @@ function FieldNotesScreen({ ApplicationName, NavItem }: MobileResourceProps) {
                     UpdatedAt: formatWhen(r.__mj_UpdatedAt),
                 })),
             );
+        } catch (e) {
+            setError(e instanceof Error ? e.message : String(e));
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     }, []);
 
     useEffect(() => {
@@ -97,6 +107,10 @@ function FieldNotesScreen({ ApplicationName, NavItem }: MobileResourceProps) {
             }
             setDraft('');
             await load();
+        } catch (e) {
+            // `Save` reports business failures by returning false, but infrastructure failures
+            // (network, auth) still throw. Without this the draft is silently lost.
+            setError(e instanceof Error ? e.message : String(e));
         } finally {
             setSaving(false);
         }

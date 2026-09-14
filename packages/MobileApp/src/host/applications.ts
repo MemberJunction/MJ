@@ -23,8 +23,10 @@ export type MobileApplication = {
     Icon: string | null;
     /** Brand colour from metadata, used for the launcher tile. */
     Color: string | null;
-    /** Ordering hint; lower sorts first. */
+    /** Ordering hint; lower sorts first. The user's own sequence when they have one. */
     Sequence: number;
+    /** The application's own ordering hint, used to break ties the way MJ Explorer does. */
+    DefaultSequence: number;
     /** Parsed navigation items. Empty when the application authored none. */
     NavItems: MobileNavItem[];
 };
@@ -53,6 +55,11 @@ export async function LoadUserApplications(contextUser?: UserInfo): Promise<Mobi
             },
             {
                 EntityName: 'MJ: Applications',
+                // Same predicate MJ Explorer applies in `ApplicationManager` and `UserInfoEngine`:
+                // an application an administrator has retired must not keep appearing, and a
+                // deployment ships at least one (`Admin (Deprecated)`). Filtering in SQL rather
+                // than after the fact also keeps the hydration off retired rows.
+                ExtraFilter: "Status = 'Active'",
                 OrderBy: 'DefaultSequence ASC, Name ASC',
                 ResultType: 'entity_object',
             },
@@ -81,9 +88,17 @@ export async function LoadUserApplications(contextUser?: UserInfo): Promise<Mobi
             Icon: a.Icon ?? null,
             Color: a.Color ?? null,
             Sequence: userSequence.get(a.ID.toLowerCase()) ?? a.DefaultSequence ?? 0,
+            DefaultSequence: a.DefaultSequence ?? 0,
             NavItems: ParseNavItems(a.DefaultNavItems),
         }))
-        .sort((a, b) => a.Sequence - b.Sequence || a.Name.localeCompare(b.Name));
+        // Explorer's `compareUserApplications` order, so the launcher and the web app agree:
+        // the user's own sequence, then the application's default sequence, then name.
+        .sort(
+            (a, b) =>
+                a.Sequence - b.Sequence ||
+                (a.DefaultSequence ?? 0) - (b.DefaultSequence ?? 0) ||
+                a.Name.localeCompare(b.Name),
+        );
 }
 
 /**
@@ -91,7 +106,8 @@ export async function LoadUserApplications(contextUser?: UserInfo): Promise<Mobi
  *
  * Tolerant by design: unparseable or non-array metadata yields an empty list rather than throwing.
  * A malformed nav definition should cost that one application its navigation, never take down the
- * launcher for every other app the user has.
+ * launcher for every other app the user has. Items an administrator has deactivated are dropped
+ * here, matching the web shell.
  *
  * @param raw The raw `DefaultNavItems` column value.
  */
@@ -107,8 +123,14 @@ export function ParseNavItems(raw: string | null | undefined): MobileNavItem[] {
                 Icon: typeof item.Icon === 'string' ? item.Icon : undefined,
                 ResourceType: typeof item.ResourceType === 'string' ? item.ResourceType : undefined,
                 DriverClass: typeof item.DriverClass === 'string' ? item.DriverClass : undefined,
+                // The record a non-Custom item opens — which dashboard, which view, which report.
+                // Dropping it is what would force every generic type to say "opens on desktop".
+                RecordID: typeof item.RecordID === 'string' ? item.RecordID : undefined,
+                Status: typeof item.Status === 'string' ? item.Status : undefined,
                 isDefault: item.isDefault === true,
-            }));
+            }))
+            // Explorer's `app-nav` hides anything not Active, treating an absent Status as Active.
+            .filter((item) => !item.Status || item.Status === 'Active');
     } catch {
         return [];
     }

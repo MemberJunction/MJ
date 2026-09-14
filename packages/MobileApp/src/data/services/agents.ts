@@ -85,8 +85,6 @@ export type SendResult = {
     userMessageId: string;
     /** The in-progress AI response detail we created (server fills it). */
     aiMessageId?: string;
-    /** True when the run was accepted but completion will arrive async (poll/reload). */
-    pendingViaPoll?: boolean;
 };
 
 /**
@@ -107,6 +105,10 @@ export type SendResult = {
  * @param args.text The user's message body.
  * @param args.agentId Optional explicit agent; otherwise the runtime's default-agent chain resolves one.
  * @param args.onProgress Live progress callback, driven by the agent run.
+ * @param args.onUserMessageSaved Runs after the user's row exists and **before** the agent does,
+ *   for work that must be visible to the run — an attachment being the reason it exists. Awaited;
+ *   a rejection is reported as a failed send rather than silently preceding a run that cannot see
+ *   the thing it was supposed to look at.
  * @param args.contextUser Optional context user; defaults to the signed-in user.
  */
 export async function SendMessage(args: {
@@ -114,9 +116,10 @@ export async function SendMessage(args: {
     text: string;
     agentId?: string;
     onProgress?: (p: SendProgress) => void;
+    onUserMessageSaved?: (userMessageId: string) => Promise<void>;
     contextUser?: UserInfo;
 }): Promise<SendResult> {
-    const { conversationId, text, agentId, onProgress, contextUser } = args;
+    const { conversationId, text, agentId, onProgress, onUserMessageSaved, contextUser } = args;
     const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
     const currentUser = contextUser ?? md.CurrentUser;
 
@@ -128,6 +131,22 @@ export async function SendMessage(args: {
     });
     if (!userDetail) {
         return { success: false, errorMessage: 'Failed to save message.', userMessageId: '' };
+    }
+
+    // Anything the run must be able to see has to land here — between the user's row existing and
+    // the agent reading it. Attaching afterwards produced a reliably wrong turn: photograph an
+    // invoice, ask for the totals, and the agent answers "I don't see an attachment" while the file
+    // appears a second later.
+    if (onUserMessageSaved) {
+        try {
+            await onUserMessageSaved(userDetail.ID);
+        } catch (error) {
+            return {
+                success: false,
+                errorMessage: error instanceof Error ? error.message : String(error),
+                userMessageId: userDetail.ID,
+            };
+        }
     }
 
     const aiDetail = await createTurnDetail(md, currentUser, {
@@ -160,9 +179,22 @@ export async function SendMessage(args: {
                 : undefined,
         });
 
+        // `processMessage` reports failure two different ways and never throws: `null` when no
+        // agent could be resolved, and a well-formed result carrying `success: false` for
+        // everything else — a quota rejection, an agent that threw, a transport failure. Testing
+        // only for null reports those as successes, leaving the user with a bubble that spins
+        // forever and no explanation anywhere in the UI.
+        if (result == null) {
+            return {
+                success: false,
+                errorMessage: 'No agent was available to respond.',
+                userMessageId: userDetail.ID,
+                aiMessageId: aiDetail.ID,
+            };
+        }
         return {
-            success: result != null,
-            errorMessage: result == null ? 'No agent was available to respond.' : undefined,
+            success: result.success !== false,
+            errorMessage: result.success === false ? result.errorMessage ?? 'The agent run failed.' : undefined,
             userMessageId: userDetail.ID,
             aiMessageId: aiDetail.ID,
         };

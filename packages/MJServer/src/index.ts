@@ -283,6 +283,17 @@ function resolveServerVersion(): string | undefined {
   }
 }
 
+// Bind MJStorage as the conversation-attachment blob store. The attachment service itself no longer
+// imports `@memberjunction/storage` — that dependency made it unusable from any browser or React
+// Native client, which is why the same attachment rules had been reimplemented three times.
+//
+// This runs at module load, not inside `serve()`, so that merely importing MJServer is enough: any
+// entry point that reaches the attachment service — a resolver under test, a script, a worker that
+// never calls `serve()` — finds storage already bound rather than degrading to "storage is not
+// available on this host". The store is stateless and configures `FileStorageEngine` on use, so
+// there is no ordering hazard in binding this early.
+GetAttachmentService().BlobStore = new MJStorageBlobStore();
+
 export const serve = async (resolverPaths: Array<string>, app: Application = createApp(), options?: MJServerOptions): Promise<void> => {
   const t0 = performance.now();
   // Level-gated startup logger. Resolves verbosity from telemetry.level (single
@@ -308,14 +319,6 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     console.warn(`No resolvers found in ${combinedResolverPaths.join(', ')}`);
     console.log({ combinedResolverPaths, paths, cwd: process.cwd() });
   }
-
-  // Bind MJStorage as the conversation-attachment blob store. The attachment service itself no
-// longer imports `@memberjunction/storage` — that dependency made it unusable from any browser or
-// React Native client, which is why the same attachment rules had been reimplemented three times.
-// Binding at module load (rather than inside a startup phase) means no server code path can reach
-// the service before its storage is available; the store is stateless and configures
-// FileStorageEngine lazily on first use, so there is no ordering hazard.
-GetAttachmentService().BlobStore = new MJStorageBlobStore();
 
 const setupComplete$ = new ReplaySubject(1);
   const dbType = getDbType();

@@ -13,6 +13,7 @@ import {
     EntityCount,
     LoadEntityRecords,
     LoadRecordDetail,
+    LoadDashboards,
 } from '@/data/services/explorer';
 
 /**
@@ -91,5 +92,18 @@ describe.skipIf(!hasToken())('integration: explorer', () => {
         expect(load).not.toBeNull();
         // Seed data includes agents; expect at least one row.
         expect(load!.rows.length).toBeGreaterThan(0);
+    });
+
+    it('loads the dashboards this deployment ships', async () => {
+        // A live check because the unit suite can only assert which entity NAME is asked for; only
+        // the real metadata can say whether that name resolves. It did not — the service asked for
+        // 'Dashboards' where the entity is 'MJ: Dashboards', `RunView` reported `Success: false`,
+        // and the screen showed "0 available" on a deployment with dashboards.
+        const dashboards = await LoadDashboards();
+        expect(dashboards.length).toBeGreaterThan(0);
+        for (const d of dashboards) {
+            expect(d.id).toBeTruthy();
+            expect(d.name).toBeTruthy();
+        }
     });
 });

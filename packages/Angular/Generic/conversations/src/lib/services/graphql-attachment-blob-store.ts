@@ -1,4 +1,4 @@
-import { UserInfo, IMetadataProvider } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, LogError } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 import type {
     AttachmentBlobUploadInput,
@@ -21,6 +21,33 @@ import type {
  * `InlineData` is for small attachments and `FileID` for large ones. That is the concrete cost of
  * having had three implementations of one policy.
  */
+/**
+ * Mints a short-lived, permission-checked URL for one `MJ: Files` record.
+ *
+ * The server resolves the storage account and object name behind the token and serves the bytes
+ * through its Range-capable `/media` route, so the browser never learns either.
+ */
+const CreateMediaAccessTokenMutation = `
+    mutation CreateMediaAccessToken($fileId: String!) {
+        CreateMediaAccessToken(fileId: $fileId) {
+            Success
+            Url
+            MimeType
+            ErrorMessage
+        }
+    }
+`;
+
+/** The shape `CreateMediaAccessToken` returns, narrowed once at this boundary. */
+type MediaAccessTokenResponse = {
+    CreateMediaAccessToken?: {
+        Success?: boolean;
+        Url?: string | null;
+        MimeType?: string | null;
+        ErrorMessage?: string | null;
+    } | null;
+};
+
 export class GraphQLAttachmentBlobStore implements IAttachmentBlobStore {
     /**
      * Uploads bytes through MJAPI's storage subsystem, which creates the `MJ: Files` record.
@@ -51,11 +78,13 @@ export class GraphQLAttachmentBlobStore implements IAttachmentBlobStore {
     }
 
     /**
-     * Not supported from the browser.
+     * Not supported from the browser, deliberately.
      *
-     * Pulling file bytes through JavaScript only to re-encode them wastes memory and bandwidth for
-     * no benefit — {@link GetDownloadUrl} gives the browser something it can hand straight to an
-     * `<img>`, a download, or a fetch. Returning `null` makes the service fall back to exactly that.
+     * Pulling file bytes through JavaScript only to re-encode them as base64 wastes memory and
+     * bandwidth for no benefit — {@link GetDownloadUrl} gives the browser something it can hand
+     * straight to an `<img>`, a download, or a fetch, and the service falls back to exactly that
+     * when this returns `null`. This is the one operation where "not supported" is the better
+     * answer rather than a gap.
      */
     public async Download(
         _fileId: string,
@@ -66,20 +95,40 @@ export class GraphQLAttachmentBlobStore implements IAttachmentBlobStore {
     }
 
     /**
-     * Not supported from the browser, deliberately.
+     * Mints a permission-gated, time-limited URL for a stored file.
      *
-     * `CreatePreAuthDownloadUrl` is keyed by storage account + object name, not by an `MJ: Files`
-     * id, so producing a URL here would mean the client resolving storage internals it should not
-     * know about. Explorer already has the right answer for a file id — `mj-storage-media-player`
-     * goes through `CreateMediaAccessToken` and the permission-gated, Range-streamed `/media`
-     * route — so this returns `null` rather than growing a second, weaker path alongside it.
+     * Goes through `CreateMediaAccessToken` rather than `CreatePreAuthDownloadUrl`: the latter is
+     * keyed by storage account + object name, so using it would mean the client resolving storage
+     * internals it has no business knowing. The media route is keyed by `MJ: Files` id, checks the
+     * caller's permissions server-side, and Range-streams — it is the same path
+     * `mj-storage-media-player` already uses, so this adds a caller rather than a second mechanism.
+     *
+     * This is what makes the write path readable. Explorer only started producing storage-backed
+     * attachments when this seam was bound; without a URL here, every attachment over the inline
+     * threshold would upload successfully and then be permanently undisplayable.
      */
     public async GetDownloadUrl(
-        _fileId: string,
+        fileId: string,
         _contextUser: UserInfo,
         _provider?: IMetadataProvider
     ): Promise<string | null> {
-        return null;
+        try {
+            const result = (await GraphQLDataProvider.Instance.ExecuteGQL(CreateMediaAccessTokenMutation, {
+                fileId,
+            })) as MediaAccessTokenResponse;
+            const minted = result?.CreateMediaAccessToken;
+            if (!minted?.Success || !minted.Url) {
+                LogError(
+                    `[GraphQLAttachmentBlobStore] Could not mint a media URL for file ${fileId}: ` +
+                        `${minted?.ErrorMessage ?? 'no URL returned'}`
+                );
+                return null;
+            }
+            return minted.Url;
+        } catch (err) {
+            LogError(`[GraphQLAttachmentBlobStore] Failed to mint a media URL for file ${fileId}: ${err}`);
+            return null;
+        }
     }
 
     /**

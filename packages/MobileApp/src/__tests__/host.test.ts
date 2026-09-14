@@ -14,6 +14,7 @@ const state = vi.hoisted(() => ({
     userAppSuccess: true,
     applications: [] as Array<Record<string, unknown>>,
     appsSuccess: true,
+    lastQueries: [] as unknown[],
 }));
 
 vi.mock('@memberjunction/core', () => {
@@ -21,7 +22,8 @@ vi.mock('@memberjunction/core', () => {
         CurrentUser = { ID: 'user-1' };
     }
     class RunView {
-        async RunViews(): Promise<Array<{ Success: boolean; Results: unknown[] }>> {
+        async RunViews(params: unknown[]): Promise<Array<{ Success: boolean; Results: unknown[] }>> {
+            state.lastQueries = params;
             return [
                 { Success: state.userAppSuccess, Results: state.userAppRows },
                 { Success: state.appsSuccess, Results: state.applications },
@@ -53,6 +55,7 @@ beforeEach(() => {
     state.userAppSuccess = true;
     state.applications = [app()];
     state.appsSuccess = true;
+    state.lastQueries = [];
 });
 
 describe('ParseNavItems', () => {
@@ -63,7 +66,15 @@ describe('ParseNavItems', () => {
             ]),
         );
         expect(items).toEqual([
-            { Label: 'Data', Icon: 'fa-solid fa-table', ResourceType: 'Custom', DriverClass: 'DataExplorerResource', isDefault: true },
+            {
+                Label: 'Data',
+                Icon: 'fa-solid fa-table',
+                ResourceType: 'Custom',
+                DriverClass: 'DataExplorerResource',
+                RecordID: undefined,
+                Status: undefined,
+                isDefault: true,
+            },
         ]);
     });
 
@@ -83,7 +94,37 @@ describe('ParseNavItems', () => {
 
     it('drops non-object entries and labels an unlabelled item', () => {
         const items = ParseNavItems(JSON.stringify([null, 'nope', { Icon: 'x' }]));
-        expect(items).toEqual([{ Label: 'Untitled', Icon: 'x', ResourceType: undefined, DriverClass: undefined, isDefault: false }]);
+        expect(items).toEqual([
+            {
+                Label: 'Untitled',
+                Icon: 'x',
+                ResourceType: undefined,
+                DriverClass: undefined,
+                RecordID: undefined,
+                Status: undefined,
+                isDefault: false,
+            },
+        ]);
+    });
+
+    it('keeps RecordID — the record a non-Custom item opens', () => {
+        // Dropping it is what forces every generic nav item to fall back to "opens on desktop":
+        // the shell would know the item is a dashboard but not WHICH dashboard.
+        const items = ParseNavItems(
+            JSON.stringify([{ Label: 'Sales', ResourceType: 'Dashboards', RecordID: 'dash-9' }]),
+        );
+        expect(items[0]).toMatchObject({ ResourceType: 'Dashboards', RecordID: 'dash-9' });
+    });
+
+    it('hides items an administrator has deactivated, treating absent Status as active', () => {
+        const items = ParseNavItems(
+            JSON.stringify([
+                { Label: 'Live' },
+                { Label: 'Active', Status: 'Active' },
+                { Label: 'Retired', Status: 'Disabled' },
+            ]),
+        );
+        expect(items.map((i) => i.Label)).toEqual(['Live', 'Active']);
     });
 
     it('treats a non-boolean isDefault as not default', () => {
@@ -93,7 +134,7 @@ describe('ParseNavItems', () => {
 });
 
 describe('DefaultNavItem', () => {
-    const base = { ID: 'a', Name: 'A', Description: null, Icon: null, Color: null, Sequence: 0 };
+    const base = { ID: 'a', Name: 'A', Description: null, Icon: null, Color: null, Sequence: 0, DefaultSequence: 0 };
 
     it('prefers the item flagged default', () => {
         const chosen = DefaultNavItem({
@@ -147,6 +188,28 @@ describe('LoadUserApplications', () => {
         expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Gamma', 'Alpha', 'Beta']);
     });
 
+    it("breaks a sequence tie on the application's own sequence before name", async () => {
+        // MJ Explorer's `compareUserApplications` order. Sorting straight to name after the user
+        // sequence puts the launcher in a different order from the web app for the same user.
+        state.applications = [
+            app({ ID: 'a', Name: 'Alpha', DefaultSequence: 20 }),
+            app({ ID: 'b', Name: 'Beta', DefaultSequence: 10 }),
+        ];
+        state.userAppRows = [
+            { ApplicationID: 'a', Sequence: 1 },
+            { ApplicationID: 'b', Sequence: 1 },
+        ];
+        expect((await LoadUserApplications()).map((a) => a.Name)).toEqual(['Beta', 'Alpha']);
+    });
+
+    it('asks the server for Active applications only', async () => {
+        // An administrator retiring an application has to take effect on mobile too; a deployment
+        // ships at least one Deprecated row.
+        await LoadUserApplications();
+        const appsQuery = state.lastQueries[1] as { ExtraFilter?: string };
+        expect(appsQuery.ExtraFilter).toContain("Status = 'Active'");
+    });
+
     it('returns nothing when the applications query fails', async () => {
         state.appsSuccess = false;
         expect(await LoadUserApplications()).toEqual([]);
@@ -163,7 +226,15 @@ describe('LoadUserApplications', () => {
         ];
         const [loaded] = await LoadUserApplications();
         expect(loaded.NavItems).toEqual([
-            { Label: 'Data', Icon: undefined, ResourceType: undefined, DriverClass: undefined, isDefault: true },
+            {
+                Label: 'Data',
+                Icon: undefined,
+                ResourceType: undefined,
+                DriverClass: undefined,
+                RecordID: undefined,
+                Status: undefined,
+                isDefault: true,
+            },
         ]);
     });
 });

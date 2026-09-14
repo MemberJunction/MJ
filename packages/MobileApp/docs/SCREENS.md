@@ -91,10 +91,10 @@ Data reaches screens through the hook → service → MJ object model chain
 
 ### `app/voice-mode.tsx` — Voice mode — `/voice-mode`
 - **Purpose:** Fullscreen realtime voice takeover over `@memberjunction/realtime-runtime`, with an animated
-  orb, ripples, a static waveform, and a mock live transcript. Pushed from the chat
+  orb, ripples, an amplitude-driven waveform, and live captions. Pushed from the chat
   and new-conversation mic buttons.
-- **Data:** none yet — STT (record → Whisper → `Conversation Detail`) and TTS are
-  the runtime publishes live captions and connection state. When the deployment resolves a
+- **Data:** the runtime publishes live captions and connection state; final captions persist to the
+  conversation server-side. When the deployment resolves a
   provider this build cannot carry audio for, the screen names that provider and offers a way back
   to text rather than opening a silent session.
 - **Interactions:** close/stop → `router.back()`; side controls are non-functional

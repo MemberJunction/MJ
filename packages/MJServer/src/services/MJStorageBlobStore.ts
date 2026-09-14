@@ -87,6 +87,17 @@ export class MJStorageBlobStore implements IAttachmentBlobStore {
         file.ProviderKey = objectName;
         file.Status = 'Uploaded';
         if (!(await file.Save())) {
+            // The bytes are already in the bucket and nothing will ever point at them, so remove
+            // them before reporting the failure. Without this compensation an RLS rejection or a
+            // transient SQL error leaves a permanently orphaned object with no catalog row — the
+            // failure mode this seam's contract calls out by name.
+            const compensated = await driver.DeleteObject(objectName);
+            if (!compensated) {
+                LogError(
+                    `[MJStorageBlobStore] Orphaned object '${objectName}': the MJ: Files row failed to save ` +
+                        `and the compensating delete also failed.`
+                );
+            }
             return {
                 Success: false,
                 Error: file.LatestResult?.CompleteMessage ?? 'Failed to create the file record',
@@ -165,6 +176,13 @@ export class MJStorageBlobStore implements IAttachmentBlobStore {
         provider?: IMetadataProvider
     ): Promise<{ file: MJFileEntity; driver: FileStorageBase; objectKey: string } | null> {
         const md = provider ?? Metadata.Provider;
+
+        // Load the engine before asking it anything. `Accounts` returns an empty array when it has
+        // not been configured, so on a cold process the account-credential branch below would be
+        // skipped silently and the driver would fall back to environment-only credentials — which
+        // then fails to read a file that is perfectly readable. Every other MJServer call site
+        // configures immediately before use for the same reason.
+        await FileStorageEngine.Instance.Config(false, contextUser);
 
         const file = await md.GetEntityObject<MJFileEntity>('MJ: Files', contextUser);
         if (!(await file.Load(fileId))) return null;

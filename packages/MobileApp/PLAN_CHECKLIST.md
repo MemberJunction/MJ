@@ -56,7 +56,7 @@ so rather than borrowing credit from the code existing.
 
 - [x] Session lifecycle — mints, resolves a provider, and **declines cleanly** when this build
       cannot carry that provider's audio, closing the session server-side
-- [x] WebRTC drivers for OpenAI Realtime, GPT-Live and Grok Voice (a two-method subclass; ~800
+- [x] WebRTC drivers for OpenAI Realtime and GPT-Live (a two-method subclass; ~800
       lines of wire protocol per provider reused unchanged)
 - [ ] **Live audio is unverified.** It needs a WebRTC-capable provider key — this environment has
       Gemini and Cerebras only — and a physical device, since a simulator's microphone is

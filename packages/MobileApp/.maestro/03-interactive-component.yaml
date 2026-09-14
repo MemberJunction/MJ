@@ -8,7 +8,7 @@ appId: org.memberjunction.mobile
 - extendedWaitUntil:
     visible: "Conversations"
     timeout: 30000
-- openLink: "mjmobile:///interactive-demo"
+- openLink: "mjmobile://interactive-demo"
 # iOS may show a "Open in MJ Mobile?" confirmation for the custom scheme.
 - runFlow:
     when:

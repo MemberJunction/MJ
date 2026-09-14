@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 /**
- * Unit tests for the push-notification service. `expo-notifications` and the MJ
- * object model (`@memberjunction/core`) are mocked; the mutable `state` drives
- * permission, token, and persistence outcomes so we can assert the graceful
- * degradation paths a simulator hits.
+ * Unit tests for the push-notification service and the token store beneath it.
+ *
+ * `expo-notifications` and MJ's `UserInfoEngine` are mocked; the mutable `state` drives permission,
+ * token, and persistence outcomes so we can assert the graceful-degradation paths a simulator hits
+ * as well as the multi-device merge rules.
  */
 type UserOrNull = { ID: string } | null;
 
@@ -13,12 +14,14 @@ const state = vi.hoisted(() => ({
     requestPerm: { granted: true } as { granted: boolean; ios?: { status: number } },
     token: 'ExponentPushToken[abc]' as string | null,
     tokenThrows: false,
-    runViewResults: [] as unknown[],
     saveResult: true,
-    deleteResult: true,
     currentUser: { ID: 'user-1' } as UserOrNull,
+    /** What `UserInfoEngine.GetSetting` returns — i.e. what is already stored for this user. */
+    storedValue: null as string | null,
+    /** What `UserInfoEngine.SetSetting` was last asked to write. */
     lastSavedValue: null as string | null,
-    existingValue: null as string | null,
+    /** Keys any code under test tried to DELETE — must stay empty; the UI role cannot delete. */
+    deletedKeys: [] as string[],
 }));
 
 vi.mock('@/data/preferences', () => {
@@ -42,36 +45,28 @@ vi.mock('expo-notifications', () => ({
 }));
 
 vi.mock('@memberjunction/core', () => {
-    class FakeSetting {
-        ID = 'setting-1';
-        UserID = '';
-        Setting = '';
-        // Seeded from `state.existingValue` so a test can express "this user already has tokens".
-        Value: string | null = state.existingValue;
-        LatestResult = { CompleteMessage: 'err' };
-        NewRecord(): void {}
-        async Save(): Promise<boolean> {
-            state.lastSavedValue = this.Value;
-            return state.saveResult;
-        }
-        async Delete(): Promise<boolean> {
-            return state.deleteResult;
-        }
-    }
     class Metadata {
         get CurrentUser(): UserOrNull {
             return state.currentUser;
         }
-        async GetEntityObject(): Promise<FakeSetting> {
-            return new FakeSetting();
-        }
     }
-    class RunView {
-        async RunView(): Promise<{ Success: boolean; Results: unknown[] }> {
-            return { Success: true, Results: state.runViewResults };
-        }
-    }
-    return { Metadata, RunView };
+    return { Metadata };
+});
+
+vi.mock('@memberjunction/core-entities', () => {
+    const instance = {
+        Config: async () => undefined,
+        GetSetting: () => state.storedValue ?? undefined,
+        SetSetting: async (_key: string, value: string) => {
+            state.lastSavedValue = value;
+            return state.saveResult;
+        },
+        DeleteSetting: async (key: string) => {
+            state.deletedKeys.push(key);
+            return true;
+        },
+    };
+    return { UserInfoEngine: { Instance: instance } };
 });
 
 import {
@@ -81,20 +76,25 @@ import {
     RequestNotificationPermission,
     UnregisterDeviceToken,
 } from '@/data/services/notifications';
+import { ParsePushTokenMap } from '@/data/services/push-token-store';
 
 beforeEach(() => {
     state.perm = { granted: true, ios: { status: 2 } };
     state.requestPerm = { granted: true };
     state.token = 'ExponentPushToken[abc]';
     state.tokenThrows = false;
-    state.runViewResults = [];
     state.saveResult = true;
-    state.deleteResult = true;
     state.currentUser = { ID: 'user-1' };
-    state.existingValue = null;
+    state.storedValue = null;
     state.lastSavedValue = null;
-    state.lastSavedValue = null;
+    state.deletedKeys = [];
 });
+
+/** Reads the map the code under test last wrote. */
+function savedMap(): Record<string, { token: string }> {
+    expect(state.lastSavedValue).not.toBeNull();
+    return JSON.parse(state.lastSavedValue as string) as Record<string, { token: string }>;
+}
 
 describe('RequestNotificationPermission', () => {
     it('is true when already granted (no re-prompt)', async () => {
@@ -130,12 +130,32 @@ describe('GetExpoPushToken', () => {
     });
 });
 
+describe('ParsePushTokenMap', () => {
+    it('drops entries that are not well-formed registrations', () => {
+        // The stored value is user-writable JSON, so "it parsed" is not the same as "it is a map of
+        // registrations". Asserting the shape is what keeps a bad entry out of the type.
+        const raw = JSON.stringify({
+            good: { token: 't', platform: 'ios', updatedAt: 'x' },
+            bad: { token: 42 },
+            alsoBad: 'not-an-object',
+        });
+        expect(Object.keys(ParsePushTokenMap(raw, 'this-device'))).toEqual(['good']);
+    });
+
+    it('returns an empty map for an array, rather than one keyed "0", "1"', () => {
+        expect(ParsePushTokenMap(JSON.stringify([{ token: 't', platform: 'ios', updatedAt: 'x' }]), 'd')).toEqual({});
+    });
+
+    it('returns an empty map for malformed JSON', () => {
+        expect(ParsePushTokenMap('{not json', 'd')).toEqual({});
+        expect(ParsePushTokenMap(null, 'd')).toEqual({});
+    });
+});
+
 describe('RegisterDeviceToken', () => {
-    it('persists the token under this device\'s slot', async () => {
+    it("persists the token under this device's slot", async () => {
         expect(await RegisterDeviceToken('tok-1')).toBe(true);
-        expect(state.lastSavedValue).not.toBeNull();
-        const map = JSON.parse(state.lastSavedValue as string) as Record<string, { token: string }>;
-        const slots = Object.values(map);
+        const slots = Object.values(savedMap());
         expect(slots).toHaveLength(1);
         expect(slots[0].token).toBe('tok-1');
     });
@@ -143,20 +163,23 @@ describe('RegisterDeviceToken', () => {
     it('keeps other devices when a second one registers', async () => {
         // The single-token shape this replaces meant signing in on a tablet silently stopped the
         // phone receiving notifications, with nothing to indicate why.
-        state.existingValue = JSON.stringify({
+        state.storedValue = JSON.stringify({
             'other-device': { token: 'tok-other', platform: 'android', updatedAt: '2026-01-01T00:00:00.000Z' },
         });
         expect(await RegisterDeviceToken('tok-mine')).toBe(true);
-        const map = JSON.parse(state.lastSavedValue as string) as Record<string, { token: string }>;
-        expect(Object.values(map).map((t) => t.token).sort()).toEqual(['tok-mine', 'tok-other']);
+        expect(Object.values(savedMap()).map((t) => t.token).sort()).toEqual(['tok-mine', 'tok-other']);
     });
 
     it('migrates a legacy single-token value instead of discarding it', async () => {
-        state.existingValue = JSON.stringify({ token: 'legacy', platform: 'ios', updatedAt: 'x' });
+        state.storedValue = JSON.stringify({ token: 'legacy', platform: 'ios', updatedAt: 'x' });
         expect(await RegisterDeviceToken('tok-new')).toBe(true);
-        const map = JSON.parse(state.lastSavedValue as string) as Record<string, { token: string }>;
         // Same installation, so the legacy entry is replaced rather than duplicated.
-        expect(Object.values(map).map((t) => t.token)).toEqual(['tok-new']);
+        expect(Object.values(savedMap()).map((t) => t.token)).toEqual(['tok-new']);
+    });
+
+    it('reports failure when the setting could not be written', async () => {
+        state.saveResult = false;
+        expect(await RegisterDeviceToken('tok-1')).toBe(false);
     });
 
     it('no-ops (false) when there is no current user', async () => {
@@ -189,51 +212,36 @@ describe('RegisterForPushNotifications', () => {
 describe('UnregisterDeviceToken', () => {
     it('is a no-op (true) when there is no stored token', async () => {
         expect(await UnregisterDeviceToken()).toBe(true);
+        expect(state.lastSavedValue).toBeNull();
     });
 
     it('empties the stored map rather than deleting the row', async () => {
         // The standard UI role has Update but deliberately NOT Delete on MJ: User Settings, so
         // removing the last device has to clear the value — deleting would fail for the very
-        // people the setting belongs to.
-        let savedValue: string | null = null as string | null;
-        state.runViewResults = [
-            {
-                ID: 'setting-1',
-                Value: JSON.stringify({ 'this-device': { token: 't', platform: 'ios', updatedAt: 'x' } }),
-                async Save(): Promise<boolean> {
-                    savedValue = (this as { Value: string }).Value;
-                    return true;
-                },
-                async Delete(): Promise<boolean> {
-                    throw new Error('Delete must not be attempted — the UI role cannot delete user settings');
-                },
-                LatestResult: { CompleteMessage: '' },
-            },
-        ];
+        // people the setting belongs to. Registering first means the stored key is this device's,
+        // which is the whole point: seeding a key the code never computes would make this pass
+        // while removing nothing.
+        await RegisterDeviceToken('tok-1');
+        state.storedValue = state.lastSavedValue;
+        state.lastSavedValue = null;
+
         expect(await UnregisterDeviceToken()).toBe(true);
-        expect(savedValue).not.toBeNull();
+        expect(savedMap()).toEqual({});
+        expect(state.deletedKeys).toEqual([]);
     });
 
     it('leaves other devices registered when one unregisters', async () => {
-        let savedValue: string | null = null as string | null;
-        state.runViewResults = [
-            {
-                ID: 'setting-1',
-                Value: JSON.stringify({
-                    'other-device': { token: 'keep-me', platform: 'android', updatedAt: 'x' },
-                }),
-                async Save(): Promise<boolean> {
-                    savedValue = (this as { Value: string }).Value;
-                    return true;
-                },
-                async Delete(): Promise<boolean> {
-                    throw new Error('Delete must not be attempted');
-                },
-                LatestResult: { CompleteMessage: '' },
-            },
-        ];
+        await RegisterDeviceToken('tok-mine');
+        const mine = JSON.parse(state.lastSavedValue as string) as Record<string, unknown>;
+        state.storedValue = JSON.stringify({
+            ...mine,
+            'other-device': { token: 'keep-me', platform: 'android', updatedAt: 'x' },
+        });
+        state.lastSavedValue = null;
+
         expect(await UnregisterDeviceToken()).toBe(true);
-        const map = JSON.parse(String(savedValue)) as Record<string, { token: string }>;
+        const map = savedMap();
         expect(map['other-device'].token).toBe('keep-me');
+        expect(Object.keys(map)).toHaveLength(1);
     });
 });

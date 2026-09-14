@@ -133,7 +133,9 @@ Every mechanism above **already exists and already runs under Hermes**:
 - `MJGlobal.ClassFactory` and `@RegisterClass` — verified working in the RN bundle since Phase 1.
 - `Metadata` / `RunView` / `RunQuery` / `GetEntityObject` — the mobile app's only data path today.
 - Permissions, row-level security, and the unified `PermissionEngine` — server-side, unchanged.
-- Generic renderers for records, queries, dashboards and conversations — **shipped** in Phase 1.
+- Generic renderers for records, queries, dashboards and conversations — **shipped** in Phase 1 (as
+  Explorer screens; wiring one of them to an application's own nav item is what §3 adds, and the
+  `Dashboards` resource type is the one wired so far).
 
 The gap is not capability. It is that the mobile app currently **hardcodes its screen list** instead
 of reading `MJ: Applications`. That is the change this document asks for.

@@ -6,6 +6,7 @@ import {
   MJArtifactVersionEntity,
   MJArtifactEntity,
   MJAIModalityEntity,
+  MJAIAgentEntity,
   ArtifactMetadataEngine
 } from '@memberjunction/core-entities';
 import {
@@ -158,11 +159,17 @@ export class ConversationAttachmentService {
    * @param conversationDetailId - ID of the conversation detail to attach to
    * @param pendingAttachments - Array of pending attachments from the mention editor
    * @param contextUser - User context for the operation
+   * @param agent - The agent this turn is addressed to, when the caller has resolved one. Only its
+   *   `InlineStorageThresholdBytes` is read, and only to make the inline-vs-storage decision match
+   *   what the server would decide for the same file. Omitting it falls back to the system default,
+   *   which is correct for a turn with no agent — but a caller that HAS an agent and does not pass
+   *   it produces the cross-surface drift this shared policy exists to remove.
    */
   async saveAttachments(
     conversationDetailId: string,
     pendingAttachments: PendingAttachment[],
-    contextUser?: UserInfo
+    contextUser?: UserInfo,
+    agent?: MJAIAgentEntity | null
   ): Promise<MJConversationDetailAttachmentEntity[]> {
     const savedAttachments: MJConversationDetailAttachmentEntity[] = [];
     const rejectionMessages: string[] = [];
@@ -218,7 +225,7 @@ export class ConversationAttachmentService {
           const base64Data = this.extractBase64FromDataUrl(pending.dataUrl);
           const storeInline = ConversationUtility.ShouldStoreInline(
             pending.sizeBytes,
-            null,
+            agent?.InlineStorageThresholdBytes ?? null,
             DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES,
           );
 

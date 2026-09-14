@@ -7,7 +7,6 @@ import { Type } from '@/theme/tokens';
 import { ResolveTargetAgent } from '@/data/services/agents';
 import type { RealtimeCaption, RealtimeConnectionState } from '@memberjunction/realtime-runtime';
 import { MobileVoiceSession } from '@/voice/MobileVoiceSession';
-import { IsRealtimeProviderSupported } from '@/voice/rn-realtime-driver';
 
 /** Why voice could not start, when it could not. */
 type VoiceUnavailableReason = 'provider' | 'permission' | 'backend' | 'unknown';
@@ -49,12 +48,29 @@ export default function VoiceModeScreen() {
         // concern subscribes to the one it renders.
         const subs = [
             service.ConnectionState$.subscribe((s) => {
-                // The runtime reports a declined provider as an error state; translate it into the
-                // specific, actionable message rather than a generic failure.
-                if (s === 'error' && service.DeclinedProvider) {
-                    setReason('provider');
-                    setState('unavailable');
-                    return;
+                if (s === 'error') {
+                    // The runtime reports every start failure the same way — as 'error' — so the
+                    // screen has to ask WHY before it can say anything useful. A declined provider
+                    // and a denied microphone are both entirely explainable; only what is left over
+                    // deserves "something went wrong".
+                    const declined = service.DeclinedProvider;
+                    const failure = service.LastStartError;
+                    if (declined) {
+                        setReason('provider');
+                        setState('unavailable');
+                        return;
+                    }
+                    if (failure) {
+                        setErrorMessage(failure.message);
+                        setReason(/permission|denied|not granted/i.test(failure.message) ? 'permission' : 'unknown');
+                        setState('unavailable');
+                        return;
+                    }
+                    // No recorded start failure means the PROVIDER failed mid-call. The runtime
+                    // does not tear down on a provider error — it surfaces the state and leaves the
+                    // call open — so showing the fallback without ending the session would leave a
+                    // hot microphone and a billing connection behind this screen.
+                    void service.EndRealtimeSession();
                 }
                 setState(s);
             }),
@@ -71,6 +87,8 @@ export default function VoiceModeScreen() {
                 }
                 // The runtime mints, checks this host's provider capability, and connects — or
                 // closes the minted session and reports 'error' when we cannot carry that provider.
+                // It does not throw: a failed start is reported through ConnectionState$ with the
+                // cause on LastStartError, which the ConnectionState$ subscription reads.
                 await service.StartRealtimeSession(
                     agent.id,
                     conversationId ?? null,
@@ -78,9 +96,12 @@ export default function VoiceModeScreen() {
                     agent.name ?? null,
                 );
             } catch (e) {
+                // Only the agent lookup can land here; the session start reports through the
+                // runtime. Kept so a resolver failure still produces a screen rather than an
+                // unhandled rejection.
                 const message = e instanceof Error ? e.message : String(e);
                 setErrorMessage(message);
-                setReason(/permission/i.test(message) ? 'permission' : 'unknown');
+                setReason('backend');
                 setState('unavailable');
             }
         })();
@@ -134,7 +155,9 @@ export default function VoiceModeScreen() {
     const ripple2Opacity = ripple2.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
 
     const close = () => {
-        void void serviceRef.current?.EndRealtimeSession();
+        // Deliberately NOT ending the session here. `router.back()` unmounts this screen, and the
+        // effect's cleanup ends it — ending it here too would run two teardowns concurrently,
+        // because the runtime flips its active flag only at the end of one.
         router.back();
     };
 
@@ -246,8 +269,6 @@ function unavailableCopy(reason: VoiceUnavailableReason | null, providerLabel?: 
             return "This workspace's server doesn't have voice enabled yet. You can still chat by text.";
         case 'provider':
             return `This workspace's voice provider (${providerLabel ?? 'unknown'}) needs audio support this app build doesn't have. Ask an administrator to enable a WebRTC provider, or chat by text.`;
-        case 'permission':
-            return 'Voice needs microphone access. Enable it for MemberJunction in Settings, then try again.';
         case 'unknown':
         default:
             return 'Voice could not start. You can still chat by text.';

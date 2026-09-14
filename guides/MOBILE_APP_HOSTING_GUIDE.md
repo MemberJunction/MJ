@@ -43,6 +43,20 @@ There are three tiers of support, and **tier 1 costs you nothing**.
 **Install the mobile app against your instance and look before you build.** For many applications
 T1 is most of the value, and the right T2 list is one or two screens, not a port of your whole app.
 
+> **T1 is the Explorer tab, not your application's navigation.** The two are easy to conflate. T1 is
+> the browsing the app already does over *any* deployment's metadata — entities, records, queries,
+> dashboards — reachable from the Explorer tab with no application-specific code at all. What your
+> application's own nav items open is a separate question, answered by resource type:
+>
+> | Nav item `ResourceType` | What the app shell does with it |
+> |---|---|
+> | `Custom` | Resolves `DriverClass` through `BaseMobileResource` — this is T2/T3, and it is what every application MJ ships uses today |
+> | `Dashboards` | Renders the dashboard `RecordID` names, the same renderer the Explorer route uses |
+> | Anything else | Shows an honest "opens on desktop" card |
+>
+> Adding another generic type is a registration in `src/host/generic-resources.tsx`, keyed by the
+> type name — the shell has one resolution path and does not special-case either kind.
+
 The question to ask is not "which of our screens do we have" but **"what does someone do standing
 up?"** Usually: look something up, approve something, ask the agent, capture something.
 

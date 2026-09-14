@@ -182,10 +182,59 @@ describe('SendMessage', () => {
         expect(state.lastProcessMessage).toBeNull();
     });
 
-    it('surfaces a runtime throw as an error rather than propagating it', async () => {
+    it('reports a null result — no agent could be resolved — as a failure', async () => {
         state.processMessageResult = null;
         const result = await SendMessage({ conversationId: 'c', text: 'x' });
         expect(result.success).toBe(false);
         expect(result.errorMessage).toContain('No agent');
+    });
+
+    it('reports a FAILED run as a failure, and carries its message', async () => {
+        // `processMessage` never throws. It returns null only when no agent resolved; a quota
+        // rejection, an agent that threw, or a transport failure all come back as a well-formed
+        // result with success:false. Testing only for null reported those as successes, leaving a
+        // permanently spinning bubble and no error anywhere in the UI.
+        state.processMessageResult = { success: false, errorMessage: 'Agent quota exceeded' };
+        const result = await SendMessage({ conversationId: 'c', text: 'x' });
+        expect(result.success).toBe(false);
+        expect(result.errorMessage).toBe('Agent quota exceeded');
+    });
+
+    it('falls back to a readable message when a failed run carries none', async () => {
+        state.processMessageResult = { success: false };
+        const result = await SendMessage({ conversationId: 'c', text: 'x' });
+        expect(result).toMatchObject({ success: false, errorMessage: 'The agent run failed.' });
+    });
+
+    it('runs onUserMessageSaved BEFORE the agent, with the saved user row', async () => {
+        // Ordering is the whole assertion. An attachment uploaded after the run produces an agent
+        // that answers "I don't see an attachment" while the file appears a second later.
+        const calls: string[] = [];
+        let seenId: string | null = null;
+        state.processMessageResult = { success: true };
+        await SendMessage({
+            conversationId: 'c',
+            text: 'x',
+            onUserMessageSaved: async (id) => {
+                calls.push('attach');
+                seenId = id;
+            },
+        });
+        calls.push('run');
+        expect(calls).toEqual(['attach', 'run']);
+        expect(seenId).toBe(state.savedDetails[0].ID);
+        expect(state.lastProcessMessage).not.toBeNull();
+    });
+
+    it('fails the send when onUserMessageSaved throws, without running the agent', async () => {
+        const result = await SendMessage({
+            conversationId: 'c',
+            text: 'x',
+            onUserMessageSaved: async () => {
+                throw new Error('upload refused');
+            },
+        });
+        expect(result).toMatchObject({ success: false, errorMessage: 'upload refused' });
+        expect(state.lastProcessMessage).toBeNull();
     });
 });

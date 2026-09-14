@@ -1,11 +1,13 @@
 import { RegisterClass } from '@memberjunction/global';
 import {
+    BaseRealtimeClient,
     OpenAILiveClient,
     OpenAIRealtimeClient,
+    type IRealtimeAudioSink,
     type IRealtimeLivePeerConnection,
     type IRealtimePeerConnection,
 } from '@memberjunction/ai-realtime-client';
-import { RTCPeerConnection } from 'react-native-webrtc';
+import { RTCPeerConnection, registerGlobals } from 'react-native-webrtc';
 
 /**
  * @fileoverview React Native drivers for MJ's WebRTC realtime providers.
@@ -17,12 +19,20 @@ import { RTCPeerConnection } from 'react-native-webrtc';
  * dedupe — platform-agnostic. Only two members reach for the browser:
  *
  *  - `createPeerConnection()`, already a factory method precisely so it can be substituted;
- *  - `attachRemoteAudio()`, which creates an `<audio>` element to play the agent's track.
+ *  - `createAudioSink()`, which creates an `<audio>` element to play the agent's track.
  *
  * `react-native-webrtc` supplies a conforming `RTCPeerConnection`, and on React Native a remote
  * audio track is routed to the output device automatically once the connection is established —
  * there is no element to attach it to. So both overrides are trivial, and roughly 800 lines of
  * protocol implementation are reused verbatim per provider.
+ *
+ * ## Why the sink is overridden and not `attachRemoteAudio`
+ *
+ * `attachRemoteAudio` is where the base driver installs `pc.ontrack` — the handler that records the
+ * remote stream, notifies every `OnRemoteStream` subscriber, and attaches the agent-side audio
+ * meter. Overriding *that* would silently delete all of it, leaving `GetRemoteMediaStream()` null
+ * forever and any future session recorder capturing microphone only. Overriding the sink factory
+ * removes exactly the browser-specific part — the DOM element — and leaves the wiring intact.
  *
  * ## Why WebRTC and not raw PCM
  *
@@ -37,11 +47,17 @@ import { RTCPeerConnection } from 'react-native-webrtc';
  *
  * ## What is NOT covered here
  *
- * The WebSocket + PCM16 providers (Gemini Live, ElevenLabs Agents, AssemblyAI) need an
+ * The WebSocket + PCM16 providers (Gemini Live, Grok Voice, ElevenLabs Agents, AssemblyAI) need an
  * `IPcmMicCapture` / `IRealtimePcmPlayback` pair backed by a native audio module. Those seams exist
  * on their drivers and are deliberately left unimplemented rather than faked — see
  * `rn-audio-adapter.ts`.
  */
+
+// `react-native-webrtc` ships the WebRTC types as module exports; the drivers and the meters reach
+// for several of them (`MediaStream`, `RTCSessionDescription`) as globals the way a browser
+// provides them. Installing them is the package's documented setup step and must happen before any
+// driver constructs a connection.
+registerGlobals();
 
 /**
  * Creates a `react-native-webrtc` peer connection.
@@ -59,30 +75,44 @@ function createNativePeerConnection(): RTCPeerConnection {
 }
 
 /**
+ * The audio sink for React Native: an inert object that satisfies the driver's contract.
+ *
+ * `react-native-webrtc` renders a remote audio track to the active output route as soon as the peer
+ * connection is established — there is no element to point at the stream. But the base driver's
+ * `ontrack` handler is guarded on a non-null sink, so returning `null` here would discard the
+ * remote stream, its subscribers and the output meter along with the element. This keeps the
+ * handler live and lets the assignments fall on the floor, which is precisely what they should do.
+ */
+function createInertAudioSink(): IRealtimeAudioSink {
+    return {
+        srcObject: null,
+        remove(): void {
+            /* nothing to remove — there is no element on this platform */
+        },
+    };
+}
+
+/**
  * GPT-Live driver for React Native.
  *
- * Registered under the same provider key the server stamps (`'openai-live'`), so
- * `ResolveMobileRealtimeClient` finds it exactly the way the browser host finds its own.
+ * Registered against `BaseRealtimeClient` under the provider key the server stamps
+ * (`'openai-live'`) — the same base class and key the browser driver uses, because that is what the
+ * shared runtime resolves against. Registering against `OpenAILiveClient` instead would file it in
+ * a bucket nothing ever looks in: `ClassFactory` matches on the registered base class's *name*, so
+ * the browser driver would still win and throw on `RTCPeerConnection` under Hermes. MJ's
+ * auto-incrementing priority does the rest — this module registers after the stock drivers, so it
+ * takes precedence on this platform.
  */
-@RegisterClass(OpenAILiveClient, 'openai-live')
+@RegisterClass(BaseRealtimeClient, 'openai-live')
 export class RNOpenAILiveClient extends OpenAILiveClient {
     /** @inheritdoc */
     protected override createPeerConnection(): IRealtimeLivePeerConnection {
         return createNativePeerConnection() as unknown as IRealtimeLivePeerConnection;
     }
 
-    /**
-     * No-op on React Native.
-     *
-     * The browser driver creates an `<audio>` element and points it at the remote stream. Under
-     * `react-native-webrtc` the remote audio track is rendered to the active output route as soon as
-     * the peer connection is established, so creating anything here would be redundant at best.
-     *
-     * The base class still fires its remote-stream handlers, which is what the call UI's
-     * audio-reactive visuals and the session recorder subscribe to.
-     */
-    protected override attachRemoteAudio(_pc: IRealtimePeerConnection): void {
-        /* intentionally empty — see the doc comment */
+    /** @inheritdoc — see {@link createInertAudioSink}. */
+    protected override createAudioSink(): IRealtimeAudioSink {
+        return createInertAudioSink();
     }
 }
 
@@ -90,19 +120,18 @@ export class RNOpenAILiveClient extends OpenAILiveClient {
  * GPT Realtime (the pre-Live protocol) driver for React Native.
  *
  * Kept alongside the Live driver rather than replaced by it: the two are different protocols, a
- * deployment may pin either, and the same two overrides serve both. Grok Voice also resolves
- * through the OpenAI protocol profile, so it is covered by this driver as well.
+ * deployment may pin either, and the same two overrides serve both.
  */
-@RegisterClass(OpenAIRealtimeClient, 'openai')
+@RegisterClass(BaseRealtimeClient, 'openai')
 export class RNOpenAIRealtimeClient extends OpenAIRealtimeClient {
     /** @inheritdoc */
     protected override createPeerConnection(): IRealtimePeerConnection {
         return createNativePeerConnection() as unknown as IRealtimePeerConnection;
     }
 
-    /** @inheritdoc — see {@link RNOpenAILiveClient.attachRemoteAudio}. */
-    protected override attachRemoteAudio(_pc: IRealtimePeerConnection): void {
-        /* intentionally empty — see the doc comment */
+    /** @inheritdoc — see {@link createInertAudioSink}. */
+    protected override createAudioSink(): IRealtimeAudioSink {
+        return createInertAudioSink();
     }
 }
 
@@ -123,8 +152,14 @@ export function LoadRNRealtimeDrivers(): void {
  * The server picks a realtime model by rank, so a deployment can legitimately resolve a provider
  * this app has no audio plane for. Checking up front lets the UI say "voice is not available with
  * this provider" instead of opening a session that would be silent in both directions.
+ *
+ * Only the two WebRTC providers qualify. Grok Voice (`'xai'`) speaks the OpenAI *protocol* but over
+ * a websocket with a client-owned PCM plane — it derives from
+ * `OpenAIProtocolWebSocketRealtimeClient`, not from the WebRTC drivers overridden above, and its
+ * playback engine constructs an `AudioContext` that does not exist under Hermes. Listing it here
+ * would admit exactly the crash this list exists to prevent.
  */
-export const SupportedRealtimeProviders: readonly string[] = ['openai', 'openai-live', 'xai'];
+export const SupportedRealtimeProviders: readonly string[] = ['openai', 'openai-live'];
 
 /**
  * Whether this build can carry a realtime session for the given provider key.

@@ -6,13 +6,18 @@ appId: org.memberjunction.mobile
 ---
 - launchApp:
     clearState: false
+# Wait for the app to finish booting before deep-linking. A link fired at a still-starting app is
+# silently dropped on Android — which is how these flows "failed" while the screens were fine.
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
 
-- openLink: "org.memberjunction.mobile:///explorer"
+- openLink: "mjmobile://explorer"
 - extendedWaitUntil:
     visible: "Data Explorer"
     timeout: 20000
 
-- openLink: "org.memberjunction.mobile:///profile"
+- openLink: "mjmobile://profile"
 - extendedWaitUntil:
     visible: "Profile & settings"
     timeout: 20000

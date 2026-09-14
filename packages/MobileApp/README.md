@@ -314,7 +314,7 @@ compiled.
 | Push token storage | **Verified** (per-device map, live) |
 | Push delivery end-to-end | **Not verified** — needs a physical device; a simulator has no APNs |
 | Realtime voice session lifecycle | **Verified** — mints, resolves a provider, declines cleanly when this build cannot carry it |
-| Realtime voice audio | **Not verified** — needs a WebRTC-capable provider key (OpenAI Realtime/Live or Grok) and a physical device |
+| Realtime voice audio | **Not verified** — needs a WebRTC-capable provider key (OpenAI Realtime or GPT-Live) and a physical device |
 | Android | **Verified** — builds and runs on an Android 15 emulator |
 
 ### Realtime voice, precisely
@@ -326,8 +326,9 @@ supplies echo cancellation, noise suppression and a jitter buffer.
 `react-native-webrtc` provides the peer connection, so the RN driver is a subclass overriding two
 methods; the ~800 lines of wire protocol per provider are reused unchanged.
 
-Providers this build can carry audio for: **OpenAI Realtime, GPT-Live, Grok Voice**. The
-WebSocket + PCM16 providers (Gemini Live, ElevenLabs Agents, AssemblyAI) need a Web Audio plane
+Providers this build can carry audio for: **OpenAI Realtime and GPT-Live** — the two WebRTC
+providers. The WebSocket + PCM16 providers (Gemini Live, Grok Voice, ElevenLabs Agents, AssemblyAI)
+need a Web Audio plane
 that does not exist under Hermes; the app declines those with a message naming the provider rather
 than opening a session that would be silent in both directions.
 
@@ -339,7 +340,6 @@ than opening a session that would be silent in both directions.
 | **Phase 2** | Push notifications (per-device tokens), biometric lock, record editing | **Shipped** |
 | **Phase 3** | Photo/file capture with real upload, offline mutation queue, Android | **Shipped** |
 | **Phase 4** | App hosting, `conversations-runtime` adoption, realtime voice over WebRTC | **Shipped** — see below |
-| **Phase 3** | Photo/file capture & attachments, offline mutation queue + sync, Android verification | Planned |
 
 Live tracking: [`PLAN_CHECKLIST.md`](PLAN_CHECKLIST.md).
 </content>

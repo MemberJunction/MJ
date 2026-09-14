@@ -1,9 +1,9 @@
 {
   "fields": {
     "Name": "Field Notes (Sample)",
-    "Description": "Worked example of an application hosted inside the MJ mobile app. See guides/MOBILE_APP_HOSTING_GUIDE.md.",
+    "Description": "Worked example of an application hosted inside the MJ mobile app. Not installed for new users by default — grant it through MJ: User Applications to try it. See guides/MOBILE_APP_HOSTING_GUIDE.md.",
     "Icon": "fa-solid fa-note-sticky",
-    "DefaultForNewUser": true,
+    "DefaultForNewUser": false,
     "DefaultSequence": 9000,
     "Color": "#1a8a5f",
     "DefaultNavItems": [
@@ -30,7 +30,7 @@
     "ID": "D4DF5208-17B7-4254-A740-D2653BB0D2CA"
   },
   "sync": {
-    "lastModified": "2026-09-13T21:57:27.498Z",
-    "checksum": "69b6a5b0391ba16f97208a645f8fe384fd110c0d6186aa1c2f49dbc02e8fae24"
+    "lastModified": "2026-09-14T00:43:03.879Z",
+    "checksum": "c74afe102b98b54d57c4f6421ffa68c4a762f702217bddbb27714c5b8a077a3b"
   }
 }

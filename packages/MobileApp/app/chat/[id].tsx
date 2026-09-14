@@ -40,9 +40,9 @@ import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
  *   - `AdaptConversation` / `AdaptConversationToSummary` (`@/data/adapt`) shape
  *     raw entities into the view model.
  *   - `SendMessage` / `GetConversationDetailStatus` (`@/data/services/agents`)
- *     post the user turn, run the agent, and poll the AI `Conversation Detail`
- *     status until it finalizes (the push WebSocket may not deliver completion
- *     on this client, so it polls up to 24× every 2.5s, refreshing as it goes).
+ *     post the user turn and run the agent. `SendMessage` resolves only once the
+ *     run has completed, so the AI `Conversation Detail` status is read once
+ *     afterwards rather than polled.
  * Interactions: type + send a message (with optimistic pending bubble + live
  *   "Working…" progress), pull-to-refresh, tap a recents chip to switch threads,
  *   open the artifacts dock -> `/artifacts/[id]`, tap mic -> `/voice-mode`,
@@ -70,6 +70,7 @@ export default function ChatThreadScreen() {
         setPendingUserText(text.trim());
         setProgress({ currentStep: 'starting', message: 'Sending…' });
         try {
+            let attachmentWarning: string | null = null;
             const result = await SendMessage({
                 conversationId: id,
                 text: text.trim(),
@@ -79,14 +80,21 @@ export default function ChatThreadScreen() {
                 // something. Unset leaves resolution to the runtime's chain.
                 agentId: GetDefaultAgentId(),
                 onProgress: (p) => setProgress(p),
+                // Uploads the file in the window between the user's row existing and the agent
+                // reading it. It has to be this exact window: earlier and there is no row to hang
+                // the attachment off, later and the agent has already answered a message it could
+                // not see the attachment on. A failed upload degrades to a warning rather than
+                // failing the turn — the text is worth sending either way.
+                onUserMessageSaved: attachment
+                    ? async (userMessageId) => {
+                          const stored = await AttachCapturedFile(attachment, userMessageId);
+                          if (!stored.ok) {
+                              attachmentWarning = `The message sent, but the attachment did not: ${stored.message}`;
+                          }
+                      }
+                    : undefined,
             });
-            // The user message now exists server-side, so the attachment finally has something to
-            // hang off. Uploading here rather than before the send keeps a failed upload from
-            // costing the user their message — the text goes either way.
-            if (attachment && result.userMessageId) {
-                const stored = await AttachCapturedFile(attachment, result.userMessageId);
-                if (!stored.ok) setSendError(`The message sent, but the attachment did not: ${stored.message}`);
-            }
+            if (attachmentWarning) setSendError(attachmentWarning);
             // The user message + in-progress AI bubble now exist server-side; show them.
             setPendingUserText(null);
             await refresh();

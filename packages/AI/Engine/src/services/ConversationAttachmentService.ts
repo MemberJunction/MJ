@@ -14,8 +14,6 @@
 
 import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
-    MJFileStorageProviderEntity,
-    MJFileEntity,
     MJAIAgentEntity,
     MJAIModelEntity,
     MJConversationDetailAttachmentEntity,
@@ -30,7 +28,6 @@ import { MJGlobal } from '@memberjunction/global';
 import {
     ConversationUtility,
     AttachmentType,
-    AttachmentLimits,
     AttachmentContent,
     DEFAULT_ATTACHMENT_LIMITS,
     DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES
@@ -578,9 +575,19 @@ export class ConversationAttachmentService {
             return false;
         }
 
-        // If stored in MJStorage, delete the file
+        // If stored in MJStorage, delete the file — and honour the answer. A store that reports
+        // `false` is saying the bytes are still there (no store bound on this host, a permission
+        // failure, a client that cannot delete server-side); removing the row anyway would leave
+        // content nothing points at, which is exactly the orphan this seam's contract forbids.
         if (attachment.FileID) {
-            await this.deleteStorageFile(attachment.FileID, contextUser, provider);
+            const removed = await this.deleteStorageFile(attachment.FileID, contextUser, provider);
+            if (!removed) {
+                LogError(
+                    `[ConversationAttachmentService] Not deleting attachment ${attachmentId}: its stored file ` +
+                        `${attachment.FileID} could not be removed, and deleting the row would orphan it.`
+                );
+                return false;
+            }
         }
 
         // Delete the attachment record

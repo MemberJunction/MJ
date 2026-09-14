@@ -36,7 +36,7 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { File } from 'expo-file-system';
-import type { CompositeKey, UserInfo } from '@memberjunction/core';
+import type { UserInfo } from '@memberjunction/core';
 import { AttachCapturedFileToMessage, type AttachResult } from './attachment-storage';
 import { DescribeAttachment, type AttachmentKind, type CapturedAttachment } from './attachment-meta';
 

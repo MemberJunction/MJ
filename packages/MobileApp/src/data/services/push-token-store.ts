@@ -1,5 +1,5 @@
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
-import type { MJUserSettingEntity } from '@memberjunction/core-entities';
+import { Metadata, type UserInfo } from '@memberjunction/core';
+import { UserInfoEngine } from '@memberjunction/core-entities';
 
 /**
  * @fileoverview Where a user's push tokens live, and how several devices share that space.
@@ -15,9 +15,16 @@ import type { MJUserSettingEntity } from '@memberjunction/core-entities';
  * overwrote the first and that device stopped receiving notifications with nothing to indicate
  * why. Keying by installation makes "a person has a phone and a tablet" the normal case.
  *
+ * ## Why `UserInfoEngine` and not a hand-rolled row
+ *
  * No new entity is needed: the communication framework's Expo provider takes a push token as the
  * recipient address, so token storage is the application's business, and `MJ: User Settings` is
- * already per-user, server-side and cross-device.
+ * already per-user, server-side and cross-device. MJ's own accessor for that table is
+ * `UserInfoEngine.GetSetting` / `SetSetting`, which this module uses rather than repeating — the
+ * engine caches the rows, and its write path recovers when the cached row has been deleted from
+ * another device by recreating it instead of reporting a failed save. A hand-rolled
+ * `RunView` + `GetEntityObject` pair loses exactly that recovery, on the one entity most likely to
+ * be written from two devices at once.
  */
 
 /** `MJ: User Settings` key holding this user's device-token map. */
@@ -36,13 +43,25 @@ export type StoredPushToken = {
 /** Every device a user has registered, keyed by a stable per-installation id. */
 export type StoredPushTokenMap = Record<string, StoredPushToken>;
 
+/** Whether a parsed value is a well-formed device registration. */
+function isStoredPushToken(value: unknown): value is StoredPushToken {
+    if (!value || typeof value !== 'object') return false;
+    const candidate = value as Record<string, unknown>;
+    return (
+        typeof candidate.token === 'string' &&
+        typeof candidate.platform === 'string' &&
+        typeof candidate.updatedAt === 'string'
+    );
+}
+
 /**
  * Parses a stored value into a token map.
  *
- * Tolerant on purpose. A malformed value yields an empty map rather than throwing, and the legacy
- * single-token shape is migrated under the supplied installation id rather than discarded — the
- * device it belongs to is still registered with Expo, so throwing its token away would silently
- * stop notifications for a device that was working a moment ago.
+ * Tolerant on purpose, and validating for the same reason: a malformed value yields an empty map
+ * rather than throwing, and entries that are not well-formed registrations are dropped rather than
+ * asserted into the type. The legacy single-token shape is migrated under the supplied installation
+ * id rather than discarded — the device it belongs to is still registered with Expo, so throwing
+ * its token away would silently stop notifications for a device that was working a moment ago.
  *
  * @param raw The raw `MJ: User Settings` value.
  * @param installationId This device's id, used when migrating a legacy value.
@@ -51,15 +70,34 @@ export function ParsePushTokenMap(raw: string | null | undefined, installationId
     if (!raw) return {};
     try {
         const parsed: unknown = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return {};
-        const asRecord = parsed as Record<string, unknown>;
-        if (typeof asRecord.token === 'string') {
-            return { [installationId]: asRecord as unknown as StoredPushToken };
+        // An array is an object too, and `Object.entries` would turn it into a map keyed "0", "1".
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+        if (isStoredPushToken(parsed)) {
+            return { [installationId]: parsed };
         }
-        return asRecord as StoredPushTokenMap;
+        const result: StoredPushTokenMap = {};
+        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+            if (isStoredPushToken(value)) {
+                result[key] = value;
+            }
+        }
+        return result;
     } catch {
         return {};
     }
+}
+
+/**
+ * Resolves the user this call acts for and makes sure their settings are loaded.
+ *
+ * @returns The user, or `null` when nobody is signed in.
+ */
+async function resolveUser(contextUser?: UserInfo): Promise<UserInfo | null> {
+    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
+    const currentUser = contextUser ?? md.CurrentUser;
+    if (!currentUser?.ID) return null;
+    await UserInfoEngine.Instance.Config(false, currentUser);
+    return currentUser;
 }
 
 /**
@@ -77,22 +115,23 @@ export async function SavePushToken(
     platform: string,
     contextUser?: UserInfo,
 ): Promise<boolean> {
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
-    if (!currentUser?.ID) {
+    const currentUser = await resolveUser(contextUser);
+    if (!currentUser) {
         console.warn('[push-token-store] no current user; cannot register device token');
         return false;
     }
 
-    const setting = await FindOrCreateSetting(md, currentUser);
     // Merge rather than replace, so registering on one device does not unregister the others.
-    const tokens = ParsePushTokenMap(setting.Value, installationId);
+    const tokens = ParsePushTokenMap(UserInfoEngine.Instance.GetSetting(PUSH_TOKEN_SETTING_KEY), installationId);
     tokens[installationId] = { token, platform, updatedAt: new Date().toISOString() };
-    setting.Value = JSON.stringify(tokens);
 
-    const saved = await setting.Save();
+    const saved = await UserInfoEngine.Instance.SetSetting(
+        PUSH_TOKEN_SETTING_KEY,
+        JSON.stringify(tokens),
+        currentUser,
+    );
     if (!saved) {
-        console.warn('[push-token-store] failed to persist device token:', setting.LatestResult?.CompleteMessage ?? 'unknown');
+        console.warn('[push-token-store] failed to persist device token');
     }
     return saved;
 }
@@ -111,46 +150,22 @@ export async function SavePushToken(
  * @returns `true` when the change was persisted, or there was nothing to remove.
  */
 export async function RemovePushToken(installationId: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();  // global-provider-ok: single-provider mobile client (one MJAPI connection via useMJ()); no per-provider threading
-    const currentUser = contextUser ?? md.CurrentUser;
-    if (!currentUser?.ID) return true;
+    const currentUser = await resolveUser(contextUser);
+    if (!currentUser) return true;
 
-    const existing = await LoadSetting(currentUser);
-    if (!existing) return true;
+    const raw = UserInfoEngine.Instance.GetSetting(PUSH_TOKEN_SETTING_KEY);
+    if (!raw) return true;
 
-    const tokens = ParsePushTokenMap(existing.Value, installationId);
+    const tokens = ParsePushTokenMap(raw, installationId);
     delete tokens[installationId];
 
-    existing.Value = JSON.stringify(tokens);
-    const saved = await existing.Save();
+    const saved = await UserInfoEngine.Instance.SetSetting(
+        PUSH_TOKEN_SETTING_KEY,
+        JSON.stringify(tokens),
+        currentUser,
+    );
     if (!saved) {
-        console.warn('[push-token-store] failed to remove device token:', existing.LatestResult?.CompleteMessage ?? 'unknown');
+        console.warn('[push-token-store] failed to remove device token');
     }
     return saved;
-}
-
-/** Loads the user's token setting row, or `null` when they have none. */
-export async function LoadSetting(user: UserInfo): Promise<MJUserSettingEntity | null> {
-    const result = await new RunView().RunView<MJUserSettingEntity>(
-        {
-            EntityName: 'MJ: User Settings',
-            ExtraFilter: `UserID='${user.ID}' AND Setting='${PUSH_TOKEN_SETTING_KEY}'`,
-            ResultType: 'entity_object',
-            MaxRows: 1,
-        },
-        user,
-    );
-    return result.Success && result.Results?.length ? result.Results[0] : null;
-}
-
-/** Loads the user's token setting row, creating an unsaved one when absent. */
-async function FindOrCreateSetting(md: Metadata, user: UserInfo): Promise<MJUserSettingEntity> {
-    const existing = await LoadSetting(user);
-    if (existing) return existing;
-
-    const setting = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', user);
-    setting.NewRecord();
-    setting.UserID = user.ID;
-    setting.Setting = PUSH_TOKEN_SETTING_KEY;
-    return setting;
 }

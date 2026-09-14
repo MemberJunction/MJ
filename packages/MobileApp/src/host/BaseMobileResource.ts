@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import { MJGlobal } from '@memberjunction/global';
+import type { MJApplicationEntity_IDefaultNavItem } from '@memberjunction/core-entities';
 
 /**
  * @fileoverview The extension point that lets the mobile app **host** applications rather than
@@ -45,25 +46,26 @@ export type MobileResourceProps = {
 /**
  * One entry in an application's navigation, parsed from `MJ: Applications.DefaultNavItems`.
  *
- * The shape is MJ Explorer's, unchanged — this is the same JSON the web shell reads. Fields are
- * optional where the metadata makes them optional, so a partially-authored nav item degrades
- * instead of throwing.
+ * Every field's type is derived from `MJApplicationEntity_IDefaultNavItem` — the CodeGen-emitted
+ * shape for that JSON column — rather than restated here, so a metadata change flows through
+ * instead of silently diverging. The only differences are deliberate: `Icon` and `ResourceType` are
+ * widened to optional because real metadata omits them (`Home`'s single nav item has no icon), and
+ * `Status` is added because it is present on the runtime shape Explorer filters on and absent from
+ * the generated interface.
  */
-export type MobileNavItem = {
+export type MobileNavItem = Pick<MJApplicationEntity_IDefaultNavItem, 'RecordID' | 'DriverClass' | 'isDefault'> & {
     /** Display label, e.g. `"Queries"`. */
-    Label: string;
+    Label: MJApplicationEntity_IDefaultNavItem['Label'];
     /** Font Awesome class from the metadata, e.g. `"fa-solid fa-database"`. */
-    Icon?: string;
+    Icon?: MJApplicationEntity_IDefaultNavItem['Icon'];
     /**
-     * What kind of thing this opens. Nine of the ten shipped types are generic and renderable by
-     * the shell with no application-specific code; `Custom` is the escape hatch that resolves a
-     * {@link BaseMobileResource} by {@link DriverClass}.
+     * What kind of thing this opens. `Custom` — which every application MJ ships uses for every
+     * item — resolves a {@link BaseMobileResource} by {@link MobileNavItem.DriverClass}. The generic
+     * types resolve the same way, by the type name itself; see {@link ResolveMobileResource}.
      */
-    ResourceType?: string;
-    /** For `Custom` resource types, the ClassFactory key to resolve. */
-    DriverClass?: string;
-    /** Whether this is the application's landing item. */
-    isDefault?: boolean;
+    ResourceType?: MJApplicationEntity_IDefaultNavItem['ResourceType'];
+    /** `'Active'`, or absent meaning active. Anything else means the item is hidden. */
+    Status?: string;
 };
 
 /**
@@ -110,14 +112,21 @@ export abstract class BaseMobileResource {
 }
 
 /**
- * Resolves a registered mobile resource by its driver-class name.
+ * Resolves a registered mobile resource by name.
  *
- * @param driverClass The `DriverClass` from the application's nav metadata.
+ * One lookup serves both kinds of nav item, which is why generic resource types are not a separate
+ * code path: a `Custom` item is resolved by its `DriverClass`, and a generic item (`Dashboards`,
+ * `Reports`, …) by its `ResourceType`. A generic type this build renders is simply a
+ * {@link BaseMobileResource} registered under that type name — see `src/host/generic-resources.tsx`
+ * — so adding one is a registration, never a change to the shell.
+ *
+ * @param key The `DriverClass` for a `Custom` item, or the `ResourceType` name for a generic one.
  * @returns The resource instance, or `null` when this build ships no mobile surface for it —
  *          which is an expected, well-handled state, not a failure. The shell renders an
  *          "open on desktop" card, the same honest fallback the dashboard renderer already uses.
  */
-export function ResolveMobileResource(driverClass: string | undefined | null): BaseMobileResource | null {
+export function ResolveMobileResource(key: string | undefined | null): BaseMobileResource | null {
+    const driverClass = key;
     if (!driverClass) return null;
     try {
         const instance = MJGlobal.Instance.ClassFactory.CreateInstance<BaseMobileResource>(

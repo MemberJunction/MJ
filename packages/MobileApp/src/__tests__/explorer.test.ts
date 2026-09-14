@@ -51,7 +51,15 @@ vi.mock('@memberjunction/core', () => {
     return { Metadata, RunView, RunQuery, CompositeKey };
 });
 
-import { LoadEntities, EntityCount, LoadQueries, QueryCount, LoadDashboard, LoadEntityRecords } from '@/data/services/explorer';
+import {
+    LoadEntities,
+    EntityCount,
+    LoadQueries,
+    QueryCount,
+    LoadDashboard,
+    LoadDashboards,
+    LoadEntityRecords,
+} from '@/data/services/explorer';
 
 beforeEach(() => {
     state.entities = [];
@@ -223,5 +231,27 @@ describe('LoadEntityRecords — card subtitle rendering of normalized date cells
         const load = await LoadEntityRecords('Test Orders');
 
         expect(load?.rows[0].subtitle).toBe('');
+    });
+});
+
+describe('LoadDashboards', () => {
+    it('asks for the entity by its real, MJ-prefixed name', async () => {
+        // The unprefixed name does not resolve in metadata, and `RunView` reports that by returning
+        // `Success: false` rather than throwing — which this function turns into an empty list. The
+        // visible symptom was "Dashboards · 0 available" on a deployment that had dashboards, with
+        // nothing in the UI to suggest a failure had happened at all.
+        const asked: string[] = [];
+        state.runView = (p) => {
+            asked.push(p.EntityName);
+            return { Success: true, Results: [{ ID: 'd1', Name: 'Ops', Description: null }] };
+        };
+        const dashboards = await LoadDashboards();
+        expect(asked).toEqual(['MJ: Dashboards']);
+        expect(dashboards).toEqual([{ id: 'd1', name: 'Ops', description: null }]);
+    });
+
+    it('returns an empty list rather than throwing when the query fails', async () => {
+        state.runView = () => ({ Success: false, Results: [] });
+        expect(await LoadDashboards()).toEqual([]);
     });
 });

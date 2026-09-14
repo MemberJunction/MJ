@@ -17,6 +17,10 @@ import { useMJ } from '@/providers/mj-provider';
  * imports any application's code, which is what makes the app a host rather than a bundle of
  * hard-coded screens.
  *
+ * Generic nav items — ones that name a record rather than a driver class — resolve through the same
+ * registry, keyed by their resource type; see `src/host/generic-resources.tsx` for which this build
+ * renders.
+ *
  * A nav item this build has no mobile surface for renders an honest "open on desktop" card. That
  * is a deliberate product decision: some surfaces (authoring tools, dense grids, admin) should not
  * be on a phone, and saying so is better than shipping a degraded imitation.
@@ -30,9 +34,14 @@ export default function AppShellScreen() {
     const [activeItem, setActiveItem] = useState<MobileNavItem | null>(null);
 
     // Same readiness gate as the launcher: a deep link can reach this screen before the MJ
-    // provider has a token, and metadata access throws on an unset provider.
+    // provider has a token, and metadata access throws on an unset provider. The terminal states
+    // have to clear `loading` too — without that a cold launch straight into this deep link sits on
+    // "Loading…" forever, with no header and so no way back.
     useEffect(() => {
-        if (status !== 'ready') return;
+        if (status !== 'ready') {
+            if (status === 'no-token' || status === 'error') setLoading(false);
+            return;
+        }
         let cancelled = false;
         void (async () => {
             const apps = await LoadUserApplications().catch(() => [] as MobileApplication[]);
@@ -47,12 +56,17 @@ export default function AppShellScreen() {
         };
     }, [appId, status]);
 
-    // Resolution is keyed on the driver name, so switching nav items re-resolves and nothing is
-    // cached across applications that happen to share a label.
-    const resource = useMemo(
-        () => (activeItem?.ResourceType === 'Custom' ? ResolveMobileResource(activeItem.DriverClass) : null),
-        [activeItem?.ResourceType, activeItem?.DriverClass],
-    );
+    // One resolution path for both kinds of nav item: a `Custom` item is resolved by the driver
+    // class the application declares, a generic one (`Dashboards`, …) by its resource type, which
+    // the shell registers surfaces for in `src/host/generic-resources.tsx`. Keyed on the resolved
+    // name, so switching items re-resolves and nothing is cached across applications that happen to
+    // share a label.
+    const resourceKey = activeItem
+        ? activeItem.ResourceType === 'Custom'
+            ? activeItem.DriverClass
+            : activeItem.ResourceType
+        : undefined;
+    const resource = useMemo(() => ResolveMobileResource(resourceKey), [resourceKey]);
 
     if (loading) {
         return (
@@ -64,10 +78,26 @@ export default function AppShellScreen() {
 
     if (!app) {
         return (
-            <View style={styles.centered}>
-                <Text style={styles.emptyTitle}>Application not found</Text>
-                <Text style={styles.muted}>It may have been removed, or you may not have access.</Text>
-            </View>
+            <SafeAreaView style={styles.screen} edges={['top']}>
+                <View style={styles.header}>
+                    <Pressable
+                        onPress={() => router.back()}
+                        accessibilityRole="button"
+                        accessibilityLabel="Back"
+                        style={styles.backBtn}
+                    >
+                        <Icons.ChevronLeft size={22} color={Colors.ink} />
+                    </Pressable>
+                </View>
+                <View style={styles.centered}>
+                    <Text style={styles.emptyTitle}>Application not found</Text>
+                    <Text style={styles.muted}>
+                        {status === 'ready'
+                            ? 'It may have been removed, or you may not have access.'
+                            : 'Sign in to open your applications.'}
+                    </Text>
+                </View>
+            </SafeAreaView>
         );
     }
 

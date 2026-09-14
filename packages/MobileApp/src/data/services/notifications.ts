@@ -37,16 +37,15 @@ export type PushRegistrationResult = {
     reason?: string;
 };
 
-/** Shape persisted as the JSON `Value` of the push-token user setting. */
-
-
 /**
  * A stable id for this app installation.
  *
- * `expo-application`'s installation id survives app restarts and updates but changes on reinstall
- * — which is the correct lifetime: a reinstalled app gets a new push token anyway, so a stale
- * entry would be undeliverable regardless. Falls back to a generated id persisted in MMKV when the
- * native value is unavailable, so a device is never merged with another one's slot.
+ * Generated once and persisted in MMKV, so it survives app restarts and updates but not a
+ * reinstall — which is the correct lifetime: a reinstalled app gets a new push token anyway, so the
+ * old entry would be undeliverable regardless, and MMKV storage is cleared with the app.
+ *
+ * Deliberately not `expo-application`'s installation id. That would be one more native dependency
+ * for a value this app is free to choose, and the lifetimes are the same either way.
  */
 function DeviceInstallationId(): string {
     const existing = PrefsStorage.getString(DEVICE_ID_PREF_KEY);

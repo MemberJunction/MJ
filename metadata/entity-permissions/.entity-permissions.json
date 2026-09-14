@@ -579,10 +579,16 @@
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
-      "CanDelete": false
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Sessions",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Sessions"
     },
     "primaryKey": {
       "ID": "662A433E-F36B-1410-8595-00C8AD7ACEA2"
+    },
+    "sync": {
+      "lastModified": "2026-09-14T00:43:05.196Z",
+      "checksum": "562944e4f8efb990e8eac3e5a4dfcdf3bde5636b285b1045606adb1a14c0281f"
     }
   },
   {
@@ -592,10 +598,16 @@
       "CanRead": true,
       "CanCreate": true,
       "CanUpdate": true,
-      "CanDelete": false
+      "CanDelete": false,
+      "ReadRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Session Channels",
+      "UpdateRLSFilterID": "@lookup:MJ: Row Level Security Filters.Name=UI: Own Agent Session Channels"
     },
     "primaryKey": {
       "ID": "7E2A433E-F36B-1410-8595-00C8AD7ACEA2"
+    },
+    "sync": {
+      "lastModified": "2026-09-14T00:43:05.195Z",
+      "checksum": "af3d006e4f981ac3689d5b20d230b6a884fc5fd20e8fdcdb5a259f53d8c4c730"
     }
   }
 ]

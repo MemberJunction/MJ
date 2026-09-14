@@ -290,7 +290,7 @@ export async function LoadDashboards(contextUser?: UserInfo): Promise<DashboardL
     const rv = new RunView();
     const result = await rv.RunView<{ ID: string; Name: string; Description: string | null }>(
         {
-            EntityName: 'Dashboards',
+            EntityName: 'MJ: Dashboards',
             Fields: ['ID', 'Name', 'Description'],
             OrderBy: 'Name',
             MaxRows: 200,
