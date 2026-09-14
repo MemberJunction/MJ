@@ -118,6 +118,17 @@ jobs:
           # for the whole era.
           FAILED=0
           for path in "${NOTES[@]}"; do
+            # A DELETED notes file is still in the diff, and still counts for SCOPE above —
+            # removing notes is a change to notes, and a PR that deletes one while touching a
+            # source file must still fail. It has no content to shape-check, though: the
+            # checker would read it off the working tree, where the PR has removed it, and exit
+            # 1 with `cannot read <path>`. That message describes the checkout rather than the
+            # PR, and would block a legitimate deletion with an error about the wrong thing.
+            # Scope is a property of the change set; shape is a property of a file.
+            if [ ! -f "$path" ]; then
+              echo "::notice::$path is removed by this PR — no content to shape-check."
+              continue
+            fi
             # Every file is checked even after one fails, so a PR touching several notes files
             # reports all of its problems in one run instead of one per push.
             node .github/scripts/check-release-notes-shape.mjs "$path" || FAILED=1
