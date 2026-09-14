@@ -1,0 +1,52 @@
+{
+  "schemaVersion": "1.0",
+  "variables": [
+    {
+      "name": "ToolCallingMode",
+      "displayName": "Tool Calling Mode",
+      "description": "Which encoding the cell exercises. 'envelope' is the baseline — today's path, no tools declared. 'native' declares the agent's actions as provider tools; the corpus case and its expectation are IDENTICAL either way, which is what makes the two directly comparable.",
+      "dataType": "string",
+      "valueSource": "static",
+      "possibleValues": [
+        { "value": "envelope", "label": "Envelope", "description": "JSON envelope only — the baseline" },
+        { "value": "native", "label": "Native tools", "description": "Actions declared as provider tools" }
+      ],
+      "defaultValue": "envelope",
+      "required": false
+    },
+    {
+      "name": "ToolChoice",
+      "displayName": "Tool Choice",
+      "description": "Forcing policy for native cells. Ignored in envelope mode. NOTE: forced choice ('required'/named) combined with JSON response format is a hard 400 on every current Gemini model.",
+      "dataType": "string",
+      "valueSource": "static",
+      "possibleValues": [
+        { "value": "auto", "label": "Auto", "description": "The model decides" },
+        { "value": "none", "label": "None", "description": "Tools declared but calling forbidden" },
+        { "value": "required", "label": "Required", "description": "The model must call some tool" }
+      ],
+      "defaultValue": "auto",
+      "required": false
+    },
+    {
+      "name": "Model",
+      "displayName": "Model",
+      "description": "Pins the (model, vendor) pair for this cell. Every AIModelVendor pair is its own cell by design — inference-provider behavior is exactly what the vendor-level capability flags exist to capture.",
+      "dataType": "string",
+      "valueSource": "freeform",
+      "required": false
+    },
+    {
+      "name": "ResponseFormat",
+      "displayName": "Response Format",
+      "description": "The prompt's response format for this cell. Crosses with ToolCallingMode to cover the JSON-mode interaction the provider probe measured.",
+      "dataType": "string",
+      "valueSource": "static",
+      "possibleValues": [
+        { "value": "Any", "label": "Any", "description": "No provider-level format constraint" },
+        { "value": "JSON", "label": "JSON", "description": "Provider JSON mode" }
+      ],
+      "required": false
+    }
+  ]
+}

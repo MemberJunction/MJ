@@ -1,0 +1,45 @@
+{
+  "id": "adversarial-invented-toplevel-keys-01",
+  "agent": "Codesmith Agent",
+  "tags": [
+    "adversarial-exemplar",
+    "payload-change",
+    "prompt-fragility",
+    "implicit-payload-first"
+  ],
+  "description": "Detects the invented-key defect: a shipped exemplar returned finalCode/result/iterations as top-level fields, which are silently dropped, instead of writing them through payloadChangeRequest under the names its own FinalPayloadValidation requires. This agent's prompt mandates storing its output via payloadChangeRequest, so under the implicit protocol — where a payload write is its own turn — the write is the prompt-correct first decision and is accepted alongside completion. The loop itself treats a payload-only envelope as completion (LoopAgentType auto-sets taskComplete), so the branch matches runtime in both arms.",
+  "input": {
+    "payload": {
+      "task": "sum values",
+      "inputData": {
+        "values": [
+          1,
+          2,
+          3
+        ]
+      },
+      "iterations": 1
+    },
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Sum input.values."
+      },
+      {
+        "role": "user",
+        "content": "[Action Result] Execute Code succeeded. output = 6"
+      }
+    ]
+  },
+  "expect": {
+    "kind": "anyOf",
+    "anyOf": [
+      {
+        "kind": "taskComplete"
+      },
+      {
+        "kind": "payloadChange"
+      }
+    ]
+  }
+}

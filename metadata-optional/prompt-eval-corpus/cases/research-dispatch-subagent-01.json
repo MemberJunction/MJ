@@ -1,0 +1,30 @@
+{
+  "id": "research-dispatch-subagent-01",
+  "agent": "Research Agent",
+  "description": "First step for the research orchestrator with nothing gathered yet: search internal scope. Dispatching the Report Writer before there are findings would be premature synthesis.",
+  "tags": [
+    "first-step-action",
+    "sub-agent-dispatch"
+  ],
+  "input": {
+    "payload": {},
+    "conversationMessages": [
+      {
+        "role": "user",
+        "content": "Research what we know internally about churn among enterprise accounts."
+      }
+    ]
+  },
+  "expect": {
+    "kind": "action",
+    "actions": [
+      {
+        "name": "Scoped Search"
+      }
+    ],
+    "allowAdditionalActions": false,
+    "forbiddenActions": [
+      "Research Report Writer"
+    ]
+  }
+}

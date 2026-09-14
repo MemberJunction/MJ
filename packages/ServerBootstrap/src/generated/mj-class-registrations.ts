@@ -111,12 +111,13 @@ import {
     OllamaLLM,
 } from '@memberjunction/ai-ollama';
 
-// @memberjunction/ai-openai (5 classes)
+// @memberjunction/ai-openai (6 classes)
 import {
     OpenAIAudioGenerator,
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAILiveRealtime,
     OpenAIRealtime,
 } from '@memberjunction/ai-openai';
 
@@ -205,7 +206,7 @@ import {
     WorkOSProvider,
 } from '@memberjunction/auth-providers';
 
-// @memberjunction/core-entities (411 classes)
+// @memberjunction/core-entities (415 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -235,6 +236,7 @@ import {
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -265,10 +267,13 @@ import {
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -636,9 +641,10 @@ import {
     RingCentralBridge,
 } from '@memberjunction/ai-bridge-ringcentral';
 
-// @memberjunction/ai-bridge-server (1 classes)
+// @memberjunction/ai-bridge-server (2 classes)
 import {
     LoopbackBridge,
+    OpenAISipBridge,
 } from '@memberjunction/ai-bridge-server';
 
 // @memberjunction/ai-bridge-teams (1 classes)
@@ -1460,9 +1466,10 @@ import {
     UpdateScheduledJobAction,
 } from '@memberjunction/scheduling-actions';
 
-// @memberjunction/testing-engine (1 classes)
+// @memberjunction/testing-engine (2 classes)
 import {
     AgentEvalDriver,
+    PromptEvalDriver,
 } from '@memberjunction/testing-engine';
 
 // @memberjunction/computer-use-engine (2 classes)
@@ -1524,6 +1531,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     OpenAIEmbedding,
     OpenAIImageGenerator,
     OpenAILLM,
+    OpenAILiveRealtime,
     OpenAIRealtime,
     HuggingFaceRealtime,
     InceptionLLM,
@@ -1578,6 +1586,7 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIAgentNoteEntity,
     MJAIAgentNoteTypeEntity,
     MJAIAgentPermissionEntity,
+    MJAIAgentPersonaEntity,
     MJAIAgentPromptEntity,
     MJAIAgentRelationshipEntity,
     MJAIAgentRequestEntity,
@@ -1608,10 +1617,13 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJAIModelCostEntity,
     MJAIModelEntity,
     MJAIModelModalityEntity,
+    MJAIModelPersonaEntity,
     MJAIModelPriceTypeEntity,
     MJAIModelPriceUnitTypeEntity,
     MJAIModelTypeEntity,
     MJAIModelVendorEntity,
+    MJAIPersonaEntity,
+    MJAIPersonaVendorEntity,
     MJAIPromptCategoryEntity,
     MJAIPromptEntity,
     MJAIPromptModelEntity,
@@ -1687,15 +1699,15 @@ const CLASS_REGISTRATIONS_0: any[] = [
     MJCompanyIntegrationRunAPILogEntity,
     MJCompanyIntegrationRunDetailEntity,
     MJCompanyIntegrationRunEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_1: any[] = [
     MJCompanyIntegrationSyncWatermarkEntity,
     MJComponentDependencyEntity,
     MJComponentEntity,
     MJComponentEntityExtended,
     MJComponentLibraryEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_1: any[] = [
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
     MJContentFileTypeEntity,
@@ -1891,15 +1903,15 @@ const CLASS_REGISTRATIONS_1: any[] = [
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
     MJScopedPromptConfigEntity,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_2: any[] = [
     MJScopedPromptPartEntity,
     MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
     MJSearchScopeEntity,
     MJSearchScopeEntityEntity,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_2: any[] = [
     MJSearchScopeExternalIndexEntity,
     MJSearchScopePermissionEntity,
     MJSearchScopeProviderEntity,
@@ -1974,6 +1986,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     LiveKitBridge,
     RingCentralBridge,
     LoopbackBridge,
+    OpenAISipBridge,
     TeamsBridge,
     TwilioBridge,
     VonageBridge,
@@ -2094,16 +2107,16 @@ const CLASS_REGISTRATIONS_2: any[] = [
     BufferSearchPostsAction,
     CreateVideoPostAction,
     FacebookBoostPostAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_3: any[] = [
     FacebookCreateAlbumAction,
     FacebookCreatePostAction,
     FacebookGetPageInsightsAction,
     FacebookGetPagePostsAction,
     FacebookGetPostInsightsAction,
     FacebookRespondToCommentsAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_3: any[] = [
     FacebookSchedulePostAction,
     FacebookSearchPostsAction,
     GetAccountAnalyticsAction,
@@ -2298,16 +2311,16 @@ const CLASS_REGISTRATIONS_3: any[] = [
     PredictiveStudioTrainModelServerOperation,
     DurableTaskGraphSubmitter,
     TaskGraphCancelServerOperation,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphForceCompleteTaskServerOperation,
     TaskGraphGetStatusServerOperation,
     TaskGraphOverrideEdgeServerOperation,
     TaskGraphPauseServerOperation,
     TaskGraphResumeServerOperation,
     TaskGraphRetryTaskServerOperation,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_4: any[] = [
     TaskGraphSetBreakpointsServerOperation,
     TaskGraphSkipTaskServerOperation,
     TaskGraphStepServerOperation,
@@ -2502,16 +2515,16 @@ const CLASS_REGISTRATIONS_4: any[] = [
     SearchStorageFilesAction,
     SendDocumentForSignatureAction,
     SendSingleMessageAction,
+];
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const CLASS_REGISTRATIONS_5: any[] = [
     SendToAudienceAction,
     ShareListAction,
     SlackWebhookAction,
     SummarizeContentAction,
     SyncMCPToolsAction,
     TavilySearchAction,
-];
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const CLASS_REGISTRATIONS_5: any[] = [
     TeamsWebhookAction,
     TestMCPConnectionAction,
     TestRuntimeActionAction,
@@ -2538,6 +2551,7 @@ const CLASS_REGISTRATIONS_5: any[] = [
     QueryScheduledJobsAction,
     UpdateScheduledJobAction,
     AgentEvalDriver,
+    PromptEvalDriver,
     ComputerUseAction,
     ComputerUseTestDriver,
     MJEntityPermissionEntityServer,
@@ -2560,7 +2574,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 1032;
+export const CLASS_REGISTRATIONS_COUNT = 1039;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

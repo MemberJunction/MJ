@@ -30,7 +30,12 @@
  *                               "elevenlabs": { "voice": "<voice id>" },
  *                               "assemblyai": { "voice": "…" } } },
  *     "allowUserModelOverride": true,
- *     "narration": { "paceMs": 8000 } } }
+ *     "narration": { "paceMs": 8000 },
+ *     "directActions": {
+ *         "enabled": true,
+ *         "actionNames": ["LookupOrder", "CheckInventory"],
+ *         "timeoutMs": 10000
+ *     } } }
  * ```
  *
  * @module @memberjunction/ai-agents
@@ -244,6 +249,36 @@ export interface RealtimeAllowedAgent {
     disclosure?: RealtimeDisclosurePolicy;
 }
 
+/**
+ * Direct action invocation configuration for a Realtime co-agent.
+ *
+ * Direct actions allow the realtime model to directly invoke select actions belonging to the target agent,
+ * bypassing full multi-turn agent delegation for low-latency voice responses.
+ *
+ * Security & defaults:
+ * - Default is strictly closed: absent or `enabled !== true` ⇒ 0 direct actions exposed.
+ * - Allowed actions must be explicitly enumerated in `actionNames`, or specified as `['*']` to allow all.
+ * - `'*'` is never defaulted; it must be explicitly authored.
+ */
+export interface RealtimeDirectActionsConfig {
+    /**
+     * Whether direct action invocation is enabled for this agent.
+     * Default: false.
+     */
+    enabled: boolean;
+
+    /**
+     * Allowed action names. Can be specific action names or `['*']` to allow all actions assigned to the agent.
+     */
+    actionNames?: string[];
+
+    /**
+     * Timeout for direct action execution in milliseconds.
+     * Defaults to 10,000 ms (10 seconds) if omitted.
+     */
+    timeoutMs?: number;
+}
+
 /** The `realtime` section of a co-agent's effective configuration. */
 export interface RealtimeConfigSection {
     /** Preferred realtime model — an `MJ: AI Models` Name OR ID. Degrades gracefully when unsatisfiable. */
@@ -281,6 +316,17 @@ export interface RealtimeConfigSection {
      * scrub it otherwise, so a shared co-agent config is safe on every provider.
      */
     session?: RealtimeSessionTuningConfig;
+    /**
+     * Direct action invocation configuration: allows the realtime model to directly invoke select
+     * actions belonging to the target agent without paying multi-turn agent delegation overhead.
+     */
+    directActions?: RealtimeDirectActionsConfig;
+    /** Shorthand / flat alias: whether direct action invocation is enabled. */
+    allowDirectActionInvocation?: boolean;
+    /** Shorthand / flat alias: allowed action names or `['*']`. */
+    directActionNames?: string[];
+    /** Shorthand / flat alias: timeout for direct action execution in milliseconds. */
+    directActionTimeoutMs?: number;
 }
 
 /**
@@ -586,6 +632,10 @@ const REALTIME_SECTION_KEY_ACCEPTS: { readonly [K in keyof Required<RealtimeConf
     disclosure: (v) => v === 'silent' || v === 'mention' || v === 'hand-voice',
     allowedAgents: (v) => Array.isArray(v),
     session: isPlainObject,
+    directActions: isPlainObject,
+    allowDirectActionInvocation: (v) => typeof v === 'boolean',
+    directActionNames: (v) => Array.isArray(v),
+    directActionTimeoutMs: (v) => typeof v === 'number' && Number.isFinite(v) && v > 0,
 };
 
 /**
@@ -845,7 +895,44 @@ function normalizeConfig(merged: JSONObjectLike): RealtimeCoAgentConfig {
         section.session = sessionTuning;
     }
 
+    const directActions = normalizeDirectActions(rawRealtime['directActions']);
+    if (directActions) {
+        section.directActions = directActions;
+    }
+    if (typeof rawRealtime['allowDirectActionInvocation'] === 'boolean') {
+        section.allowDirectActionInvocation = rawRealtime['allowDirectActionInvocation'];
+    }
+    if (Array.isArray(rawRealtime['directActionNames'])) {
+        section.directActionNames = rawRealtime['directActionNames'].filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+    if (typeof rawRealtime['directActionTimeoutMs'] === 'number' && Number.isFinite(rawRealtime['directActionTimeoutMs']) && rawRealtime['directActionTimeoutMs'] > 0) {
+        section.directActionTimeoutMs = rawRealtime['directActionTimeoutMs'];
+    }
+
     return Object.keys(section).length > 0 ? { realtime: section } : { realtime: {} };
+}
+
+/**
+ * Normalizes the `realtime.directActions` sub-object from a merged config layer.
+ */
+function normalizeDirectActions(raw: unknown): RealtimeDirectActionsConfig | undefined {
+    if (!isPlainObject(raw)) {
+        return undefined;
+    }
+    const enabled = raw['enabled'] === true;
+    let actionNames: string[] | undefined = undefined;
+    if (Array.isArray(raw['actionNames'])) {
+        actionNames = raw['actionNames'].filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+    }
+    let timeoutMs: number | undefined = undefined;
+    if (typeof raw['timeoutMs'] === 'number' && Number.isFinite(raw['timeoutMs']) && raw['timeoutMs'] > 0) {
+        timeoutMs = raw['timeoutMs'];
+    }
+    return {
+        enabled,
+        ...(actionNames ? { actionNames } : {}),
+        ...(timeoutMs ? { timeoutMs } : {}),
+    };
 }
 
 /**
@@ -1393,4 +1480,60 @@ export function EvaluateRuntimeOverrideAuthorization(
     }
 
     return { Allowed: true };
+}
+
+/**
+ * Resolves the effective direct actions configuration from a co-agent's configuration.
+ *
+ * Checks both `realtime.directActions` (the structured object) and flat fields
+ * (`allowDirectActionInvocation`, `directActionNames`, `directActionTimeoutMs`).
+ *
+ * Default is strictly closed: returns `{ enabled: false, actionNames: [] }` when unconfigured or disabled.
+ */
+export function GetDirectActionsConfig(config?: RealtimeCoAgentConfig): RealtimeDirectActionsConfig {
+    const realtime = config?.realtime;
+    if (!realtime) {
+        return { enabled: false, actionNames: [], timeoutMs: 10_000 };
+    }
+
+    const struct = realtime.directActions;
+    const enabled = struct?.enabled ?? realtime.allowDirectActionInvocation ?? false;
+    const rawNames = struct?.actionNames ?? realtime.directActionNames;
+    const actionNames = Array.isArray(rawNames)
+        ? rawNames.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        : [];
+    const timeoutMs = struct?.timeoutMs ?? realtime.directActionTimeoutMs ?? 10_000;
+
+    return {
+        enabled,
+        actionNames,
+        timeoutMs: timeoutMs > 0 ? timeoutMs : 10_000,
+    };
+}
+
+/**
+ * Checks whether a specific action name is allowed for direct invocation by the realtime co-agent.
+ *
+ * @param actionName The action name to check.
+ * @param config The resolved direct actions config or full co-agent config.
+ * @returns `true` if direct invocation is enabled and the action is in `actionNames` (or `actionNames` contains `'*'`).
+ */
+export function IsActionAllowedForDirectInvocation(
+    actionName: string,
+    config?: RealtimeCoAgentConfig | RealtimeDirectActionsConfig
+): boolean {
+    if (!actionName || !config) {
+        return false;
+    }
+    const directActions = 'enabled' in config && typeof config.enabled === 'boolean'
+        ? (config as RealtimeDirectActionsConfig)
+        : GetDirectActionsConfig(config as RealtimeCoAgentConfig);
+
+    if (!directActions.enabled || !directActions.actionNames || directActions.actionNames.length === 0) {
+        return false;
+    }
+    if (directActions.actionNames.includes('*')) {
+        return true;
+    }
+    return directActions.actionNames.some((name) => name.trim().toLowerCase() === actionName.trim().toLowerCase());
 }
