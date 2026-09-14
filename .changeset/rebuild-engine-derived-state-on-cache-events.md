@@ -13,8 +13,6 @@ For `AIEngineBase` this surfaced as model selection failing with "No suitable mo
 
 `AdditionalLoading` now runs on both paths that replace a property — the payload fast path and the full-reload fallback — and the property-change notification is emitted after the rebuild, so subscribers cannot observe a property before its derived state is attached. That notification was also missing from the payload path entirely, so `ObserveProperty` subscribers never saw cross-server updates at all.
 
-Two supporting changes:
+One supporting change:
 
 **`AIEngineBase.AdditionalLoading` is now idempotent and linear.** It previously appended into whatever each parent already held, which is only correct on a full load where the parents are new. Running it per cache event multiplied every derived collection on each call — unbounded growth on a long-lived process. It now buckets children in a single pass and replaces each parent collection outright, which also drops the model/model-vendor pairing from O(parents × children) to O(parents + children) and leaves no window in which a parent is observably empty.
-
-**Redundant payloads are skipped.** A payload whose `rowCount` and `maxUpdatedAt` match the last one applied to that property is ignored, avoiding an array swap and a full rebuild for data the server already holds. This is the common case during a peer's startup, where most published payloads carry nothing new.

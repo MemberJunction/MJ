@@ -205,23 +205,6 @@ describe('BaseEngine.OnExternalCacheChange — derived-index rebuild', () => {
         expect(attachedVendors()).toBe(3);
     });
 
-    it('skips a payload that carries nothing new', async () => {
-        // A peer warming its cache republishes every config it loads, so most payloads a
-        // server receives match what it already holds. Re-applying one costs an array swap
-        // plus a full derived-state rebuild for no benefit.
-        await engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS));
-        expect(engine.additionalLoadingCalls).toBe(1);
-
-        const modelsAfterFirst = engine._models;
-        for (let i = 0; i < 4; i++) {
-            await engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS));
-        }
-
-        expect(engine.additionalLoadingCalls).toBe(1);       // no extra rebuilds
-        expect(engine._models).toBe(modelsAfterFirst);        // array not even swapped
-        expect(attachedVendors()).toBe(3);
-    });
-
     it('still applies a payload whose contents genuinely changed', async () => {
         await engine.OnExternalCacheChangeForTest(makeModelsConfig(), makeEvent(MODEL_ROWS));
         expect(engine.additionalLoadingCalls).toBe(1);
