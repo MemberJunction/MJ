@@ -1,0 +1,19 @@
+# Voice mode must degrade honestly.
+#
+# This deployment resolves a realtime provider whose driver needs a Web Audio PCM plane that does
+# not exist under Hermes. The app must mint the session, recognise it cannot carry that provider,
+# close the session server-side, and say which provider — rather than crashing on AudioContext or
+# opening a call that is silent in both directions.
+#
+# On a deployment with a WebRTC provider configured this flow should be updated to assert a live
+# connection instead.
+appId: org.memberjunction.mobile
+---
+- launchApp:
+    clearState: false
+- openLink: "org.memberjunction.mobile:///voice-mode"
+- extendedWaitUntil:
+    visible: "Voice isn't available"
+    timeout: 25000
+- assertVisible: "Back to chat"
+- tapOn: "Back to chat"

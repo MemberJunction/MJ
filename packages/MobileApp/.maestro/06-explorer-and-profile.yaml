@@ -1,0 +1,22 @@
+# Explorer surfaces and profile — the read-heavy paths a field user actually reaches for.
+#
+# These assert on data loaded from a live MJAPI, so they also serve as a smoke test that the
+# provider booted, the token is valid, and entity permissions resolve.
+appId: org.memberjunction.mobile
+---
+- launchApp:
+    clearState: false
+
+- openLink: "org.memberjunction.mobile:///explorer"
+- extendedWaitUntil:
+    visible: "Data Explorer"
+    timeout: 20000
+
+- openLink: "org.memberjunction.mobile:///profile"
+- extendedWaitUntil:
+    visible: "Profile & settings"
+    timeout: 20000
+# Rows in this list carry accessibilityLabels that become their accessible name and shadow the
+# inner text, so assert on content that is not inside a labelled pressable.
+- assertVisible: "da-robot-tester@bluecypress.io"
+- assertVisible: "Sign out"

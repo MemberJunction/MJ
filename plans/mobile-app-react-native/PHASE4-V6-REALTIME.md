@@ -480,3 +480,12 @@ withheld, since sessions are closed rather than removed and the janitor reconcil
 Security posture is unchanged in substance: `SessionManager.CreateSession` already authorizes
 `CanRun` on the target agent before it writes anything, so the entity permission was a second gate
 that only ever produced a confusing denial for users the first gate had already admitted.
+
+---
+
+## 11. Standing instructions (2026-09-13)
+
+- **PR review protocol.** Monitor PR #4459 (and #4456). **Only AN-BC's requests are built.** Other
+  reviewers' comments are noted and surfaced, but no work starts on them until AN-BC says so.
+- **Final deliverable.** A thorough visual tour posted as a PR comment with embedded screenshots
+  from both iOS and Android, covering the full extent of the functionality.

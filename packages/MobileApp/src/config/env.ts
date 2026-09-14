@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 /**
  * Mobile app environment configuration.
  *
@@ -11,12 +12,27 @@
  *   - Refresh Token Rotation: enabled
  *   - Token Settings → Refresh Token Behavior: Rotating
  */
+/**
+ * Host that reaches the developer's machine from the running app.
+ *
+ * The iOS Simulator shares the host's network stack, so `localhost` is the machine. An Android
+ * emulator does not — `localhost` there is the emulator itself, and the special address `10.0.2.2`
+ * is how it reaches the host. Without this the app builds and launches on Android and then fails
+ * every request with an opaque `GraphQL Error (Code: unknown)`, which reads like a server problem
+ * rather than a networking one.
+ *
+ * Overridable with `EXPO_PUBLIC_MJ_API_HOST` for a device on the same LAN, where neither default
+ * applies and the machine's IP is needed.
+ */
+const LocalApiHost: string =
+  process.env.EXPO_PUBLIC_MJ_API_HOST ?? (Platform.OS === 'android' ? '10.0.2.2' : 'localhost');
+
 export const Env = {
-  /** MJAPI GraphQL endpoint. iOS Simulator can hit localhost directly. */
-  graphqlUrl: 'http://localhost:4001/graphql',
+  /** MJAPI GraphQL endpoint. */
+  graphqlUrl: `http://${LocalApiHost}:4001/graphql`,
 
   /** WebSocket subscription endpoint. */
-  graphqlWsUrl: 'ws://localhost:4001/graphql',
+  graphqlWsUrl: `ws://${LocalApiHost}:4001/graphql`,
 
   // ---------------------------------------------------------------------
   // Auth0 (primary mobile auth path)

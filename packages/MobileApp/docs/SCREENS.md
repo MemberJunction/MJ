@@ -90,11 +90,13 @@ Data reaches screens through the hook → service → MJ object model chain
 - **Mockup:** `chat-thread.html`.
 
 ### `app/voice-mode.tsx` — Voice mode — `/voice-mode`
-- **Purpose:** Phase 1 **visual scaffold** — a fullscreen takeover with an animated
+- **Purpose:** Fullscreen realtime voice takeover over `@memberjunction/realtime-runtime`, with an animated
   orb, ripples, a static waveform, and a mock live transcript. Pushed from the chat
   and new-conversation mic buttons.
 - **Data:** none yet — STT (record → Whisper → `Conversation Detail`) and TTS are
-  Phase 2; the transcript is placeholder.
+  the runtime publishes live captions and connection state. When the deployment resolves a
+  provider this build cannot carry audio for, the screen names that provider and offers a way back
+  to text rather than opening a silent session.
 - **Interactions:** close/stop → `router.back()`; side controls are non-functional
   placeholders. (The dark background colors here are intentionally static, an
   allowed design-token exception for the immersive surface.)
@@ -118,7 +120,8 @@ Data reaches screens through the hook → service → MJ object model chain
 ### `app/artifact/[id].tsx` — Artifact detail — `/artifact/:id`
 - **Route param:** `id` is the **artifact** id.
 - **Purpose:** render one artifact by its classified `kind` (json-table / json /
-  markdown / html / chart / code / text; interactive = Phase 2 "view on desktop").
+  markdown / html / chart / code / text; interactive components compile on-device via
+  `@memberjunction/react-runtime`).
 - **Data:** `useArtifact(id)` → `loadArtifact` (`GetEntityObject('MJ: Conversation
   Artifacts')` + RunView over `MJ: Conversation Artifact Versions` for the latest
   `Content`, then `classify`).
@@ -217,7 +220,8 @@ Data reaches screens through the hook → service → MJ object model chain
   `authMethod`); workspace host from `Env.graphqlUrl`.
 - **Key components:** `SettingRow`, `ToggleRow`, `AgentPickerModal`.
 - **Interactions:** pick the default agent, cycle appearance, toggle
-  voice/push/Face-ID (persisted but inert until Phase 2), sign out → `/login`.
+  voice/push/Face-ID toggles (all wired), sign out → `/login`. The default-agent choice is
+  applied to sends — it was previously stored but never read.
 - **Mockup:** `profile.html`.
 
 ---

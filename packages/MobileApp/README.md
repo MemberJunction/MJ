@@ -125,7 +125,7 @@ packages/MobileApp/
 │   ├── conversations.tsx        # Conversation list (home surface)
 │   ├── new-conversation.tsx     # Compose + agent rail → creates a conversation
 │   ├── chat/[id].tsx            # Chat thread (messages + composer + artifact dock)
-│   ├── voice-mode.tsx           # Voice conversation scaffold (Phase 2 wires STT/TTS)
+│   ├── voice-mode.tsx           # Realtime voice call surface over @memberjunction/realtime-runtime
 │   ├── profile.tsx              # Identity + preference toggles
 │   ├── artifact/[id].tsx        # Single artifact detail (classified renderer)
 │   ├── artifacts/[id].tsx       # Per-conversation artifact dock
@@ -279,12 +279,66 @@ Test files are owned separately from documentation work — do not edit them her
 
 ---
 
+## What this app is, and what it reuses
+
+The mobile app is a **host**, not a fixed set of screens. It reads the same
+`MJ: Applications` metadata MJ Explorer reads and resolves each nav item's `DriverClass`
+through the same `MJGlobal.ClassFactory` — against `BaseMobileResource` instead of
+`BaseResourceComponent`. An application already running on the web appears here without a
+parallel mobile definition. See
+[`guides/MOBILE_APP_HOSTING_GUIDE.md`](../../guides/MOBILE_APP_HOSTING_GUIDE.md) and the worked
+example in [`src/sample-app/`](src/sample-app/).
+
+Orchestration is shared, not reimplemented:
+
+| Concern | Shared package | What mobile supplies |
+|---|---|---|
+| Chat with agents | `@memberjunction/conversations-runtime` | The two `Conversation Detail` rows that frame a turn |
+| Realtime voice | `@memberjunction/realtime-runtime` | A media host (microphone) and a WebRTC driver |
+| Attachment policy | `@memberjunction/ai-core-plus` (`ConversationUtility`) | Reading bytes off the device |
+| Data, permissions, agents, actions | `core` / `core-entities` / `graphql-dataprovider` | Nothing — used unchanged |
+
+## Capability status
+
+Verified means run and observed on a simulator or emulator against a live MJAPI — not merely
+compiled.
+
+| Capability | Status |
+|---|---|
+| Chat with agents (markdown, code, tables, artifacts) | **Verified** |
+| Live agent progress | **Verified** — completion arrives over the push WebSocket; the former 2.5 s polling loop is gone |
+| Application hosting + sample hosted app | **Verified**, incl. the "opens on desktop" fallback for unregistered nav items |
+| Explorer surfaces (entities, records, queries, dashboards) | **Verified** |
+| Record editing, biometric lock, offline queue | **Verified** |
+| Attachments | **Verified** — small files inline per `ConversationUtility.ShouldStoreInline`; larger ones need a storage-capable host |
+| Push token storage | **Verified** (per-device map, live) |
+| Push delivery end-to-end | **Not verified** — needs a physical device; a simulator has no APNs |
+| Realtime voice session lifecycle | **Verified** — mints, resolves a provider, declines cleanly when this build cannot carry it |
+| Realtime voice audio | **Not verified** — needs a WebRTC-capable provider key (OpenAI Realtime/Live or Grok) and a physical device |
+| Android | **Verified** — builds and runs on an Android 15 emulator |
+
+### Realtime voice, precisely
+
+The client transport is **WebRTC**. On GPT-Live, PCM on the data channel is forbidden — media
+rides the tracks — so there is no PCM audio plane to implement, and the platform's WebRTC stack
+supplies echo cancellation, noise suppression and a jitter buffer.
+
+`react-native-webrtc` provides the peer connection, so the RN driver is a subclass overriding two
+methods; the ~800 lines of wire protocol per provider are reused unchanged.
+
+Providers this build can carry audio for: **OpenAI Realtime, GPT-Live, Grok Voice**. The
+WebSocket + PCM16 providers (Gemini Live, ElevenLabs Agents, AssemblyAI) need a Web Audio plane
+that does not exist under Hermes; the app declines those with a message naming the provider rather
+than opening a session that would be silent in both directions.
+
 ## Phase status
 
 | Phase | Scope | Status |
 |---|---|---|
 | **Phase 1** | Auth (Auth0/MSAL/dev-JWT), chat read+write with agent runs, artifacts (classified renderers), Data Explorer (entities/records/queries/dashboards, read-only), Profile shell, MMKV cache + prefs | **Code-complete**; pending full on-device verification |
-| **Phase 2** | Voice STT/TTS pipeline, push notifications, biometric (Face ID) lock, record editing/creation, interactive-component artifacts, real dashboard part rendering, dark theme | Designed-for, not wired |
+| **Phase 2** | Push notifications (per-device tokens), biometric lock, record editing | **Shipped** |
+| **Phase 3** | Photo/file capture with real upload, offline mutation queue, Android | **Shipped** |
+| **Phase 4** | App hosting, `conversations-runtime` adoption, realtime voice over WebRTC | **Shipped** — see below |
 | **Phase 3** | Photo/file capture & attachments, offline mutation queue + sync, Android verification | Planned |
 
 Live tracking: [`PLAN_CHECKLIST.md`](PLAN_CHECKLIST.md).

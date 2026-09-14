@@ -203,7 +203,7 @@ first**:
   ids) needs Web Crypto; it's backed by `expo-crypto`'s native CSPRNG (already
   linked, so no extra native module).
 - **LogBox suppression** — the push-status WebSocket errors are expected on the
-  simulator (agent runs fall back to polling), so those specific warnings are
+  simulator, so those specific warnings are
   silenced to avoid looking like real failures.
 
 Other RN-compat decisions:

@@ -195,7 +195,7 @@ describe('UnregisterDeviceToken', () => {
         // The standard UI role has Update but deliberately NOT Delete on MJ: User Settings, so
         // removing the last device has to clear the value — deleting would fail for the very
         // people the setting belongs to.
-        let savedValue: string | null = null;
+        let savedValue: string | null = null as string | null;
         state.runViewResults = [
             {
                 ID: 'setting-1',
@@ -215,7 +215,7 @@ describe('UnregisterDeviceToken', () => {
     });
 
     it('leaves other devices registered when one unregisters', async () => {
-        let savedValue: string | null = null;
+        let savedValue: string | null = null as string | null;
         state.runViewResults = [
             {
                 ID: 'setting-1',
@@ -233,7 +233,7 @@ describe('UnregisterDeviceToken', () => {
             },
         ];
         expect(await UnregisterDeviceToken()).toBe(true);
-        const map = JSON.parse(savedValue as string) as Record<string, { token: string }>;
+        const map = JSON.parse(String(savedValue)) as Record<string, { token: string }>;
         expect(map['other-device'].token).toBe('keep-me');
     });
 });
