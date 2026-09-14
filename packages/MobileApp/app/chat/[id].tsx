@@ -24,7 +24,8 @@ import { GetDefaultAgentId } from '@/data/preferences';
 import { MentionsToPlainText } from '@/data/mention-display';
 import { FindActiveTrigger, ApplyMention, MentionedAgentId, SerializeDraft, type InsertedMention } from '@/chat/mentions/trigger';
 import { MentionSuggestions } from '@/chat/mentions/MentionSuggestions';
-import { ChipText } from '@/chat/mentions/ChipText';
+import { MJComposer } from '@/chat/composer/MJComposer';
+import { GlobalNav } from '@/components/GlobalNav';
 import { useConversation, useConversations } from '@/hooks/useConversations';
 import { ChatColors, Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
@@ -75,6 +76,7 @@ export default function ChatThreadScreen() {
 
     const [sending, setSending] = useState(false);
     const [stalled, setStalled] = useState(false);
+    const [navOpen, setNavOpen] = useState(false);
     const [progress, setProgress] = useState<SendProgress | null>(null);
     const [pendingUserText, setPendingUserText] = useState<string | null>(null);
     const [sendError, setSendError] = useState<string | null>(null);
@@ -242,7 +244,7 @@ export default function ChatThreadScreen() {
                 behavior="padding"
                 keyboardVerticalOffset={0}
             >
-                <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} />
+                <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live || sending} onOpenNav={() => setNavOpen(true)} />
                 {recentChips.length > 0 ? <RecentsStrip activeId={view.id} chips={recentChips} /> : null}
 
                 <ScrollView
@@ -305,8 +307,9 @@ export default function ChatThreadScreen() {
                 </ScrollView>
 
                 <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} />
-                <Composer onSend={handleSend} disabled={sending} conversationId={view.id} />
+                <MJComposer OnSend={handleSend} Disabled={sending} ConversationID={view.id} />
             </KeyboardAvoidingView>
+            <GlobalNav Visible={navOpen} OnClose={() => setNavOpen(false)} />
         </SafeAreaView>
     );
 }
@@ -316,15 +319,23 @@ export default function ChatThreadScreen() {
  * avatar stack + participant/message counts + live dot, and `+`
  * (-> `/new-conversation`).
  */
-function ChatHeader({ title, participants, messageCount, live }: {
+function ChatHeader({ title, participants, messageCount, live, onOpenNav }: {
     title: string;
     participants: AdaptedAgentRef[];
     messageCount: number;
     live: boolean;
+    /** Opens the global navigation sheet — the only route to Apps, Explorer and Profile from here. */
+    onOpenNav: () => void;
 }) {
     return (
         <View style={styles.header}>
-            <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.push('/conversations')}>
+            <Pressable
+                hitSlop={8}
+                style={styles.iconBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Navigate"
+                onPress={onOpenNav}
+            >
                 <Icons.Menu size={22} color={Colors.ink} />
             </Pressable>
             <View style={styles.headerCenter}>
@@ -462,191 +473,6 @@ function ArtifactDockHandle({ conversationId, count }: { conversationId: string;
             </Text>
             <Icons.ChevronUp size={13} color={Colors.ink3} strokeWidth={2.5} />
         </Pressable>
-    );
-}
-
-/**
- * Message composer: a multiline input that owns its own draft `text` state plus
- * an optional pending {@link CapturedAttachment}. A paperclip button opens the
- * {@link AttachmentPicker}; a chosen attachment shows a removable preview chip
- * above the input. Shows a send button when there's non-empty text OR a pending
- * attachment (clears the draft and calls `onSend`), otherwise a mic button that
- * opens `/voice-mode`. `disabled` blocks input/send while an agent run is in flight.
- *
- * On send, the attachment travels two ways: {@link ComposeMessageWithAttachment} adds a
- * human-readable note to the message text, and the attachment itself is handed to the
- * parent so it can be uploaded and attached to the created message as a first-class
- * `MJ: Conversation Detail Attachments` row once that message exists.
- */
-function Composer({ onSend, disabled, conversationId }: { onSend: (text: string, attachment: CapturedAttachment | null) => void; disabled: boolean; conversationId: string }) {
-    const [text, setText] = useState('');
-    const [attachment, setAttachment] = useState<CapturedAttachment | null>(null);
-    const [pickerVisible, setPickerVisible] = useState(false);
-    // Caret position, tracked because a trigger is resolved against what is LEFT of the caret —
-    // editing mid-message must filter on that, not on the whole line.
-    const [caret, setCaret] = useState(0);
-    // Set only when a mention insert needs to MOVE the caret, then released on the next selection
-    // event so the field goes back to managing its own. A permanently controlled `selection` fights
-    // the user on every tap.
-    const [pendingSelection, setPendingSelection] = useState<{ start: number; end: number } | undefined>(undefined);
-    // The composer holds READABLE text; these carry the ids so it can be re-serialized on send.
-    const [inserted, setInserted] = useState<InsertedMention[]>([]);
-    const trigger = FindActiveTrigger(text, caret);
-    // The `/` picker narrows to the skills the TARGET agent accepts, so it has to use the agent the
-    // turn will actually reach — an `@mention` already in the draft outranks the stored default,
-    // exactly as the send path resolves it. Narrowing against the default while the message is
-    // addressed to someone else offers skills the server will refuse and hides the ones it wants.
-    // The `/` picker narrows to the target agent's accepted skills, so it must use the agent the
-    // turn will actually reach — an inserted agent mention outranks the stored default, exactly as
-    // the send path resolves it.
-    const targetAgentId =
-        inserted.find((m) => m.Type === 'agent' && text.includes(`${m.Prefix}${m.Name}`))?.ID ??
-        MentionedAgentId(text) ??
-        GetDefaultAgentId() ??
-        null;
-    const canSend = (text.trim().length > 0 || attachment != null) && !disabled;
-
-    /**
-     * Opens a picker from its toolbar button by typing the trigger for the user.
-     *
-     * The buttons and the typed characters are the same affordance — pressing the skills button
-     * and typing `/` must land in the same place — so the button writes the character rather than
-     * driving a parallel code path.
-     */
-    const insertTrigger = (ch: string) => {
-        const needsSpace = text.length > 0 && !/\s$/.test(text);
-        const next = `${text}${needsSpace ? ' ' : ''}${ch}`;
-        setText(next);
-        setCaret(next.length);
-    };
-
-    const submit = () => {
-        if (!canSend) return;
-        // Convert the readable draft back to the wire format the runtime parses.
-        const body = ComposeMessageWithAttachment(SerializeDraft(text, inserted), attachment);
-        const pending = attachment;
-        setText('');
-        setInserted([]);
-        setAttachment(null);
-        onSend(body, pending);
-    };
-
-    return (
-        <View style={styles.composerWrap}>
-            {trigger ? (
-                <MentionSuggestions
-                    Trigger={trigger.Trigger}
-                    Query={trigger.Query}
-                    TargetAgentID={targetAgentId}
-                    OnSelect={(s) => {
-                        // Insert the readable form and remember the id; `SerializeDraft` converts
-                        // back to the wire format at send time.
-                        setInserted((prev) => [...prev, { Type: s.type, ID: s.id, Name: s.name, Prefix: trigger.Trigger }]);
-                        const next = ApplyMention(text, trigger, `${trigger.Trigger}${s.name}`);
-                        setText(next.Text);
-                        setCaret(next.Caret);
-                        // Push the caret past the inserted token so typing continues after it
-                        // rather than wherever the field decides to put it.
-                        setPendingSelection({ start: next.Caret, end: next.Caret });
-                    }}
-                />
-            ) : null}
-            {attachment ? (
-                <View style={styles.attachRow}>
-                    <AttachmentChip attachment={attachment} onRemove={() => setAttachment(null)} />
-                </View>
-            ) : null}
-            <View style={styles.composer}>
-                <TextInput
-                    placeholder="Reply, @mention an agent, or / for a skill…"
-                    placeholderTextColor={Colors.ink3}
-                    style={styles.composerInput}
-                    multiline
-                    onChangeText={(t) => {
-                        // Only assume "caret at the end" when the text actually GREW at the end —
-                        // i.e. the user appended. The event order between onChangeText and
-                        // onSelectionChange differs by platform (iOS fires change first, Android
-                        // often fires selection first), so unconditionally writing `t.length` here
-                        // clobbered a correct mid-message caret on Android and no trigger ever
-                        // opened when editing mid-message.
-                        const appended = t.length > text.length && t.startsWith(text);
-                        setText(t);
-                        if (appended || t.length < caret) setCaret(t.length);
-                    }}
-                    onSelectionChange={(e) => {
-                        setCaret(e.nativeEvent.selection.end);
-                        if (pendingSelection) setPendingSelection(undefined);
-                    }}
-                    selection={pendingSelection}
-                    editable={!disabled}
-                >
-                    {/*
-                      * Children rather than `value`: a TextInput that has children uses them as its
-                      * content, which is the only way to style individual runs. That is what turns
-                      * an inserted mention into a chip instead of plain text.
-                      */}
-                    <ChipText Text={text} Mentions={inserted} />
-                </TextInput>
-            </View>
-            {/*
-              * The action strip sits BELOW the input, as it does on the web — 32x32 icon buttons on
-              * a 34px pitch with a 36x36 send at the end. Order matches Explorer exactly (skills,
-              * plan mode, attach, voice, send) so muscle memory carries across.
-              */}
-            <View style={styles.composerActions}>
-                <Pressable
-                    style={styles.actionBtn}
-                    onPress={() => insertTrigger('/')}
-                    disabled={disabled}
-                    accessibilityRole="button"
-                    accessibilityLabel="Skills"
-                >
-                    <Icons.Sparkle size={18} color={Colors.ink2} strokeWidth={2} />
-                </Pressable>
-                <Pressable
-                    style={styles.actionBtn}
-                    onPress={() => insertTrigger('@')}
-                    disabled={disabled}
-                    accessibilityRole="button"
-                    accessibilityLabel="Mention an agent"
-                >
-                    <Icons.Send size={18} color={Colors.ink2} strokeWidth={2} />
-                </Pressable>
-                <Pressable
-                    style={styles.actionBtn}
-                    onPress={() => setPickerVisible(true)}
-                    disabled={disabled}
-                    accessibilityRole="button"
-                    accessibilityLabel="Attach a file"
-                >
-                    <Icons.Paperclip size={18} color={Colors.ink2} strokeWidth={2} />
-                </Pressable>
-                <Pressable
-                    style={styles.actionBtn}
-                    onPress={() => router.push({ pathname: '/voice-mode', params: { conversationId } })}
-                    disabled={disabled}
-                    accessibilityRole="button"
-                    accessibilityLabel="Start a voice call"
-                >
-                    <Icons.Mic size={18} color={Colors.ink2} strokeWidth={2} />
-                </Pressable>
-                <View style={{ flex: 1 }} />
-                <Pressable
-                    style={[styles.sendBtn, !canSend && styles.sendBtnDisabled]}
-                    onPress={submit}
-                    disabled={!canSend}
-                    accessibilityRole="button"
-                    accessibilityLabel="Send"
-                >
-                    <Icons.Send size={17} color={canSend ? Colors.inverse : Colors.ink3} strokeWidth={2.2} />
-                </Pressable>
-            </View>
-            <AttachmentPicker
-                visible={pickerVisible}
-                onClose={() => setPickerVisible(false)}
-                onPicked={(a) => setAttachment(a)}
-            />
-        </View>
     );
 }
 

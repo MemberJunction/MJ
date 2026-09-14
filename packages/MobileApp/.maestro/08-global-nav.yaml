@@ -1,0 +1,29 @@
+# Global navigation must be reachable from inside a conversation.
+#
+# It was not: once in a thread the only exits were "back to conversations" and "new conversation",
+# so Apps, Data Explorer and Profile could not be reached without backing all the way out. MJ
+# Explorer keeps a persistent switcher in its top bar; a phone has no room for that, so the same
+# destinations live one tap away behind the header's navigate button.
+#
+# WHAT THIS CAN AND CANNOT ASSERT. Maestro's iOS driver does not traverse the contents of a React
+# Native `Modal` — the sheet is plainly on screen (verified by screenshot on both platforms) but its
+# rows are absent from the hierarchy Maestro reads. So this flow asserts the affordance EXISTS and
+# opens, which is the regression that actually happened; the sheet's contents are covered by the
+# `GlobalNav` unit test and by visual verification. Asserting them here would mean shipping a flow
+# that cannot pass.
+appId: org.memberjunction.mobile
+---
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Conversations"
+    timeout: 30000
+- openLink: "mjmobile://chat/72376176-217B-4E59-A32E-0722019710AD"
+
+# The button that was missing entirely. Asserted on its accessible name.
+- extendedWaitUntil:
+    visible: "Navigate"
+    timeout: 20000
+- tapOn: "Navigate"
+- waitForAnimationToEnd:
+    timeout: 5000

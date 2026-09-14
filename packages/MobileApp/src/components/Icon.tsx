@@ -44,6 +44,8 @@ export const Icons = {
     Edit: (p: IconProps) => (<D {...p}><Path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><Path d="M18.5 2.5a2.12 2.12 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></D>),
     ChevronRight: (p: IconProps) => (<D {...p}><Polyline points="9 6 15 12 9 18" /></D>),
     ChevronUp: (p: IconProps) => (<D {...p}><Polyline points="6 15 12 9 18 15" /></D>),
+    /** `@` — the mention trigger. Distinct from {@link Send}, which the mention button wrongly shared. */
+    AtSign: (p: IconProps) => (<D {...p}><Circle cx="12" cy="12" r="4" /><Path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" /></D>),
     ChevronDown: (p: IconProps) => (<D {...p}><Polyline points="6 9 12 15 18 9" /></D>),
     Mic: (p: IconProps) => (<D {...p}><Path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><Path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" /></D>),
     Send: (p: IconProps) => (<D {...p}><Path d="M22 2L11 13" /><Path d="M22 2l-7 20-4-9-9-4 20-7z" /></D>),

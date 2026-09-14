@@ -1,5 +1,10 @@
-# New-conversation navigation: from the Conversations home, open the composer
-# and confirm the new-conversation surface (agent rail + prompt) renders.
+# New-conversation surface: reachable from the Conversations home, and rendering the same welcome
+# and starter prompts MJ Explorer shows at its phone breakpoint.
+#
+# This screen used to have its own bespoke hero and its own plain composer — under copy telling the
+# user to "address a specific agent with @", which did nothing because the triggers lived only in
+# the chat thread's copy of the composer. Both are now the shared components, so this flow asserts
+# the SHARED content: if the two surfaces diverge again, this is what catches it.
 appId: org.memberjunction.mobile
 ---
 - launchApp
@@ -7,7 +12,22 @@ appId: org.memberjunction.mobile
     visible: "Conversations"
     timeout: 30000
 - tapOn: "New conversation"
-# The new-conversation screen shows the agent rail heading, which is unique to it.
+
+# The shared empty state — same greeting the web uses.
 - extendedWaitUntil:
-    visible: "Or talk to an agent"
+    visible: "Welcome to Conversations"
+    timeout: 15000
+
+# The starter cards, which come from the same four prompts as the web.
+- assertVisible: "Search files"
+- assertVisible: "Research compiler"
+
+# The shared composer, advertising the triggers it actually has.
+- assertVisible: "Ask anything — your agent will route it…"
+
+# And the triggers work HERE, not just in the thread — the bug this screen shipped with.
+- tapOn: "Ask anything — your agent will route it…"
+- inputText: "@"
+- extendedWaitUntil:
+    visible: "Agents & people"
     timeout: 15000
