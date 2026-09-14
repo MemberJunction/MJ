@@ -209,6 +209,69 @@ describe('a workflow that mints a token AND merges a PR', () => {
     });
 });
 
+describe('minting actions other than the official one', () => {
+    // The mint half is matched by NAMING CONVENTION, not by vendor. A vendor list ages badly,
+    // and a mint this guard cannot see is a SILENT false negative — which the header holds to be
+    // strictly worse than a loud false positive. These are the spellings in common use.
+    const mintedWith = (uses) => `name: Example
+on:
+  workflow_dispatch:
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint
+        uses: ${uses}
+      - name: Merge it
+        run: gh pr merge "$PR" --squash
+`;
+
+    it.each([
+        ['tibdex/github-app-token@v2'],
+        ['getsentry/action-github-app-token@v3'],
+        ['peter-murray/workflow-application-token-action@v3'],
+    ])('flags a merge in a workflow minting with %s', (uses) => {
+        const problems = checkWorkflowContent(mintedWith(uses));
+        expect(problems).toHaveLength(1);
+        expect(problems[0].code).toBe('gh-pr-merge');
+    });
+
+    // The convention is matched on a `uses:` reference and nowhere else, because the words
+    // themselves are ordinary prose in these files. publish.yml passes the minted token onward
+    // in an `APP_TOKEN:` env var, and test.yml's own step comment is titled
+    // "App-token-never-merges guard" — neither mints anything, and treating either as a mint
+    // would fire this guard on the documentation that describes it.
+    it('does not treat an APP_TOKEN env var as a mint', () => {
+        const content = `name: Example
+on:
+  workflow_dispatch:
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Push with a token minted elsewhere
+        env:
+          APP_TOKEN: \${{ secrets.SOMETHING }}
+        run: gh pr merge "$PR" --squash
+`;
+        expect(checkWorkflowContent(content)).toEqual([]);
+    });
+
+    it('does not treat prose mentioning an app-token guard as a mint', () => {
+        const content = `name: Example
+on:
+  workflow_dispatch:
+jobs:
+  job:
+    runs-on: ubuntu-latest
+    steps:
+      # The App-token-never-merges guard covers this repo's workflows.
+      - run: gh pr merge "$PR" --squash
+`;
+        expect(checkWorkflowContent(content)).toEqual([]);
+    });
+});
+
 describe('a workflow that merges a PR with NO App token', () => {
     // Merging with GITHUB_TOKEN is ordinary: that identity is not a bypass actor, so the
     // ruleset still applies and this guard has no opinion.

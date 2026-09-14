@@ -50,6 +50,11 @@
  *   - anything about credentials used OUTSIDE CI. A human holding the App's private key can
  *     still merge; this guards the repository's own automation, which is where the rule
  *     would actually erode.
+ *   - that every minting action is recognised. The mint is matched by naming convention (see
+ *     APP_TOKEN below), which covers every action in common circulation but cannot cover one
+ *     that spells it differently — `jnwng/github-app-installation-token-action` is a real
+ *     example. Introducing such an action here is the moment to widen the pattern. It is listed
+ *     because a missed mint is SILENT, and this section is where the silent gaps belong.
  *
  * Precise token dataflow analysis through shell was considered and rejected. Doing it
  * honestly means modelling variable assignment, `env:` inheritance, heredocs, and every way
@@ -84,8 +89,24 @@ export const WORKFLOWS_DIR = resolve(REPO_ROOT, '.github', 'workflows');
 export const OPT_OUT_MARKER = 'app-token-merge-allowed';
 const OPT_OUT_WITH_REASON = new RegExp(`${OPT_OUT_MARKER}\\s*:\\s*\\S`);
 
-/** Minting an App token — the capability half of the pair. */
-const APP_TOKEN = /actions\/create-github-app-token(?:[@\s'"]|$)/;
+/**
+ * Minting an App token — the capability half of the pair.
+ *
+ * Matched on a `uses:` reference by NAMING CONVENTION rather than by vendor. A vendor list ages
+ * badly, and a mint this guard cannot see is a SILENT false negative — which the header above
+ * holds to be strictly worse than a loud false positive, so the pairing must not depend on this
+ * repo happening to standardise on one action. The spellings in circulation all agree:
+ *
+ *     actions/create-github-app-token            tibdex/github-app-token
+ *     getsentry/action-github-app-token          peter-murray/workflow-application-token-action
+ *
+ * Anchored to `uses:` and nowhere else, because those words are ordinary PROSE in these files:
+ * publish.yml passes the minted token onward as `APP_TOKEN:` on four `env:` blocks, and test.yml's
+ * own step comment is titled "App-token-never-merges guard". Matching either would fire this
+ * guard on the documentation that describes it, which is the one false positive with no
+ * defensible reading.
+ */
+const APP_TOKEN = /^\s*(?:-\s*)?uses:\s*\S*\bapp(?:lication)?[-_]token/i;
 
 /**
  * The merge half. Each rule is a named way a workflow can merge a PULL REQUEST — never a
