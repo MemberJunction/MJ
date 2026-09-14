@@ -1,0 +1,88 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "dbresearch-clarify-ambiguous-scope-01 [gemini-3.7-flash · Google · native-implicit-results]",
+    "Description": "'Recent' has no defined window and the table is large. Clarifying beats guessing a range and returning something plausible but wrong.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Pull the recent activity."
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "dbresearch-clarify-ambiguous-scope-01",
+      "expect": {
+        "kind": "anyOf",
+        "anyOf": [
+          {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            }
+          },
+          {
+            "kind": "action",
+            "actions": [
+              {
+                "name": "Get Entity Details"
+              }
+            ],
+            "allowAdditionalActions": true
+          }
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Database Research Agent",
+      "modelId": "63B1434F-0400-4A98-A1B9-0765BE4362F0",
+      "vendorId": "E4A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "toolCallingMode": "native",
+      "nativeControlFlow": "implicit",
+      "nativeToolResults": true,
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "anyOf",
+            "anyOf": [
+              {
+                "kind": "chat",
+                "message": {
+                  "matcher": "nonEmpty"
+                }
+              },
+              {
+                "kind": "action",
+                "actions": [
+                  {
+                    "name": "Get Entity Details"
+                  }
+                ],
+                "allowAdditionalActions": true
+              }
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "6819E71F-00C6-4D76-A001-C6D8F302C6DA"
+  }
+}

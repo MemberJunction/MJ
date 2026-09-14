@@ -25,6 +25,33 @@ class-registration manifest system.
 
 4. **Server APIs** (`packages/MJServer/src/generated/generated.ts`)
 
+### Field-level security touches three of the above
+
+CodeGen owns part of the field-level-security (FLS) lifecycle, so a change in any of these areas
+needs [`guides/FIELD_LEVEL_SECURITY_GUIDE.md`](../../guides/FIELD_LEVEL_SECURITY_GUIDE.md) read
+first:
+
+- **Permission reconciliation** (`reconcileFieldLevelSecurity.ts`, phase `reconcileFieldPermissions`)
+  — a column added to an FLS-enabled entity has no permission rows, and on an enabled entity a field
+  with no rows is **denied**. Without this pass a new column is invisible to everyone, including the
+  administrator who added it. Must run **after** the metadata refresh that follows `manageMetadata`,
+  or it computes the delta from a field list that predates the columns it exists to cover. Failures
+  are logged and swallowed on purpose — failing the run after schema, views and procs are already
+  written would trade a recoverable permissions gap for an unrecoverable half-finished build.
+- **Database permissions** — SQL Server emits column-level `DENY SELECT` on base views for explicit
+  `ReadAccess = 'Deny'` rows, restricted to custom roles and skipping any role a service login
+  belongs to (a DENY there beats every sibling GRANT and would break the API for everyone).
+  **PostgreSQL emits nothing** — it has no DENY primitive, so Deny-wins cannot be expressed. Related
+  and not FLS-specific: permission emission is now **wipe-and-reassert** within the managed scope,
+  so deleting a permission row actually revokes the grant instead of leaving it until the view
+  happens to be rebuilt.
+- **GraphQL output types** — non-nullability derives from `EntityFieldInfo.IsUnrestrictableField`
+  (primary keys and `__mj_` columns), **not** from `AllowsNull`. A NOT NULL column says no *row*
+  stores an empty value; a GraphQL `!` says every *response, to every caller* carries one, and the
+  second does not follow from the first once a field can be withheld per user. Input types still
+  derive from `AllowsNull` — they carry the write contract. Every object type also carries the
+  `ReadableFields___` transport field.
+
 ## Base views: generated, custom, or LAYERED
 
 An entity's `BaseView` is its public surface — field discovery, permissions and the generated CRUD
@@ -244,7 +271,7 @@ CodeGen guarantees **100% idempotency relative to database state** and **minimal
 
 1. **Idempotency (No-Change Runs)**:
    - Running CodeGen twice against an unchanged database state produces **0 diffs** across all generated code, schemas, and forms.
-   - Run 2 reports counters: `fieldsNew = 0`, `fieldsChanged = 0`, and `decisionRecordsWritten = 0`.
+   - Run 2 reports counters: `fieldsNew = 0`, `fieldsChanged = 0`.
    - Empty SQL capture files (`CodeGen_Run_*.sql`) are automatically removed upon run completion; no empty migration artifacts survive.
 
 2. **Minimal Blast Radius (Single-Column Changes)**:
@@ -252,8 +279,8 @@ CodeGen guarantees **100% idempotency relative to database state** and **minimal
    - Sibling fields on the entity are untouched: existing `DisplayName`, `Category`, `ExtendedType`, `CodeType`, `GeneratedFormSection`, `DefaultInView`, `IncludeInUserSearchAPI`, and `IsNameField` do not churn.
    - `generated-forms.module.ts` is not modified by adding a column (only by adding or deleting entire entities).
 
-3. **Field Decision Persistence**:
-   - Field categorization and metadata decisions are persisted to `metadata/entities/decisions/` so clean-room builds match warm builds identically.
+3. **Field Metadata Lock & Migration Single Source of Truth**:
+   - Field categorization and metadata decisions are locked in the database via the field-metadata lock (`field-metadata-lock.ts`) and committed via the migration's CodeGen capture SQL, making migration SQL the authoritative single source of truth.
    - Re-runs against an existing schema lock established categories and metadata unless the underlying schema definition materially changes.
 
 4. **Stable Partitioning & Deterministic Ordering**:
@@ -265,4 +292,5 @@ CodeGen guarantees **100% idempotency relative to database state** and **minimal
 - **Migration authoring rules** — [`migrations/CLAUDE.md`](../../migrations/CLAUDE.md)
 - **Migration → CodeGen end-to-end workflow** — [`guides/MIGRATION_CODEGEN_WORKFLOW_GUIDE.md`](../../guides/MIGRATION_CODEGEN_WORKFLOW_GUIDE.md)
 - **Generated entity classes** — [`packages/MJCoreEntities/CLAUDE.md`](../MJCoreEntities/CLAUDE.md)
+- **Field-level security** — [`guides/FIELD_LEVEL_SECURITY_GUIDE.md`](../../guides/FIELD_LEVEL_SECURITY_GUIDE.md)
 - **PostgreSQL schema casing** — [`guides/POSTGRES_SCHEMA_CASING_GUIDE.md`](../../guides/POSTGRES_SCHEMA_CASING_GUIDE.md)

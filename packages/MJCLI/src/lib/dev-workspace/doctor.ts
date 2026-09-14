@@ -21,12 +21,13 @@ import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import chalk from 'chalk';
 import type { Dirent } from 'node:fs';
-import { SENTINEL_MARKER } from './build.js';
+import { CollectOpenAppClientPackages, IndexWorkspacePackages, SENTINEL_MARKER } from './build.js';
 import { LOCKFILE_NAME, NODE_MODULES_NAME } from './clean.js';
+import { DetectCandidates } from './detect.js';
 import { DescribeDirSource } from './dir-flag.js';
 import { CollectWorkspaceStatus } from './status.js';
 import { SENTINEL_FILE_NAME } from './write.js';
-import type { DirSource, WorkspaceStatus } from './types.js';
+import type { ClientPackageCensus, DirSource, WorkspaceStatus } from './types.js';
 
 /**
  * Packages that MUST resolve to exactly one copy across a joined workspace.
@@ -406,6 +407,100 @@ function checkOneCopyCensus(census: StoreCensus): DoctorCheck {
 }
 
 /**
+ * Reads which declared client-side packages are linked at the parent root.
+ *
+ * Parent-root linkage is exactly the question that matters: an app shell imports these through its
+ * GENERATED class-registrations manifest without declaring them, so the parent root is the only
+ * place its resolution can find them. Filesystem-reading, like the singleton census beside it.
+ *
+ * `memberNames` is passed in rather than re-derived, and that is the whole correctness argument:
+ * `DetectCandidates` answers "what Open App repo is on disk?", which is NOT "what is in this
+ * workspace" — `mj-app.json` existence is itself a detection reason (`detect.ts`), so every
+ * excluded sibling is a candidate. Judging an excluded repo is a guaranteed false failure: it can
+ * never be linked at the parent, because that is what excluding it means. The generate path has
+ * always drawn this line (`selectMembers` runs before `BuildRootPackageJson`), and so does every
+ * other member-scoped check here, via `status.Members`.
+ */
+export function CollectClientPackageCensus(parentDir: string, memberNames: readonly string[]): ClientPackageCensus {
+  const inWorkspace = new Set(memberNames);
+  const members = DetectCandidates(parentDir).filter((candidate) => inWorkspace.has(candidate.Name));
+  // Partitioned rather than caught: the collector throws on the FIRST unreadable member, so catching
+  // around it would discard every readable member's declarations too. A member whose mj-app.json is
+  // unreadable still PROVIDES its packages, so the provision index is built from all of them.
+  const unreadable = members.filter((m) => m.MjAppJsonError);
+  const readable = members.filter((m) => !m.MjAppJsonError);
+  const clients = CollectOpenAppClientPackages(readable, IndexWorkspacePackages(members)).Packages;
+  return {
+    Unreadable: unreadable.map((m) => ({ Repo: m.Name, Message: m.MjAppJsonError ?? 'unknown error' })),
+    Entries: clients.map((client) => ({
+      Package: client.Package,
+      Repo: client.Repo,
+      Provided: client.Provided,
+      Linked: existsSync(path.join(parentDir, NODE_MODULES_NAME, ...client.Package.split('/'))),
+    })),
+  };
+}
+
+/**
+ * Every client-side package a member declares must resolve from the parent root — the v1
+ * requirement in `guides/OPEN_APP_WORKSPACE_LINKING_SPEC.md` (§185): "every package named in a
+ * host's dynamicPackages.client[] MUST resolve to an importable package".
+ */
+function checkClientPackages(census: ClientPackageCensus, installed: boolean): DoctorCheck {
+  const name = 'open app client packages';
+  // Checked before everything else: an unreadable declaration is a real defect whether or not the
+  // parent has been installed, and it means this check cannot answer fully for that member.
+  if (census.Unreadable.length > 0) {
+    const linked = census.Entries.filter((e) => e.Linked).map((e) => e.Package);
+    const readableNote =
+      census.Entries.length === 0
+        ? 'no other member declares one'
+        : `the readable members' packages were still checked: ${linked.length}/${census.Entries.length} linked` +
+          (linked.length > 0 ? ` (${linked.join(', ')})` : '');
+    return {
+      Name: name,
+      Severity: 'fail',
+      Detail:
+        `could not read ${census.Unreadable.map((u) => `${u.Repo}/mj-app.json`).join(', ')} — ` +
+        `${census.Unreadable.map((u) => u.Message).join('; ')}. Fix that file, then re-run doctor; ` +
+        `${readableNote}.`,
+    };
+  }
+  if (census.Entries.length === 0) {
+    return { Name: name, Severity: 'skip', Detail: 'no member declares a client or shared package in its mj-app.json' };
+  }
+  // Linkage is `pnpm install`'s output, not the generator's, so "not installed yet" is unanswerable
+  // rather than broken — the state `--no-install` leaves behind on purpose. The two sibling checks
+  // reading this same precondition de-escalate it for that reason (checkInstallArtifacts warns,
+  // "absence is incomplete, not broken"; checkOneCopyCensus skips), and escalating it here reported
+  // an ordinary `--no-install` run as a broken manifest, exit 1.
+  if (!installed) {
+    return {
+      Name: name,
+      Severity: 'skip',
+      Detail: `${census.Entries.length} declared package(s), but the parent has no node_modules — run \`pnpm install\` at the parent, then re-run doctor`,
+    };
+  }
+  const broken = census.Entries.filter((entry) => !entry.Linked);
+  if (broken.length === 0) {
+    return {
+      Name: name,
+      Severity: 'pass',
+      Detail: `all ${census.Entries.length} declared client package(s) linked at the parent: ${census.Entries.map((e) => e.Package).join(', ')}`,
+    };
+  }
+  const detail = broken.map((e) => `${e.Package} (${e.Repo}${e.Provided ? '' : ' — no member provides it'})`).join(', ');
+  return {
+    Name: name,
+    Severity: 'fail',
+    Detail:
+      `not linked at the parent: ${detail} — an app shell imports these through its generated ` +
+      `class-registrations manifest without declaring them, so an unlinked one fails at PAGE LOAD with a green ` +
+      `build. Fix: re-run \`mj dev workspace --force\`, then \`pnpm install\` at the parent.`,
+  };
+}
+
+/**
  * Runs every health check at a parent directory. `activePnpmVersion` comes from the
  * caller (a spawn — see `pnpm.ts`) and `dirSource` likewise, so this module reads
  * neither processes nor the environment. Read-only.
@@ -434,6 +529,7 @@ export function CollectDoctorReport(
       checkCandidates(status),
       checkStandaloneInstalls(status),
       checkOneCopyCensus(census),
+      checkClientPackages(CollectClientPackageCensus(parentDir, status.Members), status.NodeModulesExists),
     ],
   };
 }

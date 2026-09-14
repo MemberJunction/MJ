@@ -16,6 +16,11 @@ There are four distinct operations. Know which one you're doing before you start
 | 3. LTS line patch release | as fixes land on a line | Cert owner | **One button** (`Publish LTS line release` workflow) |
 | 4. Certification flip | once per certification | Cert owner | Scripted-manual |
 
+> **Red publish run with an open `chore/backmerge-v*` PR?** That is a designed state, not a
+> broken one — the release shipped and only the back-merge is outstanding. Go straight to
+> [*Recovery: released, but the back-merge did not land*](#recovery-released-but-the-back-merge-did-not-land)
+> and do not re-run the release.
+
 ---
 
 ## 1. Routine Edge release
@@ -217,6 +222,76 @@ When the gates pass on a specific line build (say 6.1.2):
 
 ---
 
+## Recovery: released, but the back-merge did not land
+
+**A red publish run with an open `chore/backmerge-v*` PR is a designed state, not a broken
+one.** Read this before touching anything — the instinct to "fix" it by hand is how you end
+up with two competing back-merge branches.
+
+`publish.yml` does its last two jobs after the packages are already on npm: merge `main`
+back into `next`, and record the release in `release-lines.json`. If the back-merge cannot
+be completed, the release itself is **fine** — packages published, tag pushed, GitHub
+Release created — and only the merge is outstanding.
+
+Two things cause it, and the workflow responds to both the same way:
+
+| Cause | What it looks like |
+|---|---|
+| **A real conflict.** `ci/back-merge.mjs` refuses to auto-resolve anything but `pnpm-lock.yaml`, because `next` accumulates hours of merges while a release builds and guessing would silently discard them. | The step log names the conflicting paths. |
+| **A rejected push.** `next` is protected; the release App must hold a ruleset bypass, and that is GitHub configuration living outside this repo. | `GH013: Repository rule violations found for refs/heads/next`. |
+
+### What the workflow already did for you
+
+1. Opened **`chore/backmerge-v<version>` → `next`**, carrying `main`'s actual tip with the
+   failure output in the PR body. It is idempotent: re-running the job reuses the open PR
+   and will not push over a branch you have been resolving conflicts on.
+2. Recorded the release in `release-lines.json` anyway — that step is independent and does
+   not wait for the back-merge.
+3. **Failed the run deliberately.** The release is not complete until the PR merges, and a
+   green run would say otherwise.
+
+### What ELSE stopped, that nobody tells you about
+
+`publish.yml` is the trigger for two `workflow_run` workflows, and **both refuse to run when
+the triggering run did not conclude `success`** ("Error out if the trigger did not succeed").
+So a failed back-merge silently takes them with it:
+
+| Workflow | Consequence of the skip |
+|---|---|
+| [`docker.yml`](../.github/workflows/docker.yml) | **None during the Edge era.** It skips any prerelease version by design — *"no Docker image for Edge builds, by decision, not by omission."* Nothing to catch up. |
+| [`docs.yml`](../.github/workflows/docs.yml) | **Real.** The `/v6/` docs set builds from `main`, which the release DID advance, so the published site silently keeps documenting the previous release. |
+
+When v6.1.0-edge.6 failed this way on 2026-09-11, the docs site stayed on the 2026-09-02
+(edge.5) build and nothing surfaced it — the release PR was recovered, the ledger was
+recorded, and the stale docs went unnoticed until someone went looking.
+
+**Catching docs up is a manual dispatch:** Actions → *Update package documentation* → Run
+workflow (it carries `workflow_dispatch`). Check the last successful run first — if a later
+release already deployed, you do not need this.
+
+### What you do
+
+1. Open the PR. Resolve conflicts there and merge it. That is the whole recovery.
+2. Dispatch *Update package documentation* to catch up the docs site (see above) — the
+   failed run skipped it.
+3. If the run is red but there is **no** PR, the fallback itself failed — check its step,
+   then finish by hand: `git checkout next && git merge origin/main`.
+4. If the run warns *"main is already an ancestor of next — nothing to back-merge"*, the
+   merge had in fact landed before the step reported failure. Nothing is outstanding; read
+   the back-merge step's log to find out why it failed anyway.
+
+**Do not re-run the publish workflow to fix this.** The packages are already on npm; a
+re-run cannot republish them and will not help.
+
+### Preventing the rejected-push case
+
+[`DEPLOYMENT.md`](../DEPLOYMENT.md) Step 0 item 2 runs **Actions → "Verify the release App token"**. It is
+read-only, takes under a minute, and reports whether the App's bypass on `next` is still
+live. A revoked bypass is invisible until a release is half-done, which is exactly how
+v6.1.0-edge.6 went ([#4382](https://github.com/MemberJunction/MJ/pull/4382)).
+
+---
+
 ## Safety rails (all operations)
 
 - `latest` moves **only** in operation 4. No build ever publishes to it.
@@ -226,7 +301,8 @@ When the gates pass on a specific line build (say 6.1.2):
 - Lines never merge into `main` or `next`. Fixes flow `next` → line, never the reverse.
 - The post-publish `main` → `next` back-merge **aborts rather than auto-resolving** a
   conflict outside `pnpm-lock.yaml`. An abort means the release succeeded and only the
-  back-merge is outstanding — finish it by hand, don't re-run the release.
+  back-merge is outstanding — **never re-run the release**. `publish.yml` now opens a PR
+  for you; see *Recovery: released, but the back-merge did not land* above.
 - A green `docs.yml` does **not** mean your docs change shipped. It checks out `lts/5` on
   every trigger but an explicit-`ref` dispatch, so a `main` push rebuilds the LTS site and
   reports success while ignoring the commit that triggered it.

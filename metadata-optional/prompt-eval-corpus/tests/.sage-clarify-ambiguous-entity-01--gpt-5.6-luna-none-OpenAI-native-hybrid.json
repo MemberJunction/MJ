@@ -1,0 +1,71 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Prompt Eval",
+    "Name": "sage-clarify-ambiguous-entity-01 [gpt-5.6-luna@none · OpenAI · native-hybrid]",
+    "Description": "'The report' is unresolvable without knowing which one. Asking is right; guessing an action is the over-eager failure a 26-action catalog invites.",
+    "InputDefinition": {
+      "payload": {},
+      "conversationMessages": [
+        {
+          "role": "user",
+          "content": "Can you update the report?"
+        }
+      ],
+      "templateData": {}
+    },
+    "ExpectedOutcomes": {
+      "caseId": "sage-clarify-ambiguous-entity-01",
+      "expect": {
+        "kind": "chat",
+        "message": {
+          "matcher": "nonEmpty"
+        },
+        "forbiddenActions": [
+          "Update Record",
+          "Create Record",
+          "Modify Document Section",
+          "Create Document"
+        ]
+      }
+    },
+    "Configuration": {
+      "agentName": "Sage",
+      "modelId": "3D2A79B9-745E-4005-8440-5FB62CA61448",
+      "vendorId": "D8A5CCEC-6A37-EF11-86D4-000D3A4E707E",
+      "effortLevel": "none",
+      "toolCallingMode": "native",
+      "responseFormat": "Any",
+      "oracles": [
+        {
+          "type": "response-well-formed",
+          "weight": 0.3
+        },
+        {
+          "type": "agent-decision-match",
+          "weight": 0.7,
+          "config": {
+            "kind": "chat",
+            "message": {
+              "matcher": "nonEmpty"
+            },
+            "forbiddenActions": [
+              "Update Record",
+              "Create Record",
+              "Modify Document Section",
+              "Create Document"
+            ]
+          }
+        }
+      ],
+      "scoringWeights": {
+        "response-well-formed": 0.3,
+        "agent-decision-match": 0.7
+      }
+    },
+    "RepeatCount": 3,
+    "Status": "Active"
+  },
+  "primaryKey": {
+    "ID": "65F7F52D-B356-4F76-AAB4-56F8FDB556FA"
+  }
+}

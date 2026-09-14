@@ -50,9 +50,10 @@ import type { MJAIAgentNoteEntity } from '@memberjunction/core-entities';
 import { RedisLocalStorageProvider } from '@memberjunction/redis-provider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AIEngine } from '@memberjunction/aiengine';
-// Imported from the package directly, NOT via ./lib/harness — that shim currently re-exports a
-// symbol the package no longer provides (`createRunQueryFixtures`), so importing it throws at
-// module load. Direct import is also the shim's own documented end-state.
+// Imported from the package directly, NOT via ./lib/harness — direct import is the shim's own
+// documented end-state, and this rig got there first. (It originally had to: the shim forwarded
+// `createRunQueryFixtures`, which that package does not provide, so importing it threw at module
+// load. That is fixed — the reason to keep importing directly is the end-state, not the bug.)
 import { TestRunner, Assert, AssertEqual, bootstrapIntegrationServer } from '@memberjunction/testing-integration';
 
 /** Isolated key prefix so this rig can never collide with a real cache on the same Redis. */

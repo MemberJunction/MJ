@@ -1,5 +1,716 @@
 # @memberjunction/ng-base-forms
 
+## 6.1.0
+
+### Minor Changes
+
+- c996a56: Field-Level Security: per-field Read/Update/Create control by role.
+
+  Field security is switched **on or off per entity**, explicitly, via a new
+  `Entity.EnableFieldLevelSecurity` flag. Nothing is inferred from whether permission rows happen to
+  exist, so adding a rule can never change access on an entity that has not opted in.
+
+  A new `EntityFieldPermission` table holds one row per (field, role) with three independent
+  verbs — `ReadAccess`, `UpdateAccess`, `CreateAccess` — each `Allow`, `Deny`, or `No Access`:
+  - **`No Access`** is neutral, and the default. It grants nothing and blocks nothing; another
+    role's Allow still wins.
+  - **`Allow`** grants the action for that role.
+  - **`Deny`** wins over everything. One Deny anywhere across the user's roles beats any number of
+    Allows.
+
+  **Read is required for Update and Create.** A field a user cannot see is one they cannot change,
+  so this is enforced twice: a CHECK constraint refuses the combination within a row, and the
+  aggregation clamps it again across roles — because two individually legal rows held by one user
+  (role A grants Read+Update, role B denies Read) would otherwise aggregate to write-only access
+  that no constraint could see.
+
+  **Turning the flag on is safe.** It snapshots the entity's existing entity-level permissions into
+  per-field rows, so enabling changes nothing until an administrator tightens a specific field.
+  Turning it off keeps the rows, inactive, so re-enabling does not lose the configuration. Those rows
+  maintain themselves: adding a column, granting a role entity access, or dropping either one is
+  reconciled automatically, and an administrator's tightening is never overwritten by that process.
+
+  **Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+  permission evaluation. That includes the **MJ system user**, the account the server runs its own
+  work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+  written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+  that _denies_ anything to a role the system user holds is refused, and so is giving that account a
+  role which already denies a field. Grants save normally, since they are what the server's own
+  access depends on. Restricting that account would matter because its engine caches are
+  process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+  somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
+  Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
+
+  Enforcement (server-side and authoritative):
+  - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
+    paths, and from single-record GraphQL responses.
+  - **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+    audit entity's own field security is off — so without a dedicated control, anyone with entity read
+    on it could read a denied field straight out of the payload, in the default configuration. Each
+    row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+    denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+    withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+    appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+    generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+    when, by whom, and which of the fields they may read. It fails closed when the subject entity
+    cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+    projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+    in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+    not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+    Change from a caller carrying any denial ignores every payload column the client sends and
+    reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+    save-SQL generation writes every field, so without this a restricted user editing `Comments`
+    would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+    manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+    only the stored value is ever persisted.
+  - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
+    expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
+    values back without the column ever appearing in a result. `UserSearchString` is not rejected;
+    denied fields are simply excluded from the search.
+  - **Writes.** A save that changes a field the user cannot update is rejected. Values a client
+    sends for fields it cannot read are ignored — such a field was absent from every payload that
+    client received, so any value coming back is fabricated by the transport.
+  - **Creates.** A value supplied for a field the user may not create is dropped and the column
+    takes its default. This never rejects: an error naming the field would confirm it exists and is
+    restricted, and silently defaulting is what an unrestricted user gets by leaving it blank.
+  - **Typed accessors.** `BaseEntity.Get()` and `.Set()` throw for a field the user cannot read, so
+    a restricted field surfaces as a clear failure rather than a silent blank. Entity forms check
+    access before rendering, so a denied field is simply not shown.
+  - **Direct database connections (SQL Server only).** CodeGen emits column-level `DENY SELECT` on
+    base views for roles with an explicit `ReadAccess = 'Deny'` rule on an enabled entity, restricted
+    to custom DBA-created roles, and skips any role a service login belongs to. PostgreSQL emits
+    nothing — it has no DENY, so Deny-wins cannot be expressed there. See the guide.
+
+  RunView caching is unchanged for everyone else: the server keeps full-width slots shared across
+  users and narrows each response at read time, so a permission change takes effect on the next
+  metadata refresh without invalidating cached results. Browsers key their own cache on the fields
+  the user may see, so tightening access does not leave a stale column on screen.
+
+  Also in this release:
+  - **Permission removal now reaches the database.** CodeGen reads live permission state and
+    re-asserts it each run, so deleting a permission row actually revokes the grant or deny.
+    Previously CodeGen only ever added grants, so a deleted `EntityPermission` row left its `GRANT`
+    in place until the view happened to be rebuilt.
+  - **Partial entity objects are now safe.** `EntityField` gains a not-loaded marker, set when the
+    data an entity was loaded from left a field out. Such fields are skipped on save, are never
+    dirty, and are exempt from the required-field check, so the stored value is kept instead of
+    being overwritten with a default. This fixes silent data loss when a user edits an unrelated
+    field on a record containing columns they cannot read.
+  - **`entity_object` requests always fetch every column the user may see**, whether or not the
+    query is cacheable. This was already true on the server but not for clients, so a client could
+    build a partial entity and write defaults over real data on the next save.
+  - **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+    reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+    every user of the process, so its contents must not depend on the first caller's permissions — one
+    carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+    that then serves everyone until restart. The identity is sticky once applied, so a later
+    `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+    Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+    Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+    ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+    implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+    database with no such row — the engine degrades to acting as the caller exactly as before, with a
+    once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+    security rather than because of it: neither depends on the other, though it is what lets the guide
+    say engine caches cannot be narrowed by a restricted caller.
+
+  New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
+  restricting anything. Saved queries are not field-filtered; run access to a query is the grant.
+
+- 8de5f7e: Let a host form own the flow editor's save, and fix the canvas context menu.
+
+  **The flow was never part of the agent form's save.** `InternalSaveRecord` persisted templates, prompts and the agent row; steps and paths were written only by the flow editor's own Save button. That gave one record two save buttons with two failure modes — the form could succeed while the flow failed, leaving an agent that looked saved and step edits that were gone.
+
+  `BaseFormSectionComponent` gains an opt-in contract so a section that owns an editor can join the host's transaction: `HasPendingChanges`, `ContributeToSave(transactionGroup)` and `OnHostSaveCompleted()`. All three are no-ops by default, so existing sections are unaffected. `BaseFormComponent.HasAdditionalUnsavedChanges` (default `false`) feeds the container's `EffectiveIsDirty`, so a form holding unsaved editor state no longer reports itself clean — previously the navigate-away guard would discard those edits without asking.
+
+  `FlowAgentEditorComponent` splits `Save()` into `QueueSaveInto(transactionGroup)` (queue only, caller submits) plus `MarkSaved()`, and exposes `HasUnsavedChanges`. Two new inputs: **`ShowSaveControls`** (default `false`) hides the editor's own Save / Edit / Cancel and its unsaved indicator, for hosts that own persistence — a host that turns it on is declaring it owns its own save; and `CanvasTitle` (`null` hides the toolbar title) for hosts whose chrome already names the record.
+
+  **Context menu fix:** `onContextMenuAction` closed the menu before reading its target, and closing nulls the stored node/connection. Every branch then tested those now-null fields and fell through, so right-click **Remove and Edit both did nothing** — for nodes and connections alike, with the menu closing on click making it look like the action had been taken. The target is now captured before the menu closes, and the undo entry is pushed only once a target is confirmed, so a no-op action no longer leaves a phantom step in the undo stack. Covered by 7 regression tests, 6 of which fail against the old ordering.
+
+- 7b4abe7: Form chrome membership is a five-layer stack: CodeGen, app inclusions (Primary / More / None), the Auto ranker, install overlay (`MJ: Form Chrome Rules`), and user rail order. Policy may decorate labels and icons only.
+- 051e0ff: L3 Form Chrome Rules can now pin an admin Title on a related entity or contribution. The column is nullable and keyed by RelatedEntityID / ContributionKey, so a site-specific rail label ("Pmts") survives an OpenApp upgrade that changes the shipped DisplayName. Custom forms that hide related entities also stop inventing leftover More groups for unbaked relationships.
+- 95fc3e6: Ship generated-form chrome: a budgeted related-role ranker (not all-in-More), accordion More as a quiet overflow footer (not a fake panel), left-nav More folder, user move in/out of More via Manage Sections, Layout auto / left-nav, optional BaseFormPolicy, and Entity / Entity Relationship visualization. Metadata JSONType bags on Entity / EntityRelationship.Configuration back the ranker.
+- 6ecfaa0: Relationship `UI.sortKey` orders first-class related rail items after Details. Hug-height related grids use a top-aligned inline empty state. Left-nav labels cap at 200px and show the full title on hover.
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- b895f92: Angular DOM unit-testing — Phase 4 coverage push. Dev-only (test files + test-config/CI-gate scoping); no runtime change.
+
+  Drives the Generic DOM-coverage ratchet (`scripts/dom-test-report.mjs … --max-none`) from **185 → 137** by writing DOM specs, in usage-ranked order, for every Generic Angular component appropriate for a DOM unit test. Highlights:
+  - **Highest-leverage primitives** — `MjFormFieldComponent` (the field renderer behind ~4,000 usages) across its read/edit type matrix; the `ui-components` design system (`MJEmptyStateComponent`, the `mj-page-*` chrome family, `MJDropdown`/`MJCombobox`/`MJFilterPopover` via a new CDK-overlay test helper in `ng-test-utils`, the `mj-dialog` family, tabs, filter panel, left-nav).
+  - **Form host stack** — `MjRecordFormContainer`, `MjFormToolbar`, `MjEntityFormHost`, `MjIsaRelatedPanel`, `FormPanelSlot`, `ExplorerEntityDataGrid`, `InteractiveForm`.
+  - **Viewers, grids & dialogs** — `EntityDataGrid` + `QueryDataGrid` (AG-Grid chrome), `EntityViewer`, `ArtifactViewerPanel`, the ERD component family (`ERDComposite`/`MJEntityERD`/`ERDDiagram`), plus a broad set of panels/editors/dialogs across agents, artifacts, search, composer, list-management, scheduling, record-process-studio, user-routines, entity-action-ux, actions, and testing.
+  - **`Angular/Bootstrap` onboarded** — the last untracked library tree gains a DOM test tier (`MJAuthShell`, `MJBootstrap`) and its own `--max-none=0` CI gate, so every shipped Angular library tree (Explorer, Generic, Bootstrap) is now gated.
+
+  Reusable patterns established for the harder components: drive internal state before the first render (`setup`) rather than mutating post-render (unreliable under zoneless CD); stub the heavy core (AG-Grid, React bridge, SVG layout, plugin viewers) and spy async loaders so specs exercise the component's own chrome/wiring; add each component **and its injected services** to enumerated `tsconfig.spec.json` files (or AOT drops decorator metadata → NG0202).
+
+  Deliberately **not** covered, and left at the 137 floor: five integration/e2e-tier orchestrators (`ConversationChatArea`, `MessageInput`, `RealtimeWhiteboardBoard`, `AITestHarness`, `RealtimeSessionOverlay`) — 1,800–4,600-line components with realtime/WebRTC/canvas cores or 14–30 dependencies, which belong in the browser regression suite rather than DOM units.
+
+- a2e4e09: Honor L1 `inclusion` on form contributions. Primary contributions (Overview) are their own rail items and sort in a lead band before Details. The left-nav only applies a persisted user section order — the generated form.sections fallback no longer parks Overview after baked related grids.
+- a8ba8b7: fix(ng-base-forms): when a date field holds a value the date editor cannot display, show a warning beside the empty input instead of a blank box that reads as "no date". Previously an unreadable stored value looked identical to an empty field, and saving the record silently wrote NULL over it.
+- 815b9bc: feat(storage,core,forms): ephemeral staged binary upload pipeline, polymorphic related collections, and file record viewer
+  - **Storage & Server**:
+    - Implement Tier 2 ephemeral staged raw binary upload pipeline (UploadTokenManager, POST /media/upload-stage, CreateUploadStageToken mutation, UploadStorageFile token consumption).
+    - Add single-use cryptographic token security, user identity ownership binding, automated TTL eviction, and memory bounds.
+    - Sanitize paths/filenames and add X-Content-Type-Options: nosniff to /media endpoints.
+  - **Core & ORM**:
+    - Add support for polymorphic IS-A subtypes in RelatedRecordCollection and dirty state preservation across relationship chains.
+    - Support IEntityConfiguration and entity hierarchy traversal.
+  - **Angular & UI**:
+    - Add 3-tier upload pipeline in RecordAttachmentsComponent with real-time wire progress.
+    - Add dedicated MJ: Files custom record viewer form component in ng-core-entity-forms.
+    - Add attachment count badges to base form container and toolbar.
+    - Add ResizeObserver lifecycle handling to Gantt chart and OpenNewEntityRecord in SharedService.
+
+- 69f2bf2: `mj-explorer-entity-data-grid` now forwards the inner grid's toolbar chrome (`ShowToolbar`, `ShowSearch`, and the `Show*Button` / `ShowRecycleBin` flags) so a related list can hide New, search, refresh, export, or the whole bar without losing the rest.
+- 2d14c62: Add Image, Color, and JSON to EntityField.ExtendedType. Forms render an image thumbnail (including inline base64 / data URIs) with an edit-mode upload capped at the field's MaxLength, a color swatch + hex editor, and a pretty-printed JSON textarea. Entity-viewer grid/cards/timeline key image cells off ExtendedType rather than field-name heuristics. PhotoURL, LogoURL, and ImageURL are reclassified to Image with AutoUpdateExtendedType locked so CodeGen cannot overwrite them.
+- 05865ea: feat(angular): introduce `@memberjunction/ng-hierarchy-tree` visual hierarchy component and wire 15 core entity form hierarchy panels
+  - **`@memberjunction/ng-hierarchy-tree`**: Reusable D3-based interactive visual hierarchy and taxonomy tree component with smooth pan/zoom, dynamic primary key metadata extraction, real-time path search and ancestor branch auto-expansion, subtree focus, cancelable lifecycle events, and `--mj-*` design token theming.
+  - **`@memberjunction/ng-core-entity-forms`**: Adds 15 visual hierarchy form panels in the `after-related` slot for self-referencing and category entities in MJ Core (`AI Agent Categories`, `AI Prompt Categories`, `Action Categories`, `Dashboard Categories`, `Query Categories`, `Tags`, `Projects`, `Content Items`, `File Categories`, `List Categories`, `Record Process Categories`, `Skills`, `Template Categories`, `Test Suites`, `User View Categories`).
+  - **`@memberjunction/ng-gantt`**: Polish host height layout on `MJGanttChartComponent`.
+
+- 2e4786e: feat(ng-base-forms): a form contribution can declare `leadsWhenUnsaved` so a NEW record opens on it rather than on the first first-class group. An unsaved record already declines to restore a stored rail position; without this it falls through to the lead group, which is usually a summary — and a summary of a record with no data is a page of blanks the user must look past to find where typing starts. Opt-in per form: any form that declares nothing behaves exactly as before.
+- ac6755c: New entity records no longer restore or persist the left-nav active section from the last saved record of the same entity.
+- 73c853b: Collapsed form chrome rail stays a 36px spine (min-width no longer leaks from the expanded band). Expanded width is user-resizable and persisted per entity.
+- 142cf2a: Scope `LoadFormChromeRules`' read to the provider it was handed.
+
+  The function resolves `md = provider ?? Metadata.Provider` and checks the entity is in that provider's metadata — then ran the actual query through `new RunView()`, which binds the **global** provider. In a multi-provider app that validated against the caller's provider and read from a different one, so a form could be handed another environment's chrome rules, or none, depending on which provider happened to be global at the time. The `provider` parameter was effectively decorative for the read.
+
+  Now `RunView.FromMetadataProvider(md)`, so the check and the read use one provider. Single-provider apps are unaffected — there `md` _is_ the global provider.
+
+  This also clears the repo's `ui-layers` adopted-standard error, which had been failing the `adopted standards` gate on every PR that merged `next`.
+
+- e635378: Form contributions: registered BaseFormPanel metadata can claim a related-entity grid or replace a named field panel (hero that is not a collapsible panel). Last-wins by Priority. The container fills in DisplayInForm relationships the template did not bake. CodeGen output is unchanged.
+- de66f54: fix(ng-base-forms): a `date` column is a calendar day, not an instant. Read mode formatted date-only fields with a local-time formatter, so a stored 2026-11-20 rendered as 11/19/2026 for anyone west of Greenwich while edit mode showed the 20th. Date-only fields now render the stored day in the reader's locale format; `datetime` / `datetimeoffset` fields are unchanged and still render as local time.
+- 48ae81e: feat(ng-base-forms): form sections now say WHICH one holds unsaved edits or invalid input. Every `mj-collapsible-panel` derives live section indicators from the `mj-form-field`s it projects — an amber dot when a field on a saved record is modified (the same dot the field shows after its label) and a red count when a field is invalid or required-and-empty in edit mode (the same conditions that paint the field's underline red) — and the left-nav rail, the More folder, the collapsed rail spine, and accordion headers render them. Failed-save errors with a graph-path `Source` (`Lines[2].Amount`) route to the panel that owns the collection (declare `ValidationSources` when the path name differs from the `SectionKey`) and are never matched on the trailing field name, so a child failure cannot land on the header; errors no section claims stay in the whole-form total. Custom sections supply counts for non-field content through the new `[Indicators]` input, or implement `FormSectionIndicatorSource` and register with the new container-provided `FormSectionIndicatorCoordinator`. Closes #3962.
+- 26046d8: Add a read-mode form toolbar Refresh button that reloads the current record from the database in place and broadcasts to already-visible related-entity grids, the IS-A side panel, and custom form panels.
+- 44ac084: Hide the form toolbar expand-all / collapse-all buttons in left-nav and right-nav chrome. They only apply to accordion panels.
+- aff9886: Left-nav record forms: render the **Details** rail item's field panels as one card instead of loose label/value rows floating on the page background. The left-nav "no accordion chrome" rules were written for a single related grid (the rail label is its header); Details shows every field panel under one rail item, so the container now tags them `mj-chrome-details` (+ `-first` / `-last` on the visual edges, following section display order) and the CSS draws them as segments of a single surface with no per-section headers.
+
+  Also: the left-nav rail's items now scroll on their own when a form has more rail items than fit the viewport (they sit in a `.mj-forms-chrome-rail-items` wrapper with `overflow-y: auto`); before, the overflow was clipped by the panels container and the bottom items were unreachable. The pin / collapse toolbar above them stays fixed.
+
+- 6e98173: Left-nav form chrome can collapse to a thin current-section strip. Pin is the default and is stored per user per entity; unpinned rails hide again after you pick another section.
+- 0869c24: Left-nav rail marks the current section the way the rest of Explorer nav does: muted idle items, brand-tinted selected row, and a 3px leading bar. `aria-current="page"` is set on the active item.
+- aa9006b: Stop left-nav rail items from jumping when a section is selected: keep the previous first-class order across chrome re-resolves. Related-entity leftover height no longer stretches a custom widget's first child (the section header) to 100%, which parked titles mid-column.
+- a76cf28: Left-nav related grids size to their rows (capped) instead of filling leftover flex space, so a form header no longer collapses the grid body to zero.
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 9b6fb5b: Rail section labels show a native tooltip with the full name only when the text is clipped.
+- 14bc0b2: Forms: the section rail now refreshes when Edit mode or Show Empty Fields changes.
+
+  A panel whose fields are all blank gets the `mj-panel-empty` host class in read-only mode, and `domPanelSnapshots()` deliberately skips those panels so the rail doesn't advertise an empty section. The panel itself recomputes live, but `scheduleChromeResolve()` only ran on structural changes (content children, slot remounts, chrome rules, section reorder) — never when field visibility changed. So once a section dropped out of the rail while read-only, switching to Edit brought the panel back but left its nav entry missing until something else forced a resolve.
+
+  `MjRecordFormContainerComponent` now watches the effective Edit-mode and Show-Empty-Fields values in `ngDoCheck` and re-resolves the rail when either flips. Watching the values rather than hooking `OnEditModeChange` matters because the toolbar is not the only writer: `SaveRecord()` and `CancelEdit()` call `EndEditMode()` straight on the form component and never reach that handler, so a save used to leave the reverse staleness behind. The existing resolve is already debounced through a zero-delay timer, so a change to both flags in one tick still costs one resolve.
+
+- 394d276: Declare @angular/\* peer dependencies as ranges (^21.1.3) instead of exact pins across all Angular library packages. Peer declarations are compatibility claims, not install instructions: the exact pins falsely claimed incompatibility with every other Angular 21.x build, produced 502 peer-resolution errors under strict pnpm workspaces, and structurally blocked Angular security patches behind a full republish. Installed versions remain pinned by consuming apps and the era platform manifest; dependencies/devDependencies keep their exact pins.
+- 2a0262d: Give left-nav related grids 5px under the last row so the bottom border is not clipped, without a visible gap above the grid edge.
+- 7a98676: Related-entity grid heights now budget the real rendered chrome: a reserve for AG Grid's horizontal scrollbar (which was clipping the last row mid-glyph whenever columns overflowed), the measured 49px toolbar and header rows, and the 4px of wrapper borders. Fixes both the clipped row and the needless vertical scrollbar on grids whose rows all fit.
+- 6ef741e: Related left-nav grids hug toolbar + header + rows with no 200px floor. Optional MaxHeight (default 560) caps the box so AG Grid scrolls inside; omit it to grow with the rows.
+- 75ca6f8: Fix a `fit-content` / related-entity grid clipping its last row when its columns are wider than the container (#4223).
+
+  `RelatedGridHeightPx` budgets toolbar + header + rows + pad and hands that height to AG Grid, which lays its horizontal scrollbar out _inside_ the box — so whenever the columns overflow, the scrollbar (15px on classic-scrollbar platforms) is taken out of the row area and the last row is sliced. With one row the data row lost roughly half its height.
+  - `RelatedGridHeightPx(rowCount, maxHeight, scrollbarPx?)` gains a third parameter for the measured scrollbar height. A measurement replaces the fixed `RELATED_GRID_HSCROLLBAR_PX` reserve that #4245 introduced (0 releases it entirely; a real bar is budgeted exactly), never past `maxHeight`. A caller that omits it keeps #4245's fixed reserve, so every existing call site's result is unchanged.
+  - `<mj-explorer-entity-data-grid>` measures the allowance from the DOM instead of assuming it: the height AG Grid's fake horizontal scroller (`.ag-body-horizontal-scroll`) takes in the flow, and 0 when it is collapsed or absolutely positioned (overlay scrollbars, which draw over the rows and take no space). The measurement runs two frames after each data load (after AG Grid's own layout frame) and again whenever the host or the scroller resizes, so a scrollbar that appears or disappears as the panel narrows or widens is budgeted or released without a reload.
+  - The chrome constants are the live-measured set #4245 landed (toolbar 49, header 49, wrapper borders 4, bottom pad 2, empty body 56); this change adds the measured scrollbar on top rather than a second set of numbers.
+
+- 84f276e: Related-entity grids prefill every join field on a new child record and persist those defaults on the new-record URL (`/record/:entity/new?NewRecordValues=...`) so the link survives refresh and deeplink.
+
+  Left-nav related grids (including slot-mounted contributions) fill leftover column height and report their row-count badge: SetSectionRowCount upserts unknown section keys, contribution hosts are display:contents so they participate in the flex column, and accordion pixel heights are not applied while the rail is showing the panel.
+
+  Section search matches contribution titles (Orders) in both accordion and left-nav, keeps the rail visible when only one group hits, and does not treat chrome-hidden panels as non-matches.
+
+- 7fcdc2d: A save refused by a server-side `ValidateAsync()` now highlights the offending field(s) in the form — red border plus the inline message — exactly as a synchronous `Validate()` refusal does, instead of only toasting. `ResolverBase` write refusals carry `extensions.validationErrors` (and `SaveEntityGraphOperation` a `ValidationErrors` output) beside the unchanged message; `GraphQLDataProvider` rehydrates them into `LatestResult.Errors`; `BaseFormComponent` publishes both refusal kinds through one path; `mj-form-field` keeps a server-reported error visible on a field the user had already edited until they edit it again. Errors with no field source stay toast-only.
+
+  A `ValidateAsync()` that runs in the browser benefits too: its refusal used to surface as a bare "Error saving record" toast (that path leaves `LatestResult.Message` empty), and now highlights the field the same way. The client's `LatestResult.CompleteMessage` carries the refusal text once — the provider marks the result when its `Message` already renders the rehydrated `Errors`.
+
+- Updated dependencies [4273317]
+- Updated dependencies [394d276]
+- Updated dependencies [834f8d7]
+- Updated dependencies [a987913]
+- Updated dependencies [e533ce5]
+- Updated dependencies [b1b24d7]
+- Updated dependencies [2c826f7]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [b915983]
+- Updated dependencies [b895f92]
+- Updated dependencies [b895f92]
+- Updated dependencies [b7819d2]
+- Updated dependencies [394d276]
+- Updated dependencies [c42c0e8]
+- Updated dependencies [c1fea88]
+- Updated dependencies [4586215]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [1a2ce13]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [255d506]
+- Updated dependencies [0ec1980]
+- Updated dependencies [1940a4d]
+- Updated dependencies [07cb22e]
+- Updated dependencies [deea1a3]
+- Updated dependencies [1d2ffd4]
+- Updated dependencies [c09c818]
+- Updated dependencies [711c208]
+- Updated dependencies [e2ad3c0]
+- Updated dependencies [c581b4f]
+- Updated dependencies [d79fe39]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [2412415]
+- Updated dependencies [06ccfb2]
+- Updated dependencies [9699d0e]
+- Updated dependencies [394d276]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [08829f5]
+- Updated dependencies [815b9bc]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [a5f92d2]
+- Updated dependencies [2d14c62]
+- Updated dependencies [394d276]
+- Updated dependencies [c996a56]
+- Updated dependencies [394d276]
+- Updated dependencies [de6eb14]
+- Updated dependencies [38d4482]
+- Updated dependencies [052b4c7]
+- Updated dependencies [51017a5]
+- Updated dependencies [8ec1515]
+- Updated dependencies [9a905e8]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [50987c4]
+- Updated dependencies [c996a56]
+- Updated dependencies [7b4abe7]
+- Updated dependencies [051e0ff]
+- Updated dependencies [95fc3e6]
+- Updated dependencies [8d880cc]
+- Updated dependencies [1fa6f6b]
+- Updated dependencies [cefc302]
+- Updated dependencies [841e6ea]
+- Updated dependencies [394d276]
+- Updated dependencies [00a2483]
+- Updated dependencies [8f199e2]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [080f4cd]
+- Updated dependencies [bbb7fcc]
+- Updated dependencies [b8130f3]
+- Updated dependencies [d66a26a]
+- Updated dependencies [c643ba3]
+- Updated dependencies [e9e9873]
+- Updated dependencies [1d88e00]
+- Updated dependencies [647bd71]
+- Updated dependencies [e93f221]
+- Updated dependencies [8288711]
+- Updated dependencies [10cbc60]
+- Updated dependencies [be0bdb2]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [d26e202]
+- Updated dependencies [48ff99f]
+- Updated dependencies [076fa5d]
+- Updated dependencies [9f73528]
+- Updated dependencies [68b9cf0]
+- Updated dependencies [85a8f15]
+- Updated dependencies [27e4d09]
+- Updated dependencies [d90a3ea]
+- Updated dependencies [23c2521]
+- Updated dependencies [2741d46]
+- Updated dependencies [048c5ce]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [8ad04e8]
+- Updated dependencies [7300953]
+- Updated dependencies [7300953]
+- Updated dependencies [98841bb]
+- Updated dependencies [53c341c]
+- Updated dependencies [394d276]
+- Updated dependencies [b46330e]
+- Updated dependencies [fccd0b2]
+- Updated dependencies [84f276e]
+- Updated dependencies [6ecfaa0]
+- Updated dependencies [0db4f4f]
+- Updated dependencies [53d256f]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [cf2484c]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [0967ba7]
+- Updated dependencies [f5ec13b]
+- Updated dependencies [de343b5]
+- Updated dependencies [5fc861f]
+- Updated dependencies [1748491]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fefca2]
+- Updated dependencies [a1a8989]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+- Updated dependencies [905820a]
+- Updated dependencies [394d276]
+- Updated dependencies [ca3657d]
+- Updated dependencies [1bd9674]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [394d276]
+- Updated dependencies [5c6e36c]
+- Updated dependencies [d078c54]
+- Updated dependencies [7fcdc2d]
+- Updated dependencies [15319b4]
+- Updated dependencies [d0a2a55]
+- Updated dependencies [b46330e]
+- Updated dependencies [4b1257f]
+- Updated dependencies [ca4feb4]
+- Updated dependencies [1c0d586]
+  - @memberjunction/ng-shared-generic@6.1.0
+  - @memberjunction/ng-ui-components@6.1.0
+  - @memberjunction/ng-entity-viewer@6.1.0
+  - @memberjunction/global@6.1.0
+  - @memberjunction/core@6.1.0
+  - @memberjunction/core-entities@6.1.0
+  - @memberjunction/ng-base-types@6.1.0
+  - @memberjunction/ng-code-editor@6.1.0
+  - @memberjunction/ng-file-storage@6.1.0
+  - @memberjunction/ng-list-management@6.1.0
+  - @memberjunction/ng-markdown@6.1.0
+  - @memberjunction/ng-notifications@6.1.0
+  - @memberjunction/ng-react@6.1.0
+  - @memberjunction/ng-record-changes@6.1.0
+  - @memberjunction/ng-record-tags@6.1.0
+  - @memberjunction/interactive-component-types@6.1.0
+
+## 6.1.0-edge.7
+
+### Minor Changes
+
+- c996a56: Field-Level Security: per-field Read/Update/Create control by role.
+
+  Field security is switched **on or off per entity**, explicitly, via a new
+  `Entity.EnableFieldLevelSecurity` flag. Nothing is inferred from whether permission rows happen to
+  exist, so adding a rule can never change access on an entity that has not opted in.
+
+  A new `EntityFieldPermission` table holds one row per (field, role) with three independent
+  verbs — `ReadAccess`, `UpdateAccess`, `CreateAccess` — each `Allow`, `Deny`, or `No Access`:
+  - **`No Access`** is neutral, and the default. It grants nothing and blocks nothing; another
+    role's Allow still wins.
+  - **`Allow`** grants the action for that role.
+  - **`Deny`** wins over everything. One Deny anywhere across the user's roles beats any number of
+    Allows.
+
+  **Read is required for Update and Create.** A field a user cannot see is one they cannot change,
+  so this is enforced twice: a CHECK constraint refuses the combination within a row, and the
+  aggregation clamps it again across roles — because two individually legal rows held by one user
+  (role A grants Read+Update, role B denies Read) would otherwise aggregate to write-only access
+  that no constraint could see.
+
+  **Turning the flag on is safe.** It snapshots the entity's existing entity-level permissions into
+  per-field rows, so enabling changes nothing until an administrator tightens a specific field.
+  Turning it off keeps the rows, inactive, so re-enabling does not lose the configuration. Those rows
+  maintain themselves: adding a column, granting a role entity access, or dropping either one is
+  reconciled automatically, and an administrator's tightening is never overwritten by that process.
+
+  **Nobody is exempt** — no admin bypass, no Owner carve-out, and no exempt account anywhere in
+  permission evaluation. That includes the **MJ system user**, the account the server runs its own
+  work as: it is not special-cased at runtime, and gets its access from ordinary `Allow` rows
+  written for the standard roles it holds. What is protected instead is the CONFIGURATION — a rule
+  that _denies_ anything to a role the system user holds is refused, and so is giving that account a
+  role which already denies a field. Grants save normally, since they are what the server's own
+  access depends on. Restricting that account would matter because its engine caches are
+  process-wide, so a partially loaded cache would reach every user; a configuration rule stops that
+  somewhere an administrator can see it, rather than behind a bypass that has to be trusted.
+  Primary keys, `__mj_` columns, and the security/identity entities can never be restricted.
+
+  Enforcement (server-side and authoritative):
+  - **Reads.** Denied columns are stripped from RunView results on both the cache-hit and cache-miss
+    paths, and from single-record GraphQL responses.
+  - **The audit trail.** `MJ: Record Changes` rows carry another entity's old and new values, and the
+    audit entity's own field security is off — so without a dedicated control, anyone with entity read
+    on it could read a denied field straight out of the payload, in the default configuration. Each
+    row is now projected against **the entity it is about**, resolved per row from its `EntityID`:
+    denied keys are dropped from `ChangesJSON` and `FullRecordJSON`, and `ChangesDescription` is
+    withheld entirely. Prose cannot be safely redacted — it would leak on the first value that
+    appears in an unexpected form — so it is dropped rather than edited, and callers degrade to a
+    generic label. Rows are never hidden: a user denied one field still sees that a record changed,
+    when, by whom, and which of the fields they may read. It fails closed when the subject entity
+    cannot be resolved, including when a query narrows `Fields` such that no `EntityID` reaches the
+    projection — otherwise `Fields: ['ChangesJSON']` would be a one-parameter bypass. Payload queries
+    in the platform now select `EntityID` alongside; a saved query reading Record Changes directly is
+    not projected, for the same reason no `RunQuery` is. On the write side, an update to a Record
+    Change from a caller carrying any denial ignores every payload column the client sends and
+    reloads the stored values first — a narrowed payload hydrates as an ordinary loaded value and
+    save-SQL generation writes every field, so without this a restricted user editing `Comments`
+    would silently overwrite the audit payload with the narrowed copy they were shown. Nothing is
+    manufactured anywhere in this path: a reader gets the stored value or a strict subset of it, and
+    only the stored value is ever persisted.
+  - **Caller-written SQL.** A request is rejected if `ExtraFilter`, `OrderBy`, or an `Aggregates`
+    expression names a denied field. Without this, `MIN(Salary)` or `Salary > 200000` reads the
+    values back without the column ever appearing in a result. `UserSearchString` is not rejected;
+    denied fields are simply excluded from the search.
+  - **Writes.** A save that changes a field the user cannot update is rejected. Values a client
+    sends for fields it cannot read are ignored — such a field was absent from every payload that
+    client received, so any value coming back is fabricated by the transport.
+  - **Creates.** A value supplied for a field the user may not create is dropped and the column
+    takes its default. This never rejects: an error naming the field would confirm it exists and is
+    restricted, and silently defaulting is what an unrestricted user gets by leaving it blank.
+  - **Typed accessors.** `BaseEntity.Get()` and `.Set()` throw for a field the user cannot read, so
+    a restricted field surfaces as a clear failure rather than a silent blank. Entity forms check
+    access before rendering, so a denied field is simply not shown.
+  - **Direct database connections (SQL Server only).** CodeGen emits column-level `DENY SELECT` on
+    base views for roles with an explicit `ReadAccess = 'Deny'` rule on an enabled entity, restricted
+    to custom DBA-created roles, and skips any role a service login belongs to. PostgreSQL emits
+    nothing — it has no DENY, so Deny-wins cannot be expressed there. See the guide.
+
+  RunView caching is unchanged for everyone else: the server keeps full-width slots shared across
+  users and narrows each response at read time, so a permission change takes effect on the next
+  metadata refresh without invalidating cached results. Browsers key their own cache on the fields
+  the user may see, so tightening access does not leave a stale column on screen.
+
+  Also in this release:
+  - **Permission removal now reaches the database.** CodeGen reads live permission state and
+    re-asserts it each run, so deleting a permission row actually revokes the grant or deny.
+    Previously CodeGen only ever added grants, so a deleted `EntityPermission` row left its `GRANT`
+    in place until the view happened to be rebuilt.
+  - **Partial entity objects are now safe.** `EntityField` gains a not-loaded marker, set when the
+    data an entity was loaded from left a field out. Such fields are skipped on save, are never
+    dirty, and are exempt from the required-field check, so the stored value is kept instead of
+    being overwritten with a default. This fixes silent data loss when a user edits an unrelated
+    field on a record containing columns they cannot read.
+  - **`entity_object` requests always fetch every column the user may see**, whether or not the
+    query is cacheable. This was already true on the server but not for clients, so a client could
+    build a partial entity and write defaults over real data on the next save.
+  - **Server-side `BaseEngine` loads now run as the MJ system user**, regardless of which caller
+    reached `Config()` first. Engine data is infrastructure: the cache is process-wide and shared by
+    every user of the process, so its contents must not depend on the first caller's permissions — one
+    carrying entity denials, RLS row scoping, or field denials would otherwise seal a partial cache
+    that then serves everyone until restart. The identity is sticky once applied, so a later
+    `Config(forceRefresh, someUser)` cannot pull the shared cache back under that user's permissions.
+    Restricting what a given user may SEE stays where it belongs, at the point data is served to them.
+    Client-side (`ProviderType.Network`) behavior is unchanged. Resolution goes through a new
+    ClassFactory seam, `WellKnownUserSource` in `@memberjunction/core`, whose server-side
+    implementation answers from `UserCache`; when nothing is registered — a browser, a test, a
+    database with no such row — the engine degrades to acting as the caller exactly as before, with a
+    once-per-engine-class warning. This is a pre-existing `BaseEngine` defect fixed alongside field
+    security rather than because of it: neither depends on the other, though it is what lets the guide
+    say engine caches cannot be narrowed by a restricted caller.
+
+  New guide: `guides/FIELD_LEVEL_SECURITY_GUIDE.md`. Read the configuration limits before
+  restricting anything. Saved queries are not field-filtered; run access to a query is the grant.
+
+### Patch Changes
+
+- 7fcdc2d: A save refused by a server-side `ValidateAsync()` now highlights the offending field(s) in the form — red border plus the inline message — exactly as a synchronous `Validate()` refusal does, instead of only toasting. `ResolverBase` write refusals carry `extensions.validationErrors` (and `SaveEntityGraphOperation` a `ValidationErrors` output) beside the unchanged message; `GraphQLDataProvider` rehydrates them into `LatestResult.Errors`; `BaseFormComponent` publishes both refusal kinds through one path; `mj-form-field` keeps a server-reported error visible on a field the user had already edited until they edit it again. Errors with no field source stay toast-only.
+
+  A `ValidateAsync()` that runs in the browser benefits too: its refusal used to surface as a bare "Error saving record" toast (that path leaves `LatestResult.Message` empty), and now highlights the field the same way. The client's `LatestResult.CompleteMessage` carries the refusal text once — the provider marks the result when its `Message` already renders the rehydrated `Errors`.
+
+- Updated dependencies [a987913]
+- Updated dependencies [61b5612]
+- Updated dependencies [ee15cf7]
+- Updated dependencies [c996a56]
+- Updated dependencies [c996a56]
+- Updated dependencies [076fa5d]
+- Updated dependencies [cf2484c]
+- Updated dependencies [97aefcc]
+- Updated dependencies [4cdfdcf]
+- Updated dependencies [7fcdc2d]
+  - @memberjunction/core-entities@6.1.0-edge.7
+  - @memberjunction/core@6.1.0-edge.7
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.7
+  - @memberjunction/ng-ui-components@6.1.0-edge.7
+  - @memberjunction/global@6.1.0-edge.7
+  - @memberjunction/ng-base-types@6.1.0-edge.7
+  - @memberjunction/ng-code-editor@6.1.0-edge.7
+  - @memberjunction/ng-file-storage@6.1.0-edge.7
+  - @memberjunction/ng-list-management@6.1.0-edge.7
+  - @memberjunction/ng-notifications@6.1.0-edge.7
+  - @memberjunction/ng-react@6.1.0-edge.7
+  - @memberjunction/ng-record-changes@6.1.0-edge.7
+  - @memberjunction/ng-record-tags@6.1.0-edge.7
+  - @memberjunction/ng-shared-generic@6.1.0-edge.7
+  - @memberjunction/interactive-component-types@6.1.0-edge.7
+  - @memberjunction/ng-markdown@6.1.0-edge.7
+
+## 6.1.0-edge.6
+
+### Patch Changes
+
+- b915983: Align the Angular toolchain on the current 21.x patch line: framework packages 21.1.3 → 21.2.22,
+  CLI/builders 21.1.3 → 21.2.23, CDK 21.1.3 → 21.2.14, ng-packagr → 21.2.7, PrimeNG 21.1.1 → 21.1.9.
+
+  This is a patch-level move inside the supported Angular 21 LTS line, not a framework migration.
+  It closes every open Angular security advisory on the repository — fifteen distinct GHSAs
+  (i18n and template-sanitizer XSS bypasses, service-worker header leakage and credential
+  stripping, HttpTransferCache cross-request leakage, and formatDate/number-format DoS), all fixed
+  in 21.2.19 or earlier — which together accounted for 438 of the 749 open Dependabot alerts.
+
+  Every published `@memberjunction/ng-*` package's `@angular/*` peer range moves from `^21.1.3`
+  (or `^21.0.0`) to `^21.2.22`, so consumers must be on at least that patch. The era-6 platform
+  manifest in `release-lines.json` records the new pin; era 5 (the certified 5.51 line) is
+  unchanged.
+
+  Also moves the exact `@angular/*` runtime pins that 23 libraries carried in `dependencies`
+  into caret `peerDependencies` (adding the missing peers on `ng-react`), so a consumer on any
+  in-range Angular 21.2.x build gets a single Angular copy instead of a nested second runtime, and
+  drops the unused `primeng` peer from `ng-base-forms` (nothing in the repo imports PrimeNG).
+
+- a8ba8b7: fix(ng-base-forms): when a date field holds a value the date editor cannot display, show a warning beside the empty input instead of a blank box that reads as "no date". Previously an unreadable stored value looked identical to an empty field, and saving the record silently wrote NULL over it.
+- 2d14c62: Add Image, Color, and JSON to EntityField.ExtendedType. Forms render an image thumbnail (including inline base64 / data URIs) with an edit-mode upload capped at the field's MaxLength, a color swatch + hex editor, and a pretty-printed JSON textarea. Entity-viewer grid/cards/timeline key image cells off ExtendedType rather than field-name heuristics. PhotoURL, LogoURL, and ImageURL are reclassified to Image with AutoUpdateExtendedType locked so CodeGen cannot overwrite them.
+- 2e4786e: feat(ng-base-forms): a form contribution can declare `leadsWhenUnsaved` so a NEW record opens on it rather than on the first first-class group. An unsaved record already declines to restore a stored rail position; without this it falls through to the lead group, which is usually a summary — and a summary of a record with no data is a page of blanks the user must look past to find where typing starts. Opt-in per form: any form that declares nothing behaves exactly as before.
+- de66f54: fix(ng-base-forms): a `date` column is a calendar day, not an instant. Read mode formatted date-only fields with a local-time formatter, so a stored 2026-11-20 rendered as 11/19/2026 for anyone west of Greenwich while edit mode showed the 20th. Date-only fields now render the stored day in the reader's locale format; `datetime` / `datetimeoffset` fields are unchanged and still render as local time.
+- 48ae81e: feat(ng-base-forms): form sections now say WHICH one holds unsaved edits or invalid input. Every `mj-collapsible-panel` derives live section indicators from the `mj-form-field`s it projects — an amber dot when a field on a saved record is modified (the same dot the field shows after its label) and a red count when a field is invalid or required-and-empty in edit mode (the same conditions that paint the field's underline red) — and the left-nav rail, the More folder, the collapsed rail spine, and accordion headers render them. Failed-save errors with a graph-path `Source` (`Lines[2].Amount`) route to the panel that owns the collection (declare `ValidationSources` when the path name differs from the `SectionKey`) and are never matched on the trailing field name, so a child failure cannot land on the header; errors no section claims stay in the whole-form total. Custom sections supply counts for non-field content through the new `[Indicators]` input, or implement `FormSectionIndicatorSource` and register with the new container-provided `FormSectionIndicatorCoordinator`. Closes #3962.
+- aff9886: Left-nav record forms: render the **Details** rail item's field panels as one card instead of loose label/value rows floating on the page background. The left-nav "no accordion chrome" rules were written for a single related grid (the rail label is its header); Details shows every field panel under one rail item, so the container now tags them `mj-chrome-details` (+ `-first` / `-last` on the visual edges, following section display order) and the CSS draws them as segments of a single surface with no per-section headers.
+
+  Also: the left-nav rail's items now scroll on their own when a form has more rail items than fit the viewport (they sit in a `.mj-forms-chrome-rail-items` wrapper with `overflow-y: auto`); before, the overflow was clipped by the panels container and the bottom items were unreachable. The pin / collapse toolbar above them stays fixed.
+
+- 92f2ac9: Repo-wide sweep of code that assumed an entity's primary key is a single column named `ID`, plus a `PrimaryKeyCompliance` gate in `@memberjunction/core` so the pattern cannot come back.
+
+  MJ supports primary keys with any column name(s) and type(s). Every MJ core entity happens to use `ID`, so hardcoding it works across the whole core product and silently breaks on customer entities mapped from external schemas — `Load()` rejects the invented field name, or a composite key is truncated to its first column. #4179 (search result click-through) was one instance; this sweep found the same shape in ~90 files and fixes all of it on top of the `CompositeKey.FromURLSegment` / `FromEntityRecord` / `ToCompactURLSegment` primitives introduced with that fix.
+
+  **What changed, by kind**
+  - **Literal `ID` key construction** (`{ FieldName: 'ID', Value: x }`, `LoadFromSingleKeyValuePair('ID', …)`, `FromKeyValuePair('ID', …)`) — ~135 sites. Where the entity is a literal MJ core entity the key is now `CompositeKey.FromID(x)`, the one sanctioned way to say "this entity's key is `ID`". Where the entity is a variable (an event's `EntityName`, an `entityInfo`, a configured entity) the key is `CompositeKey.FromURLSegment(entityInfo, recordId)`, which reads a bare value or a `F1|v1||F2|v2` segment against the entity's real primary key(s).
+  - **`PrimaryKeys[0]` → `FirstPrimaryKey`** — 39 sites. Same semantics, a named accessor the gate can track. IS-A shared-key and keyset uses are annotated `// first-pk-ok`.
+  - **Real defects fixed** (arbitrary entity keyed as `ID`): Mobile app record load/edit/offline sync; the generic form overlay; the ERD "open record" path; version-history label/diff/micro-view links (which stripped `ID|` off a stored key and re-wrapped the value as `ID`); `RestoreEngine` and `buildPrimaryKeyForLoad`; the Apollo enrichment connector (six `GetEntityObject(configuredEntity, FromID(record.ID))` calls); geocoding record reload; List Detail record-open (composite keys now open instead of showing a notice); `EmbeddedRecord`; `DatabaseReferenceScanner`; hardcoded `ID` filters on a variable entity in Data Explorer's record load, Predictive Studio's label lookup, the realtime-widget visitor identity lookup, `DuplicateRecordDetector.LoadRecordsByListID`, and MetadataSync's `@lookup` GUID conversion.
+  - **REST API**: `EntityCRUDHandler` / `RESTEndpointHandler` built the key from the `:id` segment for single-column keys only and threw "Composite primary keys are not supported". Both now accept a bare value or a URL-encoded `Field1|Value1||Field2|Value2` segment. Single-column behavior is unchanged.
+  - **One serializer instead of eight**: `ListOperations.serializeRecordId`, `list-set-operations.serializeRecordId`, RecordSetProcessor's `serializeRecordId`, `GetListRecordsAction`'s inline copy, `MJListDetailEntityExtended.BuildRecordID` / `GetCompositeKey`, `record.util.buildCompositeKey`, `VersionHistory.buildCompositeKeyFromRecord` and `ChangeDetector.buildDeleteItem` all delegate to `CompositeKey.FromEntityRecord(...).ToCompactURLSegment()` / `FromURLSegment(...)`. Output is byte-identical for single-column keys.
+
+  **`FirstPrimaryKey` triage** — every one of the ~390 `FirstPrimaryKey` / `FromID` uses in the repo was read in context and either rewritten or annotated with a reason (154 annotations). Real defects found and fixed along the way, all of the shape "first key column used as the whole key" on an entity that can be composite-keyed:
+  - **Data providers**: the deterministic `ORDER BY` fallback for row-limited queries ordered by the first key column only, leaving composite-key pages in undefined order; it now orders by every key column. Saved-view run logging / exclusion and the `{%UserView%}` template subquery, whose persisted `RecordID` cannot hold a composite key, now refuse loudly instead of excluding wrong rows. The dependency-link subquery now predicates on the full key. Single-column SQL is byte-identical.
+  - **CodeGen**: generated cascade delete/update procs bound the child FK to `@<firstPK>` regardless of which parent key column the FK references; a composite key containing an identity column dropped the other key columns from the generated INSERT (both providers); the PostgreSQL JSON-arg `spCreate` inserted only the first key column; the generated join-grid/timeline filters and the GraphQL audit-log `RecordID` truncated composite keys. Single-key generator output verified byte-identical against `HEAD` (168 shapes).
+  - **Smart cache** (`ProviderBase` differential merge): keyed rows on the first PK, so composite-key deletes never applied and rows sharing the first column collapsed.
+  - **Integration push sync**: composed record identity from the first key column while the record map stores all columns joined, so every already-synced composite-key row was re-created externally as a duplicate on each full push; the changed-record path silently dropped rows.
+  - **Scheduled geocoding orphan cleanup** (destructive): compared a cast of the first key column to a `RecordID` holding all columns, so every geocode row for a composite-key entity was deleted on each run.
+  - **Lists**: list membership, export and add-record paths filtered on the first key column and wrote only its value into `ListDetail.RecordID`; Explorer "open record" paths on user-selected entities, duplicate detection, omnibar record search, Data Explorer deep links, the sharing center revoke, recent-access, tree dropdowns, the mobile app's record ids and offline queue.
+  - **AI**: duplicate detection, vector sync record ids, Predictive Studio list scope and write-back; the Recommendations engine also wrote a record id into `SourceEntityID` (an FK to Entities) and never set `SourceEntityRecordID`.
+  - **Apollo enrichment**: `Accounts` (a customer entity) loaded by literal `ID`; the contacts path read its key off an entity that had never been loaded.
+  - Every `entityInfo.FirstPrimaryKey?.Name ?? 'ID'` fallback is gone; where the entity can be missing the code now fails loudly instead of inventing `ID`.
+
+  **The gate** — `packages/MJCore/src/__tests__/PrimaryKeyCompliance.test.ts`, modelled on `MultiProviderCompliance` / `UUIDCompliance`:
+  1. _Strict_: a key built with a literal `ID` field name. Marker `// pk-literal-ok: <reason>`.
+  2. _Strict_: `PrimaryKeys[0]` / `PrimaryKeys.at(0)`.
+  3. _Strict_: `FirstPrimaryKey` and `CompositeKey.FromID(`. These are legitimate only where MJ is single-column by design (foreign-key targets, keyset `ORDER BY` / `AfterKey`, IS-A shared keys, core entities), so every use must be self-evidently on a core entity or say why: `FromID` is exempt when a `'MJ: …'` entity literal is on the same line or within 8 lines above (the `GetEntityObject` / `OpenEntityRecord` naming the core entity); everything else carries `// first-pk-ok: <reason>` on the same line, reason mandatory.
+  4. _Strict_: an `ID = …` / `ID IN (…)` `ExtraFilter` or `Fields: ['ID']` within eight lines of an `EntityName:` that is a variable rather than a string literal or ALL_CAPS constant. Marker `// pk-filter-ok: <reason>`.
+
+  Generated code, tests, `dist/`, and the `TestingFramework` / `UnitTesting` packages are not scanned. The rule is written up in `.claude/rules/data-access.md` § "Primary keys: never assume a column named ID". There is no baseline file: all four gates are strict.
+
+  No public signatures change; every edit is additive or a same-shape substitution, so this is `patch` throughout.
+
+- 14bc0b2: Forms: the section rail now refreshes when Edit mode or Show Empty Fields changes.
+
+  A panel whose fields are all blank gets the `mj-panel-empty` host class in read-only mode, and `domPanelSnapshots()` deliberately skips those panels so the rail doesn't advertise an empty section. The panel itself recomputes live, but `scheduleChromeResolve()` only ran on structural changes (content children, slot remounts, chrome rules, section reorder) — never when field visibility changed. So once a section dropped out of the rail while read-only, switching to Edit brought the panel back but left its nav entry missing until something else forced a resolve.
+
+  `MjRecordFormContainerComponent` now watches the effective Edit-mode and Show-Empty-Fields values in `ngDoCheck` and re-resolves the rail when either flips. Watching the values rather than hooking `OnEditModeChange` matters because the toolbar is not the only writer: `SaveRecord()` and `CancelEdit()` call `EndEditMode()` straight on the form component and never reach that handler, so a save used to leave the reverse staleness behind. The existing resolve is already debounced through a zero-delay timer, so a change to both flags in one tick still costs one resolve.
+
+- 7a98676: Related-entity grid heights now budget the real rendered chrome: a reserve for AG Grid's horizontal scrollbar (which was clipping the last row mid-glyph whenever columns overflowed), the measured 49px toolbar and header rows, and the 4px of wrapper borders. Fixes both the clipped row and the needless vertical scrollbar on grids whose rows all fit.
+- 75ca6f8: Fix a `fit-content` / related-entity grid clipping its last row when its columns are wider than the container (#4223).
+
+  `RelatedGridHeightPx` budgets toolbar + header + rows + pad and hands that height to AG Grid, which lays its horizontal scrollbar out _inside_ the box — so whenever the columns overflow, the scrollbar (15px on classic-scrollbar platforms) is taken out of the row area and the last row is sliced. With one row the data row lost roughly half its height.
+  - `RelatedGridHeightPx(rowCount, maxHeight, scrollbarPx?)` gains a third parameter for the measured scrollbar height. A measurement replaces the fixed `RELATED_GRID_HSCROLLBAR_PX` reserve that #4245 introduced (0 releases it entirely; a real bar is budgeted exactly), never past `maxHeight`. A caller that omits it keeps #4245's fixed reserve, so every existing call site's result is unchanged.
+  - `<mj-explorer-entity-data-grid>` measures the allowance from the DOM instead of assuming it: the height AG Grid's fake horizontal scroller (`.ag-body-horizontal-scroll`) takes in the flow, and 0 when it is collapsed or absolutely positioned (overlay scrollbars, which draw over the rows and take no space). The measurement runs two frames after each data load (after AG Grid's own layout frame) and again whenever the host or the scroller resizes, so a scrollbar that appears or disappears as the panel narrows or widens is budgeted or released without a reload.
+  - The chrome constants are the live-measured set #4245 landed (toolbar 49, header 49, wrapper borders 4, bottom pad 2, empty body 56); this change adds the measured scrollbar on top rather than a second set of numbers.
+
+- Updated dependencies [2c826f7]
+- Updated dependencies [b915983]
+- Updated dependencies [b7819d2]
+- Updated dependencies [c1fea88]
+- Updated dependencies [197fdf8]
+- Updated dependencies [67e4c9e]
+- Updated dependencies [4c1de04]
+- Updated dependencies [0d3094c]
+- Updated dependencies [0ec1980]
+- Updated dependencies [e9c5b90]
+- Updated dependencies [78ea840]
+- Updated dependencies [43f9133]
+- Updated dependencies [469461a]
+- Updated dependencies [2cc08e1]
+- Updated dependencies [2d14c62]
+- Updated dependencies [38d4482]
+- Updated dependencies [51017a5]
+- Updated dependencies [8d880cc]
+- Updated dependencies [6485ef0]
+- Updated dependencies [b954812]
+- Updated dependencies [e9e9873]
+- Updated dependencies [10cbc60]
+- Updated dependencies [9b9e5a4]
+- Updated dependencies [f544a93]
+- Updated dependencies [9f73528]
+- Updated dependencies [63bc733]
+- Updated dependencies [92f2ac9]
+- Updated dependencies [98841bb]
+- Updated dependencies [0677595]
+- Updated dependencies [2be2960]
+- Updated dependencies [7f3c60c]
+- Updated dependencies [1748491]
+- Updated dependencies [7fefca2]
+- Updated dependencies [b00a985]
+- Updated dependencies [041865c]
+  - @memberjunction/core-entities@6.1.0-edge.6
+  - @memberjunction/ng-base-types@6.1.0-edge.6
+  - @memberjunction/ng-code-editor@6.1.0-edge.6
+  - @memberjunction/ng-entity-viewer@6.1.0-edge.6
+  - @memberjunction/ng-file-storage@6.1.0-edge.6
+  - @memberjunction/ng-list-management@6.1.0-edge.6
+  - @memberjunction/ng-markdown@6.1.0-edge.6
+  - @memberjunction/ng-notifications@6.1.0-edge.6
+  - @memberjunction/ng-react@6.1.0-edge.6
+  - @memberjunction/ng-record-changes@6.1.0-edge.6
+  - @memberjunction/ng-record-tags@6.1.0-edge.6
+  - @memberjunction/ng-shared-generic@6.1.0-edge.6
+  - @memberjunction/ng-ui-components@6.1.0-edge.6
+  - @memberjunction/core@6.1.0-edge.6
+  - @memberjunction/global@6.1.0-edge.6
+  - @memberjunction/interactive-component-types@6.1.0-edge.6
+
 ## 6.1.0-edge.5
 
 ### Patch Changes

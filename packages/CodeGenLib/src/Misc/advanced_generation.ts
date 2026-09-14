@@ -12,6 +12,40 @@ export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
 export type CheckConstraintParserResult = { Description: string, Code: string, MethodName: string, ModelID: string }
 
+/** Width of `Entity.Name`; a candidate longer than this cannot be inserted. */
+const MAX_ENTITY_NAME_LENGTH = 255;
+
+/**
+ * Tokens a model returns in place of a name when it has no answer. Compared case-insensitively
+ * against the trimmed candidate.
+ */
+const NON_NAME_SENTINELS: ReadonlySet<string> = new Set([
+    'null', 'undefined', 'none', 'n/a', 'na', 'error', 'unknown', 'entityname', 'entity name'
+]);
+
+/**
+ * True when `candidate` could plausibly be an entity name: a non-empty string that fits the column,
+ * contains at least one run of two letters, and is not a bare non-answer token.
+ *
+ * Exists because a model can — and did — answer the entity-name prompt with `-1`. Nothing between the
+ * prompt and the INSERT questioned it: the name became `-1`, the INSERT failed on the metadata
+ * constraints, the failure was logged and swallowed, and CodeGen carried on reporting success with the
+ * table silently absent. Eleven of twenty-seven tables vanished from one connector that way.
+ */
+export function isPlausibleEntityName(candidate: unknown): candidate is string {
+    if (typeof candidate !== 'string') {
+        return false;
+    }
+    const name = candidate.trim();
+    if (name.length === 0 || name.length > MAX_ENTITY_NAME_LENGTH) {
+        return false;
+    }
+    if (NON_NAME_SENTINELS.has(name.toLowerCase())) {
+        return false;
+    }
+    return /[A-Za-z]{2,}/.test(name);
+}
+
 export type SmartFieldIdentificationResult = {
     /**
      * RANKED candidate list for the entity's human-readable record name, best first.
@@ -636,6 +670,10 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<EntityNameResult>(params);
 
             if (result.success && result.result) {
+                if (!isPlausibleEntityName(result.result.entityName)) {
+                    LogError(`AdvancedGeneration:Entity name generation for ${tableName} returned ${JSON.stringify(result.result.entityName)}, which is not a name; the table-derived name will be used instead`);
+                    return null;
+                }
                 LogStatus(`Entity name generated for ${tableName}: ${result.result.entityName}`);
                 return result.result;
             } else {

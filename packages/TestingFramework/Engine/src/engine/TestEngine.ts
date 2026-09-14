@@ -27,6 +27,8 @@ import { BaseTestDriver } from '../drivers/BaseTestDriver';
 import { IOracle } from '../oracles/IOracle';
 import { SchemaValidatorOracle } from '../oracles/SchemaValidatorOracle';
 import { TraceValidatorOracle } from '../oracles/TraceValidatorOracle';
+import { TraceSubAgentValidatorOracle } from '../oracles/TraceSubAgentValidatorOracle';
+import { AgentDecisionOracle, ResponseWellFormedOracle } from '../oracles/AgentDecisionOracle';
 import { LLMJudgeOracle } from '../oracles/LLMJudgeOracle';
 import { ExactMatchOracle } from '../oracles/ExactMatchOracle';
 import { SQLValidatorOracle } from '../oracles/SQLValidatorOracle';
@@ -651,6 +653,9 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private async registerBuiltInOracles(): Promise<void> {
         this.RegisterOracle(new SchemaValidatorOracle());
         this.RegisterOracle(new TraceValidatorOracle());
+        this.RegisterOracle(new TraceSubAgentValidatorOracle());
+        this.RegisterOracle(new AgentDecisionOracle());
+        this.RegisterOracle(new ResponseWellFormedOracle());
         this.RegisterOracle(new LLMJudgeOracle());
         this.RegisterOracle(new ExactMatchOracle());
         this.RegisterOracle(new SQLValidatorOracle());

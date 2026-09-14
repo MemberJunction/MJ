@@ -57,20 +57,24 @@ describe('Config Types', () => {
 });
 
 describe('integrityChecks defaults', () => {
-    // `failOnError: false` is a DELIBERATE default, not an oversight, and it is the kind of value
-    // someone tidies to `true` on sight. Until it existed the checks could not fail at all:
-    // `runCodeGen` discarded RunIntegrityChecks()'s results, printed a success tick, and reported
-    // `success: true, errors: []` over a run that had just logged `Integrity check FAILED`.
-    // It ships `false` ONLY because the `MJ: Entities` Sequence drift it reports is live on `next`
-    // today — flipping it in the same change would red every CodeGen run before anyone could act on
-    // the finding. Flip it once that drift is resolved; do not flip it to tidy the config.
-    it('defaults failOnError to false, so enabling it stays a deliberate act', () => {
-        expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.failOnError).toBe(false);
-    });
-
-    it('still runs the checks by default — reporting is not what is gated', () => {
+    // The checks run by default. This is the half that makes the reporting in `runCodeGen` reach
+    // anybody: a repo that ships with `enabled: false` gets the 'none-ran' warning rather than a
+    // pass, but it also gets no verification, so the default has to be on.
+    it('runs the integrity checks by default', () => {
         expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.enabled).toBe(true);
         expect(DEFAULT_CODEGEN_CONFIG.integrityChecks?.entityFieldsSequenceCheck).toBe(true);
+    });
+
+    // There is deliberately no `failOnError`-style opt-out. A failing integrity check always fails
+    // the run. Pinning the ABSENCE here is the point: the knob is an easy thing to add in good
+    // faith ("let people keep building while they fix the drift"), and its default would decide
+    // whether every existing repo silently stops failing. If a future change wants one, it has to
+    // delete this test and argue with the reason, which is what a fixture is for.
+    it('exposes no way to turn a failing check into a passing run', () => {
+        expect(Object.keys(DEFAULT_CODEGEN_CONFIG.integrityChecks ?? {}).sort()).toEqual([
+            'enabled',
+            'entityFieldsSequenceCheck',
+        ]);
     });
 });
 

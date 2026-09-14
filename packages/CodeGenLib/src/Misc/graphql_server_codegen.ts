@@ -1,4 +1,4 @@
-import { EntityInfo, EntityFieldInfo, TypeScriptTypeFromSQLType, TypeScriptTypeFromSQLTypeWithNullableOption, getGraphQLTypeNameBase } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, ReadableFieldsTransportKey, TypeScriptTypeFromSQLType, TypeScriptTypeFromSQLTypeWithNullableOption, getGraphQLTypeNameBase } from '@memberjunction/core';
 import {
     IsBinarySQLType,
     IsBooleanSQLType,
@@ -309,21 +309,70 @@ export class ${serverGraphQLTypeName} {`;
   protected generateServerEntityFooter(entity: EntityInfo): string {
     if (!entity) logError('entity parameter must be passed in to generateServerEntityFooter()');
 
-    return `\n}`;
+    return `${this.generateReadableFieldsTransportField()}\n}`;
+  }
+
+  /**
+   * Emits the field-security transport field onto every generated object type.
+   *
+   * Present on ALL entities, not just those with `EnableFieldLevelSecurity` — the schema is a
+   * build artifact and that flag is runtime metadata an administrator can toggle in Explorer, so
+   * a schema whose SHAPE depended on it would be silently wrong the moment someone flipped it
+   * without re-running CodeGen. It is nullable and the server leaves it null for unrestricted
+   * callers, so it costs nothing on the overwhelming majority of requests.
+   *
+   * See {@link ReadableFieldsTransportKey} for what it carries and why it names readable rather
+   * than denied fields.
+   */
+  protected generateReadableFieldsTransportField(): string {
+    return `
+    @Field(() => [String], { nullable: true, description: \`Field-level security: when non-null, the fields on this entity the calling user may read. Any other field arriving as null was withheld by the server rather than genuinely empty. Null for callers with no field restrictions.\` })
+    ${ReadableFieldsTransportKey}?: string[];
+        `;
+  }
+
+  /**
+   * Whether an OUTPUT-type field may be marked non-nullable in the generated GraphQL schema.
+   *
+   * The rule is deliberately NOT `AllowsNull`. A column's NOT NULL constraint and a GraphQL
+   * field's `!` say different things:
+   *
+   *   - NOT NULL  — no ROW stores an empty value in this column.
+   *   - `String!` — every RESPONSE, to every caller, carries a value for this field.
+   *
+   * The second does not follow from the first. It only coincided while every caller saw every
+   * column of every row they could read. Field-level security ends that: a denied field is
+   * OMITTED from the response (`ResolverBase.MapFieldNamesToCodeNames`), and GraphQL treats an
+   * absent value on a non-nullable field as an error that propagates up to the nearest nullable
+   * parent — nulling the whole record on a single-record load, the whole query on a typed list,
+   * and failing the mutation RESPONSE after the write already landed.
+   *
+   * So presence is promised only where FLS is structurally incapable of stripping the field:
+   * primary keys (hard and soft) and `__mj_` system columns — exactly
+   * {@link EntityFieldInfo.IsUnrestrictableField}, the same predicate the runtime aggregation and
+   * the save-time guard use. Anything else can legitimately be absent for SOME caller, so the
+   * schema must not promise otherwise.
+   *
+   * INPUT types are unaffected and keep deriving from `AllowsNull` — they carry the WRITE
+   * contract, which the database constraint does still govern.
+   */
+  protected isNonNullableServerField(fieldInfo: EntityFieldInfo): boolean {
+    return fieldInfo.IsUnrestrictableField;
   }
 
   protected generateServerField(fieldInfo: EntityFieldInfo): string {
     const fieldString: string = this.getTypeGraphQLFieldString(fieldInfo);
     // use a special codename for graphql because if we start with __mj we will replace with _mj_ as we can't start with __ it has meaning in graphql
     const codeName: string = fieldInfo.CodeName.startsWith('__mj') ? '_mj_' + fieldInfo.CodeName.substring(4) : fieldInfo.CodeName;
+    const nullable: boolean = !this.isNonNullableServerField(fieldInfo);
     let fieldOptions: string = '';
-    if (fieldInfo.AllowsNull) fieldOptions += 'nullable: true';
+    if (nullable) fieldOptions += 'nullable: true';
     if (fieldInfo.Description !== null && fieldInfo.Description.trim().length > 0)
       fieldOptions += (fieldOptions.length > 0 ? ', ' : '') + `description: \`${fieldInfo.Description.replace(/`/g, "\\`")}\``;
 
     return `
     @Field(${fieldString}${fieldOptions.length > 0 ? (fieldString == '' ? '' : ', ') + `{${fieldOptions}}` : ''}) ${fieldInfo.MaxLength > 0 && fieldString == '' /*string*/ ? '\n    @MaxLength(' + fieldInfo.MaxLength + ')' : ''}
-    ${codeName}${fieldInfo.AllowsNull ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
+    ${codeName}${nullable ? '?' : ''}: ${TypeScriptTypeFromSQLType(fieldInfo.Type)};
         `;
   }
 

@@ -286,24 +286,18 @@ const advancedGenerationSchema = z.object({
 export type IntegrityCheckConfig = z.infer<typeof integrityCheckConfigSchema>;
 
 const integrityCheckConfigSchema = z.object({
+  /**
+   * Master switch for the integrity checks. When false no check runs, and `runCodeGen` warns rather
+   * than ticking green — nothing was measured, which is not the same claim as "everything passed".
+   *
+   * There is deliberately NO `failOnError` knob here. A failing integrity check always fails the
+   * run (see `runCodeGen`): these checks report `EntityField` Sequence drift, which corrupts the
+   * column ordering that `spCreate`/`spUpdate` depend on, so there is no state of the world in
+   * which a caller wants the finding reported and the run still green. Turning the checks off is
+   * the supported way to opt out, and it says so in the output instead of passing silently.
+   */
   enabled: z.boolean(),
   entityFieldsSequenceCheck: z.boolean(),
-  /**
-   * Whether a failing integrity check fails the CodeGen run.
-   *
-   * Until this existed the checks could not fail at all: `RunIntegrityChecks` built a result per
-   * check and `runCodeGen` discarded the array, printed a success tick, and reported
-   * `success: true, errors: []`. A check whose only failure path is a `console.log` is not a check —
-   * a nightly drift-gate run has carried `Integrity check FAILED: entityFieldsSequenceCheck` for
-   * seven `MJ: Entities` fields, on green, for weeks.
-   *
-   * Defaults to `false` rather than `true` ONLY because that condition is live on `next` today, and
-   * flipping it in the same change would red every CodeGen run before anyone could act on the
-   * finding. The reporting is truthful either way now (see `runCodeGen`). Flip this to `true` once
-   * the `MJ: Entities` Sequence drift is resolved; that is a one-line change and the last step of
-   * this fix.
-   */
-  failOnError: z.boolean().default(false),
 });
 
 export type ForceRegenerationConfig = z.infer<typeof forceRegenerationConfigSchema>;
@@ -509,16 +503,6 @@ const newEntityRelationshipDefaultsSchema = z.object({
   CreateOneToManyRelationships: z.boolean().default(true),
 });
 
-export const decisionMetadataConfigSchema = z.object({
-  /**
-   * Controls decision metadata persistence:
-   * - 'auto' (default): enabled if <metadataDirectory>/entities/.mj-sync.json exists
-   * - true: explicitly enabled
-   * - false: explicitly disabled
-   */
-  enabled: z.union([z.literal('auto'), z.boolean()]).default('auto'),
-}).default({ enabled: 'auto' });
-export type DecisionMetadataConfig = z.infer<typeof decisionMetadataConfigSchema>;
 
 /**
  * Default settings applied when creating new entities
@@ -650,8 +634,6 @@ const configInfoSchema = z.object({
   forceRegeneration: forceRegenerationConfigSchema,
   /** Root directory containing metadata files for sync (e.g. './metadata') */
   metadataDirectory: z.string().optional(),
-  /** Decision metadata persistence settings */
-  decisionMetadata: decisionMetadataConfigSchema,
 
   /** Database platform: 'sqlserver' or 'postgresql'. */
   dbPlatform: z.enum(['sqlserver', 'postgresql']).default('sqlserver'),
@@ -932,7 +914,6 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   graphqlPort: 4000,
   verboseOutput: false,
   metadataDirectory: './metadata',
-  decisionMetadata: { enabled: 'auto' },
 
   settings: [
     { name: 'mj_core_schema', value: '__mj' },
@@ -1008,7 +989,6 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   integrityChecks: {
     enabled: true,
     entityFieldsSequenceCheck: true,
-    failOnError: false,
   },
   advancedGeneration: {
     enableAdvancedGeneration: true,
@@ -1514,4 +1494,44 @@ export function mj_core_schema(): string {
  */
 export function dbPlatform(): DatabasePlatform {
   return configInfo.dbPlatform;
+}
+
+/**
+ * Environment switch that keeps advanced (AI) generation ON for in-process CodeGen runs. Absent, or any
+ * value other than '1', means an in-process run turns it off for its duration.
+ */
+export const IN_PROCESS_ADVANCED_GENERATION_ENV = 'RSU_CODEGEN_ADVANCED_GENERATION';
+
+/**
+ * Applies the in-process CodeGen policy for advanced generation to `config` and returns a function that
+ * puts the previous value back.
+ *
+ * In-process CodeGen is the runtime schema-update path: a connector's tables are created while a
+ * customer watches a progress screen. The CLI's full AI profile is the wrong thing to run there. Every
+ * new entity and field goes through several LLM round trips, so the step's duration becomes the LLM
+ * provider's failover behaviour rather than the schema's size (one 27-table connector spent hours in
+ * it), and a model that answers the name prompt with `-1` puts the whole table at risk. So an in-process
+ * run disables advanced generation unless the operator opts back in with
+ * RSU_CODEGEN_ADVANCED_GENERATION=1. Table-derived names and descriptions are what the runtime path
+ * produces; the AI profile stays available to the CLI, which reads the same config untouched.
+ */
+export function applyInProcessAdvancedGenerationPolicy(
+  config: ConfigInfo,
+  env: NodeJS.ProcessEnv = process.env
+): { disabled: boolean; restore: () => void } {
+  const noop = { disabled: false, restore: (): void => undefined };
+  if (env[IN_PROCESS_ADVANCED_GENERATION_ENV] === '1') {
+    return noop;
+  }
+  const section = config.advancedGeneration;
+  if (!section || section.enableAdvancedGeneration !== true) {
+    return noop;
+  }
+  section.enableAdvancedGeneration = false;
+  return {
+    disabled: true,
+    restore: (): void => {
+      section.enableAdvancedGeneration = true;
+    },
+  };
 }
