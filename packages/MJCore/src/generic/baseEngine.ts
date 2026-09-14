@@ -279,6 +279,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _configRefreshGeneration: Map<string, number> = new Map();
 
     /**
+     * Identity of the last cross-server cache payload applied to each property, used to
+     * ignore an incoming payload that carries nothing new.
+     *
+     * A peer server warming its cache republishes every entity config it loads, so a single
+     * peer startup can deliver one `set` event per config to every other server — the large
+     * majority of them identical to what the receiving server already holds. Applying a
+     * redundant payload is not free: it swaps in a newly materialized entity array and forces
+     * a full {@link AdditionalLoading} rebuild of the engine's derived state.
+     *
+     * Identity is rowCount + maxUpdatedAt, matching what the read-path cache check uses.
+     * Keyed by config PropertyName.
+     */
+    private _lastAppliedCachePayload: Map<string, { rowCount: number; maxUpdatedAt: string }> = new Map();
+
+    /**
      * Returns an Observable for a specific engine array property. Subscribers receive the
      * current array immediately (BehaviorSubject semantics), then re-receive the same array
      * reference whenever the engine mutates it (save, delete, remote-invalidate, refresh).
@@ -2129,6 +2144,14 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             try {
                 const parsed = JSON.parse(event.Data);
                 if (parsed?.results && Array.isArray(parsed.results)) {
+                    // Ignore a payload identical to the one already applied — reapplying it
+                    // would swap the array and rebuild all derived state for no benefit.
+                    // See {@link _lastAppliedCachePayload}.
+                    const stamp = { rowCount: parsed.results.length, maxUpdatedAt: String(parsed.maxUpdatedAt ?? '') };
+                    const applied = this._lastAppliedCachePayload.get(config.PropertyName);
+                    if (applied && applied.rowCount === stamp.rowCount && applied.maxUpdatedAt === stamp.maxUpdatedAt) {
+                        return;
+                    }
                     // Claim a refresh generation BEFORE the awaited materialization — the same
                     // protocol LoadSingleConfig uses around its awaited RunView. Without it, two
                     // overlapping cache events (or an event racing a full reload) can resolve out
@@ -2148,6 +2171,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                             ErrorMessage: '',
                             UserViewRunID: '',
                         });
+                        // HandleSingleViewResult replaces the property with newly materialized
+                        // entity objects, so anything a subclass derived from the previous
+                        // objects in AdditionalLoading — grouped child collections, memoized
+                        // lookups — now refers to instances this engine has discarded and must
+                        // be rebuilt. Every other path that replaces a property does this;
+                        // omitting it leaves an engine whose arrays are complete and correct
+                        // while its derived state is stale or empty, which is invisible to any
+                        // row-count check and is not repaired by EnsureLoaded()/Config() because
+                        // the config is still marked loaded.
+                        await this.AdditionalLoading(this._contextUser);
+                        // Emit after the rebuild, never before, so subscribers cannot observe
+                        // the property before its derived state is attached.
+                        this.emitPropertyChange(config.PropertyName);
+                        this._lastAppliedCachePayload.set(config.PropertyName, stamp);
                         return;
                     }
                     // rows === null → cannot safely materialize; fall through to a full reload
@@ -2160,8 +2197,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 LogStatus(`BaseEngine.OnExternalCacheChange: payload for '${config.PropertyName}' could not be applied (${e instanceof Error ? e.message : String(e)}) — falling back to full reload`);
             }
         }
-        // Fallback: reload this config from the database
+        // Fallback: reload this config from the database. This also replaces the property,
+        // so the derived state has to be rebuilt here too. The property no longer reflects
+        // any cache payload, so drop the recorded identity — the next payload has to be
+        // judged on its own.
+        this._lastAppliedCachePayload.delete(config.PropertyName);
         await this.LoadSingleConfig(config, this._contextUser);
+        await this.AdditionalLoading(this._contextUser);
     }
 
     /**
