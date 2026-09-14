@@ -288,6 +288,68 @@ export abstract class SQLDialect implements SQLParserDialect {
         return `LOWER(${expr})`;
     }
 
+    // ─── Prompt / Tooling Description ──────────────────────
+
+    /**
+     * Human-readable name for this dialect, as it should appear to a person
+     * — or to an LLM being told which SQL to write.
+     *
+     * Abstract on purpose: the name is dialect knowledge, so a new dialect
+     * declares it once here rather than every prompt/UI keeping its own map.
+     */
+    abstract get DisplayName(): string;
+
+    /**
+     * The `sql-formatter` language key for this dialect (e.g. `'tsql'`,
+     * `'postgresql'`). Callers that pretty-print generated SQL read this
+     * instead of hardcoding a language, so formatting follows the tenant's
+     * actual platform.
+     */
+    abstract get FormatterLanguage(): string;
+
+    /**
+     * A syntax briefing for this dialect, composed ENTIRELY from this class's
+     * own primitives — nothing here is a hand-maintained per-dialect prose
+     * table. Implementing the dialect is therefore sufficient to get correct
+     * guidance; there is no second list to remember to update.
+     *
+     * Consumed by the `_SQL_DIALECT_RULES` system placeholder, which makes it
+     * available to EVERY AI prompt template without any template having to be
+     * registered anywhere. That is the point: the set of SQL-generating
+     * templates is a predicate ("does it ask for SQL?"), never a list of IDs.
+     */
+    get PromptGuidance(): string {
+        const topN = this.LimitClause(10);
+        const firstRows = [topN.prefix, '<columns> FROM <table>', topN.suffix]
+            .filter(part => part.length > 0)
+            .join(' ');
+        const page = this.LimitClause(25, 50);
+        const pagedRows = [page.prefix, '<columns> FROM <table> ORDER BY <column>', page.suffix]
+            .filter(part => part.length > 0)
+            .join(' ');
+
+        return [
+            `Target database platform: **${this.DisplayName}**. Emit ${this.DisplayName} syntax ONLY — SQL written for a different platform will fail on this tenant.`,
+            '',
+            `${this.DisplayName} syntax reference:`,
+            `- Quote an identifier: ${this.QuoteIdentifier('Order Date')}`,
+            `- Qualify an object: ${this.QuoteSchema('sales', 'vwOrders')}`,
+            `- Alias a column: <expression> AS ${this.QuoteColumnAlias('TotalRevenue')}`,
+            `- Limit rows: SELECT ${firstRows}`,
+            `- Page rows: SELECT ${pagedRows}`,
+            `- Boolean literals: ${this.BooleanLiteral(true)} (true) / ${this.BooleanLiteral(false)} (false)`,
+            `- Null-coalesce (2 args): ${this.IsNull('t.Amount', '0')}`,
+            `- Null-coalesce (n-ary): ${this.Coalesce('t.Amount', '0')}`,
+            `- Conditional expression: ${this.IIF('t.Amount > 0', "'Positive'", "'Non-positive'")}`,
+            `- Current timestamp (UTC): ${this.CurrentTimestampUTC()}`,
+            `- Date arithmetic (30 days ago): ${this.DateAddExpression('DAY', -30, this.CurrentTimestampUTC())}`,
+            `- Case-insensitive compare: ${this.LowerCase('t.Name')} = ${this.LowerCase("'acme'")}`,
+            `- Concatenate strings with the ${this.ConcatOperator()} operator, or cast first with ${this.CastToText('<expression>')}`,
+            `- New UUID: ${this.NewUUID()}`,
+            `- NULL literal: ${this.NullLiteral}`,
+        ].join('\n');
+    }
+
     // ─── Type-Name Sets (single source of truth for SQL ↔ category mapping) ──
     //
     // Each dialect declares the SQL type names it uses for each conceptual

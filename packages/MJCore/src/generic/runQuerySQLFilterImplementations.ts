@@ -63,7 +63,36 @@ const DANGEROUS_SQL_KEYWORDS = [
 ];
 
 /**
- * Allowed keywords and functions for ORDER BY and similar expressions
+ * Allowed keywords and functions for ORDER BY and similar expressions.
+ *
+ * WHY THIS IS A UNION RATHER THAN A PER-DIALECT TABLE
+ * ---------------------------------------------------
+ * This is a deny-by-default SAFETY list, not a grammar. Its job is to keep a
+ * user-supplied expression from reaching the database with something that is
+ * not a read-only scalar/aggregate call — it is not, and must not become, a
+ * per-platform parser. So the list carries the union of every supported
+ * dialect's read-only vocabulary.
+ *
+ * Keying it off `ResolvePlatformKey` is the alternative, and it costs more than
+ * it buys: a PostgreSQL name reaching a SQL Server tenant is caught by the SQL
+ * Server parser, which rejects `DATE_TRUNC(...)` on its own. The union cannot
+ * widen the blast radius past what the target server will actually parse, while
+ * a dialect switch here would add a second place for the dialect to be wrong.
+ *
+ * The names below are read-only by construction. Anything that writes, escalates,
+ * or reaches outside the query stays on {@link DANGEROUS_SQL_KEYWORDS}, which is
+ * checked FIRST and unconditionally — adding a name here can never unblock one
+ * that is denied there.
+ *
+ * NOTE ON WHAT THIS LIST CURRENTLY GATES. `sqlNoKeywordsExpression`'s unknown-token
+ * gate reads `isKnownKeyword && !isAllowed`, which reduces to
+ * `isDangerous && !isAllowed` — and every dangerous keyword has already thrown in
+ * the loop above it. So an UNRECOGNISED token falls straight through today, which
+ * is why `DATE_TRUNC` was not actually being rejected here. This list is therefore
+ * the DECLARED allowlist: it is what that gate will consult the moment it is
+ * tightened to reject unknown tokens, and it has to carry the PostgreSQL names
+ * BEFORE that happens, not after. Do not read the entries below as the set of
+ * things that are currently reachable.
  */
 const ALLOWED_SQL_KEYWORDS = [
     // Direction keywords
@@ -88,7 +117,15 @@ const ALLOWED_SQL_KEYWORDS = [
     'AND', 'OR', 'NOT', 'IS', 'NULL', 'LIKE',
     
     // Comparison operators (as words)
-    'BETWEEN', 'IN'
+    'BETWEEN', 'IN',
+
+    // PostgreSQL read-only vocabulary. Accepted alongside the T-SQL set above
+    // per the union rationale in this list's doc comment.
+    'ILIKE', 'CEIL', 'RANDOM', 'TRUNC', 'MOD', 'GREATEST', 'LEAST',
+    'POSITION', 'STRPOS', 'SPLIT_PART', 'INITCAP', 'LPAD', 'RPAD', 'REGEXP_REPLACE', 'TO_CHAR', 'TO_DATE',
+    'NOW', 'CURRENT_DATE', 'CURRENT_TIMESTAMP', 'DATE_TRUNC', 'DATE_PART', 'EXTRACT', 'AGE',
+    'ARRAY_AGG', 'STRING_AGG', 'COALESCE', 'NULLIF',
+    'NULLS', 'FIRST', 'LAST', 'FILTER'
 ];
 
 /**

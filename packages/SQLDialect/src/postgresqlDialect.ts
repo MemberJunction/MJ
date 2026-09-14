@@ -158,6 +158,15 @@ export class PostgreSQLDialect extends SQLDialect {
         return 'PostgresQL';
     }
 
+    get DisplayName(): string {
+        return 'PostgreSQL';
+    }
+
+    /** `sql-formatter` ships PostgreSQL under the `postgresql` language key. */
+    get FormatterLanguage(): string {
+        return 'postgresql';
+    }
+
     /**
      * PostgreSQL has no in-row row-size limit (TOAST stores oversized variable-length values
      * out-of-line), so {@link MaxInRowSizeBytes} stays `null` (inherited). It does enforce a
