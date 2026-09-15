@@ -5,10 +5,10 @@
 -- web search vendor, carrying the ClassFactory driver key, an admin on/off switch, ordering,
 -- and an optional credential link.
 --
--- Deliberately a near-mirror of __mj.SearchProvider so the two are learnable together. The
--- tables are separate because the engines are: SearchProvider feeds the internal search engine,
--- whose SearchResultItem requires EntityName and RecordID (the primary key of a source record).
--- A web result has a URL and neither of those.
+-- Deliberately a near-mirror of ${flyway:defaultSchema}.SearchProvider so the two are learnable
+-- together. The tables are separate because the engines are: SearchProvider feeds the internal
+-- search engine, whose SearchResultItem requires EntityName and RecordID (the primary key of a
+-- source record). A web result has a URL and neither of those.
 --
 -- Capability flags are NOT columns. Whether a driver can return a synthesized answer or honour
 -- a domain filter is a property of the driver implementation, declared on the class — exactly
