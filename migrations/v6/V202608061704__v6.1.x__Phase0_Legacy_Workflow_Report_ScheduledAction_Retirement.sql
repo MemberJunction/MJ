@@ -273,6 +273,13 @@ GO
 ALTER PROC [${flyway:defaultSchema}].[spDeleteEntityWithCoreDependencies]
   @EntityID uniqueidentifier
 AS
+-- Without this, a constraint violation aborts only the offending statement and the proc runs
+-- on: it strips EntityField / EntityPermission / EntityRelationship rows for an entity whose
+-- Entity row then fails to delete, and reports only the LAST error of the resulting cascade.
+-- That is what made #4483 read as FK_ResourceType_CategoryEntityID when the true first cause
+-- was FK_ResourceLink_ResourceType, two errors earlier.
+SET XACT_ABORT ON
+
 DELETE FROM [${flyway:defaultSchema}].EntityFieldValue WHERE EntityFieldID IN (SELECT ID FROM [${flyway:defaultSchema}].EntityField WHERE EntityID = @EntityID)
 DELETE FROM [${flyway:defaultSchema}].EntitySetting WHERE EntityID = @EntityID
 DELETE FROM [${flyway:defaultSchema}].EntityField WHERE EntityID = @EntityID
@@ -305,7 +312,181 @@ DELETE FROM [${flyway:defaultSchema}].[EntityAIAction] WHERE [OutputEntityID] = 
 -- so the Entity row can be deleted without tripping FK_EntityField_RelatedEntity.
 UPDATE [${flyway:defaultSchema}].EntityField SET RelatedEntityID = NULL WHERE RelatedEntityID = @EntityID
 
+-- ResourceType points at Entity TWICE: EntityID (deleted above) and CategoryEntityID. Only the
+-- first was ever cleared, so an entity used as a resource type's CATEGORY could never be
+-- deleted. Null it for the same reason the line above nulls RelatedEntityID: once the entity is
+-- gone the category link is meaningless. Symmetric partner to the #3561 hardening.
+UPDATE [${flyway:defaultSchema}].ResourceType SET CategoryEntityID = NULL WHERE CategoryEntityID = @EntityID
+
 DELETE FROM [${flyway:defaultSchema}].Entity WHERE ID = @EntityID
+GO
+
+-- ════════════════════════════════════════════════════════════════════════════════════════
+-- Retirement pre-clean (#4483, #3546)
+--
+-- spDeleteEntityWithCoreDependencies cascades 21 of the ~72 foreign keys that reference
+-- Entity. The rest block its final DELETE FROM Entity whenever they hold a row for one of the
+-- 11 entities retired below. On a stock database exactly one of them does --
+-- ResourceType.CategoryEntityID -- and this migration survives only because delete ORDER
+-- happens to clear it as a side effect (MJ: Reports is retired before MJ: Report Categories).
+-- Any database where Reports were actually used breaks that coincidence, and the upgrade
+-- hard-fails here. That is #4483.
+--
+-- This block clears those references up front so the generated block below cannot fail, and
+-- THROWs rather than leaving an entity half-pruned if it cannot.
+--
+-- Everything runs in ONE batch deliberately: #Retired and #Refs must outlive each statement,
+-- and relying on temp tables surviving a GO would be an assumption about the migration
+-- runner's connection handling that nothing here needs to make.
+-- ════════════════════════════════════════════════════════════════════════════════════════
+
+-- The retry loop below catches FK-ordering errors and retries. XACT_ABORT must be OFF for that
+-- to work: with it ON a caught error still dooms the enclosing transaction (the runner wraps
+-- each migration in one) and every later statement fails with "the current transaction cannot
+-- be committed". The proc above sets it ON for its own body, which is scoped to the proc.
+SET XACT_ABORT OFF;
+
+CREATE TABLE #Retired (ID uniqueidentifier PRIMARY KEY);
+INSERT INTO #Retired (ID) VALUES
+ ('12CD5A5D-A83B-EF11-86D4-0022481D1B23'),  -- MJ: Scheduled Actions
+ ('58E4EE77-0A3C-EF11-86D4-0022481D1B23'),  -- MJ: Scheduled Action Params
+ ('F2238F34-2837-EF11-86D4-6045BDEE16E6'),  -- MJ: Workflow Runs
+ ('F3238F34-2837-EF11-86D4-6045BDEE16E6'),  -- MJ: Workflows
+ ('F4238F34-2837-EF11-86D4-6045BDEE16E6'),  -- MJ: Workflow Engines
+ ('06248F34-2837-EF11-86D4-6045BDEE16E6'),  -- MJ: Output Trigger Types
+ ('09248F34-2837-EF11-86D4-6045BDEE16E6'),  -- MJ: Reports
+ ('0A248F34-2837-EF11-86D4-6045BDEE16E6'),  -- MJ: Report Snapshots
+ ('27248F34-2837-EF11-86D4-6045BDEE16E6'),  -- MJ: Report Categories
+ ('4A4C2EE1-BFDD-434E-9A03-6F6C2384D01F'),  -- MJ: Report User States
+ ('9516058D-9729-48EC-B0B8-E91A8221FC8F');  -- MJ: Report Versions
+
+-- ── The `Reports` resource type ─────────────────────────────────────────────────────────
+-- Both ResourceType.EntityID and ResourceType.CategoryEntityID are NULLABLE, so the generic
+-- sweep below would simply null them and leave a `Reports` resource type pointing at nothing
+-- -- a dead entry users can still see. Retire it explicitly instead, dependents first, so the
+-- migration OWNS the user-visible artefacts it destroys rather than inheriting them as a side
+-- effect of a generic metadata proc.
+--
+-- Matched by the entity it points at, not by name, so a renamed resource type is still caught
+-- (a mismatched EntityID is one of the two documented triggers for #4483).
+--
+-- The five dependent tables below are the complete set of inbound foreign keys into
+-- ResourceType; the postcondition immediately after proves it on every database that runs
+-- this, so the list cannot silently go stale.
+DECLARE @RetiredResourceTypes TABLE (ID uniqueidentifier PRIMARY KEY);
+INSERT INTO @RetiredResourceTypes (ID)
+SELECT rt.[ID]
+FROM [${flyway:defaultSchema}].[ResourceType] rt
+WHERE rt.[EntityID] IN (SELECT ID FROM #Retired)
+   OR rt.[CategoryEntityID] IN (SELECT ID FROM #Retired);
+
+DELETE FROM [${flyway:defaultSchema}].[ResourceLink]       WHERE [ResourceTypeID] IN (SELECT ID FROM @RetiredResourceTypes);
+DELETE FROM [${flyway:defaultSchema}].[ResourcePermission] WHERE [ResourceTypeID] IN (SELECT ID FROM @RetiredResourceTypes);
+DELETE FROM [${flyway:defaultSchema}].[WorkspaceItem]      WHERE [ResourceTypeID] IN (SELECT ID FROM @RetiredResourceTypes);
+DELETE FROM [${flyway:defaultSchema}].[MagicLinkInvite]    WHERE [ResourceTypeID] IN (SELECT ID FROM @RetiredResourceTypes);
+UPDATE [${flyway:defaultSchema}].[UserNotification] SET [ResourceTypeID] = NULL
+                                                   WHERE [ResourceTypeID] IN (SELECT ID FROM @RetiredResourceTypes);
+DELETE FROM [${flyway:defaultSchema}].[ResourceType]       WHERE [ID] IN (SELECT ID FROM @RetiredResourceTypes);
+
+IF EXISTS (SELECT 1 FROM [${flyway:defaultSchema}].[ResourceType]
+           WHERE [EntityID] IN (SELECT ID FROM #Retired) OR [CategoryEntityID] IN (SELECT ID FROM #Retired))
+    THROW 50000, 'Retirement pre-clean: a ResourceType row for a retired entity survived. A new inbound foreign key into ResourceType exists that this migration does not clear.', 1;
+
+-- ── Generic sweep of every remaining inbound Entity reference ────────────────────────────
+-- Discovered from sys.foreign_keys so the whole set is covered rather than the handful the
+-- proc knows about. Nullable FK columns are NULLED; NOT NULL columns mean the row itself has
+-- to go -- the schema's own statement about whether the child can exist without the parent.
+SELECT  sch      = SCHEMA_NAME(pt.schema_id),
+        tblName  = pt.name,
+        colName  = pc.name,
+        tbl      = QUOTENAME(SCHEMA_NAME(pt.schema_id)) + '.' + QUOTENAME(pt.name),
+        col      = QUOTENAME(pc.name),
+        nullable = pc.is_nullable
+INTO    #Refs
+FROM sys.foreign_keys fk
+JOIN sys.tables rt ON rt.object_id = fk.referenced_object_id
+     AND rt.name = 'Entity' AND SCHEMA_NAME(rt.schema_id) = '${flyway:defaultSchema}'
+JOIN sys.tables pt ON pt.object_id = fk.parent_object_id
+JOIN sys.foreign_key_columns fkc ON fkc.constraint_object_id = fk.object_id
+JOIN sys.columns pc ON pc.object_id = pt.object_id AND pc.column_id = fkc.parent_column_id
+WHERE pt.name <> 'Entity';   -- Entity.ParentID is a self-reference, handled after the children
+
+-- The proc already cascades these 21 correctly, including their own dependents
+-- (EntityFieldValue before EntityField, ListDetail before List). Sweeping them here fights
+-- that ordering -- an earlier iteration of this block deadlocked exactly there -- so the sweep
+-- covers only what the proc misses. Compared on bare names because the schema is a
+-- placeholder; this list mirrors the proc body above and must be kept in step with it.
+--
+-- ResourceType.CategoryEntityID is deliberately NOT excluded even though the proc now nulls
+-- it: the explicit block above should already have removed every affected ResourceType row,
+-- and sweeping it too costs nothing and covers the case where one survived.
+DELETE r FROM #Refs r
+WHERE r.sch = '${flyway:defaultSchema}'
+  AND r.tblName + '.' + r.colName IN (
+      'EntitySetting.EntityID', 'EntityField.EntityID', 'EntityField.RelatedEntityID',
+      'EntityPermission.EntityID', 'EntityRelationship.EntityID', 'EntityRelationship.RelatedEntityID',
+      'UserApplicationEntity.EntityID', 'ApplicationEntity.EntityID', 'RecordChange.EntityID',
+      'AuditLog.EntityID', 'Conversation.LinkedEntityID', 'List.EntityID',
+      'EntityDocument.EntityID', 'CompanyIntegrationRecordMap.EntityID', 'ResourceType.EntityID',
+      'DatasetItem.EntityID', 'UserViewCategory.EntityID', 'UserView.EntityID',
+      'EntityAIAction.EntityID', 'EntityAIAction.OutputEntityID',
+      'EntityCommunicationMessageType.EntityID');
+
+DECLARE @sql nvarchar(max);
+
+-- Pass 1 -- nullable references simply stop pointing at the retired entity.
+SET @sql = N'';
+SELECT @sql = @sql + N'UPDATE ' + tbl + N' SET ' + col + N' = NULL WHERE ' + col
+                   + N' IN (SELECT ID FROM #Retired);' + CHAR(10)
+FROM #Refs WHERE nullable = 1;
+EXEC sp_executesql @sql;
+
+-- Pass 2 -- NOT NULL references mean the row itself must go. Bounded retry loop, because
+-- referencing tables have their own dependents and no single pass satisfies every order.
+DECLARE @attempt int = 0, @MAX_ATTEMPTS int = 6, @removed int = 1, @remaining int = 0;
+DECLARE @tbl nvarchar(400), @col nvarchar(200);
+WHILE @attempt < @MAX_ATTEMPTS AND @removed > 0
+BEGIN
+    SET @attempt += 1;
+    SET @removed = 0;
+    DECLARE c CURSOR LOCAL FAST_FORWARD FOR SELECT tbl, col FROM #Refs WHERE nullable = 0;
+    OPEN c;
+    FETCH NEXT FROM c INTO @tbl, @col;
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        BEGIN TRY
+            SET @sql = N'DELETE FROM ' + @tbl + N' WHERE ' + @col + N' IN (SELECT ID FROM #Retired);';
+            EXEC sp_executesql @sql;
+            SET @removed += @@ROWCOUNT;
+        END TRY
+        BEGIN CATCH
+            -- 547 is a foreign-key ordering problem: this table has dependents that another
+            -- entry in #Refs will clear on a later pass. Anything else is unexpected -- rethrow.
+            IF ERROR_NUMBER() <> 547 THROW;
+        END CATCH
+        FETCH NEXT FROM c INTO @tbl, @col;
+    END
+    CLOSE c;
+    DEALLOCATE c;
+END
+
+-- Children of a retired entity would otherwise block its delete via Entity.ParentID.
+UPDATE [${flyway:defaultSchema}].[Entity] SET ParentID = NULL WHERE ParentID IN (SELECT ID FROM #Retired);
+
+-- Postcondition -- nothing may still point at a retired entity, by any route. If the bounded
+-- loop above ran out of attempts, this is what stops the migration from committing a
+-- half-pruned database (the silent state #3546 describes) and names the problem instead.
+SET @sql = N'SELECT @n = ISNULL(SUM(c), 0) FROM (SELECT 0 c';
+SELECT @sql = @sql + N' UNION ALL SELECT COUNT(*) FROM ' + tbl + N' WHERE ' + col
+                   + N' IN (SELECT ID FROM #Retired)'
+FROM #Refs;
+SET @sql = @sql + N') x;';
+EXEC sp_executesql @sql, N'@n int OUTPUT', @n = @remaining OUTPUT;
+IF @remaining > 0
+    THROW 50000, 'Retirement pre-clean could not clear all inbound references to the retired entities; aborting rather than half-pruning the metadata.', 1;
+
+DROP TABLE #Refs;
+DROP TABLE #Retired;
 GO
 
 
