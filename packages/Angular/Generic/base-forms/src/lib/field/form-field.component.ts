@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy, ElementRef, Renderer2 } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson } from '@memberjunction/core';
+import { BaseEntity, EntityInfo, EntityFieldInfo, EntityFieldTSType, CompositeKey, KeyValuePair, RunView, CoerceImageSrc, IsInlineImageDataUri, CoerceRawImageBase64ToDataUri, MaxStoredImageChars, MaxInlineImageBytes, FormatByteSize, ParseCssHexColor, PrettyPrintJson, IsDateOnlySQLType, FormatDateOnly } from '@memberjunction/core';
 import { BaseEngineRegistry } from '@memberjunction/core';
 import { ValidationErrorInfo, HighlightSearchMatches, detectRichTextFormat, RichTextFormat, UUIDsEqual } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -2115,7 +2115,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
    * an instant, and the correct way to show THAT is the reader's local zone.
    */
   private get IsDateOnlyField(): boolean {
-    return (this.FieldInfo?.Type ?? '').trim().toLowerCase() === 'date';
+    return IsDateOnlySQLType(this.FieldInfo?.Type);
   }
 
   FormatValue(): string {
@@ -2140,7 +2140,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
        * and local time is the right way to show one.
        */
       if (this.IsDateOnlyField) {
-        return val.toLocaleDateString(undefined, { timeZone: 'UTC' });
+        return FormatDateOnly(val);
       }
       return val.toLocaleString();
     }
