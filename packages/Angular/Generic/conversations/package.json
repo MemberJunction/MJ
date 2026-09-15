@@ -37,7 +37,6 @@
     "@memberjunction/ai-core-plus": "6.1.0",
     "@memberjunction/ai-engine-base": "6.1.0",
     "@memberjunction/ai-realtime-client": "6.1.0",
-    "@memberjunction/aiengine": "6.1.0",
     "@memberjunction/conversations-runtime": "6.1.0",
     "@memberjunction/core": "6.1.0",
     "@memberjunction/core-entities": "6.1.0",

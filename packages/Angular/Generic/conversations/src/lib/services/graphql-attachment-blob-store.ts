@@ -4,7 +4,7 @@ import type {
     AttachmentBlobUploadInput,
     AttachmentBlobUploadResult,
     IAttachmentBlobStore,
-} from '@memberjunction/aiengine';
+} from '@memberjunction/ai-core-plus';
 
 /**
  * @fileoverview Browser-side implementation of the conversation-attachment blob seam.

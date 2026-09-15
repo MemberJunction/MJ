@@ -30,13 +30,11 @@ import {
     AttachmentType,
     AttachmentContent,
     DEFAULT_ATTACHMENT_LIMITS,
-    DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES
+    DEFAULT_INLINE_STORAGE_THRESHOLD_BYTES,
+    AttachmentBlobStoreUnavailableError,
+    type IAttachmentBlobStore
 } from '@memberjunction/ai-core-plus';
 import { createBase64DataUrl, parseBase64DataUrl } from '@memberjunction/ai';
-import {
-    AttachmentBlobStoreUnavailableError,
-    type IAttachmentBlobStore,
-} from './IAttachmentBlobStore';
 
 /**
  * Input for adding a new attachment

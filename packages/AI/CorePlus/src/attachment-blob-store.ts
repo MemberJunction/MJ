@@ -31,9 +31,24 @@ import { UserInfo, IMetadataProvider } from '@memberjunction/core';
  * `ConversationUtility` in `@memberjunction/ai-core-plus`, which is browser-safe — while holding its
  * own `IAttachmentBlobStore` implementation rather than reaching through `GetAttachmentService()`.
  *
- * Fixing that one import — or splitting this package's entry points — would let a non-Node host use
- * the shared service itself, not just the shared contract. It belongs to this package's owners
- * rather than to the branch that discovered it.
+ * Fixing that one import — or splitting `@memberjunction/aiengine`'s entry points — would let a
+ * non-Node host use the shared *service* itself, not just this contract. Still open.
+ *
+ * ## Why this contract lives in `ai-core-plus`
+ *
+ * It was in `@memberjunction/aiengine`, and a type-only import was thought to be enough: `import
+ * type` is fully erased, so no aiengine code ever reached the browser bundle. What that reasoning
+ * missed is that the class-registration manifest generator walks **package.json**, not imports. The
+ * declared dependency was a live edge even though nothing imported through it at runtime — and when
+ * `aiengine` later gained a `@memberjunction/storage` dependency, that edge carried seven
+ * storage-driver classes (and `node:net`, `node:stream`, `node-fetch`) straight into the browser
+ * manifest and broke the MJExplorer bundle.
+ *
+ * So the contract now sits next to `ConversationUtility` in `ai-core-plus`, which is browser-safe
+ * by construction. `aiengine` re-exports it, so every existing consumer is unaffected.
+ *
+ * The rule this encodes: **a browser-reachable package must not DECLARE a server-only dependency,
+ * even for types.** See `packages/Angular/Bootstrap/CLAUDE.md`.
  *
  * ## Design notes
  *

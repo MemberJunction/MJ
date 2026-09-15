@@ -4,7 +4,7 @@ import {
     AttachmentBlobStoreUnavailableError,
     type AttachmentBlobUploadInput,
     type IAttachmentBlobStore,
-} from '../services/IAttachmentBlobStore';
+} from '@memberjunction/ai-core-plus';
 
 /**
  * Tests for the attachment blob seam.

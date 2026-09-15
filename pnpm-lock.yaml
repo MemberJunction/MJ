@@ -2539,7 +2539,7 @@ importers:
         version: 3.0.7(@azure/identity@4.13.1)
       googleapis:
         specifier: ^144.0.0
-        version: 144.0.0(encoding@0.1.13)
+        version: 144.0.0
 
   packages/AI/RealtimeClient:
     dependencies:
@@ -4061,9 +4061,6 @@ importers:
       '@memberjunction/ng-shared':
         specifier: 6.1.0
         version: link:../Explorer/shared
-      '@memberjunction/storage':
-        specifier: 6.1.0
-        version: link:../../MJStorage
       '@memberjunction/tag-engine-base':
         specifier: 6.1.0
         version: link:../../AI/Knowledge/TagEngineBase
@@ -4165,9 +4162,6 @@ importers:
       '@memberjunction/ng-shared':
         specifier: 6.1.0
         version: link:../Explorer/shared
-      '@memberjunction/storage':
-        specifier: 6.1.0
-        version: link:../../MJStorage
       rxjs:
         specifier: ^7.8.2
         version: 7.8.2
@@ -6472,9 +6466,6 @@ importers:
       '@memberjunction/ai-realtime-client':
         specifier: 6.1.0
         version: link:../../../AI/RealtimeClient
-      '@memberjunction/aiengine':
-        specifier: 6.1.0
-        version: link:../../../AI/Engine
       '@memberjunction/conversations-runtime':
         specifier: 6.1.0
         version: link:../../../ConversationsRuntime
@@ -9196,7 +9187,7 @@ importers:
     devDependencies:
       '@angular-devkit/build-angular':
         specifier: 21.2.23
-        version: 21.2.23(c9585001f8eadf034085e60e36fd3d7a)
+        version: 21.2.23(8b5ff6c8d6b2881cf5a377178f9c369e)
       '@angular/cli':
         specifier: 21.2.23
         version: 21.2.23(@types/node@24.10.11)(chokidar@5.0.0)
@@ -30147,7 +30138,7 @@ snapshots:
       tinyglobby: 0.2.15
       ts-morph: 21.0.1
     optionalDependencies:
-      '@angular-devkit/build-angular': 21.2.23(c9585001f8eadf034085e60e36fd3d7a)
+      '@angular-devkit/build-angular': 21.2.23(8b5ff6c8d6b2881cf5a377178f9c369e)
       '@angular/build': 21.2.23(3ceae79fd7ed0fe1f3994a5a26ea5c16)
       vite: 7.3.1(@types/node@24.10.11)(jiti@2.6.1)(less@4.9.0)(lightningcss@1.32.0)(sass@1.97.3)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
@@ -30246,109 +30237,12 @@ snapshots:
       - webpack-cli
       - yaml
 
-  '@angular-devkit/build-angular@21.2.23(c9585001f8eadf034085e60e36fd3d7a)':
-    dependencies:
-      '@ampproject/remapping': 2.3.0
-      '@angular-devkit/architect': 0.2102.23(chokidar@5.0.0)
-      '@angular-devkit/build-webpack': 0.2102.23(chokidar@5.0.0)(webpack-dev-server@5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)))(webpack@5.105.2(esbuild@0.28.1))
-      '@angular-devkit/core': 21.2.23(chokidar@5.0.0)
-      '@angular/build': 21.2.23(352f6625325b8a9675eda04593a3a071)
-      '@angular/compiler-cli': 21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3)
-      '@babel/core': 7.29.7
-      '@babel/generator': 7.29.1
-      '@babel/helper-annotate-as-pure': 7.27.3
-      '@babel/helper-split-export-declaration': 7.24.7
-      '@babel/plugin-transform-async-generator-functions': 7.29.0(@babel/core@7.29.7)
-      '@babel/plugin-transform-async-to-generator': 7.28.6(@babel/core@7.29.7)
-      '@babel/plugin-transform-runtime': 7.29.0(@babel/core@7.29.7)
-      '@babel/preset-env': 7.29.2(@babel/core@7.29.7)
-      '@babel/runtime': 7.29.2
-      '@discoveryjs/json-ext': 0.6.3
-      '@ngtools/webpack': 21.2.23(@angular/compiler-cli@21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3))(typescript@5.9.3)(webpack@5.105.2(esbuild@0.28.1))
-      ansi-colors: 4.1.3
-      autoprefixer: 10.4.27(postcss@8.5.23)
-      babel-loader: 10.0.0(@babel/core@7.29.7)(webpack@5.105.2(esbuild@0.28.1))
-      browserslist: 4.28.1
-      copy-webpack-plugin: 14.0.0(webpack@5.105.2(esbuild@0.28.1))
-      css-loader: 7.1.3(webpack@5.105.2(esbuild@0.28.1))
-      esbuild-wasm: 0.28.1
-      http-proxy-middleware: 3.0.7
-      istanbul-lib-instrument: 6.0.3
-      jsonc-parser: 3.3.1
-      karma-source-map-support: 1.4.0
-      less: 4.9.0
-      less-loader: 12.3.1(less@4.9.0)(webpack@5.105.2(esbuild@0.28.1))
-      license-webpack-plugin: 4.0.2(webpack@5.105.2(esbuild@0.28.1))
-      loader-utils: 3.3.1
-      mini-css-extract-plugin: 2.10.0(webpack@5.105.2(esbuild@0.28.1))
-      open: 11.0.0
-      ora: 9.3.0
-      picomatch: 4.0.4
-      piscina: 5.2.0
-      postcss: 8.5.23
-      postcss-loader: 8.2.0(postcss@8.5.23)(typescript@5.9.3)(webpack@5.105.2(esbuild@0.28.1))
-      resolve-url-loader: 5.0.0
-      rxjs: 7.8.2
-      sass: 1.97.3
-      sass-loader: 16.0.7(sass@1.97.3)(webpack@5.105.2(esbuild@0.28.1))
-      semver: 7.7.4
-      source-map-loader: 5.0.0(webpack@5.105.2(esbuild@0.28.1))
-      source-map-support: 0.5.21
-      terser: 5.46.0
-      tinyglobby: 0.2.15
-      tree-kill: 1.2.2
-      tslib: 2.8.1
-      typescript: 5.9.3
-      webpack: 5.105.2(esbuild@0.28.1)
-      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
-      webpack-dev-server: 5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
-      webpack-merge: 6.0.1
-      webpack-subresource-integrity: 5.1.0(webpack@5.105.2(esbuild@0.28.1))
-    optionalDependencies:
-      '@angular/core': 21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)
-      '@angular/localize': 21.2.22(@angular/compiler-cli@21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3))(@angular/compiler@21.2.22)
-      '@angular/platform-browser': 21.2.22(@angular/animations@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0)))(@angular/common@21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2))(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))
-      '@angular/service-worker': 21.2.22(@angular/core@21.2.22(@angular/compiler@21.2.22)(rxjs@7.8.2)(zone.js@0.16.0))(rxjs@7.8.2)
-      esbuild: 0.28.1
-      ng-packagr: 21.2.7(@angular/compiler-cli@21.2.22(@angular/compiler@21.2.22)(typescript@5.9.3))(tslib@2.8.1)(typescript@5.9.3)
-    transitivePeerDependencies:
-      - '@angular/compiler'
-      - '@rspack/core'
-      - '@swc/core'
-      - '@types/node'
-      - bufferutil
-      - chokidar
-      - debug
-      - html-webpack-plugin
-      - jiti
-      - lightningcss
-      - node-sass
-      - sass-embedded
-      - stylus
-      - sugarss
-      - supports-color
-      - tsx
-      - uglify-js
-      - utf-8-validate
-      - vitest
-      - webpack-cli
-      - yaml
-
   '@angular-devkit/build-webpack@0.2102.23(chokidar@5.0.0)(webpack-dev-server@5.2.6(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)))(webpack@5.105.2(esbuild@0.28.1))':
     dependencies:
       '@angular-devkit/architect': 0.2102.23(chokidar@5.0.0)
       rxjs: 7.8.2
       webpack: 5.105.2(esbuild@0.28.1)
       webpack-dev-server: 5.2.6(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
-    transitivePeerDependencies:
-      - chokidar
-
-  '@angular-devkit/build-webpack@0.2102.23(chokidar@5.0.0)(webpack-dev-server@5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)))(webpack@5.105.2(esbuild@0.28.1))':
-    dependencies:
-      '@angular-devkit/architect': 0.2102.23(chokidar@5.0.0)
-      rxjs: 7.8.2
-      webpack: 5.105.2(esbuild@0.28.1)
-      webpack-dev-server: 5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
     transitivePeerDependencies:
       - chokidar
 
@@ -43887,7 +43781,7 @@ snapshots:
 
   google-logging-utils@1.1.3: {}
 
-  googleapis-common@7.2.0(encoding@0.1.13):
+  googleapis-common@7.2.0:
     dependencies:
       extend: 3.0.2
       gaxios: 6.7.1(encoding@0.1.13)
@@ -43910,10 +43804,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  googleapis@144.0.0(encoding@0.1.13):
+  googleapis@144.0.0:
     dependencies:
       google-auth-library: 9.15.1(encoding@0.1.13)
-      googleapis-common: 7.2.0(encoding@0.1.13)
+      googleapis-common: 7.2.0
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -49677,45 +49571,6 @@ snapshots:
       - tslib
 
   webpack-dev-server@5.2.6(debug@4.4.3)(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)):
-    dependencies:
-      '@types/bonjour': 3.5.13
-      '@types/connect-history-api-fallback': 1.5.4
-      '@types/express': 4.17.25
-      '@types/express-serve-static-core': 4.19.8
-      '@types/serve-index': 1.9.4
-      '@types/serve-static': 1.15.10
-      '@types/sockjs': 0.3.36
-      '@types/ws': 8.18.1
-      ansi-html-community: 0.0.8
-      bonjour-service: 1.3.0
-      chokidar: 3.6.0
-      colorette: 2.0.20
-      compression: 1.8.1
-      connect-history-api-fallback: 2.0.0
-      express: 4.22.1
-      graceful-fs: 4.2.11
-      http-proxy-middleware: 2.0.9(@types/express@4.17.25)(debug@4.4.3)
-      ipaddr.js: 2.3.0
-      launch-editor: 2.14.1
-      open: 10.2.0
-      p-retry: 6.2.1
-      schema-utils: 4.3.3
-      selfsigned: 5.5.0
-      serve-index: 1.9.2
-      sockjs: 0.3.24
-      spdy: 4.0.2
-      webpack-dev-middleware: 7.4.5(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1))
-      ws: 8.19.0
-    optionalDependencies:
-      webpack: 5.105.2(esbuild@0.28.1)
-    transitivePeerDependencies:
-      - bufferutil
-      - debug
-      - supports-color
-      - tslib
-      - utf-8-validate
-
-  webpack-dev-server@5.2.6(tslib@2.8.1)(webpack@5.105.2(esbuild@0.28.1)):
     dependencies:
       '@types/bonjour': 3.5.13
       '@types/connect-history-api-fallback': 1.5.4
