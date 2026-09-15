@@ -17,9 +17,9 @@ SELECT
   {{ AIAgentRunID | sqlString }} AS AgentRunID,
   SUM(CASE WHEN f.IsPriced = 1 AND f.IsParallelParent = 0 THEN f.OwnCost END) AS TotalCost,
   SUM(CASE WHEN f.IsParallelParent = 0 THEN 1 ELSE 0 END) AS TotalPrompts,
-  SUM(f.TokensPrompt) AS TotalTokensInput,
-  SUM(f.TokensCompletion) AS TotalTokensOutput,
-  SUM(f.TokensPrompt) + SUM(f.TokensCompletion) AS TotalTokens
+  SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensPrompt ELSE 0 END) AS TotalTokensInput,
+  SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensCompletion ELSE 0 END) AS TotalTokensOutput,
+  SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensPrompt + f.TokensCompletion ELSE 0 END) AS TotalTokens
 FROM [__mj].vwAIUsageFacts f
 INNER JOIN AgentRunHierarchy arh ON f.AgentRunID = arh.ID
 WHERE f.IsCompleted = 1

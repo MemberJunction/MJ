@@ -1,10 +1,10 @@
 SELECT
     f.ModelID,
     f.PromptID,
-    SUM(f.TokensCacheRead) AS TokensCacheRead,
-    SUM(f.TokensPrompt) AS TokensPrompt,
-    CAST(SUM(f.TokensCacheRead) * 1.0 / NULLIF(SUM(f.TokensPrompt + f.TokensCacheRead), 0) AS DECIMAL(5, 4)) AS CacheReadShare,
-    SUM(CAST(f.TokensCacheRead AS DECIMAL(18, 4)) * (COALESCE(c.InputPricePerUnit, 0) - COALESCE(c.CacheReadPricePerUnit, 0)) / 1000000.0) AS EstimatedSavings
+    SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensCacheRead ELSE 0 END) AS TokensCacheRead,
+    SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensPrompt ELSE 0 END) AS TokensPrompt,
+    CAST(SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensCacheRead ELSE 0 END) * 1.0 / NULLIF(SUM(CASE WHEN f.IsParallelParent = 0 THEN f.TokensPrompt + f.TokensCacheRead ELSE 0 END), 0) AS DECIMAL(5, 4)) AS CacheReadShare,
+    SUM(CAST(CASE WHEN f.IsParallelParent = 0 THEN f.TokensCacheRead ELSE 0 END AS DECIMAL(18, 4)) * (COALESCE(c.InputPricePerUnit, 0) - COALESCE(c.CacheReadPricePerUnit, 0)) / 1000000.0) AS EstimatedSavings
 FROM [__mj].vwAIUsageFacts f
 OUTER APPLY (
     SELECT TOP 1 mc.InputPricePerUnit, mc.CacheReadPricePerUnit
