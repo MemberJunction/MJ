@@ -189,7 +189,7 @@ import {
     SQLServerVectorDatabase,
 } from '@memberjunction/ai-vectors-sqlserver';
 
-// @memberjunction/core-entities (415 classes)
+// @memberjunction/core-entities (416 classes)
 import {
     AIAgentPermissionProvider,
     AISkillPermissionProvider,
@@ -602,6 +602,7 @@ import {
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1074,7 +1075,7 @@ import {
     MJVectorIndexEntityServer,
 } from '@memberjunction/core-entities-server';
 
-// @memberjunction/core-actions (147 classes)
+// @memberjunction/core-actions (148 classes)
 import {
     APIRateLimiterAction,
     ActionSmithAgent,
@@ -1084,6 +1085,7 @@ import {
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -1719,6 +1721,7 @@ const CLASS_REGISTRATIONS_2: any[] = [
     MJVersionLabelItemEntity,
     MJVersionLabelRestoreEntity,
     MJViewTypeEntity,
+    MJWebSearchProviderEntity,
     MJWorkspaceEntity,
     MJWorkspaceItemEntity,
     QueryPermissionProvider,
@@ -1857,11 +1860,11 @@ const CLASS_REGISTRATIONS_2: any[] = [
     HootSuiteDeleteScheduledPostAction,
     HootSuiteGetAnalyticsAction,
     HootSuiteGetScheduledPostsAction,
-    HootSuiteGetSocialProfilesAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_3: any[] = [
+    HootSuiteGetSocialProfilesAction,
     HootSuiteSearchPostsAction,
     HootSuiteUpdateScheduledPostAction,
     InstagramCreatePostAction,
@@ -2061,11 +2064,11 @@ const CLASS_REGISTRATIONS_3: any[] = [
     MJUserRoutineRecipientEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
-    APIRateLimiterAction,
 ];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const CLASS_REGISTRATIONS_4: any[] = [
+    APIRateLimiterAction,
     ActionSmithAgent,
     ActivateInteractiveFormVersionAction,
     AddDocumentContentAction,
@@ -2073,6 +2076,7 @@ const CLASS_REGISTRATIONS_4: any[] = [
     AddViewResultsToListAction,
     AggregateDataAction,
     AssignUserRolesAction,
+    BraveSearchAction,
     BulkUpdateListItemStatusAction,
     BusinessDaysCalculatorAction,
     CSVParserAction,
@@ -2235,7 +2239,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 954;
+export const CLASS_REGISTRATIONS_COUNT = 956;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

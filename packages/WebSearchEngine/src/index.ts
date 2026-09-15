@@ -19,12 +19,14 @@ export * from './providers/PerplexityWebSearchProvider';
 export * from './providers/GoogleCustomSearchWebSearchProvider';
 export * from './providers/DuckDuckGoWebSearchProvider';
 export * from './providers/httpFailure';
+export * from './operations/WebSearchQueryOperation';
 
 import { LoadBraveWebSearchProvider } from './providers/BraveWebSearchProvider';
 import { LoadTavilyWebSearchProvider } from './providers/TavilyWebSearchProvider';
 import { LoadPerplexityWebSearchProvider } from './providers/PerplexityWebSearchProvider';
 import { LoadGoogleCustomSearchWebSearchProvider } from './providers/GoogleCustomSearchWebSearchProvider';
 import { LoadDuckDuckGoWebSearchProvider } from './providers/DuckDuckGoWebSearchProvider';
+import { LoadWebSearchOperations } from './operations/WebSearchQueryOperation';
 
 /**
  * Keep every driver registration alive through tree-shaking.
@@ -39,6 +41,8 @@ export function LoadWebSearchProviders(): void {
     LoadPerplexityWebSearchProvider();
     LoadGoogleCustomSearchWebSearchProvider();
     LoadDuckDuckGoWebSearchProvider();
+    LoadWebSearchOperations();
 }
 
 LoadWebSearchProviders();
+
